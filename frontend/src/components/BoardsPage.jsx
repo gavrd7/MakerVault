@@ -1,0 +1,202 @@
+import React, { useMemo, useState } from "react";
+import { AgGridReact } from "ag-grid-react";
+import { themeQuartz } from "ag-grid-community";
+import { apiFetch } from "../api";
+import { Badge, BoardImage, LoadingBlock, Modal } from "./Common";
+
+export default function BoardsPage({ boards, setBoards, config, onOpenImport, refreshDashboard }) {
+  const [query, setQuery] = useState("");
+  const [manufacturer, setManufacturer] = useState("");
+  const [family, setFamily] = useState("");
+  const [selected, setSelected] = useState(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
+
+  const manufacturers = useMemo(() => [...new Set(boards.map(b => b.manufacturer).filter(Boolean))].sort(), [boards]);
+  const families = useMemo(() => [...new Set(boards.map(b => b.family).filter(Boolean))].sort(), [boards]);
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return boards.filter(board =>
+      (!manufacturer || board.manufacturer === manufacturer)
+      && (!family || board.family === family)
+      && (!q || [board.name, board.manufacturer, board.family, board.mcu, board.variant].join(" ").toLowerCase().includes(q))
+    );
+  }, [boards, query, manufacturer, family]);
+
+  const columns = useMemo(() => [
+    { headerName: "", field: "image", width: 72, sortable: false, filter: false, cellRenderer: p => <BoardImage src={p.value} alt={p.data?.name || ""} size="tiny" /> },
+    { field: "manufacturer", minWidth: 150 },
+    { field: "name", headerName: "Board", minWidth: 230, flex: 1 },
+    { field: "family", minWidth: 125 },
+    { field: "mcu", headerName: "MCU", minWidth: 135 },
+    { field: "flash_mb", headerName: "Flash", width: 105, valueFormatter: p => p.value == null ? "" : `${p.value} MB` },
+    { headerName: "Wireless", minWidth: 190, valueGetter: p => [p.data.wifi && "Wi-Fi", p.data.bluetooth && "BT", p.data.zigbee && "Zigbee", p.data.thread && "Thread"].filter(Boolean).join(" · ") },
+    { field: "source", minWidth: 145 },
+  ], []);
+
+  async function chooseBoard(board) {
+    setSelected(board);
+    setLoadingDetail(true);
+    try {
+      const result = await apiFetch(`/api/boards/${board.id}/`);
+      setSelected(result.board);
+    } finally {
+      setLoadingDetail(false);
+    }
+  }
+
+  return <div className={`catalogueLayout ${selected ? "hasDetail" : ""}`}>
+    <section className="panel pagePanel cataloguePanel">
+      <div className="panelHead panelHeadWrap">
+        <div><h3>Board catalogue</h3><p>{filtered.length} of {boards.length} board models</p></div>
+        <div className="toolbarActions">
+          <input className="searchInput" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search boards…" />
+          <select value={manufacturer} onChange={e => setManufacturer(e.target.value)}><option value="">All manufacturers</option>{manufacturers.map(x => <option key={x}>{x}</option>)}</select>
+          <select value={family} onChange={e => setFamily(e.target.value)}><option value="">All families</option>{families.map(x => <option key={x}>{x}</option>)}</select>
+          {config?.permissions?.add_board && <>
+            <button onClick={() => setShowAdd(true)}>＋ Manual</button>
+            <button className="primary" onClick={onOpenImport}>＋ Import URL</button>
+          </>}
+        </div>
+      </div>
+      <div className="gridWrap">
+        <AgGridReact
+          theme={themeQuartz}
+          rowData={filtered}
+          columnDefs={columns}
+          defaultColDef={{ filter: true, sortable: true, resizable: true }}
+          pagination
+          paginationPageSize={50}
+          paginationPageSizeSelector={[25, 50, 100]}
+          onRowClicked={e => chooseBoard(e.data)}
+          getRowId={p => p.data.id}
+        />
+      </div>
+    </section>
+    {selected && <BoardDetail board={selected} loading={loadingDetail} onClose={() => setSelected(null)} />}
+    {showAdd && <AddBoardModal onClose={() => setShowAdd(false)} onCreated={async board => {
+      setBoards(rows => [...rows, board].sort((a, b) => a.display_name.localeCompare(b.display_name)));
+      setShowAdd(false);
+      setSelected(board);
+      await refreshDashboard();
+    }} />}
+  </div>;
+}
+
+function BoardDetail({ board, loading, onClose }) {
+  const radios = [[board.wifi, "Wi-Fi"], [board.bluetooth, "Bluetooth"], [board.zigbee, "Zigbee"], [board.thread, "Thread"]]
+    .filter(([on]) => on).map(([, label]) => label);
+  return <aside className="detailPane">
+    <div className="detailHead"><h3>Board details</h3><button className="iconButton" onClick={onClose}>×</button></div>
+    {loading ? <LoadingBlock label="Loading board details…" /> : <>
+      <BoardImage src={board.image} alt={board.display_name} size="large" />
+      <h2>{board.display_name}</h2>
+      <p className="muted">{board.description || `${board.family || "Development board"}${board.mcu ? ` · ${board.mcu}` : ""}`}</p>
+      <div className="badgeRow">{radios.map(x => <Badge key={x} tone="accent">{x}</Badge>)}{board.usb_connector && <Badge>{board.usb_connector}</Badge>}</div>
+      <dl className="specList">
+        <div><dt>MCU</dt><dd>{board.mcu || "—"}</dd></div><div><dt>Architecture</dt><dd>{board.architecture || "—"}</dd></div>
+        <div><dt>Flash</dt><dd>{board.flash_mb == null ? "—" : `${board.flash_mb} MB`}</dd></div><div><dt>PSRAM</dt><dd>{board.psram_mb == null ? "—" : `${board.psram_mb} MB`}</dd></div>
+        <div><dt>GPIO</dt><dd>{board.gpio_count ?? "—"}</dd></div><div><dt>Source</dt><dd>{board.source_url ? <a href={board.source_url} target="_blank" rel="noreferrer">{board.source} ↗</a> : board.source}</dd></div>
+      </dl>
+      <h4>Compatibility</h4>
+      <div className="compatList">{board.compatibility?.length ? board.compatibility.map(item => <div key={item.platform}><strong>{item.platform}</strong><Badge tone={item.support_level === "full" ? "good" : "neutral"}>{item.support_label}</Badge></div>) : <span className="muted">No compatibility records yet.</span>}</div>
+      {board.specifications?.datasheet_url && <a className="detailLink" href={board.specifications.datasheet_url} target="_blank" rel="noreferrer">Open datasheet ↗</a>}
+    </>}
+  </aside>;
+}
+
+function AddBoardModal({ onClose, onCreated }) {
+  const [form, setForm] = useState({
+    manufacturer: "", name: "", family: "", mcu: "", architecture: "", flash_mb: "",
+    psram_mb: "", gpio_count: "", usb_connector: "", wifi: false, bluetooth: false,
+    zigbee: false, thread: false
+  });
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const set = (key, value) => setForm(v => ({ ...v, [key]: value }));
+
+  async function submit(e) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      const result = await apiFetch("/api/boards/", { method: "POST", body: form });
+      onCreated(result.board);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <Modal title="Add board model" subtitle="Create a catalogue entry manually. You can add a physical unit to Inventory afterwards." onClose={onClose} wide>
+    <form className="formGrid" onSubmit={submit}>
+      {error && <div className="formError full">{error}</div>}
+      <label>Manufacturer<input value={form.manufacturer} onChange={e => set("manufacturer", e.target.value)} placeholder="Generic" /></label>
+      <label>Board name<input required value={form.name} onChange={e => set("name", e.target.value)} /></label>
+      <label>Family<input value={form.family} onChange={e => set("family", e.target.value)} placeholder="ESP32-S3, RP2040…" /></label>
+      <label>MCU<input value={form.mcu} onChange={e => set("mcu", e.target.value)} /></label>
+      <label>Architecture<input value={form.architecture} onChange={e => set("architecture", e.target.value)} /></label>
+      <label>USB<input value={form.usb_connector} onChange={e => set("usb_connector", e.target.value)} placeholder="USB-C" /></label>
+      <label>Flash (MB)<input type="number" step="0.01" value={form.flash_mb} onChange={e => set("flash_mb", e.target.value)} /></label>
+      <label>PSRAM (MB)<input type="number" step="0.01" value={form.psram_mb} onChange={e => set("psram_mb", e.target.value)} /></label>
+      <label>GPIO count<input type="number" value={form.gpio_count} onChange={e => set("gpio_count", e.target.value)} /></label>
+      <div className="checkRow full">{["wifi", "bluetooth", "zigbee", "thread"].map(key => <label key={key}><input type="checkbox" checked={form[key]} onChange={e => set(key, e.target.checked)} /> {key === "wifi" ? "Wi-Fi" : key[0].toUpperCase() + key.slice(1)}</label>)}</div>
+      <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Adding…" : "Add board"}</button></div>
+    </form>
+  </Modal>;
+}
+
+export function ImportBoardModal({ onClose, onImported }) {
+  const [url, setUrl] = useState("");
+  const [preview, setPreview] = useState(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function previewUrl(e) {
+    e?.preventDefault();
+    setBusy(true);
+    setError("");
+    setPreview(null);
+    try {
+      const result = await apiFetch("/api/import/board/preview/", { method: "POST", body: { url } });
+      setPreview(result.preview);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function commit() {
+    setBusy(true);
+    setError("");
+    try {
+      const result = await apiFetch("/api/import/board/commit/", { method: "POST", body: { url } });
+      onImported(result.board, result.created);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <Modal title="Import board from URL" subtitle="v0.2 securely supports ESPBoards.dev. More source adapters will plug into the same workflow." onClose={onClose} wide>
+    <form className="importForm" onSubmit={previewUrl}>
+      <input type="url" required value={url} onChange={e => setUrl(e.target.value)} placeholder="https://www.espboards.dev/esp32/…" />
+      <button className="primary" disabled={busy}>{busy ? "Reading…" : "Preview"}</button>
+    </form>
+    {error && <div className="formError">{error}</div>}
+    {preview && <div className="importPreview">
+      <BoardImage src={preview.image_url} alt={preview.name} size="large" />
+      <div className="importSummary"><span className="eyebrow">Detected board</span><h3>{preview.manufacturer} {preview.name}</h3><p>{preview.description}</p>
+        <div className="previewSpecs">
+          <span><b>MCU</b>{preview.mcu || "—"}</span><span><b>Flash</b>{preview.flash_mb == null ? "—" : `${preview.flash_mb} MB`}</span>
+          <span><b>GPIO</b>{preview.gpio_count ?? "—"}</span><span><b>USB</b>{preview.usb_connector || "—"}</span>
+        </div>
+        <div className="badgeRow">{preview.wifi && <Badge tone="accent">Wi-Fi</Badge>}{preview.bluetooth && <Badge tone="accent">Bluetooth</Badge>}{preview.zigbee && <Badge tone="accent">Zigbee</Badge>}{preview.thread && <Badge tone="accent">Thread</Badge>}</div>
+      </div>
+    </div>}
+    {preview && <div className="formActions"><button type="button" onClick={onClose}>Cancel</button><button className="primary" type="button" onClick={commit} disabled={busy}>{busy ? "Importing…" : "Import into catalogue"}</button></div>}
+  </Modal>;
+}
