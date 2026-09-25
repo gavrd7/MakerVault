@@ -25,7 +25,6 @@ else
   echo "WARNING: Unknown TZ '$TZ_VALUE'; retaining container default." >&2
 fi
 
-# Match the app process to the host user's UID/GID for bind-mounted media.
 groupmod -o -g "$PGID" makervault
 usermod -o -u "$PUID" -g "$PGID" makervault
 
@@ -46,6 +45,9 @@ cd /app/backend
 echo "Applying database migrations..."
 gosu makervault python manage.py migrate --noinput
 gosu makervault python manage.py seed_roles
+
+echo "Ensuring starter catalogue..."
+gosu makervault python manage.py seed_catalogue
 
 echo "Collecting static files..."
 gosu makervault python manage.py collectstatic --noinput --clear >/dev/null

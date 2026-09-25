@@ -1,14 +1,15 @@
 import mimetypes
-from pathlib import Path
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.db import connection
 from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import render
+from django.views.decorators.csrf import ensure_csrf_cookie
 
 
 @login_required
+@ensure_csrf_cookie
 def app_shell(request):
     return render(request, "core/app.html")
 
@@ -25,9 +26,9 @@ def media_file(request, path):
         raise Http404
 
     content_type, _ = mimetypes.guess_type(requested.name)
-    # Only raster images are displayed inline in v0.1. Everything else is
-    # download-only, which prevents active content such as SVG or executables
-    # from running in MakerVault's origin.
+    # Only raster images are displayed inline. Everything else is download-only,
+    # preventing active uploads such as SVGs or executables from running in the
+    # MakerVault origin.
     inline_types = {"image/png", "image/jpeg", "image/webp", "image/gif"}
     as_attachment = content_type not in inline_types
     return FileResponse(
