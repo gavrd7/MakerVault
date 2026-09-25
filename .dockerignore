@@ -1,0 +1,11 @@
+.git
+.gitignore
+.env
+__pycache__/
+*.py[cod]
+*.sqlite3
+node_modules/
+frontend/dist/
+media/
+.idea/
+.vscode/

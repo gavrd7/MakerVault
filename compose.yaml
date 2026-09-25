@@ -1,0 +1,90 @@
+name: makervault
+
+services:
+  makervault:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: makervault
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      TZ: ${TZ:-Europe/London}
+      DJANGO_TIME_ZONE: ${DJANGO_TIME_ZONE:-Europe/London}
+      DJANGO_LANGUAGE_CODE: ${DJANGO_LANGUAGE_CODE:-en-gb}
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      UMASK: ${UMASK:-0022}
+      FIX_PERMISSIONS: ${FIX_PERMISSIONS:-true}
+      DATABASE_HOST: ${DATABASE_HOST:-postgres}
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CELERY_CONCURRENCY: ${CELERY_CONCURRENCY:-2}
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
+      GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-120}
+    ports:
+      - "${MAKERVAULT_BIND_ADDRESS:-0.0.0.0}:${MAKERVAULT_PORT:-8765}:8000"
+    volumes:
+      - ${MEDIA_STORAGE:-makervault_media}:/app/media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - makervault_backend
+    healthcheck:
+      test: ["CMD", "python", "/app/backend/manage.py", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+
+  postgres:
+    image: postgres:18.6
+    container_name: makervault-postgres
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Europe/London}
+      POSTGRES_DB: ${POSTGRES_DB:-makervault}
+      POSTGRES_USER: ${POSTGRES_USER:-makervault}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      # PostgreSQL 18+ expects the persistent mount at /var/lib/postgresql.
+      - ${POSTGRES_STORAGE:-makervault_postgres}:/var/lib/postgresql
+    networks:
+      - makervault_backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-makervault} -d ${POSTGRES_DB:-makervault}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:8.10.1-alpine
+    container_name: makervault-redis
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Europe/London}
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    volumes:
+      - ${REDIS_STORAGE:-makervault_redis}:/data
+    networks:
+      - makervault_backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+networks:
+  makervault_backend:
+    driver: bridge
+
+# These named volumes are used by default. If a *_STORAGE variable is an absolute
+# path instead, Compose treats it as a bind mount and these declarations remain harmless.
+volumes:
+  makervault_media:
+  makervault_postgres:
+  makervault_redis:

@@ -1,0 +1,51 @@
+import mimetypes
+from pathlib import Path
+from django.conf import settings
+from django.contrib.auth.decorators import login_required
+from django.core.cache import cache
+from django.db import connection
+from django.http import FileResponse, Http404, JsonResponse
+from django.shortcuts import render
+
+
+@login_required
+def app_shell(request):
+    return render(request, "core/app.html")
+
+
+@login_required
+def media_file(request, path):
+    root = settings.MEDIA_ROOT.resolve()
+    requested = (root / path).resolve()
+    try:
+        requested.relative_to(root)
+    except ValueError as exc:
+        raise Http404 from exc
+    if not requested.is_file():
+        raise Http404
+
+    content_type, _ = mimetypes.guess_type(requested.name)
+    # Only raster images are displayed inline in v0.1. Everything else is
+    # download-only, which prevents active content such as SVG or executables
+    # from running in MakerVault's origin.
+    inline_types = {"image/png", "image/jpeg", "image/webp", "image/gif"}
+    as_attachment = content_type not in inline_types
+    return FileResponse(
+        requested.open("rb"),
+        as_attachment=as_attachment,
+        filename=requested.name,
+        content_type=content_type or "application/octet-stream",
+    )
+
+
+def healthz(request):
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+        cache.set("makervault-health", "ok", timeout=10)
+        if cache.get("makervault-health") != "ok":
+            raise RuntimeError("Redis cache round-trip failed")
+        return JsonResponse({"status": "ok"})
+    except Exception as exc:
+        return JsonResponse({"status": "error", "detail": str(exc)}, status=503)
