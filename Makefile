@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: up down logs build rebuild-app update shell migrate createsuperuser check
+.PHONY: up down logs build rebuild-app update shell migrate seed-catalogue createsuperuser check
 
 up:
 	docker compose up -d --build
@@ -26,6 +26,9 @@ shell:
 
 migrate:
 	docker compose exec makervault python manage.py migrate
+
+seed-catalogue:
+	docker compose exec makervault python manage.py seed_catalogue
 
 createsuperuser:
 	docker compose exec makervault python manage.py createsuperuser
