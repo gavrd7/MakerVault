@@ -37,6 +37,17 @@ class ImporterTests(unittest.TestCase):
         with self.assertRaises(ImporterError):
             validate_import_url("https://example.com/product")
 
+
+    def test_parser_handles_linked_manufacturer(self):
+        html = SAMPLE_HTML.replace(
+            "<h1>ESP32 C3 Super Mini</h1>\n<div>by Generic</div>",
+            '<h1>Espressif ESP32-S3-DevKitC-1</h1>\n<div class="maker">by <a href="/makers/espressif/">Espressif</a></div>\n<div>ESP32-S3 Xtensa MCU</div>',
+        )
+        data = parse_espboards_html("https://www.espboards.dev/esp32/esp32-s3-devkitc-1/", html)
+        self.assertEqual(data["manufacturer"], "Espressif")
+        self.assertEqual(data["name"], "ESP32-S3-DevKitC-1")
+        self.assertEqual(data["family"], "ESP32-S3")
+
     def test_parser_extracts_common_board_fields(self):
         data = parse_espboards_html("https://www.espboards.dev/esp32/esp32-c3-super-mini/", SAMPLE_HTML)
         self.assertEqual(data["name"], "ESP32 C3 Super Mini")
