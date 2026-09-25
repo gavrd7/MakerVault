@@ -151,8 +151,20 @@ def parse_espboards_html(source_url: str, html: str) -> dict:
     text = soup.get_text("\n", strip=True)
     flat = re.sub(r"\s+", " ", text)
 
+    manufacturer = "Generic"
     by_match = re.search(r"(?im)^by\s+([^\n]{2,80})$", text)
-    manufacturer = by_match.group(1).strip() if by_match else "Generic"
+    if by_match:
+        manufacturer = by_match.group(1).strip()
+    else:
+        # ESPBoards commonly renders the manufacturer as "by <a>Maker</a>".
+        # BeautifulSoup's newline separator can split that into separate text
+        # nodes, so inspect compact nearby containers as a fallback.
+        for tag in soup.find_all(["p", "div", "span", "section"]):
+            label = " ".join(tag.stripped_strings).strip()
+            candidate = re.fullmatch(r"by\s+(.{2,80})", label, re.IGNORECASE)
+            if candidate:
+                manufacturer = candidate.group(1).strip()
+                break
     if manufacturer.lower() in {"generic", "unknown"}:
         manufacturer = "Generic"
 
