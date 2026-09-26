@@ -22,6 +22,7 @@
 
       {% if user.is_authenticated %}
       <nav class="account-nav" aria-label="Account settings">
+        <span class="account-nav-heading">Account &amp; Security</span>
         <a href="/" class="account-back">← Back to MakerVault</a>
         {% url 'account_email' as email_url_ %}
         {% if email_url_ %}<a href="{{ email_url_ }}">Email addresses</a>{% endif %}
@@ -31,6 +32,7 @@
         {% if connections_url_ %}<a href="{{ connections_url_ }}">Account connections</a>{% endif %}
         {% url 'mfa_index' as mfa_url_ %}
         {% if mfa_url_ %}<a href="{{ mfa_url_ }}">Security &amp; MFA</a>{% endif %}
+        {% if user.is_staff %}<a href="{% url 'oidc-provider-list' %}">Identity providers / OIDC</a>{% endif %}
         {% url 'usersessions_list' as sessions_url_ %}
         {% if sessions_url_ %}<a href="{{ sessions_url_ }}">Sessions</a>{% endif %}
       </nav>

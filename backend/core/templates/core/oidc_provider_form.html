@@ -1,0 +1,41 @@
+{% extends "allauth/layouts/base.html" %}
+{% block head_title %}{% if mode == "create" %}Add OIDC provider{% else %}Edit OIDC provider{% endif %}{% endblock %}
+{% block content %}
+<div class="security-page-head">
+  <div>
+    <span class="account-eyebrow">Administrator</span>
+    <h1>{% if mode == "create" %}Add OIDC provider{% else %}Edit {{ provider.name }}{% endif %}</h1>
+    <p>Configure an OpenID Connect provider for MakerVault sign-in.</p>
+  </div>
+  <a class="account-button" href="{% url 'oidc-provider-list' %}">← Providers</a>
+</div>
+
+<div class="callback-box">
+  <span>Redirect / callback URI</span>
+  <code>{{ callback_uri }}</code>
+  <p>Register this URI with your identity provider. When creating a provider, replace <code>&lt;provider-id&gt;</code> with the ID entered below.</p>
+</div>
+
+<form method="post" class="oidc-form">
+  {% csrf_token %}
+  {% if form.non_field_errors %}<div class="account-message error">{{ form.non_field_errors }}</div>{% endif %}
+  <div class="oidc-form-grid">
+    {% for field in form %}
+      <label class="{% if field.name == 'server_url' or field.name == 'client_secret' %}wide{% endif %}">
+        <span>{{ field.label }}</span>
+        {{ field }}
+        {% if field.help_text %}<small class="helptext">{{ field.help_text }}</small>{% endif %}
+        {% if field.errors %}<span class="field-error">{{ field.errors|join:", " }}</span>{% endif %}
+      </label>
+    {% endfor %}
+  </div>
+  <div class="account-callout compact">
+    <strong>Client secret handling</strong>
+    <p>The secret is stored in django-allauth's SocialApp database record and is never displayed again by this page. Leaving the secret blank while editing preserves the current value.</p>
+  </div>
+  <div class="form-actions">
+    <a class="account-button" href="{% url 'oidc-provider-list' %}">Cancel</a>
+    <button type="submit">{% if mode == "create" %}Create provider{% else %}Save changes{% endif %}</button>
+  </div>
+</form>
+{% endblock %}

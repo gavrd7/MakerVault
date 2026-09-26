@@ -114,3 +114,45 @@ button,input,select,textarea{font:inherit}
   .account-nav{margin:0 -6px;padding:0 6px 4px}
   .account-card button,.account-card input[type="submit"]{width:100%}
 }
+
+.account-nav-heading{padding:0 13px 6px;color:#6f7c8f;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+.security-page-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:22px}
+.security-page-head h1{margin-bottom:8px}
+.security-page-head p{margin:0;max-width:650px}
+.account-eyebrow{display:block;color:#9d8cff;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px}
+.account-button{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:10px 14px;border:1px solid #3a4657;border-radius:10px;background:#151d27;color:#dfe7f3;font-weight:700}
+.account-button.primary{background:#7258e8;border-color:#7258e8;color:#fff}
+.account-button.danger{background:#2b171c;border-color:#6a3640;color:#ffb7c0}
+.account-callout,.callback-box{border:1px solid #344052;border-radius:12px;background:#111925;padding:14px 16px;margin:18px 0}
+.account-callout.compact{margin-top:8px}
+.account-callout p,.callback-box p{margin:5px 0 0}
+.callback-box span{display:block;color:#8794a6;font-size:11px;text-transform:uppercase;margin-bottom:7px}
+.callback-box code{display:block;overflow-wrap:anywhere;padding:9px 10px}
+.security-section{margin-top:28px}
+.security-section-head,.provider-card-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}
+.security-section-head h2{margin:0 0 4px}.security-section-head p{margin:0}
+.status-pill{display:inline-flex;align-items:center;min-height:26px;padding:4px 9px;border:1px solid #3b4656;border-radius:999px;color:#a9b5c5;background:#151d27;font-size:11px}
+.status-pill.status-on{border-color:#2c6a49;background:#12271c;color:#9ce0b7}
+.provider-list{display:grid;gap:14px;margin-top:14px}
+.oidc-provider-card{border:1px solid #29313c;border-radius:14px;background:#0d131a;padding:16px}
+.oidc-provider-card strong,.oidc-provider-card small{display:block}.oidc-provider-card small{margin-top:3px;color:#7f8a9c}
+.oidc-provider-card dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;margin:16px 0 0;border:1px solid #29313c;border-radius:10px;overflow:hidden}
+.oidc-provider-card dl>div{padding:10px 11px;border-bottom:1px solid #29313c}
+.oidc-provider-card dl>div:nth-child(odd){border-right:1px solid #29313c}
+.oidc-provider-card dl>div.wide{grid-column:1/-1;border-right:0}
+.oidc-provider-card dt{color:#748196;font-size:10px;text-transform:uppercase}.oidc-provider-card dd{margin:4px 0 0;overflow-wrap:anywhere}
+.provider-actions{display:flex;gap:8px;margin-top:14px}.provider-actions form{margin:0}
+.account-empty{margin-top:14px;padding:20px;border:1px dashed #394657;border-radius:12px;background:#0d131a}
+.account-empty p{margin-bottom:0}
+.oidc-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.oidc-form-grid label.wide{grid-column:1/-1}
+.field-error{color:#ffadb7;font-size:12px}
+.form-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:8px}
+@media(max-width:700px){
+ .security-page-head{display:grid}.security-page-head>.account-button{width:100%}
+ .oidc-provider-card dl,.oidc-form-grid{grid-template-columns:1fr}
+ .oidc-provider-card dl>div,.oidc-provider-card dl>div:nth-child(odd){border-right:0;border-bottom:1px solid #29313c}
+ .oidc-form-grid label.wide{grid-column:auto}
+ .provider-actions,.form-actions{display:grid;grid-template-columns:1fr}
+ .provider-actions .account-button,.provider-actions button,.form-actions>*{width:100%}
+}

@@ -27,12 +27,16 @@ USE_TZ = True
 
 MAKERVAULT_CURRENCY = os.getenv("MAKERVAULT_CURRENCY", "GBP")
 MAKERVAULT_MEASUREMENT_SYSTEM = os.getenv("MAKERVAULT_MEASUREMENT_SYSTEM", "metric")
-MAKERVAULT_VERSION = "0.3.3"
+MAKERVAULT_VERSION = "0.3.4"
 MAKERVAULT_LICENSE = "AGPL-3.0-or-later"
 MAKERVAULT_SOURCE_URL = os.getenv("MAKERVAULT_SOURCE_URL", "https://github.com/gavrd7/MakerVault")
 ALLOW_LOCAL_REGISTRATION = env_bool("ALLOW_LOCAL_REGISTRATION", False)
 OIDC_ENABLED = env_bool("OIDC_ENABLED", False)
 OIDC_AUTO_SIGNUP = env_bool("OIDC_AUTO_SIGNUP", True)
+OIDC_ENV_PROVIDER_ID = os.getenv("OIDC_PROVIDER_ID", "oidc")
+OIDC_ENV_PROVIDER_NAME = os.getenv("OIDC_PROVIDER_NAME", "OpenID Connect")
+OIDC_ENV_SERVER_URL = os.getenv("OIDC_SERVER_URL", "").strip()
+OIDC_ENV_CLIENT_ID = os.getenv("OIDC_CLIENT_ID", "").strip()
 
 # Background catalogue enrichment. Facts/specifications are pulled separately from media licensing.
 ENRICH_BOARD_CATALOGUE = env_bool("ENRICH_BOARD_CATALOGUE", True)
@@ -146,8 +150,8 @@ MFA_TOTP_ISSUER = "MakerVault"
 
 SOCIALACCOUNT_PROVIDERS = {}
 if OIDC_ENABLED:
-    oidc_server_url = os.getenv("OIDC_SERVER_URL", "").strip()
-    oidc_client_id = os.getenv("OIDC_CLIENT_ID", "").strip()
+    oidc_server_url = OIDC_ENV_SERVER_URL
+    oidc_client_id = OIDC_ENV_CLIENT_ID
     oidc_client_secret = os.getenv("OIDC_CLIENT_SECRET", "").strip()
     if oidc_server_url and oidc_client_id and oidc_client_secret:
         SOCIALACCOUNT_PROVIDERS = {
@@ -155,8 +159,8 @@ if OIDC_ENABLED:
                 "OAUTH_PKCE_ENABLED": env_bool("OIDC_PKCE", True),
                 "APPS": [
                     {
-                        "provider_id": os.getenv("OIDC_PROVIDER_ID", "oidc"),
-                        "name": os.getenv("OIDC_PROVIDER_NAME", "OpenID Connect"),
+                        "provider_id": OIDC_ENV_PROVIDER_ID,
+                        "name": OIDC_ENV_PROVIDER_NAME,
                         "client_id": oidc_client_id,
                         "secret": oidc_client_secret,
                         "settings": {
