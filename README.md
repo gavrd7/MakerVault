@@ -1,8 +1,8 @@
-# MakerVault v0.2.3
+# MakerVault v0.3.0
 
 MakerVault is a self-hosted makerspace inventory and project system for electronics, firmware, fabrication and 3D-printing assets.
 
-v0.2.2 adds automatic, source-aware catalogue image population on top of the enriched v0.2.1 catalogue:
+v0.3 turns physical inventory into first-class asset records and begins automatic technical board-specification enrichment:
 
 - Django 5.2 LTS backend and authentication
 - local accounts, MFA-capable django-allauth, and optional generic OIDC client support
@@ -15,6 +15,10 @@ v0.2.2 adds automatic, source-aware catalogue image population on top of the enr
 - catalogue image upload and secure remote-image caching into MakerVault media storage
 - automatic background image seeding for default boards/components, preferring ESPBoards.dev for supported ESP32-family boards and freely licensed raster media from Wikimedia Commons as a fallback
 - spreadsheet-style physical inventory with inline editing
+- clickable physical inventory records with full detail/edit views
+- lifecycle history for assignments, status changes, locations and general edits
+- background technical board enrichment from ESPBoards.dev for supported ESP-family boards
+- richer board technical details including CPU clock/cores, SRAM, ADC/DAC, buses, PWM, pins, voltage and native USB where available
 - manual board/component creation
 - secure ESPBoards.dev URL import with preview and duplicate-aware enrichment
 - existing schema for projects, BOMs, files, repositories, listings, filament/spools, printers, 3D models/revisions and print history
@@ -132,7 +136,7 @@ Physical inventory IDs are generated automatically when omitted:
 - printed parts: PRT-0001
 - other: OTH-0001
 
-Editors/admins can change quantity, status, project, location, price and supplier directly in the inventory grid.
+Editors/admins can change quantity, status, project, location, price and supplier directly in the inventory grid. Clicking a row opens the full physical record, including purchase data, identifiers, notes, catalogue model information and lifecycle history. Project/status/location changes are retained as history rather than silently replacing the previous state.
 
 ## URL imports
 
@@ -206,6 +210,7 @@ make update
 make shell
 make migrate
 make seed-catalogue
+make enrich-board-catalogue
 make seed-catalogue-images
 make cache-catalogue-images
 make createsuperuser
@@ -268,3 +273,17 @@ MakerVault software is licensed under **GNU AGPL v3.0 or later (AGPL-3.0-or-late
 Third-party catalogue images and other media are not relicensed under AGPL. Their original licence/provenance is retained and exposed in **About → Media attribution**. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 For automatic catalogue images, MakerVault defaults to Wikimedia Commons results reported as CC0/Public Domain, CC BY or CC BY-SA. CC BY-NC and NoDerivatives variants are excluded from the default automatic path. ESPBoards automatic image caching is disabled by default because its own board illustrations/pinouts are CC BY-NC 4.0.
+
+
+## v0.3 inventory lifecycle
+
+v0.3 introduces an `InventoryHistory` audit/lifecycle model. New physical items receive a creation event, and subsequent changes record their previous/new values plus the user responsible for the change. Existing pre-v0.3 inventory remains intact; its history begins when it is next edited.
+
+Board technical facts are enriched independently from catalogue imagery. This allows MakerVault to use factual source data without requiring the associated third-party artwork. Supported ESP-family records are enriched in the background after startup, and a board detail pane also provides **Refresh specs** for an individual record.
+
+~~~dotenv
+ENRICH_BOARD_CATALOGUE=true
+BOARD_ENRICHMENT_MAX_PER_RUN=80
+~~~
+
+The technical source URL and enrichment timestamp are retained in the board specifications.

@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
 import { themeQuartz } from "ag-grid-community";
 import { apiFetch } from "../api";
-import { BoardImage, Modal } from "./Common";
+import { Badge, BoardImage, LoadingBlock, Modal } from "./Common";
 
 const STATUS_LABELS = {
   available: "Available",
@@ -12,9 +12,20 @@ const STATUS_LABELS = {
   retired: "Retired",
 };
 
+function formatDateTime(value) {
+  if (!value) return "";
+  try {
+    return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  } catch {
+    return value;
+  }
+}
+
 export default function InventoryPage({ inventory, setInventory, boards, components, projects, config, refreshDashboard }) {
   const [search, setSearch] = useState("");
   const [showAdd, setShowAdd] = useState(false);
+  const [selected, setSelected] = useState(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
   const [message, setMessage] = useState("");
   const [savingCell, setSavingCell] = useState("");
 
@@ -52,6 +63,19 @@ export default function InventoryPage({ inventory, setInventory, boards, compone
     { field: "supplier", headerName: "Supplier", minWidth: 160, editable },
   ], [config, editable, projectMap, projects]);
 
+  async function loadDetail(item) {
+    setSelected(item);
+    setLoadingDetail(true);
+    try {
+      const result = await apiFetch(`/api/inventory/${item.id}/`);
+      setSelected(result.item);
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoadingDetail(false);
+    }
+  }
+
   async function updateCell(event) {
     if (!editable || event.newValue === event.oldValue) return;
     const field = event.colDef.field;
@@ -64,6 +88,7 @@ export default function InventoryPage({ inventory, setInventory, boards, compone
         body: { [field]: event.newValue },
       });
       setInventory(rows => rows.map(row => row.id === result.item.id ? result.item : row));
+      if (selected?.id === result.item.id) await loadDetail(result.item);
       await refreshDashboard();
     } catch (error) {
       event.data[field] = event.oldValue;
@@ -75,31 +100,48 @@ export default function InventoryPage({ inventory, setInventory, boards, compone
     }
   }
 
-  return <section className="panel pagePanel">
-    <div className="panelHead panelHeadWrap">
-      <div><h3>Inventory</h3><p>Edit quantity, status, project, location and cost directly in the grid.</p></div>
-      <div className="toolbarActions">
-        <input className="searchInput" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search inventory…" />
-        {config?.permissions?.add_inventory && <button className="primary" onClick={() => setShowAdd(true)}>＋ Add item</button>}
+  return <div className={`catalogueLayout ${selected ? "hasDetail" : ""}`}>
+    <section className="panel pagePanel cataloguePanel">
+      <div className="panelHead panelHeadWrap">
+        <div><h3>Inventory</h3><p>Click an item for its full record. Quick-edit status, project, location, quantity and cost directly in the grid.</p></div>
+        <div className="toolbarActions">
+          <input className="searchInput" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search inventory…" />
+          {config?.permissions?.add_inventory && <button className="primary" onClick={() => setShowAdd(true)}>＋ Add item</button>}
+        </div>
       </div>
-    </div>
-    {message && <div className="inlineError">{message}</div>}
-    {savingCell && <div className="saveStrip">Saving change…</div>}
-    <div className="gridWrap">
-      <AgGridReact
-        theme={themeQuartz}
-        rowData={inventory}
-        columnDefs={columns}
-        quickFilterText={search}
-        defaultColDef={{ filter: true, sortable: true, resizable: true }}
-        pagination
-        paginationPageSize={50}
-        paginationPageSizeSelector={[25, 50, 100]}
-        stopEditingWhenCellsLoseFocus
-        onCellValueChanged={updateCell}
-        getRowId={params => params.data.id}
-      />
-    </div>
+      {message && <div className="inlineError">{message}</div>}
+      {savingCell && <div className="saveStrip">Saving change…</div>}
+      <div className="gridWrap">
+        <AgGridReact
+          theme={themeQuartz}
+          rowData={inventory}
+          columnDefs={columns}
+          quickFilterText={search}
+          defaultColDef={{ filter: true, sortable: true, resizable: true }}
+          pagination
+          paginationPageSize={50}
+          paginationPageSizeSelector={[25, 50, 100]}
+          stopEditingWhenCellsLoseFocus
+          onCellValueChanged={updateCell}
+          onRowClicked={event => {
+            if (!event.api.getEditingCells().length) loadDetail(event.data);
+          }}
+          getRowId={params => params.data.id}
+        />
+      </div>
+    </section>
+    {selected && <InventoryDetail
+      item={selected}
+      loading={loadingDetail}
+      projects={projects}
+      canEdit={editable}
+      onClose={() => setSelected(null)}
+      onChanged={async updated => {
+        setInventory(rows => rows.map(row => row.id === updated.id ? updated : row));
+        await loadDetail(updated);
+        await refreshDashboard();
+      }}
+    />}
     {showAdd && <AddInventoryModal
       boards={boards}
       components={components}
@@ -110,24 +152,84 @@ export default function InventoryPage({ inventory, setInventory, boards, compone
         setInventory(rows => [...rows, item]);
         setShowAdd(false);
         await refreshDashboard();
+        await loadDetail(item);
       }}
     />}
-  </section>;
+  </div>;
 }
 
-function AddInventoryModal({ boards, components, projects, config, onClose, onCreated }) {
+function InventoryDetail({ item, loading, projects, canEdit, onClose, onChanged }) {
+  const [editing, setEditing] = useState(false);
+  if (loading) return <aside className="detailPane"><div className="detailHead"><h3>Inventory details</h3><button className="iconButton" onClick={onClose}>×</button></div><LoadingBlock label="Loading inventory record…" /></aside>;
+
+  const board = item.board;
+  const component = item.component;
+  const model = board || component;
+
+  return <aside className="detailPane inventoryDetailPane">
+    <div className="detailHead"><h3>Inventory details</h3><button className="iconButton" onClick={onClose}>×</button></div>
+    <BoardImage src={item.image} alt={item.name} size="large" placeholder={item.item_type === "board" ? "MCU" : "PART"} />
+    <div className="detailTitleRow">
+      <div><span className="inventoryCode">{item.inventory_id}</span><h2>{item.name}</h2></div>
+      {canEdit && <button className="primary" onClick={() => setEditing(true)}>Edit</button>}
+    </div>
+    <div className="badgeRow">
+      <Badge tone={item.status === "available" ? "good" : item.status === "in_use" ? "accent" : "neutral"}>{item.status_label}</Badge>
+      <Badge>{item.type}</Badge>
+      {item.project && <Badge tone="accent">{item.project}</Badge>}
+    </div>
+
+    <dl className="specList inventorySpecList">
+      <div><dt>Quantity</dt><dd>{item.quantity}</dd></div>
+      <div><dt>Location</dt><dd>{item.location || "—"}</dd></div>
+      <div><dt>Project</dt><dd>{item.project || "—"}</dd></div>
+      <div><dt>Serial / ID</dt><dd>{item.serial_number || "—"}</dd></div>
+      <div><dt>Purchase cost</dt><dd>{item.purchase_price == null ? "—" : `${item.currency} ${Number(item.purchase_price).toFixed(2)}`}</dd></div>
+      <div><dt>Purchased</dt><dd>{item.purchased_on || "—"}</dd></div>
+      <div><dt>Supplier</dt><dd>{item.supplier || "—"}</dd></div>
+      <div><dt>Updated</dt><dd>{formatDateTime(item.updated_at)}</dd></div>
+    </dl>
+
+    {item.notes && <section className="detailSection"><h4>Notes</h4><p className="muted detailNotes">{item.notes}</p></section>}
+
+    {model && <section className="detailSection">
+      <h4>Catalogue model</h4>
+      <div className="catalogueSummary">
+        <strong>{board?.display_name || component?.name}</strong>
+        <span>{board ? [board.mcu, board.architecture].filter(Boolean).join(" · ") : [component?.category, component?.part_number].filter(Boolean).join(" · ")}</span>
+      </div>
+    </section>}
+
+    <section className="detailSection">
+      <h4>Lifecycle history</h4>
+      <div className="historyTimeline">
+        {item.history?.length ? item.history.map(entry => <div className="historyEntry" key={entry.id}>
+          <span className={`historyDot history-${entry.event_type}`} />
+          <div><strong>{entry.summary}</strong><small>{formatDateTime(entry.created_at)}{entry.changed_by ? ` · ${entry.changed_by}` : ""}</small></div>
+        </div>) : <p className="muted">No history recorded yet. Changes made from v0.3 onward will appear here.</p>}
+      </div>
+    </section>
+
+    {item.purchase_url && <a className="detailLink" href={item.purchase_url} target="_blank" rel="noreferrer">Open purchase/source URL ↗</a>}
+
+    {editing && <EditInventoryModal item={item} projects={projects} onClose={() => setEditing(false)} onSaved={updated => { setEditing(false); onChanged(updated); }} />}
+  </aside>;
+}
+
+function EditInventoryModal({ item, projects, onClose, onSaved }) {
   const [form, setForm] = useState({
-    item_type: "board",
-    board_id: boards[0]?.id || "",
-    component_id: components[0]?.id || "",
-    quantity: 1,
-    status: "available",
-    project_id: "",
-    location: "",
-    purchase_price: "",
-    supplier: "",
-    custom_name: "",
-    inventory_id: "",
+    custom_name: item.custom_name || "",
+    quantity: item.quantity ?? 1,
+    status: item.status || "available",
+    project_id: item.project_id || "",
+    location: item.location || "",
+    serial_number: item.serial_number || "",
+    purchase_price: item.purchase_price ?? "",
+    currency: item.currency || "GBP",
+    supplier: item.supplier || "",
+    purchase_url: item.purchase_url || "",
+    purchased_on: item.purchased_on || "",
+    notes: item.notes || "",
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -135,14 +237,10 @@ function AddInventoryModal({ boards, components, projects, config, onClose, onCr
 
   async function submit(event) {
     event.preventDefault();
-    setBusy(true);
-    setError("");
+    setBusy(true); setError("");
     try {
-      const payload = { ...form, currency: config?.currency || "GBP" };
-      if (form.item_type !== "board") payload.board_id = "";
-      if (form.item_type !== "component") payload.component_id = "";
-      const result = await apiFetch("/api/inventory/", { method: "POST", body: payload });
-      onCreated(result.item);
+      const result = await apiFetch(`/api/inventory/${item.id}/`, { method: "PATCH", body: form });
+      onSaved(result.item);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -150,32 +248,66 @@ function AddInventoryModal({ boards, components, projects, config, onClose, onCr
     }
   }
 
-  return <Modal title="Add inventory item" subtitle="Inventory IDs are generated automatically when left blank." onClose={onClose}>
+  return <Modal title={`Edit ${item.inventory_id}`} subtitle="Changes to project, status and location are recorded in the lifecycle history." onClose={onClose} wide>
+    <form className="formGrid" onSubmit={submit}>
+      {error && <div className="formError full">{error}</div>}
+      <label className="full">Custom name<input value={form.custom_name} onChange={e => set("custom_name", e.target.value)} placeholder={item.name} /></label>
+      <label>Quantity<input type="number" min="0" step="0.001" value={form.quantity} onChange={e => set("quantity", e.target.value)} /></label>
+      <label>Status<select value={form.status} onChange={e => set("status", e.target.value)}>{Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+      <label>Project<select value={form.project_id} onChange={e => set("project_id", e.target.value)}><option value="">None</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+      <label>Location<input value={form.location} onChange={e => set("location", e.target.value)} /></label>
+      <label>Serial / unique ID<input value={form.serial_number} onChange={e => set("serial_number", e.target.value)} /></label>
+      <label>Purchase date<input type="date" value={form.purchased_on} onChange={e => set("purchased_on", e.target.value)} /></label>
+      <label>Purchase price<input type="number" step="0.01" value={form.purchase_price} onChange={e => set("purchase_price", e.target.value)} /></label>
+      <label>Currency<input maxLength="3" value={form.currency} onChange={e => set("currency", e.target.value.toUpperCase())} /></label>
+      <label>Supplier<input value={form.supplier} onChange={e => set("supplier", e.target.value)} /></label>
+      <label className="full">Purchase/source URL<input type="url" value={form.purchase_url} onChange={e => set("purchase_url", e.target.value)} /></label>
+      <label className="full">Notes<textarea rows="5" value={form.notes} onChange={e => set("notes", e.target.value)} /></label>
+      <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Saving…" : "Save changes"}</button></div>
+    </form>
+  </Modal>;
+}
+
+function AddInventoryModal({ boards, components, projects, config, onClose, onCreated }) {
+  const [form, setForm] = useState({
+    item_type: "board", board_id: boards[0]?.id || "", component_id: components[0]?.id || "",
+    quantity: 1, status: "available", project_id: "", location: "", purchase_price: "",
+    supplier: "", custom_name: "", inventory_id: "", serial_number: "", purchase_url: "", notes: "",
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const set = (key, value) => setForm(current => ({ ...current, [key]: value }));
+
+  async function submit(event) {
+    event.preventDefault(); setBusy(true); setError("");
+    try {
+      const payload = { ...form, currency: config?.currency || "GBP" };
+      if (form.item_type !== "board") payload.board_id = "";
+      if (form.item_type !== "component") payload.component_id = "";
+      const result = await apiFetch("/api/inventory/", { method: "POST", body: payload });
+      onCreated(result.item);
+    } catch (err) { setError(err.message); } finally { setBusy(false); }
+  }
+
+  return <Modal title="Add inventory item" subtitle="Inventory IDs are generated automatically when left blank." onClose={onClose} wide>
     <form className="formGrid" onSubmit={submit}>
       {error && <div className="formError full">{error}</div>}
       <label>Type<select value={form.item_type} onChange={e => set("item_type", e.target.value)}>
-        <option value="board">Microcontroller / board</option>
-        <option value="component">Component</option>
-        <option value="tool">Tool / asset</option>
-        <option value="printed_part">Printed part</option>
-        <option value="other">Other</option>
+        <option value="board">Microcontroller / board</option><option value="component">Component</option><option value="tool">Tool / asset</option><option value="printed_part">Printed part</option><option value="other">Other</option>
       </select></label>
       <label>Inventory ID<input value={form.inventory_id} placeholder="Auto (e.g. MCU-0001)" onChange={e => set("inventory_id", e.target.value)} /></label>
-      {form.item_type === "board" && <label className="full">Board<select required value={form.board_id} onChange={e => set("board_id", e.target.value)}>
-        <option value="">Choose a board…</option>
-        {boards.map(b => <option key={b.id} value={b.id}>{b.display_name}</option>)}
-      </select></label>}
-      {form.item_type === "component" && <label className="full">Component<select required value={form.component_id} onChange={e => set("component_id", e.target.value)}>
-        <option value="">Choose a component…</option>
-        {components.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-      </select></label>}
+      {form.item_type === "board" && <label className="full">Board<select required value={form.board_id} onChange={e => set("board_id", e.target.value)}><option value="">Choose a board…</option>{boards.map(b => <option key={b.id} value={b.id}>{b.display_name}</option>)}</select></label>}
+      {form.item_type === "component" && <label className="full">Component<select required value={form.component_id} onChange={e => set("component_id", e.target.value)}><option value="">Choose a component…</option>{components.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>}
       {!["board", "component"].includes(form.item_type) && <label className="full">Name<input required value={form.custom_name} onChange={e => set("custom_name", e.target.value)} /></label>}
       <label>Quantity<input type="number" min="0" step="0.001" value={form.quantity} onChange={e => set("quantity", e.target.value)} /></label>
       <label>Status<select value={form.status} onChange={e => set("status", e.target.value)}>{Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
       <label>Project<select value={form.project_id} onChange={e => set("project_id", e.target.value)}><option value="">None</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
       <label>Location<input value={form.location} onChange={e => set("location", e.target.value)} placeholder="Drawer, shelf, box…" /></label>
+      <label>Serial / unique ID<input value={form.serial_number} onChange={e => set("serial_number", e.target.value)} /></label>
       <label>Purchase cost<input type="number" step="0.01" value={form.purchase_price} onChange={e => set("purchase_price", e.target.value)} /></label>
       <label>Supplier<input value={form.supplier} onChange={e => set("supplier", e.target.value)} /></label>
+      <label className="full">Purchase/source URL<input type="url" value={form.purchase_url} onChange={e => set("purchase_url", e.target.value)} /></label>
+      <label className="full">Notes<textarea rows="3" value={form.notes} onChange={e => set("notes", e.target.value)} /></label>
       <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Adding…" : "Add to inventory"}</button></div>
     </form>
   </Modal>;

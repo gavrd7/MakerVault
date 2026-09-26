@@ -18,6 +18,7 @@ from .catalogue_images import (
     sanitise_uploaded_image,
 )
 from .importers import ImporterError, preview_board_url
+from .catalogue_enrichment import enrich_board_from_espboards
 from .models import (
     BoardCompatibility,
     BoardModel,
@@ -26,6 +27,7 @@ from .models import (
     ComponentModel,
     FilamentProduct,
     InventoryItem,
+    InventoryHistory,
     Manufacturer,
     Model3D,
     Printer,
@@ -174,6 +176,7 @@ def _serialise_inventory(item):
         "item_type": item.item_type,
         "type": item.get_item_type_display(),
         "name": item.display_name,
+        "custom_name": item.custom_name,
         "board_id": str(item.board_id) if item.board_id else "",
         "component_id": str(item.component_id) if item.component_id else "",
         "quantity": _float(item.quantity),
@@ -192,6 +195,99 @@ def _serialise_inventory(item):
         "image": image_url,
         "updated_at": item.updated_at.isoformat(),
     }
+
+
+
+def _serialise_inventory_history(entry):
+    return {
+        "id": str(entry.id),
+        "event_type": entry.event_type,
+        "event_label": entry.get_event_type_display(),
+        "summary": entry.summary,
+        "changes": entry.changes,
+        "project_id": str(entry.project_id) if entry.project_id else "",
+        "project": entry.project.name if entry.project else "",
+        "changed_by": entry.changed_by.get_username() if entry.changed_by else "",
+        "created_at": entry.created_at.isoformat(),
+    }
+
+
+def _inventory_snapshot(item):
+    return {
+        "quantity": str(item.quantity),
+        "status": item.status,
+        "project_id": str(item.project_id) if item.project_id else "",
+        "project": item.project.name if item.project else "",
+        "location": item.location,
+        "serial_number": item.serial_number,
+        "purchase_price": str(item.purchase_price) if item.purchase_price is not None else "",
+        "currency": item.currency,
+        "supplier": item.supplier,
+        "purchase_url": item.purchase_url,
+        "purchased_on": item.purchased_on.isoformat() if item.purchased_on else "",
+        "notes": item.notes,
+        "custom_name": item.custom_name,
+    }
+
+
+def _record_inventory_history(item, user, before=None, *, created=False):
+    after = _inventory_snapshot(item)
+    if created:
+        InventoryHistory.objects.create(
+            inventory_item=item,
+            event_type="created",
+            summary=f"Added {item.display_name} to inventory",
+            changes={"after": after},
+            project=item.project,
+            changed_by=user,
+        )
+        return
+
+    before = before or {}
+    changes = {}
+    for key, new_value in after.items():
+        old_value = before.get(key, "")
+        if old_value != new_value:
+            changes[key] = {"from": old_value, "to": new_value}
+    if not changes:
+        return
+
+    if "project_id" in changes:
+        if item.project:
+            event_type = "assigned"
+            summary = f"Assigned to project {item.project.name}"
+        else:
+            event_type = "unassigned"
+            previous = changes.get("project", {}).get("from") or "project"
+            summary = f"Removed from project {previous}"
+    elif "status" in changes:
+        event_type = "status"
+        summary = f"Status changed to {item.get_status_display()}"
+    elif "location" in changes:
+        event_type = "location"
+        summary = f"Location changed to {item.location or 'Unspecified'}"
+    else:
+        event_type = "updated"
+        labels = {
+            "quantity": "quantity", "serial_number": "serial number",
+            "purchase_price": "purchase price", "currency": "currency",
+            "supplier": "supplier", "purchase_url": "purchase URL",
+            "purchased_on": "purchase date", "notes": "notes",
+            "custom_name": "name",
+        }
+        changed = [labels.get(key, key.replace("_", " ")) for key in changes]
+        summary = "Updated " + ", ".join(changed[:3])
+        if len(changed) > 3:
+            summary += f" and {len(changed) - 3} more"
+
+    InventoryHistory.objects.create(
+        inventory_item=item,
+        event_type=event_type,
+        summary=summary[:500],
+        changes=changes,
+        project=item.project,
+        changed_by=user,
+    )
 
 
 def _parse_decimal(value, field_name, allow_none=True):
@@ -296,6 +392,7 @@ def inventory(request):
             )
             item.full_clean()
             item.save()
+            _record_inventory_history(item, request.user, created=True)
         return JsonResponse({"item": _serialise_inventory(item)}, status=201)
     except ValidationError as exc:
         return _validation_response(exc)
@@ -304,13 +401,22 @@ def inventory(request):
 
 
 @login_required
-@require_http_methods(["PATCH", "DELETE"])
+@require_http_methods(["GET", "PATCH", "DELETE"])
 def inventory_detail(request, item_id):
     item = InventoryItem.objects.select_related(
-        "board__manufacturer", "component__manufacturer", "project"
+        "board__manufacturer", "board__source", "component__manufacturer",
+        "component__category", "component__source", "project"
     ).filter(pk=item_id).first()
     if not item:
         return _error("Inventory item not found.", status=404)
+
+    if request.method == "GET":
+        history = item.history.select_related("project", "changed_by").all()[:250]
+        payload = _serialise_inventory(item)
+        payload["board"] = _serialise_board(item.board, detailed=True) if item.board else None
+        payload["component"] = _serialise_component(item.component) if item.component else None
+        payload["history"] = [_serialise_inventory_history(entry) for entry in history]
+        return JsonResponse({"item": payload})
 
     if request.method == "DELETE":
         denied = _require_permission(request, "core.delete_inventoryitem")
@@ -323,6 +429,7 @@ def inventory_detail(request, item_id):
     if denied:
         return denied
     try:
+        before = _inventory_snapshot(item)
         payload = _read_json(request)
         simple_fields = {
             "location", "serial_number", "supplier", "purchase_url", "notes", "custom_name"
@@ -330,12 +437,25 @@ def inventory_detail(request, item_id):
         for field in simple_fields:
             if field in payload:
                 setattr(item, field, str(payload[field] or "").strip())
+
         if "quantity" in payload:
             item.quantity = _parse_decimal(payload["quantity"], "quantity", allow_none=False)
         if "purchase_price" in payload:
             item.purchase_price = _parse_decimal(payload["purchase_price"], "purchase_price")
+        if "currency" in payload:
+            item.currency = str(payload["currency"] or settings.MAKERVAULT_CURRENCY).upper()[:3]
         if "status" in payload:
             item.status = str(payload["status"])
+        if "purchased_on" in payload:
+            raw_date = str(payload["purchased_on"] or "").strip()
+            if raw_date:
+                from datetime import date
+                try:
+                    item.purchased_on = date.fromisoformat(raw_date)
+                except ValueError as exc:
+                    raise ValidationError({"purchased_on": "Enter a valid date."}) from exc
+            else:
+                item.purchased_on = None
         if "project_id" in payload:
             if payload["project_id"]:
                 project = Project.objects.filter(pk=payload["project_id"]).first()
@@ -344,8 +464,13 @@ def inventory_detail(request, item_id):
                 item.project = project
             else:
                 item.project = None
+
         item.full_clean()
         item.save()
+        _record_inventory_history(item, request.user, before)
+        item = InventoryItem.objects.select_related(
+            "board__manufacturer", "component__manufacturer", "project"
+        ).get(pk=item.pk)
         return JsonResponse({"item": _serialise_inventory(item)})
     except ValidationError as exc:
         return _validation_response(exc)
@@ -434,6 +559,23 @@ def board_detail(request, board_id):
     if not board:
         return _error("Board not found.", status=404)
     return JsonResponse({"board": _serialise_board(board, detailed=True)})
+
+
+@login_required
+@require_http_methods(["POST"])
+def board_enrich(request, board_id):
+    denied = _require_permission(request, "core.change_boardmodel")
+    if denied:
+        return denied
+    board = BoardModel.objects.select_related("manufacturer", "source").prefetch_related("compatibility").filter(pk=board_id).first()
+    if not board:
+        return _error("Board not found.", status=404)
+    try:
+        changed = enrich_board_from_espboards(board)
+    except Exception as exc:
+        return _error(f"Board enrichment failed: {exc}")
+    board = BoardModel.objects.select_related("manufacturer", "source").prefetch_related("compatibility").get(pk=board.pk)
+    return JsonResponse({"board": _serialise_board(board, detailed=True), "changed": changed})
 
 
 @login_required
@@ -688,8 +830,6 @@ def import_board_commit(request):
         return _validation_response(exc)
 
 
-@login_required
-@require_http_methods(["GET"])
 def _attribution_row(kind, obj):
     specs = obj.specifications or {}
     provider = specs.get("image_source_provider") or ""

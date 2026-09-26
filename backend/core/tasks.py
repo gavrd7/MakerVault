@@ -1,6 +1,7 @@
 from celery import shared_task
 
 from .catalogue_image_sources import run_catalogue_image_seed
+from .catalogue_enrichment import run_board_catalogue_enrichment
 
 
 @shared_task
@@ -15,4 +16,12 @@ def seed_catalogue_images_task(self, limit=None, force_retry=False):
     # Celery worker for longer than its normal task time limit.
     if result.get("status") == "limit-reached":
         self.apply_async(kwargs={"limit": limit, "force_retry": False}, countdown=5)
+    return result
+
+
+@shared_task(bind=True, acks_late=True)
+def enrich_board_catalogue_task(self, limit=None):
+    result = run_board_catalogue_enrichment(limit=limit)
+    if result.get("status") == "limit-reached":
+        self.apply_async(kwargs={"limit": limit}, countdown=5)
     return result

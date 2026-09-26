@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.3.0
+
+- Added full clickable physical inventory detail records.
+- Added an inventory edit workflow for project, status, location, identifiers, purchase data, supplier, notes and quantity.
+- Added persistent inventory lifecycle/history records with the user, timestamp and before/after values.
+- Project assignments/unassignments, status changes and location changes receive dedicated lifecycle events.
+- Preserved fast spreadsheet-style inline editing while making rows openable for deeper management.
+- Added a database migration for the new InventoryHistory model.
+- Expanded ESPBoards parsing for technical facts including CPU cores/clock, SRAM, ADC/DAC, UART, SPI, I2C, PWM, pin count, operating voltage and native USB hints.
+- Added automatic background technical-spec enrichment for supported ESP-family catalogue boards.
+- Added per-board "Refresh specs" action and richer technical detail display/source links.
+- Kept technical data enrichment separate from third-party image licensing.
+- Added migration consistency checks to CI.
+
+
 ## v0.2.3
 
 - Licensed MakerVault source code under GNU AGPL v3.0 or later.

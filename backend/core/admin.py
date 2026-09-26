@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     Manufacturer, CatalogSource, BoardModel, BoardCompatibility, ComponentCategory,
-    ComponentModel, Project, InventoryItem, BOMItem, FileAsset, RepositoryLink,
+    ComponentModel, Project, InventoryItem, InventoryHistory, BOMItem, FileAsset, RepositoryLink,
     FilamentProduct, Spool, Printer, Model3D, ModelRevision, ProductListing, PrintJob,
 )
 
@@ -19,6 +19,14 @@ class InventoryItemAdmin(admin.ModelAdmin):
     list_display = ("inventory_id", "display_name", "item_type", "quantity", "status", "project", "location")
     list_filter = ("item_type", "status")
     search_fields = ("inventory_id", "custom_name", "board__name", "component__name", "serial_number")
+
+
+@admin.register(InventoryHistory)
+class InventoryHistoryAdmin(admin.ModelAdmin):
+    list_display = ("inventory_item", "event_type", "summary", "project", "changed_by", "created_at")
+    list_filter = ("event_type", "created_at")
+    search_fields = ("inventory_item__inventory_id", "summary", "project__name")
+    readonly_fields = ("inventory_item", "event_type", "summary", "changes", "project", "changed_by", "created_at", "updated_at")
 
 
 @admin.register(Project)

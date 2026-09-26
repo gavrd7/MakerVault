@@ -196,6 +196,38 @@ class InventoryItem(TimeStampedModel):
         return f"{self.inventory_id} — {self.display_name}"
 
 
+class InventoryHistory(TimeStampedModel):
+    EVENT_TYPES = [
+        ("created", "Added to inventory"),
+        ("updated", "Updated"),
+        ("assigned", "Assigned to project"),
+        ("unassigned", "Removed from project"),
+        ("status", "Status changed"),
+        ("location", "Location changed"),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    inventory_item = models.ForeignKey(
+        InventoryItem, on_delete=models.CASCADE, related_name="history"
+    )
+    event_type = models.CharField(max_length=20, choices=EVENT_TYPES, default="updated")
+    summary = models.CharField(max_length=500)
+    changes = models.JSONField(default=dict, blank=True)
+    project = models.ForeignKey(
+        Project, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="inventory_history"
+    )
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="makervault_inventory_changes"
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.inventory_item.inventory_id} — {self.summary}"
+
+
 class BOMItem(TimeStampedModel):
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="bom_items")
     board = models.ForeignKey(BoardModel, on_delete=models.SET_NULL, null=True, blank=True, related_name="bom_items")
