@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
@@ -16,7 +18,17 @@ def env_list(name: str, default: str = "") -> list[str]:
 
 
 DEBUG = env_bool("DJANGO_DEBUG", False)
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "unsafe-development-key")
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "").strip()
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = "unsafe-development-key"
+    else:
+        raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set when DJANGO_DEBUG=false.")
+if not DEBUG and (
+    len(SECRET_KEY) < 32
+    or SECRET_KEY in {"unsafe-development-key", "CHANGE_ME_TO_A_LONG_RANDOM_VALUE"}
+):
+    raise ImproperlyConfigured("DJANGO_SECRET_KEY must be a strong, non-default value in production.")
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS", "http://localhost:8765")
 
@@ -27,7 +39,7 @@ USE_TZ = True
 
 MAKERVAULT_CURRENCY = os.getenv("MAKERVAULT_CURRENCY", "GBP")
 MAKERVAULT_MEASUREMENT_SYSTEM = os.getenv("MAKERVAULT_MEASUREMENT_SYSTEM", "metric")
-MAKERVAULT_VERSION = "0.3.4"
+MAKERVAULT_VERSION = "0.3.5"
 MAKERVAULT_LICENSE = "AGPL-3.0-or-later"
 MAKERVAULT_SOURCE_URL = os.getenv("MAKERVAULT_SOURCE_URL", "https://github.com/gavrd7/MakerVault")
 ALLOW_LOCAL_REGISTRATION = env_bool("ALLOW_LOCAL_REGISTRATION", False)
@@ -37,6 +49,7 @@ OIDC_ENV_PROVIDER_ID = os.getenv("OIDC_PROVIDER_ID", "oidc")
 OIDC_ENV_PROVIDER_NAME = os.getenv("OIDC_PROVIDER_NAME", "OpenID Connect")
 OIDC_ENV_SERVER_URL = os.getenv("OIDC_SERVER_URL", "").strip()
 OIDC_ENV_CLIENT_ID = os.getenv("OIDC_CLIENT_ID", "").strip()
+OIDC_ALLOW_INSECURE_ISSUERS = env_bool("OIDC_ALLOW_INSECURE_ISSUERS", False)
 
 # Background catalogue enrichment. Facts/specifications are pulled separately from media licensing.
 ENRICH_BOARD_CATALOGUE = env_bool("ENRICH_BOARD_CATALOGUE", True)
@@ -227,6 +240,6 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = SECURE_HSTS_SECONDS > 0
 SECURE_HSTS_PRELOAD = False
 if env_bool("TRUST_PROXY_HEADERS", True):
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-    USE_X_FORWARDED_HOST = True
+USE_X_FORWARDED_HOST = env_bool("TRUST_X_FORWARDED_HOST", False)
 
 SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
