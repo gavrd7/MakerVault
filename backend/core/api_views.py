@@ -500,8 +500,14 @@ def _catalogue_image_response(request, obj, permission, serializer, response_key
         if obj.image:
             obj.image.delete(save=False)
         specs = dict(obj.specifications or {})
-        for key in ["external_image_url", "image_source_url", "image_source_type", "image_cached_at"]:
+        for key in [
+            "external_image_url", "image_source_url", "image_source_type", "image_cached_at",
+            "image_source_provider", "image_source_page", "image_source_query",
+            "image_license", "image_author", "auto_image_seeded", "auto_image_seeded_at",
+        ]:
             specs.pop(key, None)
+        # A deliberate removal is respected by the automatic seeder.
+        specs["auto_image_opt_out"] = True
         obj.specifications = specs
         obj.image = None
         obj.save()
