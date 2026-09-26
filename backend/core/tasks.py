@@ -10,4 +10,9 @@ def ping_worker():
 
 @shared_task(bind=True, acks_late=True)
 def seed_catalogue_images_task(self, limit=None, force_retry=False):
-    return run_catalogue_image_seed(limit=limit, force_retry=force_retry)
+    result = run_catalogue_image_seed(limit=limit, force_retry=force_retry)
+    # Work in bounded batches so a large first-run catalogue never holds a
+    # Celery worker for longer than its normal task time limit.
+    if result.get("status") == "limit-reached":
+        self.apply_async(kwargs={"limit": limit, "force_retry": force_retry}, countdown=5)
+    return result
