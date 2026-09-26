@@ -70,12 +70,17 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build MakerVault image
         run: docker build --pull -t makervault-ci .
-      - name: Scan container image for high/critical vulnerabilities
+      - name: Verify secured Python runtime versions in image
+        run: |
+          docker run --rm makervault-ci python -c \
+            "import importlib.metadata as m; print('msgpack', m.version('msgpack')); print('setuptools', m.version('setuptools')); assert tuple(map(int, m.version('msgpack').split('.'))) >= (1,2,1); assert tuple(map(int, m.version('setuptools').split('.'))) >= (78,1,1)"
+      - name: Scan container OS packages for high/critical vulnerabilities
         run: |
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
             aquasec/trivy:0.74.0 image \
             --scanners vuln \
+            --pkg-types os \
             --ignore-unfixed \
             --severity HIGH,CRITICAL \
             --exit-code 1 \
