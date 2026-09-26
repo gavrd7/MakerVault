@@ -14,5 +14,5 @@ def seed_catalogue_images_task(self, limit=None, force_retry=False):
     # Work in bounded batches so a large first-run catalogue never holds a
     # Celery worker for longer than its normal task time limit.
     if result.get("status") == "limit-reached":
-        self.apply_async(kwargs={"limit": limit, "force_retry": force_retry}, countdown=5)
+        self.apply_async(kwargs={"limit": limit, "force_retry": False}, countdown=5)
     return result
