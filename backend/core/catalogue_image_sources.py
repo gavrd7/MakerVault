@@ -14,7 +14,6 @@ from django.utils.text import slugify
 
 from .catalogue_images import CatalogueImageError, apply_catalogue_image, fetch_public_image
 from .importers import ImporterError, fetch_import_html
-from .models import BoardModel, ComponentModel
 
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
@@ -94,7 +93,7 @@ def _title_score(title: str, query: str) -> float:
     return len(overlap) / len(wanted)
 
 
-def _commons_query_for_component(component: ComponentModel) -> str:
+def _commons_query_for_component(component) -> str:
     specs = component.specifications or {}
     part = (component.part_number or "").strip()
     if part:
@@ -103,7 +102,7 @@ def _commons_query_for_component(component: ComponentModel) -> str:
     return GENERIC_COMPONENT_QUERY_BY_TYPE.get(item_type, component.name)
 
 
-def _commons_query_for_board(board: BoardModel) -> str:
+def _commons_query_for_board(board) -> str:
     maker = board.manufacturer.name if board.manufacturer else ""
     return f"{maker} {board.name} microcontroller board".strip()
 
@@ -170,7 +169,7 @@ def search_wikimedia_commons(query: str, *, minimum_score: float = 0.18) -> Imag
     return candidate
 
 
-def _espboards_slug_candidates(board: BoardModel) -> list[str]:
+def _espboards_slug_candidates(board) -> list[str]:
     name = board.name
     manufacturer = board.manufacturer.name if board.manufacturer else ""
     variants = [name]
@@ -189,7 +188,7 @@ def _espboards_slug_candidates(board: BoardModel) -> list[str]:
     return slugs[:5]
 
 
-def find_espboards_image(board: BoardModel) -> ImageCandidate | None:
+def find_espboards_image(board) -> ImageCandidate | None:
     family_text = " ".join([board.family or "", board.mcu or "", board.name or ""]).upper()
     if "ESP32" not in family_text:
         return None
@@ -225,6 +224,8 @@ def find_espboards_image(board: BoardModel) -> ImageCandidate | None:
 
 
 def resolve_catalogue_image(obj) -> ImageCandidate | None:
+    from .models import BoardModel, ComponentModel
+
     if isinstance(obj, BoardModel):
         if settings.CATALOGUE_IMAGE_PREFER_ESPBOARDS:
             candidate = find_espboards_image(obj)
@@ -285,6 +286,8 @@ def _recent_attempt(specs: dict, retry_days: int) -> bool:
 
 
 def run_catalogue_image_seed(*, limit: int | None = None, force_retry: bool = False) -> dict:
+    from .models import BoardModel, ComponentModel
+
     limit = settings.CATALOGUE_IMAGE_MAX_PER_RUN if limit is None else max(int(limit), 0)
     retry_days = max(int(settings.CATALOGUE_IMAGE_RETRY_DAYS), 1)
     lock_key = "makervault:catalogue-image-seed:v0.2.2"
