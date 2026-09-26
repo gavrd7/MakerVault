@@ -1,0 +1,64 @@
+{% extends "allauth/layouts/base.html" %}
+{% block head_title %}Identity providers{% endblock %}
+{% block content %}
+<div class="security-page-head">
+  <div>
+    <span class="account-eyebrow">Administrator</span>
+    <h1>Identity providers</h1>
+    <p>Add OpenID Connect login providers without editing MakerVault's container environment.</p>
+  </div>
+  <a class="account-button primary" href="{% url 'oidc-provider-create' %}">+ Add OIDC provider</a>
+</div>
+
+<div class="account-callout">
+  <strong>Two configuration paths</strong>
+  <p>Providers added here are stored by django-allauth in PostgreSQL and can be enabled or disabled immediately. The <code>.env</code> OIDC settings remain available as a read-only bootstrap/fallback option.</p>
+</div>
+
+{% if env_provider %}
+<section class="security-section">
+  <div class="security-section-head"><div><h2>Environment provider</h2><p>Configured through <code>.env</code>. Edit this provider on the server.</p></div><span class="status-pill status-on">Enabled</span></div>
+  <div class="oidc-provider-card">
+    <div><strong>{{ env_provider.name }}</strong><small>{{ env_provider.provider_id }}</small></div>
+    <dl>
+      <div><dt>Issuer</dt><dd>{{ env_provider.server_url }}</dd></div>
+      <div><dt>Client ID</dt><dd>{{ env_provider.client_id }}</dd></div>
+      <div><dt>Auto signup</dt><dd>{% if env_provider.auto_signup %}Yes{% else %}No{% endif %}</dd></div>
+      <div><dt>Callback URI</dt><dd><code>{{ env_provider.callback_uri }}</code></dd></div>
+    </dl>
+  </div>
+</section>
+{% endif %}
+
+<section class="security-section">
+  <div class="security-section-head"><div><h2>GUI-managed providers</h2><p>Stored in the MakerVault database.</p></div><span class="status-pill">{{ providers|length }}</span></div>
+  {% if providers %}
+  <div class="provider-list">
+    {% for provider in providers %}
+    <article class="oidc-provider-card">
+      <div class="provider-card-head">
+        <div><strong>{{ provider.name }}</strong><small>{{ provider.provider_id }}</small></div>
+        <span class="status-pill {% if provider.enabled %}status-on{% endif %}">{% if provider.enabled %}Enabled{% else %}Disabled{% endif %}</span>
+      </div>
+      <dl>
+        <div><dt>Issuer</dt><dd>{{ provider.server_url }}</dd></div>
+        <div><dt>Client ID</dt><dd>{{ provider.client_id }}</dd></div>
+        <div><dt>PKCE</dt><dd>{% if provider.pkce %}On{% else %}Off{% endif %}</dd></div>
+        <div><dt>Auto signup</dt><dd>{% if provider.auto_signup %}Yes{% else %}No{% endif %}</dd></div>
+        <div class="wide"><dt>Callback URI</dt><dd><code>{{ provider.callback_uri }}</code></dd></div>
+      </dl>
+      <div class="provider-actions">
+        <a class="account-button" href="{% url 'oidc-provider-edit' provider.id %}">Edit</a>
+        <form method="post" action="{% url 'oidc-provider-delete' provider.id %}" onsubmit="return confirm('Remove this OIDC provider?');">
+          {% csrf_token %}
+          <button class="account-button danger" type="submit">Remove</button>
+        </form>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="account-empty"><strong>No GUI-managed providers yet.</strong><p>Add Authentik, Keycloak, Authelia or another standards-compliant OpenID Connect provider when you need it.</p></div>
+  {% endif %}
+</section>
+{% endblock %}
