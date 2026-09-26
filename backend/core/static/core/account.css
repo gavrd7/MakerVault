@@ -1,0 +1,116 @@
+:root{
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  color:#e9eef7;background:#0b0f14;color-scheme:dark
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:#0b0f14}
+body{min-width:320px}
+a{color:#a99bff;text-decoration:none}
+a:hover{color:#c3b9ff}
+button,input,select,textarea{font:inherit}
+.account-shell{min-height:100vh;display:grid;grid-template-columns:250px minmax(0,1fr)}
+.account-sidebar{
+  position:sticky;top:0;height:100vh;padding:24px 16px;
+  border-right:1px solid #242b35;background:#10161e;
+  display:flex;flex-direction:column;gap:26px
+}
+.account-brand{display:flex;align-items:center;gap:12px;padding:0 8px;color:#eef3fb}
+.account-brand:hover{color:#fff}
+.account-brandmark{
+  width:40px;height:40px;border-radius:12px;display:grid;place-items:center;
+  background:#7c5cff;color:#fff;font-weight:800
+}
+.account-brand strong,.account-brand small{display:block}
+.account-brand small{margin-top:2px;color:#8490a2;font-size:12px}
+.account-nav{display:grid;gap:6px}
+.account-nav a{
+  padding:11px 13px;border-radius:10px;color:#aeb8c7;font-size:14px
+}
+.account-nav a:hover{background:#1b2430;color:#fff}
+.account-nav .account-back{margin-bottom:8px;color:#c8c0ff}
+.account-sidebar-footer{
+  margin-top:auto;padding:10px 8px;display:grid;gap:8px;color:#7f8a9c;font-size:13px
+}
+.account-sidebar-footer a{color:#aeb8c7}
+.account-main{min-width:0;padding:42px 34px}
+.account-main-inner{width:min(900px,100%);margin:0 auto}
+.account-card{
+  border:1px solid #29313c;border-radius:18px;background:#10161e;
+  padding:clamp(22px,4vw,40px);box-shadow:0 18px 50px rgba(0,0,0,.18)
+}
+.account-card h1{font-size:clamp(28px,3vw,36px);margin:0 0 24px;line-height:1.15}
+.account-card h2{font-size:20px;margin:30px 0 12px}
+.account-card h3{font-size:17px;margin:24px 0 10px}
+.account-card p{color:#9eabba;line-height:1.6}
+.account-card ul{padding-left:20px;color:#aab5c4}
+.account-card li{margin:7px 0}
+.account-card hr{border:0;border-top:1px solid #29313c;margin:26px 0}
+.account-card form{display:grid;gap:16px;margin-top:16px}
+.account-card label{display:grid;gap:7px;color:#aeb8c7;font-size:13px;font-weight:650}
+.account-card input:not([type="checkbox"]):not([type="radio"]),
+.account-card select,.account-card textarea{
+  width:100%;min-height:44px;padding:10px 12px;border:1px solid #374251;
+  border-radius:10px;background:#0d131a;color:#eef3fb;outline:none
+}
+.account-card input:focus,.account-card select:focus,.account-card textarea:focus{
+  border-color:#8069ee;box-shadow:0 0 0 3px rgba(124,92,255,.15)
+}
+.account-card input[type="checkbox"],.account-card input[type="radio"]{accent-color:#7c5cff}
+.account-card button,.account-card input[type="submit"],.account-card a[role="button"]{
+  min-height:42px;padding:10px 14px;border:1px solid #7258e8;border-radius:10px;
+  background:#7258e8;color:#fff;font-weight:700;cursor:pointer;text-decoration:none
+}
+.account-card button:hover,.account-card input[type="submit"]:hover{background:#8069ee;border-color:#8069ee}
+.account-card button[type="button"],.account-card button.secondary{
+  background:#151d27;border-color:#374251;color:#dce5f2
+}
+.account-card table{width:100%;border-collapse:separate;border-spacing:0;border:1px solid #29313c;border-radius:12px;overflow:hidden}
+.account-card th,.account-card td{padding:12px;border-bottom:1px solid #29313c;text-align:left}
+.account-card tr:last-child td{border-bottom:0}
+.account-card th{background:#0d131a;color:#8f9bad;font-size:12px;text-transform:uppercase}
+.account-card code,.account-card pre{
+  background:#0a1017;border:1px solid #29313c;border-radius:8px;color:#cbd6e5
+}
+.account-card code{padding:2px 5px}
+.account-card pre{padding:14px;overflow:auto}
+.account-card .errorlist{margin:0;padding:10px 12px;list-style:none;border:1px solid #713843;background:#2a151a;color:#ffc0c7;border-radius:9px}
+.account-card .helptext{display:block;color:#7f8a9c;font-size:12px;line-height:1.5;margin-top:5px}
+.account-messages{display:grid;gap:10px;margin-bottom:16px}
+.account-message{padding:12px 14px;border-radius:10px;border:1px solid #3a475a;background:#111a26;color:#c8d5e7}
+.account-message.success{border-color:#2f6848;background:#13271d;color:#b8ebcb}
+.account-message.error{border-color:#713843;background:#2a151a;color:#ffc0c7}
+
+/* allauth's element templates often produce simple sibling blocks rather than semantic cards */
+.account-card>div{max-width:100%}
+.account-card>form+form{margin-top:12px}
+.account-card form>div{display:grid;gap:7px}
+.account-card [class*="badge"]{
+  display:inline-flex;align-items:center;border:1px solid #3d4a5b;border-radius:999px;
+  padding:3px 8px;font-size:11px;color:#b7c3d3;background:#151d27
+}
+
+/* MFA/security settings read as individual settings sections */
+.account-card h2+p,.account-card h3+p{margin-top:0}
+.account-card h2~ul,.account-card h3~ul{margin-top:8px}
+.account-card svg{max-width:100%}
+.account-card img{max-width:100%;height:auto}
+
+@media(max-width:900px){
+  .account-shell{grid-template-columns:1fr}
+  .account-sidebar{
+    position:static;height:auto;border-right:0;border-bottom:1px solid #242b35;
+    padding:14px 16px;gap:12px
+  }
+  .account-brand{display:none}
+  .account-nav{display:flex;overflow:auto;gap:6px;padding-bottom:2px}
+  .account-nav a{white-space:nowrap}
+  .account-sidebar-footer{display:none}
+  .account-main{padding:24px 18px 40px}
+}
+@media(max-width:600px){
+  .account-main{padding:14px 10px 28px}
+  .account-card{border-radius:14px;padding:20px 16px}
+  .account-card h1{font-size:28px}
+  .account-nav{margin:0 -6px;padding:0 6px 4px}
+  .account-card button,.account-card input[type="submit"]{width:100%}
+}

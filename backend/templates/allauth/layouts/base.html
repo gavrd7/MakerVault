@@ -1,0 +1,69 @@
+{% load static i18n %}
+<!doctype html>
+<html lang="{{ LANGUAGE_CODE|default:'en-gb' }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#10161e">
+  <title>{% block head_title %}Account{% endblock head_title %} · MakerVault</title>
+  <link rel="icon" type="image/svg+xml" href="{% static 'core/favicon.svg' %}">
+  <link rel="stylesheet" href="{% static 'core/account.css' %}">
+  {% block extra_head %}{% endblock extra_head %}
+</head>
+<body>
+{% block body %}
+  <div class="account-shell">
+    <aside class="account-sidebar">
+      <a class="account-brand" href="/">
+        <span class="account-brandmark">M</span>
+        <span><strong>MakerVault</strong><small>Account &amp; security</small></span>
+      </a>
+
+      {% if user.is_authenticated %}
+      <nav class="account-nav" aria-label="Account settings">
+        <a href="/" class="account-back">← Back to MakerVault</a>
+        {% url 'account_email' as email_url_ %}
+        {% if email_url_ %}<a href="{{ email_url_ }}">Email addresses</a>{% endif %}
+        {% url 'account_change_password' as password_url_ %}
+        {% if password_url_ %}<a href="{{ password_url_ }}">Password</a>{% endif %}
+        {% url 'socialaccount_connections' as connections_url_ %}
+        {% if connections_url_ %}<a href="{{ connections_url_ }}">Account connections</a>{% endif %}
+        {% url 'mfa_index' as mfa_url_ %}
+        {% if mfa_url_ %}<a href="{{ mfa_url_ }}">Security &amp; MFA</a>{% endif %}
+        {% url 'usersessions_list' as sessions_url_ %}
+        {% if sessions_url_ %}<a href="{{ sessions_url_ }}">Sessions</a>{% endif %}
+      </nav>
+      <div class="account-sidebar-footer">
+        <span>{{ user.get_username }}</span>
+        {% url 'account_logout' as logout_url_ %}
+        {% if logout_url_ %}<a href="{{ logout_url_ }}">Sign out</a>{% endif %}
+      </div>
+      {% else %}
+      <nav class="account-nav">
+        <a href="/" class="account-back">← MakerVault</a>
+        {% url 'account_login' as login_url_ %}
+        {% if login_url_ %}<a href="{{ login_url_ }}">Sign in</a>{% endif %}
+      </nav>
+      {% endif %}
+    </aside>
+
+    <main class="account-main">
+      <div class="account-main-inner">
+        {% if messages %}
+          <div class="account-messages">
+            {% for message in messages %}
+              <div class="account-message {{ message.tags|default:'' }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+        <section class="account-card">
+          {% block content %}{% endblock content %}
+        </section>
+      </div>
+    </main>
+  </div>
+{% endblock body %}
+{% block extra_body %}{% endblock extra_body %}
+</body>
+</html>

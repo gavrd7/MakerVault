@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.3.3
+
+- Replaced django-allauth's unstyled default account layout with a MakerVault-branded responsive account/security shell.
+- Styled account email, password, account connections, logout and MFA pages consistently with the main application.
+- Kept django-allauth's existing TOTP, WebAuthn/passkey and recovery-code security flows intact.
+- Added responsive navigation back to MakerVault and account settings.
+- Preserved allauth JavaScript hooks required for WebAuthn and account-management actions.
+- No database migration is required.
+
+
 ## v0.3.2
 
 - Reworked the board detail view into a genuinely responsive layout.
