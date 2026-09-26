@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.3.4
+
+- Grouped account controls under an explicit Account & Security navigation heading.
+- Added administrator-only GUI management for OpenID Connect identity providers.
+- GUI providers use django-allauth SocialApp records in PostgreSQL rather than writing MakerVault's .env file.
+- Added create/edit/remove and enable/disable controls for OIDC providers.
+- Displays the exact OIDC callback URI required by the external identity provider.
+- Supports per-provider PKCE, UserInfo fetching and automatic user provisioning settings.
+- Client secrets are never displayed after storage; leaving the field blank during edits preserves the current secret.
+- Existing environment-backed OIDC configuration remains supported as a read-only bootstrap/fallback provider.
+- No database migration is required.
+
+
 ## v0.3.3
 
 - Replaced django-allauth's unstyled default account layout with a MakerVault-branded responsive account/security shell.
