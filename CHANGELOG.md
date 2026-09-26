@@ -9,7 +9,7 @@
 - GUI-managed OIDC issuer URLs require HTTPS by default; insecure issuers require an explicit server-admin opt-in.
 - X-Forwarded-Host trust is now a separate opt-in rather than being enabled with all proxy headers.
 - Arbitrary remote catalogue-image fetching is restricted to administrators; editors may still upload local image files.
-- Added pip-audit, Bandit, npm audit and Django --deploy checks to CI.
+- Added pip-audit, Bandit, npm audit, Django --deploy and Trivy container-image checks to CI.\n- Raised msgpack to 1.2.1+ and setuptools to 78.1.1+ after the first container scan identified high-severity fixed vulnerabilities in the cached runtime image.
 - Reduced the recommended request-body limit in .env.example to 64 MiB for the current feature set.
 - No database migration is required.
 
