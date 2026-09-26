@@ -210,29 +210,6 @@ def parse_espboards_html(source_url: str, html: str) -> dict:
         r"\bSRAM\b[^\d]{0,24}(\d+(?:\.\d+)?)\s*KB\b",
     ])
     clock_mhz = _first_number(flat, [r"(\d+(?:\.\d+)?)\s*MHz\b"])
-    core_count = _first_number(flat, [
-        r"(\d+)\s*(?:CPU\s*)?cores?\b",
-        r"\bcores?\b[^\d]{0,12}(\d+)\b",
-    ])
-    adc_channels = _first_number(flat, [
-        r"(\d+)\s*ADC\s*(?:channels?|pins?)\b",
-        r"\bADC\b[^\d]{0,16}(\d+)\b",
-    ])
-    dac_channels = _first_number(flat, [
-        r"(\d+)\s*DAC\s*(?:channels?|pins?)\b",
-        r"\bDAC\b[^\d]{0,16}(\d+)\b",
-    ])
-    uart_count = _first_number(flat, [r"(\d+)\s*UART\b", r"\bUART\b[^\d]{0,12}(\d+)\b"])
-    spi_count = _first_number(flat, [r"(\d+)\s*SPI\b", r"\bSPI\b[^\d]{0,12}(\d+)\b"])
-    i2c_count = _first_number(flat, [r"(\d+)\s*I2C\b", r"\bI2C\b[^\d]{0,12}(\d+)\b"])
-    pwm_channels = _first_number(flat, [
-        r"(\d+)\s*PWM\s*(?:channels?|pins?)\b",
-        r"\bPWM\b[^\d]{0,16}(\d+)\b",
-    ])
-    pin_count = _first_number(flat, [
-        r"(\d+)\s*(?:total\s*)?pins?\b",
-        r"\bpins?\b[^\d]{0,12}(\d+)\b",
-    ])
     gpio_count = _first_number(flat, [
         r"(\d+)\s*[·/]\s*\d+\s*ADC\s*GPIO\b",
         r"\bGPIO\s*[·:/-]?\s*(\d+)\b",
@@ -264,26 +241,9 @@ def parse_espboards_html(source_url: str, html: str) -> dict:
         if re.search(pattern, flat, re.IGNORECASE):
             compatibility.append({"platform": platform, "support_level": "full"})
 
-    operating_voltage = ""
-    voltage_match = re.search(r"(?:logic|operating|io)\s*voltage[^\d]{0,16}(\d+(?:\.\d+)?)\s*V", flat, re.IGNORECASE)
-    if voltage_match:
-        operating_voltage = f"{voltage_match.group(1)} V"
-    elif re.search(r"\b3\.3\s*V\b", flat, re.IGNORECASE):
-        operating_voltage = "3.3 V"
-
     specifications = {
         "clock_mhz": int(clock_mhz) if clock_mhz and clock_mhz.is_integer() else clock_mhz,
-        "cpu_cores": int(core_count) if core_count is not None else None,
         "sram_kb": sram_kb,
-        "adc_channels": int(adc_channels) if adc_channels is not None else None,
-        "dac_channels": int(dac_channels) if dac_channels is not None else None,
-        "uart_count": int(uart_count) if uart_count is not None else None,
-        "spi_count": int(spi_count) if spi_count is not None else None,
-        "i2c_count": int(i2c_count) if i2c_count is not None else None,
-        "pwm_channels": int(pwm_channels) if pwm_channels is not None else None,
-        "pin_count": int(pin_count) if pin_count is not None else None,
-        "operating_voltage": operating_voltage,
-        "native_usb": bool(re.search(r"\bnative\s+USB\b|\bUSB\s+OTG\b", flat, re.IGNORECASE)),
         "external_image_url": image_url,
         "datasheet_url": datasheet_url,
         "pinout_url": pinout_url,
