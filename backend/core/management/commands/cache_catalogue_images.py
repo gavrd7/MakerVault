@@ -1,4 +1,5 @@
 from django.core.management.base import BaseCommand
+from django.db.models import Q
 
 from core.catalogue_images import CatalogueImageError, cache_catalogue_image_from_url
 from core.models import BoardModel, ComponentModel
@@ -15,8 +16,8 @@ class Command(BaseCommand):
         candidates = []
 
         for kind, queryset in [
-            ("board", BoardModel.objects.filter(image="")),
-            ("component", ComponentModel.objects.filter(image="")),
+            ("board", BoardModel.objects.filter(Q(image="") | Q(image__isnull=True))),
+            ("component", ComponentModel.objects.filter(Q(image="") | Q(image__isnull=True))),
         ]:
             for obj in queryset.iterator():
                 specs = obj.specifications or {}

@@ -1,8 +1,8 @@
-# MakerVault v0.2.0
+# MakerVault v0.2.1
 
 MakerVault is a self-hosted makerspace inventory and project system for electronics, firmware, fabrication and 3D-printing assets.
 
-v0.2 builds the first real catalogue/inventory workflow on top of the v0.1 foundation:
+v0.2.1 expands the first real catalogue/inventory workflow with a much broader curated catalogue and local catalogue-image management:
 
 - Django 5.2 LTS backend and authentication
 - local accounts, MFA-capable django-allauth, and optional generic OIDC client support
@@ -10,7 +10,9 @@ v0.2 builds the first real catalogue/inventory workflow on top of the v0.1 found
 - PostgreSQL database
 - Redis + Celery worker in the same MakerVault application container
 - board catalogue with common ESP32/ESP8266, Raspberry Pi/Pico, Arduino, Seeed XIAO, M5Stack, Adafruit, SparkFun and Teensy families
-- starter catalogue of commonly used maker components
+- expanded starter catalogue with 65+ board definitions and 130+ common maker-component definitions across sensors, displays, communications, power, audio, controls, motors, connectors, prototyping and more
+- structured component attributes such as type, interface, voltage/input and package/form factor
+- catalogue image upload and secure remote-image caching into MakerVault media storage
 - spreadsheet-style physical inventory with inline editing
 - manual board/component creation
 - secure ESPBoards.dev URL import with preview and duplicate-aware enrichment
@@ -137,7 +139,7 @@ v0.2 includes the first source adapter: **ESPBoards.dev**.
 
 The Import URL flow previews extracted data before committing it. The importer is deliberately restricted to approved public hosts and validates redirects/DNS answers to prevent it becoming an SSRF proxy into the server or LAN.
 
-See docs/IMPORTERS.md for the current security model and planned adapters.
+See docs/IMPORTERS.md for the current security model and planned adapters. ESPBoards imports now attempt to cache a sanitised local copy of the source image automatically; existing remote-image records can be cached with `make cache-catalogue-images`.
 
 ## Reverse proxy / Internet exposure
 
@@ -203,8 +205,30 @@ make update
 make shell
 make migrate
 make seed-catalogue
+make cache-catalogue-images
 make createsuperuser
 make check
 ~~~
 
 GitHub Actions verifies Python compilation/importer tests, the React/Vite build and the production Docker image for pull requests and main.
+
+
+## Catalogue images
+
+MakerVault stores catalogue pictures in the configured media directory rather than relying permanently on third-party hotlinks.
+
+From a board or component detail pane, administrators/editors can:
+
+- upload a JPEG, PNG or WebP image;
+- provide a public HTTPS image URL for MakerVault to cache locally;
+- replace or remove a cached image.
+
+Uploaded/downloaded images are decoded with Pillow, metadata is stripped, oversized images are reduced, and the stored result is a WebP file. Remote image URLs are checked to prevent access to loopback, private, link-local, reserved and other non-public network addresses.
+
+To cache source images already attached to catalogue metadata:
+
+~~~bash
+make cache-catalogue-images
+~~~
+
+The physical files live under the configured media storage, e.g. /mnt/Server/MakerVault/media/boards/catalog/ and /mnt/Server/MakerVault/media/components/catalog/.

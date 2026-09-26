@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.2.1
+
+- Expanded the curated starter catalogue to 65+ board definitions and 130+ common maker components.
+- Added broader board-family coverage including Waveshare, LilyGo, Heltec, Olimex, Elecrow and DFRobot alongside existing families.
+- Added structured component metadata for type, interface, voltage/input, package/form factor and category-specific attributes.
+- Added component detail panes with searchable/filterable catalogue columns.
+- Added catalogue image upload for boards and components.
+- Added secure HTTPS remote-image caching with private/reserved network blocking, redirect revalidation, size limits and Pillow decoding.
+- Catalogue images are sanitised and stored locally as WebP files under MakerVault media storage.
+- ESPBoards imports now make a best-effort attempt to cache their product image locally.
+- Added a cache_catalogue_images management command for existing records with remote image metadata.
+- Added catalogue integrity and image-sanitisation tests.
+- No database migration is required for this release.
+
+
 ## v0.2.0
 
 - Added a first-class Board Catalogue page with filtering, board details, connectivity and compatibility information.
