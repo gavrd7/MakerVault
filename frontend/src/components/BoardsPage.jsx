@@ -32,6 +32,18 @@ function prettySpecValue(key, value) {
   return String(value ?? "—");
 }
 
+
+function BoardSpecGrid({ rows }) {
+  return <dl className="boardSpecGrid">
+    {rows.map(({ key, label, value }) => <div className="boardSpecCell" key={key}>
+      <dt>{label}</dt>
+      <dd className={value === null || value === undefined || value === "" ? "specMissing" : ""}>
+        {value === null || value === undefined || value === "" ? "—" : value}
+      </dd>
+    </div>)}
+  </dl>;
+}
+
 export default function BoardsPage({ boards, setBoards, config, onOpenImport, refreshDashboard }) {
   const [query, setQuery] = useState("");
   const [manufacturer, setManufacturer] = useState("");
@@ -127,16 +139,31 @@ function BoardDetail({ board, loading, canEdit, onClose, onChanged }) {
   const radios = [[board.wifi, "Wi-Fi"], [board.bluetooth, "Bluetooth"], [board.zigbee, "Zigbee"], [board.thread, "Thread"]]
     .filter(([on]) => on).map(([, label]) => label);
 
-  const hiddenSpecKeys = new Set([
-    "external_image_url", "image_source_url", "image_source_page", "image_source_provider",
-    "image_source_query", "image_source_type", "image_license", "image_author", "image_cached_at",
-    "auto_image_seeded", "auto_image_seeded_at", "auto_image_last_attempt", "auto_image_opt_out",
-    "starter_catalogue", "catalogue_version", "source_url", "imported_from",
-    "technical_source_url", "technical_source_provider", "technical_enriched_at",
-    "datasheet_url", "pinout_url",
-  ]);
-  const technicalSpecs = Object.entries(board.specifications || {})
-    .filter(([key, value]) => !hiddenSpecKeys.has(key) && value !== null && value !== "" && value !== undefined);
+  const specs = board.specifications || {};
+  const coreRows = [
+    { key: "mcu", label: "MCU", value: board.mcu || "" },
+    { key: "architecture", label: "Architecture", value: board.architecture || "" },
+    { key: "flash", label: "Flash", value: board.flash_mb == null ? "" : `${board.flash_mb} MB` },
+    { key: "psram", label: "PSRAM", value: board.psram_mb == null ? "" : `${board.psram_mb} MB` },
+    { key: "ram", label: "RAM / SRAM", value: board.ram_kb == null ? (specs.sram_kb == null ? "" : `${specs.sram_kb} KB`) : `${board.ram_kb} KB` },
+    { key: "gpio", label: "GPIO", value: board.gpio_count ?? "" },
+    { key: "usb", label: "USB connector", value: board.usb_connector || "" },
+    { key: "dimensions", label: "Dimensions", value: board.dimensions_mm?.length && board.dimensions_mm?.width ? `${board.dimensions_mm.length} × ${board.dimensions_mm.width} mm` : "" },
+  ];
+  const technicalRows = [
+    { key: "clock_mhz", label: "Clock", value: specs.clock_mhz == null ? "" : `${specs.clock_mhz} MHz` },
+    { key: "cpu_cores", label: "CPU cores", value: specs.cpu_cores ?? "" },
+    { key: "operating_voltage", label: "Operating voltage", value: specs.operating_voltage || "" },
+    { key: "pin_count", label: "Pin count", value: specs.pin_count ?? "" },
+    { key: "adc_channels", label: "ADC channels", value: specs.adc_channels ?? "" },
+    { key: "dac_channels", label: "DAC channels", value: specs.dac_channels ?? "" },
+    { key: "uart_count", label: "UART", value: specs.uart_count ?? "" },
+    { key: "spi_count", label: "SPI", value: specs.spi_count ?? "" },
+    { key: "i2c_count", label: "I²C", value: specs.i2c_count ?? "" },
+    { key: "pwm_channels", label: "PWM channels", value: specs.pwm_channels ?? "" },
+    { key: "native_usb", label: "Native USB", value: specs.native_usb === true ? "Yes" : specs.native_usb === false ? "No" : "" },
+    { key: "wireless", label: "Wireless", value: radios.length ? radios.join(" · ") : "" },
+  ];
 
   async function enrichBoard() {
     setEnriching(true); setEnrichMessage("");
@@ -167,15 +194,10 @@ function BoardDetail({ board, loading, canEdit, onClose, onChanged }) {
       <div className="badgeRow">{radios.map(x => <Badge key={x} tone="accent">{x}</Badge>)}{board.usb_connector && <Badge>{board.usb_connector}</Badge>}</div>
 
       <h4>Core specifications</h4>
-      <dl className="specList">
-        <div><dt>MCU</dt><dd>{board.mcu || "—"}</dd></div><div><dt>Architecture</dt><dd>{board.architecture || "—"}</dd></div>
-        <div><dt>Flash</dt><dd>{board.flash_mb == null ? "—" : `${board.flash_mb} MB`}</dd></div><div><dt>PSRAM</dt><dd>{board.psram_mb == null ? "—" : `${board.psram_mb} MB`}</dd></div>
-        <div><dt>RAM / SRAM</dt><dd>{board.ram_kb == null ? (board.specifications?.sram_kb == null ? "—" : `${board.specifications.sram_kb} KB`) : `${board.ram_kb} KB`}</dd></div><div><dt>GPIO</dt><dd>{board.gpio_count ?? "—"}</dd></div>
-        <div><dt>USB</dt><dd>{board.usb_connector || "—"}</dd></div><div><dt>Dimensions</dt><dd>{board.dimensions_mm?.length && board.dimensions_mm?.width ? `${board.dimensions_mm.length} × ${board.dimensions_mm.width} mm` : "—"}</dd></div>
-      </dl>
+      <BoardSpecGrid rows={coreRows} />
 
       <h4>Technical details</h4>
-      {technicalSpecs.length ? <dl className="detailSpecs">{technicalSpecs.map(([key, value]) => <div key={key}><dt>{prettySpecKey(key)}</dt><dd>{prettySpecValue(key, value)}</dd></div>)}</dl> : <p className="muted">No extended technical data has been populated yet.</p>}
+      <BoardSpecGrid rows={technicalRows} />
 
       <h4>Compatibility</h4>
       <div className="compatList">{board.compatibility?.length ? board.compatibility.map(item => <div key={item.platform}><strong>{item.platform}</strong><Badge tone={item.support_level === "full" ? "good" : "neutral"}>{item.support_label}</Badge></div>) : <span className="muted">No compatibility records yet.</span>}</div>
