@@ -670,6 +670,12 @@ def _catalogue_image_response(request, obj, permission, serializer, response_key
             image_content, filename = sanitise_uploaded_image(uploaded, stem)
             apply_catalogue_image(obj, image_content, filename, source_type="upload")
         else:
+            if not request.user.is_staff:
+                return _error(
+                    "Remote catalogue image fetching is restricted to administrators; "
+                    "editors can upload an image file instead.",
+                    status=403,
+                )
             payload = _read_json(request)
             image_url = str(payload.get("url") or "").strip()
             if not image_url:
