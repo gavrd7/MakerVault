@@ -5,11 +5,12 @@ import BoardsPage, { ImportBoardModal } from "./components/BoardsPage";
 import ComponentsPage from "./components/ComponentsPage";
 import Dashboard from "./components/Dashboard";
 import InventoryPage from "./components/InventoryPage";
+import AboutPage from "./components/AboutPage";
 import { EmptyModule } from "./components/Common";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
-const NAV = ["Dashboard", "Inventory", "Board Catalogue", "Projects", "Components", "3D Printing", "Files"];
+const NAV = ["Dashboard", "Inventory", "Board Catalogue", "Projects", "Components", "3D Printing", "Files", "About"];
 
 export default function App() {
   const [section, setSection] = useState("Dashboard");
@@ -44,12 +45,13 @@ export default function App() {
     if (section === "Components") return <ComponentsPage components={components} setComponents={setComponents} config={config} refreshDashboard={refreshDashboard} />;
     if (section === "Projects") return <EmptyModule title="Project workspace is next">Project records and BOM relationships already exist. The next interface milestone will add project galleries, wiring, files, repositories and cost rollups.</EmptyModule>;
     if (section === "3D Printing") return <EmptyModule title="3D printing data is ready">Printer, filament, spool, 3D model/revision and print-job schemas are already present. SpoolmanDB and 3D model workflows are planned for the next importer milestone.</EmptyModule>;
-    return <EmptyModule title="File library is ready">MakerVault already stores authenticated project, firmware, wiring, CAD, STL and 3MF assets. The dedicated browser and 3D preview workflow is a following milestone.</EmptyModule>;
+    if (section === "Files") return <EmptyModule title="File library is ready">MakerVault already stores authenticated project, firmware, wiring, CAD, STL and 3MF assets. The dedicated browser and 3D preview workflow is a following milestone.</EmptyModule>;
+    return <AboutPage config={config} />;
   }
 
   return <div className="shell">
     <aside>
-      <div className="brand"><span className="brandmark">M</span><div><strong>MakerVault</strong><small>v0.2.2 catalogue</small></div></div>
+      <div className="brand"><span className="brandmark">M</span><div><strong>MakerVault</strong><small>v0.2.3 · AGPL</small></div></div>
       <nav>{NAV.map(n => <button key={n} className={section === n ? "active" : ""} onClick={() => setSection(n)}>{n}</button>)}</nav>
       <div className="asideBottom"><a href="/admin/">Administration</a><a href="/accounts/2fa/">Security / MFA</a><a href="/accounts/logout/">Sign out</a></div>
     </aside>

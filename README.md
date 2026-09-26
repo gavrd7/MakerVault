@@ -1,4 +1,4 @@
-# MakerVault v0.2.2
+# MakerVault v0.2.3
 
 MakerVault is a self-hosted makerspace inventory and project system for electronics, firmware, fabrication and 3D-printing assets.
 
@@ -244,7 +244,7 @@ By default MakerVault queues a background catalogue-image pass after the starter
 SEED_CATALOGUE_IMAGES=true
 CATALOGUE_IMAGE_MAX_PER_RUN=60
 CATALOGUE_IMAGE_RETRY_DAYS=7
-CATALOGUE_IMAGE_PREFER_ESPBOARDS=true
+CATALOGUE_IMAGE_PREFER_ESPBOARDS=false
 CATALOGUE_IMAGE_WIKIMEDIA=true
 ~~~
 
@@ -259,3 +259,12 @@ make seed-catalogue-images
 ~~~
 
 Images are still sanitised to local WebP files in MEDIA_STORAGE. Online images are never required for normal page rendering after caching.
+
+
+## Licence
+
+MakerVault software is licensed under **GNU AGPL v3.0 or later (AGPL-3.0-or-later)**. See [LICENSE](LICENSE).
+
+Third-party catalogue images and other media are not relicensed under AGPL. Their original licence/provenance is retained and exposed in **About → Media attribution**. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+For automatic catalogue images, MakerVault defaults to Wikimedia Commons results reported as CC0/Public Domain, CC BY or CC BY-SA. CC BY-NC and NoDerivatives variants are excluded from the default automatic path. ESPBoards automatic image caching is disabled by default because its own board illustrations/pinouts are CC BY-NC 4.0.

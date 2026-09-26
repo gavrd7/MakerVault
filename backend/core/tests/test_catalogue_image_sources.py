@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from core.catalogue_image_sources import (
+    _commons_license_allowed,
     _espboards_slug_candidates,
     search_wikimedia_commons,
 )
@@ -69,6 +70,15 @@ class CatalogueImageSourceTests(unittest.TestCase):
         }
         get.return_value = response
         self.assertIsNone(search_wikimedia_commons("Example", minimum_score=0.0))
+
+    def test_commons_license_filter_rejects_noncommercial_and_nd(self):
+        self.assertTrue(_commons_license_allowed("CC BY 4.0"))
+        self.assertTrue(_commons_license_allowed("CC BY-SA 4.0"))
+        self.assertTrue(_commons_license_allowed("CC0 1.0"))
+        self.assertTrue(_commons_license_allowed("Public domain"))
+        self.assertFalse(_commons_license_allowed("CC BY-NC 4.0"))
+        self.assertFalse(_commons_license_allowed("CC BY-ND 4.0"))
+        self.assertFalse(_commons_license_allowed("CC BY-NC-SA 4.0"))
 
 
 if __name__ == "__main__":

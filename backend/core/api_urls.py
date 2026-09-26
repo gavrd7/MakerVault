@@ -15,4 +15,5 @@ urlpatterns = [
     path("import/board/preview/", api_views.import_board_preview, name="api-import-board-preview"),
     path("import/board/commit/", api_views.import_board_commit, name="api-import-board-commit"),
     path("config/", api_views.public_config, name="api-config"),
+    path("attributions/", api_views.attributions, name="api-attributions"),
 ]

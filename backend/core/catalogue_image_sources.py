@@ -18,12 +18,17 @@ from .importers import ImporterError, fetch_import_html
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 USER_AGENT = "MakerVault/0.2.2 (+self-hosted catalogue image seeder)"
-ALLOWED_COMMONS_LICENSE_PREFIXES = (
-    "CC BY",
-    "CC0",
-    "PUBLIC DOMAIN",
-    "PDM",
-)
+def _commons_license_allowed(license_name: str) -> bool:
+    """Allow only licences suitable for normal open redistribution."""
+    value = " ".join((license_name or "").strip().upper().split())
+    if not value:
+        return False
+    if "NC" in value or "ND" in value:
+        return False
+    if value.startswith("CC0") or value.startswith("PUBLIC DOMAIN") or value.startswith("PDM"):
+        return True
+    return value == "CC BY" or value.startswith("CC BY ") or value == "CC BY-SA" or value.startswith("CC BY-SA ")
+
 
 GENERIC_COMPONENT_QUERY_BY_TYPE = {
     "resistor": "electronic resistor component",
@@ -142,7 +147,7 @@ def search_wikimedia_commons(query: str, *, minimum_score: float = 0.18) -> Imag
             continue
         metadata = info.get("extmetadata") or {}
         license_name = _plain_html((metadata.get("LicenseShortName") or {}).get("value", ""))
-        if not license_name.upper().startswith(ALLOWED_COMMONS_LICENSE_PREFIXES):
+        if not _commons_license_allowed(license_name):
             continue
         image_url = info.get("thumburl") or info.get("url")
         source_page = info.get("descriptionurl") or ""
@@ -218,6 +223,8 @@ def find_espboards_image(board) -> ImageCandidate | None:
             image_url=image_url,
             source_page_url=final_url,
             provider="ESPBoards.dev",
+            license_name="CC BY-NC 4.0",
+            author="espboards.dev",
             query=board.name,
         )
     return None
