@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.3.1
+
+- Standardised board detail specification tables so every board shows the same fields in the same order.
+- Missing values now display as an em dash instead of collapsing sections or changing table height.
+- Core and technical specification sections now use the same two-column layout.
+- Preserved the two-column matrix in narrow board-detail panes for consistent comparison between boards.
+- No database migration is required.
+
+
 ## v0.3.0
 
 - Added full clickable physical inventory detail records.
