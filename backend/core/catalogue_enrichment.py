@@ -31,11 +31,17 @@ class EnrichmentResult:
 
 def _tokens(value: str) -> set[str]:
     stop = {"generic", "board", "development", "dev", "style", "mini", "module"}
-    return {
-        token
-        for token in re.findall(r"[a-z0-9]+", (value or "").lower())
-        if len(token) > 1 and token not in stop
-    }
+    raw = re.findall(r"[a-z0-9]+", (value or "").lower())
+    tokens = set()
+    for token in raw:
+        if len(token) <= 1 or token in stop:
+            continue
+        chip = re.fullmatch(r"(esp32)([a-z][0-9]?)", token)
+        if chip:
+            tokens.update(chip.groups())
+            continue
+        tokens.add(token)
+    return tokens
 
 
 def _slug_candidates(board) -> list[str]:
