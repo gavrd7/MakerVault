@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
 import { themeQuartz } from "ag-grid-community";
 import { apiFetch } from "../api";
-import { Badge, BoardImage, LoadingBlock, Modal } from "./Common";
+import { Badge, BoardImage, ImageManagerModal, LoadingBlock, Modal } from "./Common";
 
 export default function BoardsPage({ boards, setBoards, config, onOpenImport, refreshDashboard }) {
   const [query, setQuery] = useState("");
@@ -73,7 +73,16 @@ export default function BoardsPage({ boards, setBoards, config, onOpenImport, re
         />
       </div>
     </section>
-    {selected && <BoardDetail board={selected} loading={loadingDetail} onClose={() => setSelected(null)} />}
+    {selected && <BoardDetail
+      board={selected}
+      loading={loadingDetail}
+      canEdit={config?.permissions?.change_board}
+      onClose={() => setSelected(null)}
+      onChanged={updated => {
+        setBoards(rows => rows.map(row => row.id === updated.id ? updated : row));
+        setSelected(updated);
+      }}
+    />}
     {showAdd && <AddBoardModal onClose={() => setShowAdd(false)} onCreated={async board => {
       setBoards(rows => [...rows, board].sort((a, b) => a.display_name.localeCompare(b.display_name)));
       setShowAdd(false);
@@ -83,14 +92,15 @@ export default function BoardsPage({ boards, setBoards, config, onOpenImport, re
   </div>;
 }
 
-function BoardDetail({ board, loading, onClose }) {
+function BoardDetail({ board, loading, canEdit, onClose, onChanged }) {
+  const [imageOpen, setImageOpen] = useState(false);
   const radios = [[board.wifi, "Wi-Fi"], [board.bluetooth, "Bluetooth"], [board.zigbee, "Zigbee"], [board.thread, "Thread"]]
     .filter(([on]) => on).map(([, label]) => label);
   return <aside className="detailPane">
     <div className="detailHead"><h3>Board details</h3><button className="iconButton" onClick={onClose}>×</button></div>
     {loading ? <LoadingBlock label="Loading board details…" /> : <>
       <BoardImage src={board.image} alt={board.display_name} size="large" />
-      <h2>{board.display_name}</h2>
+      <div className="detailTitleRow"><h2>{board.display_name}</h2>{canEdit && <button onClick={() => setImageOpen(true)}>Image</button>}</div>
       <p className="muted">{board.description || `${board.family || "Development board"}${board.mcu ? ` · ${board.mcu}` : ""}`}</p>
       <div className="badgeRow">{radios.map(x => <Badge key={x} tone="accent">{x}</Badge>)}{board.usb_connector && <Badge>{board.usb_connector}</Badge>}</div>
       <dl className="specList">
@@ -101,7 +111,16 @@ function BoardDetail({ board, loading, onClose }) {
       <h4>Compatibility</h4>
       <div className="compatList">{board.compatibility?.length ? board.compatibility.map(item => <div key={item.platform}><strong>{item.platform}</strong><Badge tone={item.support_level === "full" ? "good" : "neutral"}>{item.support_label}</Badge></div>) : <span className="muted">No compatibility records yet.</span>}</div>
       {board.specifications?.datasheet_url && <a className="detailLink" href={board.specifications.datasheet_url} target="_blank" rel="noreferrer">Open datasheet ↗</a>}
+      {board.image_source_url && <p className="provenance"><span>Image source</span><a href={board.image_source_url} target="_blank" rel="noreferrer">Open original ↗</a></p>}
     </>}
+    {imageOpen && <ImageManagerModal
+      title={`Image — ${board.display_name}`}
+      endpoint={`/api/boards/${board.id}/image/`}
+      responseKey="board"
+      currentImage={board.image}
+      onClose={() => setImageOpen(false)}
+      onUpdated={updated => { onChanged(updated); setImageOpen(false); }}
+    />}
   </aside>;
 }
 
