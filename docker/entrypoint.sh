@@ -35,9 +35,12 @@ else
   chown "$PUID:$PGID" /app/media /app/staticfiles /app/run 2>/dev/null || true
 fi
 
-if [ "${DJANGO_DEBUG:-false}" != "true" ] && [ "${DJANGO_SECRET_KEY:-}" = "CHANGE_ME_TO_A_LONG_RANDOM_VALUE" ]; then
-  echo "ERROR: Set DJANGO_SECRET_KEY before running with DJANGO_DEBUG=false." >&2
-  exit 1
+if [ "${DJANGO_DEBUG:-false}" != "true" ]; then
+  SECRET_VALUE="${DJANGO_SECRET_KEY:-}"
+  if [ -z "$SECRET_VALUE" ] || [ "$SECRET_VALUE" = "CHANGE_ME_TO_A_LONG_RANDOM_VALUE" ] || [ "${#SECRET_VALUE}" -lt 32 ]; then
+    echo "ERROR: Set DJANGO_SECRET_KEY to a strong value (32+ characters) before running with DJANGO_DEBUG=false." >&2
+    exit 1
+  fi
 fi
 
 cd /app/backend
