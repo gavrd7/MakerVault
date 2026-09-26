@@ -69,7 +69,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build MakerVault image
-        run: docker build -t makervault-ci .
+        run: docker build --pull -t makervault-ci .
       - name: Scan container image for high/critical vulnerabilities
         run: |
           docker run --rm \
