@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.2.2
+
+- Added automatic background image seeding for starter board and component catalogue records.
+- ESP32-family boards prefer matched ESPBoards.dev pages and locally cache their board image where available.
+- Added a Wikimedia Commons fallback for boards/components using raster results with accepted free-license metadata.
+- Stores image provider, source page, query, license and author provenance with the catalogue record.
+- Automatic image work is queued to Celery so application startup remains fast.
+- Added configurable per-run limits and retry intervals.
+- Existing local/custom images are never overwritten.
+- Deliberately removed images are marked as opted out so automatic seeding does not restore them.
+- Added seed_catalogue_images management/Makefile commands and source-resolution tests.
+- No database migration is required.
+
+
 ## v0.2.1
 
 - Expanded the curated starter catalogue to 65+ board definitions and 130+ common maker components.
