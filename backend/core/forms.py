@@ -1,8 +1,10 @@
 import re
 
 from django import forms
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from allauth.socialaccount.models import SocialApp
+from urllib.parse import urlparse
 
 
 _PROVIDER_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{1,62}$")
@@ -66,4 +68,15 @@ class OIDCProviderForm(forms.Form):
         return value
 
     def clean_server_url(self):
-        return self.cleaned_data["server_url"].rstrip("/")
+        value = self.cleaned_data["server_url"].rstrip("/")
+        parsed = urlparse(value)
+        if parsed.username or parsed.password:
+            raise ValidationError("Credentials must not be embedded in the issuer URL.")
+        if parsed.query or parsed.fragment:
+            raise ValidationError("The issuer URL must not include a query string or fragment.")
+        if parsed.scheme != "https" and not settings.OIDC_ALLOW_INSECURE_ISSUERS:
+            raise ValidationError(
+                "OIDC issuer URLs must use HTTPS. A server administrator can explicitly "
+                "enable insecure issuers for an isolated lab deployment."
+            )
+        return value

@@ -10,3 +10,7 @@ python-magic>=0.4.27,<0.5
 argon2-cffi>=23,<26
 requests>=2.32,<3
 beautifulsoup4>=4.13,<5
+
+# Explicit security floors for runtime/transitive packages scanned in the final image.
+msgpack>=1.2.1,<2
+setuptools>=78.1.1

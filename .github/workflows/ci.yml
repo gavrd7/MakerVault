@@ -18,14 +18,29 @@ jobs:
           python-version: "3.13"
           cache: pip
       - name: Install backend dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
+          pip install pip-audit bandit
+      - name: Audit Python dependencies
+        run: pip-audit -r requirements.txt
+      - name: Static security scan
+        run: bandit -q -r backend -x backend/core/migrations -ll
       - name: Compile Python
         run: python -m compileall -q backend
       - name: Check Django model migrations
         env:
-          DJANGO_SECRET_KEY: ci-only-secret
+          DJANGO_SECRET_KEY: ci-only-secret-key-for-makervault-tests-0123456789
           POSTGRES_PASSWORD: ci-only-password
         run: python backend/manage.py makemigrations --check --dry-run
+      - name: Django deployment security checks
+        env:
+          DJANGO_SECRET_KEY: ci-only-secret-key-for-makervault-tests-0123456789
+          POSTGRES_PASSWORD: ci-only-password
+          DJANGO_ALLOWED_HOSTS: example.com
+          DJANGO_SECURE_COOKIES: "true"
+          DJANGO_SECURE_SSL_REDIRECT: "true"
+          DJANGO_HSTS_SECONDS: "31536000"
+        run: python backend/manage.py check --deploy
       - name: Importer unit tests
         env:
           PYTHONPATH: backend
@@ -41,6 +56,9 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm install --no-audit --no-fund
+      - name: Audit frontend dependencies
+        working-directory: frontend
+        run: npm audit --audit-level=high
       - name: Build frontend
         working-directory: frontend
         run: npm run build
@@ -51,4 +69,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build MakerVault image
-        run: docker build -t makervault-ci .
+        run: docker build --pull -t makervault-ci .
+      - name: Verify secured Python runtime versions in image
+        run: |
+          docker run --rm --entrypoint python makervault-ci -c \
+            "import importlib.metadata as m; print('msgpack', m.version('msgpack')); print('setuptools', m.version('setuptools')); assert tuple(map(int, m.version('msgpack').split('.'))) >= (1,2,1); assert tuple(map(int, m.version('setuptools').split('.'))) >= (78,1,1)"
+      - name: Scan container OS packages for high/critical vulnerabilities
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:0.74.0 image \
+            --scanners vuln \
+            --pkg-types os \
+            --ignore-unfixed \
+            --severity HIGH,CRITICAL \
+            --exit-code 1 \
+            makervault-ci

@@ -156,3 +156,28 @@ button,input,select,textarea{font:inherit}
  .provider-actions,.form-actions{display:grid;grid-template-columns:1fr}
  .provider-actions .account-button,.provider-actions button,.form-actions>*{width:100%}
 }
+
+/* v0.3.5 OIDC form consistency */
+.oidc-page-head{margin-bottom:18px}
+.oidc-form{gap:22px}
+.oidc-form-section{display:grid;gap:12px}
+.oidc-form-section h2{margin:0;font-size:18px}
+.oidc-form-grid{align-items:start}
+.oidc-form-grid label{min-width:0}
+.oidc-form-grid input[type="text"],
+.oidc-form-grid input[type="url"],
+.oidc-form-grid input[type="password"]{height:48px;min-height:48px}
+.oidc-toggle-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.oidc-toggle-card{
+  display:grid!important;grid-template-columns:auto minmax(0,1fr);gap:12px!important;align-items:start;
+  min-height:96px;padding:14px;border:1px solid #334052;border-radius:12px;background:#0d131a;cursor:pointer
+}
+.oidc-toggle-card:hover{border-color:#55479d;background:#101724}
+.oidc-toggle-card input{margin:3px 0 0;width:18px;height:18px}
+.oidc-toggle-card strong,.oidc-toggle-card small{display:block}
+.oidc-toggle-card strong{color:#e7edf7;font-size:14px}
+.oidc-toggle-card small{margin-top:4px;color:#7f8a9c;line-height:1.45;font-size:12px}
+.callback-box code{white-space:normal;word-break:break-all}
+@media(max-width:760px){
+  .oidc-toggle-grid{grid-template-columns:1fr}
+}

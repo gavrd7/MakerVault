@@ -89,7 +89,7 @@ def oidc_provider_create(request):
     return render(request, "core/oidc_provider_form.html", {
         "form": form,
         "mode": "create",
-        "callback_uri": request.build_absolute_uri("/accounts/oidc/<provider-id>/login/callback/"),
+        "callback_uri": request.build_absolute_uri("/accounts/oidc/") + "<provider-id>/login/callback/",
     })
 
 

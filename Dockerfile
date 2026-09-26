@@ -28,7 +28,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 COPY requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# The Python base image can carry preinstalled packaging libraries. Remove them
+# explicitly before installing MakerVault's audited runtime floors so scanners do
+# not retain stale vulnerable distributions alongside the upgraded copies.
+RUN pip uninstall -y msgpack setuptools >/dev/null 2>&1 || true \
+    && pip install --no-cache-dir "setuptools>=78.1.1" "msgpack>=1.2.1,<2" \
+    && pip install --no-cache-dir -r requirements.txt \
+    && python -c "import importlib.metadata as m; assert tuple(map(int, m.version('msgpack').split('.'))) >= (1,2,1); assert tuple(map(int, m.version('setuptools').split('.'))) >= (78,1,1)"
 
 RUN groupadd --gid 911 makervault \
     && useradd --uid 911 --gid 911 --create-home --home-dir /home/makervault --shell /bin/bash makervault \

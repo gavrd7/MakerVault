@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.3.5
+
+- Renamed the main navigation shortcut from Security / MFA to Account & Security.
+- Cleaned up the OIDC provider form layout and fixed the encoded <provider-id> callback placeholder.
+- Production startup now fails closed when DJANGO_SECRET_KEY is missing, default, or too short.
+- Health-check failures no longer return internal exception details to unauthenticated callers.
+- GUI-managed OIDC issuer URLs require HTTPS by default; insecure issuers require an explicit server-admin opt-in.
+- X-Forwarded-Host trust is now a separate opt-in rather than being enabled with all proxy headers.
+- Arbitrary remote catalogue-image fetching is restricted to administrators; editors may still upload local image files.
+- Added pip-audit, Bandit, npm audit, Django --deploy and Trivy container-image checks to CI.\n- Raised msgpack to 1.2.1+ and setuptools to 78.1.1+ after the first container scan identified high-severity fixed vulnerabilities in the cached runtime image.
+- Reduced the recommended request-body limit in .env.example to 64 MiB for the current feature set.
+- No database migration is required.
+
+
 ## v0.3.4
 
 - Grouped account controls under an explicit Account & Security navigation heading.
