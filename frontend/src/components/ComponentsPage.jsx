@@ -105,7 +105,7 @@ export default function ComponentsPage({ components, setComponents, config, refr
 function ComponentDetail({ component, loading, canEdit, onClose, onChanged }) {
   const [imageOpen, setImageOpen] = useState(false);
   const specs = Object.entries(component.specifications || {})
-    .filter(([key]) => !["starter_catalogue", "catalogue_version", "external_image_url", "image_source_url", "image_source_type", "image_cached_at"].includes(key));
+    .filter(([key]) => !["starter_catalogue", "catalogue_version", "external_image_url", "image_source_url", "image_source_type", "image_cached_at", "image_source_provider", "image_source_page", "image_source_query", "image_license", "image_author", "auto_image_seeded", "auto_image_seeded_at", "auto_image_last_attempt", "auto_image_opt_out"].includes(key));
 
   return <aside className="detailPane">
     <div className="detailHead"><h3>Component details</h3><button className="iconButton" onClick={onClose}>×</button></div>
@@ -127,7 +127,7 @@ function ComponentDetail({ component, loading, canEdit, onClose, onChanged }) {
       </dl>
       <h4>Specifications</h4>
       {specs.length ? <dl className="detailSpecs">{specs.map(([key, value]) => <div key={key}><dt>{prettyKey(key)}</dt><dd>{prettyValue(value)}</dd></div>)}</dl> : <p className="muted">No structured specifications yet.</p>}
-      {component.image_source_url && <p className="provenance"><span>Image source</span><a href={component.image_source_url} target="_blank" rel="noreferrer">Open original ↗</a></p>}
+      {(component.image_source_page || component.image_source_url) && <p className="provenance"><span>{component.image_source_provider ? `Image: ${component.image_source_provider}${component.image_license ? ` · ${component.image_license}` : ""}` : "Image source"}</span><a href={component.image_source_page || component.image_source_url} target="_blank" rel="noreferrer">Open source ↗</a></p>}
     </>}
     {imageOpen && <ImageManagerModal
       title={`Image — ${component.name}`}
