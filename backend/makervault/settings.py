@@ -27,12 +27,16 @@ USE_TZ = True
 
 MAKERVAULT_CURRENCY = os.getenv("MAKERVAULT_CURRENCY", "GBP")
 MAKERVAULT_MEASUREMENT_SYSTEM = os.getenv("MAKERVAULT_MEASUREMENT_SYSTEM", "metric")
-MAKERVAULT_VERSION = "0.2.3"
+MAKERVAULT_VERSION = "0.3.0"
 MAKERVAULT_LICENSE = "AGPL-3.0-or-later"
 MAKERVAULT_SOURCE_URL = os.getenv("MAKERVAULT_SOURCE_URL", "https://github.com/gavrd7/MakerVault")
 ALLOW_LOCAL_REGISTRATION = env_bool("ALLOW_LOCAL_REGISTRATION", False)
 OIDC_ENABLED = env_bool("OIDC_ENABLED", False)
 OIDC_AUTO_SIGNUP = env_bool("OIDC_AUTO_SIGNUP", True)
+
+# Background catalogue enrichment. Facts/specifications are pulled separately from media licensing.
+ENRICH_BOARD_CATALOGUE = env_bool("ENRICH_BOARD_CATALOGUE", True)
+BOARD_ENRICHMENT_MAX_PER_RUN = int(os.getenv("BOARD_ENRICHMENT_MAX_PER_RUN", "80"))
 
 # Automatic starter-catalogue image seeding. Work is queued to Celery so startup is not blocked.
 SEED_CATALOGUE_IMAGES = env_bool("SEED_CATALOGUE_IMAGES", True)
