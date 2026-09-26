@@ -70,3 +70,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build MakerVault image
         run: docker build -t makervault-ci .
+      - name: Scan container image for high/critical vulnerabilities
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:0.74.0 image \
+            --scanners vuln \
+            --ignore-unfixed \
+            --severity HIGH,CRITICAL \
+            --exit-code 1 \
+            makervault-ci
