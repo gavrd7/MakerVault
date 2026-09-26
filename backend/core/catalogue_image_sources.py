@@ -19,18 +19,16 @@ from .importers import ImporterError, fetch_import_html
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 USER_AGENT = "MakerVault/0.2.2 (+self-hosted catalogue image seeder)"
 def _commons_license_allowed(license_name: str) -> bool:
-    """Allow only licences suitable for unrestricted open-source distribution.
-
-    CC BY-NC and NoDerivatives variants are intentionally excluded.
-    """
-    value = re.sub(r"\\s+", " ", (license_name or "").strip().upper())
+    """Allow only licences suitable for normal open redistribution."""
+    value = " ".join((license_name or "").strip().upper().split())
     if not value:
         return False
     if "NC" in value or "ND" in value:
         return False
     if value.startswith("CC0") or value.startswith("PUBLIC DOMAIN") or value.startswith("PDM"):
         return True
-    return bool(re.match(r"^CC BY(?:-SA)?(?:\\s|$)", value))
+    return value == "CC BY" or value.startswith("CC BY ") or value == "CC BY-SA" or value.startswith("CC BY-SA ")
+
 
 GENERIC_COMPONENT_QUERY_BY_TYPE = {
     "resistor": "electronic resistor component",
