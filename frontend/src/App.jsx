@@ -51,7 +51,7 @@ export default function App() {
 
   return <div className="shell">
     <aside>
-      <div className="brand"><span className="brandmark">M</span><div><strong>MakerVault</strong><small>v0.3.0 · AGPL</small></div></div>
+      <div className="brand"><span className="brandmark">M</span><div><strong>MakerVault</strong><small>v0.3.1 · AGPL</small></div></div>
       <nav>{NAV.map(n => <button key={n} className={section === n ? "active" : ""} onClick={() => setSection(n)}>{n}</button>)}</nav>
       <div className="asideBottom"><a href="/admin/">Administration</a><a href="/accounts/2fa/">Security / MFA</a><a href="/accounts/logout/">Sign out</a></div>
     </aside>
