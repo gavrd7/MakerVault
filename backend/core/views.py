@@ -1,3 +1,4 @@
+import logging
 import mimetypes
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
@@ -6,6 +7,8 @@ from django.db import connection
 from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
+
+logger = logging.getLogger(__name__)
 
 
 @login_required
@@ -48,5 +51,6 @@ def healthz(request):
         if cache.get("makervault-health") != "ok":
             raise RuntimeError("Redis cache round-trip failed")
         return JsonResponse({"status": "ok"})
-    except Exception as exc:
-        return JsonResponse({"status": "error", "detail": str(exc)}, status=503)
+    except Exception:
+        logger.exception("MakerVault health check failed")
+        return JsonResponse({"status": "error"}, status=503)
