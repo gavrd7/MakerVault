@@ -18,3 +18,210 @@
   .boardSpecCell:nth-child(odd){border-right:1px solid #29313c}
   .boardSpecCell:nth-last-child(-n+2){border-bottom:0}
 }
+
+/* v0.3.2 board catalogue responsive detail layout */
+.boardsCatalogueLayout.hasDetail{
+  grid-template-columns:minmax(0,1fr) clamp(430px,34vw,560px);
+  align-items:start;
+}
+.boardDetailBackdrop{display:none}
+.boardDetailPane{
+  width:100%;
+  height:calc(100vh - 120px);
+  max-height:calc(100vh - 120px);
+  padding:0;
+  gap:0;
+  overflow:hidden;
+  position:sticky;
+  top:28px;
+  border-radius:16px;
+}
+.boardDetailHead{
+  position:sticky;
+  top:0;
+  z-index:3;
+  margin:0;
+  padding:16px 18px;
+  background:rgba(16,22,30,.96);
+  backdrop-filter:blur(10px);
+  border-bottom:1px solid #29313c;
+}
+.boardDetailScroll{
+  overflow:auto;
+  min-height:0;
+  padding:18px;
+}
+.boardHeroImage .boardImage-large{
+  width:100%;
+  height:clamp(180px,23vh,280px);
+  margin:0 0 18px;
+  padding:10px;
+  background:#f7f8fa;
+  border-color:#364252;
+}
+.boardHeroImage .boardImage-large img{
+  object-fit:contain;
+}
+.boardTitleRow{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:14px;
+  align-items:start;
+}
+.boardTitleRow h2{
+  min-width:0;
+  margin:0;
+  font-size:clamp(22px,2vw,30px);
+  line-height:1.2;
+  overflow-wrap:anywhere;
+}
+.boardTitleRow .detailActions{
+  display:grid;
+  grid-template-columns:1fr;
+  min-width:118px;
+  gap:8px;
+}
+.boardTitleRow .detailActions button{width:100%}
+.boardSubtitle{
+  margin:14px 0 0;
+  font-size:clamp(14px,1.15vw,17px);
+}
+.boardBadgeRow{margin:16px 0 4px}
+.boardDetailSection{margin-top:26px}
+.boardDetailSection h4{
+  margin:0 0 10px;
+  font-size:clamp(17px,1.25vw,20px);
+}
+.boardSpecGrid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  margin:0;
+  border:1px solid #29313c;
+  border-radius:12px;
+  overflow:hidden;
+  background:#0e141b;
+}
+.boardSpecCell{
+  min-width:0;
+  min-height:74px;
+  padding:12px 14px;
+  border-bottom:1px solid #29313c;
+}
+.boardSpecCell:nth-child(odd){border-right:1px solid #29313c}
+.boardSpecCell:nth-last-child(-n+2){border-bottom:0}
+.boardSpecCell dt{
+  font-size:11px;
+  color:#7f8a9c;
+  text-transform:uppercase;
+  letter-spacing:.035em;
+}
+.boardSpecCell dd{
+  margin:6px 0 0;
+  color:#eef3fb;
+  font-size:clamp(15px,1.2vw,18px);
+  line-height:1.25;
+  overflow-wrap:anywhere;
+}
+.boardSpecCell dd.specMissing{color:#667487}
+.boardCompatList{
+  gap:0;
+  border:1px solid #29313c;
+  border-radius:12px;
+  overflow:hidden;
+}
+.boardCompatList>div{
+  padding:11px 13px;
+  border-bottom:1px solid #29313c;
+}
+.boardCompatList>div:last-child{border-bottom:0}
+.compatEmpty{color:#7f8a9c}
+.boardLinks{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-top:22px;
+}
+.boardLinks .detailLink{
+  margin:0;
+  padding:9px 11px;
+  border:1px solid #374251;
+  border-radius:9px;
+  text-decoration:none;
+}
+.boardDetailPane .provenance{
+  align-items:flex-start;
+  flex-wrap:wrap;
+  margin-top:22px;
+  padding-bottom:8px;
+}
+
+/* Medium widths: use a true overlay drawer instead of stacking underneath the grid. */
+@media(max-width:1380px){
+  .boardsCatalogueLayout.hasDetail{grid-template-columns:minmax(0,1fr)}
+  .boardsCatalogueLayout .boardDetailBackdrop{
+    display:block;
+    position:fixed;
+    inset:0;
+    z-index:80;
+    background:rgba(3,7,12,.55);
+    backdrop-filter:blur(2px);
+  }
+  .boardsCatalogueLayout .boardDetailPane{
+    position:fixed;
+    z-index:90;
+    top:18px;
+    right:18px;
+    width:min(560px,calc(100vw - 36px));
+    height:calc(100vh - 36px);
+    max-height:calc(100vh - 36px);
+    box-shadow:0 22px 70px rgba(0,0,0,.5);
+    border-radius:16px;
+  }
+  .boardsCatalogueLayout .pagePanel.cataloguePanel{height:calc(100vh - 120px)}
+}
+
+/* Tablet/small desktop: slightly roomier controls, still drawer based. */
+@media(max-width:900px){
+  .boardsCatalogueLayout .boardDetailPane{
+    top:10px;
+    right:10px;
+    width:min(620px,calc(100vw - 20px));
+    height:calc(100vh - 20px);
+    max-height:calc(100vh - 20px);
+  }
+  .boardDetailScroll{padding:16px}
+}
+
+/* Mobile: detail becomes a full-screen sheet and spec cards collapse to one column. */
+@media(max-width:620px){
+  .boardsCatalogueLayout .boardDetailPane{
+    inset:0;
+    width:100vw;
+    height:100dvh;
+    max-height:100dvh;
+    border-radius:0;
+    border-left:0;
+    border-right:0;
+  }
+  .boardDetailHead{padding:12px 14px}
+  .boardDetailScroll{padding:14px}
+  .boardHeroImage .boardImage-large{height:clamp(160px,28vh,240px)}
+  .boardTitleRow{grid-template-columns:1fr}
+  .boardTitleRow .detailActions{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    min-width:0;
+  }
+  .boardTitleRow .detailActions:has(button:only-child){grid-template-columns:1fr}
+  .boardSpecGrid{grid-template-columns:1fr}
+  .boardSpecCell,
+  .boardSpecCell:nth-child(odd){
+    border-right:0;
+    border-bottom:1px solid #29313c;
+  }
+  .boardSpecCell:last-child{border-bottom:0}
+  .boardSpecCell:nth-last-child(-n+2){border-bottom:1px solid #29313c}
+  .boardSpecCell:last-child{border-bottom:0}
+  .boardLinks{display:grid;grid-template-columns:1fr}
+  .boardLinks .detailLink{text-align:center}
+  .boardDetailPane .provenance{display:grid;gap:6px}
+}

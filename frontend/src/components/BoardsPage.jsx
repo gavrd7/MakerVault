@@ -85,7 +85,7 @@ export default function BoardsPage({ boards, setBoards, config, onOpenImport, re
     }
   }
 
-  return <div className={`catalogueLayout ${selected ? "hasDetail" : ""}`}>
+  return <div className={`catalogueLayout boardsCatalogueLayout ${selected ? "hasDetail" : ""}`}>
     <section className="panel pagePanel cataloguePanel">
       <div className="panelHead panelHeadWrap">
         <div><h3>Board catalogue</h3><p>{filtered.length} of {boards.length} board models</p></div>
@@ -178,29 +178,38 @@ function BoardDetail({ board, loading, canEdit, onClose, onChanged }) {
     }
   }
 
-  return <aside className="detailPane boardDetailPane">
-    <div className="detailHead"><h3>Board details</h3><button className="iconButton" onClick={onClose}>×</button></div>
-    {loading ? <LoadingBlock label="Loading board details…" /> : <>
-      <BoardImage src={board.image} alt={board.display_name} size="large" />
-      <div className="detailTitleRow">
+  return <>
+    <div className="boardDetailBackdrop" onClick={onClose} aria-hidden="true" />
+    <aside className="detailPane boardDetailPane">
+      <div className="detailHead boardDetailHead"><h3>Board details</h3><button className="iconButton" onClick={onClose} aria-label="Close board details">×</button></div>
+      <div className="boardDetailScroll">
+      {loading ? <LoadingBlock label="Loading board details…" /> : <>
+      <div className="boardHeroImage"><BoardImage src={board.image} alt={board.display_name} size="large" /></div>
+      <div className="detailTitleRow boardTitleRow">
         <h2>{board.display_name}</h2>
         <div className="detailActions">
           {canEdit && <button onClick={() => setImageOpen(true)}>Image</button>}
           {canEdit && /ESP32|ESP8266/i.test([board.family, board.mcu, board.name].join(" ")) && <button onClick={enrichBoard} disabled={enriching}>{enriching ? "Refreshing…" : "Refresh specs"}</button>}
         </div>
       </div>
-      <p className="muted">{board.description || `${board.family || "Development board"}${board.mcu ? ` · ${board.mcu}` : ""}`}</p>
+      <p className="muted boardSubtitle">{board.description || `${board.family || "Development board"}${board.mcu ? ` · ${board.mcu}` : ""}`}</p>
       {enrichMessage && <div className="detailNotice">{enrichMessage}</div>}
-      <div className="badgeRow">{radios.map(x => <Badge key={x} tone="accent">{x}</Badge>)}{board.usb_connector && <Badge>{board.usb_connector}</Badge>}</div>
+      <div className="badgeRow boardBadgeRow">{radios.map(x => <Badge key={x} tone="accent">{x}</Badge>)}{board.usb_connector && <Badge>{board.usb_connector}</Badge>}</div>
 
-      <h4>Core specifications</h4>
-      <BoardSpecGrid rows={coreRows} />
+      <section className="boardDetailSection">
+        <h4>Core specifications</h4>
+        <BoardSpecGrid rows={coreRows} />
+      </section>
 
-      <h4>Technical details</h4>
-      <BoardSpecGrid rows={technicalRows} />
+      <section className="boardDetailSection">
+        <h4>Technical details</h4>
+        <BoardSpecGrid rows={technicalRows} />
+      </section>
 
-      <h4>Compatibility</h4>
-      <div className="compatList">{board.compatibility?.length ? board.compatibility.map(item => <div key={item.platform}><strong>{item.platform}</strong><Badge tone={item.support_level === "full" ? "good" : "neutral"}>{item.support_label}</Badge></div>) : <span className="muted">No compatibility records yet.</span>}</div>
+      <section className="boardDetailSection">
+        <h4>Compatibility</h4>
+        <div className="compatList boardCompatList">{board.compatibility?.length ? board.compatibility.map(item => <div key={item.platform}><strong>{item.platform}</strong><Badge tone={item.support_level === "full" ? "good" : "neutral"}>{item.support_label}</Badge></div>) : <div className="compatEmpty">No compatibility records yet.</div>}</div>
+      </section>
 
       <div className="boardLinks">
         {board.specifications?.datasheet_url && <a className="detailLink" href={board.specifications.datasheet_url} target="_blank" rel="noreferrer">Datasheet ↗</a>}
@@ -209,15 +218,17 @@ function BoardDetail({ board, loading, canEdit, onClose, onChanged }) {
       </div>
       {(board.image_source_page || board.image_source_url) && <p className="provenance"><span>{board.image_source_provider ? `Image: ${board.image_source_provider}${board.image_license ? ` · ${board.image_license}` : ""}` : "Image source"}</span><a href={board.image_source_page || board.image_source_url} target="_blank" rel="noreferrer">Open source ↗</a></p>}
     </>}
-    {imageOpen && <ImageManagerModal
-      title={`Image — ${board.display_name}`}
-      endpoint={`/api/boards/${board.id}/image/`}
-      responseKey="board"
-      currentImage={board.image}
-      onClose={() => setImageOpen(false)}
-      onUpdated={updated => { onChanged(updated); setImageOpen(false); }}
-    />}
-  </aside>;
+      </div>
+      {imageOpen && <ImageManagerModal
+        title={`Image — ${board.display_name}`}
+        endpoint={`/api/boards/${board.id}/image/`}
+        responseKey="board"
+        currentImage={board.image}
+        onClose={() => setImageOpen(false)}
+        onUpdated={updated => { onChanged(updated); setImageOpen(false); }}
+      />}
+    </aside>
+  </>;
 }
 
 function AddBoardModal({ onClose, onCreated }) {

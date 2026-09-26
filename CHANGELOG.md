@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.3.2
+
+- Reworked the board detail view into a genuinely responsive layout.
+- Uses a wider side-by-side detail pane on large desktops, an overlay drawer at medium widths, and a full-screen sheet on mobile.
+- Removed dependence on the old fixed 350px board-detail layout.
+- Board images now scale within a bounded responsive hero area without distorting their aspect ratio.
+- Board title/actions, badges, specification grids, compatibility, links and provenance adapt independently to available width.
+- Specification grids retain a consistent two-column matrix on desktop/tablet and collapse cleanly to one column on small mobile screens.
+- Prevented the catalogue grid from being pushed far below the page when opening details at intermediate resolutions.
+- No database migration is required.
+
+
 ## v0.3.1
 
 - Standardised board detail specification tables so every board shows the same fields in the same order.
