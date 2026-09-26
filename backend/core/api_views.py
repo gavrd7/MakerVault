@@ -11,6 +11,12 @@ from django.http import JsonResponse
 from django.utils.text import slugify
 from django.views.decorators.http import require_http_methods
 
+from .catalogue_images import (
+    CatalogueImageError,
+    apply_catalogue_image,
+    cache_catalogue_image_from_url,
+    sanitise_uploaded_image,
+)
 from .importers import ImporterError, preview_board_url
 from .models import (
     BoardCompatibility,
@@ -102,6 +108,8 @@ def _serialise_board(board, detailed=False):
         "thread": board.thread,
         "usb_connector": board.usb_connector,
         "image": _image_url(board),
+        "image_cached": bool(board.image),
+        "image_source_url": (board.specifications or {}).get("image_source_url") or (board.specifications or {}).get("external_image_url") or "",
         "source": board.source.name if board.source else "Manual",
         "source_url": board.source.url if board.source else "",
         "compatibility": compatibility,
@@ -118,6 +126,7 @@ def _serialise_board(board, detailed=False):
 
 
 def _serialise_component(component):
+    specs = component.specifications or {}
     return {
         "id": str(component.id),
         "name": component.name,
@@ -127,8 +136,16 @@ def _serialise_component(component):
         "part_number": component.part_number,
         "description": component.description,
         "image": _image_url(component),
-        "specifications": component.specifications,
+        "image_cached": bool(component.image),
+        "image_source_url": specs.get("image_source_url") or specs.get("external_image_url") or "",
+        "specifications": specs,
+        "type": specs.get("type", ""),
+        "interface": specs.get("interface", ""),
+        "voltage": specs.get("voltage") or specs.get("input") or "",
+        "package": specs.get("package", ""),
         "source": component.source.name if component.source else "Manual",
+        "source_url": component.source.url if component.source else "",
+        "updated_at": component.updated_at.isoformat(),
     }
 
 
@@ -444,12 +461,16 @@ def components(request):
             category, _ = ComponentCategory.objects.get_or_create(
                 slug=slugify(category_name)[:140], defaults={"name": category_name}
             )
+        specifications = payload.get("specifications") or {}
+        if not isinstance(specifications, dict):
+            return _error("Component specifications must be an object.")
         component = ComponentModel(
             manufacturer=manufacturer,
             category=category,
             name=name,
             part_number=str(payload.get("part_number") or "").strip(),
             description=str(payload.get("description") or "").strip(),
+            specifications=specifications,
         )
         component.full_clean()
         component.save()
@@ -458,6 +479,73 @@ def components(request):
         return _validation_response(exc)
     except (ValueError, IntegrityError) as exc:
         return _error(str(exc))
+
+
+
+@login_required
+@require_http_methods(["GET"])
+def component_detail(request, component_id):
+    component = ComponentModel.objects.select_related("manufacturer", "category", "source").filter(pk=component_id).first()
+    if not component:
+        return _error("Component not found.", status=404)
+    return JsonResponse({"component": _serialise_component(component)})
+
+
+def _catalogue_image_response(request, obj, permission, serializer, response_key):
+    denied = _require_permission(request, permission)
+    if denied:
+        return denied
+
+    if request.method == "DELETE":
+        if obj.image:
+            obj.image.delete(save=False)
+        specs = dict(obj.specifications or {})
+        for key in ["external_image_url", "image_source_url", "image_source_type", "image_cached_at"]:
+            specs.pop(key, None)
+        obj.specifications = specs
+        obj.image = None
+        obj.save()
+        return JsonResponse({response_key: serializer(obj)})
+
+    try:
+        if request.FILES.get("image"):
+            uploaded = request.FILES["image"]
+            stem = getattr(obj, "slug", "") or getattr(obj, "name", "") or str(obj.pk)
+            image_content, filename = sanitise_uploaded_image(uploaded, stem)
+            apply_catalogue_image(obj, image_content, filename, source_type="upload")
+        else:
+            payload = _read_json(request)
+            image_url = str(payload.get("url") or "").strip()
+            if not image_url:
+                return _error("Choose an image file or enter an HTTPS image URL.")
+            cache_catalogue_image_from_url(obj, image_url)
+        return JsonResponse({response_key: serializer(obj)})
+    except CatalogueImageError as exc:
+        return _error(str(exc))
+
+
+@login_required
+@require_http_methods(["POST", "DELETE"])
+def board_image(request, board_id):
+    board = BoardModel.objects.select_related("manufacturer", "source").prefetch_related("compatibility").filter(pk=board_id).first()
+    if not board:
+        return _error("Board not found.", status=404)
+    return _catalogue_image_response(
+        request, board, "core.change_boardmodel",
+        lambda item: _serialise_board(item, detailed=True), "board",
+    )
+
+
+@login_required
+@require_http_methods(["POST", "DELETE"])
+def component_image(request, component_id):
+    component = ComponentModel.objects.select_related("manufacturer", "category", "source").filter(pk=component_id).first()
+    if not component:
+        return _error("Component not found.", status=404)
+    return _catalogue_image_response(
+        request, component, "core.change_componentmodel",
+        _serialise_component, "component",
+    )
 
 
 @login_required
@@ -570,6 +658,14 @@ def import_board_commit(request):
                 existing.source_url = existing.source_url or data["source_url"]
                 existing.save(update_fields=["support_level", "source_url", "updated_at"])
 
+        if data.get("image_url") and not board.image:
+            try:
+                cache_catalogue_image_from_url(board, data["image_url"])
+            except CatalogueImageError:
+                # The catalogue record remains useful even when a remote image
+                # cannot be cached; the source URL is retained in specifications.
+                pass
+
         board = BoardModel.objects.select_related("manufacturer", "source").prefetch_related("compatibility").get(pk=board.pk)
         return JsonResponse({"board": _serialise_board(board, detailed=True), "created": created})
     except (ValueError, ImporterError) as exc:
@@ -590,7 +686,9 @@ def public_config(request):
         "is_staff": request.user.is_staff,
         "permissions": {
             "add_board": request.user.has_perm("core.add_boardmodel"),
+            "change_board": request.user.has_perm("core.change_boardmodel"),
             "add_component": request.user.has_perm("core.add_componentmodel"),
+            "change_component": request.user.has_perm("core.change_componentmodel"),
             "add_inventory": request.user.has_perm("core.add_inventoryitem"),
             "change_inventory": request.user.has_perm("core.change_inventoryitem"),
             "delete_inventory": request.user.has_perm("core.delete_inventoryitem"),
