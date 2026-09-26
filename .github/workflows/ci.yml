@@ -72,7 +72,7 @@ jobs:
         run: docker build --pull -t makervault-ci .
       - name: Verify secured Python runtime versions in image
         run: |
-          docker run --rm makervault-ci python -c \
+          docker run --rm --entrypoint python makervault-ci -c \
             "import importlib.metadata as m; print('msgpack', m.version('msgpack')); print('setuptools', m.version('setuptools')); assert tuple(map(int, m.version('msgpack').split('.'))) >= (1,2,1); assert tuple(map(int, m.version('setuptools').split('.'))) >= (78,1,1)"
       - name: Scan container OS packages for high/critical vulnerabilities
         run: |
