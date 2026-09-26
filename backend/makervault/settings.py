@@ -33,8 +33,8 @@ MAKERVAULT_SOURCE_URL = os.getenv("MAKERVAULT_SOURCE_URL", "https://github.com/g
 ALLOW_LOCAL_REGISTRATION = env_bool("ALLOW_LOCAL_REGISTRATION", False)
 OIDC_ENABLED = env_bool("OIDC_ENABLED", False)
 OIDC_AUTO_SIGNUP = env_bool("OIDC_AUTO_SIGNUP", True)
-OIDC_ENV_PROVIDER_ID = OIDC_ENV_PROVIDER_ID
-OIDC_ENV_PROVIDER_NAME = OIDC_ENV_PROVIDER_NAME
+OIDC_ENV_PROVIDER_ID = os.getenv("OIDC_PROVIDER_ID", "oidc")
+OIDC_ENV_PROVIDER_NAME = os.getenv("OIDC_PROVIDER_NAME", "OpenID Connect")
 OIDC_ENV_SERVER_URL = os.getenv("OIDC_SERVER_URL", "").strip()
 OIDC_ENV_CLIENT_ID = os.getenv("OIDC_CLIENT_ID", "").strip()
 
@@ -159,8 +159,8 @@ if OIDC_ENABLED:
                 "OAUTH_PKCE_ENABLED": env_bool("OIDC_PKCE", True),
                 "APPS": [
                     {
-                        "provider_id": os.getenv("OIDC_PROVIDER_ID", "oidc"),
-                        "name": os.getenv("OIDC_PROVIDER_NAME", "OpenID Connect"),
+                        "provider_id": OIDC_ENV_PROVIDER_ID,
+                        "name": OIDC_ENV_PROVIDER_NAME,
                         "client_id": oidc_client_id,
                         "secret": oidc_client_secret,
                         "settings": {
