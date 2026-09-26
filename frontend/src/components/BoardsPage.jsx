@@ -4,6 +4,34 @@ import { themeQuartz } from "ag-grid-community";
 import { apiFetch } from "../api";
 import { Badge, BoardImage, ImageManagerModal, LoadingBlock, Modal } from "./Common";
 
+function prettySpecKey(key) {
+  const labels = {
+    clock_mhz: "Clock",
+    cpu_cores: "CPU cores",
+    sram_kb: "SRAM",
+    adc_channels: "ADC channels",
+    dac_channels: "DAC channels",
+    uart_count: "UART",
+    spi_count: "SPI",
+    i2c_count: "I²C",
+    pwm_channels: "PWM channels",
+    pin_count: "Pins",
+    operating_voltage: "Operating voltage",
+    native_usb: "Native USB",
+  };
+  return labels[key] || key.replaceAll("_", " ").replace(/\b\w/g, char => char.toUpperCase());
+}
+
+function prettySpecValue(key, value) {
+  if (value === true) return "Yes";
+  if (value === false) return "No";
+  if (key === "clock_mhz" && value !== "") return `${value} MHz`;
+  if (key === "sram_kb" && value !== "") return `${value} KB`;
+  if (Array.isArray(value)) return value.join(", ");
+  if (value && typeof value === "object") return JSON.stringify(value);
+  return String(value ?? "—");
+}
+
 export default function BoardsPage({ boards, setBoards, config, onOpenImport, refreshDashboard }) {
   const [query, setQuery] = useState("");
   const [manufacturer, setManufacturer] = useState("");
@@ -94,23 +122,69 @@ export default function BoardsPage({ boards, setBoards, config, onOpenImport, re
 
 function BoardDetail({ board, loading, canEdit, onClose, onChanged }) {
   const [imageOpen, setImageOpen] = useState(false);
+  const [enriching, setEnriching] = useState(false);
+  const [enrichMessage, setEnrichMessage] = useState("");
   const radios = [[board.wifi, "Wi-Fi"], [board.bluetooth, "Bluetooth"], [board.zigbee, "Zigbee"], [board.thread, "Thread"]]
     .filter(([on]) => on).map(([, label]) => label);
-  return <aside className="detailPane">
+
+  const hiddenSpecKeys = new Set([
+    "external_image_url", "image_source_url", "image_source_page", "image_source_provider",
+    "image_source_query", "image_source_type", "image_license", "image_author", "image_cached_at",
+    "auto_image_seeded", "auto_image_seeded_at", "auto_image_last_attempt", "auto_image_opt_out",
+    "starter_catalogue", "catalogue_version", "source_url", "imported_from",
+    "technical_source_url", "technical_source_provider", "technical_enriched_at",
+    "datasheet_url", "pinout_url",
+  ]);
+  const technicalSpecs = Object.entries(board.specifications || {})
+    .filter(([key, value]) => !hiddenSpecKeys.has(key) && value !== null && value !== "" && value !== undefined);
+
+  async function enrichBoard() {
+    setEnriching(true); setEnrichMessage("");
+    try {
+      const result = await apiFetch(`/api/boards/${board.id}/enrich/`, { method: "POST" });
+      onChanged(result.board);
+      setEnrichMessage(result.changed ? "Technical specifications updated from ESPBoards.dev." : "No additional matching ESPBoards data was found.");
+    } catch (error) {
+      setEnrichMessage(error.message);
+    } finally {
+      setEnriching(false);
+    }
+  }
+
+  return <aside className="detailPane boardDetailPane">
     <div className="detailHead"><h3>Board details</h3><button className="iconButton" onClick={onClose}>×</button></div>
     {loading ? <LoadingBlock label="Loading board details…" /> : <>
       <BoardImage src={board.image} alt={board.display_name} size="large" />
-      <div className="detailTitleRow"><h2>{board.display_name}</h2>{canEdit && <button onClick={() => setImageOpen(true)}>Image</button>}</div>
+      <div className="detailTitleRow">
+        <h2>{board.display_name}</h2>
+        <div className="detailActions">
+          {canEdit && <button onClick={() => setImageOpen(true)}>Image</button>}
+          {canEdit && /ESP32|ESP8266/i.test([board.family, board.mcu, board.name].join(" ")) && <button onClick={enrichBoard} disabled={enriching}>{enriching ? "Refreshing…" : "Refresh specs"}</button>}
+        </div>
+      </div>
       <p className="muted">{board.description || `${board.family || "Development board"}${board.mcu ? ` · ${board.mcu}` : ""}`}</p>
+      {enrichMessage && <div className="detailNotice">{enrichMessage}</div>}
       <div className="badgeRow">{radios.map(x => <Badge key={x} tone="accent">{x}</Badge>)}{board.usb_connector && <Badge>{board.usb_connector}</Badge>}</div>
+
+      <h4>Core specifications</h4>
       <dl className="specList">
         <div><dt>MCU</dt><dd>{board.mcu || "—"}</dd></div><div><dt>Architecture</dt><dd>{board.architecture || "—"}</dd></div>
         <div><dt>Flash</dt><dd>{board.flash_mb == null ? "—" : `${board.flash_mb} MB`}</dd></div><div><dt>PSRAM</dt><dd>{board.psram_mb == null ? "—" : `${board.psram_mb} MB`}</dd></div>
-        <div><dt>GPIO</dt><dd>{board.gpio_count ?? "—"}</dd></div><div><dt>Source</dt><dd>{board.source_url ? <a href={board.source_url} target="_blank" rel="noreferrer">{board.source} ↗</a> : board.source}</dd></div>
+        <div><dt>RAM / SRAM</dt><dd>{board.ram_kb == null ? (board.specifications?.sram_kb == null ? "—" : `${board.specifications.sram_kb} KB`) : `${board.ram_kb} KB`}</dd></div><div><dt>GPIO</dt><dd>{board.gpio_count ?? "—"}</dd></div>
+        <div><dt>USB</dt><dd>{board.usb_connector || "—"}</dd></div><div><dt>Dimensions</dt><dd>{board.dimensions_mm?.length && board.dimensions_mm?.width ? `${board.dimensions_mm.length} × ${board.dimensions_mm.width} mm` : "—"}</dd></div>
       </dl>
+
+      <h4>Technical details</h4>
+      {technicalSpecs.length ? <dl className="detailSpecs">{technicalSpecs.map(([key, value]) => <div key={key}><dt>{prettySpecKey(key)}</dt><dd>{prettySpecValue(key, value)}</dd></div>)}</dl> : <p className="muted">No extended technical data has been populated yet.</p>}
+
       <h4>Compatibility</h4>
       <div className="compatList">{board.compatibility?.length ? board.compatibility.map(item => <div key={item.platform}><strong>{item.platform}</strong><Badge tone={item.support_level === "full" ? "good" : "neutral"}>{item.support_label}</Badge></div>) : <span className="muted">No compatibility records yet.</span>}</div>
-      {board.specifications?.datasheet_url && <a className="detailLink" href={board.specifications.datasheet_url} target="_blank" rel="noreferrer">Open datasheet ↗</a>}
+
+      <div className="boardLinks">
+        {board.specifications?.datasheet_url && <a className="detailLink" href={board.specifications.datasheet_url} target="_blank" rel="noreferrer">Datasheet ↗</a>}
+        {board.specifications?.pinout_url && <a className="detailLink" href={board.specifications.pinout_url} target="_blank" rel="noreferrer">Pinout ↗</a>}
+        {board.specifications?.technical_source_url && <a className="detailLink" href={board.specifications.technical_source_url} target="_blank" rel="noreferrer">Technical source ↗</a>}
+      </div>
       {(board.image_source_page || board.image_source_url) && <p className="provenance"><span>{board.image_source_provider ? `Image: ${board.image_source_provider}${board.image_license ? ` · ${board.image_license}` : ""}` : "Image source"}</span><a href={board.image_source_page || board.image_source_url} target="_blank" rel="noreferrer">Open source ↗</a></p>}
     </>}
     {imageOpen && <ImageManagerModal
@@ -200,7 +274,7 @@ export function ImportBoardModal({ onClose, onImported }) {
     }
   }
 
-  return <Modal title="Import board from URL" subtitle="v0.2 securely supports ESPBoards.dev. More source adapters will plug into the same workflow." onClose={onClose} wide>
+  return <Modal title="Import board from URL" subtitle="MakerVault securely supports ESPBoards.dev. More source adapters will plug into the same workflow." onClose={onClose} wide>
     <form className="importForm" onSubmit={previewUrl}>
       <input type="url" required value={url} onChange={e => setUrl(e.target.value)} placeholder="https://www.espboards.dev/esp32/…" />
       <button className="primary" disabled={busy}>{busy ? "Reading…" : "Preview"}</button>
