@@ -176,6 +176,7 @@ def _serialise_inventory(item):
         "item_type": item.item_type,
         "type": item.get_item_type_display(),
         "name": item.display_name,
+        "custom_name": item.custom_name,
         "board_id": str(item.board_id) if item.board_id else "",
         "component_id": str(item.component_id) if item.component_id else "",
         "quantity": _float(item.quantity),
@@ -829,8 +830,6 @@ def import_board_commit(request):
         return _validation_response(exc)
 
 
-@login_required
-@require_http_methods(["GET"])
 def _attribution_row(kind, obj):
     specs = obj.specifications or {}
     provider = specs.get("image_source_provider") or ""
