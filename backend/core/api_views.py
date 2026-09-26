@@ -18,6 +18,7 @@ from .catalogue_images import (
     sanitise_uploaded_image,
 )
 from .importers import ImporterError, preview_board_url
+from .catalogue_enrichment import enrich_board_from_espboards
 from .models import (
     BoardCompatibility,
     BoardModel,
@@ -557,6 +558,23 @@ def board_detail(request, board_id):
     if not board:
         return _error("Board not found.", status=404)
     return JsonResponse({"board": _serialise_board(board, detailed=True)})
+
+
+@login_required
+@require_http_methods(["POST"])
+def board_enrich(request, board_id):
+    denied = _require_permission(request, "core.change_boardmodel")
+    if denied:
+        return denied
+    board = BoardModel.objects.select_related("manufacturer", "source").prefetch_related("compatibility").filter(pk=board_id).first()
+    if not board:
+        return _error("Board not found.", status=404)
+    try:
+        changed = enrich_board_from_espboards(board)
+    except Exception as exc:
+        return _error(f"Board enrichment failed: {exc}")
+    board = BoardModel.objects.select_related("manufacturer", "source").prefetch_related("compatibility").get(pk=board.pk)
+    return JsonResponse({"board": _serialise_board(board, detailed=True), "changed": changed})
 
 
 @login_required
