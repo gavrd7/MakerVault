@@ -21,6 +21,11 @@ jobs:
         run: pip install -r requirements.txt
       - name: Compile Python
         run: python -m compileall -q backend
+      - name: Check Django model migrations
+        env:
+          DJANGO_SECRET_KEY: ci-only-secret
+          POSTGRES_PASSWORD: ci-only-password
+        run: python backend/manage.py makemigrations --check --dry-run
       - name: Importer unit tests
         env:
           PYTHONPATH: backend
