@@ -6,7 +6,6 @@ import io
 import re
 import socket
 import warnings
-from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
 import requests
@@ -122,7 +121,7 @@ def fetch_public_image(raw_url: str, stem: str) -> tuple[ContentFile, str, str]:
     current = validate_public_image_url(raw_url)
     headers = {
         "User-Agent": "MakerVault/0.2.1 (+self-hosted catalogue image cache)",
-        "Accept": "image/avif,image/webp,image/png,image/jpeg;q=0.9,*/*;q=0.2",
+        "Accept": "image/webp,image/png,image/jpeg;q=0.9,*/*;q=0.2",
     }
 
     for _ in range(5):
