@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from urllib.parse import quote
 
 import requests
@@ -276,7 +276,7 @@ def _recent_attempt(specs: dict, retry_days: int) -> bool:
     if not raw:
         return False
     try:
-        attempted = timezone.datetime.fromisoformat(raw)
+        attempted = datetime.fromisoformat(raw)
         if timezone.is_naive(attempted):
             attempted = timezone.make_aware(attempted)
     except (TypeError, ValueError):
