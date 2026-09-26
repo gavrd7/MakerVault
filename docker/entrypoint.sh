@@ -49,6 +49,11 @@ gosu makervault python manage.py seed_roles
 echo "Ensuring starter catalogue..."
 gosu makervault python manage.py seed_catalogue
 
+if [ "${SEED_CATALOGUE_IMAGES:-true}" = "true" ] || [ "${SEED_CATALOGUE_IMAGES:-true}" = "1" ]; then
+  echo "Queueing starter catalogue image seeding..."
+  gosu makervault python manage.py seed_catalogue_images --enqueue ||     echo "WARNING: Catalogue image seeding could not be queued; it can be retried later." >&2
+fi
+
 echo "Collecting static files..."
 gosu makervault python manage.py collectstatic --noinput --clear >/dev/null
 

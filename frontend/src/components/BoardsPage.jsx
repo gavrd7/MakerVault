@@ -111,7 +111,7 @@ function BoardDetail({ board, loading, canEdit, onClose, onChanged }) {
       <h4>Compatibility</h4>
       <div className="compatList">{board.compatibility?.length ? board.compatibility.map(item => <div key={item.platform}><strong>{item.platform}</strong><Badge tone={item.support_level === "full" ? "good" : "neutral"}>{item.support_label}</Badge></div>) : <span className="muted">No compatibility records yet.</span>}</div>
       {board.specifications?.datasheet_url && <a className="detailLink" href={board.specifications.datasheet_url} target="_blank" rel="noreferrer">Open datasheet ↗</a>}
-      {board.image_source_url && <p className="provenance"><span>Image source</span><a href={board.image_source_url} target="_blank" rel="noreferrer">Open original ↗</a></p>}
+      {(board.image_source_page || board.image_source_url) && <p className="provenance"><span>{board.image_source_provider ? `Image: ${board.image_source_provider}${board.image_license ? ` · ${board.image_license}` : ""}` : "Image source"}</span><a href={board.image_source_page || board.image_source_url} target="_blank" rel="noreferrer">Open source ↗</a></p>}
     </>}
     {imageOpen && <ImageManagerModal
       title={`Image — ${board.display_name}`}

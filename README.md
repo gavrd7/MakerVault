@@ -1,8 +1,8 @@
-# MakerVault v0.2.1
+# MakerVault v0.2.2
 
 MakerVault is a self-hosted makerspace inventory and project system for electronics, firmware, fabrication and 3D-printing assets.
 
-v0.2.1 expands the first real catalogue/inventory workflow with a much broader curated catalogue and local catalogue-image management:
+v0.2.2 adds automatic, source-aware catalogue image population on top of the enriched v0.2.1 catalogue:
 
 - Django 5.2 LTS backend and authentication
 - local accounts, MFA-capable django-allauth, and optional generic OIDC client support
@@ -13,6 +13,7 @@ v0.2.1 expands the first real catalogue/inventory workflow with a much broader c
 - expanded starter catalogue with 65+ board definitions and 130+ common maker-component definitions across sensors, displays, communications, power, audio, controls, motors, connectors, prototyping and more
 - structured component attributes such as type, interface, voltage/input and package/form factor
 - catalogue image upload and secure remote-image caching into MakerVault media storage
+- automatic background image seeding for default boards/components, preferring ESPBoards.dev for supported ESP32-family boards and freely licensed raster media from Wikimedia Commons as a fallback
 - spreadsheet-style physical inventory with inline editing
 - manual board/component creation
 - secure ESPBoards.dev URL import with preview and duplicate-aware enrichment
@@ -58,7 +59,7 @@ Open http://SERVER-IP:8765 by default, or your configured reverse-proxy hostname
 The normal Git deployment update is:
 
 ~~~bash
-cd /opt/makervault
+cd /mnt/Server/MakerVault/app
 git pull --ff-only
 sudo docker compose up -d --build --no-deps makervault
 ~~~
@@ -205,6 +206,7 @@ make update
 make shell
 make migrate
 make seed-catalogue
+make seed-catalogue-images
 make cache-catalogue-images
 make createsuperuser
 make check
@@ -232,3 +234,28 @@ make cache-catalogue-images
 ~~~
 
 The physical files live under the configured media storage, e.g. /mnt/Server/MakerVault/media/boards/catalog/ and /mnt/Server/MakerVault/media/components/catalog/.
+
+
+## Automatic starter images
+
+By default MakerVault queues a background catalogue-image pass after the starter catalogue is seeded:
+
+~~~dotenv
+SEED_CATALOGUE_IMAGES=true
+CATALOGUE_IMAGE_MAX_PER_RUN=60
+CATALOGUE_IMAGE_RETRY_DAYS=7
+CATALOGUE_IMAGE_PREFER_ESPBOARDS=true
+CATALOGUE_IMAGE_WIKIMEDIA=true
+~~~
+
+ESP32-family board definitions first try a matching ESPBoards.dev board page. Remaining boards and components can use matched raster images from Wikimedia Commons, and MakerVault only accepts a small allow-list of free-license labels from the returned Commons metadata. The selected source page, provider, license and author are retained in the catalogue record.
+
+The work runs through Celery after startup, so Gunicorn does not wait for hundreds of external image requests. Records with a local image are skipped. A failed record is not retried until the configured retry period has elapsed. If a user deliberately removes an image in the UI, MakerVault records an opt-out and does not silently put the automatic image back.
+
+To run or retry the population manually:
+
+~~~bash
+make seed-catalogue-images
+~~~
+
+Images are still sanitised to local WebP files in MEDIA_STORAGE. Online images are never required for normal page rendering after caching.

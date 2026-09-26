@@ -110,6 +110,10 @@ def _serialise_board(board, detailed=False):
         "image": _image_url(board),
         "image_cached": bool(board.image),
         "image_source_url": (board.specifications or {}).get("image_source_url") or (board.specifications or {}).get("external_image_url") or "",
+        "image_source_page": (board.specifications or {}).get("image_source_page") or "",
+        "image_source_provider": (board.specifications or {}).get("image_source_provider") or "",
+        "image_license": (board.specifications or {}).get("image_license") or "",
+        "image_author": (board.specifications or {}).get("image_author") or "",
         "source": board.source.name if board.source else "Manual",
         "source_url": board.source.url if board.source else "",
         "compatibility": compatibility,
@@ -138,6 +142,10 @@ def _serialise_component(component):
         "image": _image_url(component),
         "image_cached": bool(component.image),
         "image_source_url": specs.get("image_source_url") or specs.get("external_image_url") or "",
+        "image_source_page": specs.get("image_source_page") or "",
+        "image_source_provider": specs.get("image_source_provider") or "",
+        "image_license": specs.get("image_license") or "",
+        "image_author": specs.get("image_author") or "",
         "specifications": specs,
         "type": specs.get("type", ""),
         "interface": specs.get("interface", ""),
@@ -500,8 +508,14 @@ def _catalogue_image_response(request, obj, permission, serializer, response_key
         if obj.image:
             obj.image.delete(save=False)
         specs = dict(obj.specifications or {})
-        for key in ["external_image_url", "image_source_url", "image_source_type", "image_cached_at"]:
+        for key in [
+            "external_image_url", "image_source_url", "image_source_type", "image_cached_at",
+            "image_source_provider", "image_source_page", "image_source_query",
+            "image_license", "image_author", "auto_image_seeded", "auto_image_seeded_at",
+        ]:
             specs.pop(key, None)
+        # A deliberate removal is respected by the automatic seeder.
+        specs["auto_image_opt_out"] = True
         obj.specifications = specs
         obj.image = None
         obj.save()

@@ -31,6 +31,13 @@ ALLOW_LOCAL_REGISTRATION = env_bool("ALLOW_LOCAL_REGISTRATION", False)
 OIDC_ENABLED = env_bool("OIDC_ENABLED", False)
 OIDC_AUTO_SIGNUP = env_bool("OIDC_AUTO_SIGNUP", True)
 
+# Automatic starter-catalogue image seeding. Work is queued to Celery so startup is not blocked.
+SEED_CATALOGUE_IMAGES = env_bool("SEED_CATALOGUE_IMAGES", True)
+CATALOGUE_IMAGE_MAX_PER_RUN = int(os.getenv("CATALOGUE_IMAGE_MAX_PER_RUN", "60"))
+CATALOGUE_IMAGE_RETRY_DAYS = int(os.getenv("CATALOGUE_IMAGE_RETRY_DAYS", "7"))
+CATALOGUE_IMAGE_PREFER_ESPBOARDS = env_bool("CATALOGUE_IMAGE_PREFER_ESPBOARDS", True)
+CATALOGUE_IMAGE_WIKIMEDIA = env_bool("CATALOGUE_IMAGE_WIKIMEDIA", True)
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
