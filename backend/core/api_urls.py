@@ -7,6 +7,7 @@ urlpatterns = [
     path("inventory/<uuid:item_id>/", api_views.inventory_detail, name="api-inventory-detail"),
     path("boards/", api_views.boards, name="api-boards"),
     path("boards/<uuid:board_id>/", api_views.board_detail, name="api-board-detail"),
+    path("boards/<uuid:board_id>/enrich/", api_views.board_enrich, name="api-board-enrich"),
     path("boards/<uuid:board_id>/image/", api_views.board_image, name="api-board-image"),
     path("components/", api_views.components, name="api-components"),
     path("components/<uuid:component_id>/", api_views.component_detail, name="api-component-detail"),
