@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.2.3
+
+- Licensed MakerVault source code under GNU AGPL v3.0 or later.
+- Added THIRD_PARTY_NOTICES.md covering runtime media and bundled open-source dependencies.
+- Added an About / Licences & Attribution page with a source-code link, warranty notice and live media attribution register.
+- Added an attribution API covering cached/source-linked board and component images.
+- Tightened Wikimedia Commons automatic image acceptance to CC0/Public Domain, CC BY and CC BY-SA only.
+- Explicitly rejects NonCommercial and NoDerivatives Commons variants from the default automatic path.
+- Automatic ESPBoards image caching is now disabled by default because its own board illustrations are CC BY-NC 4.0; it remains an explicit non-commercial opt-in.
+- Added public in-app endpoints for the AGPL text and third-party notices.
+- No database migration is required.
+
+
 ## v0.2.2
 
 - Added automatic background image seeding for starter board and component catalogue records.

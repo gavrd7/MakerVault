@@ -690,8 +690,57 @@ def import_board_commit(request):
 
 @login_required
 @require_http_methods(["GET"])
+def _attribution_row(kind, obj):
+    specs = obj.specifications or {}
+    provider = specs.get("image_source_provider") or ""
+    page = specs.get("image_source_page") or ""
+    image_url = specs.get("image_source_url") or specs.get("external_image_url") or ""
+    if not (provider or page or image_url):
+        return None
+    return {
+        "kind": kind,
+        "id": str(obj.id),
+        "name": str(obj),
+        "provider": provider or "External source",
+        "author": specs.get("image_author") or "",
+        "license": specs.get("image_license") or "",
+        "source_page": page or image_url,
+        "cached": bool(obj.image),
+    }
+
+
+@login_required
+@require_http_methods(["GET"])
+def attributions(request):
+    rows = []
+    for board in BoardModel.objects.select_related("manufacturer").exclude(specifications={}):
+        row = _attribution_row("Board", board)
+        if row:
+            rows.append(row)
+    for component in ComponentModel.objects.select_related("manufacturer", "category").exclude(specifications={}):
+        row = _attribution_row("Component", component)
+        if row:
+            rows.append(row)
+    rows.sort(key=lambda row: (row["provider"].lower(), row["name"].lower()))
+    return JsonResponse({
+        "rows": rows,
+        "summary": {
+            "total": len(rows),
+            "with_license": sum(1 for row in rows if row["license"]),
+            "needs_review": sum(1 for row in rows if not row["license"]),
+        },
+    })
+
+
+@login_required
+@require_http_methods(["GET"])
 def public_config(request):
     return JsonResponse({
+        "version": settings.MAKERVAULT_VERSION,
+        "license": settings.MAKERVAULT_LICENSE,
+        "source_url": settings.MAKERVAULT_SOURCE_URL,
+        "license_url": "/legal/license/",
+        "third_party_notices_url": "/legal/third-party-notices/",
         "currency": settings.MAKERVAULT_CURRENCY,
         "measurement_system": settings.MAKERVAULT_MEASUREMENT_SYSTEM,
         "timezone": settings.TIME_ZONE,
