@@ -68,7 +68,6 @@ def _is_esp_family(board) -> bool:
 def _merge_board_data(board, data) -> bool:
     changed = False
     field_map = {
-        "description": "description",
         "family": "family",
         "mcu": "mcu",
         "architecture": "architecture",
