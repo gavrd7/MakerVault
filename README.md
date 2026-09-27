@@ -1,4 +1,4 @@
-# MakerVault v0.4.3
+# MakerVault v0.5.0
 
 MakerVault is a self-hosted makerspace inventory and project system for electronics, firmware, fabrication and 3D-printing assets.
 
@@ -198,6 +198,12 @@ Uploaded media is served through an authenticated Django endpoint. Raster images
 Project workspaces can upload and classify firmware/source files, wiring/schematics, documents, PCB files, CAD, STL/mesh, 3MF/slicer projects, archives and other build assets. Files are stored in authenticated MakerVault media storage and non-image assets are served download-only.
 
 Project workspaces can also link GitHub, GitLab, local or other repositories alongside their stored build files. The main **Files** page provides a categorized library for both project-linked and standalone assets. Files can be uploaded directly with no project, then attached to or detached from a project later without duplicating the stored asset. MakerVault continues to enforce its established supported extension list and authenticated download rules. A Three.js STL/3MF viewer remains planned for a later milestone.
+
+### Bill of materials and stock allocation
+
+Projects can now maintain a structured bill of materials using catalogue boards/components or custom items. BOM lines track required quantity, unit cost and allocation coverage. Physical inventory is allocated through separate quantity-aware allocation records, allowing one stock lot to serve multiple BOM lines/projects without changing the inventory item's total quantity.
+
+Inventory exposes total, BOM-allocated and free quantities. Allocation changes are recorded in inventory lifecycle history, and MakerVault prevents over-allocation, conflicting project assignments, repair/retired status changes, quantity reductions below allocated stock, and deletion of inventory that is still allocated.
 
 ## Development and Git
 
