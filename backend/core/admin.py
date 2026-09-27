@@ -2,7 +2,8 @@ from django.contrib import admin
 from .models import (
     Manufacturer, CatalogSource, CatalogueMaintenanceSettings, BoardModel, BoardCompatibility, ComponentCategory,
     ComponentModel, Project, InventoryItem, InventoryHistory, BOMItem, BOMAllocation, FileAsset, RepositoryLink,
-    FilamentProduct, Spool, Printer, Model3D, ModelRevision, ProductListing, PrintJob,
+    FilamentProduct, Spool, ExternalSpoolLink, Printer, PrinterFilamentSlot,
+    Model3D, ModelRevision, ModelRevisionAsset, ProductListing, PrintJob,
 )
 
 
@@ -65,8 +66,9 @@ class ProjectAdmin(admin.ModelAdmin):
 
 admin.site.register([
     Manufacturer, CatalogSource, BoardCompatibility, ComponentCategory, ComponentModel,
-    FileAsset, RepositoryLink, FilamentProduct, Spool, Printer, Model3D,
-    ModelRevision, ProductListing, PrintJob,
+    FileAsset, RepositoryLink, FilamentProduct, Spool, ExternalSpoolLink,
+    Printer, PrinterFilamentSlot, Model3D, ModelRevision, ModelRevisionAsset,
+    ProductListing, PrintJob,
 ])
 
 admin.site.site_header = "MakerVault administration"
