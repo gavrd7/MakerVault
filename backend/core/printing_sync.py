@@ -217,7 +217,10 @@ def sync_spoolman(setting: PrintingIntegrationSetting) -> dict:
             ).first()
 
             remaining = _as_decimal(remote.get("remaining_weight"))
-            initial = _as_decimal((remote.get("filament") or {}).get("weight"))
+            initial = _as_decimal(remote.get("initial_weight"))
+            if initial is None:
+                initial = _as_decimal((remote.get("filament") or {}).get("weight"))
+            purchase_cost = _as_decimal(remote.get("price"))
             archived = bool(remote.get("archived"))
             status = "retired" if archived else ("empty" if remaining is not None and remaining <= 0 else "open")
             location = _spoolman_location(remote.get("location"))
@@ -229,6 +232,8 @@ def sync_spoolman(setting: PrintingIntegrationSetting) -> dict:
                     spool.remaining_weight_g = remaining
                 if spool.initial_weight_g is None and initial is not None:
                     spool.initial_weight_g = initial
+                if spool.purchase_cost is None and purchase_cost is not None:
+                    spool.purchase_cost = purchase_cost
                 spool.status = status
                 if location and not spool.assigned_printer_id:
                     spool.storage_location = location
@@ -241,6 +246,7 @@ def sync_spoolman(setting: PrintingIntegrationSetting) -> dict:
                     filament=filament,
                     initial_weight_g=initial,
                     remaining_weight_g=remaining,
+                    purchase_cost=purchase_cost,
                     storage_location=location,
                     status=status,
                     notes=str(remote.get("comment") or "").strip(),
