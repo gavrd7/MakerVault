@@ -313,7 +313,7 @@ function FilamentCatalogueModal({ onClose, onImported }) {
           {!busy && total == null && <div className="printingEmptyInline">Try a manufacturer, material such as PLA/PETG/ASA, product name or colour.</div>}
         </div>
 
-        {selected && <aside className="filamentCataloguePreview">
+        {selected && <div className="filamentCataloguePreview">
           <div className={`filamentCatalogueHero filamentPreview-${selected.transparency}`}>
             <span style={filamentSwatchStyle(selected)} />
           </div>
@@ -332,7 +332,7 @@ function FilamentCatalogueModal({ onClose, onImported }) {
           </dl>
           <button className="primary" disabled={importing} onClick={importSelected}>{importing ? "Importing…" : "Import into MakerVault"}</button>
           <p className="muted">The imported record remains editable and usable without SpoolmanDB. Source provenance is retained separately.</p>
-        </aside>}
+        </div>}
       </div>
     </div>
   </Modal>;
