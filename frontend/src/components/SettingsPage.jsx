@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { apiFetch } from "../api";
-import { LoadingBlock } from "./Common";
+import { Badge, LoadingBlock } from "./Common";
 
 function formatWhen(value) {
   if (!value) return "Not yet";
@@ -12,7 +12,9 @@ function formatWhen(value) {
 export default function SettingsPage({ config }) {
   const [settings, setSettings] = useState(null);
   const [form, setForm] = useState(null);
+  const [integrations, setIntegrations] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [integrationBusy, setIntegrationBusy] = useState("");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -20,9 +22,13 @@ export default function SettingsPage({ config }) {
   async function load() {
     setError("");
     try {
-      const result = await apiFetch("/api/settings/catalogue-maintenance/");
-      setSettings(result.settings);
-      setForm(result.settings);
+      const [maintenance, printing] = await Promise.all([
+        apiFetch("/api/settings/catalogue-maintenance/"),
+        apiFetch("/api/settings/printing-integrations/"),
+      ]);
+      setSettings(maintenance.settings);
+      setForm(maintenance.settings);
+      setIntegrations(printing.rows || []);
     } catch (err) {
       setError(err.message);
     }
@@ -57,6 +63,51 @@ export default function SettingsPage({ config }) {
       setError(err.message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  function updateIntegrationLocal(provider, key, value) {
+    setIntegrations(rows => rows.map(row => row.provider === provider ? { ...row, [key]: value } : row));
+  }
+
+  async function saveIntegration(provider, patch = null) {
+    const row = integrations.find(item => item.provider === provider);
+    if (!row && !patch) return;
+    setIntegrationBusy(provider); setError(""); setNotice("");
+    try {
+      const result = await apiFetch("/api/settings/printing-integrations/" + provider + "/", {
+        method: "PATCH",
+        body: patch || {
+          enabled: row.enabled,
+          endpoint_url: row.endpoint_url,
+          sync_direction: row.sync_direction,
+        },
+      });
+      setIntegrations(rows => rows.map(item => item.provider === provider ? result.item : item));
+      setNotice(result.item.name + " settings saved.");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIntegrationBusy("");
+    }
+  }
+
+  async function testIntegration(provider) {
+    setIntegrationBusy(provider); setError(""); setNotice("");
+    try {
+      const result = await apiFetch("/api/settings/printing-integrations/" + provider + "/test/", { method: "POST" });
+      setIntegrations(rows => rows.map(item => item.provider === provider ? result.item : item));
+      setNotice(result.item.name + ": " + result.item.status_label + ".");
+    } catch (err) {
+      if (err.status === 502) {
+        try {
+          const refreshed = await apiFetch("/api/settings/printing-integrations/");
+          setIntegrations(refreshed.rows || []);
+        } catch {}
+      }
+      setError(err.message);
+    } finally {
+      setIntegrationBusy("");
     }
   }
 
