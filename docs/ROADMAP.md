@@ -27,7 +27,7 @@ Completed and merged to `main` on 27 September 2026.
 
 ## v0.4.2 — Project files and repositories
 
-Current milestone / in progress.
+Completed and merged on 27 September 2026.
 
 The Projects workspace becomes the hub for the digital assets that belong to a build.
 
@@ -42,13 +42,25 @@ Planned scope:
 - Surface repository links alongside project files using the existing `RepositoryLink` model.
 - Keep project photos/gallery separate from general project files even though both use `FileAsset`.
 
-## After v0.4.2 — BOM and inventory allocation
+## v0.4.3 — Standalone file library
 
-Next project-workspace milestone after the file/repository workflow.
+Current milestone / in progress.
+
+- Upload supported MakerVault file types directly from the Files page without requiring a project.
+- Keep standalone and project-linked files in the same FileAsset library.
+- Allow optional project assignment at upload time.
+- Allow an existing file to move between standalone and project-linked use without re-uploading or duplicating storage.
+- Preserve the existing file-extension allow-list and authenticated download behaviour.
+- Add standalone filtering and direct file management/removal.
+- No database migration required.
+
+## After v0.4.3 — BOM and inventory allocation
+
+Next project-workspace milestone after the standalone file-library refinement.
 
 - Bill of materials management.
 - Link BOM lines to catalogue records and/or physical inventory.
 - Track required versus assigned/available quantities.
 - Make project inventory consumption/allocation clearer without losing lifecycle history.
 
-Milestone numbering beyond v0.4.2 should be assigned when that work begins, rather than inferred from older roadmap text.
+Milestone numbering beyond v0.4.3 should be assigned when that work begins, rather than inferred from older roadmap text.

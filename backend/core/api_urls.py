@@ -13,6 +13,7 @@ urlpatterns = [
     path("components/<uuid:component_id>/", api_views.component_detail, name="api-component-detail"),
     path("components/<uuid:component_id>/image/", api_views.component_image, name="api-component-image"),
     path("files/", api_views.files_lookup, name="api-files"),
+    path("files/<uuid:asset_id>/", api_views.file_detail, name="api-file-detail"),
     path("projects/", api_views.projects_lookup, name="api-projects"),
     path("projects/<uuid:project_id>/", api_views.project_detail, name="api-project-detail"),
     path("projects/<uuid:project_id>/cover/", api_views.project_cover, name="api-project-cover"),

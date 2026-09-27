@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.4.3
+
+- Added direct uploads from the Files page so FileAsset records no longer require a project.
+- Standalone files use the same established MakerVault extension allow-list and authenticated storage rules as project assets.
+- Added Standalone as the default project choice for direct file uploads, with optional project assignment at upload time.
+- Added a Standalone files filter to the global Files library.
+- Added file management from the Files page so an existing asset can be attached to or detached from a project without re-uploading or duplicating the stored file.
+- Added direct standalone file removal with stored-file cleanup.
+- Added FileAsset permissions to the SPA configuration for role-aware upload/manage controls.
+- Added API tests for standalone upload, existing extension validation, project attachment without duplication and stored-file deletion.
+- No database migration is required.
+
+
 ## v0.4.2
 
 - Added project file uploads using the existing FileAsset model without a new database migration.
