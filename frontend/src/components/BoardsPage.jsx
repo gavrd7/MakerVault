@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
 import { themeQuartz } from "ag-grid-community";
 import { apiFetch } from "../api";
-import { Badge, BoardImage, ImageManagerModal, LoadingBlock, Modal } from "./Common";
+import { Badge, BoardImage, ImageManagerModal, ImageViewer, LoadingBlock, Modal } from "./Common";
 
 function prettySpecKey(key) {
   const labels = {
@@ -146,6 +146,7 @@ export default function BoardsPage({ boards, setBoards, config, onOpenImport, re
 
 function BoardDetail({ board, loading, canEdit, onClose, onChanged }) {
   const [imageOpen, setImageOpen] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
   const [enriching, setEnriching] = useState(false);
   const [enrichMessage, setEnrichMessage] = useState("");
   const radios = [[board.wifi, "Wi-Fi"], [board.bluetooth, "Bluetooth"], [board.zigbee, "Zigbee"], [board.thread, "Thread"]]
@@ -203,7 +204,7 @@ function BoardDetail({ board, loading, canEdit, onClose, onChanged }) {
       <div className="detailHead boardDetailHead"><h3>Board details</h3><button className="iconButton" onClick={onClose} aria-label="Close board details">×</button></div>
       <div className="boardDetailScroll">
       {loading ? <LoadingBlock label="Loading board details…" /> : <>
-      <div className="boardHeroImage"><BoardImage src={board.image} alt={board.display_name} size="large" /></div>
+      <button type="button" className="boardHeroImage imageViewerTrigger" onClick={() => board.image && setViewerOpen(true)} disabled={!board.image} title={board.image ? "Open image viewer" : undefined}><BoardImage src={board.image} alt={board.display_name} size="large" /></button>
       <div className="detailTitleRow boardTitleRow">
         <h2>{board.display_name}</h2>
         <div className="detailActions">
@@ -246,6 +247,7 @@ function BoardDetail({ board, loading, canEdit, onClose, onChanged }) {
         onClose={() => setImageOpen(false)}
         onUpdated={updated => { onChanged(updated); setImageOpen(false); }}
       />}
+      {viewerOpen && <ImageViewer src={board.image} alt={board.display_name} title={board.display_name} onClose={() => setViewerOpen(false)} />}
     </aside>
   </>;
 }
