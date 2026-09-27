@@ -439,6 +439,7 @@ class PrintingIntegrationSetting(TimeStampedModel):
         ("not_configured", "Not configured"),
         ("ready", "Ready"),
         ("connected", "Connected"),
+        ("disconnected", "Disconnected"),
         ("error", "Error"),
         ("planned", "Planned"),
     ]
@@ -449,8 +450,19 @@ class PrintingIntegrationSetting(TimeStampedModel):
     sync_direction = models.CharField(max_length=20, choices=SYNC_DIRECTIONS, default="import")
     status = models.CharField(max_length=24, choices=STATUSES, default="not_configured")
     last_checked_at = models.DateTimeField(blank=True, null=True)
+    auto_sync = models.BooleanField(default=False)
+    sync_interval_minutes = models.PositiveIntegerField(default=15)
+    last_sync_at = models.DateTimeField(blank=True, null=True)
+    next_sync_at = models.DateTimeField(blank=True, null=True)
+    last_sync_triggered_by = models.CharField(max_length=120, blank=True)
+    last_sync_result = models.JSONField(default=dict, blank=True)
     last_error = models.TextField(blank=True)
     config = models.JSONField(default=dict, blank=True)
+
+    def clean(self):
+        super().clean()
+        if self.sync_interval_minutes < 1 or self.sync_interval_minutes > 1440:
+            raise ValidationError({"sync_interval_minutes": "Sync interval must be between 1 and 1440 minutes."})
 
     class Meta:
         ordering = ["provider"]
