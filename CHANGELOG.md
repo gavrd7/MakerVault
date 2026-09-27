@@ -9,6 +9,15 @@
 - Added ModelRevisionAsset links so STL/3MF/CAD assets reuse existing FileAsset records instead of duplicating storage.
 - Migrated legacy direct ModelRevision file fields into FileAsset links without duplicating stored bytes, leaving FileAsset as the single revision-file system.
 - Added native create APIs/UI for printers, filament products, physical spools and 3D models.
+- Added dedicated 3D-printer and filament manufacturer catalogues so printing data no longer reuses board/component manufacturers.
+- Added an owned-printer catalogue with active/inactive state, reusable locations, local host/IP metadata and manufacturer-filtered printer model selection.
+- Added starter printer specification profiles that can populate build volume, nozzle size, enclosure and multi-material capabilities when adding an owned printer.
+- Added reusable printing/storage locations and structured spool placement at either a storage location or an owned printer.
+- Added direct STL/3MF upload from Add Model on desktop or mobile; MakerVault creates the model, initial revision and FileAsset link in one workflow.
+- Fixed Add Spool to load the current native filament catalogue directly instead of relying on potentially stale page data.
+- Moved optional Spoolman, Creality CFS, SimplyPrint and future multi-material adapter status cards into the main Settings area.
+- Added configurable Spoolman endpoint/sync direction and connection testing, plus CFS readiness status based on registered compatible printers.
+- Added dedicated filament manufacturer/material selectors and manufacturer-product suggestions backed by the open SpoolmanDB catalogue, with custom values retained as a fallback.
 - Added native filament appearance fields for opaque, translucent and transparent materials.
 - Added a visual filament colour palette, custom colour/hex selector and transparency preview for manual filament creation.
 - Added an optional SpoolmanDB browser with search, source-record preview and import into native MakerVault filament products.
