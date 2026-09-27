@@ -129,9 +129,9 @@ export default function SettingsPage({ config }) {
   return <div className="settingsStack">
     <section className="panel settingsHero">
       <div>
-        <span className="settingsEyebrow">Automatic maintenance</span>
-        <h2>Catalogue maintenance</h2>
-        <p>Periodically check for missing/new board specifications and catalogue images without rerunning work on every container restart.</p>
+        <span className="settingsEyebrow">Administration</span>
+        <h2>MakerVault settings</h2>
+        <p>Manage scheduled catalogue maintenance and optional external integrations from one place.</p>
       </div>
       <div className="settingsStatus">
         <span className={settings.enabled ? "status-pill status-on" : "status-pill"}>{settings.enabled ? "Enabled" : "Disabled"}</span>
@@ -143,7 +143,7 @@ export default function SettingsPage({ config }) {
 
     <section className="panel settingsPanel">
       <div className="panelHead">
-        <div><h3>Schedule</h3><p>The default interval is 24 hours. The next-run timestamp is stored in PostgreSQL.</p></div>
+        <div><h3>Catalogue maintenance schedule</h3><p>The default interval is 24 hours. The next-run timestamp is stored in PostgreSQL.</p></div>
       </div>
       <form className="settingsForm" onSubmit={save}>
         <label className="settingsToggle">
