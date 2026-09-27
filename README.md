@@ -1,4 +1,4 @@
-# MakerVault v0.4.2
+# MakerVault v0.4.3
 
 MakerVault is a self-hosted makerspace inventory and project system for electronics, firmware, fabrication and 3D-printing assets.
 
@@ -197,7 +197,7 @@ Uploaded media is served through an authenticated Django endpoint. Raster images
 
 Project workspaces can upload and classify firmware/source files, wiring/schematics, documents, PCB files, CAD, STL/mesh, 3MF/slicer projects, archives and other build assets. Files are stored in authenticated MakerVault media storage and non-image assets are served download-only.
 
-Project workspaces can also link GitHub, GitLab, local or other repositories alongside their stored build files. The main **Files** page provides a cross-project categorized view of those same assets and links each one back to its owning project. A Three.js STL/3MF viewer remains planned for a later milestone.
+Project workspaces can also link GitHub, GitLab, local or other repositories alongside their stored build files. The main **Files** page provides a categorized library for both project-linked and standalone assets. Files can be uploaded directly with no project, then attached to or detached from a project later without duplicating the stored asset. MakerVault continues to enforce its established supported extension list and authenticated download rules. A Three.js STL/3MF viewer remains planned for a later milestone.
 
 ## Development and Git
 
