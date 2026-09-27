@@ -159,6 +159,50 @@ class BomAllocationApiTests(TestCase):
             ).exists()
         )
 
+    def test_inventory_quantity_cannot_drop_below_allocated_stock(self):
+        bom = self.create_bom(quantity=3)
+        self.assertEqual(self.allocate(bom["id"], 2).status_code, 201)
+
+        response = self.client.patch(
+            f"/api/inventory/{self.stock.id}/",
+            data={"quantity": 1},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("quantity", response.json().get("fields", {}))
+        self.stock.refresh_from_db()
+        self.assertEqual(float(self.stock.quantity), 5.0)
+
+    def test_allocated_inventory_cannot_move_to_conflicting_project(self):
+        bom = self.create_bom(quantity=1)
+        self.assertEqual(self.allocate(bom["id"], 1).status_code, 201)
+
+        response = self.client.patch(
+            f"/api/inventory/{self.stock.id}/",
+            data={"project_id": str(self.other_project.id)},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("project_id", response.json().get("fields", {}))
+        self.stock.refresh_from_db()
+        self.assertIsNone(self.stock.project_id)
+
+    def test_allocated_inventory_cannot_be_marked_repair_or_retired(self):
+        bom = self.create_bom(quantity=1)
+        self.assertEqual(self.allocate(bom["id"], 1).status_code, 201)
+
+        for status in ("repair", "retired"):
+            response = self.client.patch(
+                f"/api/inventory/{self.stock.id}/",
+                data={"status": status},
+                content_type="application/json",
+            )
+            self.assertEqual(response.status_code, 400)
+            self.assertIn("status", response.json().get("fields", {}))
+
+        self.stock.refresh_from_db()
+        self.assertEqual(self.stock.status, "available")
+
     def test_regular_user_cannot_mutate_project_bom(self):
         viewer = get_user_model().objects.create_user(
             username="viewer",
