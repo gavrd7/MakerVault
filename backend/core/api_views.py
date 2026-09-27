@@ -2599,7 +2599,9 @@ def printing_filaments(request):
 @login_required
 @require_http_methods(["PATCH", "DELETE"])
 def printing_filament_detail(request, filament_id):
-    item = FilamentProduct.objects.select_related("manufacturer", "source").filter(pk=filament_id).first()
+    item = FilamentProduct.objects.select_related(
+        "manufacturer", "filament_manufacturer", "source"
+    ).filter(pk=filament_id).first()
     if not item:
         return _error("Filament product not found.", status=404)
     if request.method == "DELETE":
@@ -2617,11 +2619,9 @@ def printing_filament_detail(request, filament_id):
         return denied
     try:
         payload = _read_json(request)
-        if "manufacturer_id" in payload:
-            manufacturer_id = payload.get("manufacturer_id")
-            item.manufacturer = Manufacturer.objects.filter(pk=manufacturer_id).first() if manufacturer_id else None
-            if manufacturer_id and not item.manufacturer:
-                return _error("Selected manufacturer was not found.")
+        if any(key in payload for key in ["filament_manufacturer_id", "manufacturer_name", "manufacturer_id"]):
+            item.filament_manufacturer = _resolve_filament_manufacturer(payload)
+            item.manufacturer = None
         for field in ["name", "material", "color_name", "color_hex"]:
             if field in payload:
                 setattr(item, field, str(payload.get(field) or "").strip())
