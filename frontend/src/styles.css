@@ -595,7 +595,8 @@
 .bomDerivedInventory strong{margin-top:3px;font-size:13px;color:#d6dde7}
 .bomDerivedInventory small{margin-top:3px;color:#8190a4;font-size:9px}
 .inventoryDetailActions{display:flex;gap:7px;align-items:center}
-.inventoryDetailActions .assetDanger{min-height:32px;padding:6px 10px;color:#e29ba0;border-color:#57353b;background:#24151a}
+.inventoryDetailActions button{min-width:72px;min-height:34px;padding:7px 12px;display:inline-flex;align-items:center;justify-content:center}
+.inventoryDetailActions .assetDanger{color:#e29ba0;border-color:#57353b;background:#24151a}
 .inventoryDetailActions .assetDanger:disabled{opacity:.45;cursor:not-allowed}
 .inventoryDeleteHint{margin:8px 0 0;padding:8px 10px;border:1px solid #49343a;border-radius:8px;background:#1c1417;color:#c7989d;font-size:10px}
 
