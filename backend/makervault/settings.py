@@ -236,6 +236,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "core.tasks.catalogue_maintenance_tick",
         "schedule": 60.0,
     },
+    "printing-integrations-tick": {
+        "task": "core.tasks.printing_integrations_tick",
+        "schedule": 60.0,
+    },
 }
 
 DATA_UPLOAD_MAX_MEMORY_SIZE = int(os.getenv("DATA_UPLOAD_MAX_MEMORY_SIZE", str(1024 * 1024 * 1024)))
