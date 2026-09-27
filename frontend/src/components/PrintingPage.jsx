@@ -166,33 +166,110 @@ export default function PrintingPage({ config, projects }) {
   </div>;
 }
 
-function PrinterModal({ manufacturers, onClose, onSaved }) {
-  const [form, setForm] = useState({ name: "", manufacturer_id: "", model: "", serial_number: "", location: "", build_volume_x_mm: "", build_volume_y_mm: "", build_volume_z_mm: "", nozzle_mm: "0.4", notes: "" });
+function PrinterModal({ manufacturers, models, locations, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    name: "",
+    printer_manufacturer_id: manufacturers[0]?.id || "",
+    catalog_model_id: "",
+    model: "",
+    serial_number: "",
+    location_id: "",
+    connection_host: "",
+    is_active: true,
+    build_volume_x_mm: "",
+    build_volume_y_mm: "",
+    build_volume_z_mm: "",
+    nozzle_mm: "0.4",
+    notes: "",
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const set = (key, value) => setForm(value0 => ({ ...value0, [key]: value }));
+
+  const modelOptions = models.filter(item => item.manufacturer_id === form.printer_manufacturer_id);
+  const selectedModel = models.find(item => item.id === form.catalog_model_id);
+
+  function manufacturerChanged(value) {
+    setForm(current => ({
+      ...current,
+      printer_manufacturer_id: value,
+      catalog_model_id: "",
+      model: "",
+      build_volume_x_mm: "",
+      build_volume_y_mm: "",
+      build_volume_z_mm: "",
+      nozzle_mm: "0.4",
+    }));
+  }
+
+  function modelChanged(value) {
+    if (value === "__custom__") {
+      setForm(current => ({
+        ...current,
+        catalog_model_id: "",
+        model: "",
+        build_volume_x_mm: "",
+        build_volume_y_mm: "",
+        build_volume_z_mm: "",
+        nozzle_mm: "0.4",
+      }));
+      return;
+    }
+    const selected = models.find(item => item.id === value);
+    if (!selected) return;
+    setForm(current => ({
+      ...current,
+      catalog_model_id: selected.id,
+      model: selected.name,
+      name: current.name || selected.name,
+      build_volume_x_mm: selected.build_volume?.x ?? "",
+      build_volume_y_mm: selected.build_volume?.y ?? "",
+      build_volume_z_mm: selected.build_volume?.z ?? "",
+      nozzle_mm: selected.nozzle_mm ?? "0.4",
+    }));
+  }
+
   async function submit(event) {
     event.preventDefault(); setBusy(true); setError("");
-    try { await apiFetch("/api/printing/printers/", { method: "POST", body: form }); await onSaved(); }
-    catch (err) { setError(err.message); } finally { setBusy(false); }
+    try {
+      await apiFetch("/api/printing/printers/", { method: "POST", body: form });
+      await onSaved();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
   }
-  return <Modal title="Add printer" subtitle="Create a native MakerVault printer record. Integrations can be attached later." onClose={onClose} wide>
+
+  return <Modal title="Add owned printer" subtitle="Choose a known printer model to populate its specifications, or create a custom printer record." onClose={onClose} wide>
     <form className="formGrid" onSubmit={submit}>
       {error && <div className="formError full">{error}</div>}
-      <label>Name<input required value={form.name} onChange={e => set("name", e.target.value)} placeholder="Desk printer" /></label>
-      <label>Manufacturer<select value={form.manufacturer_id} onChange={e => set("manufacturer_id", e.target.value)}><option value="">Unspecified</option>{manufacturers.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
-      <label>Model<input required value={form.model} onChange={e => set("model", e.target.value)} placeholder="K2, K1, X1C…" /></label>
+      <label>Manufacturer<select required value={form.printer_manufacturer_id} onChange={e => manufacturerChanged(e.target.value)}>
+        <option value="">Choose manufacturer…</option>
+        {manufacturers.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+      </select></label>
+      <label>Model<select required={!!form.printer_manufacturer_id} value={form.catalog_model_id || (form.model ? "__custom__" : "")} onChange={e => modelChanged(e.target.value)} disabled={!form.printer_manufacturer_id}>
+        <option value="">Choose model…</option>
+        {modelOptions.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+        <option value="__custom__">Other / custom model</option>
+      </select></label>
+      {!form.catalog_model_id && form.printer_manufacturer_id && <label>Custom model<input required value={form.model} onChange={e => set("model", e.target.value)} placeholder="Printer model" /></label>}
+      <label>Printer name<input required value={form.name} onChange={e => set("name", e.target.value)} placeholder={selectedModel ? selectedModel.display_name : "Desk printer"} /></label>
       <label>Serial number<input value={form.serial_number} onChange={e => set("serial_number", e.target.value)} /></label>
-      <label>Location<input value={form.location} onChange={e => set("location", e.target.value)} /></label>
+      <label>Location<select value={form.location_id} onChange={e => set("location_id", e.target.value)}><option value="">Unassigned</option>{locations.map(x => <option key={x.id} value={x.id}>{x.name} · {x.kind_label}</option>)}</select></label>
+      <label>Local host / IP<input value={form.connection_host} onChange={e => set("connection_host", e.target.value)} placeholder="192.168.1.34" /><small>Used by optional local printer/CFS adapters.</small></label>
       <label>Nozzle (mm)<input type="number" min="0.1" step="0.05" value={form.nozzle_mm} onChange={e => set("nozzle_mm", e.target.value)} /></label>
       <label>Build X (mm)<input type="number" min="1" step="0.1" value={form.build_volume_x_mm} onChange={e => set("build_volume_x_mm", e.target.value)} /></label>
       <label>Build Y (mm)<input type="number" min="1" step="0.1" value={form.build_volume_y_mm} onChange={e => set("build_volume_y_mm", e.target.value)} /></label>
       <label>Build Z (mm)<input type="number" min="1" step="0.1" value={form.build_volume_z_mm} onChange={e => set("build_volume_z_mm", e.target.value)} /></label>
+      <label className="settingsToggle full"><div><strong>Currently in use</strong><small>Inactive printers remain in your owned-printer catalogue and print history.</small></div><input type="checkbox" checked={form.is_active} onChange={e => set("is_active", e.target.checked)} /></label>
+      {selectedModel && <div className="settingsCallout full"><strong>Catalogue profile</strong><p>{selectedModel.build_volume?.x || "?"} × {selectedModel.build_volume?.y || "?"} × {selectedModel.build_volume?.z || "?"} mm · {selectedModel.enclosed ? "Enclosed" : "Open"}{selectedModel.multi_material_label ? " · " + selectedModel.multi_material_label : ""}</p></div>}
       <label className="full">Notes<textarea rows="3" value={form.notes} onChange={e => set("notes", e.target.value)} /></label>
-      <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Saving…" : "Add printer"}</button></div>
+      <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy || !form.printer_manufacturer_id}>{busy ? "Saving…" : "Add printer"}</button></div>
     </form>
   </Modal>;
 }
+
 
 const FILAMENT_COLOUR_PALETTE = [
   ["Black", "#111111"], ["White", "#f4f4f4"], ["Grey", "#808080"], ["Silver", "#b9bec4"],
