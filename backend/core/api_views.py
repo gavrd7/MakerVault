@@ -3228,7 +3228,7 @@ def printing_spools(request):
             return _error("Choose either a storage location or a printer.")
 
         item = Spool(
-            spool_id=str(payload.get("spool_id") or "").strip(),
+            spool_id=next_spool_id(),
             filament=filament,
             initial_weight_g=_parse_decimal(payload.get("initial_weight_g"), "initial_weight_g"),
             remaining_weight_g=_parse_decimal(payload.get("remaining_weight_g"), "remaining_weight_g"),
@@ -3253,7 +3253,7 @@ def printing_spools(request):
     except ValidationError as exc:
         return _validation_response(exc)
     except IntegrityError:
-        return _error("Spool ID must be unique.")
+        return _error("MakerVault could not allocate a unique spool ID; please retry.")
 
 
 @login_required
@@ -3304,7 +3304,7 @@ def printing_spool_detail(request, spool_id):
             if item.assigned_printer:
                 item.storage_location = None
                 item.location = ""
-        for field in ["spool_id", "status", "currency", "notes"]:
+        for field in ["status", "currency", "notes"]:
             if field in payload:
                 value = str(payload.get(field) or "").strip()
                 setattr(item, field, value.upper()[:3] if field == "currency" else value)
