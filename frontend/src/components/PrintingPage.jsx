@@ -55,6 +55,7 @@ export default function PrintingPage({ config, projects }) {
       <div className="printingHeroActions">
         {canAddPrinter && <button onClick={() => setModal("printer")}>＋ Printer</button>}
         {canAddFilament && <button onClick={() => setModal("filament")}>＋ Filament</button>}
+        {canAddFilament && <button onClick={() => setModal("filamentCatalogue")}>⌕ Filament catalogue</button>}
         {canAddSpool && <button onClick={() => setModal("spool")}>＋ Spool</button>}
         {canAddModel && <button className="primary" onClick={() => setModal("model")}>＋ Model</button>}
         {canAddPrintJob && <button onClick={() => setModal("print")}>＋ Print history</button>}
@@ -138,6 +139,7 @@ export default function PrintingPage({ config, projects }) {
 
     {modal === "printer" && <PrinterModal manufacturers={data?.manufacturers || []} onClose={() => setModal("")} onSaved={saved} />}
     {modal === "filament" && <FilamentModal manufacturers={data?.manufacturers || []} onClose={() => setModal("")} onSaved={saved} />}
+    {modal === "filamentCatalogue" && <FilamentCatalogueModal onClose={() => setModal("")} onImported={saved} />}
     {modal === "spool" && <SpoolModal filaments={data?.filaments || []} currency={config?.currency || "GBP"} onClose={() => setModal("")} onSaved={saved} />}
     {modal === "model" && <ModelModal projects={projects || []} onClose={() => setModal("")} onSaved={saved} />}
     {modal === "print" && <PrintJobModal
@@ -231,6 +233,108 @@ function FilamentModal({ manufacturers, onClose, onSaved }) {
       <label>Nominal weight (g)<input type="number" step="1" min="0" value={form.nominal_weight_g} onChange={e => set("nominal_weight_g", e.target.value)} /></label>
       <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Saving…" : "Add filament"}</button></div>
     </form>
+  </Modal>;
+}
+
+function filamentSwatchStyle(item) {
+  const colours = (item?.color_hexes || []).map(value => String(value || "").slice(0, 7)).filter(Boolean);
+  if (colours.length > 1) {
+    const width = 100 / colours.length;
+    const stops = colours.flatMap((colour, index) => [
+      `${colour} ${(index * width).toFixed(1)}%`,
+      `${colour} ${((index + 1) * width).toFixed(1)}%`,
+    ]);
+    return { background: `linear-gradient(135deg, ${stops.join(", ")})` };
+  }
+  return item?.color_hex ? { background: item.color_hex } : undefined;
+}
+
+function FilamentCatalogueModal({ onClose, onImported }) {
+  const [query, setQuery] = useState("");
+  const [rows, setRows] = useState([]);
+  const [total, setTotal] = useState(null);
+  const [source, setSource] = useState(null);
+  const [selected, setSelected] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [error, setError] = useState("");
+
+  async function search(event) {
+    event?.preventDefault();
+    setBusy(true); setError(""); setSelected(null);
+    try {
+      const result = await apiFetch("/api/printing/catalogue/filaments/?q=" + encodeURIComponent(query) + "&limit=50");
+      setRows(result.rows || []);
+      setTotal(result.total ?? 0);
+      setSource(result.source || null);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function importSelected() {
+    if (!selected) return;
+    setImporting(true); setError("");
+    try {
+      await apiFetch("/api/printing/catalogue/filaments/import/", {
+        method: "POST",
+        body: { external_id: selected.external_id },
+      });
+      await onImported();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  return <Modal title="Open filament catalogue" subtitle="Search SpoolmanDB, preview the source record, then import it as a normal native MakerVault filament product." onClose={onClose} wide>
+    <div className="filamentCatalogueModal">
+      {error && <div className="formError">{error}</div>}
+      <form className="filamentCatalogueSearch" onSubmit={search}>
+        <input autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Search brand, product, material, colour…" />
+        <button className="primary" disabled={busy}>{busy ? "Searching…" : "Search catalogue"}</button>
+      </form>
+      <div className="filamentCatalogueMeta">
+        <span>{total == null ? "Search the public catalogue to begin." : `${total.toLocaleString()} matching variants · showing up to 50`}</span>
+        {source && <span>{source.name} · {source.license}</span>}
+      </div>
+
+      <div className={`filamentCatalogueLayout${selected ? " hasPreview" : ""}`}>
+        <div className="filamentCatalogueResults">
+          {rows.map(item => <button type="button" className={`filamentCatalogueRow${selected?.external_id === item.external_id ? " selected" : ""}`} key={item.external_id} onClick={() => setSelected(item)}>
+            <span className={`printingSwatch catalogueSwatch filamentPreview-${item.transparency}`} style={filamentSwatchStyle(item)} />
+            <span><strong>{item.manufacturer} · {item.name}</strong><small>{item.material} · {item.diameter_mm || "?"} mm · {grams(item.nominal_weight_g)}</small></span>
+            <span className="printingBadges">{item.transparency !== "opaque" && <Badge>{item.transparency}</Badge>}{item.color_hexes?.length > 1 && <Badge tone="accent">{item.color_hexes.length} colours</Badge>}{item.glow && <Badge>Glow</Badge>}</span>
+          </button>)}
+          {!busy && total === 0 && <div className="printingEmptyInline">No matching filament variants.</div>}
+          {!busy && total == null && <div className="printingEmptyInline">Try a manufacturer, material such as PLA/PETG/ASA, product name or colour.</div>}
+        </div>
+
+        {selected && <aside className="filamentCataloguePreview">
+          <div className={`filamentCatalogueHero filamentPreview-${selected.transparency}`}>
+            <span style={filamentSwatchStyle(selected)} />
+          </div>
+          <span className="settingsEyebrow">SpoolmanDB preview</span>
+          <h3>{selected.manufacturer} · {selected.name}</h3>
+          <div className="badgeRow"><Badge tone="accent">{selected.material}</Badge><Badge>{selected.transparency}</Badge>{selected.finish && <Badge>{selected.finish}</Badge>}{selected.pattern && <Badge>{selected.pattern}</Badge>}{selected.glow && <Badge>Glow</Badge>}</div>
+          <dl className="detailSpecs">
+            <div><dt>Diameter</dt><dd>{selected.diameter_mm || "—"} mm</dd></div>
+            <div><dt>Net weight</dt><dd>{grams(selected.nominal_weight_g)}</dd></div>
+            <div><dt>Spool weight</dt><dd>{grams(selected.empty_spool_weight_g)}</dd></div>
+            <div><dt>Density</dt><dd>{selected.density_g_cm3 ? `${selected.density_g_cm3} g/cm³` : "—"}</dd></div>
+            <div><dt>Nozzle</dt><dd>{selected.nozzle_temp_min_c == null ? "—" : `${selected.nozzle_temp_min_c}–${selected.nozzle_temp_max_c} °C`}</dd></div>
+            <div><dt>Bed</dt><dd>{selected.bed_temp_min_c == null ? "—" : `${selected.bed_temp_min_c}–${selected.bed_temp_max_c} °C`}</dd></div>
+            <div><dt>Colour mode</dt><dd>{selected.color_hexes?.length > 1 ? `${selected.color_hexes.length}-colour ${selected.multi_color_direction || "multi-colour"}` : selected.color_hex || "—"}</dd></div>
+            <div><dt>Source ID</dt><dd>{selected.external_id}</dd></div>
+          </dl>
+          <button className="primary" disabled={importing} onClick={importSelected}>{importing ? "Importing…" : "Import into MakerVault"}</button>
+          <p className="muted">The imported record remains editable and usable without SpoolmanDB. Source provenance is retained separately.</p>
+        </aside>}
+      </div>
+    </div>
   </Modal>;
 }
 
