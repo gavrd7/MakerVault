@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlparse
 
@@ -578,7 +579,7 @@ def sync_printing_integration(provider: str, triggered_by: str = "manual") -> tu
         setting.last_sync_triggered_by = str(triggered_by or "manual")[:120]
         setting.last_sync_result = result
         if setting.auto_sync:
-            setting.next_sync_at = now + timezone.timedelta(minutes=setting.sync_interval_minutes)
+            setting.next_sync_at = now + timedelta(minutes=setting.sync_interval_minutes)
         else:
             setting.next_sync_at = None
         setting.save()
@@ -591,7 +592,7 @@ def sync_printing_integration(provider: str, triggered_by: str = "manual") -> tu
         setting.last_sync_triggered_by = str(triggered_by or "manual")[:120]
         setting.last_sync_result = {"provider": provider, "error": str(exc)}
         if setting.auto_sync:
-            setting.next_sync_at = now + timezone.timedelta(minutes=setting.sync_interval_minutes)
+            setting.next_sync_at = now + timedelta(minutes=setting.sync_interval_minutes)
         setting.save()
         raise
     except PrintingSyncError as exc:
@@ -602,6 +603,6 @@ def sync_printing_integration(provider: str, triggered_by: str = "manual") -> tu
         setting.last_sync_triggered_by = str(triggered_by or "manual")[:120]
         setting.last_sync_result = {"provider": provider, "error": str(exc)}
         if setting.auto_sync:
-            setting.next_sync_at = now + timezone.timedelta(minutes=setting.sync_interval_minutes)
+            setting.next_sync_at = now + timedelta(minutes=setting.sync_interval_minutes)
         setting.save()
         raise
