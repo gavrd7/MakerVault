@@ -151,7 +151,7 @@ function BoardDetail({ board, loading, canEdit, onClose, onChanged }) {
   const coreRows = [
     { key: "mcu", label: "MCU", value: board.mcu || "" },
     { key: "architecture", label: "Architecture", value: board.architecture || "" },
-    { key: "flash", label: "Flash", value: formatMemoryMb(board.flash_mb) },
+    { key: "flash", label: "Flash", value: specs.flash_kb != null ? `${specs.flash_kb} KB` : formatMemoryMb(board.flash_mb) },
     { key: "psram", label: "PSRAM", value: board.psram_mb == null ? "" : `${board.psram_mb} MB` },
     { key: "ram", label: "RAM / SRAM", value: board.ram_kb == null ? (specs.sram_kb == null ? "" : `${specs.sram_kb} KB`) : `${board.ram_kb} KB` },
     { key: "gpio", label: "GPIO", value: board.gpio_count ?? "" },
@@ -160,6 +160,7 @@ function BoardDetail({ board, loading, canEdit, onClose, onChanged }) {
   ];
   const technicalRows = [
     { key: "clock_mhz", label: "Clock", value: specs.clock_mhz == null ? "" : `${specs.clock_mhz} MHz` },
+    { key: "eeprom_kb", label: "EEPROM", value: specs.eeprom_kb == null ? "" : `${specs.eeprom_kb} KB` },
     { key: "cpu_cores", label: "CPU cores", value: specs.cpu_cores ?? "" },
     { key: "operating_voltage", label: "Operating voltage", value: specs.operating_voltage || "" },
     { key: "pin_count", label: "Pin count", value: specs.pin_count ?? "" },
