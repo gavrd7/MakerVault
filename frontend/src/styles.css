@@ -723,6 +723,11 @@
 .printingSlot{display:grid;grid-template-columns:18px minmax(0,1fr);gap:9px;align-items:start;padding:9px;border:1px solid #252f3b;border-radius:9px;background:#101821}
 .printingSlot strong,.printingSlot small{display:block}
 .printingSlot small{color:#7f8a9c;margin-top:2px;font-size:11px}
+.slotInventoryAction{margin-top:8px;padding:5px 9px;font-size:10px;border-color:#40516a;background:#151f2b;color:#d5deea}
+.slotInventoryAction:hover{border-color:#657b9a;color:#fff}
+.detectedSpoolSummary .badgeRow{margin-top:10px}
+.colorInputRow{display:grid;grid-template-columns:48px minmax(0,1fr);gap:8px;align-items:center}
+.colorInputRow input[type="color"]{width:48px;height:38px;padding:3px;cursor:pointer}
 .printingSwatch{width:16px;height:16px;border-radius:50%;border:1px solid #556174;background:#2a3442;margin-top:2px}
 .printingColumns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
 .printingList{display:grid}
