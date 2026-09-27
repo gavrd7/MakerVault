@@ -2377,12 +2377,23 @@ def _serialise_print_job(job):
 @require_http_methods(["GET"])
 def printing_overview(request):
     printers = list(
-        Printer.objects.select_related("manufacturer").prefetch_related(
-            "filament_slots__spool__filament__manufacturer"
+        Printer.objects.select_related(
+            "manufacturer",
+            "printer_manufacturer",
+            "catalog_model__manufacturer",
+            "printing_location",
+        ).prefetch_related(
+            "filament_slots__spool__filament__manufacturer",
+            "filament_slots__spool__filament__filament_manufacturer",
         )
     )
     spools = list(
-        Spool.objects.select_related("filament__manufacturer").prefetch_related(
+        Spool.objects.select_related(
+            "filament__manufacturer",
+            "filament__filament_manufacturer",
+            "storage_location",
+            "assigned_printer",
+        ).prefetch_related(
             "external_links",
             "printer_slots__printer",
         )
@@ -2399,7 +2410,9 @@ def printing_overview(request):
             "model_revision__model",
         ).prefetch_related(
             "material_usages__spool__filament__manufacturer",
+            "material_usages__spool__filament__filament_manufacturer",
             "material_usages__filament__manufacturer",
+            "material_usages__filament__filament_manufacturer",
             "material_usages__printer_slot",
         )[:12]
     )
@@ -2415,8 +2428,10 @@ def printing_overview(request):
     return JsonResponse({
         "summary": {
             "printers": len(printers),
+            "active_printers": sum(1 for printer in printers if printer.is_active),
             "models": len(models_3d),
             "spools": len(spools),
+            "filaments": FilamentProduct.objects.count(),
             "loaded_slots": loaded_slots,
             "externally_linked_spools": linked_spools,
             "print_jobs": PrintJob.objects.count(),
@@ -2425,12 +2440,27 @@ def printing_overview(request):
         "spools": [_serialise_spool(spool) for spool in spools],
         "filaments": [
             _serialise_filament_product(item)
-            for item in FilamentProduct.objects.select_related("manufacturer", "source").all()
+            for item in FilamentProduct.objects.select_related(
+                "manufacturer", "filament_manufacturer", "source"
+            ).all()
         ],
-        "manufacturers": [
-            {"id": item.id, "name": item.name}
-            for item in Manufacturer.objects.order_by("name")
+        "printer_manufacturers": [
+            {"id": str(item.id), "name": item.name, "website": item.website}
+            for item in PrinterManufacturer.objects.order_by("name")
         ],
+        "printer_catalogue_models": [
+            _serialise_printer_catalog_model(item)
+            for item in PrinterCatalogModel.objects.select_related("manufacturer").all()
+        ],
+        "filament_manufacturers": [
+            {"id": str(item.id), "name": item.name, "website": item.website}
+            for item in FilamentManufacturer.objects.order_by("name")
+        ],
+        "locations": [
+            _serialise_printing_location(item)
+            for item in PrintingLocation.objects.order_by("name")
+        ],
+        "common_filament_materials": COMMON_FILAMENT_MATERIALS,
         "model_files": [
             _serialise_file_asset(asset)
             for asset in FileAsset.objects.filter(category__in=["mesh", "slicer", "cad"])
@@ -2439,12 +2469,6 @@ def printing_overview(request):
         ],
         "models": [_serialise_printing_model(model) for model in models_3d],
         "recent_prints": [_serialise_print_job(job) for job in recent_prints],
-        "integration_status": {
-            "spoolman": "foundation_ready",
-            "simplyprint": "planned",
-            "creality_cfs": "foundation_ready",
-            "multi_material_adapters": "foundation_ready",
-        },
     })
 
 
