@@ -26,6 +26,7 @@ from .models import (
     ComponentCategory,
     ComponentModel,
     FilamentProduct,
+    FileAsset,
     InventoryItem,
     InventoryHistory,
     Manufacturer,
@@ -288,6 +289,93 @@ def _record_inventory_history(item, user, before=None, *, created=False):
         project=item.project,
         changed_by=user,
     )
+
+
+
+def _file_url(field):
+    if not field:
+        return ""
+    try:
+        return field.url
+    except ValueError:
+        return ""
+
+
+def _project_cost(project):
+    total = Decimal("0")
+    currency = settings.MAKERVAULT_CURRENCY
+    for item in project.inventory_items.all():
+        if item.purchase_price is not None:
+            total += item.purchase_price * item.quantity
+            currency = item.currency or currency
+    return float(total), currency
+
+
+def _serialise_project(project, detailed=False):
+    gallery_qs = project.files.filter(category="image").order_by("-created_at")
+    cost, currency = _project_cost(project)
+    data = {
+        "id": str(project.id),
+        "name": project.name,
+        "slug": project.slug,
+        "status": project.status,
+        "status_label": project.get_status_display(),
+        "summary": project.summary,
+        "cover_image": _file_url(project.cover_image),
+        "started_on": project.started_on.isoformat() if project.started_on else "",
+        "completed_on": project.completed_on.isoformat() if project.completed_on else "",
+        "created_by": project.created_by.get_username() if project.created_by else "",
+        "inventory_count": project.inventory_items.count(),
+        "gallery_count": gallery_qs.count(),
+        "inventory_cost": cost,
+        "currency": currency,
+        "updated_at": project.updated_at.isoformat(),
+        "created_at": project.created_at.isoformat(),
+    }
+    if detailed:
+        data.update({
+            "description": project.description,
+            "notes": project.notes,
+            "tags": project.tags or [],
+            "reference_url": project.reference_url,
+            "inventory": [_serialise_inventory(item) for item in project.inventory_items.select_related(
+                "board__manufacturer", "component__manufacturer", "project"
+            ).order_by("inventory_id")],
+            "gallery": [
+                {
+                    "id": str(asset.id),
+                    "name": asset.name,
+                    "url": _file_url(asset.file),
+                    "description": asset.description,
+                    "created_at": asset.created_at.isoformat(),
+                }
+                for asset in gallery_qs
+            ],
+        })
+    return data
+
+
+def _parse_date(value, field_name):
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    from datetime import date
+    try:
+        return date.fromisoformat(raw)
+    except ValueError as exc:
+        raise ValidationError({field_name: "Enter a valid date."}) from exc
+
+
+def _normalise_tags(value):
+    if value in (None, ""):
+        return []
+    values = value if isinstance(value, list) else str(value).split(",")
+    output = []
+    for tag in values:
+        cleaned = str(tag).strip()
+        if cleaned and cleaned not in output:
+            output.append(cleaned[:60])
+    return output[:30]
 
 
 def _parse_decimal(value, field_name, allow_none=True):
@@ -711,13 +799,181 @@ def component_image(request, component_id):
 
 
 @login_required
-@require_http_methods(["GET"])
+@require_http_methods(["GET", "POST"])
 def projects_lookup(request):
-    rows = [
-        {"id": str(project.id), "name": project.name, "status": project.status, "status_label": project.get_status_display()}
-        for project in Project.objects.order_by("name")
-    ]
-    return JsonResponse({"rows": rows})
+    if request.method == "GET":
+        qs = Project.objects.select_related("created_by").prefetch_related("inventory_items", "files").all()
+        return JsonResponse({"rows": [_serialise_project(project) for project in qs[:2000]]})
+
+    denied = _require_permission(request, "core.add_project")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        name = str(payload.get("name") or "").strip()
+        if not name:
+            return _error("Project name is required.")
+        status = str(payload.get("status") or "idea")
+        if status not in dict(Project.STATUS):
+            return _error("Unknown project status.")
+        project = Project(
+            name=name,
+            status=status,
+            summary=str(payload.get("summary") or "").strip(),
+            description=str(payload.get("description") or "").strip(),
+            notes=str(payload.get("notes") or "").strip(),
+            tags=_normalise_tags(payload.get("tags")),
+            reference_url=str(payload.get("reference_url") or "").strip(),
+            started_on=_parse_date(payload.get("started_on"), "started_on"),
+            completed_on=_parse_date(payload.get("completed_on"), "completed_on"),
+            created_by=request.user,
+        )
+        project.full_clean()
+        project.save()
+        project = Project.objects.select_related("created_by").prefetch_related("inventory_items", "files").get(pk=project.pk)
+        return JsonResponse({"project": _serialise_project(project, detailed=True)}, status=201)
+    except ValidationError as exc:
+        return _validation_response(exc)
+
+
+@login_required
+@require_http_methods(["GET", "PATCH", "DELETE"])
+def project_detail(request, project_id):
+    project = Project.objects.select_related("created_by").prefetch_related(
+        "inventory_items__board__manufacturer",
+        "inventory_items__component__manufacturer",
+        "files",
+    ).filter(pk=project_id).first()
+    if not project:
+        return _error("Project not found.", status=404)
+
+    if request.method == "GET":
+        return JsonResponse({"project": _serialise_project(project, detailed=True)})
+
+    if request.method == "DELETE":
+        denied = _require_permission(request, "core.delete_project")
+        if denied:
+            return denied
+        project.delete()
+        return JsonResponse({"deleted": True})
+
+    denied = _require_permission(request, "core.change_project")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        for field in ("name", "summary", "description", "notes", "reference_url"):
+            if field in payload:
+                setattr(project, field, str(payload.get(field) or "").strip())
+        if "status" in payload:
+            status = str(payload.get("status") or "idea")
+            if status not in dict(Project.STATUS):
+                return _error("Unknown project status.")
+            project.status = status
+        if "tags" in payload:
+            project.tags = _normalise_tags(payload.get("tags"))
+        if "started_on" in payload:
+            project.started_on = _parse_date(payload.get("started_on"), "started_on")
+        if "completed_on" in payload:
+            project.completed_on = _parse_date(payload.get("completed_on"), "completed_on")
+        project.full_clean()
+        project.save()
+        project = Project.objects.select_related("created_by").prefetch_related(
+            "inventory_items__board__manufacturer",
+            "inventory_items__component__manufacturer",
+            "files",
+        ).get(pk=project.pk)
+        return JsonResponse({"project": _serialise_project(project, detailed=True)})
+    except ValidationError as exc:
+        return _validation_response(exc)
+
+
+@login_required
+@require_http_methods(["POST", "DELETE"])
+def project_cover(request, project_id):
+    project = Project.objects.select_related("created_by").prefetch_related("inventory_items", "files").filter(pk=project_id).first()
+    if not project:
+        return _error("Project not found.", status=404)
+    denied = _require_permission(request, "core.change_project")
+    if denied:
+        return denied
+
+    if request.method == "DELETE":
+        if project.cover_image:
+            project.cover_image.delete(save=False)
+        project.cover_image = None
+        project.save(update_fields=["cover_image", "updated_at"])
+        return JsonResponse({"project": _serialise_project(project, detailed=True)})
+
+    uploaded = request.FILES.get("image")
+    if not uploaded:
+        return _error("Choose an image file.")
+    try:
+        content, filename = sanitise_uploaded_image(uploaded, project.slug or project.name)
+        if project.cover_image:
+            project.cover_image.delete(save=False)
+        project.cover_image.save(filename, content, save=False)
+        project.save(update_fields=["cover_image", "updated_at"])
+        return JsonResponse({"project": _serialise_project(project, detailed=True)})
+    except CatalogueImageError as exc:
+        return _error(str(exc))
+
+
+@login_required
+@require_http_methods(["POST"])
+def project_gallery(request, project_id):
+    project = Project.objects.filter(pk=project_id).first()
+    if not project:
+        return _error("Project not found.", status=404)
+    denied = _require_permission(request, "core.change_project")
+    if denied:
+        return denied
+    uploaded = request.FILES.get("image")
+    if not uploaded:
+        return _error("Choose an image file.")
+    try:
+        content, filename = sanitise_uploaded_image(uploaded, f"{project.slug}-gallery")
+        asset = FileAsset(
+            project=project,
+            category="image",
+            name=str(request.POST.get("name") or uploaded.name or "Project image")[:255],
+            description=str(request.POST.get("description") or "").strip(),
+        )
+        asset.file.save(filename, content, save=False)
+        asset.full_clean()
+        asset.save()
+        return JsonResponse({
+            "image": {
+                "id": str(asset.id),
+                "name": asset.name,
+                "url": _file_url(asset.file),
+                "description": asset.description,
+                "created_at": asset.created_at.isoformat(),
+            }
+        }, status=201)
+    except CatalogueImageError as exc:
+        return _error(str(exc))
+
+
+@login_required
+@require_http_methods(["DELETE"])
+def project_gallery_delete(request, project_id, asset_id):
+    project = Project.objects.filter(pk=project_id).first()
+    if not project:
+        return _error("Project not found.", status=404)
+    denied = _require_permission(request, "core.change_project")
+    if denied:
+        return denied
+    asset = FileAsset.objects.filter(pk=asset_id, project=project, category="image").first()
+    if not asset:
+        return _error("Project image not found.", status=404)
+    if asset.file:
+        try:
+            asset.file.delete(save=False)
+        except OSError:
+            pass
+    asset.delete()
+    return JsonResponse({"deleted": True})
 
 
 @login_required
@@ -901,6 +1157,9 @@ def public_config(request):
             "add_inventory": request.user.has_perm("core.add_inventoryitem"),
             "change_inventory": request.user.has_perm("core.change_inventoryitem"),
             "delete_inventory": request.user.has_perm("core.delete_inventoryitem"),
+            "add_project": request.user.has_perm("core.add_project"),
+            "change_project": request.user.has_perm("core.change_project"),
+            "delete_project": request.user.has_perm("core.delete_project"),
         },
         "importers": ["ESPBoards.dev"],
     })

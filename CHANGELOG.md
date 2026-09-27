@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.4.0
+
+- Replaced the placeholder Projects page with a full project workspace.
+- Added project create/edit/detail APIs and responsive project cards/detail drawer.
+- Added project notes, tags and reference URL fields with migration 0003.
+- Added project status, start/completion dates, descriptions and build notes.
+- Added project cover image upload/removal using MakerVault's sanitised local WebP pipeline.
+- Added project photo gallery storage through existing FileAsset records.
+- Added assigned physical inventory visibility inside project details.
+- Added project inventory-cost rollups from assigned physical inventory purchase prices.
+- Added project permissions to the SPA configuration for role-aware controls.
+- Added a reusable image viewer/lightbox with zoom, pan, fit/reset and browser fullscreen.
+- Board catalogue images now open directly in the image viewer; project cover/gallery images use the same viewer.
+- Prepared the project workspace for v0.4.1 BOM/inventory allocation and v0.4.2 file/repository workflows.
+
+
 ## v0.3.8
 
 - Added explicit per-field technical specification state: known value, unknown, or not applicable.
