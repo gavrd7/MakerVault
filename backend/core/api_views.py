@@ -743,6 +743,11 @@ def inventory_detail(request, item_id):
 
         if "quantity" in payload:
             item.quantity = _parse_decimal(payload["quantity"], "quantity", allow_none=False)
+            allocated = item.bom_allocations.aggregate(total=Sum("quantity"))["total"] or Decimal("0")
+            if item.quantity < allocated:
+                raise ValidationError({
+                    "quantity": f"Quantity cannot be lower than the {allocated} already allocated to BOMs."
+                })
         if "purchase_price" in payload:
             item.purchase_price = _parse_decimal(payload["purchase_price"], "purchase_price")
         if "currency" in payload:
