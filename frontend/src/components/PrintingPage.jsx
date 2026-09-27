@@ -705,26 +705,66 @@ function SpoolModal({ filaments, locations, printers, currency, onClose, onSaved
 }
 
 
-function ModelModal({ projects, onClose, onSaved }) {
-  const [form, setForm] = useState({ name: "", project_id: "", description: "", source_url: "", license: "", tags: "" });
+function ModelModal({ projects, canUpload, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    name: "",
+    project_id: "",
+    description: "",
+    source_url: "",
+    license: "",
+    tags: "",
+    revision_version: "1.0",
+    revision_notes: "",
+  });
+  const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const set = (key, value) => setForm(value0 => ({ ...value0, [key]: value }));
+
+  function fileChanged(event) {
+    const selected = event.target.files?.[0] || null;
+    setFile(selected);
+    if (selected && !form.name) {
+      set("name", selected.name.replace(/\.(stl|3mf)$/i, ""));
+    }
+  }
+
   async function submit(event) {
     event.preventDefault(); setBusy(true); setError("");
-    try { await apiFetch("/api/printing/models/", { method: "POST", body: form }); await onSaved(); }
-    catch (err) { setError(err.message); } finally { setBusy(false); }
+    try {
+      if (file) {
+        const body = new FormData();
+        for (const [key, value] of Object.entries(form)) body.append(key, value ?? "");
+        body.append("file", file);
+        await apiFetch("/api/printing/models/", { method: "POST", body });
+      } else {
+        await apiFetch("/api/printing/models/", { method: "POST", body: form });
+      }
+      await onSaved();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
   }
-  return <Modal title="Add 3D model" subtitle="Create the model record first; revisions and existing MakerVault files can then be attached without duplicating storage." onClose={onClose} wide>
+
+  return <Modal title="Add 3D model" subtitle="Upload an STL/3MF directly from this device, or create an empty model record and attach existing MakerVault files later." onClose={onClose} wide>
     <form className="formGrid" onSubmit={submit}>
       {error && <div className="formError full">{error}</div>}
-      <label>Name<input required value={form.name} onChange={e => set("name", e.target.value)} /></label>
+      {canUpload && <label className="full modelFilePicker">
+        <span>STL / 3MF file</span>
+        <input type="file" accept=".stl,.3mf,model/stl,application/vnd.ms-package.3dmanufacturing-3dmodel+xml" onChange={fileChanged} />
+        <small>{file ? `${file.name} · ${(file.size / 1024 / 1024).toFixed(2)} MB` : "Browse this computer, phone or tablet. The file is stored in MakerVault Files and attached to revision 1.0 by default."}</small>
+      </label>}
+      <label>Name<input required={!file} value={form.name} onChange={e => set("name", e.target.value)} placeholder={file ? "Defaults to file name" : "Model name"} /></label>
       <label>Project<select value={form.project_id} onChange={e => set("project_id", e.target.value)}><option value="">Standalone model</option>{projects.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
+      {file && <label>Initial revision<input required value={form.revision_version} onChange={e => set("revision_version", e.target.value)} placeholder="1.0" /></label>}
+      {file && <label>Revision notes<input value={form.revision_notes} onChange={e => set("revision_notes", e.target.value)} /></label>}
       <label className="full">Description<textarea rows="3" value={form.description} onChange={e => set("description", e.target.value)} /></label>
       <label>Source URL<input type="url" value={form.source_url} onChange={e => set("source_url", e.target.value)} /></label>
       <label>Licence<input value={form.license} onChange={e => set("license", e.target.value)} placeholder="CC BY 4.0, personal use…" /></label>
       <label className="full">Tags<input value={form.tags} onChange={e => set("tags", e.target.value)} placeholder="Comma-separated" /></label>
-      <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Saving…" : "Add model"}</button></div>
+      <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy ? file ? "Uploading…" : "Saving…" : file ? "Upload & add model" : "Add model"}</button></div>
     </form>
   </Modal>;
 }
