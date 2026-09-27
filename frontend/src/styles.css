@@ -865,3 +865,52 @@
   .printingCardHead{align-items:flex-start}
   .printingCardHead>.printingBadges{max-width:none}
 }
+
+
+/* v0.6.0 enabled-integration status + sync scheduling */
+.printingIntegrationStatusBar{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  align-items:center;
+}
+.printingIntegrationStatus{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-height:40px;
+  padding:8px 11px;
+  border:1px solid #29313c;
+  border-radius:10px;
+  background:#101720;
+}
+.printingIntegrationStatus strong{font-size:13px}
+.printingIntegrationStatus small{color:#7f8a9c}
+.printingIntegrationDot{
+  width:8px;
+  height:8px;
+  border-radius:999px;
+  background:#7f8a9c;
+  flex:0 0 auto;
+}
+.printingIntegrationStatus-connected .printingIntegrationDot{background:#58c787}
+.printingIntegrationStatus-disconnected .printingIntegrationDot,
+.printingIntegrationStatus-error .printingIntegrationDot{background:#ef727f}
+.printingIntegrationStatus-not_configured .printingIntegrationDot{background:#d2a55c}
+.integrationSchedule{
+  display:grid;
+  gap:9px;
+  padding:10px;
+  border:1px solid #29313c;
+  border-radius:10px;
+  background:#0d131a;
+}
+.integrationTimes{
+  display:grid;
+  gap:3px;
+  color:#7f8a9c;
+}
+@media(max-width:700px){
+  .printingIntegrationStatusBar{display:grid}
+  .printingIntegrationStatus{flex-wrap:wrap}
+}
