@@ -4,6 +4,7 @@ from . import api_views
 urlpatterns = [
     path("dashboard/", api_views.dashboard, name="api-dashboard"),
     path("inventory/", api_views.inventory, name="api-inventory"),
+    path("printing/", api_views.printing_overview, name="api-printing-overview"),
     path("inventory/<uuid:item_id>/", api_views.inventory_detail, name="api-inventory-detail"),
     path("boards/", api_views.boards, name="api-boards"),
     path("boards/<uuid:board_id>/", api_views.board_detail, name="api-board-detail"),
