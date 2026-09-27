@@ -2317,6 +2317,349 @@ def printing_overview(request):
     })
 
 
+def _serialise_filament_product(filament):
+    return {
+        "id": str(filament.id),
+        "name": filament.name,
+        "display_name": str(filament),
+        "manufacturer_id": filament.manufacturer_id,
+        "manufacturer": filament.manufacturer.name if filament.manufacturer else "",
+        "material": filament.material,
+        "color_name": filament.color_name,
+        "color_hex": filament.color_hex,
+        "diameter_mm": _float(filament.diameter_mm),
+        "density_g_cm3": _float(filament.density_g_cm3),
+        "nominal_weight_g": _float(filament.nominal_weight_g),
+        "empty_spool_weight_g": _float(filament.empty_spool_weight_g),
+        "nozzle_temp_min_c": filament.nozzle_temp_min_c,
+        "nozzle_temp_max_c": filament.nozzle_temp_max_c,
+        "bed_temp_min_c": filament.bed_temp_min_c,
+        "bed_temp_max_c": filament.bed_temp_max_c,
+        "drying_temp_c": filament.drying_temp_c,
+        "drying_time_hours": _float(filament.drying_time_hours),
+        "updated_at": filament.updated_at.isoformat(),
+    }
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def printing_filaments(request):
+    if request.method == "GET":
+        qs = FilamentProduct.objects.select_related("manufacturer").all()
+        return JsonResponse({"rows": [_serialise_filament_product(item) for item in qs]})
+
+    denied = _require_permission(request, "core.add_filamentproduct")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        manufacturer = None
+        if payload.get("manufacturer_id"):
+            manufacturer = Manufacturer.objects.filter(pk=payload["manufacturer_id"]).first()
+            if not manufacturer:
+                return _error("Selected manufacturer was not found.")
+        item = FilamentProduct(
+            manufacturer=manufacturer,
+            name=str(payload.get("name") or "").strip(),
+            material=str(payload.get("material") or "").strip(),
+            color_name=str(payload.get("color_name") or "").strip(),
+            color_hex=str(payload.get("color_hex") or "").strip(),
+            diameter_mm=_parse_decimal(payload.get("diameter_mm", "1.75"), "diameter_mm", allow_none=False),
+            density_g_cm3=_parse_decimal(payload.get("density_g_cm3"), "density_g_cm3"),
+            nominal_weight_g=_parse_decimal(payload.get("nominal_weight_g"), "nominal_weight_g"),
+            empty_spool_weight_g=_parse_decimal(payload.get("empty_spool_weight_g"), "empty_spool_weight_g"),
+            nozzle_temp_min_c=payload.get("nozzle_temp_min_c") or None,
+            nozzle_temp_max_c=payload.get("nozzle_temp_max_c") or None,
+            bed_temp_min_c=payload.get("bed_temp_min_c") or None,
+            bed_temp_max_c=payload.get("bed_temp_max_c") or None,
+            drying_temp_c=payload.get("drying_temp_c") or None,
+            drying_time_hours=_parse_decimal(payload.get("drying_time_hours"), "drying_time_hours"),
+        )
+        item.full_clean()
+        item.save()
+        return JsonResponse({"item": _serialise_filament_product(item)}, status=201)
+    except ValidationError as exc:
+        return _validation_response(exc)
+    except (ValueError, IntegrityError) as exc:
+        return _error(str(exc))
+
+
+@login_required
+@require_http_methods(["PATCH", "DELETE"])
+def printing_filament_detail(request, filament_id):
+    item = FilamentProduct.objects.select_related("manufacturer").filter(pk=filament_id).first()
+    if not item:
+        return _error("Filament product not found.", status=404)
+    if request.method == "DELETE":
+        denied = _require_permission(request, "core.delete_filamentproduct")
+        if denied:
+            return denied
+        try:
+            item.delete()
+            return JsonResponse({"deleted": True})
+        except ProtectedError:
+            return _error("This filament product is still used by one or more spools.", status=409)
+
+    denied = _require_permission(request, "core.change_filamentproduct")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        if "manufacturer_id" in payload:
+            manufacturer_id = payload.get("manufacturer_id")
+            item.manufacturer = Manufacturer.objects.filter(pk=manufacturer_id).first() if manufacturer_id else None
+            if manufacturer_id and not item.manufacturer:
+                return _error("Selected manufacturer was not found.")
+        for field in ["name", "material", "color_name", "color_hex"]:
+            if field in payload:
+                setattr(item, field, str(payload.get(field) or "").strip())
+        for field in ["diameter_mm", "density_g_cm3", "nominal_weight_g", "empty_spool_weight_g", "drying_time_hours"]:
+            if field in payload:
+                setattr(item, field, _parse_decimal(payload.get(field), field, allow_none=field != "diameter_mm"))
+        for field in ["nozzle_temp_min_c", "nozzle_temp_max_c", "bed_temp_min_c", "bed_temp_max_c", "drying_temp_c"]:
+            if field in payload:
+                setattr(item, field, payload.get(field) or None)
+        item.full_clean()
+        item.save()
+        return JsonResponse({"item": _serialise_filament_product(item)})
+    except ValidationError as exc:
+        return _validation_response(exc)
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def printing_printers(request):
+    if request.method == "GET":
+        qs = Printer.objects.select_related("manufacturer").prefetch_related(
+            "filament_slots__spool__filament__manufacturer"
+        )
+        return JsonResponse({"rows": [_serialise_printer(item) for item in qs]})
+
+    denied = _require_permission(request, "core.add_printer")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        manufacturer = None
+        if payload.get("manufacturer_id"):
+            manufacturer = Manufacturer.objects.filter(pk=payload["manufacturer_id"]).first()
+            if not manufacturer:
+                return _error("Selected manufacturer was not found.")
+        item = Printer(
+            name=str(payload.get("name") or "").strip(),
+            manufacturer=manufacturer,
+            model=str(payload.get("model") or "").strip(),
+            serial_number=str(payload.get("serial_number") or "").strip(),
+            location=str(payload.get("location") or "").strip(),
+            build_volume_x_mm=_parse_decimal(payload.get("build_volume_x_mm"), "build_volume_x_mm"),
+            build_volume_y_mm=_parse_decimal(payload.get("build_volume_y_mm"), "build_volume_y_mm"),
+            build_volume_z_mm=_parse_decimal(payload.get("build_volume_z_mm"), "build_volume_z_mm"),
+            nozzle_mm=_parse_decimal(payload.get("nozzle_mm", "0.4"), "nozzle_mm", allow_none=False),
+            notes=str(payload.get("notes") or "").strip(),
+        )
+        item.full_clean()
+        item.save()
+        return JsonResponse({"item": _serialise_printer(item)}, status=201)
+    except ValidationError as exc:
+        return _validation_response(exc)
+
+
+@login_required
+@require_http_methods(["PATCH", "DELETE"])
+def printing_printer_detail(request, printer_id):
+    item = Printer.objects.select_related("manufacturer").prefetch_related(
+        "filament_slots__spool__filament__manufacturer"
+    ).filter(pk=printer_id).first()
+    if not item:
+        return _error("Printer not found.", status=404)
+    if request.method == "DELETE":
+        denied = _require_permission(request, "core.delete_printer")
+        if denied:
+            return denied
+        try:
+            item.delete()
+            return JsonResponse({"deleted": True})
+        except ProtectedError:
+            return _error("This printer is referenced by print history and cannot be deleted.", status=409)
+
+    denied = _require_permission(request, "core.change_printer")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        if "manufacturer_id" in payload:
+            manufacturer_id = payload.get("manufacturer_id")
+            item.manufacturer = Manufacturer.objects.filter(pk=manufacturer_id).first() if manufacturer_id else None
+            if manufacturer_id and not item.manufacturer:
+                return _error("Selected manufacturer was not found.")
+        for field in ["name", "model", "serial_number", "location", "notes"]:
+            if field in payload:
+                setattr(item, field, str(payload.get(field) or "").strip())
+        for field in ["build_volume_x_mm", "build_volume_y_mm", "build_volume_z_mm", "nozzle_mm"]:
+            if field in payload:
+                setattr(item, field, _parse_decimal(payload.get(field), field, allow_none=field != "nozzle_mm"))
+        item.full_clean()
+        item.save()
+        return JsonResponse({"item": _serialise_printer(item)})
+    except ValidationError as exc:
+        return _validation_response(exc)
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def printing_spools(request):
+    if request.method == "GET":
+        qs = Spool.objects.select_related("filament__manufacturer").prefetch_related(
+            "external_links", "printer_slots__printer"
+        )
+        return JsonResponse({"rows": [_serialise_spool(item) for item in qs]})
+
+    denied = _require_permission(request, "core.add_spool")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        filament = FilamentProduct.objects.filter(pk=payload.get("filament_id")).first()
+        if not filament:
+            return _error("Choose a filament product.")
+        item = Spool(
+            spool_id=str(payload.get("spool_id") or "").strip(),
+            filament=filament,
+            initial_weight_g=_parse_decimal(payload.get("initial_weight_g"), "initial_weight_g"),
+            remaining_weight_g=_parse_decimal(payload.get("remaining_weight_g"), "remaining_weight_g"),
+            purchase_cost=_parse_decimal(payload.get("purchase_cost"), "purchase_cost"),
+            currency=str(payload.get("currency") or settings.MAKERVAULT_CURRENCY).upper()[:3],
+            location=str(payload.get("location") or "").strip(),
+            status=str(payload.get("status") or "sealed"),
+            opened_on=_parse_date(payload.get("opened_on"), "opened_on"),
+            notes=str(payload.get("notes") or "").strip(),
+        )
+        item.full_clean()
+        item.save()
+        return JsonResponse({"item": _serialise_spool(item)}, status=201)
+    except ValidationError as exc:
+        return _validation_response(exc)
+    except IntegrityError:
+        return _error("Spool ID must be unique.")
+
+
+@login_required
+@require_http_methods(["PATCH", "DELETE"])
+def printing_spool_detail(request, spool_id):
+    item = Spool.objects.select_related("filament__manufacturer").prefetch_related(
+        "external_links", "printer_slots__printer"
+    ).filter(pk=spool_id).first()
+    if not item:
+        return _error("Spool not found.", status=404)
+    if request.method == "DELETE":
+        denied = _require_permission(request, "core.delete_spool")
+        if denied:
+            return denied
+        try:
+            item.delete()
+            return JsonResponse({"deleted": True})
+        except ProtectedError:
+            return _error("This spool is referenced by print history and cannot be deleted.", status=409)
+
+    denied = _require_permission(request, "core.change_spool")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        if "filament_id" in payload:
+            filament = FilamentProduct.objects.filter(pk=payload.get("filament_id")).first()
+            if not filament:
+                return _error("Choose a filament product.")
+            item.filament = filament
+        for field in ["spool_id", "status", "location", "currency", "notes"]:
+            if field in payload:
+                value = str(payload.get(field) or "").strip()
+                setattr(item, field, value.upper()[:3] if field == "currency" else value)
+        for field in ["initial_weight_g", "remaining_weight_g", "purchase_cost"]:
+            if field in payload:
+                setattr(item, field, _parse_decimal(payload.get(field), field))
+        if "opened_on" in payload:
+            item.opened_on = _parse_date(payload.get("opened_on"), "opened_on")
+        item.full_clean()
+        item.save()
+        return JsonResponse({"item": _serialise_spool(item)})
+    except ValidationError as exc:
+        return _validation_response(exc)
+    except IntegrityError:
+        return _error("Spool ID must be unique.")
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def printing_models(request):
+    if request.method == "GET":
+        qs = Model3D.objects.select_related("project").prefetch_related(
+            "revisions__assets__file_asset__project"
+        )
+        return JsonResponse({"rows": [_serialise_printing_model(item) for item in qs]})
+
+    denied = _require_permission(request, "core.add_model3d")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        project = None
+        if payload.get("project_id"):
+            project = Project.objects.filter(pk=payload["project_id"]).first()
+            if not project:
+                return _error("Selected project was not found.")
+        item = Model3D(
+            project=project,
+            name=str(payload.get("name") or "").strip(),
+            description=str(payload.get("description") or "").strip(),
+            source_url=str(payload.get("source_url") or "").strip(),
+            license=str(payload.get("license") or "").strip(),
+            tags=_normalise_tags(payload.get("tags")),
+        )
+        item.full_clean()
+        item.save()
+        return JsonResponse({"item": _serialise_printing_model(item)}, status=201)
+    except ValidationError as exc:
+        return _validation_response(exc)
+
+
+@login_required
+@require_http_methods(["PATCH", "DELETE"])
+def printing_model_detail(request, model_id):
+    item = Model3D.objects.select_related("project").prefetch_related(
+        "revisions__assets__file_asset__project"
+    ).filter(pk=model_id).first()
+    if not item:
+        return _error("3D model not found.", status=404)
+    if request.method == "DELETE":
+        denied = _require_permission(request, "core.delete_model3d")
+        if denied:
+            return denied
+        item.delete()
+        return JsonResponse({"deleted": True})
+
+    denied = _require_permission(request, "core.change_model3d")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        if "project_id" in payload:
+            project_id = payload.get("project_id")
+            item.project = Project.objects.filter(pk=project_id).first() if project_id else None
+            if project_id and not item.project:
+                return _error("Selected project was not found.")
+        for field in ["name", "description", "source_url", "license"]:
+            if field in payload:
+                setattr(item, field, str(payload.get(field) or "").strip())
+        if "tags" in payload:
+            item.tags = _normalise_tags(payload.get("tags"))
+        item.full_clean()
+        item.save()
+        return JsonResponse({"item": _serialise_printing_model(item)})
+    except ValidationError as exc:
+        return _validation_response(exc)
+
+
 @login_required
 @require_http_methods(["GET"])
 def public_config(request):
