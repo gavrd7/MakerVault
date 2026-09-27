@@ -2130,6 +2130,172 @@ def attributions(request):
     })
 
 
+PRINTING_INTEGRATION_DEFAULTS = {
+    "spoolman": {"status": "not_configured", "sync_direction": "bidirectional"},
+    "simplyprint": {"status": "planned", "sync_direction": "import"},
+    "creality_cfs": {"status": "ready", "sync_direction": "import"},
+    "bambu_ams": {"status": "planned", "sync_direction": "import"},
+    "elegoo": {"status": "planned", "sync_direction": "import"},
+    "qidi": {"status": "planned", "sync_direction": "import"},
+    "snapmaker": {"status": "planned", "sync_direction": "import"},
+}
+
+
+def _ensure_printing_integrations():
+    rows = []
+    for provider, defaults in PRINTING_INTEGRATION_DEFAULTS.items():
+        row, _ = PrintingIntegrationSetting.objects.get_or_create(
+            provider=provider,
+            defaults=defaults,
+        )
+        rows.append(row)
+    return rows
+
+
+def _serialise_printing_integration(item):
+    extra = {}
+    if item.provider == "creality_cfs":
+        compatible = Printer.objects.filter(
+            is_active=True,
+            catalog_model__multi_material_system="creality_cfs",
+        )
+        configured = compatible.exclude(connection_host="")
+        extra = {
+            "compatible_printers": compatible.count(),
+            "configured_printers": configured.count(),
+        }
+    elif item.provider == "spoolman":
+        extra = {
+            "linked_spools": ExternalSpoolLink.objects.filter(provider="spoolman").count(),
+        }
+    return {
+        "provider": item.provider,
+        "name": item.get_provider_display(),
+        "enabled": item.enabled,
+        "endpoint_url": item.endpoint_url,
+        "sync_direction": item.sync_direction,
+        "sync_direction_label": item.get_sync_direction_display(),
+        "status": item.status,
+        "status_label": item.get_status_display(),
+        "last_checked_at": item.last_checked_at.isoformat() if item.last_checked_at else None,
+        "last_error": item.last_error,
+        "config": item.config or {},
+        **extra,
+    }
+
+
+@login_required
+@require_http_methods(["GET"])
+def printing_integration_settings(request):
+    if not request.user.is_staff:
+        return _error("Administrator access is required.", status=403)
+    rows = _ensure_printing_integrations()
+    return JsonResponse({
+        "rows": [_serialise_printing_integration(item) for item in rows],
+    })
+
+
+@login_required
+@require_http_methods(["PATCH"])
+def printing_integration_detail(request, provider):
+    if not request.user.is_staff:
+        return _error("Administrator access is required.", status=403)
+    if provider not in dict(PrintingIntegrationSetting.PROVIDERS):
+        return _error("Unknown printing integration.", status=404)
+    item, _ = PrintingIntegrationSetting.objects.get_or_create(
+        provider=provider,
+        defaults=PRINTING_INTEGRATION_DEFAULTS.get(provider, {}),
+    )
+    try:
+        payload = _read_json(request)
+        if "enabled" in payload:
+            item.enabled = bool(payload.get("enabled"))
+        if "endpoint_url" in payload:
+            item.endpoint_url = str(payload.get("endpoint_url") or "").strip()
+        if "sync_direction" in payload:
+            direction = str(payload.get("sync_direction") or "import")
+            if direction not in dict(PrintingIntegrationSetting.SYNC_DIRECTIONS):
+                return _error("Unknown sync direction.")
+            item.sync_direction = direction
+
+        if not item.enabled:
+            item.status = "disabled"
+            item.last_error = ""
+        elif item.provider == "spoolman" and not item.endpoint_url:
+            item.status = "not_configured"
+        elif item.provider == "creality_cfs":
+            configured = Printer.objects.filter(
+                is_active=True,
+                catalog_model__multi_material_system="creality_cfs",
+            ).exclude(connection_host="").exists()
+            item.status = "ready" if configured else "not_configured"
+        elif item.provider in {"simplyprint", "bambu_ams", "elegoo", "qidi", "snapmaker"}:
+            item.status = "planned"
+        else:
+            item.status = "ready"
+
+        item.full_clean()
+        item.save()
+        return JsonResponse({"item": _serialise_printing_integration(item)})
+    except ValidationError as exc:
+        return _validation_response(exc)
+
+
+@login_required
+@require_http_methods(["POST"])
+def printing_integration_test(request, provider):
+    if not request.user.is_staff:
+        return _error("Administrator access is required.", status=403)
+    if provider not in dict(PrintingIntegrationSetting.PROVIDERS):
+        return _error("Unknown printing integration.", status=404)
+    item, _ = PrintingIntegrationSetting.objects.get_or_create(
+        provider=provider,
+        defaults=PRINTING_INTEGRATION_DEFAULTS.get(provider, {}),
+    )
+
+    try:
+        if provider == "spoolman":
+            result = probe_spoolman(item.endpoint_url)
+            item.endpoint_url = result["endpoint_url"]
+            item.status = "connected"
+            item.last_error = ""
+            item.last_checked_at = timezone.now()
+            item.config = {
+                **(item.config or {}),
+                "server_info": result.get("info") or {},
+            }
+            item.save()
+        elif provider == "creality_cfs":
+            compatible = Printer.objects.filter(
+                is_active=True,
+                catalog_model__multi_material_system="creality_cfs",
+            )
+            configured = compatible.exclude(connection_host="")
+            item.last_checked_at = timezone.now()
+            if not compatible.exists():
+                item.status = "not_configured"
+                item.last_error = "No active CFS-capable printer is registered."
+            elif not configured.exists():
+                item.status = "not_configured"
+                item.last_error = "Add a local host/IP to at least one CFS-capable printer."
+            else:
+                item.status = "ready"
+                item.last_error = ""
+            item.save()
+        else:
+            item.last_checked_at = timezone.now()
+            item.status = "planned"
+            item.last_error = ""
+            item.save()
+        return JsonResponse({"item": _serialise_printing_integration(item)})
+    except PrintingIntegrationError as exc:
+        item.status = "error"
+        item.last_error = str(exc)
+        item.last_checked_at = timezone.now()
+        item.save(update_fields=["status", "last_error", "last_checked_at", "updated_at"])
+        return JsonResponse({"item": _serialise_printing_integration(item)}, status=502)
+
+
 def _serialise_catalogue_maintenance(config):
     return {
         "enabled": config.enabled,
