@@ -36,7 +36,7 @@ Planned scope:
 - Upload and attach project files through the existing `FileAsset` model.
 - Group project assets by type rather than presenting one undifferentiated file list.
 - Supported groups include source code, firmware, CAD, STL/mesh, 3MF/slicer projects, PCB, wiring/schematics, documents, binaries, archives and other files.
-- Show the same asset from the relevant project section and later dedicated asset areas without duplicating storage.
+- Show the same asset from the relevant project section and the global categorized Files browser without duplicating storage.
 - Preserve file name, version, description and project association.
 - Add/remove/download controls subject to MakerVault permissions.
 - Surface repository links alongside project files using the existing `RepositoryLink` model.
