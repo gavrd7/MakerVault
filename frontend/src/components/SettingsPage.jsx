@@ -144,6 +144,22 @@ export default function SettingsPage({ config }) {
     }
   }
 
+  async function resetIgnoredImports(provider) {
+    setIntegrationBusy(provider); setError(""); setNotice("");
+    try {
+      const result = await apiFetch("/api/settings/printing-integrations/" + provider + "/", {
+        method: "PATCH",
+        body: { reset_ignored_imports: true },
+      });
+      setIntegrations(rows => rows.map(item => item.provider === provider ? result.item : item));
+      setNotice(result.item.name + " ignored imports will be reconsidered on the next sync.");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIntegrationBusy("");
+    }
+  }
+
   async function openIntegrationReviews(provider) {
     setError(""); setNotice("");
     try {
@@ -282,6 +298,7 @@ export default function SettingsPage({ config }) {
                 <p>Existing MakerVault filament identity, placement, notes and status are not silently replaced by Spoolman. Missing Spoolman location names are added to the location catalogue; only genuinely new imports inherit their remote location.</p>
               </div>
               {item.pending_review_count > 0 && <button className="integrationReviewButton" type="button" onClick={() => openIntegrationReviews(item.provider)}>Review {item.pending_review_count} possible duplicate{item.pending_review_count === 1 ? "" : "s"}</button>}
+              {item.ignored_import_count > 0 && <button type="button" onClick={() => resetIgnoredImports(item.provider)} disabled={isBusy}>Reconsider {item.ignored_import_count} ignored import{item.ignored_import_count === 1 ? "" : "s"}</button>}
             </>}
 
             {item.provider === "creality_cfs" && <>
@@ -400,7 +417,7 @@ function IntegrationReviewRow({ review, spools, filaments, busy, onResolve }) {
     </div>
 
     <div className="integrationReviewFooter">
-      <small>Ignoring keeps this Spoolman record out of future automatic import attempts until the integration configuration is reset.</small>
+      <small>Ignoring keeps this Spoolman record out of future automatic import attempts. You can reconsider ignored imports from the Spoolman settings card.</small>
       <button type="button" disabled={busy} onClick={() => onResolve({ action: "ignore" })}>{busy ? "Working…" : "Ignore remote spool"}</button>
     </div>
   </article>;
