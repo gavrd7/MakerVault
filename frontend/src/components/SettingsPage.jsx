@@ -124,7 +124,7 @@ export default function SettingsPage({ config }) {
       const details = result.result || {};
       if (provider === "spoolman") {
         setNotice(
-          `Spoolman sync complete: ${details.created || 0} added, ${details.updated || 0} linked records refreshed, ${details.pending_review || 0} awaiting review, ${details.exported || 0} exported.`
+          `Spoolman sync complete: ${details.remote_spools || 0} remote read, ${details.created || 0} added, ${details.updated || 0} linked records refreshed, ${details.pending_review || 0} awaiting review, ${details.locations_discovered || 0} new locations, ${details.exported || 0} exported.`
         );
       } else if (provider === "creality_cfs") {
         setNotice(
