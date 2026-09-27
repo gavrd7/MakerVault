@@ -158,6 +158,7 @@ export default function ProjectBomSection({
       item={allocating}
       allocation={allocationEdit}
       inventory={inventory}
+      config={config}
       onClose={() => { setAllocating(null); setAllocationEdit(null); }}
       onSaved={async () => { setAllocating(null); setAllocationEdit(null); await refreshAll(); }}
     />}
@@ -243,7 +244,8 @@ function BomItemModal({ project, item, boards, components, currency, onClose, on
   </Modal>;
 }
 
-function BomAllocationModal({ project, item, allocation, inventory, onClose, onSaved }) {
+
+function BomAllocationModal({ project, item, allocation, inventory, config, onClose, onSaved }) {
   const candidates = useMemo(() => {
     const alreadyAllocated = new Set((item.allocations || []).map(row => row.inventory_item_id));
     return (inventory || []).filter(stock => {
@@ -257,18 +259,38 @@ function BomAllocationModal({ project, item, allocation, inventory, onClose, onS
     });
   }, [inventory, item, project.id, allocation]);
 
+  const canCreateInventory = Boolean(config?.permissions?.add_inventory);
+  const [mode, setMode] = useState(candidates.length ? "existing" : canCreateInventory ? "new" : "existing");
   const [inventoryId, setInventoryId] = useState(allocation?.inventory_item_id || candidates[0]?.id || "");
-  const [quantity, setQuantity] = useState(allocation?.quantity ?? Math.min(1, Number(item.remaining_quantity || 1)));
+  const initialAllocation = allocation?.quantity ?? Math.max(0.001, Number(item.remaining_quantity || 1));
+  const [quantity, setQuantity] = useState(initialAllocation);
   const [notes, setNotes] = useState(allocation?.notes || "");
+  const [stockQuantity, setStockQuantity] = useState(Math.max(initialAllocation, Number(item.remaining_quantity || initialAllocation)));
+  const [newInventoryId, setNewInventoryId] = useState("");
+  const [location, setLocation] = useState("");
+  const [serialNumber, setSerialNumber] = useState("");
+  const [supplier, setSupplier] = useState("");
+  const [purchasePrice, setPurchasePrice] = useState("");
+  const [purchaseUrl, setPurchaseUrl] = useState("");
+  const [inventoryNotes, setInventoryNotes] = useState("");
+  const [assignToProject, setAssignToProject] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const selected = candidates.find(row => row.id === inventoryId);
-  const maxAvailable = selected
+  const existingAvailable = selected
     ? Number(selected.available_quantity ?? selected.quantity ?? 0) + (allocation && selected.id === allocation.inventory_item_id ? Number(allocation.quantity || 0) : 0)
     : 0;
   const maxBom = Number(item.remaining_quantity || 0) + (allocation ? Number(allocation.quantity || 0) : 0);
-  const maxQuantity = Math.min(maxAvailable, maxBom);
+  const maxQuantity = allocation || mode === "existing"
+    ? Math.min(existingAvailable, maxBom)
+    : Math.min(Number(stockQuantity || 0), maxBom);
+
+  const derivedType = item.source_type === "board"
+    ? "Board"
+    : item.source_type === "component"
+      ? "Component"
+      : "Other / custom";
 
   async function submit(event) {
     event.preventDefault();
@@ -276,12 +298,36 @@ function BomAllocationModal({ project, item, allocation, inventory, onClose, onS
     try {
       if (allocation) {
         await apiFetch(
-          `/api/projects/${project.id}/bom/${item.id}/allocations/${allocation.id}/`,
+          "/api/projects/" + project.id + "/bom/" + item.id + "/allocations/" + allocation.id + "/",
           { method: "PATCH", body: { quantity, notes } },
+        );
+      } else if (mode === "new") {
+        await apiFetch(
+          "/api/projects/" + project.id + "/bom/" + item.id + "/allocations/",
+          {
+            method: "POST",
+            body: {
+              quantity,
+              notes,
+              create_inventory: {
+                inventory_id: newInventoryId,
+                quantity: stockQuantity,
+                status: "available",
+                assign_to_project: assignToProject,
+                location,
+                serial_number: serialNumber,
+                purchase_price: purchasePrice,
+                currency: config?.currency || "GBP",
+                supplier,
+                purchase_url: purchaseUrl,
+                notes: inventoryNotes,
+              },
+            },
+          },
         );
       } else {
         await apiFetch(
-          `/api/projects/${project.id}/bom/${item.id}/allocations/`,
+          "/api/projects/" + project.id + "/bom/" + item.id + "/allocations/",
           { method: "POST", body: { inventory_item_id: inventoryId, quantity, notes } },
         );
       }
@@ -293,21 +339,89 @@ function BomAllocationModal({ project, item, allocation, inventory, onClose, onS
     }
   }
 
-  return <Modal title={allocation ? "Adjust allocation" : `Allocate stock · ${item.name}`} subtitle={`${qty(item.remaining_quantity)} ${item.unit} currently remain on this BOM line.`} onClose={onClose} wide>
+  return <Modal
+    title={allocation ? "Adjust allocation" : "Allocate stock · " + item.name}
+    subtitle={qty(item.remaining_quantity) + " " + item.unit + " currently remain on this BOM line."}
+    onClose={onClose}
+    wide
+  >
     <form className="formGrid" onSubmit={submit}>
       {error && <div className="formError full">{error}</div>}
-      <label className="full">Inventory item
-        {allocation ? <input value={`${allocation.inventory_id} · ${allocation.inventory_name}`} readOnly /> :
+
+      {!allocation && canCreateInventory && <div className="bomAllocationMode full">
+        <button type="button" className={mode === "existing" ? "active" : ""} onClick={() => setMode("existing")}>Existing inventory</button>
+        <button type="button" className={mode === "new" ? "active" : ""} onClick={() => setMode("new")}>＋ Create inventory</button>
+      </div>}
+
+      {allocation ? <label className="full">Inventory item
+        <input value={allocation.inventory_id + " · " + allocation.inventory_name} readOnly />
+      </label> : mode === "existing" ? <>
+        <label className="full">Inventory item
           <select required value={inventoryId} onChange={e => setInventoryId(e.target.value)}>
             <option value="">Choose inventory…</option>
-            {candidates.map(stock => <option key={stock.id} value={stock.id}>{stock.inventory_id} · {stock.name} · {qty(stock.available_quantity ?? stock.quantity)} free</option>)}
-          </select>}
+            {candidates.map(stock => <option key={stock.id} value={stock.id}>{stock.inventory_id + " · " + stock.name + " · " + qty(stock.available_quantity ?? stock.quantity) + " free"}</option>)}
+          </select>
+        </label>
+        {!candidates.length && <div className="formError full">No compatible inventory currently has free quantity for this BOM line.{canCreateInventory ? " Choose Create inventory to add the stock now." : ""}</div>}
+      </> : <>
+        <div className="bomDerivedInventory full">
+          <span>New inventory record</span>
+          <strong>{item.name}</strong>
+          <small>{derivedType} · derived automatically from this BOM line</small>
+        </div>
+        <label>Inventory ID
+          <input value={newInventoryId} onChange={e => setNewInventoryId(e.target.value)} placeholder="Auto-generated" />
+        </label>
+        <label>Stock quantity
+          <input type="number" min="0.001" step="0.001" required value={stockQuantity} onChange={e => setStockQuantity(e.target.value)} />
+        </label>
+        <label>Location
+          <input value={location} onChange={e => setLocation(e.target.value)} placeholder="Drawer, shelf, box…" />
+        </label>
+        <label>Serial / unique ID
+          <input value={serialNumber} onChange={e => setSerialNumber(e.target.value)} />
+        </label>
+        <label>Purchase cost
+          <input type="number" min="0" step="0.01" value={purchasePrice} onChange={e => setPurchasePrice(e.target.value)} placeholder="Optional" />
+        </label>
+        <label>Supplier
+          <input value={supplier} onChange={e => setSupplier(e.target.value)} />
+        </label>
+        <label className="full">Purchase/source URL
+          <input type="url" value={purchaseUrl} onChange={e => setPurchaseUrl(e.target.value)} />
+        </label>
+        <label className="full">Inventory notes
+          <textarea rows="2" value={inventoryNotes} onChange={e => setInventoryNotes(e.target.value)} placeholder="Optional notes for the physical stock record" />
+        </label>
+        <label className="checkRow full">
+          <input type="checkbox" checked={assignToProject} onChange={e => setAssignToProject(e.target.checked)} />
+          <span>Assign the entire new inventory record to {project.name}</span>
+        </label>
+      </>}
+
+      <label>Allocation quantity
+        <input type="number" min="0.001" max={maxQuantity || undefined} step="0.001" required value={quantity} onChange={e => setQuantity(e.target.value)} />
       </label>
-      <label>Allocation quantity<input type="number" min="0.001" max={maxQuantity || undefined} step="0.001" required value={quantity} onChange={e => setQuantity(e.target.value)} /></label>
-      <label>Available<input value={selected ? `${qty(maxAvailable)} stock · ${qty(maxBom)} BOM capacity` : "Choose inventory"} readOnly /></label>
-      <label className="full">Notes<textarea rows="3" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Optional allocation note" /></label>
-      {!candidates.length && !allocation && <div className="formError full">No compatible inventory currently has free quantity for this BOM line.</div>}
-      <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy || !inventoryId || maxQuantity <= 0}>{busy ? "Saving…" : allocation ? "Save allocation" : "Allocate stock"}</button></div>
+      <label>Available
+        <input
+          value={allocation || mode === "existing"
+            ? selected ? qty(existingAvailable) + " stock · " + qty(maxBom) + " BOM capacity" : "Choose inventory"
+            : qty(stockQuantity) + " new stock · " + qty(maxBom) + " BOM capacity"}
+          readOnly
+        />
+      </label>
+      <label className="full">Allocation notes
+        <textarea rows="3" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Optional note about this project's allocation" />
+      </label>
+      <div className="formActions full">
+        <button type="button" onClick={onClose}>Cancel</button>
+        <button
+          className="primary"
+          disabled={busy || maxQuantity <= 0 || ((!allocation && mode === "existing") && !inventoryId)}
+        >
+          {busy ? "Saving…" : allocation ? "Save allocation" : mode === "new" ? "Create & allocate" : "Allocate stock"}
+        </button>
+      </div>
     </form>
   </Modal>;
 }
