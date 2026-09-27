@@ -56,7 +56,7 @@ export default function App() {
     if (section === "Components") return <ComponentsPage components={components} setComponents={setComponents} config={config} refreshDashboard={refreshDashboard} />;
     if (section === "Projects") return <ProjectsPage projects={projects} setProjects={setProjects} config={config} refreshDashboard={refreshDashboard} openProjectId={projectTarget} onOpenConsumed={() => setProjectTarget("")} />;
     if (section === "3D Printing") return <EmptyModule title="3D printing data is ready">Printer, filament, spool, 3D model/revision and print-job schemas are already present. SpoolmanDB and 3D model workflows are planned for the next importer milestone.</EmptyModule>;
-    if (section === "Files") return <FilesPage projects={projects} onOpenProject={projectId => { setProjectTarget(projectId); setSection("Projects"); }} />;
+    if (section === "Files") return <FilesPage projects={projects} config={config} onOpenProject={projectId => { setProjectTarget(projectId); setSection("Projects"); }} />;
     if (section === "Settings") return <SettingsPage config={config} />;
     return <AboutPage config={config} />;
   }
