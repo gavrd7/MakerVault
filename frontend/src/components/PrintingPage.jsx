@@ -316,24 +316,168 @@ const FILAMENT_COLOUR_PALETTE = [
   ["Beige", "#d7c7a3"], ["Gold", "#c9a227"], ["Copper", "#b87333"], ["Natural", "#e8dfc8"],
 ];
 
-function FilamentModal({ manufacturers, onClose, onSaved }) {
-  const [form, setForm] = useState({ manufacturer_id: "", name: "", material: "PLA", color_name: "", color_hex: "#777777", transparency: "opaque", diameter_mm: "1.75", nominal_weight_g: "1000" });
+function FilamentModal({ manufacturers, materials, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    manufacturer_name: manufacturers[0]?.name || "",
+    name: "",
+    material: materials[0] || "PLA",
+    color_name: "",
+    color_hex: "#777777",
+    color_hexes: [],
+    transparency: "opaque",
+    diameter_mm: "1.75",
+    nominal_weight_g: "1000",
+    catalogue_external_id: "",
+  });
+  const [meta, setMeta] = useState({ manufacturers: [], materials: [] });
+  const [products, setProducts] = useState([]);
+  const [customManufacturer, setCustomManufacturer] = useState(false);
+  const [customMaterial, setCustomMaterial] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [loadingProducts, setLoadingProducts] = useState(false);
   const [error, setError] = useState("");
-  const set = (key, value) => setForm(value0 => ({ ...value0, [key]: value }));
+
+  const set = (key, value, clearCatalogue = false) => setForm(value0 => ({
+    ...value0,
+    [key]: value,
+    ...(clearCatalogue ? { catalogue_external_id: "" } : {}),
+  }));
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch("/api/printing/catalogue/filaments/meta/")
+      .then(result => {
+        if (!cancelled) setMeta({
+          manufacturers: result.manufacturers || [],
+          materials: result.materials || [],
+        });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  const manufacturerOptions = Array.from(new Set([
+    ...manufacturers.map(item => item.name),
+    ...(meta.manufacturers || []),
+  ])).sort((a, b) => a.localeCompare(b));
+  const materialOptions = Array.from(new Set([
+    ...materials,
+    ...(meta.materials || []),
+  ])).sort((a, b) => a.localeCompare(b));
+
+  useEffect(() => {
+    if (!form.manufacturer_name || !form.material || customManufacturer || customMaterial) {
+      setProducts([]);
+      return;
+    }
+    let cancelled = false;
+    setLoadingProducts(true);
+    const path = "/api/printing/catalogue/filaments/?manufacturer=" +
+      encodeURIComponent(form.manufacturer_name) + "&material=" +
+      encodeURIComponent(form.material) + "&limit=100";
+    apiFetch(path)
+      .then(result => {
+        if (cancelled) return;
+        const unique = [];
+        const seen = new Set();
+        for (const row of result.rows || []) {
+          if (seen.has(row.name)) continue;
+          seen.add(row.name);
+          unique.push(row);
+        }
+        setProducts(unique);
+      })
+      .catch(() => { if (!cancelled) setProducts([]); })
+      .finally(() => { if (!cancelled) setLoadingProducts(false); });
+    return () => { cancelled = true; };
+  }, [form.manufacturer_name, form.material, customManufacturer, customMaterial]);
+
+  function chooseProduct(externalId) {
+    const row = products.find(item => item.external_id === externalId);
+    if (!row) {
+      set("catalogue_external_id", "");
+      return;
+    }
+    setForm(current => ({
+      ...current,
+      catalogue_external_id: row.external_id,
+      name: row.name,
+      material: row.material,
+      color_name: row.color_name || current.color_name,
+      color_hex: row.color_hex || current.color_hex,
+      color_hexes: row.color_hexes || [],
+      transparency: row.transparency || "opaque",
+      diameter_mm: row.diameter_mm || current.diameter_mm,
+      nominal_weight_g: row.nominal_weight_g || current.nominal_weight_g,
+    }));
+  }
+
   async function submit(event) {
     event.preventDefault(); setBusy(true); setError("");
-    try { await apiFetch("/api/printing/filaments/", { method: "POST", body: form }); await onSaved(); }
-    catch (err) { setError(err.message); } finally { setBusy(false); }
+    try {
+      if (form.catalogue_external_id) {
+        await apiFetch("/api/printing/catalogue/filaments/import/", {
+          method: "POST",
+          body: { external_id: form.catalogue_external_id },
+        });
+      } else {
+        await apiFetch("/api/printing/filaments/", {
+          method: "POST",
+          body: {
+            ...form,
+            catalogue_external_id: undefined,
+          },
+        });
+      }
+      await onSaved();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
   }
-  return <Modal title="Add filament product" subtitle="Define the material/product once, then create one or more physical spools from it." onClose={onClose} wide>
+
+  return <Modal title="Add filament product" subtitle="Choose a known manufacturer/product from the open catalogue or create a fully custom filament." onClose={onClose} wide>
     <form className="formGrid" onSubmit={submit}>
       {error && <div className="formError full">{error}</div>}
-      <label>Manufacturer<select value={form.manufacturer_id} onChange={e => set("manufacturer_id", e.target.value)}><option value="">Unspecified</option>{manufacturers.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
-      <label>Product name<input required value={form.name} onChange={e => set("name", e.target.value)} placeholder="PLA Basic" /></label>
-      <label>Material<input required value={form.material} onChange={e => set("material", e.target.value)} placeholder="PLA, PETG, ASA…" /></label>
-      <label>Colour name<input value={form.color_name} onChange={e => set("color_name", e.target.value)} placeholder="Manufacturer colour name" /></label>
-      <label>Appearance<select value={form.transparency} onChange={e => set("transparency", e.target.value)}><option value="opaque">Opaque</option><option value="translucent">Translucent</option><option value="transparent">Transparent</option></select></label>
+      <label>Manufacturer<select value={customManufacturer ? "__custom__" : form.manufacturer_name} onChange={e => {
+        if (e.target.value === "__custom__") {
+          setCustomManufacturer(true);
+          set("manufacturer_name", "", true);
+        } else {
+          setCustomManufacturer(false);
+          set("manufacturer_name", e.target.value, true);
+        }
+      }}>
+        <option value="">Choose manufacturer…</option>
+        {manufacturerOptions.map(name => <option key={name} value={name}>{name}</option>)}
+        <option value="__custom__">Other / custom manufacturer</option>
+      </select></label>
+      {customManufacturer && <label>Custom manufacturer<input required value={form.manufacturer_name} onChange={e => set("manufacturer_name", e.target.value, true)} /></label>}
+
+      <label>Material<select value={customMaterial ? "__custom__" : form.material} onChange={e => {
+        if (e.target.value === "__custom__") {
+          setCustomMaterial(true);
+          set("material", "", true);
+        } else {
+          setCustomMaterial(false);
+          set("material", e.target.value, true);
+        }
+      }}>
+        <option value="">Choose material…</option>
+        {materialOptions.map(name => <option key={name} value={name}>{name}</option>)}
+        <option value="__custom__">Other / custom material</option>
+      </select></label>
+      {customMaterial && <label>Custom material<input required value={form.material} onChange={e => set("material", e.target.value, true)} /></label>}
+
+      <label className="full">Known product offering<select value={form.catalogue_external_id} onChange={e => chooseProduct(e.target.value)} disabled={!products.length}>
+        <option value="">{loadingProducts ? "Loading manufacturer products…" : products.length ? "Custom / choose product…" : "No catalogue products found — enter one manually"}</option>
+        {products.map(item => <option key={item.external_id} value={item.external_id}>{item.name}</option>)}
+      </select></label>
+
+      <label>Product name<input required value={form.name} onChange={e => set("name", e.target.value, true)} placeholder="PLA Basic" /></label>
+      <label>Colour name<input value={form.color_name} onChange={e => set("color_name", e.target.value, true)} placeholder="Manufacturer colour name" /></label>
+      <label>Appearance<select value={form.transparency} onChange={e => set("transparency", e.target.value, true)}><option value="opaque">Opaque</option><option value="translucent">Translucent</option><option value="transparent">Transparent</option></select></label>
       <div className="full filamentColourField">
         <span>Colour palette</span>
         <div className="filamentPalette" role="group" aria-label="Filament colour palette">
@@ -343,18 +487,19 @@ function FilamentModal({ manufacturers, onClose, onSaved }) {
             className={form.color_hex.toLowerCase() === hex ? "selected" : ""}
             title={name}
             aria-label={name}
-            onClick={() => setForm(value => ({ ...value, color_hex: hex, color_name: value.color_name || name }))}
+            onClick={() => setForm(value => ({ ...value, color_hex: hex, color_hexes: [], color_name: value.color_name || name, catalogue_external_id: "" }))}
           ><span style={{ background: hex }} /></button>)}
         </div>
       </div>
-      <label>Custom colour<div className="filamentCustomColour"><input type="color" value={form.color_hex || "#777777"} onChange={e => set("color_hex", e.target.value)} /><input value={form.color_hex} onChange={e => set("color_hex", e.target.value)} maxLength="9" placeholder="#RRGGBB" /></div></label>
-      <label>Preview<div className={`filamentPreview filamentPreview-${form.transparency}`}><span style={{ background: form.color_hex || "#777777" }} /><strong>{form.color_name || "Selected colour"}</strong><small>{form.transparency}</small></div></label>
-      <label>Diameter (mm)<input type="number" step="0.01" min="0.1" value={form.diameter_mm} onChange={e => set("diameter_mm", e.target.value)} /></label>
-      <label>Nominal weight (g)<input type="number" step="1" min="0" value={form.nominal_weight_g} onChange={e => set("nominal_weight_g", e.target.value)} /></label>
-      <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Saving…" : "Add filament"}</button></div>
+      <label>Custom colour<div className="filamentCustomColour"><input type="color" value={form.color_hex || "#777777"} onChange={e => setForm(value => ({ ...value, color_hex: e.target.value, color_hexes: [], catalogue_external_id: "" }))} /><input value={form.color_hex} onChange={e => setForm(value => ({ ...value, color_hex: e.target.value, color_hexes: [], catalogue_external_id: "" }))} maxLength="9" placeholder="#RRGGBB" /></div></label>
+      <label>Preview<div className={`filamentPreview filamentPreview-${form.transparency}`}><span style={filamentSwatchStyle(form)} /><strong>{form.color_name || "Selected colour"}</strong><small>{form.transparency}{form.catalogue_external_id ? " · catalogue product" : ""}</small></div></label>
+      <label>Diameter (mm)<input type="number" step="0.01" min="0.1" value={form.diameter_mm} onChange={e => set("diameter_mm", e.target.value, true)} /></label>
+      <label>Nominal weight (g)<input type="number" step="1" min="0" value={form.nominal_weight_g} onChange={e => set("nominal_weight_g", e.target.value, true)} /></label>
+      <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy || !form.manufacturer_name || !form.material}>{busy ? "Saving…" : form.catalogue_external_id ? "Import product" : "Add filament"}</button></div>
     </form>
   </Modal>;
 }
+
 
 function filamentSwatchStyle(item) {
   const colours = (item?.color_hexes || []).map(value => String(value || "").slice(0, 7)).filter(Boolean);
