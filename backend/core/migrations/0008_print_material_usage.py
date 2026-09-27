@@ -74,4 +74,3 @@ class Migration(migrations.Migration):
             constraint=models.CheckConstraint(condition=models.Q(("waste_g__gte", 0)), name="print_material_waste_nonnegative"),
         ),
     ]
-}
