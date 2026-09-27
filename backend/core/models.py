@@ -14,6 +14,34 @@ class TimeStampedModel(models.Model):
         abstract = True
 
 
+class CatalogueMaintenanceSettings(TimeStampedModel):
+    """Singleton schedule for automatic catalogue maintenance."""
+
+    singleton_key = models.PositiveSmallIntegerField(default=1, unique=True, editable=False)
+    enabled = models.BooleanField(default=True)
+    interval_hours = models.PositiveIntegerField(default=24)
+    check_board_data = models.BooleanField(default=True)
+    check_images = models.BooleanField(default=True)
+    last_run_at = models.DateTimeField(blank=True, null=True)
+    next_run_at = models.DateTimeField(blank=True, null=True)
+    last_triggered_by = models.CharField(max_length=120, blank=True)
+
+    class Meta:
+        verbose_name = "Catalogue maintenance settings"
+        verbose_name_plural = "Catalogue maintenance settings"
+
+    def clean(self):
+        if not 1 <= int(self.interval_hours) <= 720:
+            raise ValidationError({"interval_hours": "Choose an interval between 1 and 720 hours."})
+
+    def save(self, *args, **kwargs):
+        self.singleton_key = 1
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Catalogue maintenance every {self.interval_hours}h"
+
+
 class Manufacturer(TimeStampedModel):
     name = models.CharField(max_length=200, unique=True)
     website = models.URLField(blank=True)
