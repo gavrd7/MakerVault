@@ -117,6 +117,8 @@ MCU_PROFILES = {
     "ATmega328P": {
         "ram_kb": 2,
         "specifications": {
+            "native_usb": False,
+            "dac_channels": 0,
             "flash_kb": 32,
             "clock_mhz": 16,
             "cpu_cores": 1,
@@ -129,6 +131,8 @@ MCU_PROFILES = {
         "flash_mb": 0.25,
         "ram_kb": 8,
         "specifications": {
+            "native_usb": False,
+            "dac_channels": 0,
             "clock_mhz": 16,
             "cpu_cores": 1,
             "operating_voltage": "5 V",
@@ -139,6 +143,7 @@ MCU_PROFILES = {
     "ATmega32U4": {
         "ram_kb": 2.5,
         "specifications": {
+            "dac_channels": 0,
             "flash_kb": 32,
             "clock_mhz": 16,
             "cpu_cores": 1,
@@ -151,6 +156,8 @@ MCU_PROFILES = {
     "ATmega4809": {
         "ram_kb": 6,
         "specifications": {
+            "native_usb": False,
+            "dac_channels": 0,
             "flash_kb": 48,
             "clock_mhz": 20,
             "cpu_cores": 1,
