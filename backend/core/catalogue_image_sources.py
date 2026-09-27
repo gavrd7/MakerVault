@@ -17,7 +17,9 @@ from .importers import ImporterError, fetch_import_html
 
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
-USER_AGENT = "MakerVault/0.2.2 (+self-hosted catalogue image seeder)"
+OPENVERSE_API = "https://api.openverse.org/v1/images/"
+IMAGE_SEED_VERSION = "0.3.6"
+USER_AGENT = "MakerVault/0.3.6 (+self-hosted catalogue image seeder)"
 def _commons_license_allowed(license_name: str) -> bool:
     """Allow only licences suitable for normal open redistribution."""
     value = " ".join((license_name or "").strip().upper().split())
@@ -28,6 +30,22 @@ def _commons_license_allowed(license_name: str) -> bool:
     if value.startswith("CC0") or value.startswith("PUBLIC DOMAIN") or value.startswith("PDM"):
         return True
     return value == "CC BY" or value.startswith("CC BY ") or value == "CC BY-SA" or value.startswith("CC BY-SA ")
+
+
+OPENVERSE_LICENSES = {
+    "cc0": "CC0",
+    "pdm": "Public Domain",
+    "by": "CC BY",
+    "by-sa": "CC BY-SA",
+}
+
+
+def _openverse_license_name(code: str, version: str = "") -> str:
+    base = OPENVERSE_LICENSES.get((code or "").strip().lower(), "")
+    if not base:
+        return ""
+    version = (version or "").strip()
+    return f"{base} {version}".strip()
 
 
 GENERIC_COMPONENT_QUERY_BY_TYPE = {
@@ -174,6 +192,112 @@ def search_wikimedia_commons(query: str, *, minimum_score: float = 0.18) -> Imag
     return candidate
 
 
+def search_openverse(query: str, *, minimum_score: float = 0.18) -> ImageCandidate | None:
+    """Search Openverse for a confidently matching, openly licensed image."""
+    try:
+        response = requests.get(
+            OPENVERSE_API,
+            params={"q": query, "page_size": 20},
+            timeout=(5, 20),
+            headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except (requests.RequestException, ValueError):
+        return None
+
+    ranked = []
+    for item in payload.get("results", []):
+        license_name = _openverse_license_name(
+            str(item.get("license") or ""),
+            str(item.get("license_version") or ""),
+        )
+        if not license_name:
+            continue
+        image_url = item.get("thumbnail") or item.get("url") or ""
+        source_page = item.get("foreign_landing_url") or item.get("detail_url") or ""
+        if not image_url or not source_page:
+            continue
+        title = str(item.get("title") or "")
+        score = _title_score(title, query)
+        if not score:
+            tags = " ".join(
+                str(tag.get("name") or "")
+                for tag in (item.get("tags") or [])
+                if isinstance(tag, dict)
+            )
+            score = _title_score(tags, query) * 0.75
+        provider = str(item.get("source") or item.get("provider") or "Openverse")
+        creator = str(item.get("creator") or "")[:500]
+        ranked.append((score, title, ImageCandidate(
+            image_url=image_url,
+            source_page_url=source_page,
+            provider=f"Openverse / {provider}",
+            license_name=license_name,
+            author=creator,
+            query=query,
+        )))
+
+    if not ranked:
+        return None
+    ranked.sort(key=lambda row: (row[0], row[1]), reverse=True)
+    best_score, _, candidate = ranked[0]
+    if best_score < minimum_score:
+        return None
+    return candidate
+
+
+def _board_image_queries(board) -> list[str]:
+    maker = board.manufacturer.name if board.manufacturer else ""
+    name = re.sub(r"\s+", " ", (board.name or "").replace(" style", "")).strip()
+    queries = []
+    if maker and maker.lower() != "generic":
+        queries.append(f"{maker} {name}")
+    queries.append(name)
+    if board.mcu and _normalise_tokens(board.mcu) - _normalise_tokens(name):
+        queries.append(f"{board.mcu} {name}")
+    out = []
+    for query in queries:
+        query = query.strip()
+        if query and query not in out:
+            out.append(query)
+    return out[:3]
+
+
+def _component_image_queries(component) -> list[str]:
+    specs = component.specifications or {}
+    part = (component.part_number or "").strip()
+    item_type = str(specs.get("type") or "").strip()
+    queries = []
+    if part:
+        if item_type not in {"resistor", "capacitor", "diode", "transistor", "mosfet", "regulator"}:
+            queries.append(f"{part} module")
+        queries.append(part)
+    queries.append(component.name)
+    fallback = GENERIC_COMPONENT_QUERY_BY_TYPE.get(item_type)
+    if fallback:
+        queries.append(fallback)
+    out = []
+    for query in queries:
+        query = re.sub(r"\s+", " ", query).strip()
+        if query and query not in out:
+            out.append(query)
+    return out[:4]
+
+
+def _search_open_media(queries: list[str], *, minimum_score: float = 0.16) -> ImageCandidate | None:
+    for query in queries:
+        if settings.CATALOGUE_IMAGE_WIKIMEDIA:
+            candidate = search_wikimedia_commons(query, minimum_score=minimum_score)
+            if candidate:
+                return candidate
+        if getattr(settings, "CATALOGUE_IMAGE_OPENVERSE", True):
+            candidate = search_openverse(query, minimum_score=minimum_score)
+            if candidate:
+                return candidate
+    return None
+
+
 def _espboards_slug_candidates(board) -> list[str]:
     name = board.name
     manufacturer = board.manufacturer.name if board.manufacturer else ""
@@ -238,20 +362,17 @@ def resolve_catalogue_image(obj) -> ImageCandidate | None:
             candidate = find_espboards_image(obj)
             if candidate:
                 return candidate
-        if settings.CATALOGUE_IMAGE_WIKIMEDIA:
-            return search_wikimedia_commons(_commons_query_for_board(obj), minimum_score=0.16)
-        return None
+        return _search_open_media(_board_image_queries(obj), minimum_score=0.16)
 
-    if isinstance(obj, ComponentModel) and settings.CATALOGUE_IMAGE_WIKIMEDIA:
-        query = _commons_query_for_component(obj)
-        candidate = search_wikimedia_commons(query, minimum_score=0.16)
+    if isinstance(obj, ComponentModel):
+        queries = _component_image_queries(obj)
+        candidate = _search_open_media(queries[:3], minimum_score=0.16)
         if candidate:
             return candidate
-        # Generic components benefit from a broader type-level fallback.
-        item_type = str((obj.specifications or {}).get("type") or "")
-        fallback = GENERIC_COMPONENT_QUERY_BY_TYPE.get(item_type)
-        if fallback and fallback != query:
-            return search_wikimedia_commons(fallback, minimum_score=0.12)
+        # The final query is usually a generic representative type. Be slightly
+        # more permissive for that fallback while still requiring token overlap.
+        if len(queries) > 3:
+            return _search_open_media(queries[3:], minimum_score=0.12)
     return None
 
 
@@ -280,6 +401,10 @@ def cache_candidate(obj, candidate: ImageCandidate):
 
 
 def _recent_attempt(specs: dict, retry_days: int) -> bool:
+    # A new image-search generation gets one fresh attempt even if the previous
+    # release tried the record recently.
+    if specs.get("auto_image_attempt_version") != IMAGE_SEED_VERSION:
+        return False
     raw = specs.get("auto_image_last_attempt")
     if not raw:
         return False
@@ -297,7 +422,7 @@ def run_catalogue_image_seed(*, limit: int | None = None, force_retry: bool = Fa
 
     limit = settings.CATALOGUE_IMAGE_MAX_PER_RUN if limit is None else max(int(limit), 0)
     retry_days = max(int(settings.CATALOGUE_IMAGE_RETRY_DAYS), 1)
-    lock_key = "makervault:catalogue-image-seed:v0.2.2"
+    lock_key = f"makervault:catalogue-image-seed:{IMAGE_SEED_VERSION}"
     if not cache.add(lock_key, "running", timeout=60 * 60):
         return {"status": "already-running", "processed": 0, "cached": 0, "failed": 0, "skipped": 0}
 
@@ -324,6 +449,7 @@ def run_catalogue_image_seed(*, limit: int | None = None, force_retry: bool = Fa
 
                 processed += 1
                 specs["auto_image_last_attempt"] = timezone.now().isoformat()
+                specs["auto_image_attempt_version"] = IMAGE_SEED_VERSION
                 obj.specifications = specs
                 obj.save(update_fields=["specifications", "updated_at"])
 
