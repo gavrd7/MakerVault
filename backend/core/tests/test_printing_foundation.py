@@ -14,6 +14,7 @@ from core.models import (
     Printer,
     PrinterFilamentSlot,
     PrintJob,
+    PrintMaterialUsage,
     Spool,
 )
 
@@ -82,13 +83,21 @@ class PrintingFoundationTests(TestCase):
             role="model",
             is_primary=True,
         )
-        PrintJob.objects.create(
+        print_job = PrintJob.objects.create(
             model_revision=revision,
             printer=self.printer,
-            spool=self.spool,
             status="success",
-            filament_used_g="15.5",
             quantity=1,
+        )
+        PrintMaterialUsage.objects.create(
+            print_job=print_job,
+            spool=self.spool,
+            filament=self.filament,
+            printer_slot=slot,
+            used_g="15.5",
+            waste_g="0.5",
+            material_cost="0.42",
+            currency="GBP",
         )
 
         response = self.client.get("/api/printing/")
@@ -108,6 +117,60 @@ class PrintingFoundationTests(TestCase):
         self.assertEqual(payload["models"][0]["revisions"][0]["assets"][0]["id"], str(link.id))
         self.assertEqual(payload["models"][0]["revisions"][0]["assets"][0]["file"]["category"], "mesh")
         self.assertEqual(payload["recent_prints"][0]["status"], "success")
+        self.assertEqual(payload["recent_prints"][0]["filament_used_g"], 15.5)
+        self.assertEqual(payload["recent_prints"][0]["waste_g"], 0.5)
+        self.assertEqual(payload["recent_prints"][0]["material_cost"], 0.42)
+        self.assertEqual(payload["recent_prints"][0]["material_usages"][0]["spool"], "SPL-0001")
+
+    def test_print_job_supports_multiple_spools_and_aggregates_material_usage(self):
+        second_filament = FilamentProduct.objects.create(
+            manufacturer=self.manufacturer,
+            name="PETG Accent",
+            material="PETG",
+            color_name="White",
+            color_hex="#ffffff",
+            diameter_mm="1.75",
+        )
+        second_spool = Spool.objects.create(
+            spool_id="SPL-0002",
+            filament=second_filament,
+            initial_weight_g="1000",
+            remaining_weight_g="800",
+            status="open",
+        )
+        job = PrintJob.objects.create(
+            printer=self.printer,
+            status="success",
+            quantity=1,
+        )
+        PrintMaterialUsage.objects.create(
+            print_job=job,
+            spool=self.spool,
+            used_g="12.25",
+            waste_g="0.25",
+            material_cost="0.30",
+            currency="GBP",
+        )
+        PrintMaterialUsage.objects.create(
+            print_job=job,
+            spool=second_spool,
+            used_g="3.75",
+            waste_g="0.10",
+            material_cost="0.12",
+            currency="GBP",
+        )
+
+        response = self.client.get("/api/printing/")
+        self.assertEqual(response.status_code, 200)
+        recent = response.json()["recent_prints"][0]
+        self.assertEqual(len(recent["material_usages"]), 2)
+        self.assertEqual(recent["filament_used_g"], 16.0)
+        self.assertEqual(recent["waste_g"], 0.35)
+        self.assertEqual(recent["material_cost"], 0.42)
+        self.assertEqual(
+            {usage["spool"] for usage in recent["material_usages"]},
+            {"SPL-0001", "SPL-0002"},
+        )
 
     def test_model_revision_asset_reuses_fileasset_and_validates_printable_role(self):
         model = Model3D.objects.create(name="Calibration part")
