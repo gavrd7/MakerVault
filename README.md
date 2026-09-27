@@ -353,6 +353,6 @@ Administrators can open **Settings → Catalogue maintenance** to:
 - see the last trigger and next scheduled run;
 - queue a maintenance pass immediately with **Run now**.
 
-Celery Beat runs inside the existing MakerVault application container and performs only a lightweight due-time check once per minute. When maintenance is due, it queues the normal board-enrichment and image-seeding tasks. Those workers retain their existing per-record retry periods, source-confidence checks and distributed locks, so a 24-hour schedule does not imply that every board or image is downloaded every day.
+Celery Beat runs inside the existing MakerVault application container and performs only a lightweight due-time check once per minute. When maintenance is due, it queues the normal board-enrichment and image-seeding tasks. Scheduled maintenance deliberately bypasses the older failed-attempt cooldown for supported online board sources and records still missing images, so the configured interval is the real retry cadence. Existing local images still skip immediately; source-confidence/licence checks, distributed locks and user-value protection remain in force.
 
 The environment variables `ENRICH_BOARD_CATALOGUE` and `SEED_CATALOGUE_IMAGES` remain server-level hard disables. If either is false, the GUI cannot override it.
