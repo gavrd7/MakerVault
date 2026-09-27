@@ -165,6 +165,22 @@ class BomAllocationApiTests(TestCase):
             ).exists()
         )
 
+    def test_inventory_detail_lists_active_bom_allocations_for_release_picker(self):
+        bom = self.create_bom(quantity=2, name="M3 screws")
+        allocation = self.allocate(bom["id"], 1.5).json()["allocation"]
+
+        response = self.client.get(f"/api/inventory/{self.stock.id}/")
+        self.assertEqual(response.status_code, 200)
+        rows = response.json()["item"]["bom_allocations"]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["id"], allocation["id"])
+        self.assertEqual(rows[0]["project_id"], str(self.project.id))
+        self.assertEqual(rows[0]["project_name"], self.project.name)
+        self.assertEqual(rows[0]["bom_item_id"], bom["id"])
+        self.assertEqual(rows[0]["bom_item_name"], "M3 screws")
+        self.assertEqual(rows[0]["quantity"], 1.5)
+        self.assertEqual(rows[0]["unit"], "item")
+
     def test_inventory_quantity_cannot_drop_below_allocated_stock(self):
         bom = self.create_bom(quantity=3)
         self.assertEqual(self.allocate(bom["id"], 2).status_code, 201)
