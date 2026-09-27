@@ -1,6 +1,20 @@
 from django.db import migrations, models
 
 
+
+def normalise_live_integration_statuses(apps, schema_editor):
+    Integration = apps.get_model("core", "PrintingIntegrationSetting")
+    Integration.objects.filter(
+        provider__in=["spoolman", "creality_cfs"],
+        enabled=False,
+    ).update(status="disabled")
+    Integration.objects.filter(
+        provider="creality_cfs",
+        enabled=True,
+        status="ready",
+    ).update(status="disconnected")
+
+
 class Migration(migrations.Migration):
     dependencies = [
         ("core", "0011_printing_catalogues_locations_integrations"),
@@ -54,4 +68,5 @@ class Migration(migrations.Migration):
                 max_length=24,
             ),
         ),
+        migrations.RunPython(normalise_live_integration_statuses, migrations.RunPython.noop),
     ]
