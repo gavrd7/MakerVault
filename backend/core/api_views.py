@@ -28,7 +28,10 @@ from .filament_catalogue import (
     FilamentCatalogueError,
     get_spoolmandb_item,
     search_spoolmandb,
+    spoolmandb_meta,
 )
+from .printing_catalogue_seed import COMMON_FILAMENT_MATERIALS
+from .printing_integrations import PrintingIntegrationError, probe_spoolman
 from .tasks import queue_catalogue_maintenance_now
 from .models import (
     BoardCompatibility,
@@ -39,6 +42,7 @@ from .models import (
     CatalogueMaintenanceSettings,
     ComponentCategory,
     ComponentModel,
+    FilamentManufacturer,
     FilamentProduct,
     FileAsset,
     InventoryItem,
@@ -48,7 +52,11 @@ from .models import (
     ModelRevision,
     ModelRevisionAsset,
     Printer,
+    PrinterCatalogModel,
     PrinterFilamentSlot,
+    PrinterManufacturer,
+    PrintingIntegrationSetting,
+    PrintingLocation,
     PrintJob,
     PrintMaterialUsage,
     Project,
