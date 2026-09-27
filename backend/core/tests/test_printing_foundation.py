@@ -144,6 +144,12 @@ class FilamentCatalogueTests(TestCase):
 
 class PrintingFoundationTests(TestCase):
     def setUp(self):
+        self.media_root = tempfile.mkdtemp(prefix="makervault-printing-")
+        self.override = override_settings(MEDIA_ROOT=Path(self.media_root))
+        self.override.enable()
+        self.addCleanup(self.override.disable)
+        self.addCleanup(shutil.rmtree, self.media_root, True)
+
         self.user = get_user_model().objects.create_superuser(
             username="printing-admin",
             email="printing@example.com",
