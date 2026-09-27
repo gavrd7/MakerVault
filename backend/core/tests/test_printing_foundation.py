@@ -717,11 +717,14 @@ class PrintingFoundationTests(TestCase):
             }
         ]
         get_mock.return_value = response
-        PrintingIntegrationSetting.objects.create(
+        PrintingIntegrationSetting.objects.update_or_create(
             provider="spoolman",
-            enabled=True,
-            endpoint_url="https://spoolman.example.test",
-            sync_direction="import",
+            defaults={
+                "enabled": True,
+                "endpoint_url": "https://spoolman.example.test",
+                "sync_direction": "import",
+                "status": "disconnected",
+            },
         )
 
         synced = self.client.post("/api/settings/printing-integrations/spoolman/sync/")
