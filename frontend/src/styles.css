@@ -594,14 +594,15 @@
 .bomDerivedInventory span{color:#738095;font-size:9px;text-transform:uppercase;letter-spacing:.04em}
 .bomDerivedInventory strong{margin-top:3px;font-size:13px;color:#d6dde7}
 .bomDerivedInventory small{margin-top:3px;color:#8190a4;font-size:9px}
-.inventoryDetailActions{display:flex;gap:7px;align-items:center}
-.inventoryDetailActions button{min-width:72px;min-height:34px;padding:7px 12px;display:inline-flex;align-items:center;justify-content:center}
+.inventoryDetailIdentity{display:block;margin-top:10px}
+.inventoryDetailIdentity h2{margin:5px 0 0}
+.inventoryDetailActions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px;width:100%}
+.inventoryDetailActions button{width:100%;min-height:38px;padding:8px 10px;display:inline-flex;align-items:center;justify-content:center;text-align:center}
 .inventoryDetailActions .assetDanger{color:#e29ba0;border-color:#57353b;background:#24151a}
 .inventoryDetailActions .assetDanger:disabled{opacity:.45;cursor:not-allowed}
 .inventoryDeleteHint{margin:8px 0 0;padding:8px 10px;border:1px solid #49343a;border-radius:8px;background:#1c1417;color:#c7989d;font-size:10px}
 
 @media(max-width:700px){
-  .inventoryDetailActions{align-items:stretch;flex-direction:column}
-  .inventoryDetailActions button{width:100%}
+  .inventoryDetailActions{grid-template-columns:1fr}
   .bomAllocationMode{flex-direction:column}
 }
