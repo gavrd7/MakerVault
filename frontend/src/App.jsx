@@ -33,6 +33,11 @@ export default function App() {
     setDashboard(result);
   }, []);
 
+  const refreshInventory = useCallback(async () => {
+    const result = await apiFetch("/api/inventory/");
+    setInventory(result.rows || []);
+  }, []);
+
   useEffect(() => {
     if (section !== "Projects") return;
     apiFetch("/api/projects/")
@@ -54,7 +59,7 @@ export default function App() {
     if (section === "Inventory") return <InventoryPage inventory={inventory} setInventory={setInventory} boards={boards} components={components} projects={projects} config={config} refreshDashboard={refreshDashboard} />;
     if (section === "Board Catalogue") return <BoardsPage boards={boards} setBoards={setBoards} config={config} onOpenImport={() => setImportOpen(true)} refreshDashboard={refreshDashboard} />;
     if (section === "Components") return <ComponentsPage components={components} setComponents={setComponents} config={config} refreshDashboard={refreshDashboard} />;
-    if (section === "Projects") return <ProjectsPage projects={projects} setProjects={setProjects} config={config} refreshDashboard={refreshDashboard} openProjectId={projectTarget} onOpenConsumed={() => setProjectTarget("")} />;
+    if (section === "Projects") return <ProjectsPage projects={projects} setProjects={setProjects} config={config} refreshDashboard={refreshDashboard} refreshInventory={refreshInventory} boards={boards} components={components} inventory={inventory} openProjectId={projectTarget} onOpenConsumed={() => setProjectTarget("")} />;
     if (section === "3D Printing") return <EmptyModule title="3D printing data is ready">Printer, filament, spool, 3D model/revision and print-job schemas are already present. SpoolmanDB and 3D model workflows are planned for the next importer milestone.</EmptyModule>;
     if (section === "Files") return <FilesPage projects={projects} config={config} onOpenProject={projectId => { setProjectTarget(projectId); setSection("Projects"); }} />;
     if (section === "Settings") return <SettingsPage config={config} />;
