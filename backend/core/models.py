@@ -422,6 +422,38 @@ class Spool(TimeStampedModel):
         return f"{self.spool_id} — {self.filament}"
 
 
+class ExternalSpoolLink(TimeStampedModel):
+    PROVIDERS = [
+        ("spoolman", "Spoolman"),
+        ("simplyprint", "SimplyPrint"),
+        ("other", "Other"),
+    ]
+    SYNC_DIRECTIONS = [
+        ("import", "External → MakerVault"),
+        ("export", "MakerVault → external"),
+        ("bidirectional", "Bidirectional"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    spool = models.ForeignKey(Spool, on_delete=models.CASCADE, related_name="external_links")
+    provider = models.CharField(max_length=30, choices=PROVIDERS)
+    external_id = models.CharField(max_length=255)
+    external_url = models.URLField(blank=True)
+    sync_direction = models.CharField(max_length=20, choices=SYNC_DIRECTIONS, default="import")
+    last_synced_at = models.DateTimeField(blank=True, null=True)
+    sync_metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["provider", "external_id"]
+        constraints = [
+            models.UniqueConstraint(fields=["provider", "external_id"], name="unique_external_spool_provider_id"),
+            models.UniqueConstraint(fields=["spool", "provider"], name="unique_spool_provider_link"),
+        ]
+
+    def __str__(self):
+        return f"{self.get_provider_display()} {self.external_id} → {self.spool.spool_id}"
+
+
 class Printer(TimeStampedModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
@@ -441,6 +473,45 @@ class Printer(TimeStampedModel):
 
     def __str__(self):
         return self.name
+
+
+class PrinterFilamentSlot(TimeStampedModel):
+    SYSTEMS = [
+        ("creality_cfs", "Creality CFS"),
+        ("bambu_ams", "Bambu Lab AMS"),
+        ("elegoo", "Elegoo multi-material"),
+        ("qidi", "QIDI multi-material"),
+        ("snapmaker", "Snapmaker multi-material"),
+        ("generic", "Generic / other"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    printer = models.ForeignKey(Printer, on_delete=models.CASCADE, related_name="filament_slots")
+    system = models.CharField(max_length=30, choices=SYSTEMS, default="generic")
+    unit_index = models.PositiveSmallIntegerField(default=0)
+    slot_index = models.PositiveSmallIntegerField(default=0)
+    spool = models.ForeignKey(Spool, on_delete=models.SET_NULL, null=True, blank=True, related_name="printer_slots")
+    external_ref = models.CharField(max_length=255, blank=True)
+    rfid_uid = models.CharField(max_length=255, blank=True, db_index=True)
+    material = models.CharField(max_length=80, blank=True)
+    color_name = models.CharField(max_length=120, blank=True)
+    color_hex = models.CharField(max_length=9, blank=True)
+    remaining_weight_g = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    is_loaded = models.BooleanField(default=True)
+    last_seen_at = models.DateTimeField(blank=True, null=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["printer__name", "system", "unit_index", "slot_index"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["printer", "system", "unit_index", "slot_index"],
+                name="unique_printer_filament_slot",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.printer} · {self.get_system_display()} {self.unit_index}:{self.slot_index}"
 
 
 class Model3D(TimeStampedModel):
@@ -477,6 +548,36 @@ class ModelRevision(TimeStampedModel):
 
     def __str__(self):
         return f"{self.model} {self.version}"
+
+
+class ModelRevisionAsset(TimeStampedModel):
+    ROLES = [
+        ("model", "Printable model"),
+        ("slicer", "Slicer project"),
+        ("cad", "CAD / source"),
+        ("reference", "Reference"),
+        ("other", "Other"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    revision = models.ForeignKey(ModelRevision, on_delete=models.CASCADE, related_name="assets")
+    file_asset = models.ForeignKey(FileAsset, on_delete=models.PROTECT, related_name="model_revisions")
+    role = models.CharField(max_length=20, choices=ROLES, default="model")
+    is_primary = models.BooleanField(default=False)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["role", "-is_primary", "created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["revision", "file_asset"], name="unique_revision_file_asset"),
+        ]
+
+    def clean(self):
+        if self.file_asset_id and self.role == "model" and self.file_asset.category not in {"mesh", "slicer", "cad"}:
+            raise ValidationError({"file_asset": "Printable model assets should use a mesh, slicer or CAD file category."})
+
+    def __str__(self):
+        return f"{self.revision} · {self.file_asset.name}"
 
 
 class ProductListing(TimeStampedModel):
