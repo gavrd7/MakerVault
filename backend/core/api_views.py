@@ -18,7 +18,7 @@ from .catalogue_images import (
     sanitise_uploaded_image,
 )
 from .importers import ImporterError, preview_board_url
-from .catalogue_enrichment import enrich_board_from_espboards
+from .catalogue_enrichment import enrich_board
 from .models import (
     BoardCompatibility,
     BoardModel,
@@ -571,7 +571,7 @@ def board_enrich(request, board_id):
     if not board:
         return _error("Board not found.", status=404)
     try:
-        changed = enrich_board_from_espboards(board)
+        changed = enrich_board(board, online=True)
     except Exception as exc:
         return _error(f"Board enrichment failed: {exc}")
     board = BoardModel.objects.select_related("manufacturer", "source").prefetch_related("compatibility").get(pk=board.pk)

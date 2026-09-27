@@ -13,7 +13,7 @@ from .importers import ImporterError, fetch_import_html, parse_espboards_html
 from .catalogue_profiles import apply_board_profile
 
 
-ENRICHMENT_VERSION = "0.3.6"
+ENRICHMENT_VERSION = "0.3.8"
 
 
 @dataclass
@@ -119,6 +119,103 @@ def _merge_board_data(board, data) -> bool:
     if merged_specs != current_specs:
         board.specifications = merged_specs
         changed = True
+    return changed
+
+
+TRACKED_BOARD_FIELDS = (
+    "mcu", "architecture", "flash", "psram", "ram", "gpio", "usb", "dimensions",
+    "clock_mhz", "eeprom_kb", "cpu_cores", "operating_voltage", "pin_count",
+    "adc_channels", "dac_channels", "uart_count", "spi_count", "i2c_count",
+    "pwm_channels", "native_usb", "usb_capability", "wifi_standard",
+    "bluetooth_generation", "ieee_802154", "pio_state_machines", "wireless",
+)
+
+
+def _tracked_board_values(board) -> dict:
+    specs = board.specifications or {}
+    radios = [name for enabled, name in (
+        (board.wifi, "Wi-Fi"), (board.bluetooth, "Bluetooth"),
+        (board.zigbee, "Zigbee"), (board.thread, "Thread"),
+    ) if enabled]
+    return {
+        "mcu": board.mcu,
+        "architecture": board.architecture,
+        "flash": specs.get("flash_kb") if specs.get("flash_kb") is not None else board.flash_mb,
+        "psram": board.psram_mb,
+        "ram": board.ram_kb if board.ram_kb is not None else specs.get("sram_kb"),
+        "gpio": board.gpio_count,
+        "usb": board.usb_connector,
+        "dimensions": board.dimensions_mm if board.dimensions_mm else None,
+        "clock_mhz": specs.get("clock_mhz"),
+        "eeprom_kb": specs.get("eeprom_kb"),
+        "cpu_cores": specs.get("cpu_cores"),
+        "operating_voltage": specs.get("operating_voltage"),
+        "pin_count": specs.get("pin_count"),
+        "adc_channels": specs.get("adc_channels"),
+        "dac_channels": specs.get("dac_channels"),
+        "uart_count": specs.get("uart_count"),
+        "spi_count": specs.get("spi_count"),
+        "i2c_count": specs.get("i2c_count"),
+        "pwm_channels": specs.get("pwm_channels"),
+        "native_usb": specs.get("native_usb"),
+        "usb_capability": "USB OTG" if specs.get("usb_otg") is True else (
+            "USB Serial/JTAG" if specs.get("usb_serial_jtag") is True else None
+        ),
+        "wifi_standard": specs.get("wifi_standard"),
+        "bluetooth_generation": specs.get("bluetooth_generation"),
+        "ieee_802154": specs.get("ieee_802154"),
+        "pio_state_machines": specs.get("pio_state_machines"),
+        "wireless": radios or None,
+    }
+
+
+def update_board_enrichment_state(board, *, save=True) -> bool:
+    """Persist per-field known/unknown/not-applicable state for future enrichers."""
+    specs = dict(board.specifications or {})
+    not_applicable = set(specs.get("not_applicable_specs") or [])
+    if {"wifi_standard", "bluetooth_generation", "ieee_802154"}.issubset(not_applicable):
+        not_applicable.add("wireless")
+    if specs.get("native_usb") is False and not specs.get("usb_otg") and not specs.get("usb_serial_jtag"):
+        not_applicable.add("usb_capability")
+    values = _tracked_board_values(board)
+    state = {}
+    unresolved = []
+    for key in TRACKED_BOARD_FIELDS:
+        value = values.get(key)
+        if key in not_applicable:
+            state[key] = "not_applicable"
+        elif value is not None and value != "" and value != [] and value != {}:
+            state[key] = "value"
+        else:
+            state[key] = "unknown"
+            unresolved.append(key)
+
+    old_state = specs.get("technical_field_status")
+    old_unresolved = specs.get("technical_unresolved_fields")
+    changed = (
+        old_state != state
+        or old_unresolved != unresolved
+        or specs.get("technical_status_version") != ENRICHMENT_VERSION
+    )
+    if not changed:
+        return False
+    specs["technical_field_status"] = state
+    specs["technical_unresolved_fields"] = unresolved
+    specs["technical_status_version"] = ENRICHMENT_VERSION
+    specs["technical_status_updated_at"] = datetime.now().astimezone().isoformat()
+    board.specifications = specs
+    if save:
+        board.save(update_fields=["specifications", "updated_at"])
+    return True
+
+
+def enrich_board(board, *, online=True) -> bool:
+    """Run safe curated enrichment, optional online enrichment, then refresh field status."""
+    changed = enrich_board_from_profile(board)
+    if online and _is_esp_family(board) and _online_attempt_due(board):
+        _mark_online_attempt(board)
+        changed = enrich_board_from_espboards(board) or changed
+    changed = update_board_enrichment_state(board) or changed
     return changed
 
 
@@ -253,6 +350,11 @@ def run_board_catalogue_enrichment(limit: int | None = None) -> dict:
                         board_failed = True
                 except Exception:
                     board_failed = True
+
+            try:
+                changed = update_board_enrichment_state(board) or changed
+            except Exception:
+                board_failed = True
 
             enriched += int(changed)
             failed += int(board_failed)

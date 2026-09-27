@@ -117,6 +117,8 @@ MCU_PROFILES = {
     "ATmega328P": {
         "ram_kb": 2,
         "specifications": {
+            "native_usb": False,
+            "dac_channels": 0,
             "flash_kb": 32,
             "clock_mhz": 16,
             "cpu_cores": 1,
@@ -129,6 +131,8 @@ MCU_PROFILES = {
         "flash_mb": 0.25,
         "ram_kb": 8,
         "specifications": {
+            "native_usb": False,
+            "dac_channels": 0,
             "clock_mhz": 16,
             "cpu_cores": 1,
             "operating_voltage": "5 V",
@@ -139,6 +143,7 @@ MCU_PROFILES = {
     "ATmega32U4": {
         "ram_kb": 2.5,
         "specifications": {
+            "dac_channels": 0,
             "flash_kb": 32,
             "clock_mhz": 16,
             "cpu_cores": 1,
@@ -151,6 +156,8 @@ MCU_PROFILES = {
     "ATmega4809": {
         "ram_kb": 6,
         "specifications": {
+            "native_usb": False,
+            "dac_channels": 0,
             "flash_kb": 48,
             "clock_mhz": 20,
             "cpu_cores": 1,
@@ -321,6 +328,7 @@ BOARD_PROFILES = {
         "gpio_count": 26,
         "dimensions_mm": {"length": 51, "width": 21},
         "specifications": {
+            "not_applicable_specs": ["wifi_standard","bluetooth_generation","ieee_802154"],
             "adc_channels": 3,
             "input_voltage": "1.8–5.5 V DC",
             "pio_state_machines": 8,
@@ -332,6 +340,7 @@ BOARD_PROFILES = {
         "gpio_count": 26,
         "dimensions_mm": {"length": 51, "width": 21},
         "specifications": {
+            "not_applicable_specs": ["ieee_802154"],
             "adc_channels": 3,
             "input_voltage": "1.8–5.5 V DC",
             "pio_state_machines": 8,
@@ -343,6 +352,7 @@ BOARD_PROFILES = {
         "gpio_count": 26,
         "dimensions_mm": {"length": 51, "width": 21},
         "specifications": {
+            "not_applicable_specs": ["wifi_standard","bluetooth_generation","ieee_802154"],
             "adc_channels": 4,
             "input_voltage": "1.8–5.5 V DC",
             "pio_state_machines": 12,
@@ -354,6 +364,7 @@ BOARD_PROFILES = {
         "gpio_count": 26,
         "dimensions_mm": {"length": 51, "width": 21},
         "specifications": {
+            "not_applicable_specs": ["ieee_802154"],
             "adc_channels": 4,
             "input_voltage": "1.8–5.5 V DC",
             "pio_state_machines": 12,
@@ -364,6 +375,7 @@ BOARD_PROFILES = {
         "gpio_count": 14,
         "dimensions_mm": {"length": 68.6, "width": 53.4},
         "specifications": {
+            "not_applicable_specs": ["wifi_standard","bluetooth_generation","ieee_802154","pio_state_machines"],
             "adc_channels": 6,
             "pwm_channels": 6,
             "uart_count": 1,
@@ -377,6 +389,7 @@ BOARD_PROFILES = {
         "gpio_count": 54,
         "dimensions_mm": {"length": 101.52, "width": 53.3},
         "specifications": {
+            "not_applicable_specs": ["wifi_standard","bluetooth_generation","ieee_802154","pio_state_machines"],
             "adc_channels": 16,
             "pwm_channels": 15,
             "uart_count": 4,
@@ -390,6 +403,7 @@ BOARD_PROFILES = {
         "gpio_count": 20,
         "dimensions_mm": {"length": 45, "width": 18},
         "specifications": {
+            "not_applicable_specs": ["wifi_standard","bluetooth_generation","ieee_802154","pio_state_machines"],
             "adc_channels": 8,
             "pwm_channels": 5,
             "uart_count": 1,
@@ -403,6 +417,7 @@ BOARD_PROFILES = {
         "gpio_count": 22,
         "dimensions_mm": {"length": 45, "width": 18},
         "specifications": {
+            "not_applicable_specs": ["wifi_standard","bluetooth_generation","ieee_802154","pio_state_machines"],
             "adc_channels": 8,
             "pwm_channels": 6,
             "uart_count": 1,
@@ -417,6 +432,7 @@ BOARD_PROFILES = {
         "gpio_count": 20,
         "dimensions_mm": {"length": 68.6, "width": 53.3},
         "specifications": {
+            "not_applicable_specs": ["wifi_standard","bluetooth_generation","ieee_802154","pio_state_machines"],
             "adc_channels": 12,
             "pwm_channels": 7,
             "uart_count": 1,
@@ -431,6 +447,7 @@ BOARD_PROFILES = {
         "gpio_count": 20,
         "dimensions_mm": {"length": 48, "width": 18},
         "specifications": {
+            "not_applicable_specs": ["wifi_standard","bluetooth_generation","ieee_802154","pio_state_machines"],
             "adc_channels": 12,
             "pwm_channels": 7,
             "uart_count": 1,
@@ -445,6 +462,7 @@ BOARD_PROFILES = {
         "ram_kb": 32,
         "gpio_count": 14,
         "specifications": {
+            "not_applicable_specs": ["wifi_standard","bluetooth_generation","ieee_802154","pio_state_machines"],
             "adc_channels": 6,
             "pwm_channels": 6,
             "uart_count": 1,
@@ -459,6 +477,7 @@ BOARD_PROFILES = {
         "ram_kb": 32,
         "gpio_count": 14,
         "specifications": {
+            "not_applicable_specs": ["ieee_802154","pio_state_machines"],
             "adc_channels": 6,
             "pwm_channels": 6,
             "uart_count": 1,

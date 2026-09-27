@@ -1,4 +1,4 @@
-# MakerVault v0.3.6
+# MakerVault v0.3.8
 
 MakerVault is a self-hosted makerspace inventory and project system for electronics, firmware, fabrication and 3D-printing assets.
 
@@ -314,3 +314,16 @@ docker compose exec makervault python manage.py seed_catalogue_images --force-re
 ~~~
 
 Openverse is an image-discovery/index service; the original media licence, creator and landing/source page are retained on each cached record.
+
+
+## Specification completeness states (v0.3.8)
+
+Board technical fields now distinguish between three cases:
+
+- a known value,
+- unknown data that remains eligible for enrichment,
+- and a capability known not to apply to that board.
+
+Unknown fields are retained in `technical_unresolved_fields`, while `technical_field_status` records the state of each displayed field. This gives future manufacturer/source adapters a concrete backlog to target instead of treating a board as simply enriched or not enriched. Known unsupported capabilities can be marked `not_applicable` and display as `N/A`.
+
+MakerVault does not guess that an absent value means unsupported. A field only becomes N/A when a profile or trusted source explicitly establishes that state.

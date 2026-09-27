@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.3.8
+
+- Added explicit per-field technical specification state: known value, unknown, or not applicable.
+- Unknown fields remain blank in the UI and are retained in a backend enrichment backlog instead of being confused with unsupported capabilities.
+- Known unsupported capabilities render as N/A; explicit negative capabilities such as Native USB can render as No.
+- Added persistent technical_unresolved_fields and technical_field_status metadata to board specifications without a database migration.
+- Curated board profiles can now mark capabilities as not applicable using authoritative board/family knowledge.
+- Added initial N/A coverage for common Arduino and Raspberry Pi Pico variants.
+- Added explicit negative AVR capability facts such as no native USB on ATmega328P/2560/4809 and zero DAC channels.
+- The Refresh specs action now applies all available enrichment layers to every board, not only ESP-family boards.
+- Enrichment state is versioned so future source adapters can revisit only unresolved fields.
+- No database migration is required.
+
+
 ## v0.3.7
 
 - Rendered all MakerVault modals through a React portal at the document root so drawers, AG Grid and overflow/stacking contexts cannot overlap them.
