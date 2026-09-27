@@ -1,5 +1,6 @@
 import shutil
 import tempfile
+from decimal import Decimal
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
