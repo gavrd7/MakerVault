@@ -471,6 +471,161 @@ class PrintingFoundationTests(TestCase):
         self.assertEqual(Spool.objects.filter(spool_id="SPL-API-1").count(), 1)
         self.assertEqual(Model3D.objects.filter(name="Cable clip").count(), 1)
 
+    def test_owned_printer_catalogue_populates_specs_location_and_connection(self):
+        maker = PrinterManufacturer.objects.create(name="Creality")
+        model = PrinterCatalogModel.objects.create(
+            manufacturer=maker,
+            name="K2",
+            build_volume_x_mm="260",
+            build_volume_y_mm="260",
+            build_volume_z_mm="260",
+            nozzle_mm="0.4",
+            multi_material_system="creality_cfs",
+            features={"cfs": True},
+        )
+        location = PrintingLocation.objects.create(name="Office", kind="room")
+
+        response = self.client.post(
+            "/api/printing/printers/",
+            data={
+                "printer_manufacturer_id": str(maker.id),
+                "catalog_model_id": str(model.id),
+                "name": "Office K2",
+                "location_id": str(location.id),
+                "connection_host": "192.168.1.34",
+                "is_active": True,
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        payload = response.json()["item"]
+        self.assertEqual(payload["manufacturer"], "Creality")
+        self.assertEqual(payload["model"], "K2")
+        self.assertEqual(payload["build_volume"]["x"], 260.0)
+        self.assertEqual(payload["build_volume"]["z"], 260.0)
+        self.assertEqual(payload["location"], "Office")
+        self.assertEqual(payload["connection_host"], "192.168.1.34")
+        self.assertTrue(payload["is_active"])
+        self.assertEqual(payload["catalogue"]["multi_material_system"], "creality_cfs")
+
+    def test_spool_can_use_structured_location_or_printer(self):
+        location = PrintingLocation.objects.create(name="Dry box 1", kind="drybox")
+        stored = self.client.post(
+            "/api/printing/spools/",
+            data={
+                "spool_id": "SPL-LOC-1",
+                "filament_id": str(self.filament.id),
+                "storage_location_id": str(location.id),
+                "remaining_weight_g": "800",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(stored.status_code, 201, stored.content)
+        self.assertEqual(stored.json()["item"]["location"], "Dry box 1")
+        self.assertEqual(stored.json()["item"]["placement_type"], "location")
+
+        assigned = self.client.post(
+            "/api/printing/spools/",
+            data={
+                "spool_id": "SPL-PRN-1",
+                "filament_id": str(self.filament.id),
+                "assigned_printer_id": str(self.printer.id),
+                "remaining_weight_g": "700",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(assigned.status_code, 201, assigned.content)
+        self.assertEqual(assigned.json()["item"]["location"], "Workshop printer")
+        self.assertEqual(assigned.json()["item"]["placement_type"], "printer")
+
+        invalid = self.client.post(
+            "/api/printing/spools/",
+            data={
+                "spool_id": "SPL-BOTH",
+                "filament_id": str(self.filament.id),
+                "storage_location_id": str(location.id),
+                "assigned_printer_id": str(self.printer.id),
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(invalid.status_code, 400)
+
+    def test_model_create_can_upload_local_stl_and_create_initial_revision(self):
+        response = self.client.post(
+            "/api/printing/models/",
+            {
+                "name": "Uploaded bracket",
+                "revision_version": "1.0",
+                "description": "Uploaded directly from Add Model",
+                "file": SimpleUploadedFile(
+                    "uploaded-bracket.stl",
+                    b"solid bracket\nendsolid bracket\n",
+                    content_type="model/stl",
+                ),
+            },
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        model = Model3D.objects.get(name="Uploaded bracket")
+        revision = ModelRevision.objects.get(model=model, version="1.0")
+        link = ModelRevisionAsset.objects.get(revision=revision)
+        self.assertEqual(link.role, "model")
+        self.assertTrue(link.is_primary)
+        self.assertEqual(link.file_asset.category, "mesh")
+        self.assertEqual(link.file_asset.metadata["uploaded_from"], "printing_model")
+        self.assertTrue(link.file_asset.file.storage.exists(link.file_asset.file.name))
+
+    @patch("core.api_views.probe_spoolman")
+    def test_printing_integration_settings_report_spoolman_and_cfs_status(self, probe_mock):
+        probe_mock.return_value = {
+            "endpoint_url": "http://spoolman.local:7912",
+            "info": {"version": "test"},
+        }
+        maker = PrinterManufacturer.objects.create(name="Creality")
+        model = PrinterCatalogModel.objects.create(
+            manufacturer=maker,
+            name="K2",
+            multi_material_system="creality_cfs",
+        )
+        Printer.objects.create(
+            name="CFS printer",
+            printer_manufacturer=maker,
+            catalog_model=model,
+            model="K2",
+            connection_host="192.168.1.34",
+            is_active=True,
+        )
+
+        settings_response = self.client.get("/api/settings/printing-integrations/")
+        self.assertEqual(settings_response.status_code, 200, settings_response.content)
+        providers = {row["provider"] for row in settings_response.json()["rows"]}
+        self.assertIn("spoolman", providers)
+        self.assertIn("creality_cfs", providers)
+
+        configure = self.client.patch(
+            "/api/settings/printing-integrations/spoolman/",
+            data={
+                "enabled": True,
+                "endpoint_url": "http://spoolman.local:7912",
+                "sync_direction": "bidirectional",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(configure.status_code, 200, configure.content)
+
+        tested = self.client.post("/api/settings/printing-integrations/spoolman/test/")
+        self.assertEqual(tested.status_code, 200, tested.content)
+        self.assertEqual(tested.json()["item"]["status"], "connected")
+
+        cfs = self.client.patch(
+            "/api/settings/printing-integrations/creality_cfs/",
+            data={"enabled": True, "sync_direction": "import"},
+            content_type="application/json",
+        )
+        self.assertEqual(cfs.status_code, 200, cfs.content)
+        self.assertEqual(cfs.json()["item"]["status"], "ready")
+        self.assertEqual(cfs.json()["item"]["compatible_printers"], 1)
+        self.assertEqual(cfs.json()["item"]["configured_printers"], 1)
+
     def test_regular_user_cannot_create_native_printing_records(self):
         regular = get_user_model().objects.create_user(
             username="printing-viewer",
