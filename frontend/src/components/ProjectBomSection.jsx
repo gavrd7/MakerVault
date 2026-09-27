@@ -119,7 +119,7 @@ export default function ProjectBomSection({
 
           <div className="bomAllocations">
             {(item.allocations || []).map(allocation => <div className="bomAllocationRow" key={allocation.id}>
-              <BoardImage src="" alt="" size="tiny" placeholder="INV" />
+              <BoardImage src={allocation.inventory_image} alt={allocation.inventory_name} size="tiny" placeholder="INV" />
               <div>
                 <strong>{allocation.inventory_name}</strong>
                 <small>{allocation.inventory_id} · {allocation.status_label}{allocation.location ? ` · ${allocation.location}` : ""}</small>
