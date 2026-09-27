@@ -1438,9 +1438,12 @@ def project_bom_allocations(request, project_id, bom_id):
 
     try:
         payload = _read_json(request)
+        create_payload = payload.get("create_inventory")
         inventory_id = str(payload.get("inventory_item_id") or "").strip()
-        if not inventory_id:
-            return _error("Choose an inventory item.")
+        if not inventory_id and not isinstance(create_payload, dict):
+            return _error("Choose an inventory item or create a new one from this BOM line.")
+        if inventory_id and isinstance(create_payload, dict):
+            return _error("Choose existing inventory or create new inventory, not both.")
 
         with transaction.atomic():
             bom_item = BOMItem.objects.select_for_update().select_related(
@@ -1448,13 +1451,76 @@ def project_bom_allocations(request, project_id, bom_id):
             ).filter(pk=bom_id, project=project).first()
             if not bom_item:
                 return _error("BOM item not found.", status=404)
-            inventory = InventoryItem.objects.select_for_update().filter(pk=inventory_id).first()
-            if not inventory:
-                return _error("Inventory item not found.", status=404)
-            if BOMAllocation.objects.filter(bom_item=bom_item, inventory_item=inventory).exists():
-                return _error("This inventory item is already allocated to this BOM line.")
 
             quantity = _parse_decimal(payload.get("quantity", 1), "quantity", allow_none=False)
+
+            if isinstance(create_payload, dict):
+                permission_denied = _require_permission(request, "core.add_inventoryitem")
+                if permission_denied:
+                    return permission_denied
+
+                if bom_item.board_id:
+                    item_type = "board"
+                    board = BoardModel.objects.filter(pk=bom_item.board_id).first()
+                    component = None
+                    custom_name = ""
+                elif bom_item.component_id:
+                    item_type = "component"
+                    board = None
+                    component = ComponentModel.objects.filter(pk=bom_item.component_id).first()
+                    custom_name = ""
+                else:
+                    item_type = "other"
+                    board = None
+                    component = None
+                    custom_name = bom_item.display_name[:255]
+
+                stock_quantity = _parse_decimal(
+                    create_payload.get("quantity", quantity),
+                    "inventory_quantity",
+                    allow_none=False,
+                )
+                assigned_project = None
+                if bool(create_payload.get("assign_to_project")):
+                    assigned_project = project
+
+                inventory = InventoryItem(
+                    inventory_id=(
+                        str(create_payload.get("inventory_id") or "").strip()
+                        or _next_inventory_id(item_type)
+                    ),
+                    item_type=item_type,
+                    board=board,
+                    component=component,
+                    custom_name=custom_name,
+                    quantity=stock_quantity,
+                    status=str(create_payload.get("status") or "available"),
+                    project=assigned_project,
+                    location=str(create_payload.get("location") or "").strip(),
+                    serial_number=str(create_payload.get("serial_number") or "").strip(),
+                    purchase_price=_parse_decimal(
+                        create_payload.get("purchase_price"),
+                        "purchase_price",
+                    ),
+                    currency=str(
+                        create_payload.get("currency") or settings.MAKERVAULT_CURRENCY
+                    ).upper()[:3],
+                    supplier=str(create_payload.get("supplier") or "").strip(),
+                    purchase_url=str(create_payload.get("purchase_url") or "").strip(),
+                    notes=str(create_payload.get("notes") or "").strip(),
+                )
+                inventory.full_clean()
+                inventory.save()
+                _record_inventory_history(inventory, request.user, created=True)
+            else:
+                inventory = InventoryItem.objects.select_for_update().filter(pk=inventory_id).first()
+                if not inventory:
+                    return _error("Inventory item not found.", status=404)
+                if BOMAllocation.objects.filter(
+                    bom_item=bom_item, inventory_item=inventory
+                ).exists():
+                    return _error("This inventory item is already allocated to this BOM line.")
+
             allocation = BOMAllocation(
                 bom_item=bom_item,
                 inventory_item=inventory,
@@ -1467,10 +1533,19 @@ def project_bom_allocations(request, project_id, bom_id):
             allocation.save()
             _record_bom_allocation_history(allocation, request.user, "bom_allocated")
             project.save(update_fields=["updated_at"])
-            return JsonResponse({"allocation": _serialise_bom_allocation(allocation)}, status=201)
+
+            inventory = InventoryItem.objects.select_related(
+                "board__manufacturer", "component__manufacturer", "project"
+            ).get(pk=inventory.pk)
+            allocation.inventory_item = inventory
+            return JsonResponse({
+                "allocation": _serialise_bom_allocation(allocation),
+                "inventory_item": _serialise_inventory(inventory),
+                "created_inventory": isinstance(create_payload, dict),
+            }, status=201)
     except ValidationError as exc:
         return _validation_response(exc)
-    except ValueError as exc:
+    except (ValueError, IntegrityError) as exc:
         return _error(str(exc))
 
 
