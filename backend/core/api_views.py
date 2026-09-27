@@ -3169,6 +3169,107 @@ def printing_models(request):
     denied = _require_permission(request, "core.add_model3d")
     if denied:
         return denied
+
+    uploaded = request.FILES.get("file")
+    if uploaded:
+        file_denied = _require_permission(request, "core.add_fileasset")
+        if file_denied:
+            return file_denied
+        payload = request.POST
+        project = None
+        project_id = str(payload.get("project_id") or "").strip()
+        if project_id:
+            project = Project.objects.filter(pk=project_id).first()
+            if not project:
+                return _error("Selected project was not found.")
+            project_denied = _require_permission(request, "core.change_project")
+            if project_denied:
+                return project_denied
+
+        original_name = Path(uploaded.name or "model").name
+        extension = Path(original_name).suffix.lower()
+        category = {" .stl": "mesh"}.get(extension)
+        if extension == ".stl":
+            category = "mesh"
+        elif extension == ".3mf":
+            category = "slicer"
+        else:
+            return _error("Choose an STL or 3MF file.")
+
+        model_name = str(payload.get("name") or Path(original_name).stem).strip()
+        revision_version = str(payload.get("revision_version") or "1.0").strip()
+        if not revision_version:
+            return _error("Revision version is required.")
+
+        stored_asset = None
+        try:
+            checksum = _sha256_upload(uploaded)
+            with transaction.atomic():
+                item = Model3D(
+                    project=project,
+                    name=model_name,
+                    description=str(payload.get("description") or "").strip(),
+                    source_url=str(payload.get("source_url") or "").strip(),
+                    license=str(payload.get("license") or "").strip(),
+                    tags=_normalise_tags(payload.get("tags")),
+                )
+                item.full_clean()
+                item.save()
+
+                revision = ModelRevision(
+                    model=item,
+                    version=revision_version,
+                    notes=str(payload.get("revision_notes") or "").strip(),
+                )
+                revision.full_clean()
+                revision.save()
+
+                stored_asset = FileAsset(
+                    project=project,
+                    category=category,
+                    name=str(payload.get("file_name") or original_name).strip()[:255],
+                    version=revision_version[:80],
+                    description=str(payload.get("file_description") or "").strip(),
+                    sha256=checksum,
+                    metadata={
+                        "original_name": original_name,
+                        "size_bytes": getattr(uploaded, "size", 0) or 0,
+                        "extension": extension,
+                        "uploaded_from": "printing_model",
+                    },
+                )
+                stored_asset.file = uploaded
+                stored_asset.full_clean()
+                stored_asset.save()
+
+                link = ModelRevisionAsset(
+                    revision=revision,
+                    file_asset=stored_asset,
+                    role="slicer" if category == "slicer" else "model",
+                    is_primary=True,
+                )
+                link.full_clean()
+                link.save()
+
+            item = Model3D.objects.select_related("project").prefetch_related(
+                "revisions__assets__file_asset__project"
+            ).get(pk=item.pk)
+            return JsonResponse({"item": _serialise_printing_model(item)}, status=201)
+        except ValidationError as exc:
+            if stored_asset and stored_asset.file:
+                try:
+                    stored_asset.file.delete(save=False)
+                except OSError:
+                    pass
+            return _validation_response(exc)
+        except IntegrityError:
+            if stored_asset and stored_asset.file:
+                try:
+                    stored_asset.file.delete(save=False)
+                except OSError:
+                    pass
+            return _error("A matching model revision already exists.")
+
     try:
         payload = _read_json(request)
         project = None
