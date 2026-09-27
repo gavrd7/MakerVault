@@ -174,6 +174,7 @@ export default function InventoryPage({ inventory, setInventory, boards, compone
 
 function InventoryDetail({ item, loading, projects, canEdit, canDelete, onClose, onChanged, onDeleted }) {
   const [editing, setEditing] = useState(false);
+  const [releaseOpen, setReleaseOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   if (loading) return <aside className="detailPane"><div className="detailHead"><h3>Inventory details</h3><button className="iconButton" onClick={onClose}>×</button></div><LoadingBlock label="Loading inventory record…" /></aside>;
@@ -189,6 +190,7 @@ function InventoryDetail({ item, loading, projects, canEdit, canDelete, onClose,
       <div><span className="inventoryCode">{item.inventory_id}</span><h2>{item.name}</h2></div>
       <div className="inventoryDetailActions">
         {canEdit && <button className="primary" onClick={() => setEditing(true)}>Edit</button>}
+        {canEdit && Number(item.allocated_quantity || 0) > 0 && <button onClick={() => setReleaseOpen(true)}>Release BOM</button>}
         {canDelete && <button
           className="assetDanger"
           disabled={deleting || Number(item.allocated_quantity || 0) > 0}
@@ -253,7 +255,68 @@ function InventoryDetail({ item, loading, projects, canEdit, canDelete, onClose,
     {item.purchase_url && <a className="detailLink" href={item.purchase_url} target="_blank" rel="noreferrer">Open purchase/source URL ↗</a>}
 
     {editing && <EditInventoryModal item={item} projects={projects} onClose={() => setEditing(false)} onSaved={updated => { setEditing(false); onChanged(updated); }} />}
+    {releaseOpen && <ReleaseBomAllocationModal
+      item={item}
+      onClose={() => setReleaseOpen(false)}
+      onReleased={async () => {
+        setReleaseOpen(false);
+        await onChanged(item);
+      }}
+    />}
   </aside>;
+}
+
+function ReleaseBomAllocationModal({ item, onClose, onReleased }) {
+  const allocations = item.bom_allocations || [];
+  const [allocationId, setAllocationId] = useState(allocations[0]?.id ? String(allocations[0].id) : "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const selected = allocations.find(row => String(row.id) === allocationId);
+
+  async function release(event) {
+    event.preventDefault();
+    if (!selected) return;
+    setBusy(true); setError("");
+    try {
+      await apiFetch(
+        "/api/projects/" + selected.project_id + "/bom/" + selected.bom_item_id + "/allocations/" + selected.id + "/",
+        { method: "DELETE" },
+      );
+      await onReleased();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <Modal
+    title={"Release " + item.inventory_id + " from BOM"}
+    subtitle="Choose the project and BOM line to release. Only that allocation will be removed."
+    onClose={onClose}
+    wide
+  >
+    <form className="formGrid" onSubmit={release}>
+      {error && <div className="formError full">{error}</div>}
+      <label className="full">Project / BOM allocation
+        <select required value={allocationId} onChange={e => setAllocationId(e.target.value)}>
+          {allocations.map(allocation => <option key={allocation.id} value={allocation.id}>
+            {allocation.project_name + " · " + allocation.bom_item_name + " · " + allocation.quantity + " " + allocation.unit}
+          </option>)}
+        </select>
+      </label>
+      {selected && <div className="bomDerivedInventory full">
+        <span>Selected allocation</span>
+        <strong>{selected.project_name}</strong>
+        <small>{selected.bom_item_name + " · " + selected.quantity + " " + selected.unit}</small>
+      </div>}
+      <div className="formActions full">
+        <button type="button" onClick={onClose}>Cancel</button>
+        <button className="assetDanger" disabled={busy || !selected}>{busy ? "Releasing…" : "Release from BOM"}</button>
+      </div>
+    </form>
+  </Modal>;
 }
 
 function EditInventoryModal({ item, projects, onClose, onSaved }) {
