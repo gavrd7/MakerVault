@@ -676,6 +676,64 @@ class PrintingFoundationTests(TestCase):
         self.assertEqual(setting.status, "connected")
         self.assertIsNotNone(setting.last_sync_at)
 
+    @patch("core.printing_sync.requests.get")
+    def test_first_spoolman_sync_links_one_unambiguous_existing_spool(self, get_mock):
+        maker = FilamentManufacturer.objects.create(name="Creality")
+        filament = FilamentProduct.objects.create(
+            filament_manufacturer=maker,
+            name="Hyper ABS",
+            material="ABS",
+            color_hex="#ffffff",
+            diameter_mm="1.75",
+        )
+        local = Spool.objects.create(
+            spool_id="SPL-LOCAL",
+            filament=filament,
+            initial_weight_g="1000",
+            remaining_weight_g="900",
+            status="open",
+        )
+        response = Mock(status_code=200)
+        response.json.return_value = [
+            {
+                "id": 99,
+                "remaining_weight": 450,
+                "initial_weight": 1000,
+                "archived": False,
+                "location": "",
+                "filament": {
+                    "id": 8,
+                    "name": "Hyper ABS",
+                    "material": "ABS",
+                    "color_hex": "FFFFFF",
+                    "diameter": 1.75,
+                    "density": 1.04,
+                    "weight": 1000,
+                    "vendor": {"id": 3, "name": "Creality"},
+                },
+            }
+        ]
+        get_mock.return_value = response
+        PrintingIntegrationSetting.objects.create(
+            provider="spoolman",
+            enabled=True,
+            endpoint_url="https://spoolman.example.test",
+            sync_direction="import",
+        )
+
+        synced = self.client.post("/api/settings/printing-integrations/spoolman/sync/")
+        self.assertEqual(synced.status_code, 200, synced.content)
+        result = synced.json()["result"]
+        self.assertEqual(result["created"], 0)
+        self.assertEqual(result["linked_existing"], 1)
+        self.assertEqual(Spool.objects.filter(filament=filament).count(), 1)
+        local.refresh_from_db()
+        self.assertEqual(local.remaining_weight_g, Decimal("450"))
+        self.assertEqual(
+            ExternalSpoolLink.objects.get(provider="spoolman", external_id="99").spool_id,
+            local.id,
+        )
+
     @patch("core.printing_sync._fetch_cfs_boxs_info", new_callable=AsyncMock)
     def test_creality_cfs_sync_populates_slots_and_matches_assigned_spool(self, fetch_mock):
         maker = PrinterManufacturer.objects.create(name="Creality")
