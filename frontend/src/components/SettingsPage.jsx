@@ -218,35 +218,54 @@ export default function SettingsPage({ config }) {
 
     <section className="panel settingsPanel">
       <div className="panelHead">
-        <div><h3>3D printing integrations</h3><p>Optional external services and multi-material systems plug into MakerVault without becoming required dependencies.</p></div>
+        <div><h3>3D printing integrations</h3><p>Enable the services you use. Connected services can be synchronised manually or on their own schedule.</p></div>
       </div>
       <div className="printingIntegrationGrid settingsIntegrationGrid">
         {integrations.map(item => {
-          const statusTone = item.status === "connected" || item.status === "ready" ? "good" : item.status === "error" ? "danger" : item.status === "planned" ? "accent" : "neutral";
+          const statusTone = item.status === "connected" ? "good" : item.status === "error" || item.status === "disconnected" ? "danger" : item.status === "planned" ? "accent" : "neutral";
+          const supported = item.can_sync;
+          const isBusy = integrationBusy === item.provider;
           return <article key={item.provider}>
             <div className="settingsIntegrationHead"><strong>{item.name}</strong><Badge tone={statusTone}>{item.status_label}</Badge></div>
+
             {item.provider === "spoolman" && <>
-              <span>Synchronise native MakerVault spools with an optional self-hosted Spoolman server.</span>
-              <label className="settingsToggle compact"><div><strong>Enable</strong><small>MakerVault remains usable when disabled.</small></div><input type="checkbox" checked={item.enabled} onChange={e => saveIntegration(item.provider, { enabled: e.target.checked, endpoint_url: item.endpoint_url, sync_direction: item.sync_direction })} /></label>
+              <span>Synchronise MakerVault spool inventory with your self-hosted Spoolman server.</span>
+              <label className="settingsToggle compact"><div><strong>Enable integration</strong><small>Only enabled integrations appear on the 3D Printing status bar.</small></div><input type="checkbox" checked={item.enabled} onChange={e => saveIntegration(item.provider, { enabled: e.target.checked })} /></label>
               <label><span>Server URL</span><input value={item.endpoint_url || ""} onChange={e => updateIntegrationLocal(item.provider, "endpoint_url", e.target.value)} placeholder="http://spoolman.local:7912" /></label>
               <label><span>Sync direction</span><select value={item.sync_direction} onChange={e => updateIntegrationLocal(item.provider, "sync_direction", e.target.value)}><option value="import">External → MakerVault</option><option value="export">MakerVault → external</option><option value="bidirectional">Bidirectional</option></select></label>
-              <small>{item.linked_spools || 0} spool link{item.linked_spools === 1 ? "" : "s"} currently mapped.</small>
-              {item.last_error && <small className="integrationError">{item.last_error}</small>}
-              <div className="settingsActions compact"><button onClick={() => testIntegration(item.provider)} disabled={integrationBusy === item.provider}>Test connection</button><button className="primary" onClick={() => saveIntegration(item.provider)} disabled={integrationBusy === item.provider}>Save</button></div>
+              <small>{item.linked_spools || 0} Spoolman link{item.linked_spools === 1 ? "" : "s"} mapped in MakerVault.</small>
             </>}
+
             {item.provider === "creality_cfs" && <>
-              <span>Read loaded CFS slots from compatible Creality printers registered in MakerVault.</span>
-              <label className="settingsToggle compact"><div><strong>Enable</strong><small>Read-only discovery first.</small></div><input type="checkbox" checked={item.enabled} onChange={e => saveIntegration(item.provider, { enabled: e.target.checked, sync_direction: "import" })} /></label>
+              <span>Read CFS boxes and loaded filament slots directly from compatible Creality printers on your local network.</span>
+              <label className="settingsToggle compact"><div><strong>Enable integration</strong><small>The CFS adapter is read-only.</small></div><input type="checkbox" checked={item.enabled} onChange={e => saveIntegration(item.provider, { enabled: e.target.checked, sync_direction: "import" })} /></label>
               <small>{item.compatible_printers || 0} compatible printer{item.compatible_printers === 1 ? "" : "s"} · {item.configured_printers || 0} with local host/IP.</small>
-              {item.last_error && <small className="integrationError">{item.last_error}</small>}
-              <div className="settingsActions compact"><button onClick={() => testIntegration(item.provider)} disabled={integrationBusy === item.provider}>Refresh status</button></div>
             </>}
-            {item.provider === "simplyprint" && <><span>Optional filament inventory synchronisation where SimplyPrint API access is available.</span><small>Adapter planned; no dependency on SimplyPrint.</small></>}
-            {item.provider === "bambu_ams" && <><span>Future Bambu Lab AMS / AMS Lite adapter using the same provider-neutral slot model.</span><small>Future adapter.</small></>}
-            {item.provider === "elegoo" && <><span>Future Elegoo multi-material adapter where a reliable interface is available.</span><small>Future adapter.</small></>}
-            {item.provider === "qidi" && <><span>Future QIDI Box adapter where a reliable interface is available.</span><small>Future adapter.</small></>}
-            {item.provider === "snapmaker" && <><span>Future Snapmaker multi-material/toolchanger adapter where a reliable interface is available.</span><small>Future adapter.</small></>}
-            <small>Last checked: {formatWhen(item.last_checked_at)}</small>
+
+            {!supported && item.provider === "simplyprint" && <><span>Optional SimplyPrint filament inventory integration.</span><small>Adapter placeholder — not selectable yet.</small></>}
+            {!supported && item.provider === "bambu_ams" && <><span>Bambu Lab AMS / AMS Lite integration.</span><small>Adapter placeholder — not selectable yet.</small></>}
+            {!supported && item.provider === "elegoo" && <><span>Elegoo multi-material integration.</span><small>Adapter placeholder — not selectable yet.</small></>}
+            {!supported && item.provider === "qidi" && <><span>QIDI multi-material integration.</span><small>Adapter placeholder — not selectable yet.</small></>}
+            {!supported && item.provider === "snapmaker" && <><span>Snapmaker multi-material/toolchanger integration.</span><small>Adapter placeholder — not selectable yet.</small></>}
+
+            {supported && item.enabled && <div className="integrationSchedule">
+              <label className="settingsToggle compact"><div><strong>Scheduled sync</strong><small>Run this integration automatically in the background.</small></div><input type="checkbox" checked={item.auto_sync} onChange={e => updateIntegrationLocal(item.provider, "auto_sync", e.target.checked)} /></label>
+              <label><span>Sync interval</span><div className="intervalInput"><input type="number" min="1" max="1440" step="1" value={item.sync_interval_minutes || 15} onChange={e => updateIntegrationLocal(item.provider, "sync_interval_minutes", e.target.value)} /><span>minutes</span></div></label>
+              <div className="integrationTimes">
+                <small>Last sync: {formatWhen(item.last_sync_at)}</small>
+                <small>Next sync: {item.auto_sync ? formatWhen(item.next_sync_at) : "Manual only"}</small>
+              </div>
+            </div>}
+
+            {item.last_error && <small className="integrationError">{item.last_error}</small>}
+
+            {supported && <div className="settingsActions compact">
+              {item.provider === "spoolman" && <button onClick={() => testIntegration(item.provider)} disabled={isBusy || !item.enabled}>{isBusy ? "Working…" : "Test connection"}</button>}
+              <button onClick={() => syncIntegration(item.provider)} disabled={isBusy || !item.enabled}>{isBusy ? "Synchronising…" : "Sync now"}</button>
+              <button className="primary" onClick={() => saveIntegration(item.provider)} disabled={isBusy}>{isBusy ? "Saving…" : "Save"}</button>
+            </div>}
+
+            <small>Connection checked: {formatWhen(item.last_checked_at)}</small>
           </article>;
         })}
       </div>
