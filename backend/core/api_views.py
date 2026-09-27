@@ -1,5 +1,6 @@
 import json
 import re
+from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
@@ -8,6 +9,7 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.http import JsonResponse
+from django.utils import timezone
 from django.utils.text import slugify
 from django.views.decorators.http import require_http_methods
 
@@ -19,10 +21,12 @@ from .catalogue_images import (
 )
 from .importers import ImporterError, preview_board_url
 from .catalogue_enrichment import enrich_board
+from .tasks import queue_catalogue_maintenance_now
 from .models import (
     BoardCompatibility,
     BoardModel,
     CatalogSource,
+    CatalogueMaintenanceSettings,
     ComponentCategory,
     ComponentModel,
     FilamentProduct,
@@ -1131,6 +1135,69 @@ def attributions(request):
             "with_license": sum(1 for row in rows if row["license"]),
             "needs_review": sum(1 for row in rows if not row["license"]),
         },
+    })
+
+
+def _serialise_catalogue_maintenance(config):
+    return {
+        "enabled": config.enabled,
+        "interval_hours": config.interval_hours,
+        "check_board_data": config.check_board_data,
+        "check_images": config.check_images,
+        "last_run_at": config.last_run_at.isoformat() if config.last_run_at else "",
+        "next_run_at": config.next_run_at.isoformat() if config.next_run_at else "",
+        "last_triggered_by": config.last_triggered_by,
+        "server_board_enrichment_enabled": bool(settings.ENRICH_BOARD_CATALOGUE),
+        "server_image_seeding_enabled": bool(settings.SEED_CATALOGUE_IMAGES),
+    }
+
+
+@login_required
+@require_http_methods(["GET", "PATCH"])
+def catalogue_maintenance_settings(request):
+    if not request.user.is_staff:
+        return _error("Administrator access is required.", status=403)
+
+    config, _ = CatalogueMaintenanceSettings.objects.get_or_create(singleton_key=1)
+    if request.method == "GET":
+        return JsonResponse({"settings": _serialise_catalogue_maintenance(config)})
+
+    try:
+        payload = _read_json(request)
+        if "enabled" in payload:
+            config.enabled = bool(payload["enabled"])
+        if "check_board_data" in payload:
+            config.check_board_data = bool(payload["check_board_data"])
+        if "check_images" in payload:
+            config.check_images = bool(payload["check_images"])
+        if "interval_hours" in payload:
+            try:
+                config.interval_hours = int(payload["interval_hours"])
+            except (TypeError, ValueError) as exc:
+                raise ValidationError({"interval_hours": "Enter a whole number of hours."}) from exc
+
+        config.full_clean()
+        config.next_run_at = (
+            timezone.now() + timedelta(hours=config.interval_hours)
+            if config.enabled else None
+        )
+        config.save()
+        return JsonResponse({"settings": _serialise_catalogue_maintenance(config)})
+    except ValidationError as exc:
+        return _validation_response(exc)
+
+
+@login_required
+@require_http_methods(["POST"])
+def catalogue_maintenance_run_now(request):
+    if not request.user.is_staff:
+        return _error("Administrator access is required.", status=403)
+    config, queued = queue_catalogue_maintenance_now(
+        triggered_by=f"user:{request.user.get_username()}"
+    )
+    return JsonResponse({
+        "settings": _serialise_catalogue_maintenance(config),
+        "queued": queued,
     })
 
 
