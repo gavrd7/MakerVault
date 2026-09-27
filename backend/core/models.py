@@ -372,6 +372,12 @@ class RepositoryLink(TimeStampedModel):
 
 
 class FilamentProduct(TimeStampedModel):
+    TRANSPARENCY = [
+        ("opaque", "Opaque"),
+        ("translucent", "Translucent"),
+        ("transparent", "Transparent"),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     manufacturer = models.ForeignKey(Manufacturer, on_delete=models.SET_NULL, null=True, blank=True, related_name="filaments")
     source = models.ForeignKey(CatalogSource, on_delete=models.SET_NULL, null=True, blank=True, related_name="filaments")
@@ -379,6 +385,7 @@ class FilamentProduct(TimeStampedModel):
     material = models.CharField(max_length=80)
     color_name = models.CharField(max_length=120, blank=True)
     color_hex = models.CharField(max_length=9, blank=True)
+    transparency = models.CharField(max_length=16, choices=TRANSPARENCY, default="opaque")
     diameter_mm = models.DecimalField(max_digits=5, decimal_places=2, default=1.75)
     density_g_cm3 = models.DecimalField(max_digits=6, decimal_places=3, blank=True, null=True)
     nominal_weight_g = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
