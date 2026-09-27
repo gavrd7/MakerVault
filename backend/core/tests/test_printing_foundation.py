@@ -11,6 +11,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from core.filament_catalogue import normalise_spoolmandb_row
+from core.tasks import printing_integrations_tick
 
 from core.models import (
     ExternalSpoolLink,
@@ -781,6 +782,23 @@ class PrintingFoundationTests(TestCase):
             [item["provider"] for item in response.json()["integrations"]],
             ["spoolman"],
         )
+
+    @patch("core.tasks.printing_integration_sync_task.delay")
+    def test_enabled_scheduled_integration_is_queued_when_due(self, delay_mock):
+        setting = PrintingIntegrationSetting.objects.create(
+            provider="spoolman",
+            enabled=True,
+            endpoint_url="https://spoolman.example.test",
+            sync_direction="import",
+            auto_sync=True,
+            sync_interval_minutes=30,
+            next_sync_at=timezone.now() - timezone.timedelta(minutes=1),
+        )
+        result = printing_integrations_tick()
+        self.assertEqual(result["queued"], ["spoolman"])
+        delay_mock.assert_called_once_with("spoolman", triggered_by="schedule")
+        setting.refresh_from_db()
+        self.assertGreater(setting.next_sync_at, timezone.now())
 
     def test_regular_user_cannot_create_native_printing_records(self):
         regular = get_user_model().objects.create_user(
