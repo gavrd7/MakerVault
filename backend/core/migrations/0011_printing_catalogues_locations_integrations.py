@@ -205,6 +205,10 @@ class Migration(migrations.Migration):
             name="storage_location",
             field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name="spools", to="core.printinglocation"),
         ),
+        migrations.AlterModelOptions(
+            name="filamentproduct",
+            options={"ordering": ["filament_manufacturer__name", "name", "color_name"]},
+        ),
         migrations.RunPython(migrate_printing_domains, migrations.RunPython.noop),
         migrations.RunPython(seed_integration_rows, migrations.RunPython.noop),
     ]
