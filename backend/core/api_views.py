@@ -2254,6 +2254,11 @@ def printing_integration_detail(request, provider):
                     "sync_interval_minutes": "Enter a whole number of minutes."
                 }) from exc
 
+        if payload.get("reset_ignored_imports") is True:
+            config = dict(item.config or {})
+            config["ignored_external_ids"] = []
+            item.config = config
+
         if not item.enabled:
             item.status = "disabled"
             item.last_error = ""
