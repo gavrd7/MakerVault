@@ -56,7 +56,7 @@ Completed and merged on 27 September 2026.
 
 ## v0.5.0 — BOM and inventory allocation
 
-Current major milestone / in progress.
+Completed and merged to `main` on 27 September 2026.
 
 - First-class bill of materials inside each project.
 - BOM lines can reference board catalogue records, component catalogue records or custom materials.
@@ -70,6 +70,26 @@ Current major milestone / in progress.
 - Protect allocated stock from incompatible project/status/quantity changes and deletion.
 - Migrate any legacy direct BOM inventory links to allocation records.
 
-## After v0.5.0
+## v0.6.0 — 3D Printing & Model Library
 
-The next milestone should be selected after v0.5.0 is exercised in real projects. Existing candidate areas include the dedicated 3D-printing/model workflow, richer file previews and further inventory/BOM refinements; no version number is assigned yet.
+Next major milestone.
+
+MakerVault expands its existing project/file/inventory foundation into a first-class 3D-printing workspace while reusing the same stored files rather than creating a parallel asset system.
+
+Planned scope:
+
+- First-class 3D model records with name, description, tags, source/reference URL and optional project association.
+- Model revisions so design iterations can be tracked without losing earlier files or notes.
+- Attach existing MakerVault STL, 3MF, OBJ and supported CAD assets to models without duplicating storage.
+- Add richer model/file previews, beginning with interactive STL/3MF viewing where practical.
+- First-class printer records for the machines available to MakerVault.
+- Filament/spool inventory with material, colour, diameter, supplier, purchase data and remaining quantity.
+- Print history linking a model revision, printer and consumed spool(s), including quantity, duration, outcome and notes.
+- Surface model/print information naturally inside Projects and the global Files library rather than creating isolated silos.
+- Preserve MakerVault permissions, authenticated file delivery and existing file-extension/security rules.
+
+Initial scope deliberately excludes live printer control, slicer automation and OctoPrint/Moonraker-style telemetry integrations. Those can be considered after the core model/printer/spool/history workflow is proven.
+
+## After v0.6.0
+
+Candidate follow-on areas include deeper inventory/BOM refinements, richer previews for additional engineering file types, print-cost estimation, and optional printer/slicer integrations. No later version number is assigned yet.
