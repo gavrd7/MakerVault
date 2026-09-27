@@ -192,17 +192,21 @@ def update_board_enrichment_state(board, *, save=True) -> bool:
 
     old_state = specs.get("technical_field_status")
     old_unresolved = specs.get("technical_unresolved_fields")
-    changed = old_state != state or old_unresolved != unresolved
+    changed = (
+        old_state != state
+        or old_unresolved != unresolved
+        or specs.get("technical_status_version") != ENRICHMENT_VERSION
+    )
+    if not changed:
+        return False
     specs["technical_field_status"] = state
     specs["technical_unresolved_fields"] = unresolved
     specs["technical_status_version"] = ENRICHMENT_VERSION
     specs["technical_status_updated_at"] = timezone.now().isoformat()
-    if changed or board.specifications != specs:
-        board.specifications = specs
-        if save:
-            board.save(update_fields=["specifications", "updated_at"])
-        return True
-    return False
+    board.specifications = specs
+    if save:
+        board.save(update_fields=["specifications", "updated_at"])
+    return True
 
 
 def enrich_board(board, *, online=True) -> bool:
