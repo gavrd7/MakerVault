@@ -44,7 +44,7 @@ Planned scope:
 
 ## v0.4.3 — Standalone file library
 
-Current milestone / in progress.
+Completed and merged on 27 September 2026.
 
 - Upload supported MakerVault file types directly from the Files page without requiring a project.
 - Keep standalone and project-linked files in the same FileAsset library.
@@ -54,13 +54,22 @@ Current milestone / in progress.
 - Add standalone filtering and direct file management/removal.
 - No database migration required.
 
-## After v0.4.3 — BOM and inventory allocation
+## v0.5.0 — BOM and inventory allocation
 
-Next project-workspace milestone after the standalone file-library refinement.
+Current major milestone / in progress.
 
-- Bill of materials management.
-- Link BOM lines to catalogue records and/or physical inventory.
-- Track required versus assigned/available quantities.
-- Make project inventory consumption/allocation clearer without losing lifecycle history.
+- First-class bill of materials inside each project.
+- BOM lines can reference board catalogue records, component catalogue records or custom materials.
+- Track required quantity, unit, optional unit cost and estimated BOM cost.
+- Allocate physical inventory with explicit quantities instead of mutating the stock total.
+- Support partial allocations and allocation from multiple stock records.
+- Track required, allocated and remaining quantities per BOM line.
+- Show total, allocated and free quantities in Inventory.
+- Preserve allocation/release events in inventory lifecycle history.
+- Prevent concurrent over-allocation with transactional row locking.
+- Protect allocated stock from incompatible project/status/quantity changes and deletion.
+- Migrate any legacy direct BOM inventory links to allocation records.
 
-Milestone numbering beyond v0.4.3 should be assigned when that work begins, rather than inferred from older roadmap text.
+## After v0.5.0
+
+The next milestone should be selected after v0.5.0 is exercised in real projects. Existing candidate areas include the dedicated 3D-printing/model workflow, richer file previews and further inventory/BOM refinements; no version number is assigned yet.
