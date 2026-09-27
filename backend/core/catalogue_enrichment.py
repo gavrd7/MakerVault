@@ -202,7 +202,7 @@ def update_board_enrichment_state(board, *, save=True) -> bool:
     specs["technical_field_status"] = state
     specs["technical_unresolved_fields"] = unresolved
     specs["technical_status_version"] = ENRICHMENT_VERSION
-    specs["technical_status_updated_at"] = timezone.now().isoformat()
+    specs["technical_status_updated_at"] = datetime.now().astimezone().isoformat()
     board.specifications = specs
     if save:
         board.save(update_fields=["specifications", "updated_at"])
