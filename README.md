@@ -338,7 +338,7 @@ Project media uses the existing authenticated MakerVault media storage. Cover ph
 
 Catalogue and project images can be opened in MakerVault's image viewer. The viewer supports zoom in/out, mouse-wheel zoom, drag/pan while zoomed, fit/reset, keyboard shortcuts (+, -, 0) and browser fullscreen. This is particularly useful for pinout diagrams, board photography and wiring references.
 
-v0.4.2 will build BOM/inventory allocation on top of this workspace, followed by project files/repositories in v0.4.3.
+The current v0.4.x roadmap continues with **v0.4.2 project files/repositories**, using the existing FileAsset model to attach and group code, firmware, CAD/STL/3MF, PCB/schematic, document and other project assets. **BOM/inventory allocation follows after v0.4.2**.
 
 
 ## Scheduled catalogue maintenance (v0.4.1)
