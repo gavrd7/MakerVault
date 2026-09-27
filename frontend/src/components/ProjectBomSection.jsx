@@ -45,10 +45,10 @@ export default function ProjectBomSection({
   }
 
   async function removeItem(item) {
-    if (!window.confirm(\`Remove "\${item.name}" from the BOM? Any allocations on this line will be released.\`)) return;
+    if (!window.confirm(`Remove "${item.name}" from the BOM? Any allocations on this line will be released.`)) return;
     setError("");
     try {
-      await apiFetch(\`/api/projects/\${project.id}/bom/\${item.id}/\`, { method: "DELETE" });
+      await apiFetch(`/api/projects/${project.id}/bom/${item.id}/`, { method: "DELETE" });
       await refreshAll();
     } catch (err) {
       setError(err.message);
@@ -56,11 +56,11 @@ export default function ProjectBomSection({
   }
 
   async function releaseAllocation(item, allocation) {
-    if (!window.confirm(\`Release \${qty(allocation.quantity)} from \${allocation.inventory_id}?\`)) return;
+    if (!window.confirm(`Release ${qty(allocation.quantity)} from ${allocation.inventory_id}?`)) return;
     setError("");
     try {
       await apiFetch(
-        \`/api/projects/\${project.id}/bom/\${item.id}/allocations/\${allocation.id}/\`,
+        `/api/projects/${project.id}/bom/${item.id}/allocations/${allocation.id}/`,
         { method: "DELETE" },
       );
       await refreshAll();
@@ -111,8 +111,8 @@ export default function ProjectBomSection({
             <span>Cost <strong>{item.estimated_cost === null ? "—" : money(item.estimated_cost, item.currency)}</strong></span>
           </div>
 
-          <div className="bomProgressTrack" aria-label={\`\${item.allocated_quantity} of \${item.quantity} allocated\`}>
-            <span style={{ width: \`\${Math.min(100, item.quantity ? (Number(item.allocated_quantity || 0) / Number(item.quantity)) * 100 : 0)}%\` }} />
+          <div className="bomProgressTrack" aria-label={`${item.allocated_quantity} of ${item.quantity} allocated`}>
+            <span style={{ width: `${Math.min(100, item.quantity ? (Number(item.allocated_quantity || 0) / Number(item.quantity)) * 100 : 0)}%` }} />
           </div>
 
           {item.notes && <p className="bomNotes">{item.notes}</p>}
@@ -122,7 +122,7 @@ export default function ProjectBomSection({
               <BoardImage src="" alt="" size="tiny" placeholder="INV" />
               <div>
                 <strong>{allocation.inventory_name}</strong>
-                <small>{allocation.inventory_id} · {allocation.status_label}{allocation.location ? \` · \${allocation.location}\` : ""}</small>
+                <small>{allocation.inventory_id} · {allocation.status_label}{allocation.location ? ` · ${allocation.location}` : ""}</small>
               </div>
               <span>{qty(allocation.quantity)}</span>
               {canEdit && <div className="bomAllocationActions">
@@ -192,7 +192,7 @@ function BomItemModal({ project, item, boards, components, currency, onClose, on
         notes,
       };
       await apiFetch(
-        item ? \`/api/projects/\${project.id}/bom/\${item.id}/\` : \`/api/projects/\${project.id}/bom/\`,
+        item ? `/api/projects/${project.id}/bom/${item.id}/` : `/api/projects/${project.id}/bom/`,
         { method: item ? "PATCH" : "POST", body },
       );
       onSaved();
@@ -225,7 +225,7 @@ function BomItemModal({ project, item, boards, components, currency, onClose, on
       {sourceType === "component" && <label>Component
         <select required value={componentId} onChange={e => setComponentId(e.target.value)}>
           <option value="">Choose component…</option>
-          {(components || []).map(component => <option key={component.id} value={component.id}>{component.manufacturer ? \`\${component.manufacturer} · \` : ""}{component.name}</option>)}
+          {(components || []).map(component => <option key={component.id} value={component.id}>{component.manufacturer ? `${component.manufacturer} · ` : ""}{component.name}</option>)}
         </select>
       </label>}
 
@@ -276,12 +276,12 @@ function BomAllocationModal({ project, item, allocation, inventory, onClose, onS
     try {
       if (allocation) {
         await apiFetch(
-          \`/api/projects/\${project.id}/bom/\${item.id}/allocations/\${allocation.id}/\`,
+          `/api/projects/${project.id}/bom/${item.id}/allocations/${allocation.id}/`,
           { method: "PATCH", body: { quantity, notes } },
         );
       } else {
         await apiFetch(
-          \`/api/projects/\${project.id}/bom/\${item.id}/allocations/\`,
+          `/api/projects/${project.id}/bom/${item.id}/allocations/`,
           { method: "POST", body: { inventory_item_id: inventoryId, quantity, notes } },
         );
       }
@@ -293,18 +293,18 @@ function BomAllocationModal({ project, item, allocation, inventory, onClose, onS
     }
   }
 
-  return <Modal title={allocation ? "Adjust allocation" : \`Allocate stock · \${item.name}\`} subtitle={\`\${qty(item.remaining_quantity)} \${item.unit} currently remain on this BOM line.\`} onClose={onClose} wide>
+  return <Modal title={allocation ? "Adjust allocation" : `Allocate stock · ${item.name}`} subtitle={`${qty(item.remaining_quantity)} ${item.unit} currently remain on this BOM line.`} onClose={onClose} wide>
     <form className="formGrid" onSubmit={submit}>
       {error && <div className="formError full">{error}</div>}
       <label className="full">Inventory item
-        {allocation ? <input value={\`\${allocation.inventory_id} · \${allocation.inventory_name}\`} readOnly /> :
+        {allocation ? <input value={`${allocation.inventory_id} · ${allocation.inventory_name}`} readOnly /> :
           <select required value={inventoryId} onChange={e => setInventoryId(e.target.value)}>
             <option value="">Choose inventory…</option>
             {candidates.map(stock => <option key={stock.id} value={stock.id}>{stock.inventory_id} · {stock.name} · {qty(stock.available_quantity ?? stock.quantity)} free</option>)}
           </select>}
       </label>
       <label>Allocation quantity<input type="number" min="0.001" max={maxQuantity || undefined} step="0.001" required value={quantity} onChange={e => setQuantity(e.target.value)} /></label>
-      <label>Available<input value={selected ? \`\${qty(maxAvailable)} stock · \${qty(maxBom)} BOM capacity\` : "Choose inventory"} readOnly /></label>
+      <label>Available<input value={selected ? `${qty(maxAvailable)} stock · ${qty(maxBom)} BOM capacity` : "Choose inventory"} readOnly /></label>
       <label className="full">Notes<textarea rows="3" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Optional allocation note" /></label>
       {!candidates.length && !allocation && <div className="formError full">No compatible inventory currently has free quantity for this BOM line.</div>}
       <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy || !inventoryId || maxQuantity <= 0}>{busy ? "Saving…" : allocation ? "Save allocation" : "Allocate stock"}</button></div>
