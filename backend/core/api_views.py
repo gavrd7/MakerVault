@@ -659,6 +659,30 @@ def _resolve_printing_location(location_id, field_name="location_id"):
     return location
 
 
+def _resolve_printer_catalogue(payload):
+    catalog_model = None
+    if payload.get("catalog_model_id"):
+        catalog_model = PrinterCatalogModel.objects.select_related("manufacturer").filter(
+            pk=payload.get("catalog_model_id")
+        ).first()
+        if not catalog_model:
+            raise ValidationError({"catalog_model_id": "Selected printer model was not found."})
+        return catalog_model.manufacturer, catalog_model
+
+    manufacturer = None
+    manufacturer_id = payload.get("printer_manufacturer_id") or payload.get("manufacturer_id")
+    if manufacturer_id:
+        manufacturer = PrinterManufacturer.objects.filter(pk=manufacturer_id).first()
+        if not manufacturer:
+            raise ValidationError({"printer_manufacturer_id": "Selected printer manufacturer was not found."})
+    else:
+        manufacturer_name = str(payload.get("manufacturer_name") or "").strip()
+        if manufacturer_name:
+            manufacturer, _ = PrinterManufacturer.objects.get_or_create(name=manufacturer_name)
+
+    return manufacturer, None
+
+
 def _next_inventory_id(item_type):
     prefix = {
         "board": "MCU",
