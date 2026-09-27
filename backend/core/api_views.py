@@ -505,6 +505,7 @@ def _serialise_project(project, detailed=False):
     gallery_qs = project.files.filter(category="image").order_by("-created_at")
     asset_qs = project.files.exclude(category="image").order_by("category", "-created_at")
     repository_qs = project.repositories.all().order_by("provider", "name")
+    bom_count = project.bom_items.count()
     cost, currency = _project_cost(project)
     data = {
         "id": str(project.id),
@@ -521,12 +522,14 @@ def _serialise_project(project, detailed=False):
         "gallery_count": gallery_qs.count(),
         "file_count": asset_qs.count(),
         "repository_count": repository_qs.count(),
+        "bom_count": bom_count,
         "inventory_cost": cost,
         "currency": currency,
         "updated_at": project.updated_at.isoformat(),
         "created_at": project.created_at.isoformat(),
     }
     if detailed:
+        bom_rows, bom_summary = _project_bom(project)
         data.update({
             "description": project.description,
             "notes": project.notes,
@@ -547,6 +550,8 @@ def _serialise_project(project, detailed=False):
             ],
             "files": [_serialise_file_asset(asset) for asset in asset_qs],
             "repositories": [_serialise_repository_link(link) for link in repository_qs],
+            "bom": bom_rows,
+            "bom_summary": bom_summary,
             "file_categories": [
                 {"value": value, "label": label}
                 for value, label in FileAsset.CATEGORIES
@@ -631,7 +636,7 @@ def inventory(request):
     if request.method == "GET":
         qs = InventoryItem.objects.select_related(
             "board__manufacturer", "component__manufacturer", "project"
-        ).all()[:5000]
+        ).annotate(allocated_quantity=Sum("bom_allocations__quantity")).all()[:5000]
         return JsonResponse({"rows": [_serialise_inventory(item) for item in qs]})
 
     denied = _require_permission(request, "core.add_inventoryitem")
@@ -710,7 +715,13 @@ def inventory_detail(request, item_id):
         denied = _require_permission(request, "core.delete_inventoryitem")
         if denied:
             return denied
-        item.delete()
+        try:
+            item.delete()
+        except ProtectedError:
+            return _error(
+                "This inventory item is allocated to a project BOM. Release its BOM allocations before deleting it.",
+                status=409,
+            )
         return JsonResponse({"deleted": True})
 
     denied = _require_permission(request, "core.change_inventoryitem")
