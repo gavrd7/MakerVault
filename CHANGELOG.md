@@ -11,6 +11,8 @@
 - Added native create APIs/UI for printers, filament products, physical spools and 3D models.
 - Added native filament appearance fields for opaque, translucent and transparent materials.
 - Added a visual filament colour palette, custom colour/hex selector and transparency preview for manual filament creation.
+- Added an optional SpoolmanDB browser with search, source-record preview and import into native MakerVault filament products.
+- Preserved SpoolmanDB multi-colour, transparency, finish, pattern, glow, temperature, weight and source-provenance metadata during import.
 - Added model revision creation and existing MakerVault file attachment/detachment workflows.
 - Protected model-linked files from deletion until they are detached from the revision.
 - Added PostgreSQL regression coverage for printing overview, native CRUD, external spool identity, revision file reuse and project/file integrity.
