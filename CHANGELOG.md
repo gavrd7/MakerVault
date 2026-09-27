@@ -17,6 +17,11 @@
 - Fixed Add Spool to load the current native filament catalogue directly instead of relying on potentially stale page data.
 - Moved optional Spoolman, Creality CFS, SimplyPrint and future multi-material adapter status cards into the main Settings area.
 - Added configurable Spoolman endpoint/sync direction and connection testing, plus CFS readiness status based on registered compatible printers.
+- Physical spool IDs are now allocated automatically as `SPL-####` and are no longer entered manually.
+- Added real Spoolman inventory synchronisation with native spool/link creation, remote weight/location updates and safe linked-record export for bidirectional mode.
+- Added a read-only local Creality CFS adapter using the K-series WebSocket `boxsInfo` feed to discover loaded slots, filament metadata and RFID-derived remaining percentage.
+- Added per-integration `Sync now`, optional scheduled background sync, configurable sync interval, last/next sync timestamps and persisted sync results.
+- Replaced the hard-coded 3D Printing integration roadmap cards with a compact status strip that only shows integrations the user has enabled, including connected/disconnected/error state.
 - Added dedicated filament manufacturer/material selectors and manufacturer-product suggestions backed by the open SpoolmanDB catalogue, with custom values retained as a fallback.
 - Added native filament appearance fields for opaque, translucent and transparent materials.
 - Added a visual filament colour palette, custom colour/hex selector and transparency preview for manual filament creation.
