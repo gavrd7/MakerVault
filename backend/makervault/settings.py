@@ -64,6 +64,12 @@ CATALOGUE_IMAGE_PREFER_ESPBOARDS = env_bool("CATALOGUE_IMAGE_PREFER_ESPBOARDS", 
 CATALOGUE_IMAGE_WIKIMEDIA = env_bool("CATALOGUE_IMAGE_WIKIMEDIA", True)
 CATALOGUE_IMAGE_OPENVERSE = env_bool("CATALOGUE_IMAGE_OPENVERSE", True)
 
+# Optional public filament catalogue. MakerVault remains fully usable when disabled.
+FILAMENT_CATALOGUE_SPOOLMANDB_URL = os.getenv(
+    "FILAMENT_CATALOGUE_SPOOLMANDB_URL",
+    "https://donkie.github.io/SpoolmanDB/filaments.json",
+).strip()
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
