@@ -919,3 +919,35 @@
   .printingIntegrationStatusBar{display:grid}
   .printingIntegrationStatus{flex-wrap:wrap}
 }
+
+
+/* v0.6.0 focused printing libraries and integration review */
+.printingLibraryHero{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:22px 24px}
+.printingLibraryHero h2{margin:5px 0 8px}
+.printingLibraryHero p{margin:0;max-width:820px;color:#95a0b1;line-height:1.55}
+.printingLibraryToolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;border-bottom:1px solid #29313c}
+.printingLibraryToolbar strong,.printingLibraryToolbar small{display:block}
+.printingLibraryToolbar small{margin-top:3px;color:#7f8a9c}
+.printingLibraryToolbar input{width:min(520px,50vw)}
+.printingLibraryRow{min-height:64px}
+.integrationAuthorityCallout{margin-top:3px}
+.integrationReviewButton{border-color:#6a5b2f;background:#211d12;color:#e8d79a}
+.integrationReviewList{display:grid;gap:12px}
+.integrationReviewCard{display:grid;gap:14px;padding:16px;border:1px solid #303b49;border-radius:12px;background:#0d141c}
+.integrationReviewHead{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.integrationReviewHead h3{margin:4px 0 5px}
+.integrationReviewHead p{margin:0;color:#8d99aa;font-size:12px}
+.integrationCandidateList{display:grid;gap:8px;padding:12px;border:1px solid #29313c;border-radius:10px;background:#101821}
+.integrationCandidateList>strong{font-size:12px}
+.integrationCandidateRow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:8px;border-top:1px solid #27313d}
+.integrationCandidateRow strong,.integrationCandidateRow small{display:block}
+.integrationCandidateRow small{margin-top:3px;color:#7f8a9c}
+.integrationReviewChoices{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end}
+.integrationReviewChoices label{display:grid;gap:6px}
+.integrationReviewFooter{display:flex;justify-content:space-between;align-items:center;gap:16px;padding-top:10px;border-top:1px solid #27313d}
+.integrationReviewFooter small{max-width:680px;color:#7f8a9c;line-height:1.45}
+@media(max-width:720px){
+  .printingLibraryHero,.printingLibraryToolbar,.integrationReviewHead,.integrationCandidateRow,.integrationReviewFooter{display:grid}
+  .printingLibraryToolbar input{width:100%}
+  .integrationReviewChoices{grid-template-columns:1fr}
+}
