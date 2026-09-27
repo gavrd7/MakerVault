@@ -96,7 +96,7 @@ export default function PrintingPage({ config, projects }) {
         <div className="panelHead"><div><h3>Spool inventory</h3><p>Native spool records with optional external mappings.</p></div></div>
         <div className="printingList">
           {(data?.spools || []).map(spool => <article className="printingListRow" key={spool.id}>
-            <span className="printingSwatch" style={spool.color_hex ? { background: spool.color_hex } : undefined} />
+            <span className={`printingSwatch filamentPreview-${spool.transparency || "opaque"}`} style={filamentSwatchStyle(spool)} />
             <div><strong>{spool.spool_id} · {spool.filament}</strong><small>{spool.material} · {grams(spool.remaining_weight_g)} remaining</small></div>
             <div className="printingBadges">{spool.loaded_slots.length > 0 && <Badge tone="accent">Loaded</Badge>}{spool.external_links.map(link => <Badge key={link.id}>{link.provider_label}</Badge>)}</div>
           </article>)}
