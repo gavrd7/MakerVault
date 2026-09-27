@@ -53,7 +53,8 @@ OIDC_ALLOW_INSECURE_ISSUERS = env_bool("OIDC_ALLOW_INSECURE_ISSUERS", False)
 
 # Background catalogue enrichment. Facts/specifications are pulled separately from media licensing.
 ENRICH_BOARD_CATALOGUE = env_bool("ENRICH_BOARD_CATALOGUE", True)
-BOARD_ENRICHMENT_MAX_PER_RUN = int(os.getenv("BOARD_ENRICHMENT_MAX_PER_RUN", "80"))
+BOARD_ENRICHMENT_MAX_PER_RUN = int(os.getenv("BOARD_ENRICHMENT_MAX_PER_RUN", "500"))
+BOARD_ENRICHMENT_RETRY_DAYS = int(os.getenv("BOARD_ENRICHMENT_RETRY_DAYS", "14"))
 
 # Automatic starter-catalogue image seeding. Work is queued to Celery so startup is not blocked.
 SEED_CATALOGUE_IMAGES = env_bool("SEED_CATALOGUE_IMAGES", True)
