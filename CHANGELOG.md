@@ -9,6 +9,8 @@
 - Added ModelRevisionAsset links so STL/3MF/CAD assets reuse existing FileAsset records instead of duplicating storage.
 - Migrated legacy direct ModelRevision file fields into FileAsset links without duplicating stored bytes, leaving FileAsset as the single revision-file system.
 - Added native create APIs/UI for printers, filament products, physical spools and 3D models.
+- Added native filament appearance fields for opaque, translucent and transparent materials.
+- Added a visual filament colour palette, custom colour/hex selector and transparency preview for manual filament creation.
 - Added model revision creation and existing MakerVault file attachment/detachment workflows.
 - Protected model-linked files from deletion until they are detached from the revision.
 - Added PostgreSQL regression coverage for printing overview, native CRUD, external spool identity, revision file reuse and project/file integrity.
