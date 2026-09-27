@@ -5,6 +5,7 @@
 - Replaced the 3D Printing placeholder with the first native printing/model workspace.
 - Added provider-neutral external spool links so MakerVault spools can map to optional services such as Spoolman or SimplyPrint without making those services required.
 - Added provider-neutral printer filament slots for Creality CFS, Bambu AMS and future multi-material adapters.
+- Reworked print material tracking into multi-spool material usage rows, preserving legacy print consumption data while supporting CFS/AMS-style multi-material jobs.
 - Added ModelRevisionAsset links so STL/3MF/CAD assets reuse existing FileAsset records instead of duplicating storage.
 - Migrated legacy direct ModelRevision file fields into FileAsset links without duplicating stored bytes, leaving FileAsset as the single revision-file system.
 - Added native create APIs/UI for printers, filament products, physical spools and 3D models.
