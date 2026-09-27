@@ -2819,6 +2819,67 @@ def printing_filament_catalogue_import(request):
 
 @login_required
 @require_http_methods(["GET", "POST"])
+def printing_locations(request):
+    if request.method == "GET":
+        return JsonResponse({
+            "rows": [
+                _serialise_printing_location(item)
+                for item in PrintingLocation.objects.order_by("name")
+            ]
+        })
+
+    denied = _require_permission(request, "core.add_printinglocation")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        item = PrintingLocation(
+            name=str(payload.get("name") or "").strip(),
+            kind=str(payload.get("kind") or "storage").strip(),
+            notes=str(payload.get("notes") or "").strip(),
+        )
+        item.full_clean()
+        item.save()
+        return JsonResponse({"item": _serialise_printing_location(item)}, status=201)
+    except ValidationError as exc:
+        return _validation_response(exc)
+    except IntegrityError:
+        return _error("Location name must be unique.")
+
+
+@login_required
+@require_http_methods(["PATCH", "DELETE"])
+def printing_location_detail(request, location_id):
+    item = PrintingLocation.objects.filter(pk=location_id).first()
+    if not item:
+        return _error("Location not found.", status=404)
+
+    if request.method == "DELETE":
+        denied = _require_permission(request, "core.change_printinglocation")
+        if denied:
+            return denied
+        item.delete()
+        return JsonResponse({"deleted": True})
+
+    denied = _require_permission(request, "core.change_printinglocation")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        for field in ["name", "kind", "notes"]:
+            if field in payload:
+                setattr(item, field, str(payload.get(field) or "").strip())
+        item.full_clean()
+        item.save()
+        return JsonResponse({"item": _serialise_printing_location(item)})
+    except ValidationError as exc:
+        return _validation_response(exc)
+    except IntegrityError:
+        return _error("Location name must be unique.")
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
 def printing_printers(request):
     if request.method == "GET":
         qs = Printer.objects.select_related(
