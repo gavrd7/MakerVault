@@ -415,3 +415,38 @@
   .imageViewerToolbar{align-items:flex-start;flex-direction:column}
   .imageViewerControls{width:100%;overflow:auto}
 }
+
+/* v0.4.1 catalogue maintenance settings */
+.settingsStack{display:grid;gap:18px;max-width:1100px}
+.settingsHero{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;padding:24px}
+.settingsHero h2{margin:4px 0 8px;font-size:28px}
+.settingsHero p{margin:0;max-width:760px;color:#98a5b6;line-height:1.6}
+.settingsEyebrow{display:block;color:#9d8cff;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px}
+.status-pill{display:inline-flex;align-items:center;min-height:26px;padding:4px 9px;border:1px solid #3b4656;border-radius:999px;color:#a9b5c5;background:#151d27;font-size:11px}
+.status-pill.status-on{border-color:#2c6a49;background:#12271c;color:#9ce0b7}
+.settingsPanel{overflow:hidden}
+.settingsForm{display:grid;gap:18px;padding:20px}
+.settingsForm>label{display:grid;gap:7px;color:#aeb8c7;font-size:13px}
+.settingsForm small{color:#7f8a9c;line-height:1.45}
+.settingsToggle{display:flex!important;justify-content:space-between;align-items:center;gap:18px;padding:14px;border:1px solid #29313c;border-radius:12px;background:#0d131a}
+.settingsToggle strong,.settingsToggle small{display:block}.settingsToggle small{margin-top:4px}
+.settingsToggle input{width:auto;transform:scale(1.1)}
+.intervalInput{display:flex;align-items:center;gap:10px;max-width:280px}
+.intervalInput input{max-width:160px}
+.intervalInput span{color:#8c98aa}
+.settingsSubgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.settingsTimes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.settingsTimes>div{padding:14px;border:1px solid #29313c;border-radius:12px;background:#0d131a}
+.settingsTimes span,.settingsTimes strong,.settingsTimes small{display:block}
+.settingsTimes span{font-size:10px;color:#7f8a9c;text-transform:uppercase}
+.settingsTimes strong{margin-top:6px}.settingsTimes small{margin-top:4px;color:#6f7c8f}
+.settingsActions{display:flex;justify-content:flex-end;gap:10px}
+.settingsInfo{padding:20px}.settingsInfo h3{margin-top:0}.settingsInfo p{color:#98a5b6;line-height:1.6}
+.settingsCallout{border:1px solid #344052;border-radius:12px;background:#111925;padding:14px 16px}
+.settingsCallout p{margin:5px 0 0;color:#98a5b6}
+@media(max-width:700px){
+  .settingsHero{display:grid}
+  .settingsSubgrid,.settingsTimes{grid-template-columns:1fr}
+  .settingsActions{display:grid;grid-template-columns:1fr}
+  .settingsActions button{width:100%}
+}
