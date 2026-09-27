@@ -89,7 +89,11 @@ export default function PrintingPage({ config, projects }) {
           <div className="printingSlotGrid">
             {printer.slots.filter(slot => slot.is_loaded).map(slot => <div className="printingSlot" key={slot.id}>
               <span className="printingSwatch" style={slot.color_hex ? { background: slot.color_hex } : undefined} />
-              <div><strong>{slot.material || "Unknown material"}</strong><small>{slot.system_label} · unit {slot.unit_index + 1}, slot {slot.slot_index + 1}</small><small>{slot.spool_code || "Unmatched spool"} · {grams(slot.remaining_weight_g)}</small></div>
+              <div>
+                <strong>{slot.product_name || slot.material || "Unknown material"}</strong>
+                <small>{[slot.vendor, slot.material].filter(Boolean).join(" · ")}{slot.vendor || slot.material ? " · " : ""}{slot.system_label} · unit {slot.unit_index + 1}, slot {slot.slot_index + 1}</small>
+                <small>{slot.spool_code || "Unmatched MakerVault spool"} · {slot.remaining_percent != null ? Math.round(slot.remaining_percent) + "% remaining" : grams(slot.remaining_weight_g)}</small>
+              </div>
             </div>)}
             {!printer.slots.some(slot => slot.is_loaded) && <div className="printingEmptyInline">No loaded filament slots have been discovered yet.</div>}
           </div>
@@ -124,15 +128,18 @@ export default function PrintingPage({ config, projects }) {
       </div>
     </section>
 
-    <section className="panel printingSection">
-      <div className="panelHead"><div><h3>Integration foundation</h3><p>Optional adapters will synchronise around MakerVault rather than becoming required dependencies.</p></div></div>
-      <div className="printingIntegrationGrid">
-        <article><strong>Spoolman</strong><span>External spool mapping schema ready</span><Badge>Foundation</Badge></article>
-        <article><strong>SimplyPrint</strong><span>Optional filament mapping planned</span><Badge>Planned</Badge></article>
-        <article><strong>Creality CFS</strong><span>Provider-neutral loaded-slot schema ready</span><Badge>Foundation</Badge></article>
-        <article><strong>AMS / other systems</strong><span>Generic adapter model reserved</span><Badge>Future adapters</Badge></article>
-      </div>
-    </section>
+    {!!data?.integrations?.length && <section className="printingIntegrationStatusBar" aria-label="Enabled integration status">
+      {data.integrations.map(item => {
+        const tone = item.status === "connected" ? "good" : item.status === "error" || item.status === "disconnected" ? "danger" : "neutral";
+        return <div className={"printingIntegrationStatus printingIntegrationStatus-" + item.status} key={item.provider}>
+          <span className="printingIntegrationDot" />
+          <strong>{item.name}</strong>
+          <Badge tone={tone}>{item.status_label}</Badge>
+          <small>{item.last_sync_at ? "Last sync " + formatDate(item.last_sync_at) : "Not synced yet"}</small>
+          {item.auto_sync && item.next_sync_at && <small>Next {formatDate(item.next_sync_at)}</small>}
+        </div>;
+      })}
+    </section>}
 
     {!!data?.recent_prints?.length && <section className="panel printingSection">
       <div className="panelHead"><div><h3>Recent prints</h3><p>Latest native MakerVault print history.</p></div></div>
@@ -720,7 +727,6 @@ function SpoolModal({ filaments, locations, printers, currency, onClose, onSaved
   const [availableFilaments, setAvailableFilaments] = useState(filaments || []);
   const [placementType, setPlacementType] = useState("location");
   const [form, setForm] = useState({
-    spool_id: "",
     filament_id: filaments[0]?.id || "",
     initial_weight_g: "",
     remaining_weight_g: "",
@@ -785,7 +791,7 @@ function SpoolModal({ filaments, locations, printers, currency, onClose, onSaved
   return <Modal title="Add physical spool" subtitle="Choose a native MakerVault filament, then store the spool at a custom location or assign it to one of your printers." onClose={onClose} wide>
     <form className="formGrid" onSubmit={submit}>
       {error && <div className="formError full">{error}</div>}
-      <label>Spool ID<input required value={form.spool_id} onChange={e => set("spool_id", e.target.value)} placeholder="SPL-0001" /></label>
+      <div className="settingsCallout"><strong>Spool ID</strong><p>MakerVault assigns the next available SPL-#### ID automatically when this spool is created.</p></div>
       <label>Filament<select required value={form.filament_id} onChange={e => set("filament_id", e.target.value)} disabled={loadingFilaments}>
         <option value="">{loadingFilaments ? "Loading filaments…" : "Choose filament…"}</option>
         {availableFilaments.map(x => <option key={x.id} value={x.id}>{x.display_name} · {x.material}</option>)}
