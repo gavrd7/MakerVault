@@ -2583,6 +2583,11 @@ def _serialise_printer_slot(slot):
         "color_name": slot.color_name or (slot.spool.filament.color_name if slot.spool else ""),
         "color_hex": slot.color_hex or (slot.spool.filament.color_hex if slot.spool else ""),
         "remaining_weight_g": _float(slot.remaining_weight_g),
+        "remaining_percent": (slot.metadata or {}).get("remaining_percent"),
+        "vendor": (slot.metadata or {}).get("vendor", ""),
+        "product_name": (slot.metadata or {}).get("product_name", ""),
+        "rfid_detected": bool((slot.metadata or {}).get("rfid_detected")),
+        "selected": bool((slot.metadata or {}).get("selected")),
         "rfid_uid": slot.rfid_uid,
         "external_ref": slot.external_ref,
         "is_loaded": slot.is_loaded,
@@ -2755,6 +2760,10 @@ def printing_overview(request):
         ],
         "models": [_serialise_printing_model(model) for model in models_3d],
         "recent_prints": [_serialise_print_job(job) for job in recent_prints],
+        "integrations": [
+            _serialise_printing_integration_status(item)
+            for item in PrintingIntegrationSetting.objects.filter(enabled=True).order_by("provider")
+        ],
     })
 
 
