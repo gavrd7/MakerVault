@@ -392,7 +392,7 @@ function IntegrationReviewRow({ review, spools, filaments, busy, onResolve }) {
     {!!review.spool_candidates?.length && <div className="integrationCandidateList">
       <strong>Likely MakerVault spool matches</strong>
       {review.spool_candidates.map(candidate => <div className="integrationCandidateRow" key={candidate.id}>
-        <div><strong>{candidate.spool_id} · {candidate.filament}</strong><small>{candidate.score}% match{candidate.location ? " · " + candidate.location : ""}</small></div>
+        <div><strong>{candidate.spool_id} · {candidate.filament}</strong><small>Match score {candidate.score}{candidate.location ? " · " + candidate.location : ""}</small></div>
         <button type="button" disabled={busy} onClick={() => onResolve({ action: "link", spool_id: candidate.id })}>Link this spool</button>
       </div>)}
     </div>}
