@@ -445,7 +445,6 @@ class PrintingFoundationTests(TestCase):
         spool_response = self.client.post(
             "/api/printing/spools/",
             data={
-                "spool_id": "SPL-API-1",
                 "filament_id": filament_id,
                 "initial_weight_g": "1000",
                 "remaining_weight_g": "950",
@@ -468,7 +467,8 @@ class PrintingFoundationTests(TestCase):
         self.assertEqual(model_response.status_code, 201, model_response.content)
 
         self.assertEqual(Printer.objects.filter(name="Desk printer").count(), 1)
-        self.assertEqual(Spool.objects.filter(spool_id="SPL-API-1").count(), 1)
+        self.assertEqual(spool_response.json()["item"]["spool_id"], "SPL-0002")
+        self.assertEqual(Spool.objects.filter(spool_id="SPL-0002").count(), 1)
         self.assertEqual(Model3D.objects.filter(name="Cable clip").count(), 1)
 
     def test_owned_printer_catalogue_populates_specs_location_and_connection(self):
@@ -513,7 +513,6 @@ class PrintingFoundationTests(TestCase):
         stored = self.client.post(
             "/api/printing/spools/",
             data={
-                "spool_id": "SPL-LOC-1",
                 "filament_id": str(self.filament.id),
                 "storage_location_id": str(location.id),
                 "remaining_weight_g": "800",
@@ -521,13 +520,13 @@ class PrintingFoundationTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(stored.status_code, 201, stored.content)
+        self.assertEqual(stored.json()["item"]["spool_id"], "SPL-0002")
         self.assertEqual(stored.json()["item"]["location"], "Dry box 1")
         self.assertEqual(stored.json()["item"]["placement_type"], "location")
 
         assigned = self.client.post(
             "/api/printing/spools/",
             data={
-                "spool_id": "SPL-PRN-1",
                 "filament_id": str(self.filament.id),
                 "assigned_printer_id": str(self.printer.id),
                 "remaining_weight_g": "700",
@@ -535,13 +534,13 @@ class PrintingFoundationTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(assigned.status_code, 201, assigned.content)
+        self.assertEqual(assigned.json()["item"]["spool_id"], "SPL-0003")
         self.assertEqual(assigned.json()["item"]["location"], "Workshop printer")
         self.assertEqual(assigned.json()["item"]["placement_type"], "printer")
 
         invalid = self.client.post(
             "/api/printing/spools/",
             data={
-                "spool_id": "SPL-BOTH",
                 "filament_id": str(self.filament.id),
                 "storage_location_id": str(location.id),
                 "assigned_printer_id": str(self.printer.id),
@@ -622,7 +621,7 @@ class PrintingFoundationTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(cfs.status_code, 200, cfs.content)
-        self.assertEqual(cfs.json()["item"]["status"], "ready")
+        self.assertEqual(cfs.json()["item"]["status"], "disconnected")
         self.assertEqual(cfs.json()["item"]["compatible_printers"], 1)
         self.assertEqual(cfs.json()["item"]["configured_printers"], 1)
 
