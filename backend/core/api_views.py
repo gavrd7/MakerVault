@@ -2306,6 +2306,14 @@ def printing_overview(request):
         },
         "printers": [_serialise_printer(printer) for printer in printers],
         "spools": [_serialise_spool(spool) for spool in spools],
+        "filaments": [
+            _serialise_filament_product(item)
+            for item in FilamentProduct.objects.select_related("manufacturer").all()
+        ],
+        "manufacturers": [
+            {"id": item.id, "name": item.name}
+            for item in Manufacturer.objects.order_by("name")
+        ],
         "models": [_serialise_printing_model(model) for model in models_3d],
         "recent_prints": [_serialise_print_job(job) for job in recent_prints],
         "integration_status": {
