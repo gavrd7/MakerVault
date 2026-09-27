@@ -4,7 +4,27 @@
 
 .aboutStack{display:grid;gap:18px;max-width:1200px}.legalHero{padding:28px}.legalHero h2{font-size:30px;margin:8px 0}.legalHero>p{color:#aab5c4;line-height:1.6;max-width:820px}.legalActions{display:flex;gap:10px;flex-wrap:wrap;margin:20px 0 12px}.legalFine{font-size:12px!important;color:#758195!important}.attributionCount{color:#8e9aac;font-size:13px}.licenceWarning{margin:16px 20px 0;padding:12px 14px;border:1px solid #735f2f;background:#2b2412;color:#ead393;border-radius:10px}.attributionGroups{padding:0 20px 20px}.attributionGroup{margin-top:20px}.attributionGroup h4{display:flex;gap:8px;align-items:center;margin:0 0 8px}.attributionGroup h4 span{font-size:11px;color:#8995a7;background:#18202a;border-radius:999px;padding:3px 7px}.attributionTable{border:1px solid #29313c;border-radius:12px;overflow:hidden}.attributionRow{display:grid;grid-template-columns:minmax(240px,2fr) minmax(190px,1.4fr) 90px;gap:14px;align-items:center;padding:11px 13px;border-bottom:1px solid #29313c}.attributionRow:last-child{border-bottom:0}.attributionRow strong,.attributionRow span,.attributionRow small{display:block}.attributionRow small{color:#778397;margin-top:3px}.attributionRow a{color:#a99bff}.legalPolicy{padding:22px}.legalPolicy h3{margin-top:0}.legalPolicy p{color:#9aa6b7;line-height:1.6}@media(max-width:700px){.attributionRow{grid-template-columns:1fr}.legalActions{display:grid}.legalActions>*{text-align:center}}
 
-.inventoryDetailPane .boardImage-large{height:190px}.inventoryCode{display:inline-block;color:#9587ff;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;margin-bottom:2px}.inventoryDetailPane .detailTitleRow{align-items:flex-start}.inventoryDetailPane .detailTitleRow h2{margin:3px 0}.inventorySpecList{margin-bottom:20px}.detailSection{margin-top:22px}.detailSection h4{margin:0 0 10px}.detailNotes{white-space:pre-wrap}.catalogueSummary{display:grid;gap:3px;padding:12px;border:1px solid #29313c;border-radius:10px;background:#0d131a}.catalogueSummary span{color:#8995a7;font-size:13px}.historyTimeline{display:grid;gap:0;border-left:1px solid #354153;margin-left:7px;padding-left:17px}.historyEntry{position:relative;padding:0 0 17px}.historyEntry:last-child{padding-bottom:0}.historyEntry strong,.historyEntry small{display:block}.historyEntry strong{font-size:13px}.historyEntry small{color:#7f8a9c;margin-top:4px;font-size:11px}.historyDot{position:absolute;left:-23px;top:3px;width:11px;height:11px;border:2px solid #0f151d;border-radius:50%;background:#728096;box-shadow:0 0 0 1px #3a4657}.history-assigned{background:#7c5cff}.history-unassigned{background:#9b7380}.history-status{background:#6c9d82}.history-location{background:#6f88a8}.history-created{background:#64a879}.detailActions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}.detailNotice{padding:9px 11px;border:1px solid #3c4b61;border-radius:9px;background:#111b28;color:#a9bad0;font-size:12px;margin:10px 0}.boardLinks{display:flex;gap:12px;flex-wrap:wrap}.boardLinks .detailLink{margin-top:16px}.boardDetailPane .detailSpecs{margin-bottom:18px}.boardDetailPane h4{margin:20px 0 9px}.boardDetailPane .specList{margin-top:0}
+.inventoryDetailPane{align-content:start}
+.inventoryDetailPane>*{flex-shrink:0}
+.inventoryDetailPane .boardImage-large{
+  width:100%;
+  height:auto;
+  min-height:190px;
+  aspect-ratio:16 / 9;
+  max-height:260px;
+  margin-bottom:16px;
+  padding:10px;
+}
+.inventoryDetailPane .boardImage-large img{
+  width:auto;
+  height:auto;
+  max-width:100%;
+  max-height:100%;
+  object-fit:contain;
+  object-position:center;
+}
+.inventoryCode{display:inline-block;color:#9587ff;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;margin-bottom:2px}
+.inventorySpecList{margin-bottom:20px}.detailSection{margin-top:22px}.detailSection h4{margin:0 0 10px}.detailNotes{white-space:pre-wrap}.catalogueSummary{display:grid;gap:3px;padding:12px;border:1px solid #29313c;border-radius:10px;background:#0d131a}.catalogueSummary span{color:#8995a7;font-size:13px}.historyTimeline{display:grid;gap:0;border-left:1px solid #354153;margin-left:7px;padding-left:17px}.historyEntry{position:relative;padding:0 0 17px}.historyEntry:last-child{padding-bottom:0}.historyEntry strong,.historyEntry small{display:block}.historyEntry strong{font-size:13px}.historyEntry small{color:#7f8a9c;margin-top:4px;font-size:11px}.historyDot{position:absolute;left:-23px;top:3px;width:11px;height:11px;border:2px solid #0f151d;border-radius:50%;background:#728096;box-shadow:0 0 0 1px #3a4657}.history-assigned{background:#7c5cff}.history-unassigned{background:#9b7380}.history-status{background:#6c9d82}.history-location{background:#6f88a8}.history-created{background:#64a879}.detailActions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}.detailNotice{padding:9px 11px;border:1px solid #3c4b61;border-radius:9px;background:#111b28;color:#a9bad0;font-size:12px;margin:10px 0}.boardLinks{display:flex;gap:12px;flex-wrap:wrap}.boardLinks .detailLink{margin-top:16px}.boardDetailPane .detailSpecs{margin-bottom:18px}.boardDetailPane h4{margin:20px 0 9px}.boardDetailPane .specList{margin-top:0}
 
 .boardSpecGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));margin:0 0 18px;border:1px solid #29313c;border-radius:12px;overflow:hidden;background:#0e141b}
 .boardSpecCell{min-height:72px;padding:11px 12px;border-bottom:1px solid #29313c}
@@ -594,15 +614,52 @@
 .bomDerivedInventory span{color:#738095;font-size:9px;text-transform:uppercase;letter-spacing:.04em}
 .bomDerivedInventory strong{margin-top:3px;font-size:13px;color:#d6dde7}
 .bomDerivedInventory small{margin-top:3px;color:#8190a4;font-size:9px}
-.inventoryDetailIdentity{display:block;margin-top:10px}
-.inventoryDetailIdentity h2{margin:5px 0 0}
-.inventoryDetailActions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px;width:100%}
-.inventoryDetailActions button{width:100%;min-height:38px;padding:8px 10px;display:inline-flex;align-items:center;justify-content:center;text-align:center}
+.inventoryDetailIdentity{display:block;margin-top:10px;min-width:0}
+.inventoryDetailIdentity h2{margin:5px 0 0;overflow-wrap:anywhere}
+.inventoryDetailActions{
+  display:grid;
+  grid-auto-flow:column;
+  grid-auto-columns:minmax(0,1fr);
+  gap:8px;
+  margin-top:12px;
+  width:100%;
+  align-items:stretch;
+}
+.inventoryDetailActions button{
+  width:100%;
+  min-width:0;
+  min-height:44px;
+  padding:9px 10px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  line-height:1.25;
+  white-space:normal;
+}
 .inventoryDetailActions .assetDanger{color:#e29ba0;border-color:#57353b;background:#24151a}
 .inventoryDetailActions .assetDanger:disabled{opacity:.45;cursor:not-allowed}
-.inventoryDeleteHint{margin:8px 0 0;padding:8px 10px;border:1px solid #49343a;border-radius:8px;background:#1c1417;color:#c7989d;font-size:10px}
+.inventoryDeleteHint{
+  margin:8px 0 0;
+  padding:8px 10px;
+  border:1px solid #49343a;
+  border-radius:8px;
+  background:#1c1417;
+  color:#c7989d;
+  font-size:10px;
+  line-height:1.4;
+}
 
 @media(max-width:700px){
-  .inventoryDetailActions{grid-template-columns:1fr}
+  .inventoryDetailPane .boardImage-large{
+    min-height:160px;
+    max-height:230px;
+    aspect-ratio:16 / 10;
+  }
+  .inventoryDetailActions{
+    grid-auto-flow:row;
+    grid-template-columns:1fr;
+    grid-auto-columns:auto;
+  }
   .bomAllocationMode{flex-direction:column}
 }
