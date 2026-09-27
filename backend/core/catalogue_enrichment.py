@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 
 from django.conf import settings
 from django.core.cache import cache
@@ -9,6 +10,10 @@ from django.utils import timezone
 from django.utils.text import slugify
 
 from .importers import ImporterError, fetch_import_html, parse_espboards_html
+from .catalogue_profiles import apply_board_profile
+
+
+ENRICHMENT_VERSION = "0.3.6"
 
 
 @dataclass
@@ -117,6 +122,60 @@ def _merge_board_data(board, data) -> bool:
     return changed
 
 
+def enrich_board_from_profile(board) -> bool:
+    """Fill missing board fields/specifications from curated technical profiles."""
+    definition = {
+        "manufacturer": board.manufacturer.name if board.manufacturer else "Generic",
+        "name": board.name,
+        "family": board.family,
+        "mcu": board.mcu,
+        "architecture": board.architecture,
+        "flash_mb": board.flash_mb,
+        "psram_mb": board.psram_mb,
+        "ram_kb": board.ram_kb,
+        "gpio_count": board.gpio_count,
+        "wifi": board.wifi,
+        "bluetooth": board.bluetooth,
+        "zigbee": board.zigbee,
+        "thread": board.thread,
+        "usb_connector": board.usb_connector,
+        "dimensions_mm": board.dimensions_mm,
+        "specifications": dict(board.specifications or {}),
+    }
+    profiled = apply_board_profile(definition)
+    changed = _merge_board_data(board, profiled)
+    if changed:
+        board.save()
+    return changed
+
+
+def _online_attempt_due(board) -> bool:
+    specs = board.specifications or {}
+    if specs.get("technical_source_provider") == "ESPBoards.dev" and specs.get("technical_enriched_at"):
+        return False
+    if specs.get("technical_attempt_version") != ENRICHMENT_VERSION:
+        return True
+    raw = specs.get("technical_last_attempt")
+    if not raw:
+        return True
+    try:
+        attempted = datetime.fromisoformat(raw)
+        if timezone.is_naive(attempted):
+            attempted = timezone.make_aware(attempted)
+    except (TypeError, ValueError):
+        return True
+    retry_days = max(int(getattr(settings, "BOARD_ENRICHMENT_RETRY_DAYS", 14)), 1)
+    return attempted < timezone.now() - timedelta(days=retry_days)
+
+
+def _mark_online_attempt(board):
+    specs = dict(board.specifications or {})
+    specs["technical_attempt_version"] = ENRICHMENT_VERSION
+    specs["technical_last_attempt"] = timezone.now().isoformat()
+    board.specifications = specs
+    board.save(update_fields=["specifications", "updated_at"])
+
+
 def enrich_board_from_espboards(board) -> bool:
     wanted = _tokens(f"{board.manufacturer.name if board.manufacturer else ''} {board.name}")
     for slug in _slug_candidates(board):
@@ -165,7 +224,7 @@ def run_board_catalogue_enrichment(limit: int | None = None) -> dict:
 
     if limit is None:
         limit = max(int(getattr(settings, "BOARD_ENRICHMENT_MAX_PER_RUN", 80)), 0)
-    lock_key = "makervault:board-catalogue-enrichment:v0.3"
+    lock_key = f"makervault:board-catalogue-enrichment:{ENRICHMENT_VERSION}"
     if not cache.add(lock_key, "running", timeout=60 * 45):
         return EnrichmentResult("already-running", 0, 0, 0, 0).as_dict()
 
@@ -175,21 +234,31 @@ def run_board_catalogue_enrichment(limit: int | None = None) -> dict:
         for board in queryset.iterator():
             if limit and processed >= limit:
                 return EnrichmentResult("limit-reached", processed, enriched, failed, skipped).as_dict()
-            if not _is_esp_family(board):
-                skipped += 1
-                continue
-            specs = board.specifications or {}
-            if specs.get("technical_source_provider") == "ESPBoards.dev" and specs.get("technical_enriched_at"):
-                skipped += 1
-                continue
+
             processed += 1
+            changed = False
+            board_failed = False
+
             try:
-                if enrich_board_from_espboards(board):
-                    enriched += 1
-                else:
-                    failed += 1
+                changed = enrich_board_from_profile(board) or changed
             except Exception:
-                failed += 1
+                board_failed = True
+
+            if _is_esp_family(board) and _online_attempt_due(board):
+                try:
+                    _mark_online_attempt(board)
+                    online_changed = enrich_board_from_espboards(board)
+                    changed = online_changed or changed
+                    if not online_changed:
+                        board_failed = True
+                except Exception:
+                    board_failed = True
+
+            enriched += int(changed)
+            failed += int(board_failed)
+            skipped += int(not changed and not board_failed)
+
         return EnrichmentResult("complete", processed, enriched, failed, skipped).as_dict()
     finally:
         cache.delete(lock_key)
+

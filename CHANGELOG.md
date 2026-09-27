@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.3.6
+
+- Added broad curated technical profiles for common ESP32/ESP8266, RP2040/RP2350, Arduino/AVR, SAMD21, RA4M1 and Teensy hardware.
+- Added board-specific profiles for common Super Mini, Seeed XIAO, Waveshare Zero, Raspberry Pi Pico and Arduino variants.
+- Enriched common component records with additional part-level function, interface, address, channel and protocol metadata.
+- Starter catalogue upgrades remain idempotent and fill missing fields without replacing populated user values.
+- Board catalogue enrichment now applies curated profiles to all board records before optional ESPBoards enrichment.
+- Added versioned ESPBoards retry tracking so unmatched boards are not fetched on every restart.
+- Added Openverse as a second open-licensed image discovery source after Wikimedia Commons.
+- Openverse results are limited to CC0/Public Domain, CC BY and CC BY-SA metadata and preserve creator/source/licence attribution.
+- Improved board/component image queries and automatically re-attempt missing images previously tried by older seeder versions.
+- Added a refresh-catalogue Make target for a full technical-data and image refresh.
+- Improved small flash-size formatting and expanded visible board technical fields.
+- No database migration is required.
+
+
 ## v0.3.5
 
 - Renamed the main navigation shortcut from Security / MFA to Account & Security.

@@ -21,7 +21,4 @@ def seed_catalogue_images_task(self, limit=None, force_retry=False):
 
 @shared_task(bind=True, acks_late=True)
 def enrich_board_catalogue_task(self, limit=None):
-    result = run_board_catalogue_enrichment(limit=limit)
-    if result.get("status") == "limit-reached":
-        self.apply_async(kwargs={"limit": limit}, countdown=5)
-    return result
+    return run_board_catalogue_enrichment(limit=limit)

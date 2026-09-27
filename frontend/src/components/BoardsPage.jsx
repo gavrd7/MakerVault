@@ -33,6 +33,14 @@ function prettySpecValue(key, value) {
 }
 
 
+function formatMemoryMb(value) {
+  if (value == null || value === "") return "";
+  const number = Number(value);
+  if (!Number.isFinite(number)) return String(value);
+  if (number < 1) return `${Math.round(number * 1024)} KB`;
+  return Number.isInteger(number) ? `${number} MB` : `${number.toFixed(2).replace(/0+$/, "").replace(/\.$/, "")} MB`;
+}
+
 function BoardSpecGrid({ rows }) {
   return <dl className="boardSpecGrid">
     {rows.map(({ key, label, value }) => <div className="boardSpecCell" key={key}>
@@ -69,7 +77,7 @@ export default function BoardsPage({ boards, setBoards, config, onOpenImport, re
     { field: "name", headerName: "Board", minWidth: 230, flex: 1 },
     { field: "family", minWidth: 125 },
     { field: "mcu", headerName: "MCU", minWidth: 135 },
-    { field: "flash_mb", headerName: "Flash", width: 105, valueFormatter: p => p.value == null ? "" : `${p.value} MB` },
+    { field: "flash_mb", headerName: "Flash", width: 105, valueFormatter: p => formatMemoryMb(p.value) },
     { headerName: "Wireless", minWidth: 190, valueGetter: p => [p.data.wifi && "Wi-Fi", p.data.bluetooth && "BT", p.data.zigbee && "Zigbee", p.data.thread && "Thread"].filter(Boolean).join(" · ") },
     { field: "source", minWidth: 145 },
   ], []);
@@ -143,7 +151,7 @@ function BoardDetail({ board, loading, canEdit, onClose, onChanged }) {
   const coreRows = [
     { key: "mcu", label: "MCU", value: board.mcu || "" },
     { key: "architecture", label: "Architecture", value: board.architecture || "" },
-    { key: "flash", label: "Flash", value: board.flash_mb == null ? "" : `${board.flash_mb} MB` },
+    { key: "flash", label: "Flash", value: specs.flash_kb != null ? `${specs.flash_kb} KB` : formatMemoryMb(board.flash_mb) },
     { key: "psram", label: "PSRAM", value: board.psram_mb == null ? "" : `${board.psram_mb} MB` },
     { key: "ram", label: "RAM / SRAM", value: board.ram_kb == null ? (specs.sram_kb == null ? "" : `${specs.sram_kb} KB`) : `${board.ram_kb} KB` },
     { key: "gpio", label: "GPIO", value: board.gpio_count ?? "" },
@@ -152,6 +160,7 @@ function BoardDetail({ board, loading, canEdit, onClose, onChanged }) {
   ];
   const technicalRows = [
     { key: "clock_mhz", label: "Clock", value: specs.clock_mhz == null ? "" : `${specs.clock_mhz} MHz` },
+    { key: "eeprom_kb", label: "EEPROM", value: specs.eeprom_kb == null ? "" : `${specs.eeprom_kb} KB` },
     { key: "cpu_cores", label: "CPU cores", value: specs.cpu_cores ?? "" },
     { key: "operating_voltage", label: "Operating voltage", value: specs.operating_voltage || "" },
     { key: "pin_count", label: "Pin count", value: specs.pin_count ?? "" },
@@ -162,6 +171,11 @@ function BoardDetail({ board, loading, canEdit, onClose, onChanged }) {
     { key: "i2c_count", label: "I²C", value: specs.i2c_count ?? "" },
     { key: "pwm_channels", label: "PWM channels", value: specs.pwm_channels ?? "" },
     { key: "native_usb", label: "Native USB", value: specs.native_usb === true ? "Yes" : specs.native_usb === false ? "No" : "" },
+    { key: "usb_capability", label: "USB capability", value: specs.usb_otg === true ? "USB OTG" : specs.usb_serial_jtag === true ? "USB Serial/JTAG" : "" },
+    { key: "wifi_standard", label: "Wi-Fi standard", value: specs.wifi_standard || "" },
+    { key: "bluetooth_generation", label: "Bluetooth", value: specs.bluetooth_generation || "" },
+    { key: "ieee_802154", label: "802.15.4", value: specs.ieee_802154 === true ? "Yes" : specs.ieee_802154 === false ? "No" : "" },
+    { key: "pio_state_machines", label: "PIO state machines", value: specs.pio_state_machines ?? "" },
     { key: "wireless", label: "Wireless", value: radios.length ? radios.join(" · ") : "" },
   ];
 
@@ -214,7 +228,7 @@ function BoardDetail({ board, loading, canEdit, onClose, onChanged }) {
       <div className="boardLinks">
         {board.specifications?.datasheet_url && <a className="detailLink" href={board.specifications.datasheet_url} target="_blank" rel="noreferrer">Datasheet ↗</a>}
         {board.specifications?.pinout_url && <a className="detailLink" href={board.specifications.pinout_url} target="_blank" rel="noreferrer">Pinout ↗</a>}
-        {board.specifications?.technical_source_url && <a className="detailLink" href={board.specifications.technical_source_url} target="_blank" rel="noreferrer">Technical source ↗</a>}
+        {(board.specifications?.technical_source_url || board.specifications?.reference_url) && <a className="detailLink" href={board.specifications.technical_source_url || board.specifications.reference_url} target="_blank" rel="noreferrer">Technical source ↗</a>}
       </div>
       {(board.image_source_page || board.image_source_url) && <p className="provenance"><span>{board.image_source_provider ? `Image: ${board.image_source_provider}${board.image_license ? ` · ${board.image_license}` : ""}` : "Image source"}</span><a href={board.image_source_page || board.image_source_url} target="_blank" rel="noreferrer">Open source ↗</a></p>}
     </>}
