@@ -2309,7 +2309,7 @@ def printing_overview(request):
         "models": [_serialise_printing_model(model) for model in models_3d],
         "recent_prints": [_serialise_print_job(job) for job in recent_prints],
         "integration_status": {
-            "spoolman": "available",
+            "spoolman": "foundation_ready",
             "simplyprint": "planned",
             "creality_cfs": "foundation_ready",
             "multi_material_adapters": "foundation_ready",
