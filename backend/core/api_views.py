@@ -2550,7 +2550,9 @@ def _serialise_filament_product(filament):
 @require_http_methods(["GET", "POST"])
 def printing_filaments(request):
     if request.method == "GET":
-        qs = FilamentProduct.objects.select_related("manufacturer", "source").all()
+        qs = FilamentProduct.objects.select_related(
+            "manufacturer", "filament_manufacturer", "source"
+        ).all()
         return JsonResponse({"rows": [_serialise_filament_product(item) for item in qs]})
 
     denied = _require_permission(request, "core.add_filamentproduct")
@@ -2558,13 +2560,9 @@ def printing_filaments(request):
         return denied
     try:
         payload = _read_json(request)
-        manufacturer = None
-        if payload.get("manufacturer_id"):
-            manufacturer = Manufacturer.objects.filter(pk=payload["manufacturer_id"]).first()
-            if not manufacturer:
-                return _error("Selected manufacturer was not found.")
+        filament_manufacturer = _resolve_filament_manufacturer(payload)
         item = FilamentProduct(
-            manufacturer=manufacturer,
+            filament_manufacturer=filament_manufacturer,
             name=str(payload.get("name") or "").strip(),
             material=str(payload.get("material") or "").strip(),
             color_name=str(payload.get("color_name") or "").strip(),
@@ -2588,6 +2586,9 @@ def printing_filaments(request):
         )
         item.full_clean()
         item.save()
+        item = FilamentProduct.objects.select_related(
+            "manufacturer", "filament_manufacturer", "source"
+        ).get(pk=item.pk)
         return JsonResponse({"item": _serialise_filament_product(item)}, status=201)
     except ValidationError as exc:
         return _validation_response(exc)
