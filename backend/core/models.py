@@ -235,6 +235,8 @@ class InventoryHistory(TimeStampedModel):
         ("unassigned", "Removed from project"),
         ("status", "Status changed"),
         ("location", "Location changed"),
+        ("bom_allocated", "Allocated to BOM"),
+        ("bom_released", "Released from BOM"),
     ]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     inventory_item = models.ForeignKey(
@@ -263,7 +265,6 @@ class BOMItem(TimeStampedModel):
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="bom_items")
     board = models.ForeignKey(BoardModel, on_delete=models.SET_NULL, null=True, blank=True, related_name="bom_items")
     component = models.ForeignKey(ComponentModel, on_delete=models.SET_NULL, null=True, blank=True, related_name="bom_items")
-    inventory_item = models.ForeignKey(InventoryItem, on_delete=models.SET_NULL, null=True, blank=True, related_name="bom_items")
     custom_name = models.CharField(max_length=255, blank=True)
     quantity = models.DecimalField(max_digits=12, decimal_places=3, default=1)
     unit = models.CharField(max_length=40, default="item")
@@ -273,9 +274,66 @@ class BOMItem(TimeStampedModel):
 
     class Meta:
         ordering = ["created_at"]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(quantity__gt=0), name="bom_item_quantity_positive"),
+        ]
+
+    def clean(self):
+        if self.board_id and self.component_id:
+            raise ValidationError("A BOM item can reference a board or component, not both.")
+        if not self.board_id and not self.component_id and not self.custom_name.strip():
+            raise ValidationError({"custom_name": "Enter a name for a custom BOM item."})
+        if not self.unit.strip():
+            raise ValidationError({"unit": "Unit cannot be blank."})
+
+    @property
+    def display_name(self):
+        return self.custom_name or str(self.component or self.board or "BOM item")
 
     def __str__(self):
-        return self.custom_name or str(self.component or self.board or self.inventory_item or "BOM item")
+        return self.display_name
+
+
+class BOMAllocation(TimeStampedModel):
+    bom_item = models.ForeignKey(BOMItem, on_delete=models.CASCADE, related_name="allocations")
+    inventory_item = models.ForeignKey(
+        InventoryItem, on_delete=models.PROTECT, related_name="bom_allocations"
+    )
+    quantity = models.DecimalField(max_digits=12, decimal_places=3)
+    notes = models.TextField(blank=True)
+    allocated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="makervault_bom_allocations"
+    )
+
+    class Meta:
+        ordering = ["created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["bom_item", "inventory_item"],
+                name="unique_bom_inventory_allocation",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(quantity__gt=0),
+                name="bom_allocation_quantity_positive",
+            ),
+        ]
+
+    def clean(self):
+        if self.quantity is not None and self.quantity <= 0:
+            raise ValidationError({"quantity": "Allocation quantity must be greater than zero."})
+        if self.bom_item_id and self.inventory_item_id:
+            if self.bom_item.board_id and self.inventory_item.board_id != self.bom_item.board_id:
+                raise ValidationError({"inventory_item": "This inventory item does not match the BOM board."})
+            if self.bom_item.component_id and self.inventory_item.component_id != self.bom_item.component_id:
+                raise ValidationError({"inventory_item": "This inventory item does not match the BOM component."})
+            if self.inventory_item.project_id and self.inventory_item.project_id != self.bom_item.project_id:
+                raise ValidationError({"inventory_item": "This inventory item is assigned to a different project."})
+            if self.inventory_item.status in {"repair", "retired"}:
+                raise ValidationError({"inventory_item": "Repair or retired inventory cannot be allocated."})
+
+    def __str__(self):
+        return f"{self.bom_item} ← {self.inventory_item} ({self.quantity})"
 
 
 class FileAsset(TimeStampedModel):
