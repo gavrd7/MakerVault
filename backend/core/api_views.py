@@ -24,6 +24,11 @@ from .catalogue_images import (
 )
 from .importers import ImporterError, preview_board_url
 from .catalogue_enrichment import enrich_board
+from .filament_catalogue import (
+    FilamentCatalogueError,
+    get_spoolmandb_item,
+    search_spoolmandb,
+)
 from .tasks import queue_catalogue_maintenance_now
 from .models import (
     BoardCompatibility,
@@ -2184,8 +2189,13 @@ def _serialise_spool(spool):
         "material": filament.material,
         "color_name": filament.color_name,
         "color_hex": filament.color_hex,
+        "color_hexes": filament.color_hexes or [],
         "transparency": filament.transparency,
         "transparency_label": filament.get_transparency_display(),
+        "multi_color_direction": filament.multi_color_direction,
+        "finish": filament.finish,
+        "pattern": filament.pattern,
+        "glow": filament.glow,
         "diameter_mm": _float(filament.diameter_mm),
         "initial_weight_g": _float(spool.initial_weight_g),
         "remaining_weight_g": _float(spool.remaining_weight_g),
@@ -2413,7 +2423,12 @@ def printing_filaments(request):
             material=str(payload.get("material") or "").strip(),
             color_name=str(payload.get("color_name") or "").strip(),
             color_hex=str(payload.get("color_hex") or "").strip(),
+            color_hexes=payload.get("color_hexes") if isinstance(payload.get("color_hexes"), list) else [],
             transparency=str(payload.get("transparency") or "opaque").strip(),
+            multi_color_direction=str(payload.get("multi_color_direction") or "").strip(),
+            finish=str(payload.get("finish") or "").strip(),
+            pattern=str(payload.get("pattern") or "").strip(),
+            glow=bool(payload.get("glow")),
             diameter_mm=_parse_decimal(payload.get("diameter_mm", "1.75"), "diameter_mm", allow_none=False),
             density_g_cm3=_parse_decimal(payload.get("density_g_cm3"), "density_g_cm3"),
             nominal_weight_g=_parse_decimal(payload.get("nominal_weight_g"), "nominal_weight_g"),
@@ -2465,6 +2480,13 @@ def printing_filament_detail(request, filament_id):
                 setattr(item, field, str(payload.get(field) or "").strip())
         if "transparency" in payload:
             item.transparency = str(payload.get("transparency") or "opaque").strip()
+        if "color_hexes" in payload:
+            item.color_hexes = payload.get("color_hexes") if isinstance(payload.get("color_hexes"), list) else []
+        for field in ["multi_color_direction", "finish", "pattern"]:
+            if field in payload:
+                setattr(item, field, str(payload.get(field) or "").strip())
+        if "glow" in payload:
+            item.glow = bool(payload.get("glow"))
         for field in ["diameter_mm", "density_g_cm3", "nominal_weight_g", "empty_spool_weight_g", "drying_time_hours"]:
             if field in payload:
                 setattr(item, field, _parse_decimal(payload.get(field), field, allow_none=field != "diameter_mm"))
@@ -2476,6 +2498,128 @@ def printing_filament_detail(request, filament_id):
         return JsonResponse({"item": _serialise_filament_product(item)})
     except ValidationError as exc:
         return _validation_response(exc)
+
+
+@login_required
+@require_http_methods(["GET"])
+def printing_filament_catalogue(request):
+    try:
+        query = str(request.GET.get("q") or "").strip()
+        material = str(request.GET.get("material") or "").strip()
+        manufacturer = str(request.GET.get("manufacturer") or "").strip()
+        try:
+            limit = min(max(int(request.GET.get("limit", 50)), 1), 100)
+            offset = max(int(request.GET.get("offset", 0)), 0)
+        except (TypeError, ValueError):
+            return _error("Catalogue pagination values must be whole numbers.")
+        return JsonResponse(search_spoolmandb(
+            query=query,
+            material=material,
+            manufacturer=manufacturer,
+            limit=limit,
+            offset=offset,
+        ))
+    except FilamentCatalogueError as exc:
+        return _error(str(exc), status=502)
+
+
+@login_required
+@require_http_methods(["POST"])
+def printing_filament_catalogue_import(request):
+    denied = _require_permission(request, "core.add_filamentproduct")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        data = get_spoolmandb_item(payload.get("external_id"))
+
+        manufacturer, _ = Manufacturer.objects.get_or_create(name=data["manufacturer"] or "Generic")
+        source, _ = CatalogSource.objects.update_or_create(
+            source_type="spoolmandb",
+            external_id=data["external_id"],
+            defaults={
+                "name": f"SpoolmanDB — {data['manufacturer']} — {data['name']}"[:200],
+                "url": data["source_url"],
+                "raw_metadata": {
+                    "license": data["source_license"],
+                    "catalogue_id": data["external_id"],
+                    "record": data["raw"],
+                },
+            },
+        )
+
+        existing = FilamentProduct.objects.filter(source=source).first()
+        if existing:
+            return JsonResponse({"item": _serialise_filament_product(existing), "created": False})
+
+        existing = FilamentProduct.objects.filter(
+            manufacturer=manufacturer,
+            name=data["name"],
+            material=data["material"],
+            diameter_mm=data["diameter_mm"],
+            color_hex=data["color_hex"],
+        ).first()
+
+        defaults = {
+            "source": source,
+            "manufacturer": manufacturer,
+            "name": data["name"],
+            "material": data["material"],
+            "color_name": data["color_name"],
+            "color_hex": data["color_hex"],
+            "color_hexes": data["color_hexes"],
+            "transparency": data["transparency"],
+            "multi_color_direction": data["multi_color_direction"],
+            "finish": data["finish"],
+            "pattern": data["pattern"],
+            "glow": data["glow"],
+            "diameter_mm": data["diameter_mm"],
+            "density_g_cm3": data["density_g_cm3"],
+            "nominal_weight_g": data["nominal_weight_g"],
+            "empty_spool_weight_g": data["empty_spool_weight_g"],
+            "nozzle_temp_min_c": data["nozzle_temp_min_c"],
+            "nozzle_temp_max_c": data["nozzle_temp_max_c"],
+            "bed_temp_min_c": data["bed_temp_min_c"],
+            "bed_temp_max_c": data["bed_temp_max_c"],
+            "profile_data": {
+                "source": "SpoolmanDB",
+                "source_license": data["source_license"],
+                "external_catalogue_id": data["external_id"],
+                "spool_type": data["spool_type"],
+                "raw_color_hexes": data["color_hexes"],
+            },
+        }
+
+        if existing:
+            changed = False
+            if not existing.source:
+                existing.source = source
+                changed = True
+            for field, value in defaults.items():
+                if field in {"source", "manufacturer", "name", "material", "diameter_mm"}:
+                    continue
+                current = getattr(existing, field)
+                if current in (None, "", [], {}) and value not in (None, "", [], {}):
+                    setattr(existing, field, value)
+                    changed = True
+            if changed:
+                existing.full_clean()
+                existing.save()
+            item = existing
+            created = False
+        else:
+            item = FilamentProduct(**defaults)
+            item.full_clean()
+            item.save()
+            created = True
+
+        return JsonResponse({"item": _serialise_filament_product(item), "created": created}, status=201 if created else 200)
+    except FilamentCatalogueError as exc:
+        return _error(str(exc), status=502)
+    except ValidationError as exc:
+        return _validation_response(exc)
+    except (ValueError, IntegrityError) as exc:
+        return _error(str(exc))
 
 
 @login_required
