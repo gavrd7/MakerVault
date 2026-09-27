@@ -349,6 +349,7 @@ def _serialise_bom_allocation(allocation):
         "inventory_item_id": str(inventory.pk),
         "inventory_id": inventory.inventory_id,
         "inventory_name": inventory.display_name,
+        "inventory_image": _serialise_inventory(inventory).get("image", ""),
         "quantity": _float(allocation.quantity),
         "inventory_total_quantity": _float(inventory.quantity),
         "inventory_available_quantity": _float(inventory_available),
@@ -700,14 +701,14 @@ def inventory(request):
 @login_required
 @require_http_methods(["GET", "PATCH", "DELETE"])
 def inventory_detail(request, item_id):
-    item = InventoryItem.objects.select_related(
+    base_qs = InventoryItem.objects.select_related(
         "board__manufacturer", "board__source", "component__manufacturer",
         "component__category", "component__source", "project"
-    ).filter(pk=item_id).first()
-    if not item:
-        return _error("Inventory item not found.", status=404)
-
+    )
     if request.method == "GET":
+        item = base_qs.filter(pk=item_id).first()
+        if not item:
+            return _error("Inventory item not found.", status=404)
         history = item.history.select_related("project", "changed_by").all()[:250]
         payload = _serialise_inventory(item)
         payload["board"] = _serialise_board(item.board, detailed=True) if item.board else None
@@ -719,78 +720,86 @@ def inventory_detail(request, item_id):
         denied = _require_permission(request, "core.delete_inventoryitem")
         if denied:
             return denied
-        try:
-            item.delete()
-        except ProtectedError:
-            return _error(
-                "This inventory item is allocated to a project BOM. Release its BOM allocations before deleting it.",
-                status=409,
-            )
+        with transaction.atomic():
+            item = InventoryItem.objects.select_for_update().filter(pk=item_id).first()
+            if not item:
+                return _error("Inventory item not found.", status=404)
+            try:
+                item.delete()
+            except ProtectedError:
+                return _error(
+                    "This inventory item is allocated to a project BOM. Release its BOM allocations before deleting it.",
+                    status=409,
+                )
         return JsonResponse({"deleted": True})
 
     denied = _require_permission(request, "core.change_inventoryitem")
     if denied:
         return denied
     try:
-        before = _inventory_snapshot(item)
         payload = _read_json(request)
-        simple_fields = {
-            "location", "serial_number", "supplier", "purchase_url", "notes", "custom_name"
-        }
-        for field in simple_fields:
-            if field in payload:
-                setattr(item, field, str(payload[field] or "").strip())
-
-        if "quantity" in payload:
-            item.quantity = _parse_decimal(payload["quantity"], "quantity", allow_none=False)
-            allocated = item.bom_allocations.aggregate(total=Sum("quantity"))["total"] or Decimal("0")
-            if item.quantity < allocated:
-                raise ValidationError({
-                    "quantity": f"Quantity cannot be lower than the {allocated} already allocated to BOMs."
-                })
-        if "purchase_price" in payload:
-            item.purchase_price = _parse_decimal(payload["purchase_price"], "purchase_price")
-        if "currency" in payload:
-            item.currency = str(payload["currency"] or settings.MAKERVAULT_CURRENCY).upper()[:3]
-        if "status" in payload:
-            item.status = str(payload["status"])
-            if item.status in {"repair", "retired"} and item.bom_allocations.exists():
-                raise ValidationError({
-                    "status": "Release BOM allocations before marking this inventory item as repair or retired."
-                })
-        if "purchased_on" in payload:
-            raw_date = str(payload["purchased_on"] or "").strip()
-            if raw_date:
-                from datetime import date
-                try:
-                    item.purchased_on = date.fromisoformat(raw_date)
-                except ValueError as exc:
-                    raise ValidationError({"purchased_on": "Enter a valid date."}) from exc
-            else:
-                item.purchased_on = None
-        if "project_id" in payload:
-            if payload["project_id"]:
-                project = Project.objects.filter(pk=payload["project_id"]).first()
-                if not project:
-                    return _error("Selected project was not found.")
-                allocation_projects = set(
-                    item.bom_allocations.values_list("bom_item__project_id", flat=True).distinct()
-                )
-                if allocation_projects and allocation_projects != {project.id}:
+        with transaction.atomic():
+            item = base_qs.select_for_update().filter(pk=item_id).first()
+            if not item:
+                return _error("Inventory item not found.", status=404)
+            before = _inventory_snapshot(item)
+            simple_fields = {
+                "location", "serial_number", "supplier", "purchase_url", "notes", "custom_name"
+            }
+            for field in simple_fields:
+                if field in payload:
+                    setattr(item, field, str(payload[field] or "").strip())
+    
+            if "quantity" in payload:
+                item.quantity = _parse_decimal(payload["quantity"], "quantity", allow_none=False)
+                allocated = item.bom_allocations.aggregate(total=Sum("quantity"))["total"] or Decimal("0")
+                if item.quantity < allocated:
                     raise ValidationError({
-                        "project_id": "This inventory item has BOM allocations for another project. Release them before changing its project assignment."
+                        "quantity": f"Quantity cannot be lower than the {allocated} already allocated to BOMs."
                     })
-                item.project = project
-            else:
-                item.project = None
-
-        item.full_clean()
-        item.save()
-        _record_inventory_history(item, request.user, before)
-        item = InventoryItem.objects.select_related(
-            "board__manufacturer", "component__manufacturer", "project"
-        ).get(pk=item.pk)
-        return JsonResponse({"item": _serialise_inventory(item)})
+            if "purchase_price" in payload:
+                item.purchase_price = _parse_decimal(payload["purchase_price"], "purchase_price")
+            if "currency" in payload:
+                item.currency = str(payload["currency"] or settings.MAKERVAULT_CURRENCY).upper()[:3]
+            if "status" in payload:
+                item.status = str(payload["status"])
+                if item.status in {"repair", "retired"} and item.bom_allocations.exists():
+                    raise ValidationError({
+                        "status": "Release BOM allocations before marking this inventory item as repair or retired."
+                    })
+            if "purchased_on" in payload:
+                raw_date = str(payload["purchased_on"] or "").strip()
+                if raw_date:
+                    from datetime import date
+                    try:
+                        item.purchased_on = date.fromisoformat(raw_date)
+                    except ValueError as exc:
+                        raise ValidationError({"purchased_on": "Enter a valid date."}) from exc
+                else:
+                    item.purchased_on = None
+            if "project_id" in payload:
+                if payload["project_id"]:
+                    project = Project.objects.filter(pk=payload["project_id"]).first()
+                    if not project:
+                        return _error("Selected project was not found.")
+                    allocation_projects = set(
+                        item.bom_allocations.values_list("bom_item__project_id", flat=True).distinct()
+                    )
+                    if allocation_projects and allocation_projects != {project.id}:
+                        raise ValidationError({
+                            "project_id": "This inventory item has BOM allocations for another project. Release them before changing its project assignment."
+                        })
+                    item.project = project
+                else:
+                    item.project = None
+    
+            item.full_clean()
+            item.save()
+            _record_inventory_history(item, request.user, before)
+            item = InventoryItem.objects.select_related(
+                "board__manufacturer", "component__manufacturer", "project"
+            ).get(pk=item.pk)
+            return JsonResponse({"item": _serialise_inventory(item)})
     except ValidationError as exc:
         return _validation_response(exc)
     except ValueError as exc:
