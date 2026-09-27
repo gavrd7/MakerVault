@@ -173,6 +173,10 @@ def update_board_enrichment_state(board, *, save=True) -> bool:
     """Persist per-field known/unknown/not-applicable state for future enrichers."""
     specs = dict(board.specifications or {})
     not_applicable = set(specs.get("not_applicable_specs") or [])
+    if {"wifi_standard", "bluetooth_generation", "ieee_802154"}.issubset(not_applicable):
+        not_applicable.add("wireless")
+    if specs.get("native_usb") is False and not specs.get("usb_otg") and not specs.get("usb_serial_jtag"):
+        not_applicable.add("usb_capability")
     values = _tracked_board_values(board)
     state = {}
     unresolved = []
