@@ -1,7 +1,12 @@
+import shutil
+import tempfile
+from pathlib import Path
 from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
-from django.test import TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from core.filament_catalogue import normalise_spoolmandb_row
@@ -9,13 +14,18 @@ from core.filament_catalogue import normalise_spoolmandb_row
 from core.models import (
     ExternalSpoolLink,
     FileAsset,
+    FilamentManufacturer,
     FilamentProduct,
     Manufacturer,
     Model3D,
     ModelRevision,
     ModelRevisionAsset,
     Printer,
+    PrinterCatalogModel,
     PrinterFilamentSlot,
+    PrinterManufacturer,
+    PrintingIntegrationSetting,
+    PrintingLocation,
     PrintJob,
     PrintMaterialUsage,
     Spool,
@@ -114,7 +124,7 @@ class FilamentCatalogueTests(TestCase):
         payload = response.json()
         self.assertTrue(payload["created"])
         filament = FilamentProduct.objects.get(pk=payload["item"]["id"])
-        self.assertEqual(filament.manufacturer.name, "Example")
+        self.assertEqual(filament.filament_manufacturer.name, "Example")
         self.assertEqual(filament.source.source_type, "spoolmandb")
         self.assertEqual(filament.source.external_id, sample["external_id"])
         self.assertEqual(filament.color_hexes, sample["color_hexes"])
