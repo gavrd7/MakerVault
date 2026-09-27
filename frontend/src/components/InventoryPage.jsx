@@ -45,6 +45,14 @@ export default function InventoryPage({ inventory, setInventory, boards, compone
       valueParser: p => Number(p.newValue)
     },
     {
+      field: "allocated_quantity", headerName: "BOM alloc.", width: 110, editable: false, type: "numericColumn",
+      valueFormatter: p => Number(p.value || 0).toFixed(3).replace(/\.000$/, "")
+    },
+    {
+      field: "available_quantity", headerName: "Free", width: 95, editable: false, type: "numericColumn",
+      valueFormatter: p => Number(p.value || 0).toFixed(3).replace(/\.000$/, "")
+    },
+    {
       field: "status", headerName: "Status", minWidth: 135, editable,
       cellEditor: "agSelectCellEditor", cellEditorParams: { values: Object.keys(STATUS_LABELS) },
       valueFormatter: p => STATUS_LABELS[p.value] || p.value
@@ -103,7 +111,7 @@ export default function InventoryPage({ inventory, setInventory, boards, compone
   return <div className={`catalogueLayout ${selected ? "hasDetail" : ""}`}>
     <section className="panel pagePanel cataloguePanel">
       <div className="panelHead panelHeadWrap">
-        <div><h3>Inventory</h3><p>Click an item for its full record. Quick-edit status, project, location, quantity and cost directly in the grid.</p></div>
+        <div><h3>Inventory</h3><p>Click an item for its full record. Total, BOM-allocated and free quantities stay visible while you quick-edit stock details.</p></div>
         <div className="toolbarActions">
           <input className="searchInput" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search inventory…" />
           {config?.permissions?.add_inventory && <button className="primary" onClick={() => setShowAdd(true)}>＋ Add item</button>}
@@ -180,7 +188,9 @@ function InventoryDetail({ item, loading, projects, canEdit, onClose, onChanged 
     </div>
 
     <dl className="specList inventorySpecList">
-      <div><dt>Quantity</dt><dd>{item.quantity}</dd></div>
+      <div><dt>Total quantity</dt><dd>{item.quantity}</dd></div>
+      <div><dt>BOM allocated</dt><dd>{item.allocated_quantity ?? 0}</dd></div>
+      <div><dt>Free quantity</dt><dd>{item.available_quantity ?? item.quantity}</dd></div>
       <div><dt>Location</dt><dd>{item.location || "—"}</dd></div>
       <div><dt>Project</dt><dd>{item.project || "—"}</dd></div>
       <div><dt>Serial / ID</dt><dd>{item.serial_number || "—"}</dd></div>
@@ -252,7 +262,7 @@ function EditInventoryModal({ item, projects, onClose, onSaved }) {
     <form className="formGrid" onSubmit={submit}>
       {error && <div className="formError full">{error}</div>}
       <label className="full">Custom name<input value={form.custom_name} onChange={e => set("custom_name", e.target.value)} placeholder={item.name} /></label>
-      <label>Quantity<input type="number" min="0" step="0.001" value={form.quantity} onChange={e => set("quantity", e.target.value)} /></label>
+      <label>Quantity<input type="number" min={item.allocated_quantity || 0} step="0.001" value={form.quantity} onChange={e => set("quantity", e.target.value)} /></label>
       <label>Status<select value={form.status} onChange={e => set("status", e.target.value)}>{Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
       <label>Project<select value={form.project_id} onChange={e => set("project_id", e.target.value)}><option value="">None</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
       <label>Location<input value={form.location} onChange={e => set("location", e.target.value)} /></label>
