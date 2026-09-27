@@ -238,3 +238,24 @@ def get_spoolmandb_item(external_id):
         if item["external_id"] == target:
             return item
     raise FilamentCatalogueError("That SpoolmanDB filament could not be found.")
+
+
+def spoolmandb_meta():
+    rows = get_spoolmandb_catalogue()
+    manufacturers = sorted(
+        {item["manufacturer"] for item in rows if item.get("manufacturer")},
+        key=str.casefold,
+    )
+    materials = sorted(
+        {item["material"] for item in rows if item.get("material")},
+        key=str.casefold,
+    )
+    return {
+        "manufacturers": manufacturers,
+        "materials": materials,
+        "source": {
+            "name": "SpoolmanDB",
+            "url": "https://donkie.github.io/SpoolmanDB/",
+            "license": "MIT",
+        },
+    }
