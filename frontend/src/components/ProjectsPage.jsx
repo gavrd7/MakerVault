@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../api";
 import { Badge, BoardImage, ImageViewer, LoadingBlock, Modal } from "./Common";
 
@@ -55,7 +55,7 @@ function money(value, currency) {
   return new Intl.NumberFormat(undefined, { style: "currency", currency: currency || "GBP" }).format(Number(value || 0));
 }
 
-export default function ProjectsPage({ projects, setProjects, config, refreshDashboard }) {
+export default function ProjectsPage({ projects, setProjects, config, refreshDashboard, openProjectId, onOpenConsumed }) {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -87,6 +87,14 @@ export default function ProjectsPage({ projects, setProjects, config, refreshDas
     setProjects(rows => rows.map(row => row.id === project.id ? { ...row, ...result.project } : row));
     await refreshDashboard();
   }
+
+  useEffect(() => {
+    if (!openProjectId) return;
+    const project = projects.find(row => row.id === openProjectId);
+    if (!project) return;
+    openProject(project);
+    onOpenConsumed?.();
+  }, [openProjectId, projects]);
 
   return <div className={`projectLayout ${selected ? "hasDetail" : ""}`}>
     <section className="panel projectPanel">
