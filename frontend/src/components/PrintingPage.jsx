@@ -44,6 +44,7 @@ export default function PrintingPage({ config, projects }) {
   const canAddModel = Boolean(config?.permissions?.add_model3d);
   const canChangeModel = Boolean(config?.permissions?.change_model3d);
   const canAddPrintJob = Boolean(config?.permissions?.add_printjob);
+  const canAddLocation = Boolean(config?.permissions?.add_printing_location);
 
   return <div className="printingStack">
     <section className="panel printingHero">
@@ -54,6 +55,7 @@ export default function PrintingPage({ config, projects }) {
       </div>
       <div className="printingHeroActions">
         {canAddPrinter && <button onClick={() => setModal("printer")}>＋ Printer</button>}
+        {canAddLocation && <button onClick={() => setModal("location")}>＋ Location</button>}
         {canAddFilament && <button onClick={() => setModal("filament")}>＋ Filament</button>}
         {canAddFilament && <button onClick={() => setModal("filamentCatalogue")}>⌕ Filament catalogue</button>}
         {canAddSpool && <button onClick={() => setModal("spool")}>＋ Spool</button>}
@@ -67,10 +69,10 @@ export default function PrintingPage({ config, projects }) {
 
     <div className="printingMetrics">
       <article><span>Models</span><strong>{summary.models || 0}</strong></article>
-      <article><span>Printers</span><strong>{summary.printers || 0}</strong></article>
+      <article><span>Active printers</span><strong>{summary.active_printers || 0}</strong></article>
+      <article><span>Filaments</span><strong>{summary.filaments || 0}</strong></article>
       <article><span>Spools</span><strong>{summary.spools || 0}</strong></article>
       <article><span>Loaded slots</span><strong>{summary.loaded_slots || 0}</strong></article>
-      <article><span>External links</span><strong>{summary.externally_linked_spools || 0}</strong></article>
       <article><span>Print jobs</span><strong>{summary.print_jobs || 0}</strong></article>
     </div>
 
@@ -78,7 +80,10 @@ export default function PrintingPage({ config, projects }) {
       <div className="panelHead"><div><h3>Printers &amp; loaded filament</h3><p>Filament slots are provider-neutral so CFS, AMS and later systems can use the same model.</p></div></div>
       <div className="printingCards">
         {(data?.printers || []).map(printer => <article className="printingCard" key={printer.id}>
-          <div className="printingCardHead"><div><strong>{printer.name}</strong><small>{[printer.manufacturer, printer.model].filter(Boolean).join(" · ")}</small></div><Badge>{printer.slots.length} slots</Badge></div>
+          <div className="printingCardHead">
+            <div><strong>{printer.name}</strong><small>{[printer.manufacturer, printer.model, printer.location].filter(Boolean).join(" · ")}</small></div>
+            <div className="printingBadges">{printer.is_active ? <Badge tone="good">Active</Badge> : <Badge>Inactive</Badge>}{printer.catalogue?.multi_material_label && <Badge>{printer.catalogue.multi_material_label}</Badge>}<Badge>{printer.slots.length} slots</Badge></div>
+          </div>
           <div className="printingSlotGrid">
             {printer.slots.filter(slot => slot.is_loaded).map(slot => <div className="printingSlot" key={slot.id}>
               <span className="printingSwatch" style={slot.color_hex ? { background: slot.color_hex } : undefined} />
@@ -97,7 +102,7 @@ export default function PrintingPage({ config, projects }) {
         <div className="printingList">
           {(data?.spools || []).map(spool => <article className="printingListRow" key={spool.id}>
             <span className={`printingSwatch filamentPreview-${spool.transparency || "opaque"}`} style={filamentSwatchStyle(spool)} />
-            <div><strong>{spool.spool_id} · {spool.filament}</strong><small>{spool.material} · {grams(spool.remaining_weight_g)} remaining</small></div>
+            <div><strong>{spool.spool_id} · {spool.filament}</strong><small>{spool.material} · {grams(spool.remaining_weight_g)} remaining{spool.location ? " · " + spool.location : ""}</small></div>
             <div className="printingBadges">{spool.loaded_slots.length > 0 && <Badge tone="accent">Loaded</Badge>}{spool.external_links.map(link => <Badge key={link.id}>{link.provider_label}</Badge>)}</div>
           </article>)}
           {!data?.spools?.length && <div className="printingEmptyInline">No spool records yet.</div>}
@@ -137,11 +142,12 @@ export default function PrintingPage({ config, projects }) {
       </div>
     </section>}
 
-    {modal === "printer" && <PrinterModal manufacturers={data?.manufacturers || []} onClose={() => setModal("")} onSaved={saved} />}
-    {modal === "filament" && <FilamentModal manufacturers={data?.manufacturers || []} onClose={() => setModal("")} onSaved={saved} />}
+    {modal === "printer" && <PrinterModal manufacturers={data?.printer_manufacturers || []} models={data?.printer_catalogue_models || []} locations={data?.locations || []} onClose={() => setModal("")} onSaved={saved} />}
+    {modal === "location" && <LocationModal onClose={() => setModal("")} onSaved={saved} />}
+    {modal === "filament" && <FilamentModal manufacturers={data?.filament_manufacturers || []} materials={data?.common_filament_materials || []} onClose={() => setModal("")} onSaved={saved} />}
     {modal === "filamentCatalogue" && <FilamentCatalogueModal onClose={() => setModal("")} onImported={saved} />}
-    {modal === "spool" && <SpoolModal filaments={data?.filaments || []} currency={config?.currency || "GBP"} onClose={() => setModal("")} onSaved={saved} />}
-    {modal === "model" && <ModelModal projects={projects || []} onClose={() => setModal("")} onSaved={saved} />}
+    {modal === "spool" && <SpoolModal filaments={data?.filaments || []} locations={data?.locations || []} printers={data?.printers || []} currency={config?.currency || "GBP"} onClose={() => setModal("")} onSaved={saved} />}
+    {modal === "model" && <ModelModal projects={projects || []} canUpload={Boolean(config?.permissions?.add_file)} onClose={() => setModal("")} onSaved={saved} />}
     {modal === "print" && <PrintJobModal
       printers={data?.printers || []}
       spools={data?.spools || []}
