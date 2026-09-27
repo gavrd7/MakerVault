@@ -770,7 +770,7 @@ class PrintingFoundationTests(TestCase):
         self.assertIsNotNone(setting.last_sync_at)
 
     @patch("core.printing_sync.requests.get")
-    def test_first_spoolman_sync_links_one_unambiguous_existing_spool(self, get_mock):
+    def test_first_spoolman_sync_queues_possible_duplicate_for_review(self, get_mock):
         maker = FilamentManufacturer.objects.create(name="Creality")
         filament = FilamentProduct.objects.create(
             filament_manufacturer=maker,
@@ -779,12 +779,18 @@ class PrintingFoundationTests(TestCase):
             color_hex="#ffffff",
             diameter_mm="1.75",
         )
+        local_location = PrintingLocation.objects.create(
+            name="MakerVault shelf",
+            kind="shelf",
+        )
         local = Spool.objects.create(
             spool_id="SPL-LOCAL",
             filament=filament,
             initial_weight_g="1000",
             remaining_weight_g="900",
-            status="open",
+            storage_location=local_location,
+            status="drying",
+            notes="Local notes stay authoritative",
         )
         response = Mock(status_code=200)
         response.json.return_value = [
@@ -792,8 +798,9 @@ class PrintingFoundationTests(TestCase):
                 "id": 99,
                 "remaining_weight": 450,
                 "initial_weight": 1000,
-                "archived": False,
-                "location": "",
+                "archived": True,
+                "location": "Spoolman shelf",
+                "comment": "Remote note must not replace local notes",
                 "filament": {
                     "id": 8,
                     "name": "Hyper ABS",
@@ -821,14 +828,40 @@ class PrintingFoundationTests(TestCase):
         self.assertEqual(synced.status_code, 200, synced.content)
         result = synced.json()["result"]
         self.assertEqual(result["created"], 0)
-        self.assertEqual(result["linked_existing"], 1)
+        self.assertEqual(result["pending_review"], 1)
         self.assertEqual(Spool.objects.filter(filament=filament).count(), 1)
+        self.assertFalse(ExternalSpoolLink.objects.filter(provider="spoolman", external_id="99").exists())
+        self.assertTrue(PrintingLocation.objects.filter(name="Spoolman shelf").exists())
+
         local.refresh_from_db()
-        self.assertEqual(local.remaining_weight_g, Decimal("450"))
+        self.assertEqual(local.remaining_weight_g, Decimal("900"))
+        self.assertEqual(local.storage_location, local_location)
+        self.assertEqual(local.status, "drying")
+        self.assertEqual(local.notes, "Local notes stay authoritative")
+
+        reviews = self.client.get("/api/settings/printing-integrations/spoolman/reviews/")
+        self.assertEqual(reviews.status_code, 200, reviews.content)
+        self.assertEqual(len(reviews.json()["rows"]), 1)
+        self.assertEqual(reviews.json()["rows"][0]["external_id"], "99")
+        self.assertEqual(reviews.json()["rows"][0]["spool_candidates"][0]["id"], str(local.id))
+
+        resolved = self.client.post(
+            "/api/settings/printing-integrations/spoolman/reviews/99/",
+            data={"action": "link", "spool_id": str(local.id)},
+            content_type="application/json",
+        )
+        self.assertEqual(resolved.status_code, 200, resolved.content)
+        self.assertEqual(resolved.json()["item"]["pending_review_count"], 0)
         self.assertEqual(
             ExternalSpoolLink.objects.get(provider="spoolman", external_id="99").spool_id,
             local.id,
         )
+
+        local.refresh_from_db()
+        self.assertEqual(local.remaining_weight_g, Decimal("450"))
+        self.assertEqual(local.storage_location, local_location)
+        self.assertEqual(local.status, "drying")
+        self.assertEqual(local.notes, "Local notes stay authoritative")
 
     @patch("core.printing_sync._fetch_cfs_boxs_info", new_callable=AsyncMock)
     def test_creality_cfs_sync_populates_slots_and_matches_assigned_spool(self, fetch_mock):
