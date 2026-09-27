@@ -95,6 +95,25 @@ class ProjectAssetApiTests(TestCase):
         self.assertFalse(FileAsset.objects.filter(pk=asset.id).exists())
         self.assertFalse(storage.exists(stored_name))
 
+    def test_global_file_library_returns_same_project_asset(self):
+        upload = self.client.post(
+            f"/api/projects/{self.project.id}/files/",
+            {
+                "file": SimpleUploadedFile("speaker.uf2", b"firmware-bytes"),
+                "category": "firmware",
+                "name": "Speaker firmware",
+            },
+        )
+        self.assertEqual(upload.status_code, 201, upload.content)
+
+        response = self.client.get("/api/files/")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload["rows"]), 1)
+        self.assertEqual(payload["rows"][0]["project"], "Desk speaker")
+        self.assertEqual(payload["rows"][0]["category"], "firmware")
+        self.assertTrue(any(item["value"] == "mesh" for item in payload["categories"]))
+
     def test_repository_link_is_returned_with_project(self):
         response = self.client.post(
             f"/api/projects/{self.project.id}/repositories/",
