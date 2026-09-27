@@ -186,30 +186,31 @@ function InventoryDetail({ item, loading, projects, canEdit, canDelete, onClose,
   return <aside className="detailPane inventoryDetailPane">
     <div className="detailHead"><h3>Inventory details</h3><button className="iconButton" onClick={onClose}>×</button></div>
     <BoardImage src={item.image} alt={item.name} size="large" placeholder={item.item_type === "board" ? "MCU" : "PART"} />
-    <div className="detailTitleRow">
-      <div><span className="inventoryCode">{item.inventory_id}</span><h2>{item.name}</h2></div>
-      <div className="inventoryDetailActions">
-        {canEdit && <button className="primary" onClick={() => setEditing(true)}>Edit</button>}
-        {canEdit && Number(item.allocated_quantity || 0) > 0 && <button onClick={() => setReleaseOpen(true)}>Release BOM</button>}
-        {canDelete && <button
-          className="assetDanger"
-          disabled={deleting || Number(item.allocated_quantity || 0) > 0}
-          title={Number(item.allocated_quantity || 0) > 0 ? "Release BOM allocations before deleting this inventory record." : "Delete this inventory record"}
-          onClick={async () => {
-            if (!window.confirm('Delete "' + item.inventory_id + ' · ' + item.name + '" from inventory? This cannot be undone.')) return;
-            setDeleting(true);
-            setDeleteError("");
-            try {
-              await apiFetch("/api/inventory/" + item.id + "/", { method: "DELETE" });
-              await onDeleted(item);
-            } catch (error) {
-              setDeleteError(error.message);
-            } finally {
-              setDeleting(false);
-            }
-          }}
-        >{deleting ? "Deleting…" : "Delete"}</button>}
-      </div>
+    <div className="inventoryDetailIdentity">
+      <span className="inventoryCode">{item.inventory_id}</span>
+      <h2>{item.name}</h2>
+    </div>
+    <div className="inventoryDetailActions">
+      {canEdit && <button className="primary" onClick={() => setEditing(true)}>Edit</button>}
+      {canEdit && Number(item.allocated_quantity || 0) > 0 && <button onClick={() => setReleaseOpen(true)}>Release from allocation</button>}
+      {canDelete && <button
+        className="assetDanger"
+        disabled={deleting || Number(item.allocated_quantity || 0) > 0}
+        title={Number(item.allocated_quantity || 0) > 0 ? "Release BOM allocations before deleting this inventory record." : "Delete this inventory record"}
+        onClick={async () => {
+          if (!window.confirm('Delete "' + item.inventory_id + ' · ' + item.name + '" from inventory? This cannot be undone.')) return;
+          setDeleting(true);
+          setDeleteError("");
+          try {
+            await apiFetch("/api/inventory/" + item.id + "/", { method: "DELETE" });
+            await onDeleted(item);
+          } catch (error) {
+            setDeleteError(error.message);
+          } finally {
+            setDeleting(false);
+          }
+        }}
+      >{deleting ? "Deleting…" : "Delete"}</button>}
     </div>
     {deleteError && <div className="inlineError">{deleteError}</div>}
     {canDelete && Number(item.allocated_quantity || 0) > 0 && <div className="inventoryDeleteHint">Release this item's BOM allocations before deleting it.</div>}
