@@ -172,6 +172,67 @@ class PrintingFoundationTests(TestCase):
             {"SPL-0001", "SPL-0002"},
         )
 
+    def test_print_history_api_accepts_multiple_material_usages(self):
+        second_filament = FilamentProduct.objects.create(
+            manufacturer=self.manufacturer,
+            name="PLA White",
+            material="PLA",
+            color_name="White",
+            diameter_mm="1.75",
+        )
+        second_spool = Spool.objects.create(
+            spool_id="SPL-HISTORY-2",
+            filament=second_filament,
+            initial_weight_g="1000",
+            remaining_weight_g="900",
+            status="open",
+        )
+
+        response = self.client.post(
+            "/api/printing/jobs/",
+            data={
+                "printer_id": str(self.printer.id),
+                "status": "success",
+                "quantity": 1,
+                "actual_minutes": 42,
+                "material_usages": [
+                    {"spool_id": str(self.spool.id), "used_g": "10.5", "waste_g": "0.2"},
+                    {"spool_id": str(second_spool.id), "used_g": "2.5", "waste_g": "0.1"},
+                ],
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        job = response.json()["job"]
+        self.assertEqual(len(job["material_usages"]), 2)
+        self.assertEqual(job["filament_used_g"], 13.0)
+        self.assertEqual(job["waste_g"], 0.3)
+        self.assertEqual(PrintJob.objects.count(), 1)
+        self.assertEqual(PrintMaterialUsage.objects.count(), 2)
+
+    def test_print_history_rejects_slot_from_another_printer(self):
+        other_printer = Printer.objects.create(name="Other printer", model="Other")
+        foreign_slot = PrinterFilamentSlot.objects.create(
+            printer=other_printer,
+            system="creality_cfs",
+            slot_index=0,
+            spool=self.spool,
+        )
+        response = self.client.post(
+            "/api/printing/jobs/",
+            data={
+                "printer_id": str(self.printer.id),
+                "status": "success",
+                "material_usages": [
+                    {"printer_slot_id": str(foreign_slot.id), "used_g": "1"},
+                ],
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(PrintJob.objects.count(), 0)
+        self.assertEqual(PrintMaterialUsage.objects.count(), 0)
+
     def test_model_revision_asset_reuses_fileasset_and_validates_printable_role(self):
         model = Model3D.objects.create(name="Calibration part")
         revision = ModelRevision.objects.create(model=model, version="A")
