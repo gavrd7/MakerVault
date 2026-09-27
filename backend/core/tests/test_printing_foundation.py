@@ -209,6 +209,83 @@ class PrintingFoundationTests(TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertFalse(Printer.objects.filter(name="Blocked printer").exists())
 
+    def test_model_revision_can_attach_existing_fileasset_without_duplication(self):
+        model = Model3D.objects.create(name="Bracket")
+        asset = FileAsset.objects.create(
+            name="Bracket STL",
+            category="mesh",
+            file="files/bracket.stl",
+        )
+
+        revision_response = self.client.post(
+            f"/api/printing/models/{model.id}/revisions/",
+            data={"version": "1.0", "notes": "Initial revision"},
+            content_type="application/json",
+        )
+        self.assertEqual(revision_response.status_code, 201, revision_response.content)
+        revision_id = revision_response.json()["model"]["revisions"][0]["id"]
+
+        attach_response = self.client.post(
+            f"/api/printing/models/{model.id}/revisions/{revision_id}/assets/",
+            data={"file_asset_id": str(asset.id), "role": "model", "is_primary": True},
+            content_type="application/json",
+        )
+        self.assertEqual(attach_response.status_code, 201, attach_response.content)
+        payload = attach_response.json()["model"]
+        attached = payload["revisions"][0]["assets"][0]
+        self.assertEqual(attached["file"]["id"], str(asset.id))
+        self.assertTrue(attached["is_primary"])
+        self.assertEqual(FileAsset.objects.filter(pk=asset.id).count(), 1)
+
+    def test_model_linked_file_cannot_be_deleted_until_detached(self):
+        model = Model3D.objects.create(name="Protected model")
+        revision = ModelRevision.objects.create(model=model, version="1")
+        asset = FileAsset.objects.create(
+            name="Protected STL",
+            category="mesh",
+            file="files/protected.stl",
+        )
+        link = ModelRevisionAsset.objects.create(
+            revision=revision,
+            file_asset=asset,
+            role="model",
+        )
+
+        response = self.client.delete(f"/api/files/{asset.id}/")
+        self.assertEqual(response.status_code, 409)
+        self.assertTrue(FileAsset.objects.filter(pk=asset.id).exists())
+
+        detach = self.client.delete(
+            f"/api/printing/models/{model.id}/revisions/{revision.id}/assets/{link.id}/"
+        )
+        self.assertEqual(detach.status_code, 200)
+
+        response = self.client.delete(f"/api/files/{asset.id}/")
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(FileAsset.objects.filter(pk=asset.id).exists())
+
+    def test_cross_project_model_file_attachment_is_rejected(self):
+        from core.models import Project
+
+        model_project = Project.objects.create(name="Model project")
+        other_project = Project.objects.create(name="Other project")
+        model = Model3D.objects.create(name="Project model", project=model_project)
+        revision = ModelRevision.objects.create(model=model, version="1")
+        asset = FileAsset.objects.create(
+            name="Other STL",
+            category="mesh",
+            file="files/other.stl",
+            project=other_project,
+        )
+
+        response = self.client.post(
+            f"/api/printing/models/{model.id}/revisions/{revision.id}/assets/",
+            data={"file_asset_id": str(asset.id), "role": "model"},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(ModelRevisionAsset.objects.filter(revision=revision).exists())
+
     def test_external_provider_links_do_not_replace_native_spool_identity(self):
         link = ExternalSpoolLink.objects.create(
             spool=self.spool,
