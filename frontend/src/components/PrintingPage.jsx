@@ -166,6 +166,43 @@ export default function PrintingPage({ config, projects }) {
   </div>;
 }
 
+function LocationModal({ onClose, onSaved }) {
+  const [form, setForm] = useState({ name: "", kind: "storage", notes: "" });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const set = (key, value) => setForm(current => ({ ...current, [key]: value }));
+
+  async function submit(event) {
+    event.preventDefault();
+    setBusy(true); setError("");
+    try {
+      await apiFetch("/api/printing/locations/", { method: "POST", body: form });
+      await onSaved();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <Modal title="Add printing location" subtitle="Create reusable storage and printer locations for spools and owned machines." onClose={onClose}>
+    <form className="formGrid" onSubmit={submit}>
+      {error && <div className="formError full">{error}</div>}
+      <label>Name<input required value={form.name} onChange={e => set("name", e.target.value)} placeholder="Workshop shelf A" /></label>
+      <label>Type<select value={form.kind} onChange={e => set("kind", e.target.value)}>
+        <option value="room">Room / area</option>
+        <option value="workshop">Workshop</option>
+        <option value="shelf">Shelf</option>
+        <option value="drybox">Dry box</option>
+        <option value="storage">Storage</option>
+        <option value="other">Other</option>
+      </select></label>
+      <label className="full">Notes<textarea rows="3" value={form.notes} onChange={e => set("notes", e.target.value)} /></label>
+      <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Saving…" : "Add location"}</button></div>
+    </form>
+  </Modal>;
+}
+
 function PrinterModal({ manufacturers, models, locations, onClose, onSaved }) {
   const [form, setForm] = useState({
     name: "",
