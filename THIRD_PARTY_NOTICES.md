@@ -25,3 +25,10 @@ MakerVault is built with third-party open-source libraries and container images,
 Open **About → Media attribution** in a running MakerVault instance to see the third-party image records actually cached by that installation.
 
 This notice is informational and is not a substitute for the licence terms of any third-party work.
+
+
+## Openverse
+
+MakerVault can use the Openverse API as a discovery index for openly licensed catalogue images. Openverse does not become the owner or licence issuer of the indexed media. MakerVault retains the upstream creator, landing/source page and reported licence metadata and only automatically accepts CC0/Public Domain, CC BY and CC BY-SA licence families.
+
+Users should follow the attribution and ShareAlike requirements of the original work. MakerVault does not relicense runtime-downloaded Openverse media under the MakerVault software licence.
