@@ -331,3 +331,8 @@
     aspect-ratio:16 / 10;
   }
 }
+
+/* v0.3.8 specification field state */
+.boardSpecCell.spec-unknown dd{min-height:1.35em;color:transparent}
+.boardSpecCell.spec-unknown{background:rgba(255,255,255,.005)}
+.boardSpecCell.spec-not_applicable dd{color:#778397;font-style:italic}
