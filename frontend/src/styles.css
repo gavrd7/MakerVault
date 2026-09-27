@@ -450,3 +450,33 @@
   .settingsActions{display:grid;grid-template-columns:1fr}
   .settingsActions button{width:100%}
 }
+
+
+/* v0.4.2 project files and repositories */
+.projectSectionIntro{margin:-3px 0 12px;color:#7f8a9c;font-size:12px;line-height:1.5}
+.projectAssetGroups{display:grid;gap:12px}
+.projectAssetGroup{border:1px solid #29313c;border-radius:12px;overflow:hidden;background:#0d131a}
+.projectAssetGroupHead{display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-bottom:1px solid #29313c;background:#111923}
+.projectAssetGroupHead strong{font-size:12px;color:#c8d1de}.projectAssetGroupHead span{font-size:11px;color:#778397}
+.projectAssetList{display:grid}
+.projectAssetRow,.projectRepositoryRow{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:11px;align-items:center;padding:11px 12px;border-bottom:1px solid #29313c}
+.projectAssetRow:last-child,.projectRepositoryRow:last-child{border-bottom:0}
+.projectFileBadge{display:grid;place-items:center;min-width:48px;height:34px;padding:0 7px;border:1px solid #3a4658;border-radius:8px;background:#151e29;color:#91a2b8;font-size:9px;font-weight:800;letter-spacing:.05em}
+.projectAssetMain{min-width:0}.projectAssetMain strong,.projectAssetMain small{display:block}
+.projectAssetMain strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.projectAssetMain small{margin-top:4px;color:#778397;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.projectAssetMain p{margin:7px 0 0;color:#98a5b6;font-size:11px;line-height:1.45}
+.projectAssetActions{display:flex;gap:6px;align-items:center}
+.assetButton,.projectAssetActions button{display:inline-flex;align-items:center;justify-content:center;min-height:30px;padding:5px 9px;border:1px solid #354154;border-radius:7px;background:#151d27;color:#c8d1de;text-decoration:none;font-size:10px}
+.assetButton:hover{border-color:#596b84;color:#fff}
+.projectAssetActions .assetDanger{color:#e29ba0;border-color:#57353b;background:#24151a}
+.projectAssetEmpty{padding:20px;border:1px dashed #394657;border-radius:12px;color:#778397;text-align:center;font-size:12px}
+.projectRepositoryList{display:grid;border:1px solid #29313c;border-radius:12px;overflow:hidden;background:#0d131a}
+.projectRepoProvider{min-width:62px;padding:6px 8px;border:1px solid #38465a;border-radius:999px;text-align:center;color:#9eacf8;background:#17182a;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.05em}
+.projectUploadHint{padding:10px 12px;border:1px solid #303b4a;border-radius:9px;background:#101821;color:#7f8a9c;font-size:11px;line-height:1.5}
+
+@media(max-width:700px){
+  .projectAssetRow,.projectRepositoryRow{grid-template-columns:auto minmax(0,1fr)}
+  .projectAssetActions{grid-column:1/-1;justify-content:flex-end}
+  .projectAssetActions .assetButton,.projectAssetActions button{flex:1}
+}
