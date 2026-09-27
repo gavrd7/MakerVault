@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.4.1
+
+- Added persistent automatic catalogue-maintenance scheduling with a default 24-hour interval.
+- Added Celery Beat inside the existing MakerVault application container; no extra Docker service is required.
+- Added an administrator-only Settings page for catalogue maintenance.
+- Schedule interval is configurable from 1 to 720 hours and persists in PostgreSQL across container rebuilds/restarts.
+- Added separate toggles for technical board-data checks and catalogue-image checks.
+- Added a Run now control for immediate manual maintenance without changing the saved schedule.
+- The scheduler queues existing enrichment/image jobs, preserving their locks, confidence rules and per-record retry windows.
+- Removed the old behaviour that queued catalogue enrichment on every container restart.
+- Environment flags ENRICH_BOARD_CATALOGUE and SEED_CATALOGUE_IMAGES remain server-level hard disables that the GUI cannot override.
+- Added last-run, next-run and trigger metadata to the settings view.
+- Added migration 0004 for the singleton catalogue maintenance settings record.
+
+
 ## v0.4.0
 
 - Replaced the placeholder Projects page with a full project workspace.
