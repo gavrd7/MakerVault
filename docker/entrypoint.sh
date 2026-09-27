@@ -52,17 +52,7 @@ gosu makervault python manage.py seed_roles
 echo "Ensuring starter catalogue..."
 gosu makervault python manage.py seed_catalogue
 
-if [ "${ENRICH_BOARD_CATALOGUE:-true}" = "true" ] || [ "${ENRICH_BOARD_CATALOGUE:-true}" = "1" ]; then
-  echo "Queueing board technical specification enrichment..."
-  gosu makervault python manage.py enrich_board_catalogue --enqueue || \
-    echo "WARNING: Board enrichment could not be queued; it can be retried later." >&2
-fi
-
-if [ "${SEED_CATALOGUE_IMAGES:-true}" = "true" ] || [ "${SEED_CATALOGUE_IMAGES:-true}" = "1" ]; then
-  echo "Queueing starter catalogue image seeding..."
-  gosu makervault python manage.py seed_catalogue_images --enqueue || \
-    echo "WARNING: Catalogue image seeding could not be queued; it can be retried later." >&2
-fi
+echo "Catalogue maintenance is handled by the persistent scheduler."
 
 echo "Collecting static files..."
 gosu makervault python manage.py collectstatic --noinput --clear >/dev/null
