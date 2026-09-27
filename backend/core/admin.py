@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     Manufacturer, CatalogSource, CatalogueMaintenanceSettings, BoardModel, BoardCompatibility, ComponentCategory,
-    ComponentModel, Project, InventoryItem, InventoryHistory, BOMItem, FileAsset, RepositoryLink,
+    ComponentModel, Project, InventoryItem, InventoryHistory, BOMItem, BOMAllocation, FileAsset, RepositoryLink,
     FilamentProduct, Spool, Printer, Model3D, ModelRevision, ProductListing, PrintJob,
 )
 
@@ -33,6 +33,21 @@ class InventoryItemAdmin(admin.ModelAdmin):
     search_fields = ("inventory_id", "custom_name", "board__name", "component__name", "serial_number")
 
 
+@admin.register(BOMItem)
+class BOMItemAdmin(admin.ModelAdmin):
+    list_display = ("project", "display_name", "quantity", "unit", "unit_cost", "currency")
+    list_filter = ("project", "currency")
+    search_fields = ("project__name", "custom_name", "board__name", "component__name")
+
+
+@admin.register(BOMAllocation)
+class BOMAllocationAdmin(admin.ModelAdmin):
+    list_display = ("bom_item", "inventory_item", "quantity", "allocated_by", "created_at")
+    list_filter = ("bom_item__project", "created_at")
+    search_fields = ("bom_item__project__name", "bom_item__custom_name", "inventory_item__inventory_id", "inventory_item__custom_name")
+    readonly_fields = ("created_at", "updated_at")
+
+
 @admin.register(InventoryHistory)
 class InventoryHistoryAdmin(admin.ModelAdmin):
     list_display = ("inventory_item", "event_type", "summary", "project", "changed_by", "created_at")
@@ -50,7 +65,7 @@ class ProjectAdmin(admin.ModelAdmin):
 
 admin.site.register([
     Manufacturer, CatalogSource, BoardCompatibility, ComponentCategory, ComponentModel,
-    BOMItem, FileAsset, RepositoryLink, FilamentProduct, Spool, Printer, Model3D,
+    FileAsset, RepositoryLink, FilamentProduct, Spool, Printer, Model3D,
     ModelRevision, ProductListing, PrintJob,
 ])
 
