@@ -2178,10 +2178,30 @@ def _serialise_printing_integration(item):
         "sync_direction_label": item.get_sync_direction_display(),
         "status": item.status,
         "status_label": item.get_status_display(),
+        "auto_sync": item.auto_sync,
+        "sync_interval_minutes": item.sync_interval_minutes,
         "last_checked_at": item.last_checked_at.isoformat() if item.last_checked_at else None,
+        "last_sync_at": item.last_sync_at.isoformat() if item.last_sync_at else None,
+        "next_sync_at": item.next_sync_at.isoformat() if item.next_sync_at else None,
+        "last_sync_triggered_by": item.last_sync_triggered_by,
+        "last_sync_result": item.last_sync_result or {},
         "last_error": item.last_error,
+        "can_sync": item.provider in {"spoolman", "creality_cfs"},
         "config": item.config or {},
         **extra,
+    }
+
+
+def _serialise_printing_integration_status(item):
+    return {
+        "provider": item.provider,
+        "name": item.get_provider_display(),
+        "status": item.status,
+        "status_label": item.get_status_display(),
+        "last_sync_at": item.last_sync_at.isoformat() if item.last_sync_at else None,
+        "next_sync_at": item.next_sync_at.isoformat() if item.next_sync_at else None,
+        "auto_sync": item.auto_sync,
+        "last_error": item.last_error,
     }
 
 
@@ -2218,22 +2238,44 @@ def printing_integration_detail(request, provider):
             if direction not in dict(PrintingIntegrationSetting.SYNC_DIRECTIONS):
                 return _error("Unknown sync direction.")
             item.sync_direction = direction
+        if "auto_sync" in payload:
+            item.auto_sync = bool(payload.get("auto_sync"))
+        if "sync_interval_minutes" in payload:
+            try:
+                item.sync_interval_minutes = int(payload.get("sync_interval_minutes"))
+            except (TypeError, ValueError) as exc:
+                raise ValidationError({
+                    "sync_interval_minutes": "Enter a whole number of minutes."
+                }) from exc
 
         if not item.enabled:
             item.status = "disabled"
             item.last_error = ""
+            item.next_sync_at = None
         elif item.provider == "spoolman" and not item.endpoint_url:
             item.status = "not_configured"
+            item.next_sync_at = None
         elif item.provider == "creality_cfs":
             configured = Printer.objects.filter(
                 is_active=True,
                 catalog_model__multi_material_system="creality_cfs",
             ).exclude(connection_host="").exists()
-            item.status = "ready" if configured else "not_configured"
+            if not configured:
+                item.status = "not_configured"
+                item.next_sync_at = None
+            elif item.status in {"disabled", "not_configured", "ready"}:
+                item.status = "disconnected"
         elif item.provider in {"simplyprint", "bambu_ams", "elegoo", "qidi", "snapmaker"}:
             item.status = "planned"
-        else:
-            item.status = "ready"
+            item.auto_sync = False
+            item.next_sync_at = None
+        elif item.status in {"disabled", "not_configured", "ready"}:
+            item.status = "disconnected"
+
+        if item.enabled and item.auto_sync and item.provider in {"spoolman", "creality_cfs"}:
+            item.next_sync_at = timezone.now() + timedelta(minutes=item.sync_interval_minutes)
+        elif not item.auto_sync:
+            item.next_sync_at = None
 
         item.full_clean()
         item.save()
@@ -2267,34 +2309,52 @@ def printing_integration_test(request, provider):
             }
             item.save()
         elif provider == "creality_cfs":
-            compatible = Printer.objects.filter(
-                is_active=True,
-                catalog_model__multi_material_system="creality_cfs",
+            item, _ = sync_printing_integration(
+                provider,
+                triggered_by=f"test:user:{request.user.get_username()}",
             )
-            configured = compatible.exclude(connection_host="")
-            item.last_checked_at = timezone.now()
-            if not compatible.exists():
-                item.status = "not_configured"
-                item.last_error = "No active CFS-capable printer is registered."
-            elif not configured.exists():
-                item.status = "not_configured"
-                item.last_error = "Add a local host/IP to at least one CFS-capable printer."
-            else:
-                item.status = "ready"
-                item.last_error = ""
-            item.save()
         else:
             item.last_checked_at = timezone.now()
             item.status = "planned"
             item.last_error = ""
             item.save()
         return JsonResponse({"item": _serialise_printing_integration(item)})
-    except PrintingIntegrationError as exc:
-        item.status = "error"
-        item.last_error = str(exc)
-        item.last_checked_at = timezone.now()
-        item.save(update_fields=["status", "last_error", "last_checked_at", "updated_at"])
-        return JsonResponse({"item": _serialise_printing_integration(item)}, status=502)
+    except (PrintingIntegrationError, PrintingSyncError) as exc:
+        item.refresh_from_db()
+        if item.status not in {"disconnected", "error"}:
+            item.status = "disconnected"
+            item.last_error = str(exc)
+            item.last_checked_at = timezone.now()
+            item.save(update_fields=["status", "last_error", "last_checked_at", "updated_at"])
+        return JsonResponse(
+            {"error": str(exc), "item": _serialise_printing_integration(item)},
+            status=502,
+        )
+
+
+@login_required
+@require_http_methods(["POST"])
+def printing_integration_sync_now(request, provider):
+    if not request.user.is_staff:
+        return _error("Administrator access is required.", status=403)
+    if provider not in {"spoolman", "creality_cfs"}:
+        return _error("This integration does not have a sync adapter yet.", status=409)
+    try:
+        item, result = sync_printing_integration(
+            provider,
+            triggered_by=f"user:{request.user.get_username()}",
+        )
+        return JsonResponse({
+            "item": _serialise_printing_integration(item),
+            "result": result,
+        })
+    except PrintingSyncError as exc:
+        item = PrintingIntegrationSetting.objects.filter(provider=provider).first()
+        payload = {"error": str(exc)}
+        if item:
+            payload["item"] = _serialise_printing_integration(item)
+        return JsonResponse(payload, status=502)
+
 
 
 def _serialise_catalogue_maintenance(config):
