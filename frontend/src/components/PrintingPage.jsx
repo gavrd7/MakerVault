@@ -186,8 +186,16 @@ function PrinterModal({ manufacturers, onClose, onSaved }) {
   </Modal>;
 }
 
+const FILAMENT_COLOUR_PALETTE = [
+  ["Black", "#111111"], ["White", "#f4f4f4"], ["Grey", "#808080"], ["Silver", "#b9bec4"],
+  ["Red", "#d32f2f"], ["Orange", "#ef6c00"], ["Yellow", "#f9a825"], ["Lime", "#7cb342"],
+  ["Green", "#2e7d32"], ["Teal", "#00897b"], ["Cyan", "#00acc1"], ["Blue", "#1565c0"],
+  ["Navy", "#283593"], ["Purple", "#7b1fa2"], ["Pink", "#d81b60"], ["Brown", "#6d4c41"],
+  ["Beige", "#d7c7a3"], ["Gold", "#c9a227"], ["Copper", "#b87333"], ["Natural", "#e8dfc8"],
+];
+
 function FilamentModal({ manufacturers, onClose, onSaved }) {
-  const [form, setForm] = useState({ manufacturer_id: "", name: "", material: "PLA", color_name: "", color_hex: "", diameter_mm: "1.75", nominal_weight_g: "1000" });
+  const [form, setForm] = useState({ manufacturer_id: "", name: "", material: "PLA", color_name: "", color_hex: "#777777", transparency: "opaque", diameter_mm: "1.75", nominal_weight_g: "1000" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const set = (key, value) => setForm(value0 => ({ ...value0, [key]: value }));
@@ -202,8 +210,23 @@ function FilamentModal({ manufacturers, onClose, onSaved }) {
       <label>Manufacturer<select value={form.manufacturer_id} onChange={e => set("manufacturer_id", e.target.value)}><option value="">Unspecified</option>{manufacturers.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
       <label>Product name<input required value={form.name} onChange={e => set("name", e.target.value)} placeholder="PLA Basic" /></label>
       <label>Material<input required value={form.material} onChange={e => set("material", e.target.value)} placeholder="PLA, PETG, ASA…" /></label>
-      <label>Colour name<input value={form.color_name} onChange={e => set("color_name", e.target.value)} /></label>
-      <label>Colour<input type="color" value={form.color_hex || "#777777"} onChange={e => set("color_hex", e.target.value)} /></label>
+      <label>Colour name<input value={form.color_name} onChange={e => set("color_name", e.target.value)} placeholder="Manufacturer colour name" /></label>
+      <label>Appearance<select value={form.transparency} onChange={e => set("transparency", e.target.value)}><option value="opaque">Opaque</option><option value="translucent">Translucent</option><option value="transparent">Transparent</option></select></label>
+      <div className="full filamentColourField">
+        <span>Colour palette</span>
+        <div className="filamentPalette" role="group" aria-label="Filament colour palette">
+          {FILAMENT_COLOUR_PALETTE.map(([name, hex]) => <button
+            key={hex}
+            type="button"
+            className={form.color_hex.toLowerCase() === hex ? "selected" : ""}
+            title={name}
+            aria-label={name}
+            onClick={() => setForm(value => ({ ...value, color_hex: hex, color_name: value.color_name || name }))}
+          ><span style={{ background: hex }} /></button>)}
+        </div>
+      </div>
+      <label>Custom colour<div className="filamentCustomColour"><input type="color" value={form.color_hex || "#777777"} onChange={e => set("color_hex", e.target.value)} /><input value={form.color_hex} onChange={e => set("color_hex", e.target.value)} maxLength="9" placeholder="#RRGGBB" /></div></label>
+      <label>Preview<div className={`filamentPreview filamentPreview-${form.transparency}`}><span style={{ background: form.color_hex || "#777777" }} /><strong>{form.color_name || "Selected colour"}</strong><small>{form.transparency}</small></div></label>
       <label>Diameter (mm)<input type="number" step="0.01" min="0.1" value={form.diameter_mm} onChange={e => set("diameter_mm", e.target.value)} /></label>
       <label>Nominal weight (g)<input type="number" step="1" min="0" value={form.nominal_weight_g} onChange={e => set("nominal_weight_g", e.target.value)} /></label>
       <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Saving…" : "Add filament"}</button></div>
