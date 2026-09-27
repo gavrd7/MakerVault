@@ -9,6 +9,7 @@ Pillow>=11,<13
 python-magic>=0.4.27,<0.5
 argon2-cffi>=23,<26
 requests>=2.32,<3
+websockets>=15,<16
 beautifulsoup4>=4.13,<5
 
 # Explicit security floors for runtime/transitive packages scanned in the final image.
