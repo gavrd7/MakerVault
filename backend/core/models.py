@@ -371,6 +371,138 @@ class RepositoryLink(TimeStampedModel):
         return self.name
 
 
+class FilamentManufacturer(TimeStampedModel):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=200, unique=True)
+    website = models.URLField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class PrinterManufacturer(TimeStampedModel):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=200, unique=True)
+    website = models.URLField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class PrintingLocation(TimeStampedModel):
+    KINDS = [
+        ("room", "Room / area"),
+        ("shelf", "Shelf"),
+        ("drybox", "Dry box"),
+        ("storage", "Storage"),
+        ("workshop", "Workshop"),
+        ("other", "Other"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=200, unique=True)
+    kind = models.CharField(max_length=20, choices=KINDS, default="storage")
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class PrintingIntegrationSetting(TimeStampedModel):
+    PROVIDERS = [
+        ("spoolman", "Spoolman"),
+        ("simplyprint", "SimplyPrint"),
+        ("creality_cfs", "Creality CFS"),
+        ("bambu_ams", "Bambu Lab AMS"),
+        ("elegoo", "Elegoo multi-material"),
+        ("qidi", "QIDI multi-material"),
+        ("snapmaker", "Snapmaker multi-material"),
+    ]
+    SYNC_DIRECTIONS = [
+        ("import", "External → MakerVault"),
+        ("export", "MakerVault → external"),
+        ("bidirectional", "Bidirectional"),
+    ]
+    STATUSES = [
+        ("disabled", "Disabled"),
+        ("not_configured", "Not configured"),
+        ("ready", "Ready"),
+        ("connected", "Connected"),
+        ("error", "Error"),
+        ("planned", "Planned"),
+    ]
+
+    provider = models.CharField(max_length=30, choices=PROVIDERS, unique=True)
+    enabled = models.BooleanField(default=False)
+    endpoint_url = models.CharField(max_length=500, blank=True)
+    sync_direction = models.CharField(max_length=20, choices=SYNC_DIRECTIONS, default="import")
+    status = models.CharField(max_length=24, choices=STATUSES, default="not_configured")
+    last_checked_at = models.DateTimeField(blank=True, null=True)
+    last_error = models.TextField(blank=True)
+    config = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["provider"]
+
+    def __str__(self):
+        return self.get_provider_display()
+
+
+class PrinterCatalogModel(TimeStampedModel):
+    MULTI_MATERIAL_SYSTEMS = [
+        ("", "None / unknown"),
+        ("creality_cfs", "Creality CFS"),
+        ("bambu_ams", "Bambu Lab AMS"),
+        ("elegoo", "Elegoo multi-material"),
+        ("qidi", "QIDI multi-material"),
+        ("snapmaker", "Snapmaker multi-material"),
+        ("other", "Other"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    manufacturer = models.ForeignKey(
+        PrinterManufacturer, on_delete=models.CASCADE, related_name="models"
+    )
+    name = models.CharField(max_length=255)
+    build_volume_x_mm = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
+    build_volume_y_mm = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
+    build_volume_z_mm = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
+    nozzle_mm = models.DecimalField(max_digits=5, decimal_places=2, default=0.4)
+    filament_diameter_mm = models.DecimalField(max_digits=5, decimal_places=2, default=1.75)
+    max_nozzle_temp_c = models.SmallIntegerField(blank=True, null=True)
+    max_bed_temp_c = models.SmallIntegerField(blank=True, null=True)
+    enclosed = models.BooleanField(default=False)
+    multi_material_system = models.CharField(
+        max_length=30, choices=MULTI_MATERIAL_SYSTEMS, blank=True
+    )
+    max_multi_material_units = models.PositiveSmallIntegerField(blank=True, null=True)
+    features = models.JSONField(default=dict, blank=True)
+    source_url = models.URLField(blank=True)
+
+    class Meta:
+        ordering = ["manufacturer__name", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["manufacturer", "name"],
+                name="unique_printer_catalogue_model",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.manufacturer} {self.name}"
+
+
 class FilamentProduct(TimeStampedModel):
     TRANSPARENCY = [
         ("opaque", "Opaque"),
@@ -380,6 +512,10 @@ class FilamentProduct(TimeStampedModel):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     manufacturer = models.ForeignKey(Manufacturer, on_delete=models.SET_NULL, null=True, blank=True, related_name="filaments")
+    filament_manufacturer = models.ForeignKey(
+        FilamentManufacturer, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="filaments"
+    )
     source = models.ForeignKey(CatalogSource, on_delete=models.SET_NULL, null=True, blank=True, related_name="filaments")
     name = models.CharField(max_length=255)
     material = models.CharField(max_length=80)
@@ -405,10 +541,11 @@ class FilamentProduct(TimeStampedModel):
     profile_data = models.JSONField(default=dict, blank=True)
 
     class Meta:
-        ordering = ["manufacturer__name", "name", "color_name"]
+        ordering = ["filament_manufacturer__name", "name", "color_name"]
 
     def __str__(self):
-        return " ".join(filter(None, [str(self.manufacturer) if self.manufacturer else "", self.name, self.color_name])).strip()
+        maker = self.filament_manufacturer or self.manufacturer
+        return " ".join(filter(None, [str(maker) if maker else "", self.name, self.color_name])).strip()
 
 
 class Spool(TimeStampedModel):
@@ -421,6 +558,14 @@ class Spool(TimeStampedModel):
     purchase_cost = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     currency = models.CharField(max_length=3, default="GBP")
     location = models.CharField(max_length=255, blank=True)
+    storage_location = models.ForeignKey(
+        PrintingLocation, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="spools"
+    )
+    assigned_printer = models.ForeignKey(
+        "Printer", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="assigned_spools"
+    )
     status = models.CharField(max_length=20, choices=STATUS, default="sealed")
     opened_on = models.DateField(blank=True, null=True)
     last_dried_at = models.DateTimeField(blank=True, null=True)
@@ -429,6 +574,10 @@ class Spool(TimeStampedModel):
 
     class Meta:
         ordering = ["spool_id"]
+
+    def clean(self):
+        if self.storage_location_id and self.assigned_printer_id:
+            raise ValidationError("A spool can be stored at a location or assigned to a printer, not both.")
 
     def __str__(self):
         return f"{self.spool_id} — {self.filament}"
@@ -470,9 +619,23 @@ class Printer(TimeStampedModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
     manufacturer = models.ForeignKey(Manufacturer, on_delete=models.SET_NULL, null=True, blank=True, related_name="printers")
+    printer_manufacturer = models.ForeignKey(
+        PrinterManufacturer, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="printers"
+    )
+    catalog_model = models.ForeignKey(
+        PrinterCatalogModel, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="owned_printers"
+    )
     model = models.CharField(max_length=255)
     serial_number = models.CharField(max_length=255, blank=True)
     location = models.CharField(max_length=255, blank=True)
+    printing_location = models.ForeignKey(
+        PrintingLocation, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="printers"
+    )
+    is_active = models.BooleanField(default=True)
+    connection_host = models.CharField(max_length=255, blank=True)
     build_volume_x_mm = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
     build_volume_y_mm = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
     build_volume_z_mm = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
