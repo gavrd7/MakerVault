@@ -603,33 +603,107 @@ function FilamentCatalogueModal({ onClose, onImported }) {
   </Modal>;
 }
 
-function SpoolModal({ filaments, currency, onClose, onSaved }) {
-  const [form, setForm] = useState({ spool_id: "", filament_id: filaments[0]?.id || "", initial_weight_g: "", remaining_weight_g: "", purchase_cost: "", currency, location: "", status: "sealed", opened_on: "", notes: "" });
+function SpoolModal({ filaments, locations, printers, currency, onClose, onSaved }) {
+  const [availableFilaments, setAvailableFilaments] = useState(filaments || []);
+  const [placementType, setPlacementType] = useState("location");
+  const [form, setForm] = useState({
+    spool_id: "",
+    filament_id: filaments[0]?.id || "",
+    initial_weight_g: "",
+    remaining_weight_g: "",
+    purchase_cost: "",
+    currency,
+    storage_location_id: locations[0]?.id || "",
+    assigned_printer_id: "",
+    status: "sealed",
+    opened_on: "",
+    notes: "",
+  });
   const [busy, setBusy] = useState(false);
+  const [loadingFilaments, setLoadingFilaments] = useState(false);
   const [error, setError] = useState("");
   const set = (key, value) => setForm(value0 => ({ ...value0, [key]: value }));
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingFilaments(true);
+    apiFetch("/api/printing/filaments/")
+      .then(result => {
+        if (cancelled) return;
+        const rows = result.rows || [];
+        setAvailableFilaments(rows);
+        if (!form.filament_id && rows.length) {
+          setForm(current => ({ ...current, filament_id: rows[0].id }));
+        }
+      })
+      .catch(err => { if (!cancelled) setError(err.message); })
+      .finally(() => { if (!cancelled) setLoadingFilaments(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  function placementChanged(value) {
+    setPlacementType(value);
+    setForm(current => ({
+      ...current,
+      storage_location_id: value === "location" ? (current.storage_location_id || locations[0]?.id || "") : "",
+      assigned_printer_id: value === "printer" ? (current.assigned_printer_id || printers.find(item => item.is_active)?.id || "") : "",
+    }));
+  }
+
   async function submit(event) {
     event.preventDefault(); setBusy(true); setError("");
-    try { await apiFetch("/api/printing/spools/", { method: "POST", body: form }); await onSaved(); }
-    catch (err) { setError(err.message); } finally { setBusy(false); }
+    try {
+      await apiFetch("/api/printing/spools/", {
+        method: "POST",
+        body: {
+          ...form,
+          storage_location_id: placementType === "location" ? form.storage_location_id : "",
+          assigned_printer_id: placementType === "printer" ? form.assigned_printer_id : "",
+        },
+      });
+      await onSaved();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
   }
-  return <Modal title="Add physical spool" subtitle="This remains a native MakerVault spool even if you later link it to Spoolman or SimplyPrint." onClose={onClose} wide>
+
+  return <Modal title="Add physical spool" subtitle="Choose a native MakerVault filament, then store the spool at a custom location or assign it to one of your printers." onClose={onClose} wide>
     <form className="formGrid" onSubmit={submit}>
       {error && <div className="formError full">{error}</div>}
       <label>Spool ID<input required value={form.spool_id} onChange={e => set("spool_id", e.target.value)} placeholder="SPL-0001" /></label>
-      <label>Filament<select required value={form.filament_id} onChange={e => set("filament_id", e.target.value)}><option value="">Choose filament…</option>{filaments.map(x => <option key={x.id} value={x.id}>{x.display_name}</option>)}</select></label>
-      {!filaments.length && <div className="formError full">Create a filament product before adding a spool.</div>}
+      <label>Filament<select required value={form.filament_id} onChange={e => set("filament_id", e.target.value)} disabled={loadingFilaments}>
+        <option value="">{loadingFilaments ? "Loading filaments…" : "Choose filament…"}</option>
+        {availableFilaments.map(x => <option key={x.id} value={x.id}>{x.display_name} · {x.material}</option>)}
+      </select></label>
+      {!loadingFilaments && !availableFilaments.length && <div className="formError full">No filament products exist yet. Add or import a filament first, then reopen this dialog.</div>}
+
+      <label>Placement<select value={placementType} onChange={e => placementChanged(e.target.value)}>
+        <option value="location">Storage location</option>
+        <option value="printer">Assigned to printer</option>
+        <option value="none">Unassigned</option>
+      </select></label>
+      {placementType === "location" && <label>Location<select value={form.storage_location_id} onChange={e => set("storage_location_id", e.target.value)}>
+        <option value="">Choose location…</option>
+        {locations.map(x => <option key={x.id} value={x.id}>{x.name} · {x.kind_label}</option>)}
+      </select></label>}
+      {placementType === "printer" && <label>Printer<select value={form.assigned_printer_id} onChange={e => set("assigned_printer_id", e.target.value)}>
+        <option value="">Choose printer…</option>
+        {printers.filter(x => x.is_active).map(x => <option key={x.id} value={x.id}>{x.name} · {x.model}</option>)}
+      </select></label>}
+
       <label>Initial weight (g)<input type="number" min="0" step="0.1" value={form.initial_weight_g} onChange={e => set("initial_weight_g", e.target.value)} /></label>
       <label>Remaining weight (g)<input type="number" min="0" step="0.1" value={form.remaining_weight_g} onChange={e => set("remaining_weight_g", e.target.value)} /></label>
       <label>Status<select value={form.status} onChange={e => set("status", e.target.value)}><option value="sealed">Sealed</option><option value="open">Open</option><option value="drying">Drying</option><option value="empty">Empty</option><option value="retired">Retired</option></select></label>
-      <label>Location<input value={form.location} onChange={e => set("location", e.target.value)} /></label>
       <label>Purchase cost<input type="number" min="0" step="0.01" value={form.purchase_cost} onChange={e => set("purchase_cost", e.target.value)} /></label>
       <label>Opened on<input type="date" value={form.opened_on} onChange={e => set("opened_on", e.target.value)} /></label>
       <label className="full">Notes<textarea rows="3" value={form.notes} onChange={e => set("notes", e.target.value)} /></label>
-      <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy || !filaments.length}>{busy ? "Saving…" : "Add spool"}</button></div>
+      <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy || !availableFilaments.length || !form.filament_id}>{busy ? "Saving…" : "Add spool"}</button></div>
     </form>
   </Modal>;
 }
+
 
 function ModelModal({ projects, onClose, onSaved }) {
   const [form, setForm] = useState({ name: "", project_id: "", description: "", source_url: "", license: "", tags: "" });
