@@ -78,7 +78,7 @@ export default function SettingsPage({ config }) {
   return <div className="settingsStack">
     <section className="panel settingsHero">
       <div>
-        <span className="account-eyebrow">Automatic maintenance</span>
+        <span className="settingsEyebrow">Automatic maintenance</span>
         <h2>Catalogue maintenance</h2>
         <p>Periodically check for missing/new board specifications and catalogue images without rerunning work on every container restart.</p>
       </div>
@@ -122,7 +122,7 @@ export default function SettingsPage({ config }) {
           <div><span>Next scheduled run</span><strong>{settings.enabled ? formatWhen(settings.next_run_at) : "Disabled"}</strong><small>{config.timezone}</small></div>
         </div>
 
-        {(!settings.server_board_enrichment_enabled || !settings.server_image_seeding_enabled) && <div className="account-callout">
+        {(!settings.server_board_enrichment_enabled || !settings.server_image_seeding_enabled) && <div className="settingsCallout">
           <strong>Server-level restriction</strong>
           <p>{!settings.server_board_enrichment_enabled ? "Technical enrichment is disabled by ENRICH_BOARD_CATALOGUE. " : ""}{!settings.server_image_seeding_enabled ? "Image seeding is disabled by SEED_CATALOGUE_IMAGES." : ""} GUI scheduling cannot override a server-level disable.</p>
         </div>}
