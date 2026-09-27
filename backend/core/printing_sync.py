@@ -122,6 +122,17 @@ def _spoolman_filament(remote: dict) -> FilamentProduct:
             color_hex=color_hex,
         ).first()
 
+    if existing is None:
+        candidates = FilamentProduct.objects.filter(
+            filament_manufacturer=maker,
+            material__iexact=material,
+        )
+        if color_hex:
+            candidates = candidates.filter(color_hex__iexact=color_hex)
+        candidate_ids = list(candidates.values_list("pk", flat=True)[:2])
+        if len(candidate_ids) == 1:
+            existing = FilamentProduct.objects.get(pk=candidate_ids[0])
+
     profile = {
         "spoolman": {
             "filament_id": remote_filament_id,
@@ -200,6 +211,7 @@ def sync_spoolman(setting: PrintingIntegrationSetting) -> dict:
     do_export = direction in {"export", "bidirectional"}
 
     created = 0
+    linked_existing = 0
     updated = 0
     exported = 0
     skipped_unlinked = 0
@@ -242,15 +254,38 @@ def sync_spoolman(setting: PrintingIntegrationSetting) -> dict:
                 spool.save()
                 updated += 1
             else:
-                spool = _create_spool_with_generated_id(
-                    filament=filament,
-                    initial_weight_g=initial,
-                    remaining_weight_g=remaining,
-                    purchase_cost=purchase_cost,
-                    storage_location=location,
-                    status=status,
-                    notes=str(remote.get("comment") or "").strip(),
+                candidates = list(
+                    Spool.objects.filter(filament=filament)
+                    .exclude(external_links__provider="spoolman")
+                    .order_by("created_at")[:2]
                 )
+                if len(candidates) == 1:
+                    spool = candidates[0]
+                    if remaining is not None:
+                        spool.remaining_weight_g = remaining
+                    if spool.initial_weight_g is None and initial is not None:
+                        spool.initial_weight_g = initial
+                    if spool.purchase_cost is None and purchase_cost is not None:
+                        spool.purchase_cost = purchase_cost
+                    spool.status = status
+                    if location and not spool.assigned_printer_id:
+                        spool.storage_location = location
+                        spool.location = ""
+                    spool.full_clean()
+                    spool.save()
+                    linked_existing += 1
+                else:
+                    spool = _create_spool_with_generated_id(
+                        filament=filament,
+                        initial_weight_g=initial,
+                        remaining_weight_g=remaining,
+                        purchase_cost=purchase_cost,
+                        storage_location=location,
+                        status=status,
+                        notes=str(remote.get("comment") or "").strip(),
+                    )
+                    created += 1
+
                 link = ExternalSpoolLink.objects.create(
                     spool=spool,
                     provider="spoolman",
@@ -260,7 +295,6 @@ def sync_spoolman(setting: PrintingIntegrationSetting) -> dict:
                     last_synced_at=now,
                     sync_metadata={"remote": remote},
                 )
-                created += 1
 
             link.sync_direction = direction
             link.last_synced_at = now
@@ -316,6 +350,7 @@ def sync_spoolman(setting: PrintingIntegrationSetting) -> dict:
         "provider": "spoolman",
         "remote_spools": len(remote_spools),
         "created": created,
+        "linked_existing": linked_existing,
         "updated": updated,
         "exported": exported,
         "unlinked_local_spools_skipped": skipped_unlinked,
