@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../api";
 import { Badge, BoardImage, ImageViewer, LoadingBlock, Modal } from "./Common";
+import ProjectBomSection from "./ProjectBomSection";
 
 const STATUS = {
   idea: "Idea",
@@ -55,7 +56,7 @@ function money(value, currency) {
   return new Intl.NumberFormat(undefined, { style: "currency", currency: currency || "GBP" }).format(Number(value || 0));
 }
 
-export default function ProjectsPage({ projects, setProjects, config, refreshDashboard, openProjectId, onOpenConsumed }) {
+export default function ProjectsPage({ projects, setProjects, config, refreshDashboard, refreshInventory, boards, components, inventory, openProjectId, onOpenConsumed }) {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -115,7 +116,7 @@ export default function ProjectsPage({ projects, setProjects, config, refreshDas
             <div className="projectCardHead"><h3>{project.name}</h3><Badge tone={project.status === "active" ? "good" : project.status === "idea" ? "accent" : "neutral"}>{project.status_label}</Badge></div>
             <p>{project.summary || "No project summary yet."}</p>
             <div className="projectCardMeta">
-              <span>{project.inventory_count || 0} inventory item(s)</span>
+              <span>{project.inventory_count || 0} inventory item(s) · {project.bom_count || 0} BOM line(s)</span>
               <span>{project.file_count || 0} file(s) · {project.gallery_count || 0} photo(s)</span>
               <strong>{money(project.inventory_cost, project.currency || config?.currency)}</strong>
             </div>
@@ -129,6 +130,11 @@ export default function ProjectsPage({ projects, setProjects, config, refreshDas
       project={selected}
       loading={loading}
       canEdit={config?.permissions?.change_project}
+      config={config}
+      boards={boards}
+      components={components}
+      inventory={inventory}
+      refreshInventory={refreshInventory}
       onClose={() => setSelected(null)}
       onRefresh={refreshProject}
       onUpdated={project => {
@@ -151,7 +157,7 @@ export default function ProjectsPage({ projects, setProjects, config, refreshDas
   </div>;
 }
 
-function ProjectDetail({ project, loading, canEdit, onClose, onRefresh, onUpdated }) {
+function ProjectDetail({ project, loading, canEdit, config, boards, components, inventory, refreshInventory, onClose, onRefresh, onUpdated }) {
   const [editing, setEditing] = useState(false);
   const [coverOpen, setCoverOpen] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
@@ -195,6 +201,7 @@ function ProjectDetail({ project, loading, canEdit, onClose, onRefresh, onUpdate
       <div className="projectMetrics">
         <div><span>Assigned inventory</span><strong>{project.inventory?.length || project.inventory_count || 0}</strong></div>
         <div><span>Inventory cost</span><strong>{money(project.inventory_cost, project.currency)}</strong></div>
+        <div><span>BOM coverage</span><strong>{project.bom_summary?.line_count ? `${project.bom_summary.complete_lines}/${project.bom_summary.line_count}` : "—"}</strong></div>
         <div><span>Project files</span><strong>{project.files?.length || project.file_count || 0}</strong></div>
         <div><span>Repositories</span><strong>{project.repositories?.length || project.repository_count || 0}</strong></div>
         <div><span>Started</span><strong>{project.started_on || "—"}</strong></div>
@@ -203,6 +210,17 @@ function ProjectDetail({ project, loading, canEdit, onClose, onRefresh, onUpdate
 
       <section className="projectSection"><h3>Description</h3><div className="projectRichText">{project.description || "No description yet."}</div></section>
       <section className="projectSection"><h3>Build notes</h3><div className="projectRichText">{project.notes || "No build notes yet."}</div></section>
+
+      <ProjectBomSection
+        project={project}
+        boards={boards}
+        components={components}
+        inventory={inventory}
+        canEdit={canEdit}
+        config={config}
+        onRefresh={onRefresh}
+        refreshInventory={refreshInventory}
+      />
 
       <section className="projectSection">
         <div className="projectSectionHead"><h3>Assigned inventory</h3><span>{project.inventory?.length || 0}</span></div>

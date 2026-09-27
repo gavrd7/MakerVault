@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.5.0
+
+- Added first-class project bill-of-materials management for catalogue boards, catalogue components and custom materials.
+- Added quantity-aware BOM allocation records so physical inventory can be allocated without mutating or duplicating stock records.
+- Added migration 0005, including best-effort conversion of legacy BOM inventory links into allocation records.
+- Projects now show BOM line counts, required/allocated/remaining quantities, allocation status and estimated BOM cost.
+- Added create/edit/remove BOM controls and allocate/adjust/release inventory workflows inside the project workspace.
+- Inventory now exposes total quantity, BOM-allocated quantity and free quantity in both the grid and detail view.
+- Allocation operations use database transactions and row locks to prevent concurrent over-allocation.
+- Added data-integrity guards preventing BOM over-allocation, stock over-allocation, incompatible project assignment, repair/retired status while allocated, stock quantity reductions below allocations, and deletion of allocated inventory.
+- BOM allocation and release events are recorded in inventory lifecycle history.
+- Added BOM allocation administration views and extensive API/integrity/permission tests.
+- Existing project files, standalone Files workflows and catalogue maintenance remain unchanged.
+
+
 ## v0.4.3
 
 - Added direct uploads from the Files page so FileAsset records no longer require a project.

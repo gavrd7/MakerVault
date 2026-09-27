@@ -3,6 +3,7 @@ import { AgGridReact } from "ag-grid-react";
 import { themeQuartz } from "ag-grid-community";
 import { apiFetch } from "../api";
 import { Badge, BoardImage, ImageManagerModal, ImageViewer, LoadingBlock, Modal } from "./Common";
+import { AddInventoryModal } from "./InventoryPage";
 
 function prettySpecKey(key) {
   const labels = {
@@ -56,7 +57,7 @@ function BoardSpecGrid({ rows, status = {} }) {
   </dl>;
 }
 
-export default function BoardsPage({ boards, setBoards, config, onOpenImport, refreshDashboard }) {
+export default function BoardsPage({ boards, setBoards, components, projects, config, onOpenImport, refreshDashboard, onInventoryCreated }) {
   const [query, setQuery] = useState("");
   const [manufacturer, setManufacturer] = useState("");
   const [family, setFamily] = useState("");
@@ -129,6 +130,12 @@ export default function BoardsPage({ boards, setBoards, config, onOpenImport, re
       board={selected}
       loading={loadingDetail}
       canEdit={config?.permissions?.change_board}
+      canAddInventory={config?.permissions?.add_inventory}
+      boards={boards}
+      components={components}
+      projects={projects}
+      config={config}
+      onInventoryCreated={onInventoryCreated}
       onClose={() => setSelected(null)}
       onChanged={updated => {
         setBoards(rows => rows.map(row => row.id === updated.id ? updated : row));
@@ -144,8 +151,9 @@ export default function BoardsPage({ boards, setBoards, config, onOpenImport, re
   </div>;
 }
 
-function BoardDetail({ board, loading, canEdit, onClose, onChanged }) {
+function BoardDetail({ board, loading, canEdit, canAddInventory, boards, components, projects, config, onInventoryCreated, onClose, onChanged }) {
   const [imageOpen, setImageOpen] = useState(false);
+  const [inventoryOpen, setInventoryOpen] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [enriching, setEnriching] = useState(false);
   const [enrichMessage, setEnrichMessage] = useState("");
@@ -208,6 +216,7 @@ function BoardDetail({ board, loading, canEdit, onClose, onChanged }) {
       <div className="detailTitleRow boardTitleRow">
         <h2>{board.display_name}</h2>
         <div className="detailActions">
+          {canAddInventory && <button className="primary" onClick={() => setInventoryOpen(true)}>＋ Add to inventory</button>}
           {canEdit && <button onClick={() => setImageOpen(true)}>Image</button>}
           {canEdit && <button onClick={enrichBoard} disabled={enriching}>{enriching ? "Refreshing…" : "Refresh specs"}</button>}
         </div>
@@ -248,6 +257,20 @@ function BoardDetail({ board, loading, canEdit, onClose, onChanged }) {
         onUpdated={updated => { onChanged(updated); setImageOpen(false); }}
       />}
       {viewerOpen && <ImageViewer src={board.image} alt={board.display_name} title={board.display_name} onClose={() => setViewerOpen(false)} />}
+      {inventoryOpen && <AddInventoryModal
+        boards={boards}
+        components={components}
+        projects={projects}
+        config={config}
+        initialBoard={board}
+        lockCatalogueItem
+        title={"Add " + board.display_name + " to inventory"}
+        onClose={() => setInventoryOpen(false)}
+        onCreated={async item => {
+          setInventoryOpen(false);
+          await onInventoryCreated?.(item);
+        }}
+      />}
     </aside>
   </>;
 }

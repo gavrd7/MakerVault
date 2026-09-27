@@ -9,7 +9,8 @@ from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Q
+from django.db.models import Count, Q, Sum
+from django.db.models.deletion import ProtectedError
 from django.http import JsonResponse
 from django.utils import timezone
 from django.utils.text import slugify
@@ -27,6 +28,8 @@ from .tasks import queue_catalogue_maintenance_now
 from .models import (
     BoardCompatibility,
     BoardModel,
+    BOMAllocation,
+    BOMItem,
     CatalogSource,
     CatalogueMaintenanceSettings,
     ComponentCategory,
@@ -167,6 +170,13 @@ def _serialise_component(component):
     }
 
 
+def _inventory_allocated_quantity(item):
+    allocated = getattr(item, "allocated_quantity", None)
+    if allocated is None:
+        allocated = item.bom_allocations.aggregate(total=Sum("quantity"))["total"]
+    return allocated or Decimal("0")
+
+
 def _serialise_inventory(item):
     image_url = ""
     if item.image:
@@ -178,6 +188,8 @@ def _serialise_inventory(item):
         image_url = _image_url(item.board)
     if not image_url and item.component:
         image_url = _image_url(item.component)
+    allocated = _inventory_allocated_quantity(item)
+    available = max((item.quantity or Decimal("0")) - allocated, Decimal("0"))
     return {
         "id": str(item.id),
         "inventory_id": item.inventory_id,
@@ -188,6 +200,8 @@ def _serialise_inventory(item):
         "board_id": str(item.board_id) if item.board_id else "",
         "component_id": str(item.component_id) if item.component_id else "",
         "quantity": _float(item.quantity),
+        "allocated_quantity": _float(allocated),
+        "available_quantity": _float(available),
         "status": item.status,
         "status_label": item.get_status_display(),
         "project_id": str(item.project_id) if item.project_id else "",
@@ -299,6 +313,124 @@ def _record_inventory_history(item, user, before=None, *, created=False):
 
 
 
+def _record_bom_allocation_history(allocation, user, event_type, *, previous_quantity=None):
+    inventory = allocation.inventory_item
+    bom_item = allocation.bom_item
+    if event_type == "bom_released":
+        summary = f"Released {allocation.quantity} from BOM: {bom_item.display_name}"
+    elif previous_quantity is not None:
+        summary = f"Changed BOM allocation for {bom_item.display_name}: {previous_quantity} → {allocation.quantity}"
+    else:
+        summary = f"Allocated {allocation.quantity} to BOM: {bom_item.display_name}"
+    InventoryHistory.objects.create(
+        inventory_item=inventory,
+        event_type=event_type,
+        summary=summary[:500],
+        changes={
+            "bom_item_id": bom_item.pk,
+            "bom_item": bom_item.display_name,
+            "quantity": str(allocation.quantity),
+            "previous_quantity": str(previous_quantity) if previous_quantity is not None else "",
+        },
+        project=bom_item.project,
+        changed_by=user,
+    )
+
+
+def _serialise_bom_allocation(allocation):
+    inventory = allocation.inventory_item
+    inventory_allocated = _inventory_allocated_quantity(inventory)
+    inventory_available = max(
+        (inventory.quantity or Decimal("0")) - inventory_allocated,
+        Decimal("0"),
+    )
+    return {
+        "id": allocation.pk,
+        "inventory_item_id": str(inventory.pk),
+        "inventory_id": inventory.inventory_id,
+        "inventory_name": inventory.display_name,
+        "inventory_image": _serialise_inventory(inventory).get("image", ""),
+        "quantity": _float(allocation.quantity),
+        "inventory_total_quantity": _float(inventory.quantity),
+        "inventory_available_quantity": _float(inventory_available),
+        "status": inventory.status,
+        "status_label": inventory.get_status_display(),
+        "location": inventory.location,
+        "notes": allocation.notes,
+        "allocated_by": allocation.allocated_by.get_username() if allocation.allocated_by else "",
+        "created_at": allocation.created_at.isoformat(),
+        "updated_at": allocation.updated_at.isoformat(),
+    }
+
+
+def _serialise_bom_item(item):
+    allocations = list(item.allocations.select_related(
+        "inventory_item__board__manufacturer",
+        "inventory_item__component__manufacturer",
+        "allocated_by",
+    ).all())
+    allocated = sum((allocation.quantity for allocation in allocations), Decimal("0"))
+    required = item.quantity or Decimal("0")
+    remaining = max(required - allocated, Decimal("0"))
+    if allocated <= 0:
+        allocation_status = "unallocated"
+    elif remaining > 0:
+        allocation_status = "partial"
+    else:
+        allocation_status = "complete"
+    estimated_cost = (
+        item.unit_cost * required
+        if item.unit_cost is not None else None
+    )
+    source_type = "board" if item.board_id else "component" if item.component_id else "custom"
+    return {
+        "id": item.pk,
+        "name": item.display_name,
+        "custom_name": item.custom_name,
+        "source_type": source_type,
+        "board_id": str(item.board_id) if item.board_id else "",
+        "board": str(item.board) if item.board else "",
+        "component_id": str(item.component_id) if item.component_id else "",
+        "component": str(item.component) if item.component else "",
+        "quantity": _float(required),
+        "unit": item.unit,
+        "unit_cost": _float(item.unit_cost),
+        "estimated_cost": _float(estimated_cost),
+        "currency": item.currency,
+        "notes": item.notes,
+        "allocated_quantity": _float(allocated),
+        "remaining_quantity": _float(remaining),
+        "allocation_status": allocation_status,
+        "allocations": [_serialise_bom_allocation(allocation) for allocation in allocations],
+        "created_at": item.created_at.isoformat(),
+        "updated_at": item.updated_at.isoformat(),
+    }
+
+
+def _project_bom(project):
+    items = list(project.bom_items.select_related(
+        "board__manufacturer", "component__manufacturer"
+    ).prefetch_related(
+        "allocations__inventory_item__board__manufacturer",
+        "allocations__inventory_item__component__manufacturer",
+        "allocations__allocated_by",
+    ).all())
+    rows = [_serialise_bom_item(item) for item in items]
+    complete = sum(1 for item in rows if item["allocation_status"] == "complete")
+    costs = [item for item in rows if item["estimated_cost"] is not None]
+    currencies = {item["currency"] for item in costs}
+    estimated_cost = sum((Decimal(str(item["estimated_cost"])) for item in costs), Decimal("0")) if len(currencies) <= 1 else None
+    return rows, {
+        "line_count": len(rows),
+        "complete_lines": complete,
+        "partial_lines": sum(1 for item in rows if item["allocation_status"] == "partial"),
+        "unallocated_lines": sum(1 for item in rows if item["allocation_status"] == "unallocated"),
+        "estimated_cost": _float(estimated_cost),
+        "currency": next(iter(currencies), settings.MAKERVAULT_CURRENCY),
+        "mixed_currency": len(currencies) > 1,
+    }
+
+
 def _file_url(field):
     if not field:
         return ""
@@ -376,6 +508,9 @@ def _serialise_project(project, detailed=False):
     gallery_qs = project.files.filter(category="image").order_by("-created_at")
     asset_qs = project.files.exclude(category="image").order_by("category", "-created_at")
     repository_qs = project.repositories.all().order_by("provider", "name")
+    bom_count = getattr(project, "bom_count_value", None)
+    if bom_count is None:
+        bom_count = project.bom_items.count()
     cost, currency = _project_cost(project)
     data = {
         "id": str(project.id),
@@ -392,12 +527,14 @@ def _serialise_project(project, detailed=False):
         "gallery_count": gallery_qs.count(),
         "file_count": asset_qs.count(),
         "repository_count": repository_qs.count(),
+        "bom_count": bom_count,
         "inventory_cost": cost,
         "currency": currency,
         "updated_at": project.updated_at.isoformat(),
         "created_at": project.created_at.isoformat(),
     }
     if detailed:
+        bom_rows, bom_summary = _project_bom(project)
         data.update({
             "description": project.description,
             "notes": project.notes,
@@ -418,6 +555,8 @@ def _serialise_project(project, detailed=False):
             ],
             "files": [_serialise_file_asset(asset) for asset in asset_qs],
             "repositories": [_serialise_repository_link(link) for link in repository_qs],
+            "bom": bom_rows,
+            "bom_summary": bom_summary,
             "file_categories": [
                 {"value": value, "label": label}
                 for value, label in FileAsset.CATEGORIES
@@ -502,7 +641,7 @@ def inventory(request):
     if request.method == "GET":
         qs = InventoryItem.objects.select_related(
             "board__manufacturer", "component__manufacturer", "project"
-        ).all()[:5000]
+        ).annotate(allocated_quantity=Sum("bom_allocations__quantity")).all()[:5000]
         return JsonResponse({"rows": [_serialise_inventory(item) for item in qs]})
 
     denied = _require_permission(request, "core.add_inventoryitem")
@@ -562,75 +701,122 @@ def inventory(request):
 @login_required
 @require_http_methods(["GET", "PATCH", "DELETE"])
 def inventory_detail(request, item_id):
-    item = InventoryItem.objects.select_related(
+    base_qs = InventoryItem.objects.select_related(
         "board__manufacturer", "board__source", "component__manufacturer",
         "component__category", "component__source", "project"
-    ).filter(pk=item_id).first()
-    if not item:
-        return _error("Inventory item not found.", status=404)
-
+    )
     if request.method == "GET":
+        item = base_qs.filter(pk=item_id).first()
+        if not item:
+            return _error("Inventory item not found.", status=404)
         history = item.history.select_related("project", "changed_by").all()[:250]
         payload = _serialise_inventory(item)
         payload["board"] = _serialise_board(item.board, detailed=True) if item.board else None
         payload["component"] = _serialise_component(item.component) if item.component else None
         payload["history"] = [_serialise_inventory_history(entry) for entry in history]
+        payload["bom_allocations"] = [
+            {
+                "id": allocation.id,
+                "project_id": str(allocation.bom_item.project_id),
+                "project_name": allocation.bom_item.project.name,
+                "bom_item_id": allocation.bom_item_id,
+                "bom_item_name": allocation.bom_item.display_name,
+                "quantity": _float(allocation.quantity),
+                "unit": allocation.bom_item.unit,
+                "notes": allocation.notes,
+            }
+            for allocation in item.bom_allocations.select_related(
+                "bom_item__project",
+                "bom_item__board__manufacturer",
+                "bom_item__component__manufacturer",
+            ).order_by("bom_item__project__name", "bom_item__created_at")
+        ]
         return JsonResponse({"item": payload})
 
     if request.method == "DELETE":
         denied = _require_permission(request, "core.delete_inventoryitem")
         if denied:
             return denied
-        item.delete()
+        with transaction.atomic():
+            item = InventoryItem.objects.select_for_update().filter(pk=item_id).first()
+            if not item:
+                return _error("Inventory item not found.", status=404)
+            try:
+                item.delete()
+            except ProtectedError:
+                return _error(
+                    "This inventory item is allocated to a project BOM. Release its BOM allocations before deleting it.",
+                    status=409,
+                )
         return JsonResponse({"deleted": True})
 
     denied = _require_permission(request, "core.change_inventoryitem")
     if denied:
         return denied
     try:
-        before = _inventory_snapshot(item)
         payload = _read_json(request)
-        simple_fields = {
-            "location", "serial_number", "supplier", "purchase_url", "notes", "custom_name"
-        }
-        for field in simple_fields:
-            if field in payload:
-                setattr(item, field, str(payload[field] or "").strip())
-
-        if "quantity" in payload:
-            item.quantity = _parse_decimal(payload["quantity"], "quantity", allow_none=False)
-        if "purchase_price" in payload:
-            item.purchase_price = _parse_decimal(payload["purchase_price"], "purchase_price")
-        if "currency" in payload:
-            item.currency = str(payload["currency"] or settings.MAKERVAULT_CURRENCY).upper()[:3]
-        if "status" in payload:
-            item.status = str(payload["status"])
-        if "purchased_on" in payload:
-            raw_date = str(payload["purchased_on"] or "").strip()
-            if raw_date:
-                from datetime import date
-                try:
-                    item.purchased_on = date.fromisoformat(raw_date)
-                except ValueError as exc:
-                    raise ValidationError({"purchased_on": "Enter a valid date."}) from exc
-            else:
-                item.purchased_on = None
-        if "project_id" in payload:
-            if payload["project_id"]:
-                project = Project.objects.filter(pk=payload["project_id"]).first()
-                if not project:
-                    return _error("Selected project was not found.")
-                item.project = project
-            else:
-                item.project = None
-
-        item.full_clean()
-        item.save()
-        _record_inventory_history(item, request.user, before)
-        item = InventoryItem.objects.select_related(
-            "board__manufacturer", "component__manufacturer", "project"
-        ).get(pk=item.pk)
-        return JsonResponse({"item": _serialise_inventory(item)})
+        with transaction.atomic():
+            item = InventoryItem.objects.select_for_update().filter(pk=item_id).first()
+            if not item:
+                return _error("Inventory item not found.", status=404)
+            before = _inventory_snapshot(item)
+            simple_fields = {
+                "location", "serial_number", "supplier", "purchase_url", "notes", "custom_name"
+            }
+            for field in simple_fields:
+                if field in payload:
+                    setattr(item, field, str(payload[field] or "").strip())
+    
+            if "quantity" in payload:
+                item.quantity = _parse_decimal(payload["quantity"], "quantity", allow_none=False)
+                allocated = item.bom_allocations.aggregate(total=Sum("quantity"))["total"] or Decimal("0")
+                if item.quantity < allocated:
+                    raise ValidationError({
+                        "quantity": f"Quantity cannot be lower than the {allocated} already allocated to BOMs."
+                    })
+            if "purchase_price" in payload:
+                item.purchase_price = _parse_decimal(payload["purchase_price"], "purchase_price")
+            if "currency" in payload:
+                item.currency = str(payload["currency"] or settings.MAKERVAULT_CURRENCY).upper()[:3]
+            if "status" in payload:
+                item.status = str(payload["status"])
+                if item.status in {"repair", "retired"} and item.bom_allocations.exists():
+                    raise ValidationError({
+                        "status": "Release BOM allocations before marking this inventory item as repair or retired."
+                    })
+            if "purchased_on" in payload:
+                raw_date = str(payload["purchased_on"] or "").strip()
+                if raw_date:
+                    from datetime import date
+                    try:
+                        item.purchased_on = date.fromisoformat(raw_date)
+                    except ValueError as exc:
+                        raise ValidationError({"purchased_on": "Enter a valid date."}) from exc
+                else:
+                    item.purchased_on = None
+            if "project_id" in payload:
+                if payload["project_id"]:
+                    project = Project.objects.filter(pk=payload["project_id"]).first()
+                    if not project:
+                        return _error("Selected project was not found.")
+                    allocation_projects = set(
+                        item.bom_allocations.values_list("bom_item__project_id", flat=True).distinct()
+                    )
+                    if allocation_projects and allocation_projects != {project.id}:
+                        raise ValidationError({
+                            "project_id": "This inventory item has BOM allocations for another project. Release them before changing its project assignment."
+                        })
+                    item.project = project
+                else:
+                    item.project = None
+    
+            item.full_clean()
+            item.save()
+            _record_inventory_history(item, request.user, before)
+            item = InventoryItem.objects.select_related(
+                "board__manufacturer", "component__manufacturer", "project"
+            ).get(pk=item.pk)
+            return JsonResponse({"item": _serialise_inventory(item)})
     except ValidationError as exc:
         return _validation_response(exc)
     except ValueError as exc:
@@ -1017,7 +1203,9 @@ def file_detail(request, asset_id):
 @require_http_methods(["GET", "POST"])
 def projects_lookup(request):
     if request.method == "GET":
-        qs = Project.objects.select_related("created_by").prefetch_related("inventory_items", "files", "repositories").all()
+        qs = Project.objects.select_related("created_by").prefetch_related(
+            "inventory_items", "files", "repositories"
+        ).annotate(bom_count_value=Count("bom_items", distinct=True)).all()
         return JsonResponse({"rows": [_serialise_project(project) for project in qs[:2000]]})
 
     denied = _require_permission(request, "core.add_project")
@@ -1103,6 +1291,335 @@ def project_detail(request, project_id):
         return JsonResponse({"project": _serialise_project(project, detailed=True)})
     except ValidationError as exc:
         return _validation_response(exc)
+
+
+def _bom_catalogue_refs(payload):
+    board_id = str(payload.get("board_id") or "").strip()
+    component_id = str(payload.get("component_id") or "").strip()
+    if board_id and component_id:
+        raise ValidationError("Choose a board or component, not both.")
+
+    board = None
+    component = None
+    if board_id:
+        board = BoardModel.objects.filter(pk=board_id).first()
+        if not board:
+            raise ValidationError({"board_id": "Selected board was not found."})
+    if component_id:
+        component = ComponentModel.objects.filter(pk=component_id).first()
+        if not component:
+            raise ValidationError({"component_id": "Selected component was not found."})
+    return board, component
+
+
+def _validate_allocation_capacity(bom_item, inventory, quantity, *, excluding_id=None):
+    quantity = Decimal(quantity)
+    if quantity <= 0:
+        raise ValidationError({"quantity": "Allocation quantity must be greater than zero."})
+
+    bom_allocations = bom_item.allocations.all()
+    inventory_allocations = inventory.bom_allocations.all()
+    if excluding_id:
+        bom_allocations = bom_allocations.exclude(pk=excluding_id)
+        inventory_allocations = inventory_allocations.exclude(pk=excluding_id)
+
+    bom_allocated = bom_allocations.aggregate(total=Sum("quantity"))["total"] or Decimal("0")
+    inventory_allocated = inventory_allocations.aggregate(total=Sum("quantity"))["total"] or Decimal("0")
+    bom_remaining = (bom_item.quantity or Decimal("0")) - bom_allocated
+    inventory_remaining = (inventory.quantity or Decimal("0")) - inventory_allocated
+
+    if quantity > bom_remaining:
+        raise ValidationError({
+            "quantity": f"Only {bom_remaining} {bom_item.unit} remain unallocated on this BOM line."
+        })
+    if quantity > inventory_remaining:
+        raise ValidationError({
+            "quantity": f"Only {inventory_remaining} remain available in inventory item {inventory.inventory_id}."
+        })
+
+
+@login_required
+@require_http_methods(["POST"])
+def project_bom_items(request, project_id):
+    project = Project.objects.filter(pk=project_id).first()
+    if not project:
+        return _error("Project not found.", status=404)
+    denied = _require_permission(request, "core.change_project")
+    if denied:
+        return denied
+
+    try:
+        payload = _read_json(request)
+        board, component = _bom_catalogue_refs(payload)
+        item = BOMItem(
+            project=project,
+            board=board,
+            component=component,
+            custom_name=str(payload.get("custom_name") or "").strip()[:255],
+            quantity=_parse_decimal(payload.get("quantity", 1), "quantity", allow_none=False),
+            unit=str(payload.get("unit") or "item").strip()[:40],
+            unit_cost=_parse_decimal(payload.get("unit_cost"), "unit_cost"),
+            currency=str(payload.get("currency") or settings.MAKERVAULT_CURRENCY).upper()[:3],
+            notes=str(payload.get("notes") or "").strip(),
+        )
+        item.full_clean()
+        item.save()
+        project.save(update_fields=["updated_at"])
+        item = BOMItem.objects.select_related("board__manufacturer", "component__manufacturer").get(pk=item.pk)
+        return JsonResponse({"bom_item": _serialise_bom_item(item)}, status=201)
+    except ValidationError as exc:
+        return _validation_response(exc)
+    except ValueError as exc:
+        return _error(str(exc))
+
+
+@login_required
+@require_http_methods(["PATCH", "DELETE"])
+def project_bom_item_detail(request, project_id, bom_id):
+    project = Project.objects.filter(pk=project_id).first()
+    if not project:
+        return _error("Project not found.", status=404)
+    denied = _require_permission(request, "core.change_project")
+    if denied:
+        return denied
+
+    with transaction.atomic():
+        item = BOMItem.objects.select_for_update().select_related(
+            "project"
+        ).filter(pk=bom_id, project=project).first()
+        if not item:
+            return _error("BOM item not found.", status=404)
+
+        if request.method == "DELETE":
+            allocations = list(item.allocations.select_related("inventory_item").all())
+            for allocation in allocations:
+                _record_bom_allocation_history(allocation, request.user, "bom_released")
+            item.delete()
+            project.save(update_fields=["updated_at"])
+            return JsonResponse({"deleted": True})
+
+        try:
+            payload = _read_json(request)
+            new_board, new_component = _bom_catalogue_refs({
+                "board_id": payload.get("board_id", item.board_id or ""),
+                "component_id": payload.get("component_id", item.component_id or ""),
+            })
+            if "board_id" in payload or "component_id" in payload:
+                item.board = new_board
+                item.component = new_component
+            if "custom_name" in payload:
+                item.custom_name = str(payload.get("custom_name") or "").strip()[:255]
+            if "quantity" in payload:
+                item.quantity = _parse_decimal(payload.get("quantity"), "quantity", allow_none=False)
+            if "unit" in payload:
+                item.unit = str(payload.get("unit") or "").strip()[:40]
+            if "unit_cost" in payload:
+                item.unit_cost = _parse_decimal(payload.get("unit_cost"), "unit_cost")
+            if "currency" in payload:
+                item.currency = str(payload.get("currency") or settings.MAKERVAULT_CURRENCY).upper()[:3]
+            if "notes" in payload:
+                item.notes = str(payload.get("notes") or "").strip()
+
+            allocated = item.allocations.aggregate(total=Sum("quantity"))["total"] or Decimal("0")
+            if item.quantity < allocated:
+                raise ValidationError({
+                    "quantity": f"Quantity cannot be lower than the {allocated} already allocated."
+                })
+
+            for allocation in item.allocations.select_related("inventory_item").all():
+                inventory = allocation.inventory_item
+                if item.board_id and inventory.board_id != item.board_id:
+                    raise ValidationError({"board_id": "Release incompatible allocations before changing the BOM board."})
+                if item.component_id and inventory.component_id != item.component_id:
+                    raise ValidationError({"component_id": "Release incompatible allocations before changing the BOM component."})
+
+            item.full_clean()
+            item.save()
+            project.save(update_fields=["updated_at"])
+            return JsonResponse({"bom_item": _serialise_bom_item(item)})
+        except ValidationError as exc:
+            return _validation_response(exc)
+        except ValueError as exc:
+            return _error(str(exc))
+
+
+@login_required
+@require_http_methods(["POST"])
+def project_bom_allocations(request, project_id, bom_id):
+    project = Project.objects.filter(pk=project_id).first()
+    if not project:
+        return _error("Project not found.", status=404)
+    denied = _require_permission(request, "core.change_project")
+    if denied:
+        return denied
+
+    try:
+        payload = _read_json(request)
+        create_payload = payload.get("create_inventory")
+        inventory_id = str(payload.get("inventory_item_id") or "").strip()
+        if not inventory_id and not isinstance(create_payload, dict):
+            return _error("Choose an inventory item or create a new one from this BOM line.")
+        if inventory_id and isinstance(create_payload, dict):
+            return _error("Choose existing inventory or create new inventory, not both.")
+
+        with transaction.atomic():
+            bom_item = BOMItem.objects.select_for_update().select_related(
+                "project"
+            ).filter(pk=bom_id, project=project).first()
+            if not bom_item:
+                return _error("BOM item not found.", status=404)
+
+            quantity = _parse_decimal(payload.get("quantity", 1), "quantity", allow_none=False)
+
+            if isinstance(create_payload, dict):
+                permission_denied = _require_permission(request, "core.add_inventoryitem")
+                if permission_denied:
+                    return permission_denied
+
+                if bom_item.board_id:
+                    item_type = "board"
+                    board = BoardModel.objects.filter(pk=bom_item.board_id).first()
+                    component = None
+                    custom_name = ""
+                elif bom_item.component_id:
+                    item_type = "component"
+                    board = None
+                    component = ComponentModel.objects.filter(pk=bom_item.component_id).first()
+                    custom_name = ""
+                else:
+                    item_type = "other"
+                    board = None
+                    component = None
+                    custom_name = bom_item.display_name[:255]
+
+                stock_quantity = _parse_decimal(
+                    create_payload.get("quantity", quantity),
+                    "inventory_quantity",
+                    allow_none=False,
+                )
+                assigned_project = None
+                if bool(create_payload.get("assign_to_project")):
+                    assigned_project = project
+
+                inventory = InventoryItem(
+                    inventory_id=(
+                        str(create_payload.get("inventory_id") or "").strip()
+                        or _next_inventory_id(item_type)
+                    ),
+                    item_type=item_type,
+                    board=board,
+                    component=component,
+                    custom_name=custom_name,
+                    quantity=stock_quantity,
+                    status=str(create_payload.get("status") or "available"),
+                    project=assigned_project,
+                    location=str(create_payload.get("location") or "").strip(),
+                    serial_number=str(create_payload.get("serial_number") or "").strip(),
+                    purchase_price=_parse_decimal(
+                        create_payload.get("purchase_price"),
+                        "purchase_price",
+                    ),
+                    currency=str(
+                        create_payload.get("currency") or settings.MAKERVAULT_CURRENCY
+                    ).upper()[:3],
+                    supplier=str(create_payload.get("supplier") or "").strip(),
+                    purchase_url=str(create_payload.get("purchase_url") or "").strip(),
+                    notes=str(create_payload.get("notes") or "").strip(),
+                )
+                inventory.full_clean()
+                inventory.save()
+                _record_inventory_history(inventory, request.user, created=True)
+            else:
+                inventory = InventoryItem.objects.select_for_update().filter(pk=inventory_id).first()
+                if not inventory:
+                    return _error("Inventory item not found.", status=404)
+                if BOMAllocation.objects.filter(
+                    bom_item=bom_item, inventory_item=inventory
+                ).exists():
+                    return _error("This inventory item is already allocated to this BOM line.")
+
+            allocation = BOMAllocation(
+                bom_item=bom_item,
+                inventory_item=inventory,
+                quantity=quantity,
+                notes=str(payload.get("notes") or "").strip(),
+                allocated_by=request.user,
+            )
+            allocation.full_clean()
+            _validate_allocation_capacity(bom_item, inventory, quantity)
+            allocation.save()
+            _record_bom_allocation_history(allocation, request.user, "bom_allocated")
+            project.save(update_fields=["updated_at"])
+
+            inventory = InventoryItem.objects.select_related(
+                "board__manufacturer", "component__manufacturer", "project"
+            ).get(pk=inventory.pk)
+            allocation.inventory_item = inventory
+            return JsonResponse({
+                "allocation": _serialise_bom_allocation(allocation),
+                "inventory_item": _serialise_inventory(inventory),
+                "created_inventory": isinstance(create_payload, dict),
+            }, status=201)
+    except ValidationError as exc:
+        return _validation_response(exc)
+    except (ValueError, IntegrityError) as exc:
+        return _error(str(exc))
+
+
+@login_required
+@require_http_methods(["PATCH", "DELETE"])
+def project_bom_allocation_detail(request, project_id, bom_id, allocation_id):
+    project = Project.objects.filter(pk=project_id).first()
+    if not project:
+        return _error("Project not found.", status=404)
+    denied = _require_permission(request, "core.change_project")
+    if denied:
+        return denied
+
+    try:
+        with transaction.atomic():
+            allocation = BOMAllocation.objects.select_for_update().select_related(
+                "bom_item", "bom_item__project", "inventory_item",
+            ).filter(
+                pk=allocation_id,
+                bom_item_id=bom_id,
+                bom_item__project=project,
+            ).first()
+            if not allocation:
+                return _error("BOM allocation not found.", status=404)
+
+            inventory = InventoryItem.objects.select_for_update().get(pk=allocation.inventory_item_id)
+            bom_item = BOMItem.objects.select_for_update().get(pk=allocation.bom_item_id)
+
+            if request.method == "DELETE":
+                _record_bom_allocation_history(allocation, request.user, "bom_released")
+                allocation.delete()
+                project.save(update_fields=["updated_at"])
+                return JsonResponse({"deleted": True})
+
+            payload = _read_json(request)
+            previous_quantity = allocation.quantity
+            if "quantity" in payload:
+                allocation.quantity = _parse_decimal(payload.get("quantity"), "quantity", allow_none=False)
+            if "notes" in payload:
+                allocation.notes = str(payload.get("notes") or "").strip()
+            allocation.bom_item = bom_item
+            allocation.inventory_item = inventory
+            allocation.full_clean()
+            _validate_allocation_capacity(
+                bom_item, inventory, allocation.quantity, excluding_id=allocation.pk
+            )
+            allocation.save()
+            if allocation.quantity != previous_quantity:
+                _record_bom_allocation_history(
+                    allocation, request.user, "bom_allocated", previous_quantity=previous_quantity
+                )
+            project.save(update_fields=["updated_at"])
+            return JsonResponse({"allocation": _serialise_bom_allocation(allocation)})
+    except ValidationError as exc:
+        return _validation_response(exc)
+    except ValueError as exc:
+        return _error(str(exc))
 
 
 @login_required

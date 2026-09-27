@@ -45,6 +45,14 @@ export default function InventoryPage({ inventory, setInventory, boards, compone
       valueParser: p => Number(p.newValue)
     },
     {
+      field: "allocated_quantity", headerName: "BOM alloc.", width: 110, editable: false, type: "numericColumn",
+      valueFormatter: p => Number(p.value || 0).toFixed(3).replace(/\.000$/, "")
+    },
+    {
+      field: "available_quantity", headerName: "Free", width: 95, editable: false, type: "numericColumn",
+      valueFormatter: p => Number(p.value || 0).toFixed(3).replace(/\.000$/, "")
+    },
+    {
       field: "status", headerName: "Status", minWidth: 135, editable,
       cellEditor: "agSelectCellEditor", cellEditorParams: { values: Object.keys(STATUS_LABELS) },
       valueFormatter: p => STATUS_LABELS[p.value] || p.value
@@ -103,7 +111,7 @@ export default function InventoryPage({ inventory, setInventory, boards, compone
   return <div className={`catalogueLayout ${selected ? "hasDetail" : ""}`}>
     <section className="panel pagePanel cataloguePanel">
       <div className="panelHead panelHeadWrap">
-        <div><h3>Inventory</h3><p>Click an item for its full record. Quick-edit status, project, location, quantity and cost directly in the grid.</p></div>
+        <div><h3>Inventory</h3><p>Click an item for its full record. Total, BOM-allocated and free quantities stay visible while you quick-edit stock details.</p></div>
         <div className="toolbarActions">
           <input className="searchInput" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search inventory…" />
           {config?.permissions?.add_inventory && <button className="primary" onClick={() => setShowAdd(true)}>＋ Add item</button>}
@@ -135,7 +143,13 @@ export default function InventoryPage({ inventory, setInventory, boards, compone
       loading={loadingDetail}
       projects={projects}
       canEdit={editable}
+      canDelete={Boolean(config?.permissions?.delete_inventory)}
       onClose={() => setSelected(null)}
+      onDeleted={async deleted => {
+        setInventory(rows => rows.filter(row => row.id !== deleted.id));
+        setSelected(null);
+        await refreshDashboard();
+      }}
       onChanged={async updated => {
         setInventory(rows => rows.map(row => row.id === updated.id ? updated : row));
         await loadDetail(updated);
@@ -158,8 +172,11 @@ export default function InventoryPage({ inventory, setInventory, boards, compone
   </div>;
 }
 
-function InventoryDetail({ item, loading, projects, canEdit, onClose, onChanged }) {
+function InventoryDetail({ item, loading, projects, canEdit, canDelete, onClose, onChanged, onDeleted }) {
   const [editing, setEditing] = useState(false);
+  const [releaseOpen, setReleaseOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   if (loading) return <aside className="detailPane"><div className="detailHead"><h3>Inventory details</h3><button className="iconButton" onClick={onClose}>×</button></div><LoadingBlock label="Loading inventory record…" /></aside>;
 
   const board = item.board;
@@ -169,10 +186,34 @@ function InventoryDetail({ item, loading, projects, canEdit, onClose, onChanged 
   return <aside className="detailPane inventoryDetailPane">
     <div className="detailHead"><h3>Inventory details</h3><button className="iconButton" onClick={onClose}>×</button></div>
     <BoardImage src={item.image} alt={item.name} size="large" placeholder={item.item_type === "board" ? "MCU" : "PART"} />
-    <div className="detailTitleRow">
-      <div><span className="inventoryCode">{item.inventory_id}</span><h2>{item.name}</h2></div>
-      {canEdit && <button className="primary" onClick={() => setEditing(true)}>Edit</button>}
+    <div className="inventoryDetailIdentity">
+      <span className="inventoryCode">{item.inventory_id}</span>
+      <h2>{item.name}</h2>
     </div>
+    <div className="inventoryDetailActions">
+      {canEdit && <button className="primary" onClick={() => setEditing(true)}>Edit</button>}
+      {canEdit && Number(item.allocated_quantity || 0) > 0 && <button onClick={() => setReleaseOpen(true)}>Release from allocation</button>}
+      {canDelete && <button
+        className="assetDanger"
+        disabled={deleting || Number(item.allocated_quantity || 0) > 0}
+        title={Number(item.allocated_quantity || 0) > 0 ? "Release BOM allocations before deleting this inventory record." : "Delete this inventory record"}
+        onClick={async () => {
+          if (!window.confirm('Delete "' + item.inventory_id + ' · ' + item.name + '" from inventory? This cannot be undone.')) return;
+          setDeleting(true);
+          setDeleteError("");
+          try {
+            await apiFetch("/api/inventory/" + item.id + "/", { method: "DELETE" });
+            await onDeleted(item);
+          } catch (error) {
+            setDeleteError(error.message);
+          } finally {
+            setDeleting(false);
+          }
+        }}
+      >{deleting ? "Deleting…" : "Delete"}</button>}
+    </div>
+    {deleteError && <div className="inlineError">{deleteError}</div>}
+    {canDelete && Number(item.allocated_quantity || 0) > 0 && <div className="inventoryDeleteHint">Release this item's BOM allocations before deleting it.</div>}
     <div className="badgeRow">
       <Badge tone={item.status === "available" ? "good" : item.status === "in_use" ? "accent" : "neutral"}>{item.status_label}</Badge>
       <Badge>{item.type}</Badge>
@@ -180,7 +221,9 @@ function InventoryDetail({ item, loading, projects, canEdit, onClose, onChanged 
     </div>
 
     <dl className="specList inventorySpecList">
-      <div><dt>Quantity</dt><dd>{item.quantity}</dd></div>
+      <div><dt>Total quantity</dt><dd>{item.quantity}</dd></div>
+      <div><dt>BOM allocated</dt><dd>{item.allocated_quantity ?? 0}</dd></div>
+      <div><dt>Free quantity</dt><dd>{item.available_quantity ?? item.quantity}</dd></div>
       <div><dt>Location</dt><dd>{item.location || "—"}</dd></div>
       <div><dt>Project</dt><dd>{item.project || "—"}</dd></div>
       <div><dt>Serial / ID</dt><dd>{item.serial_number || "—"}</dd></div>
@@ -213,7 +256,69 @@ function InventoryDetail({ item, loading, projects, canEdit, onClose, onChanged 
     {item.purchase_url && <a className="detailLink" href={item.purchase_url} target="_blank" rel="noreferrer">Open purchase/source URL ↗</a>}
 
     {editing && <EditInventoryModal item={item} projects={projects} onClose={() => setEditing(false)} onSaved={updated => { setEditing(false); onChanged(updated); }} />}
+    {releaseOpen && <ReleaseBomAllocationModal
+      item={item}
+      onClose={() => setReleaseOpen(false)}
+      onReleased={async () => {
+        const result = await apiFetch("/api/inventory/" + item.id + "/");
+        setReleaseOpen(false);
+        await onChanged(result.item);
+      }}
+    />}
   </aside>;
+}
+
+function ReleaseBomAllocationModal({ item, onClose, onReleased }) {
+  const allocations = item.bom_allocations || [];
+  const [allocationId, setAllocationId] = useState(allocations[0]?.id ? String(allocations[0].id) : "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const selected = allocations.find(row => String(row.id) === allocationId);
+
+  async function release(event) {
+    event.preventDefault();
+    if (!selected) return;
+    setBusy(true); setError("");
+    try {
+      await apiFetch(
+        "/api/projects/" + selected.project_id + "/bom/" + selected.bom_item_id + "/allocations/" + selected.id + "/",
+        { method: "DELETE" },
+      );
+      await onReleased();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <Modal
+    title={"Release " + item.inventory_id + " from BOM"}
+    subtitle="Choose the project and BOM line to release. Only that allocation will be removed."
+    onClose={onClose}
+    wide
+  >
+    <form className="formGrid" onSubmit={release}>
+      {error && <div className="formError full">{error}</div>}
+      <label className="full">Project / BOM allocation
+        <select required value={allocationId} onChange={e => setAllocationId(e.target.value)}>
+          {allocations.map(allocation => <option key={allocation.id} value={allocation.id}>
+            {allocation.project_name + " · " + allocation.bom_item_name + " · " + allocation.quantity + " " + allocation.unit}
+          </option>)}
+        </select>
+      </label>
+      {selected && <div className="bomDerivedInventory full">
+        <span>Selected allocation</span>
+        <strong>{selected.project_name}</strong>
+        <small>{selected.bom_item_name + " · " + selected.quantity + " " + selected.unit}</small>
+      </div>}
+      <div className="formActions full">
+        <button type="button" onClick={onClose}>Cancel</button>
+        <button className="assetDanger" disabled={busy || !selected}>{busy ? "Releasing…" : "Release from BOM"}</button>
+      </div>
+    </form>
+  </Modal>;
 }
 
 function EditInventoryModal({ item, projects, onClose, onSaved }) {
@@ -252,7 +357,7 @@ function EditInventoryModal({ item, projects, onClose, onSaved }) {
     <form className="formGrid" onSubmit={submit}>
       {error && <div className="formError full">{error}</div>}
       <label className="full">Custom name<input value={form.custom_name} onChange={e => set("custom_name", e.target.value)} placeholder={item.name} /></label>
-      <label>Quantity<input type="number" min="0" step="0.001" value={form.quantity} onChange={e => set("quantity", e.target.value)} /></label>
+      <label>Quantity<input type="number" min={item.allocated_quantity || 0} step="0.001" value={form.quantity} onChange={e => set("quantity", e.target.value)} /></label>
       <label>Status<select value={form.status} onChange={e => set("status", e.target.value)}>{Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
       <label>Project<select value={form.project_id} onChange={e => set("project_id", e.target.value)}><option value="">None</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
       <label>Location<input value={form.location} onChange={e => set("location", e.target.value)} /></label>
@@ -268,9 +373,24 @@ function EditInventoryModal({ item, projects, onClose, onSaved }) {
   </Modal>;
 }
 
-function AddInventoryModal({ boards, components, projects, config, onClose, onCreated }) {
+export function AddInventoryModal({
+  boards,
+  components,
+  projects,
+  config,
+  onClose,
+  onCreated,
+  initialItemType = "board",
+  initialBoard = null,
+  initialComponent = null,
+  lockCatalogueItem = false,
+  title = "Add inventory item",
+}) {
+  const initialType = initialBoard ? "board" : initialComponent ? "component" : initialItemType;
   const [form, setForm] = useState({
-    item_type: "board", board_id: boards[0]?.id || "", component_id: components[0]?.id || "",
+    item_type: initialType,
+    board_id: initialBoard?.id || boards[0]?.id || "",
+    component_id: initialComponent?.id || components[0]?.id || "",
     quantity: 1, status: "available", project_id: "", location: "", purchase_price: "",
     supplier: "", custom_name: "", inventory_id: "", serial_number: "", purchase_url: "", notes: "",
   });
@@ -289,15 +409,15 @@ function AddInventoryModal({ boards, components, projects, config, onClose, onCr
     } catch (err) { setError(err.message); } finally { setBusy(false); }
   }
 
-  return <Modal title="Add inventory item" subtitle="Inventory IDs are generated automatically when left blank." onClose={onClose} wide>
+  return <Modal title={title} subtitle="Inventory IDs are generated automatically when left blank." onClose={onClose} wide>
     <form className="formGrid" onSubmit={submit}>
       {error && <div className="formError full">{error}</div>}
-      <label>Type<select value={form.item_type} onChange={e => set("item_type", e.target.value)}>
+      <label>Type<select value={form.item_type} disabled={lockCatalogueItem} onChange={e => set("item_type", e.target.value)}>
         <option value="board">Microcontroller / board</option><option value="component">Component</option><option value="tool">Tool / asset</option><option value="printed_part">Printed part</option><option value="other">Other</option>
       </select></label>
       <label>Inventory ID<input value={form.inventory_id} placeholder="Auto (e.g. MCU-0001)" onChange={e => set("inventory_id", e.target.value)} /></label>
-      {form.item_type === "board" && <label className="full">Board<select required value={form.board_id} onChange={e => set("board_id", e.target.value)}><option value="">Choose a board…</option>{boards.map(b => <option key={b.id} value={b.id}>{b.display_name}</option>)}</select></label>}
-      {form.item_type === "component" && <label className="full">Component<select required value={form.component_id} onChange={e => set("component_id", e.target.value)}><option value="">Choose a component…</option>{components.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>}
+      {form.item_type === "board" && <label className="full">Board<select required disabled={lockCatalogueItem && Boolean(initialBoard)} value={form.board_id} onChange={e => set("board_id", e.target.value)}><option value="">Choose a board…</option>{boards.map(b => <option key={b.id} value={b.id}>{b.display_name}</option>)}</select></label>}
+      {form.item_type === "component" && <label className="full">Component<select required disabled={lockCatalogueItem && Boolean(initialComponent)} value={form.component_id} onChange={e => set("component_id", e.target.value)}><option value="">Choose a component…</option>{components.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>}
       {!["board", "component"].includes(form.item_type) && <label className="full">Name<input required value={form.custom_name} onChange={e => set("custom_name", e.target.value)} /></label>}
       <label>Quantity<input type="number" min="0" step="0.001" value={form.quantity} onChange={e => set("quantity", e.target.value)} /></label>
       <label>Status<select value={form.status} onChange={e => set("status", e.target.value)}>{Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>

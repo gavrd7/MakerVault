@@ -3,6 +3,7 @@ import { AgGridReact } from "ag-grid-react";
 import { themeQuartz } from "ag-grid-community";
 import { apiFetch } from "../api";
 import { Badge, BoardImage, ImageManagerModal, LoadingBlock, Modal } from "./Common";
+import { AddInventoryModal } from "./InventoryPage";
 
 function prettyKey(key) {
   return key.replaceAll("_", " ").replace(/\b\w/g, c => c.toUpperCase());
@@ -15,7 +16,7 @@ function prettyValue(value) {
   return String(value ?? "");
 }
 
-export default function ComponentsPage({ components, setComponents, config, refreshDashboard }) {
+export default function ComponentsPage({ components, setComponents, boards, projects, config, refreshDashboard, onInventoryCreated }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
   const [showAdd, setShowAdd] = useState(false);
@@ -86,6 +87,12 @@ export default function ComponentsPage({ components, setComponents, config, refr
       component={selected}
       loading={loadingDetail}
       canEdit={config?.permissions?.change_component}
+      canAddInventory={config?.permissions?.add_inventory}
+      boards={boards}
+      components={components}
+      projects={projects}
+      config={config}
+      onInventoryCreated={onInventoryCreated}
       onClose={() => setSelected(null)}
       onChanged={replaceComponent}
     />}
@@ -102,8 +109,9 @@ export default function ComponentsPage({ components, setComponents, config, refr
   </div>;
 }
 
-function ComponentDetail({ component, loading, canEdit, onClose, onChanged }) {
+function ComponentDetail({ component, loading, canEdit, canAddInventory, boards, components, projects, config, onInventoryCreated, onClose, onChanged }) {
   const [imageOpen, setImageOpen] = useState(false);
+  const [inventoryOpen, setInventoryOpen] = useState(false);
   const specs = Object.entries(component.specifications || {})
     .filter(([key]) => !["starter_catalogue", "catalogue_version", "external_image_url", "image_source_url", "image_source_type", "image_cached_at", "image_source_provider", "image_source_page", "image_source_query", "image_license", "image_author", "auto_image_seeded", "auto_image_seeded_at", "auto_image_last_attempt", "auto_image_attempt_version", "auto_image_opt_out"].includes(key));
 
@@ -111,7 +119,7 @@ function ComponentDetail({ component, loading, canEdit, onClose, onChanged }) {
     <div className="detailHead"><h3>Component details</h3><button className="iconButton" onClick={onClose}>×</button></div>
     {loading ? <LoadingBlock label="Loading component details…" /> : <>
       <BoardImage src={component.image} alt={component.name} size="large" placeholder="PART" />
-      <div className="detailTitleRow"><div><h2>{component.name}</h2><p className="muted detailMaker">{component.manufacturer} · {component.category}</p></div>{canEdit && <button onClick={() => setImageOpen(true)}>Image</button>}</div>
+      <div className="detailTitleRow"><div><h2>{component.name}</h2><p className="muted detailMaker">{component.manufacturer} · {component.category}</p></div><div className="detailActions">{canAddInventory && <button className="primary" onClick={() => setInventoryOpen(true)}>＋ Add to inventory</button>}{canEdit && <button onClick={() => setImageOpen(true)}>Image</button>}</div></div>
       <p className="muted">{component.description || "Reusable makerspace component definition."}</p>
       <div className="badgeRow">
         {component.type && <Badge tone="accent">{component.type}</Badge>}
@@ -136,6 +144,20 @@ function ComponentDetail({ component, loading, canEdit, onClose, onChanged }) {
       currentImage={component.image}
       onClose={() => setImageOpen(false)}
       onUpdated={updated => { onChanged(updated); setImageOpen(false); }}
+    />}
+    {inventoryOpen && <AddInventoryModal
+      boards={boards}
+      components={components}
+      projects={projects}
+      config={config}
+      initialComponent={component}
+      lockCatalogueItem
+      title={"Add " + component.name + " to inventory"}
+      onClose={() => setInventoryOpen(false)}
+      onCreated={async item => {
+        setInventoryOpen(false);
+        await onInventoryCreated?.(item);
+      }}
     />}
   </aside>;
 }
