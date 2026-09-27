@@ -753,3 +753,7 @@
   .printingListRow{align-items:flex-start;flex-wrap:wrap}
   .printingBadges{width:100%;justify-content:flex-start}
 }
+
+.printingHeroActions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+@media(max-width:900px){.printingHero{align-items:flex-start}.printingHeroActions{justify-content:flex-start}}
+@media(max-width:620px){.printingHeroActions{display:grid;grid-template-columns:1fr 1fr;width:100%}.printingHeroActions button{width:100%}}
