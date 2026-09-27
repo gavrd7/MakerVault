@@ -314,7 +314,7 @@ def _serialise_file_asset(asset):
         size_bytes = asset.file.size if asset.file else 0
     except (OSError, ValueError):
         size_bytes = metadata.get("size_bytes") or 0
-    filename = Path(asset.file.name).name if asset.file else metadata.get("original_name", "")
+    filename = metadata.get("original_name") or (Path(asset.file.name).name if asset.file else "")
     return {
         "id": str(asset.id),
         "name": asset.name,
