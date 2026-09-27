@@ -45,6 +45,7 @@ from .models import (
     Printer,
     PrinterFilamentSlot,
     PrintJob,
+    PrintMaterialUsage,
     Project,
     RepositoryLink,
     Spool,
@@ -2245,7 +2246,28 @@ def _serialise_printer(printer):
     }
 
 
+def _serialise_print_material_usage(usage):
+    return {
+        "id": str(usage.id),
+        "spool_id": str(usage.spool_id) if usage.spool_id else None,
+        "spool": usage.spool.spool_id if usage.spool else "",
+        "filament_id": str(usage.filament_id) if usage.filament_id else None,
+        "filament": str(usage.filament) if usage.filament else "",
+        "printer_slot_id": str(usage.printer_slot_id) if usage.printer_slot_id else None,
+        "used_g": _float(usage.used_g),
+        "waste_g": _float(usage.waste_g),
+        "material_cost": _float(usage.material_cost),
+        "currency": usage.currency,
+        "notes": usage.notes,
+    }
+
+
 def _serialise_print_job(job):
+    usages = list(job.material_usages.all())
+    total_used = sum((usage.used_g or Decimal("0") for usage in usages), Decimal("0"))
+    total_waste = sum((usage.waste_g or Decimal("0") for usage in usages), Decimal("0"))
+    costs = [usage.material_cost for usage in usages if usage.material_cost is not None]
+    total_cost = sum(costs, Decimal("0")) if costs else None
     return {
         "id": str(job.id),
         "status": job.status,
@@ -2258,9 +2280,10 @@ def _serialise_print_job(job):
         "model_revision_id": str(job.model_revision_id) if job.model_revision_id else None,
         "model": job.model_revision.model.name if job.model_revision else "",
         "revision": job.model_revision.version if job.model_revision else "",
-        "spool_id": str(job.spool_id) if job.spool_id else None,
-        "spool": job.spool.spool_id if job.spool else "",
-        "filament_used_g": _float(job.filament_used_g),
+        "material_usages": [_serialise_print_material_usage(usage) for usage in usages],
+        "filament_used_g": _float(total_used),
+        "waste_g": _float(total_waste),
+        "material_cost": _float(total_cost),
         "actual_minutes": job.actual_minutes,
         "created_at": job.created_at.isoformat(),
     }
@@ -2289,8 +2312,11 @@ def printing_overview(request):
         PrintJob.objects.select_related(
             "printer",
             "project",
-            "spool",
             "model_revision__model",
+        ).prefetch_related(
+            "material_usages__spool__filament__manufacturer",
+            "material_usages__filament__manufacturer",
+            "material_usages__printer_slot",
         )[:12]
     )
 
