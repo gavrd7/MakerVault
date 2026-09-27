@@ -41,14 +41,18 @@ function formatMemoryMb(value) {
   return Number.isInteger(number) ? `${number} MB` : `${number.toFixed(2).replace(/0+$/, "").replace(/\.$/, "")} MB`;
 }
 
-function BoardSpecGrid({ rows }) {
+function BoardSpecGrid({ rows, status = {} }) {
   return <dl className="boardSpecGrid">
-    {rows.map(({ key, label, value }) => <div className="boardSpecCell" key={key}>
-      <dt>{label}</dt>
-      <dd className={value === null || value === undefined || value === "" ? "specMissing" : ""}>
-        {value === null || value === undefined || value === "" ? "—" : value}
-      </dd>
-    </div>)}
+    {rows.map(({ key, label, value }) => {
+      const fieldStatus = status[key] || (value === null || value === undefined || value === "" ? "unknown" : "value");
+      const display = fieldStatus === "not_applicable"
+        ? "N/A"
+        : (fieldStatus === "unknown" ? "" : value);
+      return <div className={`boardSpecCell spec-${fieldStatus}`} key={key} title={fieldStatus === "unknown" ? "Missing data — eligible for enrichment" : undefined}>
+        <dt>{label}</dt>
+        <dd>{display}</dd>
+      </div>;
+    })}
   </dl>;
 }
 
@@ -148,6 +152,7 @@ function BoardDetail({ board, loading, canEdit, onClose, onChanged }) {
     .filter(([on]) => on).map(([, label]) => label);
 
   const specs = board.specifications || {};
+  const fieldStatus = specs.technical_field_status || {};
   const coreRows = [
     { key: "mcu", label: "MCU", value: board.mcu || "" },
     { key: "architecture", label: "Architecture", value: board.architecture || "" },
@@ -184,7 +189,7 @@ function BoardDetail({ board, loading, canEdit, onClose, onChanged }) {
     try {
       const result = await apiFetch(`/api/boards/${board.id}/enrich/`, { method: "POST" });
       onChanged(result.board);
-      setEnrichMessage(result.changed ? "Technical specifications updated from ESPBoards.dev." : "No additional matching ESPBoards data was found.");
+      setEnrichMessage(result.changed ? "Technical specifications and enrichment status were updated." : "No additional source data was found. Missing fields remain queued for future enrichment.");
     } catch (error) {
       setEnrichMessage(error.message);
     } finally {
@@ -203,7 +208,7 @@ function BoardDetail({ board, loading, canEdit, onClose, onChanged }) {
         <h2>{board.display_name}</h2>
         <div className="detailActions">
           {canEdit && <button onClick={() => setImageOpen(true)}>Image</button>}
-          {canEdit && /ESP32|ESP8266/i.test([board.family, board.mcu, board.name].join(" ")) && <button onClick={enrichBoard} disabled={enriching}>{enriching ? "Refreshing…" : "Refresh specs"}</button>}
+          {canEdit && <button onClick={enrichBoard} disabled={enriching}>{enriching ? "Refreshing…" : "Refresh specs"}</button>}
         </div>
       </div>
       <p className="muted boardSubtitle">{board.description || `${board.family || "Development board"}${board.mcu ? ` · ${board.mcu}` : ""}`}</p>
@@ -212,12 +217,12 @@ function BoardDetail({ board, loading, canEdit, onClose, onChanged }) {
 
       <section className="boardDetailSection">
         <h4>Core specifications</h4>
-        <BoardSpecGrid rows={coreRows} />
+        <BoardSpecGrid rows={coreRows} status={fieldStatus} />
       </section>
 
       <section className="boardDetailSection">
         <h4>Technical details</h4>
-        <BoardSpecGrid rows={technicalRows} />
+        <BoardSpecGrid rows={technicalRows} status={fieldStatus} />
       </section>
 
       <section className="boardDetailSection">
