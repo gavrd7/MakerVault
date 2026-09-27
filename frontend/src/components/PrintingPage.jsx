@@ -18,6 +18,7 @@ export default function PrintingPage({ config, projects }) {
   const [error, setError] = useState("");
   const [modal, setModal] = useState("");
   const [manageModel, setManageModel] = useState(null);
+  const [managePrinter, setManagePrinter] = useState(null);
 
   async function load() {
     setError("");
@@ -39,6 +40,7 @@ export default function PrintingPage({ config, projects }) {
 
   const summary = data?.summary || {};
   const canAddPrinter = Boolean(config?.permissions?.add_printer);
+  const canChangePrinter = Boolean(config?.permissions?.change_printer);
   const canAddFilament = Boolean(config?.permissions?.add_filament);
   const canAddSpool = Boolean(config?.permissions?.add_spool);
   const canAddModel = Boolean(config?.permissions?.add_model3d);
@@ -82,7 +84,7 @@ export default function PrintingPage({ config, projects }) {
         {(data?.printers || []).map(printer => <article className="printingCard" key={printer.id}>
           <div className="printingCardHead">
             <div><strong>{printer.name}</strong><small>{[printer.manufacturer, printer.model, printer.location].filter(Boolean).join(" · ")}</small></div>
-            <div className="printingBadges">{printer.is_active ? <Badge tone="good">Active</Badge> : <Badge>Inactive</Badge>}{printer.catalogue?.multi_material_label && <Badge>{printer.catalogue.multi_material_label}</Badge>}<Badge>{printer.slots.length} slots</Badge></div>
+            <div className="printingBadges">{printer.is_active ? <Badge tone="good">Active</Badge> : <Badge>Inactive</Badge>}{printer.catalogue?.multi_material_label && <Badge>{printer.catalogue.multi_material_label}</Badge>}<Badge>{printer.slots.length} slots</Badge>{canChangePrinter && <button type="button" onClick={() => setManagePrinter(printer)}>Manage</button>}</div>
           </div>
           <div className="printingSlotGrid">
             {printer.slots.filter(slot => slot.is_loaded).map(slot => <div className="printingSlot" key={slot.id}>
@@ -156,6 +158,14 @@ export default function PrintingPage({ config, projects }) {
       currency={config?.currency || "GBP"}
       onClose={() => setModal("")}
       onSaved={saved}
+    />}
+    {managePrinter && <PrinterManageModal
+      printer={managePrinter}
+      manufacturers={data?.printer_manufacturers || []}
+      models={data?.printer_catalogue_models || []}
+      locations={data?.locations || []}
+      onClose={() => setManagePrinter(null)}
+      onSaved={async () => { setManagePrinter(null); await load(); }}
     />}
     {manageModel && <ModelManageModal
       model={manageModel}
