@@ -259,8 +259,9 @@ function InventoryDetail({ item, loading, projects, canEdit, canDelete, onClose,
       item={item}
       onClose={() => setReleaseOpen(false)}
       onReleased={async () => {
+        const result = await apiFetch("/api/inventory/" + item.id + "/");
         setReleaseOpen(false);
-        await onChanged(item);
+        await onChanged(result.item);
       }}
     />}
   </aside>;
