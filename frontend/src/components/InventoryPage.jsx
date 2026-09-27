@@ -308,9 +308,24 @@ function EditInventoryModal({ item, projects, onClose, onSaved }) {
   </Modal>;
 }
 
-function AddInventoryModal({ boards, components, projects, config, onClose, onCreated }) {
+export function AddInventoryModal({
+  boards,
+  components,
+  projects,
+  config,
+  onClose,
+  onCreated,
+  initialItemType = "board",
+  initialBoard = null,
+  initialComponent = null,
+  lockCatalogueItem = false,
+  title = "Add inventory item",
+}) {
+  const initialType = initialBoard ? "board" : initialComponent ? "component" : initialItemType;
   const [form, setForm] = useState({
-    item_type: "board", board_id: boards[0]?.id || "", component_id: components[0]?.id || "",
+    item_type: initialType,
+    board_id: initialBoard?.id || boards[0]?.id || "",
+    component_id: initialComponent?.id || components[0]?.id || "",
     quantity: 1, status: "available", project_id: "", location: "", purchase_price: "",
     supplier: "", custom_name: "", inventory_id: "", serial_number: "", purchase_url: "", notes: "",
   });
@@ -329,15 +344,15 @@ function AddInventoryModal({ boards, components, projects, config, onClose, onCr
     } catch (err) { setError(err.message); } finally { setBusy(false); }
   }
 
-  return <Modal title="Add inventory item" subtitle="Inventory IDs are generated automatically when left blank." onClose={onClose} wide>
+  return <Modal title={title} subtitle="Inventory IDs are generated automatically when left blank." onClose={onClose} wide>
     <form className="formGrid" onSubmit={submit}>
       {error && <div className="formError full">{error}</div>}
-      <label>Type<select value={form.item_type} onChange={e => set("item_type", e.target.value)}>
+      <label>Type<select value={form.item_type} disabled={lockCatalogueItem} onChange={e => set("item_type", e.target.value)}>
         <option value="board">Microcontroller / board</option><option value="component">Component</option><option value="tool">Tool / asset</option><option value="printed_part">Printed part</option><option value="other">Other</option>
       </select></label>
       <label>Inventory ID<input value={form.inventory_id} placeholder="Auto (e.g. MCU-0001)" onChange={e => set("inventory_id", e.target.value)} /></label>
-      {form.item_type === "board" && <label className="full">Board<select required value={form.board_id} onChange={e => set("board_id", e.target.value)}><option value="">Choose a board…</option>{boards.map(b => <option key={b.id} value={b.id}>{b.display_name}</option>)}</select></label>}
-      {form.item_type === "component" && <label className="full">Component<select required value={form.component_id} onChange={e => set("component_id", e.target.value)}><option value="">Choose a component…</option>{components.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>}
+      {form.item_type === "board" && <label className="full">Board<select required disabled={lockCatalogueItem && Boolean(initialBoard)} value={form.board_id} onChange={e => set("board_id", e.target.value)}><option value="">Choose a board…</option>{boards.map(b => <option key={b.id} value={b.id}>{b.display_name}</option>)}</select></label>}
+      {form.item_type === "component" && <label className="full">Component<select required disabled={lockCatalogueItem && Boolean(initialComponent)} value={form.component_id} onChange={e => set("component_id", e.target.value)}><option value="">Choose a component…</option>{components.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>}
       {!["board", "component"].includes(form.item_type) && <label className="full">Name<input required value={form.custom_name} onChange={e => set("custom_name", e.target.value)} /></label>}
       <label>Quantity<input type="number" min="0" step="0.001" value={form.quantity} onChange={e => set("quantity", e.target.value)} /></label>
       <label>Status<select value={form.status} onChange={e => set("status", e.target.value)}>{Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
