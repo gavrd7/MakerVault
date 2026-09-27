@@ -190,7 +190,9 @@ def _rank_spoolman_filaments(snapshot: dict) -> list[tuple[int, FilamentProduct]
 
 def _create_filament_from_spoolman(snapshot: dict) -> FilamentProduct:
     maker_name = snapshot.get("vendor") or "Generic"
-    maker, _ = FilamentManufacturer.objects.get_or_create(name=maker_name)
+    maker = FilamentManufacturer.objects.filter(name__iexact=maker_name).first()
+    if maker is None:
+        maker = FilamentManufacturer.objects.create(name=maker_name)
     profile = {
         "spoolman": {
             "filament_id": snapshot.get("filament_external_id", ""),
@@ -220,14 +222,14 @@ def _spoolman_location(name: str):
     value = str(name or "").strip()[:200]
     if not value:
         return None
-    location, created = PrintingLocation.objects.get_or_create(
+    location = PrintingLocation.objects.filter(name__iexact=value).first()
+    if location is not None:
+        return location
+    return PrintingLocation.objects.create(
         name=value,
-        defaults={
-            "kind": "storage",
-            "notes": "Location discovered from Spoolman. MakerVault remains authoritative for spool placement.",
-        },
+        kind="storage",
+        notes="Location discovered from Spoolman. MakerVault remains authoritative for spool placement.",
     )
-    return location
 
 
 def _rank_spoolman_spools(snapshot: dict) -> list[dict]:
