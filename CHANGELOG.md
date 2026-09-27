@@ -8,7 +8,7 @@
 - Schedule interval is configurable from 1 to 720 hours and persists in PostgreSQL across container rebuilds/restarts.
 - Added separate toggles for technical board-data checks and catalogue-image checks.
 - Added a Run now control for immediate manual maintenance without changing the saved schedule.
-- The scheduler queues existing enrichment/image jobs, preserving their locks, confidence rules and per-record retry windows.
+- The scheduler queues existing enrichment/image jobs with a forced source retry on the configured cadence, while preserving locks, licence/confidence checks and user-value protection.
 - Removed the old behaviour that queued catalogue enrichment on every container restart.
 - Environment flags ENRICH_BOARD_CATALOGUE and SEED_CATALOGUE_IMAGES remain server-level hard disables that the GUI cannot override.
 - Added last-run, next-run and trigger metadata to the settings view.
