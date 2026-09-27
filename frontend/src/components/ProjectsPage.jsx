@@ -4,6 +4,7 @@ import { Badge, BoardImage, ImageViewer, LoadingBlock, Modal } from "./Common";
 
 const STATUS = {
   idea: "Idea",
+  planning: "Planning",
   active: "Active",
   paused: "Paused",
   complete: "Complete",
