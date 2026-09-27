@@ -339,6 +339,11 @@ def _record_bom_allocation_history(allocation, user, event_type, *, previous_qua
 
 def _serialise_bom_allocation(allocation):
     inventory = allocation.inventory_item
+    inventory_allocated = _inventory_allocated_quantity(inventory)
+    inventory_available = max(
+        (inventory.quantity or Decimal("0")) - inventory_allocated,
+        Decimal("0"),
+    )
     return {
         "id": allocation.pk,
         "inventory_item_id": str(inventory.pk),
@@ -346,10 +351,7 @@ def _serialise_bom_allocation(allocation):
         "inventory_name": inventory.display_name,
         "quantity": _float(allocation.quantity),
         "inventory_total_quantity": _float(inventory.quantity),
-        "inventory_available_quantity": _float(_inventory_allocated_quantity(inventory) and max(
-            (inventory.quantity or Decimal("0")) - _inventory_allocated_quantity(inventory),
-            Decimal("0"),
-        ) or (inventory.quantity or Decimal("0"))),
+        "inventory_available_quantity": _float(inventory_available),
         "status": inventory.status,
         "status_label": inventory.get_status_display(),
         "location": inventory.location,
