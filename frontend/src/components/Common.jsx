@@ -1,8 +1,9 @@
 import React, { useState } from "react";
+import { createPortal } from "react-dom";
 import { apiFetch } from "../api";
 
 export function Modal({ title, subtitle, onClose, children, wide = false }) {
-  return <div className="modalBackdrop" role="presentation" onMouseDown={e => {
+  const modal = <div className="modalBackdrop" role="presentation" onMouseDown={e => {
     if (e.target === e.currentTarget) onClose();
   }}>
     <section className={`modal ${wide ? "modalWide" : ""}`} role="dialog" aria-modal="true" aria-label={title}>
@@ -13,6 +14,7 @@ export function Modal({ title, subtitle, onClose, children, wide = false }) {
       <div className="modalBody">{children}</div>
     </section>
   </div>;
+  return createPortal(modal, document.body);
 }
 
 export function BoardImage({ src, alt = "", size = "normal", placeholder = "MCU" }) {
