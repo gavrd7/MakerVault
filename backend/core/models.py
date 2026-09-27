@@ -607,12 +607,8 @@ class PrintJob(TimeStampedModel):
     model_revision = models.ForeignKey(ModelRevision, on_delete=models.SET_NULL, null=True, blank=True, related_name="prints")
     project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True, related_name="print_jobs")
     printer = models.ForeignKey(Printer, on_delete=models.PROTECT, related_name="print_jobs")
-    spool = models.ForeignKey(Spool, on_delete=models.SET_NULL, null=True, blank=True, related_name="print_jobs")
     status = models.CharField(max_length=20, choices=STATUS, default="planned")
     quantity = models.PositiveIntegerField(default=1)
-    filament_used_g = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
-    waste_g = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
-    material_cost = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     currency = models.CharField(max_length=3, default="GBP")
     estimated_minutes = models.PositiveIntegerField(blank=True, null=True)
     actual_minutes = models.PositiveIntegerField(blank=True, null=True)
@@ -627,3 +623,40 @@ class PrintJob(TimeStampedModel):
 
     def __str__(self):
         return f"Print {self.id} ({self.get_status_display()})"
+
+
+class PrintMaterialUsage(TimeStampedModel):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    print_job = models.ForeignKey(PrintJob, on_delete=models.CASCADE, related_name="material_usages")
+    spool = models.ForeignKey(Spool, on_delete=models.SET_NULL, null=True, blank=True, related_name="print_material_usages")
+    filament = models.ForeignKey(FilamentProduct, on_delete=models.SET_NULL, null=True, blank=True, related_name="print_material_usages")
+    printer_slot = models.ForeignKey(
+        PrinterFilamentSlot,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="print_material_usages",
+    )
+    used_g = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    waste_g = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    material_cost = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    currency = models.CharField(max_length=3, default="GBP")
+    notes = models.TextField(blank=True)
+    source_metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["created_at"]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(used_g__gte=0), name="print_material_used_nonnegative"),
+            models.CheckConstraint(condition=models.Q(waste_g__gte=0), name="print_material_waste_nonnegative"),
+        ]
+
+    def clean(self):
+        if self.spool_id and self.filament_id and self.spool.filament_id != self.filament_id:
+            raise ValidationError({"filament": "Selected filament does not match the selected spool."})
+        if self.spool_id and not self.filament_id:
+            self.filament = self.spool.filament
+
+    def __str__(self):
+        material = self.spool.spool_id if self.spool else str(self.filament or "Material")
+        return f"{self.print_job} · {material}"
