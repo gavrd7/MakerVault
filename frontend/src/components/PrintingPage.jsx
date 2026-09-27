@@ -78,6 +78,20 @@ export default function PrintingPage({ config, projects }) {
       <article><span>Print jobs</span><strong>{summary.print_jobs || 0}</strong></article>
     </div>
 
+
+    {!!data?.integrations?.length && <section className="printingIntegrationStatusBar" aria-label="Enabled integration status">
+      {data.integrations.map(item => {
+        const tone = item.status === "connected" ? "good" : item.status === "error" || item.status === "disconnected" ? "danger" : "neutral";
+        return <div className={"printingIntegrationStatus printingIntegrationStatus-" + item.status} key={item.provider}>
+          <span className="printingIntegrationDot" />
+          <strong>{item.name}</strong>
+          <Badge tone={tone}>{item.status_label}</Badge>
+          <small>{item.last_sync_at ? "Last sync " + formatDate(item.last_sync_at) : "Not synced yet"}</small>
+          {item.auto_sync && item.next_sync_at && <small>Next {formatDate(item.next_sync_at)}</small>}
+        </div>;
+      })}
+    </section>}
+
     <section className="panel printingSection">
       <div className="panelHead"><div><h3>Printers &amp; loaded filament</h3><p>Filament slots are provider-neutral so CFS, AMS and later systems can use the same model.</p></div></div>
       <div className="printingCards">
@@ -127,19 +141,6 @@ export default function PrintingPage({ config, projects }) {
         </div>
       </div>
     </section>
-
-    {!!data?.integrations?.length && <section className="printingIntegrationStatusBar" aria-label="Enabled integration status">
-      {data.integrations.map(item => {
-        const tone = item.status === "connected" ? "good" : item.status === "error" || item.status === "disconnected" ? "danger" : "neutral";
-        return <div className={"printingIntegrationStatus printingIntegrationStatus-" + item.status} key={item.provider}>
-          <span className="printingIntegrationDot" />
-          <strong>{item.name}</strong>
-          <Badge tone={tone}>{item.status_label}</Badge>
-          <small>{item.last_sync_at ? "Last sync " + formatDate(item.last_sync_at) : "Not synced yet"}</small>
-          {item.auto_sync && item.next_sync_at && <small>Next {formatDate(item.next_sync_at)}</small>}
-        </div>;
-      })}
-    </section>}
 
     {!!data?.recent_prints?.length && <section className="panel printingSection">
       <div className="panelHead"><div><h3>Recent prints</h3><p>Latest native MakerVault print history.</p></div></div>
