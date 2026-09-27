@@ -277,6 +277,96 @@ class PrintingFoundationTests(TestCase):
         self.assertEqual(payload["recent_prints"][0]["material_cost"], 0.42)
         self.assertEqual(payload["recent_prints"][0]["material_usages"][0]["spool"], "SPL-0001")
 
+    def test_unmatched_discovered_slot_can_be_added_to_inventory_with_existing_filament(self):
+        slot = PrinterFilamentSlot.objects.create(
+            printer=self.printer,
+            system="creality_cfs",
+            unit_index=0,
+            slot_index=0,
+            material="PLA",
+            color_hex="#7b1fa2",
+            is_loaded=True,
+            last_seen_at=timezone.now(),
+            metadata={
+                "vendor": "eSUN",
+                "product_name": "PLA+ HS",
+                "remaining_percent": 99,
+                "rfid_detected": True,
+            },
+        )
+
+        response = self.client.post(
+            f"/api/printing/slots/{slot.id}/add-to-inventory/",
+            data={
+                "filament_id": str(self.filament.id),
+                "initial_weight_g": "1000",
+                "status": "open",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        payload = response.json()
+        self.assertFalse(payload["created_filament"])
+        self.assertEqual(payload["item"]["spool_id"], "SPL-0002")
+        self.assertEqual(payload["item"]["assigned_printer_id"], str(self.printer.id))
+        self.assertEqual(payload["item"]["remaining_weight_g"], 990.0)
+
+        slot.refresh_from_db()
+        self.assertIsNotNone(slot.spool_id)
+        self.assertEqual(slot.spool.spool_id, "SPL-0002")
+        self.assertEqual(slot.remaining_weight_g, Decimal("990.00"))
+
+    def test_discovered_slot_framework_can_create_filament_for_future_provider(self):
+        slot = PrinterFilamentSlot.objects.create(
+            printer=self.printer,
+            system="bambu_ams",
+            unit_index=0,
+            slot_index=2,
+            material="PETG",
+            color_hex="#8844cc",
+            external_ref="ams:0:2",
+            rfid_uid="RFID-FUTURE",
+            is_loaded=True,
+            last_seen_at=timezone.now(),
+            metadata={
+                "vendor": "Example Future Vendor",
+                "product_name": "Rapid PETG",
+                "remaining_percent": 75,
+                "rfid_detected": True,
+            },
+        )
+
+        response = self.client.post(
+            f"/api/printing/slots/{slot.id}/add-to-inventory/",
+            data={
+                "new_filament": {
+                    "manufacturer_name": "Example Future Vendor",
+                    "name": "Rapid PETG",
+                    "material": "PETG",
+                    "color_name": "Purple",
+                    "color_hex": "#8844cc",
+                    "diameter_mm": "1.75",
+                    "nominal_weight_g": "1000",
+                },
+                "initial_weight_g": "1000",
+                "status": "open",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        payload = response.json()
+        self.assertTrue(payload["created_filament"])
+        self.assertEqual(payload["item"]["remaining_weight_g"], 750.0)
+
+        slot.refresh_from_db()
+        filament = slot.spool.filament
+        self.assertEqual(filament.filament_manufacturer.name, "Example Future Vendor")
+        self.assertEqual(filament.name, "Rapid PETG")
+        self.assertEqual(filament.material, "PETG")
+        self.assertEqual(filament.color_name, "Purple")
+        self.assertEqual(filament.profile_data["discovered_from"]["system"], "bambu_ams")
+        self.assertEqual(filament.profile_data["discovered_from"]["external_ref"], "ams:0:2")
+
     def test_print_job_supports_multiple_spools_and_aggregates_material_usage(self):
         second_filament = FilamentProduct.objects.create(
             manufacturer=self.manufacturer,
