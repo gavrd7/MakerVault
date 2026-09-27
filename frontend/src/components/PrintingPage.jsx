@@ -19,6 +19,7 @@ export default function PrintingPage({ config, projects }) {
   const [modal, setModal] = useState("");
   const [manageModel, setManageModel] = useState(null);
   const [managePrinter, setManagePrinter] = useState(null);
+  const [claimSlot, setClaimSlot] = useState(null);
 
   async function load() {
     setError("");
@@ -107,6 +108,7 @@ export default function PrintingPage({ config, projects }) {
                 <strong>{slot.product_name || slot.material || "Unknown material"}</strong>
                 <small>{[slot.vendor, slot.material].filter(Boolean).join(" · ")}{slot.vendor || slot.material ? " · " : ""}{slot.system_label} · unit {slot.unit_index + 1}, slot {slot.slot_index + 1}</small>
                 <small>{slot.spool_code || "Unmatched MakerVault spool"} · {slot.remaining_percent != null ? Math.round(slot.remaining_percent) + "% remaining" : grams(slot.remaining_weight_g)}</small>
+                {!slot.spool_id && canAddSpool && <button className="slotInventoryAction" type="button" onClick={() => setClaimSlot({ printer, slot })}>＋ Add to inventory</button>}
               </div>
             </div>)}
             {!printer.slots.some(slot => slot.is_loaded) && <div className="printingEmptyInline">No loaded filament slots have been discovered yet.</div>}
@@ -157,6 +159,15 @@ export default function PrintingPage({ config, projects }) {
     {modal === "filament" && <FilamentModal manufacturers={data?.filament_manufacturers || []} materials={data?.common_filament_materials || []} onClose={() => setModal("")} onSaved={saved} />}
     {modal === "filamentCatalogue" && <FilamentCatalogueModal onClose={() => setModal("")} onImported={saved} />}
     {modal === "spool" && <SpoolModal filaments={data?.filaments || []} locations={data?.locations || []} printers={data?.printers || []} currency={config?.currency || "GBP"} onClose={() => setModal("")} onSaved={saved} />}
+    {claimSlot && <DiscoveredSpoolModal
+      printer={claimSlot.printer}
+      slot={claimSlot.slot}
+      filaments={data?.filaments || []}
+      currency={config?.currency || "GBP"}
+      canCreateFilament={canAddFilament}
+      onClose={() => setClaimSlot(null)}
+      onSaved={async () => { setClaimSlot(null); await load(); }}
+    />}
     {modal === "model" && <ModelModal projects={projects || []} canUpload={Boolean(config?.permissions?.add_file)} onClose={() => setModal("")} onSaved={saved} />}
     {modal === "print" && <PrintJobModal
       printers={data?.printers || []}
@@ -723,6 +734,185 @@ function FilamentCatalogueModal({ onClose, onImported }) {
     </div>
   </Modal>;
 }
+
+function normaliseDetectedText(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function findDetectedFilamentMatch(filaments, slot) {
+  const vendor = normaliseDetectedText(slot?.vendor);
+  const product = normaliseDetectedText(slot?.product_name);
+  const material = normaliseDetectedText(slot?.material);
+  const colour = normaliseDetectedText(slot?.color_hex);
+  let best = null;
+  let bestScore = 0;
+
+  for (const filament of filaments || []) {
+    let score = 0;
+    const candidateVendor = normaliseDetectedText(filament.manufacturer);
+    const candidateName = normaliseDetectedText(filament.name);
+    const candidateMaterial = normaliseDetectedText(filament.material);
+    const candidateColour = normaliseDetectedText(filament.color_hex);
+
+    if (material && candidateMaterial === material) score += 6;
+    if (vendor && candidateVendor === vendor) score += 5;
+    if (product && candidateName) {
+      if (candidateName === product) score += 6;
+      else if (candidateName.includes(product) || product.includes(candidateName)) score += 3;
+    }
+    if (colour && candidateColour === colour) score += 3;
+
+    if (score > bestScore) {
+      best = filament;
+      bestScore = score;
+    }
+  }
+  return bestScore >= 6 ? best : null;
+}
+
+function DiscoveredSpoolModal({ printer, slot, filaments, currency, canCreateFilament, onClose, onSaved }) {
+  const initialMatch = findDetectedFilamentMatch(filaments, slot);
+  const [availableFilaments, setAvailableFilaments] = useState(filaments || []);
+  const [mode, setMode] = useState(initialMatch ? "existing" : "new");
+  const [form, setForm] = useState({
+    filament_id: initialMatch?.id || "",
+    initial_weight_g: initialMatch?.nominal_weight_g || "",
+    remaining_weight_g: "",
+    purchase_cost: "",
+    currency,
+    status: "open",
+    opened_on: "",
+    notes: "",
+  });
+  const [newFilament, setNewFilament] = useState({
+    manufacturer_name: slot.vendor || "",
+    name: slot.product_name || slot.material || "",
+    material: slot.material || "",
+    color_name: "",
+    color_hex: slot.color_hex || "#777777",
+    transparency: "opaque",
+    diameter_mm: "1.75",
+    nominal_weight_g: "",
+  });
+  const [busy, setBusy] = useState(false);
+  const [loadingFilaments, setLoadingFilaments] = useState(false);
+  const [error, setError] = useState("");
+  const set = (key, value) => setForm(current => ({ ...current, [key]: value }));
+  const setNew = (key, value) => setNewFilament(current => ({ ...current, [key]: value }));
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingFilaments(true);
+    apiFetch("/api/printing/filaments/")
+      .then(result => {
+        if (cancelled) return;
+        const rows = result.rows || [];
+        setAvailableFilaments(rows);
+        const match = findDetectedFilamentMatch(rows, slot);
+        if (match) {
+          setMode(current => current === "new" && !canCreateFilament ? "existing" : current);
+          setForm(current => ({
+            ...current,
+            filament_id: current.filament_id || match.id,
+            initial_weight_g: current.initial_weight_g || match.nominal_weight_g || "",
+          }));
+        } else if (!canCreateFilament) {
+          setMode("existing");
+        }
+      })
+      .catch(err => { if (!cancelled) setError(err.message); })
+      .finally(() => { if (!cancelled) setLoadingFilaments(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  function existingFilamentChanged(value) {
+    const selected = availableFilaments.find(item => item.id === value);
+    setForm(current => ({
+      ...current,
+      filament_id: value,
+      initial_weight_g: current.initial_weight_g || selected?.nominal_weight_g || "",
+    }));
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    setBusy(true); setError("");
+    try {
+      const body = {
+        ...form,
+        filament_id: mode === "existing" ? form.filament_id : "",
+        new_filament: mode === "new" ? newFilament : undefined,
+      };
+      await apiFetch("/api/printing/slots/" + slot.id + "/add-to-inventory/", {
+        method: "POST",
+        body,
+      });
+      await onSaved();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const detectedPercent = slot.remaining_percent != null ? Math.round(slot.remaining_percent) : null;
+
+  return <Modal
+    title="Add detected spool to inventory"
+    subtitle={"MakerVault discovered this material through " + slot.system_label + ". Review the detected values before creating the native spool record."}
+    onClose={onClose}
+    wide
+  >
+    <form className="formGrid" onSubmit={submit}>
+      {error && <div className="formError full">{error}</div>}
+
+      <div className="settingsCallout full detectedSpoolSummary">
+        <strong>Detected in {printer.name} · {slot.system_label} unit {slot.unit_index + 1}, slot {slot.slot_index + 1}</strong>
+        <p>{[slot.vendor, slot.product_name, slot.material].filter(Boolean).join(" · ") || "Unknown filament"}{detectedPercent != null ? " · " + detectedPercent + "% remaining" : ""}</p>
+        <div className="badgeRow">
+          {slot.vendor && <Badge>{slot.vendor}</Badge>}
+          {slot.product_name && <Badge tone="accent">{slot.product_name}</Badge>}
+          {slot.material && <Badge>{slot.material}</Badge>}
+          {slot.rfid_detected && <Badge tone="good">RFID detected</Badge>}
+        </div>
+      </div>
+
+      <label>Filament record<select value={mode} onChange={e => setMode(e.target.value)}>
+        <option value="existing">Use existing MakerVault filament</option>
+        {canCreateFilament && <option value="new">Create a new filament product from detected data</option>}
+      </select></label>
+
+      {mode === "existing" && <label>Existing filament<select required value={form.filament_id} onChange={e => existingFilamentChanged(e.target.value)} disabled={loadingFilaments}>
+        <option value="">{loadingFilaments ? "Loading filaments…" : "Choose filament…"}</option>
+        {availableFilaments.map(item => <option key={item.id} value={item.id}>{item.display_name} · {item.material}{item.color_name ? " · " + item.color_name : ""}</option>)}
+      </select></label>}
+
+      {mode === "new" && <>
+        <label>Manufacturer<input value={newFilament.manufacturer_name} onChange={e => setNew("manufacturer_name", e.target.value)} placeholder="eSUN" /></label>
+        <label>Product name<input required value={newFilament.name} onChange={e => setNew("name", e.target.value)} placeholder="PLA+ HS" /></label>
+        <label>Material<input required value={newFilament.material} onChange={e => setNew("material", e.target.value)} placeholder="PLA" /></label>
+        <label>Colour name<input value={newFilament.color_name} onChange={e => setNew("color_name", e.target.value)} placeholder="Purple" /></label>
+        <label>Detected colour<div className="colorInputRow"><input type="color" value={(newFilament.color_hex || "#777777").slice(0, 7)} onChange={e => setNew("color_hex", e.target.value)} /><input value={newFilament.color_hex} onChange={e => setNew("color_hex", e.target.value)} placeholder="#7b1fa2" /></div></label>
+        <label>Filament diameter (mm)<input type="number" min="0.5" step="0.01" value={newFilament.diameter_mm} onChange={e => setNew("diameter_mm", e.target.value)} /></label>
+        <label>Nominal spool weight (g)<input type="number" min="0" step="0.1" value={newFilament.nominal_weight_g} onChange={e => { setNew("nominal_weight_g", e.target.value); if (!form.initial_weight_g) set("initial_weight_g", e.target.value); }} placeholder="1000" /></label>
+      </>}
+
+      <label>Initial filament weight (g)<input type="number" min="0" step="0.1" value={form.initial_weight_g} onChange={e => set("initial_weight_g", e.target.value)} placeholder="1000" /></label>
+      <label>Remaining weight (g)<input type="number" min="0" step="0.1" value={form.remaining_weight_g} onChange={e => set("remaining_weight_g", e.target.value)} placeholder={detectedPercent != null ? "Auto from " + detectedPercent + "% if left blank" : ""} /></label>
+      <label>Status<select value={form.status} onChange={e => set("status", e.target.value)}><option value="open">Open</option><option value="sealed">Sealed</option><option value="drying">Drying</option><option value="empty">Empty</option><option value="retired">Retired</option></select></label>
+      <label>Purchase cost<input type="number" min="0" step="0.01" value={form.purchase_cost} onChange={e => set("purchase_cost", e.target.value)} /></label>
+      <label>Opened on<input type="date" value={form.opened_on} onChange={e => set("opened_on", e.target.value)} /></label>
+      <div className="settingsCallout"><strong>Placement</strong><p>This spool is currently loaded in {printer.name}, so MakerVault will assign it to that printer automatically.</p></div>
+      <label className="full">Notes<textarea rows="3" value={form.notes} onChange={e => set("notes", e.target.value)} /></label>
+
+      <div className="formActions full">
+        <button type="button" onClick={onClose}>Cancel</button>
+        <button className="primary" disabled={busy || (mode === "existing" && !form.filament_id) || (mode === "new" && (!newFilament.name || !newFilament.material))}>{busy ? "Adding…" : "Add to inventory & link slot"}</button>
+      </div>
+    </form>
+  </Modal>;
+}
+
 
 function SpoolModal({ filaments, locations, printers, currency, onClose, onSaved }) {
   const [availableFilaments, setAvailableFilaments] = useState(filaments || []);
