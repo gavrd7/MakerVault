@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: up down logs build rebuild-app update shell migrate seed-catalogue enrich-board-catalogue seed-catalogue-images cache-catalogue-images createsuperuser check
+.PHONY: up down logs build rebuild-app update shell migrate seed-catalogue enrich-board-catalogue seed-catalogue-images cache-catalogue-images refresh-catalogue createsuperuser check
 
 up:
 	docker compose up -d --build
@@ -38,6 +38,11 @@ seed-catalogue-images:
 
 cache-catalogue-images:
 	docker compose exec makervault python manage.py cache_catalogue_images
+
+refresh-catalogue:
+	docker compose exec makervault python manage.py seed_catalogue
+	docker compose exec makervault python manage.py enrich_board_catalogue
+	docker compose exec makervault python manage.py seed_catalogue_images --force-retry
 
 createsuperuser:
 	docker compose exec makervault python manage.py createsuperuser
