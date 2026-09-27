@@ -52,6 +52,9 @@ gosu makervault python manage.py seed_roles
 echo "Ensuring starter catalogue..."
 gosu makervault python manage.py seed_catalogue
 
+echo "Ensuring 3D printer catalogue..."
+gosu makervault python manage.py seed_printing_catalogue
+
 echo "Catalogue maintenance is handled by the persistent scheduler."
 
 echo "Collecting static files..."
