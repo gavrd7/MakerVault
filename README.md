@@ -1,4 +1,4 @@
-# MakerVault v0.4.1
+# MakerVault v0.4.2
 
 MakerVault is a self-hosted makerspace inventory and project system for electronics, firmware, fabrication and 3D-printing assets.
 
@@ -195,7 +195,9 @@ MakerVault creates Viewer and Editor Django groups at startup. Full administrato
 
 Uploaded media is served through an authenticated Django endpoint. Raster images may display inline; CAD, firmware, archives, SVGs and executables are forced to download.
 
-The data model already supports firmware/source archives, wiring, documents, PCB files, CAD, STL and 3MF assets. A dedicated file browser and Three.js STL/3MF viewer are planned for a later milestone.
+Project workspaces can upload and classify firmware/source files, wiring/schematics, documents, PCB files, CAD, STL/mesh, 3MF/slicer projects, archives and other build assets. Files are stored in authenticated MakerVault media storage and non-image assets are served download-only.
+
+Project workspaces can also link GitHub, GitLab, local or other repositories alongside their stored build files. The main **Files** page provides a cross-project categorized view of those same assets and links each one back to its owning project. A Three.js STL/3MF viewer remains planned for a later milestone.
 
 ## Development and Git
 
@@ -338,7 +340,7 @@ Project media uses the existing authenticated MakerVault media storage. Cover ph
 
 Catalogue and project images can be opened in MakerVault's image viewer. The viewer supports zoom in/out, mouse-wheel zoom, drag/pan while zoomed, fit/reset, keyboard shortcuts (+, -, 0) and browser fullscreen. This is particularly useful for pinout diagrams, board photography and wiring references.
 
-v0.4.2 will build BOM/inventory allocation on top of this workspace, followed by project files/repositories in v0.4.3.
+The current v0.4.x roadmap continues with **v0.4.2 project files/repositories**, using the existing FileAsset model to attach and group code, firmware, CAD/STL/3MF, PCB/schematic, document and other project assets. **BOM/inventory allocation follows after v0.4.2**.
 
 
 ## Scheduled catalogue maintenance (v0.4.1)

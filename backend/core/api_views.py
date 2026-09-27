@@ -1,5 +1,7 @@
+import hashlib
 import json
 import re
+from pathlib import Path
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -37,6 +39,7 @@ from .models import (
     Model3D,
     Printer,
     Project,
+    RepositoryLink,
     Spool,
 )
 
@@ -305,6 +308,60 @@ def _file_url(field):
         return ""
 
 
+def _serialise_file_asset(asset):
+    metadata = asset.metadata or {}
+    try:
+        size_bytes = asset.file.size if asset.file else 0
+    except (OSError, ValueError):
+        size_bytes = metadata.get("size_bytes") or 0
+    filename = metadata.get("original_name") or (Path(asset.file.name).name if asset.file else "")
+    return {
+        "id": str(asset.id),
+        "name": asset.name,
+        "category": asset.category,
+        "category_label": asset.get_category_display(),
+        "url": _file_url(asset.file),
+        "filename": filename,
+        "version": asset.version,
+        "description": asset.description,
+        "sha256": asset.sha256,
+        "size_bytes": size_bytes,
+        "project_id": str(asset.project_id) if asset.project_id else "",
+        "project": asset.project.name if asset.project else "",
+        "board_id": str(asset.board_id) if asset.board_id else "",
+        "board": str(asset.board) if asset.board else "",
+        "component_id": str(asset.component_id) if asset.component_id else "",
+        "component": str(asset.component) if asset.component else "",
+        "created_at": asset.created_at.isoformat(),
+        "updated_at": asset.updated_at.isoformat(),
+    }
+
+
+def _serialise_repository_link(link):
+    return {
+        "id": link.pk,
+        "provider": link.provider,
+        "provider_label": link.get_provider_display(),
+        "name": link.name,
+        "url": link.url,
+        "local_path": link.local_path,
+        "default_branch": link.default_branch,
+        "created_at": link.created_at.isoformat(),
+        "updated_at": link.updated_at.isoformat(),
+    }
+
+
+def _sha256_upload(uploaded):
+    digest = hashlib.sha256()
+    for chunk in uploaded.chunks():
+        digest.update(chunk)
+    try:
+        uploaded.seek(0)
+    except (AttributeError, OSError):
+        pass
+    return digest.hexdigest()
+
+
 def _project_cost(project):
     total = Decimal("0")
     currency = settings.MAKERVAULT_CURRENCY
@@ -317,6 +374,8 @@ def _project_cost(project):
 
 def _serialise_project(project, detailed=False):
     gallery_qs = project.files.filter(category="image").order_by("-created_at")
+    asset_qs = project.files.exclude(category="image").order_by("category", "-created_at")
+    repository_qs = project.repositories.all().order_by("provider", "name")
     cost, currency = _project_cost(project)
     data = {
         "id": str(project.id),
@@ -331,6 +390,8 @@ def _serialise_project(project, detailed=False):
         "created_by": project.created_by.get_username() if project.created_by else "",
         "inventory_count": project.inventory_items.count(),
         "gallery_count": gallery_qs.count(),
+        "file_count": asset_qs.count(),
+        "repository_count": repository_qs.count(),
         "inventory_cost": cost,
         "currency": currency,
         "updated_at": project.updated_at.isoformat(),
@@ -355,9 +416,15 @@ def _serialise_project(project, detailed=False):
                 }
                 for asset in gallery_qs
             ],
+            "files": [_serialise_file_asset(asset) for asset in asset_qs],
+            "repositories": [_serialise_repository_link(link) for link in repository_qs],
+            "file_categories": [
+                {"value": value, "label": label}
+                for value, label in FileAsset.CATEGORIES
+                if value != "image"
+            ],
         })
     return data
-
 
 def _parse_date(value, field_name):
     raw = str(value or "").strip()
@@ -803,10 +870,42 @@ def component_image(request, component_id):
 
 
 @login_required
+@require_http_methods(["GET"])
+def files_lookup(request):
+    qs = FileAsset.objects.exclude(category="image").select_related(
+        "project", "board__manufacturer", "component__manufacturer"
+    )
+    query = request.GET.get("q", "").strip()
+    category = request.GET.get("category", "").strip()
+    project_id = request.GET.get("project", "").strip()
+    if query:
+        qs = qs.filter(
+            Q(name__icontains=query)
+            | Q(description__icontains=query)
+            | Q(version__icontains=query)
+            | Q(project__name__icontains=query)
+        )
+    if category:
+        if category not in dict(FileAsset.CATEGORIES) or category == "image":
+            return _error("Unknown file category.")
+        qs = qs.filter(category=category)
+    if project_id:
+        qs = qs.filter(project_id=project_id)
+    return JsonResponse({
+        "rows": [_serialise_file_asset(asset) for asset in qs.order_by("category", "-updated_at")[:5000]],
+        "categories": [
+            {"value": value, "label": label}
+            for value, label in FileAsset.CATEGORIES
+            if value != "image"
+        ],
+    })
+
+
+@login_required
 @require_http_methods(["GET", "POST"])
 def projects_lookup(request):
     if request.method == "GET":
-        qs = Project.objects.select_related("created_by").prefetch_related("inventory_items", "files").all()
+        qs = Project.objects.select_related("created_by").prefetch_related("inventory_items", "files", "repositories").all()
         return JsonResponse({"rows": [_serialise_project(project) for project in qs[:2000]]})
 
     denied = _require_permission(request, "core.add_project")
@@ -834,7 +933,7 @@ def projects_lookup(request):
         )
         project.full_clean()
         project.save()
-        project = Project.objects.select_related("created_by").prefetch_related("inventory_items", "files").get(pk=project.pk)
+        project = Project.objects.select_related("created_by").prefetch_related("inventory_items", "files", "repositories").get(pk=project.pk)
         return JsonResponse({"project": _serialise_project(project, detailed=True)}, status=201)
     except ValidationError as exc:
         return _validation_response(exc)
@@ -847,6 +946,7 @@ def project_detail(request, project_id):
         "inventory_items__board__manufacturer",
         "inventory_items__component__manufacturer",
         "files",
+        "repositories",
     ).filter(pk=project_id).first()
     if not project:
         return _error("Project not found.", status=404)
@@ -886,6 +986,7 @@ def project_detail(request, project_id):
             "inventory_items__board__manufacturer",
             "inventory_items__component__manufacturer",
             "files",
+            "repositories",
         ).get(pk=project.pk)
         return JsonResponse({"project": _serialise_project(project, detailed=True)})
     except ValidationError as exc:
@@ -895,7 +996,7 @@ def project_detail(request, project_id):
 @login_required
 @require_http_methods(["POST", "DELETE"])
 def project_cover(request, project_id):
-    project = Project.objects.select_related("created_by").prefetch_related("inventory_items", "files").filter(pk=project_id).first()
+    project = Project.objects.select_related("created_by").prefetch_related("inventory_items", "files", "repositories").filter(pk=project_id).first()
     if not project:
         return _error("Project not found.", status=404)
     denied = _require_permission(request, "core.change_project")
@@ -978,6 +1079,175 @@ def project_gallery_delete(request, project_id, asset_id):
             pass
     asset.delete()
     return JsonResponse({"deleted": True})
+
+
+@login_required
+@require_http_methods(["POST"])
+def project_files(request, project_id):
+    project = Project.objects.filter(pk=project_id).first()
+    if not project:
+        return _error("Project not found.", status=404)
+    denied = _require_permission(request, "core.change_project")
+    if denied:
+        return denied
+
+    uploaded = request.FILES.get("file")
+    if not uploaded:
+        return _error("Choose a file to upload.")
+
+    category = str(request.POST.get("category") or "other").strip()
+    allowed_categories = dict(FileAsset.CATEGORIES)
+    if category == "image":
+        return _error("Use the project gallery for project photos.")
+    if category not in allowed_categories:
+        return _error("Unknown file category.")
+
+    original_name = Path(uploaded.name or "project-file").name
+    try:
+        checksum = _sha256_upload(uploaded)
+        asset = FileAsset(
+            project=project,
+            category=category,
+            name=str(request.POST.get("name") or original_name)[:255],
+            version=str(request.POST.get("version") or "").strip()[:80],
+            description=str(request.POST.get("description") or "").strip(),
+            sha256=checksum,
+            metadata={
+                "original_name": original_name,
+                "size_bytes": getattr(uploaded, "size", 0) or 0,
+                "extension": Path(original_name).suffix.lower(),
+            },
+        )
+        asset.file = uploaded
+        asset.full_clean()
+        asset.save()
+        project.save(update_fields=["updated_at"])
+        return JsonResponse({"file": _serialise_file_asset(asset)}, status=201)
+    except ValidationError as exc:
+        return _validation_response(exc)
+
+
+@login_required
+@require_http_methods(["PATCH", "DELETE"])
+def project_file_detail(request, project_id, asset_id):
+    project = Project.objects.filter(pk=project_id).first()
+    if not project:
+        return _error("Project not found.", status=404)
+    denied = _require_permission(request, "core.change_project")
+    if denied:
+        return denied
+    asset = FileAsset.objects.filter(pk=asset_id, project=project).exclude(category="image").first()
+    if not asset:
+        return _error("Project file not found.", status=404)
+
+    if request.method == "DELETE":
+        if asset.file:
+            try:
+                asset.file.delete(save=False)
+            except OSError:
+                pass
+        asset.delete()
+        project.save(update_fields=["updated_at"])
+        return JsonResponse({"deleted": True})
+
+    try:
+        payload = _read_json(request)
+        if "name" in payload:
+            asset.name = str(payload.get("name") or "").strip()[:255]
+        if "version" in payload:
+            asset.version = str(payload.get("version") or "").strip()[:80]
+        if "description" in payload:
+            asset.description = str(payload.get("description") or "").strip()
+        if "category" in payload:
+            category = str(payload.get("category") or "other").strip()
+            if category == "image" or category not in dict(FileAsset.CATEGORIES):
+                return _error("Unknown file category.")
+            asset.category = category
+        asset.full_clean()
+        asset.save()
+        project.save(update_fields=["updated_at"])
+        return JsonResponse({"file": _serialise_file_asset(asset)})
+    except ValidationError as exc:
+        return _validation_response(exc)
+
+
+@login_required
+@require_http_methods(["POST"])
+def project_repositories(request, project_id):
+    project = Project.objects.filter(pk=project_id).first()
+    if not project:
+        return _error("Project not found.", status=404)
+    denied = _require_permission(request, "core.change_project")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        provider = str(payload.get("provider") or "other").strip()
+        if provider not in dict(RepositoryLink.PROVIDERS):
+            return _error("Unknown repository provider.")
+        name = str(payload.get("name") or "").strip()
+        url = str(payload.get("url") or "").strip()
+        local_path = str(payload.get("local_path") or "").strip()
+        if not name:
+            return _error("Repository name is required.")
+        if not url and not local_path:
+            return _error("Enter a repository URL or local path.")
+        link = RepositoryLink(
+            project=project,
+            provider=provider,
+            name=name[:255],
+            url=url,
+            local_path=local_path[:500],
+            default_branch=str(payload.get("default_branch") or "").strip()[:120],
+        )
+        link.full_clean()
+        link.save()
+        project.save(update_fields=["updated_at"])
+        return JsonResponse({"repository": _serialise_repository_link(link)}, status=201)
+    except ValidationError as exc:
+        return _validation_response(exc)
+
+
+@login_required
+@require_http_methods(["PATCH", "DELETE"])
+def project_repository_detail(request, project_id, repository_id):
+    project = Project.objects.filter(pk=project_id).first()
+    if not project:
+        return _error("Project not found.", status=404)
+    denied = _require_permission(request, "core.change_project")
+    if denied:
+        return denied
+    link = RepositoryLink.objects.filter(pk=repository_id, project=project).first()
+    if not link:
+        return _error("Repository link not found.", status=404)
+
+    if request.method == "DELETE":
+        link.delete()
+        project.save(update_fields=["updated_at"])
+        return JsonResponse({"deleted": True})
+
+    try:
+        payload = _read_json(request)
+        for field, limit in (("name", 255), ("local_path", 500), ("default_branch", 120)):
+            if field in payload:
+                setattr(link, field, str(payload.get(field) or "").strip()[:limit])
+        if "url" in payload:
+            link.url = str(payload.get("url") or "").strip()
+        if "provider" in payload:
+            provider = str(payload.get("provider") or "other").strip()
+            if provider not in dict(RepositoryLink.PROVIDERS):
+                return _error("Unknown repository provider.")
+            link.provider = provider
+        if not link.name:
+            return _error("Repository name is required.")
+        if not link.url and not link.local_path:
+            return _error("Enter a repository URL or local path.")
+        link.full_clean()
+        link.save()
+        project.save(update_fields=["updated_at"])
+        return JsonResponse({"repository": _serialise_repository_link(link)})
+    except ValidationError as exc:
+        return _validation_response(exc)
 
 
 @login_required

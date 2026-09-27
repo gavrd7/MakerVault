@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.4.2
+
+- Added project file uploads using the existing FileAsset model without a new database migration.
+- Project files are grouped by source code, firmware, executable/binary, CAD, STL/mesh, 3MF/slicer, PCB, wiring/schematic, document, archive and other categories.
+- Added automatic file-category suggestions in the upload UI while keeping the category user-editable.
+- Added file version and description metadata, original filename/size metadata and SHA-256 hashing.
+- Non-image project assets continue to use MakerVault's authenticated download-only media delivery.
+- Added project file removal with stored-file cleanup.
+- Added project repository links for GitHub, GitLab, local and other repositories, including default branch metadata.
+- Replaced the placeholder Files page with a cross-project categorized asset browser that reuses the same FileAsset records and links back to the owning project.
+- Project cards and detail metrics now show digital asset/repository counts alongside inventory and photos.
+- Added project asset API tests for upload validation, hashing, detail serialization, deletion and repository links.
+- Added docs/ROADMAP.md as the canonical current milestone reference.
+
+
 ## v0.4.1
 
 - Added persistent automatic catalogue-maintenance scheduling with a default 24-hour interval.
@@ -28,7 +43,7 @@
 - Added project permissions to the SPA configuration for role-aware controls.
 - Added a reusable image viewer/lightbox with zoom, pan, fit/reset and browser fullscreen.
 - Board catalogue images now open directly in the image viewer; project cover/gallery images use the same viewer.
-- Prepared the project workspace for v0.4.1 BOM/inventory allocation and v0.4.2 file/repository workflows.
+- Prepared the project workspace for follow-on catalogue maintenance, project file/repository workflows, and BOM/inventory allocation.
 
 
 ## v0.3.8
