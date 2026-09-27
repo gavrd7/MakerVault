@@ -739,7 +739,7 @@ def inventory_detail(request, item_id):
     try:
         payload = _read_json(request)
         with transaction.atomic():
-            item = base_qs.select_for_update().filter(pk=item_id).first()
+            item = InventoryItem.objects.select_for_update().filter(pk=item_id).first()
             if not item:
                 return _error("Inventory item not found.", status=404)
             before = _inventory_snapshot(item)
