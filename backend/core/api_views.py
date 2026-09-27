@@ -624,6 +624,41 @@ def _catalogue_decimal(value, field_name, decimal_places):
     return parsed.quantize(quantum)
 
 
+def _resolve_filament_manufacturer(payload):
+    dedicated_id = payload.get("filament_manufacturer_id")
+    if dedicated_id:
+        maker = FilamentManufacturer.objects.filter(pk=dedicated_id).first()
+        if not maker:
+            raise ValidationError({"filament_manufacturer_id": "Selected filament manufacturer was not found."})
+        return maker
+
+    name = str(payload.get("manufacturer_name") or "").strip()
+    if name:
+        maker, _ = FilamentManufacturer.objects.get_or_create(name=name)
+        return maker
+
+    legacy_id = payload.get("manufacturer_id")
+    if legacy_id:
+        legacy = Manufacturer.objects.filter(pk=legacy_id).first()
+        if legacy:
+            maker, _ = FilamentManufacturer.objects.get_or_create(name=legacy.name)
+            return maker
+        maker = FilamentManufacturer.objects.filter(pk=legacy_id).first()
+        if maker:
+            return maker
+        raise ValidationError({"manufacturer_id": "Selected filament manufacturer was not found."})
+    return None
+
+
+def _resolve_printing_location(location_id, field_name="location_id"):
+    if not location_id:
+        return None
+    location = PrintingLocation.objects.filter(pk=location_id).first()
+    if not location:
+        raise ValidationError({field_name: "Selected location was not found."})
+    return location
+
+
 def _next_inventory_id(item_type):
     prefix = {
         "board": "MCU",
