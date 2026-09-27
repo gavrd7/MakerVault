@@ -134,6 +134,81 @@ class PrintingFoundationTests(TestCase):
         reference.save()
         self.assertEqual(reference.file_asset_id, document.id)
 
+    def test_native_printing_crud_endpoints_create_core_records(self):
+        filament_response = self.client.post(
+            "/api/printing/filaments/",
+            data={
+                "manufacturer_id": self.manufacturer.id,
+                "name": "PETG Tough",
+                "material": "PETG",
+                "color_name": "Black",
+                "color_hex": "#111111",
+                "diameter_mm": "1.75",
+                "nominal_weight_g": "1000",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(filament_response.status_code, 201, filament_response.content)
+        filament_id = filament_response.json()["item"]["id"]
+
+        printer_response = self.client.post(
+            "/api/printing/printers/",
+            data={
+                "name": "Desk printer",
+                "model": "K1",
+                "location": "Workshop",
+                "build_volume_x_mm": "220",
+                "build_volume_y_mm": "220",
+                "build_volume_z_mm": "250",
+                "nozzle_mm": "0.4",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(printer_response.status_code, 201, printer_response.content)
+
+        spool_response = self.client.post(
+            "/api/printing/spools/",
+            data={
+                "spool_id": "SPL-API-1",
+                "filament_id": filament_id,
+                "initial_weight_g": "1000",
+                "remaining_weight_g": "950",
+                "status": "open",
+                "location": "Dry box",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(spool_response.status_code, 201, spool_response.content)
+
+        model_response = self.client.post(
+            "/api/printing/models/",
+            data={
+                "name": "Cable clip",
+                "description": "Small printable cable clip",
+                "tags": ["utility", "cable"],
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(model_response.status_code, 201, model_response.content)
+
+        self.assertEqual(Printer.objects.filter(name="Desk printer").count(), 1)
+        self.assertEqual(Spool.objects.filter(spool_id="SPL-API-1").count(), 1)
+        self.assertEqual(Model3D.objects.filter(name="Cable clip").count(), 1)
+
+    def test_regular_user_cannot_create_native_printing_records(self):
+        regular = get_user_model().objects.create_user(
+            username="printing-viewer",
+            password="test-password",
+        )
+        self.client.force_login(regular)
+        response = self.client.post(
+            "/api/printing/printers/",
+            data={"name": "Blocked printer", "model": "Example"},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(Printer.objects.filter(name="Blocked printer").exists())
+
     def test_external_provider_links_do_not_replace_native_spool_identity(self):
         link = ExternalSpoolLink.objects.create(
             spool=self.spool,
