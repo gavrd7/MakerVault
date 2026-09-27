@@ -43,6 +43,7 @@ export default function PrintingPage({ config, projects }) {
   const canAddSpool = Boolean(config?.permissions?.add_spool);
   const canAddModel = Boolean(config?.permissions?.add_model3d);
   const canChangeModel = Boolean(config?.permissions?.change_model3d);
+  const canAddPrintJob = Boolean(config?.permissions?.add_printjob);
 
   return <div className="printingStack">
     <section className="panel printingHero">
@@ -56,6 +57,7 @@ export default function PrintingPage({ config, projects }) {
         {canAddFilament && <button onClick={() => setModal("filament")}>＋ Filament</button>}
         {canAddSpool && <button onClick={() => setModal("spool")}>＋ Spool</button>}
         {canAddModel && <button className="primary" onClick={() => setModal("model")}>＋ Model</button>}
+        {canAddPrintJob && <button onClick={() => setModal("print")}>＋ Print history</button>}
         <button onClick={load}>Refresh</button>
       </div>
     </section>
@@ -138,6 +140,15 @@ export default function PrintingPage({ config, projects }) {
     {modal === "filament" && <FilamentModal manufacturers={data?.manufacturers || []} onClose={() => setModal("")} onSaved={saved} />}
     {modal === "spool" && <SpoolModal filaments={data?.filaments || []} currency={config?.currency || "GBP"} onClose={() => setModal("")} onSaved={saved} />}
     {modal === "model" && <ModelModal projects={projects || []} onClose={() => setModal("")} onSaved={saved} />}
+    {modal === "print" && <PrintJobModal
+      printers={data?.printers || []}
+      spools={data?.spools || []}
+      models={data?.models || []}
+      projects={projects || []}
+      currency={config?.currency || "GBP"}
+      onClose={() => setModal("")}
+      onSaved={saved}
+    />}
     {manageModel && <ModelManageModal
       model={manageModel}
       files={data?.model_files || []}
@@ -358,5 +369,128 @@ function ModelManageModal({ model, files, onClose, onChanged }) {
         <button className="primary" disabled={busy || !model.revisions.length || !compatibleFiles.length}>{busy ? "Saving…" : "Attach file"}</button>
       </form>
     </div>
+  </Modal>;
+}
+
+
+function PrintJobModal({ printers, spools, models, projects, currency, onClose, onSaved }) {
+  const revisionOptions = models.flatMap(model =>
+    model.revisions.map(revision => ({
+      id: revision.id,
+      label: model.name + " · " + revision.version,
+      project_id: model.project_id || "",
+    }))
+  );
+  const [form, setForm] = useState({
+    printer_id: printers[0]?.id || "",
+    model_revision_id: "",
+    project_id: "",
+    status: "success",
+    quantity: 1,
+    estimated_minutes: "",
+    actual_minutes: "",
+    layer_height_mm: "",
+    nozzle_mm: "",
+    slicer: "",
+    notes: "",
+  });
+  const [usages, setUsages] = useState([
+    { spool_id: spools[0]?.id || "", used_g: "", waste_g: "", material_cost: "", currency },
+  ]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const set = (key, value) => setForm(current => ({ ...current, [key]: value }));
+  const setUsage = (index, key, value) => setUsages(rows => rows.map((row, i) => i === index ? { ...row, [key]: value } : row));
+
+  function addUsage() {
+    setUsages(rows => [...rows, { spool_id: "", used_g: "", waste_g: "", material_cost: "", currency }]);
+  }
+
+  function removeUsage(index) {
+    setUsages(rows => rows.filter((_, i) => i !== index));
+  }
+
+  function revisionChanged(value) {
+    const revision = revisionOptions.find(option => option.id === value);
+    setForm(current => ({
+      ...current,
+      model_revision_id: value,
+      project_id: revision?.project_id || current.project_id,
+    }));
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    setBusy(true); setError("");
+    try {
+      const material_usages = usages
+        .filter(row => row.spool_id || row.used_g || row.waste_g || row.material_cost)
+        .map(row => ({
+          ...row,
+          used_g: row.used_g || 0,
+          waste_g: row.waste_g || 0,
+        }));
+      await apiFetch("/api/printing/jobs/", {
+        method: "POST",
+        body: { ...form, material_usages },
+      });
+      await onSaved();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <Modal title="Add print history" subtitle="Record a completed, failed, cancelled or planned print. Multiple spools can be recorded for multi-material jobs." onClose={onClose} wide>
+    <form className="formGrid" onSubmit={submit}>
+      {error && <div className="formError full">{error}</div>}
+
+      <label>Printer<select required value={form.printer_id} onChange={e => set("printer_id", e.target.value)}>
+        <option value="">Choose printer…</option>
+        {printers.map(printer => <option key={printer.id} value={printer.id}>{printer.name} · {printer.model}</option>)}
+      </select></label>
+      <label>Status<select value={form.status} onChange={e => set("status", e.target.value)}>
+        <option value="planned">Planned</option>
+        <option value="printing">Printing</option>
+        <option value="success">Success</option>
+        <option value="failed">Failed</option>
+        <option value="cancelled">Cancelled</option>
+      </select></label>
+
+      <label>Model revision<select value={form.model_revision_id} onChange={e => revisionChanged(e.target.value)}>
+        <option value="">Unlinked print</option>
+        {revisionOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
+      </select></label>
+      <label>Project<select value={form.project_id} onChange={e => set("project_id", e.target.value)}>
+        <option value="">No project</option>
+        {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
+      </select></label>
+
+      <label>Quantity<input type="number" min="1" step="1" value={form.quantity} onChange={e => set("quantity", e.target.value)} /></label>
+      <label>Actual duration (min)<input type="number" min="1" step="1" value={form.actual_minutes} onChange={e => set("actual_minutes", e.target.value)} /></label>
+      <label>Estimated duration (min)<input type="number" min="1" step="1" value={form.estimated_minutes} onChange={e => set("estimated_minutes", e.target.value)} /></label>
+      <label>Layer height (mm)<input type="number" min="0" step="0.01" value={form.layer_height_mm} onChange={e => set("layer_height_mm", e.target.value)} /></label>
+      <label>Nozzle (mm)<input type="number" min="0.1" step="0.05" value={form.nozzle_mm} onChange={e => set("nozzle_mm", e.target.value)} /></label>
+      <label>Slicer<input value={form.slicer} onChange={e => set("slicer", e.target.value)} placeholder="OrcaSlicer, Creality Print…" /></label>
+
+      <div className="full printingUsageEditor">
+        <div className="printingUsageTitle"><div><strong>Material usage</strong><small>Optional. Add one row per spool/material used.</small></div><button type="button" onClick={addUsage}>＋ Material</button></div>
+        {usages.map((row, index) => <div className="printingUsageRow" key={index}>
+          <label>Spool<select value={row.spool_id} onChange={e => setUsage(index, "spool_id", e.target.value)}>
+            <option value="">Choose spool…</option>
+            {spools.map(spool => <option key={spool.id} value={spool.id}>{spool.spool_id} · {spool.filament} · {grams(spool.remaining_weight_g)}</option>)}
+          </select></label>
+          <label>Used (g)<input type="number" min="0" step="0.01" value={row.used_g} onChange={e => setUsage(index, "used_g", e.target.value)} /></label>
+          <label>Waste (g)<input type="number" min="0" step="0.01" value={row.waste_g} onChange={e => setUsage(index, "waste_g", e.target.value)} /></label>
+          <label>Cost<input type="number" min="0" step="0.01" value={row.material_cost} onChange={e => setUsage(index, "material_cost", e.target.value)} /></label>
+          {usages.length > 1 && <button type="button" className="assetDanger" onClick={() => removeUsage(index)}>Remove</button>}
+        </div>)}
+      </div>
+
+      <label className="full">Notes<textarea rows="3" value={form.notes} onChange={e => set("notes", e.target.value)} /></label>
+      {!printers.length && <div className="formError full">Create a printer before recording print history.</div>}
+      <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy || !printers.length}>{busy ? "Saving…" : "Add print"}</button></div>
+    </form>
   </Modal>;
 }
