@@ -76,6 +76,7 @@ def _spoolman_get_spools(endpoint_url: str) -> tuple[str, list[dict]]:
     try:
         response = requests.get(
             root + "/spool",
+            params={"allow_archived": "true"},
             headers={"User-Agent": "MakerVault/0.6 (Spoolman sync)"},
             timeout=(4, 20),
         )
