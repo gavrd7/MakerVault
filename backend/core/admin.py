@@ -1,9 +1,21 @@
 from django.contrib import admin
 from .models import (
-    Manufacturer, CatalogSource, BoardModel, BoardCompatibility, ComponentCategory,
+    Manufacturer, CatalogSource, CatalogueMaintenanceSettings, BoardModel, BoardCompatibility, ComponentCategory,
     ComponentModel, Project, InventoryItem, InventoryHistory, BOMItem, FileAsset, RepositoryLink,
     FilamentProduct, Spool, Printer, Model3D, ModelRevision, ProductListing, PrintJob,
 )
+
+
+@admin.register(CatalogueMaintenanceSettings)
+class CatalogueMaintenanceSettingsAdmin(admin.ModelAdmin):
+    list_display = ("enabled", "interval_hours", "check_board_data", "check_images", "last_run_at", "next_run_at")
+    readonly_fields = ("last_run_at", "next_run_at", "last_triggered_by", "created_at", "updated_at")
+
+    def has_add_permission(self, request):
+        return not CatalogueMaintenanceSettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(BoardModel)
