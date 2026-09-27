@@ -757,3 +757,23 @@
 .printingHeroActions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 @media(max-width:900px){.printingHero{align-items:flex-start}.printingHeroActions{justify-content:flex-start}}
 @media(max-width:620px){.printingHeroActions{display:grid;grid-template-columns:1fr 1fr;width:100%}.printingHeroActions button{width:100%}}
+
+.printingModelManage{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(260px,.85fr);gap:16px}
+.printingModelManage>section{grid-row:span 2}
+.printingModelManage h3{margin:0 0 10px}
+.printingRevisionList{display:grid;gap:10px}
+.printingRevisionList>article{border:1px solid #29313c;border-radius:10px;padding:11px;background:#0d131a}
+.printingRevisionHead strong,.printingRevisionHead small{display:block}
+.printingRevisionHead small{color:#7f8a9c;margin-top:3px}
+.printingRevisionAssets{display:grid;gap:7px;margin-top:10px}
+.printingRevisionAssets>div{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px;border:1px solid #242e3a;border-radius:8px}
+.printingRevisionAssets strong,.printingRevisionAssets small{display:block}
+.printingRevisionAssets small{color:#7f8a9c;margin-top:2px;font-size:11px}
+.printingManageForm{display:grid;gap:10px;border:1px solid #29313c;border-radius:10px;padding:12px;background:#0d131a}
+.printingManageForm label{display:grid;gap:6px;color:#aeb8c7;font-size:12px}
+.printingManageForm .checkRow{display:flex;align-items:center}
+.printingManageForm .checkRow input{width:auto}
+@media(max-width:800px){
+  .printingModelManage{grid-template-columns:1fr}
+  .printingModelManage>section{grid-row:auto}
+}
