@@ -2155,6 +2155,7 @@ def _ensure_printing_integrations():
 
 def _serialise_printing_integration(item):
     extra = {}
+    safe_config = {key: value for key, value in (item.config or {}).items() if key != "pending_reviews"}
     if item.provider == "creality_cfs":
         compatible = Printer.objects.filter(
             is_active=True,
@@ -2192,7 +2193,7 @@ def _serialise_printing_integration(item):
         "last_sync_result": item.last_sync_result or {},
         "last_error": item.last_error,
         "can_sync": item.provider in {"spoolman", "creality_cfs"},
-        "config": item.config or {},
+        "config": safe_config,
         **extra,
     }
 
