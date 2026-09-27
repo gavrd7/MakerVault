@@ -9,6 +9,7 @@
 - Non-image project assets continue to use MakerVault's authenticated download-only media delivery.
 - Added project file removal with stored-file cleanup.
 - Added project repository links for GitHub, GitLab, local and other repositories, including default branch metadata.
+- Replaced the placeholder Files page with a cross-project categorized asset browser that reuses the same FileAsset records and links back to the owning project.
 - Project cards and detail metrics now show digital asset/repository counts alongside inventory and photos.
 - Added project asset API tests for upload validation, hashing, detail serialization, deletion and repository links.
 - Added docs/ROADMAP.md as the canonical current milestone reference.
