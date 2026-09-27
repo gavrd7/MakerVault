@@ -845,3 +845,23 @@
   .filamentCatalogueRow{grid-template-columns:24px minmax(0,1fr)}
   .filamentCatalogueRow .printingBadges{grid-column:1/-1}
 }
+
+
+/* v0.6.0 printing catalogue / integration refinements */
+.badge-danger{border-color:#7a3b43;background:#31191d;color:#ffbec6}
+.settingsIntegrationGrid{padding:16px}
+.settingsIntegrationGrid article{align-content:start}
+.settingsIntegrationHead{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.settingsIntegrationGrid label{display:grid;gap:6px;color:#aeb8c7;font-size:12px}
+.settingsIntegrationGrid .settingsToggle.compact{display:flex;align-items:center;justify-content:space-between}
+.settingsIntegrationGrid .settingsToggle.compact input{width:auto}
+.settingsIntegrationGrid .settingsActions.compact{margin-top:2px;justify-content:flex-start}
+.settingsIntegrationGrid .integrationError{color:#ff9ea8}
+.modelFilePicker{border:1px dashed #485568;border-radius:10px;padding:12px;background:#0d131a}
+.modelFilePicker input[type="file"]{padding:8px;background:#101821}
+.modelFilePicker small{color:#7f8a9c}
+.printingCardHead>.printingBadges{max-width:55%}
+@media(max-width:620px){
+  .printingCardHead{align-items:flex-start}
+  .printingCardHead>.printingBadges{max-width:none}
+}
