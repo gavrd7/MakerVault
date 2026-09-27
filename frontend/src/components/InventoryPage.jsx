@@ -143,7 +143,13 @@ export default function InventoryPage({ inventory, setInventory, boards, compone
       loading={loadingDetail}
       projects={projects}
       canEdit={editable}
+      canDelete={Boolean(config?.permissions?.delete_inventory)}
       onClose={() => setSelected(null)}
+      onDeleted={async deleted => {
+        setInventory(rows => rows.filter(row => row.id !== deleted.id));
+        setSelected(null);
+        await refreshDashboard();
+      }}
       onChanged={async updated => {
         setInventory(rows => rows.map(row => row.id === updated.id ? updated : row));
         await loadDetail(updated);
@@ -166,8 +172,10 @@ export default function InventoryPage({ inventory, setInventory, boards, compone
   </div>;
 }
 
-function InventoryDetail({ item, loading, projects, canEdit, onClose, onChanged }) {
+function InventoryDetail({ item, loading, projects, canEdit, canDelete, onClose, onChanged, onDeleted }) {
   const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   if (loading) return <aside className="detailPane"><div className="detailHead"><h3>Inventory details</h3><button className="iconButton" onClick={onClose}>×</button></div><LoadingBlock label="Loading inventory record…" /></aside>;
 
   const board = item.board;
@@ -179,8 +187,30 @@ function InventoryDetail({ item, loading, projects, canEdit, onClose, onChanged 
     <BoardImage src={item.image} alt={item.name} size="large" placeholder={item.item_type === "board" ? "MCU" : "PART"} />
     <div className="detailTitleRow">
       <div><span className="inventoryCode">{item.inventory_id}</span><h2>{item.name}</h2></div>
-      {canEdit && <button className="primary" onClick={() => setEditing(true)}>Edit</button>}
+      <div className="inventoryDetailActions">
+        {canEdit && <button className="primary" onClick={() => setEditing(true)}>Edit</button>}
+        {canDelete && <button
+          className="assetDanger"
+          disabled={deleting || Number(item.allocated_quantity || 0) > 0}
+          title={Number(item.allocated_quantity || 0) > 0 ? "Release BOM allocations before deleting this inventory record." : "Delete this inventory record"}
+          onClick={async () => {
+            if (!window.confirm('Delete "' + item.inventory_id + ' · ' + item.name + '" from inventory? This cannot be undone.')) return;
+            setDeleting(true);
+            setDeleteError("");
+            try {
+              await apiFetch("/api/inventory/" + item.id + "/", { method: "DELETE" });
+              await onDeleted(item);
+            } catch (error) {
+              setDeleteError(error.message);
+            } finally {
+              setDeleting(false);
+            }
+          }}
+        >{deleting ? "Deleting…" : "Delete"}</button>}
+      </div>
     </div>
+    {deleteError && <div className="inlineError">{deleteError}</div>}
+    {canDelete && Number(item.allocated_quantity || 0) > 0 && <div className="inventoryDeleteHint">Release this item's BOM allocations before deleting it.</div>}
     <div className="badgeRow">
       <Badge tone={item.status === "available" ? "good" : item.status === "in_use" ? "accent" : "neutral"}>{item.status_label}</Badge>
       <Badge>{item.type}</Badge>
