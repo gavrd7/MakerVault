@@ -13,6 +13,14 @@ function formatDate(value) {
   catch { return value; }
 }
 
+function newestFirst(rows) {
+  return [...(rows || [])].sort((a, b) => {
+    const left = new Date(a.updated_at || a.created_at || 0).getTime() || 0;
+    const right = new Date(b.updated_at || b.created_at || 0).getTime() || 0;
+    return right - left;
+  });
+}
+
 export default function PrintingPage({ config, projects }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
@@ -20,6 +28,7 @@ export default function PrintingPage({ config, projects }) {
   const [manageModel, setManageModel] = useState(null);
   const [managePrinter, setManagePrinter] = useState(null);
   const [claimSlot, setClaimSlot] = useState(null);
+  const [workspaceView, setWorkspaceView] = useState("overview");
 
   async function load() {
     setError("");
@@ -48,6 +57,34 @@ export default function PrintingPage({ config, projects }) {
   const canChangeModel = Boolean(config?.permissions?.change_model3d);
   const canAddPrintJob = Boolean(config?.permissions?.add_printjob);
   const canAddLocation = Boolean(config?.permissions?.add_printing_location);
+  const recentSpools = newestFirst(data?.spools).slice(0, 5);
+  const recentModels = newestFirst(data?.models).slice(0, 5);
+
+  if (workspaceView === "spools") {
+    return <SpoolInventoryPage
+      spools={data?.spools || []}
+      filaments={data?.filaments || []}
+      locations={data?.locations || []}
+      printers={data?.printers || []}
+      currency={config?.currency || "GBP"}
+      canAddSpool={canAddSpool}
+      onBack={() => setWorkspaceView("overview")}
+      onChanged={load}
+    />;
+  }
+
+  if (workspaceView === "models") {
+    return <ModelLibraryPage
+      models={data?.models || []}
+      files={data?.model_files || []}
+      projects={projects || []}
+      canAddModel={canAddModel}
+      canChangeModel={canChangeModel}
+      canUpload={Boolean(config?.permissions?.add_file)}
+      onBack={() => setWorkspaceView("overview")}
+      onChanged={load}
+    />;
+  }
 
   return <div className="printingStack">
     <section className="panel printingHero">
@@ -120,26 +157,26 @@ export default function PrintingPage({ config, projects }) {
 
     <section className="printingColumns">
       <div className="panel printingSection">
-        <div className="panelHead"><div><h3>Spool inventory</h3><p>Native spool records with optional external mappings.</p></div></div>
+        <div className="panelHead"><div><h3>Spool inventory</h3><p>Showing the 5 most recently updated spools.</p></div><button onClick={() => setWorkspaceView("spools")}>View all {summary.spools || 0}</button></div>
         <div className="printingList">
-          {(data?.spools || []).map(spool => <article className="printingListRow" key={spool.id}>
-            <span className={`printingSwatch filamentPreview-${spool.transparency || "opaque"}`} style={filamentSwatchStyle(spool)} />
+          {recentSpools.map(spool => <article className="printingListRow" key={spool.id}>
+            <span className={"printingSwatch filamentPreview-" + (spool.transparency || "opaque")} style={filamentSwatchStyle(spool)} />
             <div><strong>{spool.spool_id} · {spool.filament}</strong><small>{spool.material} · {grams(spool.remaining_weight_g)} remaining{spool.location ? " · " + spool.location : ""}</small></div>
             <div className="printingBadges">{spool.loaded_slots.length > 0 && <Badge tone="accent">Loaded</Badge>}{spool.external_links.map(link => <Badge key={link.id}>{link.provider_label}</Badge>)}</div>
           </article>)}
-          {!data?.spools?.length && <div className="printingEmptyInline">No spool records yet.</div>}
+          {!recentSpools.length && <div className="printingEmptyInline">No spool records yet.</div>}
         </div>
       </div>
 
       <div className="panel printingSection">
-        <div className="panelHead"><div><h3>Model library</h3><p>Revisions can reuse existing MakerVault files without duplicating storage.</p></div></div>
+        <div className="panelHead"><div><h3>Model library</h3><p>Showing the 5 most recently updated models.</p></div><button onClick={() => setWorkspaceView("models")}>View all {summary.models || 0}</button></div>
         <div className="printingList">
-          {(data?.models || []).map(model => <article className="printingListRow printingModelRow" key={model.id}>
+          {recentModels.map(model => <article className="printingListRow printingModelRow" key={model.id}>
             <div><strong>{model.name}</strong><small>{model.project || "Standalone model"} · {model.revision_count} revision{model.revision_count === 1 ? "" : "s"}</small></div>
             <div className="printingBadges">{model.revisions.flatMap(r => r.assets).slice(0,3).map(asset => <Badge key={asset.id}>{asset.file.category_label}</Badge>)}</div>
             {canChangeModel && <button onClick={() => setManageModel(model)}>Manage</button>}
           </article>)}
-          {!data?.models?.length && <div className="printingEmptyInline">No 3D models yet.</div>}
+          {!recentModels.length && <div className="printingEmptyInline">No 3D models yet.</div>}
         </div>
       </div>
     </section>
@@ -194,6 +231,102 @@ export default function PrintingPage({ config, projects }) {
     />}
   </div>;
 }
+
+function SpoolInventoryPage({ spools, filaments, locations, printers, currency, canAddSpool, onBack, onChanged }) {
+  const [query, setQuery] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
+  const term = query.trim().toLowerCase();
+  const rows = newestFirst(spools).filter(spool => !term || [
+    spool.spool_id, spool.filament, spool.manufacturer, spool.material, spool.color_name, spool.location,
+    ...(spool.external_links || []).map(link => link.provider_label),
+  ].filter(Boolean).join(" ").toLowerCase().includes(term));
+
+  return <div className="printingStack">
+    <section className="panel printingLibraryHero">
+      <div>
+        <span className="settingsEyebrow">3D Printing</span>
+        <h2>Spool Inventory</h2>
+        <p>MakerVault-native spool records. External integrations add context and links without replacing your local inventory decisions.</p>
+      </div>
+      <div className="printingHeroActions">
+        <button onClick={onBack}>← Printing overview</button>
+        {canAddSpool && <button className="primary" onClick={() => setAddOpen(true)}>＋ Spool</button>}
+      </div>
+    </section>
+
+    <section className="panel printingSection">
+      <div className="printingLibraryToolbar">
+        <div><strong>{spools.length} spool{spools.length === 1 ? "" : "s"}</strong><small>{rows.length !== spools.length ? rows.length + " matching" : "Newest updated first"}</small></div>
+        <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search ID, filament, material, location or integration…" />
+      </div>
+      <div className="printingList">
+        {rows.map(spool => <article className="printingListRow printingLibraryRow" key={spool.id}>
+          <span className={"printingSwatch filamentPreview-" + (spool.transparency || "opaque")} style={filamentSwatchStyle(spool)} />
+          <div>
+            <strong>{spool.spool_id} · {spool.filament}</strong>
+            <small>{[spool.manufacturer, spool.material, spool.color_name].filter(Boolean).join(" · ")} · {grams(spool.remaining_weight_g)} remaining{spool.location ? " · " + spool.location : ""}</small>
+            <small>Updated {formatDate(spool.updated_at)}</small>
+          </div>
+          <div className="printingBadges">
+            {spool.loaded_slots?.length > 0 && <Badge tone="accent">Loaded</Badge>}
+            <Badge>{spool.status_label || spool.status}</Badge>
+            {(spool.external_links || []).map(link => <Badge key={link.id}>{link.provider_label}</Badge>)}
+          </div>
+        </article>)}
+        {!rows.length && <div className="printingEmptyInline">{term ? "No spools match this search." : "No spool records yet."}</div>}
+      </div>
+    </section>
+
+    {addOpen && <SpoolModal filaments={filaments} locations={locations} printers={printers} currency={currency} onClose={() => setAddOpen(false)} onSaved={async () => { setAddOpen(false); await onChanged(); }} />}
+  </div>;
+}
+
+
+function ModelLibraryPage({ models, files, projects, canAddModel, canChangeModel, canUpload, onBack, onChanged }) {
+  const [query, setQuery] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
+  const [manageModel, setManageModel] = useState(null);
+  const term = query.trim().toLowerCase();
+  const rows = newestFirst(models).filter(model => !term || [
+    model.name, model.project, model.description, ...(model.tags || []),
+  ].filter(Boolean).join(" ").toLowerCase().includes(term));
+
+  return <div className="printingStack">
+    <section className="panel printingLibraryHero">
+      <div>
+        <span className="settingsEyebrow">3D Printing</span>
+        <h2>Model Library</h2>
+        <p>All printable models, revisions and attached STL/3MF/CAD assets in one dedicated library.</p>
+      </div>
+      <div className="printingHeroActions">
+        <button onClick={onBack}>← Printing overview</button>
+        {canAddModel && <button className="primary" onClick={() => setAddOpen(true)}>＋ Model</button>}
+      </div>
+    </section>
+
+    <section className="panel printingSection">
+      <div className="printingLibraryToolbar">
+        <div><strong>{models.length} model{models.length === 1 ? "" : "s"}</strong><small>{rows.length !== models.length ? rows.length + " matching" : "Newest updated first"}</small></div>
+        <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search model, project, description or tag…" />
+      </div>
+      <div className="printingList">
+        {rows.map(model => <article className="printingListRow printingModelRow printingLibraryRow" key={model.id}>
+          <div>
+            <strong>{model.name}</strong>
+            <small>{model.project || "Standalone model"} · {model.revision_count} revision{model.revision_count === 1 ? "" : "s"} · updated {formatDate(model.updated_at)}</small>
+          </div>
+          <div className="printingBadges">{model.revisions.flatMap(r => r.assets).slice(0, 4).map(asset => <Badge key={asset.id}>{asset.file.category_label}</Badge>)}</div>
+          {canChangeModel && <button onClick={() => setManageModel(model)}>Manage</button>}
+        </article>)}
+        {!rows.length && <div className="printingEmptyInline">{term ? "No models match this search." : "No 3D models yet."}</div>}
+      </div>
+    </section>
+
+    {addOpen && <ModelModal projects={projects} canUpload={canUpload} onClose={() => setAddOpen(false)} onSaved={async () => { setAddOpen(false); await onChanged(); }} />}
+    {manageModel && <ModelManageModal model={manageModel} files={files} onClose={() => setManageModel(null)} onChanged={async () => { setManageModel(null); await onChanged(); }} />}
+  </div>;
+}
+
 
 function LocationModal({ onClose, onSaved }) {
   const [form, setForm] = useState({ name: "", kind: "storage", notes: "" });
