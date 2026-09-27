@@ -701,3 +701,55 @@
     max-height:180px;
   }
 }
+
+
+/* v0.6.0 3D printing workspace */
+.printingStack{display:grid;gap:16px}
+.printingHero{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:24px}
+.printingHero h2{margin:5px 0 8px}
+.printingHero p{margin:0;max-width:820px;color:#95a0b1;line-height:1.55}
+.printingMetrics{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+.printingMetrics article{border:1px solid #29313c;background:#10161e;border-radius:13px;padding:15px}
+.printingMetrics span,.printingMetrics strong{display:block}
+.printingMetrics span{color:#7f8a9c;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+.printingMetrics strong{font-size:24px;margin-top:5px}
+.printingSection{overflow:hidden}
+.printingCards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:16px}
+.printingCard{border:1px solid #29313c;border-radius:12px;padding:14px;background:#0d131a}
+.printingCardHead{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.printingCardHead strong,.printingCardHead small{display:block}
+.printingCardHead small{color:#7f8a9c;margin-top:3px}
+.printingSlotGrid{display:grid;gap:8px;margin-top:12px}
+.printingSlot{display:grid;grid-template-columns:18px minmax(0,1fr);gap:9px;align-items:start;padding:9px;border:1px solid #252f3b;border-radius:9px;background:#101821}
+.printingSlot strong,.printingSlot small{display:block}
+.printingSlot small{color:#7f8a9c;margin-top:2px;font-size:11px}
+.printingSwatch{width:16px;height:16px;border-radius:50%;border:1px solid #556174;background:#2a3442;margin-top:2px}
+.printingColumns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.printingList{display:grid}
+.printingListRow{display:flex;align-items:center;gap:10px;padding:12px 15px;border-top:1px solid #222b36}
+.printingListRow:first-child{border-top:0}
+.printingListRow>div:nth-child(2){min-width:0;flex:1}
+.printingListRow strong,.printingListRow small{display:block}
+.printingListRow small{color:#7f8a9c;margin-top:3px}
+.printingModelRow>div:first-child{min-width:0;flex:1}
+.printingBadges{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+.printingEmptyInline{padding:18px;color:#7f8a9c}
+.printingIntegrationGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:16px}
+.printingIntegrationGrid article{display:grid;gap:6px;border:1px solid #29313c;border-radius:11px;padding:12px;background:#0d131a}
+.printingIntegrationGrid span{color:#8793a5;font-size:12px;line-height:1.4}
+.printingIntegrationGrid .badge{justify-self:start}
+@media(max-width:1200px){
+  .printingMetrics{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .printingIntegrationGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:900px){
+  .printingCards,.printingColumns{grid-template-columns:1fr}
+}
+@media(max-width:620px){
+  .printingHero{display:grid}
+  .printingHero button{width:100%}
+  .printingMetrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .printingIntegrationGrid{grid-template-columns:1fr}
+  .printingListRow{align-items:flex-start;flex-wrap:wrap}
+  .printingBadges{width:100%;justify-content:flex-start}
+}
