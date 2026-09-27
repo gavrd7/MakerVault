@@ -316,7 +316,7 @@ def enrich_board_from_espboards(board) -> bool:
     return False
 
 
-def run_board_catalogue_enrichment(limit: int | None = None) -> dict:
+def run_board_catalogue_enrichment(limit: int | None = None, force_retry: bool = False) -> dict:
     from .models import BoardModel
 
     if limit is None:
@@ -341,7 +341,7 @@ def run_board_catalogue_enrichment(limit: int | None = None) -> dict:
             except Exception:
                 board_failed = True
 
-            if _is_esp_family(board) and _online_attempt_due(board):
+            if _is_esp_family(board) and (force_retry or _online_attempt_due(board)):
                 try:
                     _mark_online_attempt(board)
                     online_changed = enrich_board_from_espboards(board)

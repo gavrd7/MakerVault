@@ -1,4 +1,4 @@
-# MakerVault v0.4.0
+# MakerVault v0.4.1
 
 MakerVault is a self-hosted makerspace inventory and project system for electronics, firmware, fabrication and 3D-printing assets.
 
@@ -338,4 +338,21 @@ Project media uses the existing authenticated MakerVault media storage. Cover ph
 
 Catalogue and project images can be opened in MakerVault's image viewer. The viewer supports zoom in/out, mouse-wheel zoom, drag/pan while zoomed, fit/reset, keyboard shortcuts (+, -, 0) and browser fullscreen. This is particularly useful for pinout diagrams, board photography and wiring references.
 
-v0.4.1 will build BOM/inventory allocation on top of this workspace, followed by project files/repositories in v0.4.2.
+v0.4.2 will build BOM/inventory allocation on top of this workspace, followed by project files/repositories in v0.4.3.
+
+
+## Scheduled catalogue maintenance (v0.4.1)
+
+MakerVault now uses a persistent catalogue-maintenance schedule instead of automatically re-running enrichment on every application-container restart. The default schedule is every 24 hours and is stored in PostgreSQL, so rebuilding or restarting the container does not reset the clock.
+
+Administrators can open **Settings → Catalogue maintenance** to:
+
+- enable or disable automatic maintenance;
+- choose an interval from 1 to 720 hours;
+- enable technical board-data checks independently from catalogue-image checks;
+- see the last trigger and next scheduled run;
+- queue a maintenance pass immediately with **Run now**.
+
+Celery Beat runs inside the existing MakerVault application container and performs only a lightweight due-time check once per minute. When maintenance is due, it queues the normal board-enrichment and image-seeding tasks. Scheduled maintenance deliberately bypasses the older failed-attempt cooldown for supported online board sources and records still missing images, so the configured interval is the real retry cadence. Existing local images still skip immediately; source-confidence/licence checks, distributed locks and user-value protection remain in force.
+
+The environment variables `ENRICH_BOARD_CATALOGUE` and `SEED_CATALOGUE_IMAGES` remain server-level hard disables. If either is false, the GUI cannot override it.
