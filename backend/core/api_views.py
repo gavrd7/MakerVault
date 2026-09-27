@@ -3861,6 +3861,8 @@ def public_config(request):
             "change_file": request.user.has_perm("core.change_fileasset"),
             "add_printer": request.user.has_perm("core.add_printer"),
             "change_printer": request.user.has_perm("core.change_printer"),
+            "add_printing_location": request.user.has_perm("core.add_printinglocation"),
+            "change_printing_location": request.user.has_perm("core.change_printinglocation"),
             "add_filament": request.user.has_perm("core.add_filamentproduct"),
             "change_filament": request.user.has_perm("core.change_filamentproduct"),
             "add_spool": request.user.has_perm("core.add_spool"),
