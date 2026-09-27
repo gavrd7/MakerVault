@@ -3,12 +3,21 @@ from django.db import migrations, models
 import django.db.models.deletion
 
 
+def _legacy_allocation_quantity(required, stock_total, already_allocated):
+    required = required or 0
+    stock_total = stock_total or 0
+    already_allocated = already_allocated or 0
+    remaining_stock = max(stock_total - already_allocated, 0)
+    return min(required, remaining_stock)
+
+
 def migrate_legacy_bom_allocations(apps, schema_editor):
     BOMItem = apps.get_model("core", "BOMItem")
     BOMAllocation = apps.get_model("core", "BOMAllocation")
     InventoryItem = apps.get_model("core", "InventoryItem")
+    allocated_by_inventory = {}
 
-    for bom_item in BOMItem.objects.all().iterator():
+    for bom_item in BOMItem.objects.all().order_by("created_at", "pk").iterator():
         changed = False
         if bom_item.quantity is None or bom_item.quantity <= 0:
             bom_item.quantity = 1
@@ -21,13 +30,25 @@ def migrate_legacy_bom_allocations(apps, schema_editor):
         inventory = InventoryItem.objects.filter(pk=bom_item.inventory_item_id).first()
         if not inventory or inventory.quantity is None or inventory.quantity <= 0:
             continue
-        allocation_quantity = min(bom_item.quantity, inventory.quantity)
-        if allocation_quantity > 0:
-            BOMAllocation.objects.get_or_create(
-                bom_item_id=bom_item.pk,
-                inventory_item_id=inventory.pk,
-                defaults={"quantity": allocation_quantity},
-            )
+
+        already_allocated = allocated_by_inventory.get(inventory.pk, 0)
+        allocation_quantity = _legacy_allocation_quantity(
+            bom_item.quantity,
+            inventory.quantity,
+            already_allocated,
+        )
+        if allocation_quantity <= 0:
+            continue
+
+        allocation, created = BOMAllocation.objects.get_or_create(
+            bom_item_id=bom_item.pk,
+            inventory_item_id=inventory.pk,
+            defaults={"quantity": allocation_quantity},
+        )
+        if created:
+            allocated_by_inventory[inventory.pk] = already_allocated + allocation_quantity
+        else:
+            allocated_by_inventory[inventory.pk] = already_allocated + allocation.quantity
 
 
 class Migration(migrations.Migration):
