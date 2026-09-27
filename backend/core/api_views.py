@@ -2321,6 +2321,12 @@ def printing_overview(request):
             {"id": item.id, "name": item.name}
             for item in Manufacturer.objects.order_by("name")
         ],
+        "model_files": [
+            _serialise_file_asset(asset)
+            for asset in FileAsset.objects.filter(category__in=["mesh", "slicer", "cad"])
+                .select_related("project", "board__manufacturer", "component__manufacturer")
+                .order_by("category", "name")[:5000]
+        ],
         "models": [_serialise_printing_model(model) for model in models_3d],
         "recent_prints": [_serialise_print_job(job) for job in recent_prints],
         "integration_status": {
@@ -2673,6 +2679,149 @@ def printing_model_detail(request, model_id):
         return JsonResponse({"item": _serialise_printing_model(item)})
     except ValidationError as exc:
         return _validation_response(exc)
+
+
+@login_required
+@require_http_methods(["POST"])
+def printing_model_revisions(request, model_id):
+    model = Model3D.objects.filter(pk=model_id).first()
+    if not model:
+        return _error("3D model not found.", status=404)
+    denied = _require_permission(request, "core.change_model3d")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        version = str(payload.get("version") or "").strip()
+        if not version:
+            return _error("Revision version is required.")
+        revision = ModelRevision(
+            model=model,
+            version=version,
+            notes=str(payload.get("notes") or "").strip(),
+            source_url=str(payload.get("source_url") or "").strip(),
+        )
+        revision.full_clean()
+        revision.save()
+        model = Model3D.objects.select_related("project").prefetch_related(
+            "revisions__assets__file_asset__project"
+        ).get(pk=model.pk)
+        return JsonResponse({"model": _serialise_printing_model(model)}, status=201)
+    except ValidationError as exc:
+        return _validation_response(exc)
+    except IntegrityError:
+        return _error("That revision version already exists for this model.")
+
+
+@login_required
+@require_http_methods(["PATCH", "DELETE"])
+def printing_model_revision_detail(request, model_id, revision_id):
+    model = Model3D.objects.filter(pk=model_id).first()
+    if not model:
+        return _error("3D model not found.", status=404)
+    revision = ModelRevision.objects.filter(pk=revision_id, model=model).first()
+    if not revision:
+        return _error("Model revision not found.", status=404)
+    denied = _require_permission(request, "core.change_model3d")
+    if denied:
+        return denied
+
+    if request.method == "DELETE":
+        if revision.prints.exists():
+            return _error("This revision is referenced by print history and cannot be deleted.", status=409)
+        revision.delete()
+        return JsonResponse({"deleted": True})
+
+    try:
+        payload = _read_json(request)
+        for field in ["version", "notes", "source_url"]:
+            if field in payload:
+                setattr(revision, field, str(payload.get(field) or "").strip())
+        if not revision.version:
+            return _error("Revision version is required.")
+        revision.full_clean()
+        revision.save()
+        return JsonResponse({
+            "revision": {
+                "id": str(revision.id),
+                "version": revision.version,
+                "notes": revision.notes,
+                "source_url": revision.source_url,
+            }
+        })
+    except ValidationError as exc:
+        return _validation_response(exc)
+    except IntegrityError:
+        return _error("That revision version already exists for this model.")
+
+
+@login_required
+@require_http_methods(["POST"])
+def printing_revision_assets(request, model_id, revision_id):
+    model = Model3D.objects.select_related("project").filter(pk=model_id).first()
+    if not model:
+        return _error("3D model not found.", status=404)
+    revision = ModelRevision.objects.filter(pk=revision_id, model=model).first()
+    if not revision:
+        return _error("Model revision not found.", status=404)
+    denied = _require_permission(request, "core.change_model3d")
+    if denied:
+        return denied
+
+    try:
+        payload = _read_json(request)
+        asset = FileAsset.objects.select_related("project").filter(pk=payload.get("file_asset_id")).first()
+        if not asset:
+            return _error("Selected MakerVault file was not found.")
+        if asset.category not in {"mesh", "slicer", "cad"}:
+            return _error("Choose an STL/mesh, 3MF/slicer or CAD asset.")
+        if model.project_id and asset.project_id and model.project_id != asset.project_id:
+            return _error("This file belongs to a different project. Detach it or choose a matching project file first.")
+
+        role = str(payload.get("role") or "model")
+        if role not in dict(ModelRevisionAsset.ROLES):
+            return _error("Unknown revision asset role.")
+        is_primary = payload.get("is_primary") is True
+        with transaction.atomic():
+            if is_primary:
+                revision.assets.filter(role=role, is_primary=True).update(is_primary=False)
+            link = ModelRevisionAsset(
+                revision=revision,
+                file_asset=asset,
+                role=role,
+                is_primary=is_primary,
+                notes=str(payload.get("notes") or "").strip(),
+            )
+            link.full_clean()
+            link.save()
+
+        model = Model3D.objects.select_related("project").prefetch_related(
+            "revisions__assets__file_asset__project"
+        ).get(pk=model.pk)
+        return JsonResponse({"model": _serialise_printing_model(model)}, status=201)
+    except ValidationError as exc:
+        return _validation_response(exc)
+    except IntegrityError:
+        return _error("That file is already attached to this revision.")
+
+
+@login_required
+@require_http_methods(["DELETE"])
+def printing_revision_asset_detail(request, model_id, revision_id, link_id):
+    model = Model3D.objects.filter(pk=model_id).first()
+    if not model:
+        return _error("3D model not found.", status=404)
+    revision = ModelRevision.objects.filter(pk=revision_id, model=model).first()
+    if not revision:
+        return _error("Model revision not found.", status=404)
+    denied = _require_permission(request, "core.change_model3d")
+    if denied:
+        return denied
+    link = ModelRevisionAsset.objects.filter(pk=link_id, revision=revision).first()
+    if not link:
+        return _error("Revision file link not found.", status=404)
+    link.delete()
+    return JsonResponse({"deleted": True})
 
 
 @login_required
