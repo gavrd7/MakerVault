@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 
 import requests
 import websockets
+from websockets.exceptions import WebSocketException
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
@@ -370,7 +371,7 @@ async def _fetch_cfs_boxs_info(host: str) -> dict:
                 boxs_info = _find_boxs_info(payload)
                 if boxs_info is not None:
                     return boxs_info
-    except (OSError, asyncio.TimeoutError, websockets.WebSocketException) as exc:
+    except (OSError, asyncio.TimeoutError, WebSocketException) as exc:
         raise PrintingSyncConnectionError(
             f"Could not read CFS data from {_normalise_printer_host(host)}:9999."
         ) from exc
