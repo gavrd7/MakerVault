@@ -31,6 +31,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (section !== "Projects") return;
+    apiFetch("/api/projects/")
+      .then(result => setProjects(result.rows || []))
+      .catch(err => setError(err.message || "MakerVault could not refresh projects."));
+  }, [section]);
+
+  useEffect(() => {
     Promise.all([
       apiFetch("/api/dashboard/"), apiFetch("/api/inventory/"), apiFetch("/api/config/"),
       apiFetch("/api/boards/"), apiFetch("/api/components/"), apiFetch("/api/projects/"),
