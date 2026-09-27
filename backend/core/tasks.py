@@ -24,17 +24,17 @@ def seed_catalogue_images_task(self, limit=None, force_retry=False):
 
 
 @shared_task(bind=True, acks_late=True)
-def enrich_board_catalogue_task(self, limit=None):
-    return run_board_catalogue_enrichment(limit=limit)
+def enrich_board_catalogue_task(self, limit=None, force_retry=False):
+    return run_board_catalogue_enrichment(limit=limit, force_retry=force_retry)
 
 
 def _queue_catalogue_maintenance(config):
     queued = []
     if config.check_board_data and getattr(settings, "ENRICH_BOARD_CATALOGUE", True):
-        enrich_board_catalogue_task.delay()
+        enrich_board_catalogue_task.delay(force_retry=True)
         queued.append("board-data")
     if config.check_images and getattr(settings, "SEED_CATALOGUE_IMAGES", True):
-        seed_catalogue_images_task.delay()
+        seed_catalogue_images_task.delay(force_retry=True)
         queued.append("images")
     return queued
 
