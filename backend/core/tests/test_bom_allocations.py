@@ -1,5 +1,9 @@
+import importlib
+import threading
+
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.db import close_old_connections, models
+from django.test import Client, TestCase, TransactionTestCase
 
 from core.models import BOMAllocation, BOMItem, InventoryHistory, InventoryItem, Project
 
@@ -203,6 +207,13 @@ class BomAllocationApiTests(TestCase):
         self.stock.refresh_from_db()
         self.assertEqual(self.stock.status, "available")
 
+    def test_legacy_migration_caps_multiple_links_by_remaining_stock(self):
+        migration = importlib.import_module("core.migrations.0005_bom_allocations")
+        self.assertEqual(migration._legacy_allocation_quantity(4, 5, 0), 4)
+        self.assertEqual(migration._legacy_allocation_quantity(4, 5, 4), 1)
+        self.assertEqual(migration._legacy_allocation_quantity(2, 5, 5), 0)
+
+
     def test_regular_user_cannot_mutate_project_bom(self):
         viewer = get_user_model().objects.create_user(
             username="viewer",
@@ -217,3 +228,89 @@ class BomAllocationApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 403)
         self.assertEqual(BOMItem.objects.filter(project=self.project).count(), 0)
+
+
+
+class BomAllocationConcurrencyTests(TransactionTestCase):
+    reset_sequences = True
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_superuser(
+            username="bom-race-admin",
+            email="bom-race@example.com",
+            password="test-password",
+        )
+        self.project = Project.objects.create(name="Concurrent build", created_by=self.user)
+        self.stock = InventoryItem.objects.create(
+            inventory_id="OTH-RACE",
+            item_type="other",
+            custom_name="Single stock item",
+            quantity=1,
+            status="available",
+        )
+        self.bom = BOMItem.objects.create(
+            project=self.project,
+            custom_name="Required item",
+            quantity=1,
+            unit="item",
+        )
+
+    def test_inventory_quantity_edit_and_allocation_cannot_race_past_stock_invariant(self):
+        barrier = threading.Barrier(2)
+        results = []
+        errors = []
+
+        def patch_quantity():
+            close_old_connections()
+            try:
+                client = Client()
+                client.force_login(self.user)
+                barrier.wait()
+                response = client.patch(
+                    f"/api/inventory/{self.stock.id}/",
+                    data={"quantity": 0},
+                    content_type="application/json",
+                )
+                results.append(("patch", response.status_code))
+            except Exception as exc:
+                errors.append(exc)
+            finally:
+                close_old_connections()
+
+        def allocate_stock():
+            close_old_connections()
+            try:
+                client = Client()
+                client.force_login(self.user)
+                barrier.wait()
+                response = client.post(
+                    f"/api/projects/{self.project.id}/bom/{self.bom.id}/allocations/",
+                    data={
+                        "inventory_item_id": str(self.stock.id),
+                        "quantity": 1,
+                    },
+                    content_type="application/json",
+                )
+                results.append(("allocate", response.status_code))
+            except Exception as exc:
+                errors.append(exc)
+            finally:
+                close_old_connections()
+
+        first = threading.Thread(target=patch_quantity)
+        second = threading.Thread(target=allocate_stock)
+        first.start()
+        second.start()
+        first.join()
+        second.join()
+
+        self.assertEqual(errors, [])
+        self.assertEqual(len(results), 2)
+        statuses = sorted(status for _, status in results)
+        self.assertEqual(statuses, [201, 400] if any(name == "allocate" and status == 201 for name, status in results) else [200, 400])
+
+        self.stock.refresh_from_db()
+        allocated = BOMAllocation.objects.filter(
+            inventory_item=self.stock
+        ).aggregate(total=models.Sum("quantity"))["total"] or 0
+        self.assertLessEqual(allocated, self.stock.quantity)
