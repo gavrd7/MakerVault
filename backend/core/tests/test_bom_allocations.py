@@ -2,6 +2,8 @@ import importlib
 import threading
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
+from django.core.management import call_command
 from django.db import close_old_connections, models
 from django.test import Client, TestCase, TransactionTestCase
 
@@ -212,6 +214,124 @@ class BomAllocationApiTests(TestCase):
         self.assertEqual(migration._legacy_allocation_quantity(4, 5, 0), 4)
         self.assertEqual(migration._legacy_allocation_quantity(4, 5, 4), 1)
         self.assertEqual(migration._legacy_allocation_quantity(2, 5, 5), 0)
+
+
+    def test_create_inventory_and_allocate_from_bom_is_atomic(self):
+        bom = self.create_bom(quantity=8, name="M3 screws")
+        response = self.client.post(
+            f"/api/projects/{self.project.id}/bom/{bom['id']}/allocations/",
+            data={
+                "quantity": 8,
+                "notes": "First build allocation",
+                "create_inventory": {
+                    "quantity": 100,
+                    "location": "Fasteners drawer",
+                    "supplier": "Example supplier",
+                    "purchase_price": "4.50",
+                    "currency": "GBP",
+                },
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        payload = response.json()
+        self.assertTrue(payload["created_inventory"])
+
+        created = InventoryItem.objects.get(pk=payload["inventory_item"]["id"])
+        self.assertEqual(created.item_type, "other")
+        self.assertEqual(created.custom_name, "M3 screws")
+        self.assertEqual(float(created.quantity), 100.0)
+        self.assertIsNone(created.project_id)
+        self.assertEqual(created.location, "Fasteners drawer")
+
+        allocation = BOMAllocation.objects.get(
+            bom_item_id=bom["id"],
+            inventory_item=created,
+        )
+        self.assertEqual(float(allocation.quantity), 8.0)
+        self.assertTrue(
+            InventoryHistory.objects.filter(
+                inventory_item=created,
+                event_type="created",
+            ).exists()
+        )
+        self.assertTrue(
+            InventoryHistory.objects.filter(
+                inventory_item=created,
+                event_type="bom_allocated",
+                project=self.project,
+            ).exists()
+        )
+
+    def test_create_inventory_and_allocate_rolls_back_if_stock_is_too_small(self):
+        bom = self.create_bom(quantity=8, name="M3 screws")
+        before = InventoryItem.objects.count()
+        response = self.client.post(
+            f"/api/projects/{self.project.id}/bom/{bom['id']}/allocations/",
+            data={
+                "quantity": 8,
+                "create_inventory": {
+                    "quantity": 4,
+                    "location": "Fasteners drawer",
+                },
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(InventoryItem.objects.count(), before)
+        self.assertFalse(BOMAllocation.objects.filter(bom_item_id=bom["id"]).exists())
+
+    def test_create_inventory_can_optionally_assign_whole_stock_to_project(self):
+        bom = self.create_bom(quantity=1, name="Project-only part")
+        response = self.client.post(
+            f"/api/projects/{self.project.id}/bom/{bom['id']}/allocations/",
+            data={
+                "quantity": 1,
+                "create_inventory": {
+                    "quantity": 1,
+                    "assign_to_project": True,
+                },
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        created = InventoryItem.objects.get(pk=response.json()["inventory_item"]["id"])
+        self.assertEqual(created.project_id, self.project.id)
+
+    def test_unallocated_inventory_can_be_deleted(self):
+        disposable = InventoryItem.objects.create(
+            inventory_id="OTH-MISTAKE",
+            item_type="other",
+            custom_name="Mistaken record",
+            quantity=1,
+            status="available",
+        )
+        response = self.client.delete(f"/api/inventory/{disposable.id}/")
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(InventoryItem.objects.filter(pk=disposable.id).exists())
+
+    def test_editor_role_can_delete_inventory_but_does_not_gain_general_delete_rights(self):
+        call_command("seed_roles")
+        editor = get_user_model().objects.create_user(
+            username="inventory-editor",
+            email="inventory-editor@example.com",
+            password="test-password",
+        )
+        editor.groups.add(Group.objects.get(name="Editor"))
+        self.assertTrue(editor.has_perm("core.delete_inventoryitem"))
+        self.assertFalse(editor.has_perm("core.delete_project"))
+
+        disposable = InventoryItem.objects.create(
+            inventory_id="OTH-EDITOR-MISTAKE",
+            item_type="other",
+            custom_name="Editor mistake",
+            quantity=1,
+            status="available",
+        )
+        self.client.force_login(editor)
+        response = self.client.delete(f"/api/inventory/{disposable.id}/")
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(InventoryItem.objects.filter(pk=disposable.id).exists())
 
 
     def test_regular_user_cannot_mutate_project_bom(self):
