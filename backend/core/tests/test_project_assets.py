@@ -114,6 +114,84 @@ class ProjectAssetApiTests(TestCase):
         self.assertEqual(payload["rows"][0]["category"], "firmware")
         self.assertTrue(any(item["value"] == "mesh" for item in payload["categories"]))
 
+    def test_standalone_file_upload_uses_existing_file_type_validator(self):
+        payload = b"print('standalone')\n"
+        response = self.client.post(
+            "/api/files/",
+            {
+                "file": SimpleUploadedFile("utility.py", payload, content_type="text/plain"),
+                "category": "source",
+                "name": "Standalone utility",
+                "version": "1.0",
+            },
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+
+        asset = FileAsset.objects.get(name="Standalone utility")
+        self.assertIsNone(asset.project)
+        self.assertEqual(asset.sha256, hashlib.sha256(payload).hexdigest())
+
+        library = self.client.get("/api/files/?project=__standalone__")
+        self.assertEqual(library.status_code, 200)
+        self.assertEqual(len(library.json()["rows"]), 1)
+        self.assertEqual(library.json()["rows"][0]["project_id"], "")
+
+        rejected = self.client.post(
+            "/api/files/",
+            {
+                "file": SimpleUploadedFile("unsupported.weird", b"not allowed"),
+                "category": "other",
+            },
+        )
+        self.assertEqual(rejected.status_code, 400)
+
+    def test_standalone_file_can_be_attached_to_project_without_reupload(self):
+        upload = self.client.post(
+            "/api/files/",
+            {
+                "file": SimpleUploadedFile("enclosure.stl", b"solid enclosure\nendsolid enclosure\n"),
+                "category": "mesh",
+                "name": "Standalone enclosure",
+            },
+        )
+        self.assertEqual(upload.status_code, 201, upload.content)
+        asset_id = upload.json()["file"]["id"]
+
+        response = self.client.patch(
+            f"/api/files/{asset_id}/",
+            data={
+                "project_id": str(self.project.id),
+                "name": "Project enclosure",
+                "category": "mesh",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        asset = FileAsset.objects.get(pk=asset_id)
+        self.assertEqual(asset.project, self.project)
+        self.assertEqual(asset.name, "Project enclosure")
+        self.assertEqual(FileAsset.objects.filter(pk=asset_id).count(), 1)
+
+    def test_standalone_file_delete_removes_stored_file(self):
+        upload = self.client.post(
+            "/api/files/",
+            {
+                "file": SimpleUploadedFile("notes.md", b"# Notes\n"),
+                "category": "source",
+                "name": "Notes",
+            },
+        )
+        self.assertEqual(upload.status_code, 201, upload.content)
+        asset = FileAsset.objects.get(name="Notes")
+        stored_name = asset.file.name
+        storage = asset.file.storage
+        self.assertTrue(storage.exists(stored_name))
+
+        response = self.client.delete(f"/api/files/{asset.id}/")
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(FileAsset.objects.filter(pk=asset.id).exists())
+        self.assertFalse(storage.exists(stored_name))
+
     def test_repository_link_is_returned_with_project(self):
         response = self.client.post(
             f"/api/projects/{self.project.id}/repositories/",
