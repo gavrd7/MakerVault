@@ -1,4 +1,4 @@
-# MakerVault v0.3.0
+# MakerVault v0.3.6
 
 MakerVault is a self-hosted makerspace inventory and project system for electronics, firmware, fabrication and 3D-printing assets.
 
@@ -287,3 +287,30 @@ BOARD_ENRICHMENT_MAX_PER_RUN=80
 ~~~
 
 The technical source URL and enrichment timestamp are retained in the board specifications.
+
+
+## Catalogue coverage refresh (v0.3.6)
+
+MakerVault now combines three safe enrichment layers:
+
+1. Curated board/MCU profiles fill missing technical facts for common ESP32, RP2040/RP2350, Arduino/AVR, SAMD21, RA4M1 and Teensy hardware.
+2. ESP-family boards can receive additional board-specific factual data from ESPBoards.dev.
+3. Missing catalogue images are searched through Wikimedia Commons and then Openverse, accepting only CC0/Public Domain, CC BY and CC BY-SA results with recorded provenance.
+
+Existing populated fields and custom images are not overwritten. A new image-search generation automatically retries records that older MakerVault releases could not match.
+
+To deliberately run the complete catalogue pass:
+
+~~~bash
+make refresh-catalogue
+~~~
+
+or without Make:
+
+~~~bash
+docker compose exec makervault python manage.py seed_catalogue
+docker compose exec makervault python manage.py enrich_board_catalogue
+docker compose exec makervault python manage.py seed_catalogue_images --force-retry
+~~~
+
+Openverse is an image-discovery/index service; the original media licence, creator and landing/source page are retained on each cached record.
