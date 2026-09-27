@@ -2181,6 +2181,41 @@ def _serialise_printing_model(model):
     }
 
 
+def _serialise_printing_location(location):
+    return {
+        "id": str(location.id),
+        "name": location.name,
+        "kind": location.kind,
+        "kind_label": location.get_kind_display(),
+        "notes": location.notes,
+    }
+
+
+def _serialise_printer_catalog_model(item):
+    return {
+        "id": str(item.id),
+        "manufacturer_id": str(item.manufacturer_id),
+        "manufacturer": item.manufacturer.name,
+        "name": item.name,
+        "display_name": str(item),
+        "build_volume": {
+            "x": _float(item.build_volume_x_mm),
+            "y": _float(item.build_volume_y_mm),
+            "z": _float(item.build_volume_z_mm),
+        },
+        "nozzle_mm": _float(item.nozzle_mm),
+        "filament_diameter_mm": _float(item.filament_diameter_mm),
+        "max_nozzle_temp_c": item.max_nozzle_temp_c,
+        "max_bed_temp_c": item.max_bed_temp_c,
+        "enclosed": item.enclosed,
+        "multi_material_system": item.multi_material_system,
+        "multi_material_label": item.get_multi_material_system_display() if item.multi_material_system else "",
+        "max_multi_material_units": item.max_multi_material_units,
+        "features": item.features or {},
+        "source_url": item.source_url,
+    }
+
+
 def _serialise_external_spool_link(link):
     return {
         "id": str(link.id),
@@ -2196,12 +2231,24 @@ def _serialise_external_spool_link(link):
 
 def _serialise_spool(spool):
     filament = spool.filament
+    maker = filament.filament_manufacturer or filament.manufacturer
+    placement = ""
+    placement_type = ""
+    if spool.assigned_printer_id:
+        placement = spool.assigned_printer.name
+        placement_type = "printer"
+    elif spool.storage_location_id:
+        placement = spool.storage_location.name
+        placement_type = "location"
+    elif spool.location:
+        placement = spool.location
+        placement_type = "legacy"
     return {
         "id": str(spool.id),
         "spool_id": spool.spool_id,
         "filament": str(filament),
         "filament_id": str(filament.id),
-        "manufacturer": filament.manufacturer.name if filament.manufacturer else "",
+        "manufacturer": maker.name if maker else "",
         "material": filament.material,
         "color_name": filament.color_name,
         "color_hex": filament.color_hex,
@@ -2217,7 +2264,10 @@ def _serialise_spool(spool):
         "remaining_weight_g": _float(spool.remaining_weight_g),
         "status": spool.status,
         "status_label": spool.get_status_display(),
-        "location": spool.location,
+        "location": placement,
+        "placement_type": placement_type,
+        "storage_location_id": str(spool.storage_location_id) if spool.storage_location_id else None,
+        "assigned_printer_id": str(spool.assigned_printer_id) if spool.assigned_printer_id else None,
         "external_links": [_serialise_external_spool_link(link) for link in spool.external_links.all()],
         "loaded_slots": [
             {
@@ -2233,7 +2283,6 @@ def _serialise_spool(spool):
         ],
         "updated_at": spool.updated_at.isoformat(),
     }
-
 
 def _serialise_printer_slot(slot):
     return {
@@ -2256,23 +2305,30 @@ def _serialise_printer_slot(slot):
 
 
 def _serialise_printer(printer):
+    maker = printer.printer_manufacturer or printer.manufacturer
+    catalogue = printer.catalog_model
     return {
         "id": str(printer.id),
         "name": printer.name,
-        "manufacturer": printer.manufacturer.name if printer.manufacturer else "",
+        "manufacturer_id": str(printer.printer_manufacturer_id) if printer.printer_manufacturer_id else None,
+        "manufacturer": maker.name if maker else "",
+        "catalog_model_id": str(printer.catalog_model_id) if printer.catalog_model_id else None,
         "model": printer.model,
         "serial_number": printer.serial_number,
-        "location": printer.location,
+        "location_id": str(printer.printing_location_id) if printer.printing_location_id else None,
+        "location": printer.printing_location.name if printer.printing_location else printer.location,
+        "is_active": printer.is_active,
+        "connection_host": printer.connection_host,
         "build_volume": {
             "x": _float(printer.build_volume_x_mm),
             "y": _float(printer.build_volume_y_mm),
             "z": _float(printer.build_volume_z_mm),
         },
         "nozzle_mm": _float(printer.nozzle_mm),
+        "catalogue": _serialise_printer_catalog_model(catalogue) if catalogue else None,
         "slots": [_serialise_printer_slot(slot) for slot in printer.filament_slots.all()],
         "updated_at": printer.updated_at.isoformat(),
     }
-
 
 def _serialise_print_material_usage(usage):
     return {
@@ -2397,8 +2453,12 @@ def _serialise_filament_product(filament):
         "id": str(filament.id),
         "name": filament.name,
         "display_name": str(filament),
-        "manufacturer_id": filament.manufacturer_id,
-        "manufacturer": filament.manufacturer.name if filament.manufacturer else "",
+        "manufacturer_id": str(filament.filament_manufacturer_id) if filament.filament_manufacturer_id else None,
+        "manufacturer": (
+            filament.filament_manufacturer.name
+            if filament.filament_manufacturer
+            else filament.manufacturer.name if filament.manufacturer else ""
+        ),
         "material": filament.material,
         "color_name": filament.color_name,
         "color_hex": filament.color_hex,
