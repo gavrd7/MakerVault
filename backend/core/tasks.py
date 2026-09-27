@@ -7,7 +7,8 @@ from django.utils import timezone
 
 from .catalogue_image_sources import run_catalogue_image_seed
 from .catalogue_enrichment import run_board_catalogue_enrichment
-from .models import CatalogueMaintenanceSettings
+from .models import CatalogueMaintenanceSettings, PrintingIntegrationSetting
+from .printing_sync import PrintingSyncError, sync_printing_integration
 
 
 @shared_task
@@ -77,3 +78,45 @@ def queue_catalogue_maintenance_now(triggered_by="manual"):
         config.save(update_fields=["last_run_at", "next_run_at", "last_triggered_by", "updated_at"])
     queued = _queue_catalogue_maintenance(config)
     return config, queued
+
+
+
+@shared_task
+def printing_integration_sync_task(provider, triggered_by="schedule"):
+    try:
+        setting, result = sync_printing_integration(provider, triggered_by=triggered_by)
+        return {
+            "status": setting.status,
+            "provider": provider,
+            "result": result,
+        }
+    except PrintingSyncError as exc:
+        return {
+            "status": "error",
+            "provider": provider,
+            "error": str(exc),
+        }
+
+
+@shared_task
+def printing_integrations_tick():
+    """Queue due user-enabled printing integrations; schedule lives in PostgreSQL."""
+    now = timezone.now()
+    due = []
+    with transaction.atomic():
+        rows = list(
+            PrintingIntegrationSetting.objects.select_for_update()
+            .filter(enabled=True, auto_sync=True)
+            .order_by("provider")
+        )
+        for item in rows:
+            if item.next_sync_at and item.next_sync_at > now:
+                continue
+            item.next_sync_at = now + timedelta(minutes=item.sync_interval_minutes)
+            item.save(update_fields=["next_sync_at", "updated_at"])
+            due.append(item.provider)
+
+    for provider in due:
+        printing_integration_sync_task.delay(provider, triggered_by="schedule")
+
+    return {"status": "queued" if due else "not-due", "queued": due}
