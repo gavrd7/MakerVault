@@ -32,6 +32,7 @@ from .filament_catalogue import (
 )
 from .printing_catalogue_seed import COMMON_FILAMENT_MATERIALS
 from .printing_integrations import PrintingIntegrationError, probe_spoolman
+from .printing_sync import PrintingSyncError, next_spool_id, sync_printing_integration
 from .tasks import queue_catalogue_maintenance_now
 from .models import (
     BoardCompatibility,
