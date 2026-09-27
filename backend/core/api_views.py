@@ -40,10 +40,15 @@ from .models import (
     InventoryHistory,
     Manufacturer,
     Model3D,
+    ModelRevision,
+    ModelRevisionAsset,
     Printer,
+    PrinterFilamentSlot,
+    PrintJob,
     Project,
     RepositoryLink,
     Spool,
+    ExternalSpoolLink,
 )
 
 
@@ -2100,6 +2105,218 @@ def catalogue_maintenance_run_now(request):
     })
 
 
+def _serialise_printing_file_link(link):
+    asset = link.file_asset
+    return {
+        "id": str(link.id),
+        "role": link.role,
+        "role_label": link.get_role_display(),
+        "is_primary": link.is_primary,
+        "notes": link.notes,
+        "file": {
+            "id": str(asset.id),
+            "name": asset.name,
+            "category": asset.category,
+            "category_label": asset.get_category_display(),
+            "filename": Path(asset.file.name).name if asset.file else "",
+            "url": f"/media/{asset.id}/",
+            "project_id": str(asset.project_id) if asset.project_id else None,
+            "project": asset.project.name if asset.project else "",
+        },
+    }
+
+
+def _serialise_printing_model(model):
+    revisions = []
+    for revision in model.revisions.all():
+        revisions.append({
+            "id": str(revision.id),
+            "version": revision.version,
+            "notes": revision.notes,
+            "source_url": revision.source_url,
+            "assets": [_serialise_printing_file_link(link) for link in revision.assets.all()],
+            "created_at": revision.created_at.isoformat(),
+        })
+    return {
+        "id": str(model.id),
+        "name": model.name,
+        "description": model.description,
+        "source_url": model.source_url,
+        "license": model.license,
+        "tags": model.tags,
+        "project_id": str(model.project_id) if model.project_id else None,
+        "project": model.project.name if model.project else "",
+        "revision_count": len(revisions),
+        "revisions": revisions,
+        "updated_at": model.updated_at.isoformat(),
+    }
+
+
+def _serialise_external_spool_link(link):
+    return {
+        "id": str(link.id),
+        "provider": link.provider,
+        "provider_label": link.get_provider_display(),
+        "external_id": link.external_id,
+        "external_url": link.external_url,
+        "sync_direction": link.sync_direction,
+        "sync_direction_label": link.get_sync_direction_display(),
+        "last_synced_at": link.last_synced_at.isoformat() if link.last_synced_at else None,
+    }
+
+
+def _serialise_spool(spool):
+    filament = spool.filament
+    return {
+        "id": str(spool.id),
+        "spool_id": spool.spool_id,
+        "filament": str(filament),
+        "filament_id": str(filament.id),
+        "manufacturer": filament.manufacturer.name if filament.manufacturer else "",
+        "material": filament.material,
+        "color_name": filament.color_name,
+        "color_hex": filament.color_hex,
+        "diameter_mm": _float(filament.diameter_mm),
+        "initial_weight_g": _float(spool.initial_weight_g),
+        "remaining_weight_g": _float(spool.remaining_weight_g),
+        "status": spool.status,
+        "status_label": spool.get_status_display(),
+        "location": spool.location,
+        "external_links": [_serialise_external_spool_link(link) for link in spool.external_links.all()],
+        "loaded_slots": [
+            {
+                "printer_id": str(slot.printer_id),
+                "printer": slot.printer.name,
+                "system": slot.system,
+                "system_label": slot.get_system_display(),
+                "unit_index": slot.unit_index,
+                "slot_index": slot.slot_index,
+            }
+            for slot in spool.printer_slots.all()
+            if slot.is_loaded
+        ],
+        "updated_at": spool.updated_at.isoformat(),
+    }
+
+
+def _serialise_printer_slot(slot):
+    return {
+        "id": str(slot.id),
+        "system": slot.system,
+        "system_label": slot.get_system_display(),
+        "unit_index": slot.unit_index,
+        "slot_index": slot.slot_index,
+        "spool_id": str(slot.spool_id) if slot.spool_id else None,
+        "spool_code": slot.spool.spool_id if slot.spool else "",
+        "material": slot.material or (slot.spool.filament.material if slot.spool else ""),
+        "color_name": slot.color_name or (slot.spool.filament.color_name if slot.spool else ""),
+        "color_hex": slot.color_hex or (slot.spool.filament.color_hex if slot.spool else ""),
+        "remaining_weight_g": _float(slot.remaining_weight_g),
+        "rfid_uid": slot.rfid_uid,
+        "external_ref": slot.external_ref,
+        "is_loaded": slot.is_loaded,
+        "last_seen_at": slot.last_seen_at.isoformat() if slot.last_seen_at else None,
+    }
+
+
+def _serialise_printer(printer):
+    return {
+        "id": str(printer.id),
+        "name": printer.name,
+        "manufacturer": printer.manufacturer.name if printer.manufacturer else "",
+        "model": printer.model,
+        "serial_number": printer.serial_number,
+        "location": printer.location,
+        "build_volume": {
+            "x": _float(printer.build_volume_x_mm),
+            "y": _float(printer.build_volume_y_mm),
+            "z": _float(printer.build_volume_z_mm),
+        },
+        "nozzle_mm": _float(printer.nozzle_mm),
+        "slots": [_serialise_printer_slot(slot) for slot in printer.filament_slots.all()],
+        "updated_at": printer.updated_at.isoformat(),
+    }
+
+
+def _serialise_print_job(job):
+    return {
+        "id": str(job.id),
+        "status": job.status,
+        "status_label": job.get_status_display(),
+        "quantity": job.quantity,
+        "printer_id": str(job.printer_id),
+        "printer": job.printer.name,
+        "project_id": str(job.project_id) if job.project_id else None,
+        "project": job.project.name if job.project else "",
+        "model_revision_id": str(job.model_revision_id) if job.model_revision_id else None,
+        "model": job.model_revision.model.name if job.model_revision else "",
+        "revision": job.model_revision.version if job.model_revision else "",
+        "spool_id": str(job.spool_id) if job.spool_id else None,
+        "spool": job.spool.spool_id if job.spool else "",
+        "filament_used_g": _float(job.filament_used_g),
+        "actual_minutes": job.actual_minutes,
+        "created_at": job.created_at.isoformat(),
+    }
+
+
+@login_required
+@require_http_methods(["GET"])
+def printing_overview(request):
+    printers = list(
+        Printer.objects.select_related("manufacturer").prefetch_related(
+            "filament_slots__spool__filament__manufacturer"
+        )
+    )
+    spools = list(
+        Spool.objects.select_related("filament__manufacturer").prefetch_related(
+            "external_links",
+            "printer_slots__printer",
+        )
+    )
+    models_3d = list(
+        Model3D.objects.select_related("project").prefetch_related(
+            "revisions__assets__file_asset__project"
+        )
+    )
+    recent_prints = list(
+        PrintJob.objects.select_related(
+            "printer",
+            "project",
+            "spool",
+            "model_revision__model",
+        )[:12]
+    )
+
+    loaded_slots = sum(
+        1
+        for printer in printers
+        for slot in printer.filament_slots.all()
+        if slot.is_loaded
+    )
+    linked_spools = sum(1 for spool in spools if list(spool.external_links.all()))
+
+    return JsonResponse({
+        "summary": {
+            "printers": len(printers),
+            "models": len(models_3d),
+            "spools": len(spools),
+            "loaded_slots": loaded_slots,
+            "externally_linked_spools": linked_spools,
+            "print_jobs": PrintJob.objects.count(),
+        },
+        "printers": [_serialise_printer(printer) for printer in printers],
+        "spools": [_serialise_spool(spool) for spool in spools],
+        "models": [_serialise_printing_model(model) for model in models_3d],
+        "recent_prints": [_serialise_print_job(job) for job in recent_prints],
+        "integration_status": {
+            "spoolman": "available",
+            "simplyprint": "planned",
+            "creality_cfs": "foundation_ready",
+            "multi_material_adapters": "foundation_ready",
+        },
+    })
+
+
 @login_required
 @require_http_methods(["GET"])
 def public_config(request):
@@ -2128,6 +2345,12 @@ def public_config(request):
             "delete_project": request.user.has_perm("core.delete_project"),
             "add_file": request.user.has_perm("core.add_fileasset"),
             "change_file": request.user.has_perm("core.change_fileasset"),
+            "add_printer": request.user.has_perm("core.add_printer"),
+            "change_printer": request.user.has_perm("core.change_printer"),
+            "add_spool": request.user.has_perm("core.add_spool"),
+            "change_spool": request.user.has_perm("core.change_spool"),
+            "add_model3d": request.user.has_perm("core.add_model3d"),
+            "change_model3d": request.user.has_perm("core.change_model3d"),
         },
         "importers": ["ESPBoards.dev"],
     })
