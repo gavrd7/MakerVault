@@ -49,6 +49,29 @@ class PrintingFoundationTests(TestCase):
             nozzle_mm="0.4",
         )
 
+    def test_filament_creation_supports_transparent_custom_colour(self):
+        response = self.client.post(
+            "/api/printing/filaments/",
+            data={
+                "manufacturer_id": str(self.manufacturer.id),
+                "name": "Clear PETG",
+                "material": "PETG",
+                "color_name": "Crystal Clear",
+                "color_hex": "#bfe8ff",
+                "transparency": "transparent",
+                "diameter_mm": "1.75",
+                "nominal_weight_g": "1000",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        payload = response.json()["item"]
+        self.assertEqual(payload["color_hex"], "#bfe8ff")
+        self.assertEqual(payload["transparency"], "transparent")
+        self.assertEqual(payload["transparency_label"], "Transparent")
+        created = FilamentProduct.objects.get(pk=payload["id"])
+        self.assertEqual(created.transparency, "transparent")
+
     def test_printing_overview_exposes_native_models_spools_and_slots(self):
         ExternalSpoolLink.objects.create(
             spool=self.spool,
