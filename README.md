@@ -197,7 +197,7 @@ Uploaded media is served through an authenticated Django endpoint. Raster images
 
 Project workspaces can upload and classify firmware/source files, wiring/schematics, documents, PCB files, CAD, STL/mesh, 3MF/slicer projects, archives and other build assets. Files are stored in authenticated MakerVault media storage and non-image assets are served download-only.
 
-Project workspaces can also link GitHub, GitLab, local or other repositories alongside their stored build files. A dedicated cross-project file browser and Three.js STL/3MF viewer remain planned for later milestones.
+Project workspaces can also link GitHub, GitLab, local or other repositories alongside their stored build files. The main **Files** page provides a cross-project categorized view of those same assets and links each one back to its owning project. A Three.js STL/3MF viewer remains planned for a later milestone.
 
 ## Development and Git
 
