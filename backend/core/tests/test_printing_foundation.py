@@ -652,11 +652,14 @@ class PrintingFoundationTests(TestCase):
             }
         ]
         get_mock.return_value = response
-        PrintingIntegrationSetting.objects.create(
+        PrintingIntegrationSetting.objects.update_or_create(
             provider="spoolman",
-            enabled=True,
-            endpoint_url="https://spoolman.example.test",
-            sync_direction="import",
+            defaults={
+                "enabled": True,
+                "endpoint_url": "https://spoolman.example.test",
+                "sync_direction": "import",
+                "status": "disconnected",
+            },
         )
 
         synced = self.client.post("/api/settings/printing-integrations/spoolman/sync/")
@@ -794,10 +797,13 @@ class PrintingFoundationTests(TestCase):
                 }
             ]
         }
-        PrintingIntegrationSetting.objects.create(
+        PrintingIntegrationSetting.objects.update_or_create(
             provider="creality_cfs",
-            enabled=True,
-            sync_direction="import",
+            defaults={
+                "enabled": True,
+                "sync_direction": "import",
+                "status": "disconnected",
+            },
         )
 
         synced = self.client.post("/api/settings/printing-integrations/creality_cfs/sync/")
@@ -825,15 +831,13 @@ class PrintingFoundationTests(TestCase):
         self.assertIsNotNone(setting.last_sync_at)
 
     def test_printing_overview_only_lists_enabled_integrations(self):
-        PrintingIntegrationSetting.objects.create(
+        PrintingIntegrationSetting.objects.update_or_create(
             provider="spoolman",
-            enabled=True,
-            status="connected",
+            defaults={"enabled": True, "status": "connected"},
         )
-        PrintingIntegrationSetting.objects.create(
+        PrintingIntegrationSetting.objects.update_or_create(
             provider="creality_cfs",
-            enabled=False,
-            status="disabled",
+            defaults={"enabled": False, "status": "disabled"},
         )
         response = self.client.get("/api/printing/")
         self.assertEqual(response.status_code, 200, response.content)
@@ -844,14 +848,16 @@ class PrintingFoundationTests(TestCase):
 
     @patch("core.tasks.printing_integration_sync_task.delay")
     def test_enabled_scheduled_integration_is_queued_when_due(self, delay_mock):
-        setting = PrintingIntegrationSetting.objects.create(
+        setting, _ = PrintingIntegrationSetting.objects.update_or_create(
             provider="spoolman",
-            enabled=True,
-            endpoint_url="https://spoolman.example.test",
-            sync_direction="import",
-            auto_sync=True,
-            sync_interval_minutes=30,
-            next_sync_at=timezone.now() - timedelta(minutes=1),
+            defaults={
+                "enabled": True,
+                "endpoint_url": "https://spoolman.example.test",
+                "sync_direction": "import",
+                "auto_sync": True,
+                "sync_interval_minutes": 30,
+                "next_sync_at": timezone.now() - timedelta(minutes=1),
+            },
         )
         result = printing_integrations_tick()
         self.assertEqual(result["queued"], ["spoolman"])
