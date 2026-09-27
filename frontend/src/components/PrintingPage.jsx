@@ -38,6 +38,7 @@ export default function PrintingPage({ config, projects }) {
 
   const summary = data?.summary || {};
   const canAddPrinter = Boolean(config?.permissions?.add_printer);
+  const canAddFilament = Boolean(config?.permissions?.add_filament);
   const canAddSpool = Boolean(config?.permissions?.add_spool);
   const canAddModel = Boolean(config?.permissions?.add_model3d);
 
@@ -50,7 +51,7 @@ export default function PrintingPage({ config, projects }) {
       </div>
       <div className="printingHeroActions">
         {canAddPrinter && <button onClick={() => setModal("printer")}>＋ Printer</button>}
-        {canAddSpool && <button onClick={() => setModal("filament")}>＋ Filament</button>}
+        {canAddFilament && <button onClick={() => setModal("filament")}>＋ Filament</button>}
         {canAddSpool && <button onClick={() => setModal("spool")}>＋ Spool</button>}
         {canAddModel && <button className="primary" onClick={() => setModal("model")}>＋ Model</button>}
         <button onClick={load}>Refresh</button>
