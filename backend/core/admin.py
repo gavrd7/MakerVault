@@ -3,7 +3,7 @@ from .models import (
     Manufacturer, CatalogSource, CatalogueMaintenanceSettings, BoardModel, BoardCompatibility, ComponentCategory,
     ComponentModel, Project, InventoryItem, InventoryHistory, BOMItem, BOMAllocation, FileAsset, RepositoryLink,
     FilamentProduct, Spool, ExternalSpoolLink, Printer, PrinterFilamentSlot,
-    Model3D, ModelRevision, ModelRevisionAsset, ProductListing, PrintJob,
+    Model3D, ModelRevision, ModelRevisionAsset, ProductListing, PrintJob, PrintMaterialUsage,
 )
 
 
@@ -68,7 +68,7 @@ admin.site.register([
     Manufacturer, CatalogSource, BoardCompatibility, ComponentCategory, ComponentModel,
     FileAsset, RepositoryLink, FilamentProduct, Spool, ExternalSpoolLink,
     Printer, PrinterFilamentSlot, Model3D, ModelRevision, ModelRevisionAsset,
-    ProductListing, PrintJob,
+    ProductListing, PrintJob, PrintMaterialUsage,
 ])
 
 admin.site.site_header = "MakerVault administration"
