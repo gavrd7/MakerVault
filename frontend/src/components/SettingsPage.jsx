@@ -112,7 +112,7 @@ export default function SettingsPage({ config }) {
             <input type="checkbox" checked={form.check_board_data} onChange={e => set("check_board_data", e.target.checked)} />
           </label>
           <label className="settingsToggle">
-            <div><strong>Catalogue images</strong><small>Retry missing images when their source/retry rules allow it.</small></div>
+            <div><strong>Catalogue images</strong><small>Retry missing catalogue images on the saved maintenance cadence.</small></div>
             <input type="checkbox" checked={form.check_images} onChange={e => set("check_images", e.target.checked)} />
           </label>
         </div>
@@ -136,7 +136,7 @@ export default function SettingsPage({ config }) {
 
     <section className="panel settingsInfo">
       <h3>How scheduled checks behave</h3>
-      <p>The scheduler does not blindly redownload the whole catalogue every day. It queues the existing enrichment engines, which retain their own locks, confidence rules and retry windows. Records that are already complete or not due are skipped.</p>
+      <p>The scheduler does not blindly redownload the whole catalogue every day. It re-checks supported online board sources and retries records still missing images on the saved cadence. Existing local images are skipped, confidence/licence rules remain enforced, and populated/user-edited specification values are not overwritten.</p>
       <p>Restarting or rebuilding the MakerVault container does not reset the interval. The schedule is stored in the database and resumes from the saved next-run time.</p>
     </section>
   </div>;
