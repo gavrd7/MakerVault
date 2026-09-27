@@ -122,7 +122,7 @@ export default function SettingsPage({ config }) {
       const details = result.result || {};
       if (provider === "spoolman") {
         setNotice(
-          `Spoolman sync complete: ${details.created || 0} added, ${details.updated || 0} updated, ${details.exported || 0} exported.`
+          `Spoolman sync complete: ${details.created || 0} added, ${details.linked_existing || 0} matched to existing, ${details.updated || 0} updated, ${details.exported || 0} exported.`
         );
       } else if (provider === "creality_cfs") {
         setNotice(
