@@ -1,5 +1,6 @@
 import shutil
 import tempfile
+from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
@@ -792,7 +793,7 @@ class PrintingFoundationTests(TestCase):
             sync_direction="import",
             auto_sync=True,
             sync_interval_minutes=30,
-            next_sync_at=timezone.now() - timezone.timedelta(minutes=1),
+            next_sync_at=timezone.now() - timedelta(minutes=1),
         )
         result = printing_integrations_tick()
         self.assertEqual(result["queued"], ["spoolman"])
