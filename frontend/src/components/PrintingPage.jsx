@@ -14,11 +14,11 @@ function formatDate(value) {
 }
 
 function newestFirst(rows) {
-  return [...(rows || [])].sort((a, b) => {
-    const left = new Date(a.updated_at || a.created_at || 0).getTime() || 0;
-    const right = new Date(b.updated_at || b.created_at || 0).getTime() || 0;
-    return right - left;
-  });
+  const activityTime = row => Math.max(
+    new Date(row.updated_at || row.created_at || 0).getTime() || 0,
+    ...((row.revisions || []).map(revision => new Date(revision.created_at || 0).getTime() || 0))
+  );
+  return [...(rows || [])].sort((a, b) => activityTime(b) - activityTime(a));
 }
 
 export default function PrintingPage({ config, projects }) {
