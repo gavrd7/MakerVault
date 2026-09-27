@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.3.7
+
+- Rendered all MakerVault modals through a React portal at the document root so drawers, AG Grid and overflow/stacking contexts cannot overlap them.
+- Fixed the board image-management modal so catalogue/grid content no longer renders through the dialog.
+- Reworked board/detail image sizing to preserve the full source image at arbitrary aspect ratios.
+- Catalogue images now use intrinsic dimensions with max-width/max-height containment instead of stretching into fixed-size image boxes.
+- Added responsive hero/image-manager frames that scale cleanly across desktop, tablet and mobile without bottom-cropping.
+- No database migration is required.
+
+
 ## v0.3.6
 
 - Added broad curated technical profiles for common ESP32/ESP8266, RP2040/RP2350, Arduino/AVR, SAMD21, RA4M1 and Teensy hardware.
