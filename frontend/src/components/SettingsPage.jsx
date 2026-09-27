@@ -72,15 +72,18 @@ export default function SettingsPage({ config }) {
 
   async function saveIntegration(provider, patch = null) {
     const row = integrations.find(item => item.provider === provider);
-    if (!row && !patch) return;
+    if (!row) return;
+    const merged = { ...row, ...(patch || {}) };
     setIntegrationBusy(provider); setError(""); setNotice("");
     try {
       const result = await apiFetch("/api/settings/printing-integrations/" + provider + "/", {
         method: "PATCH",
-        body: patch || {
-          enabled: row.enabled,
-          endpoint_url: row.endpoint_url,
-          sync_direction: row.sync_direction,
+        body: {
+          enabled: merged.enabled,
+          endpoint_url: merged.endpoint_url,
+          sync_direction: merged.sync_direction,
+          auto_sync: merged.auto_sync,
+          sync_interval_minutes: Number(merged.sync_interval_minutes || 15),
         },
       });
       setIntegrations(rows => rows.map(item => item.provider === provider ? result.item : item));
@@ -105,6 +108,34 @@ export default function SettingsPage({ config }) {
           setIntegrations(refreshed.rows || []);
         } catch {}
       }
+      setError(err.message);
+    } finally {
+      setIntegrationBusy("");
+    }
+  }
+
+  async function syncIntegration(provider) {
+    setIntegrationBusy(provider); setError(""); setNotice("");
+    try {
+      const result = await apiFetch("/api/settings/printing-integrations/" + provider + "/sync/", { method: "POST" });
+      setIntegrations(rows => rows.map(item => item.provider === provider ? result.item : item));
+      const details = result.result || {};
+      if (provider === "spoolman") {
+        setNotice(
+          `Spoolman sync complete: ${details.created || 0} added, ${details.updated || 0} updated, ${details.exported || 0} exported.`
+        );
+      } else if (provider === "creality_cfs") {
+        setNotice(
+          `Creality CFS sync complete: ${details.loaded_slots || 0} loaded slot${details.loaded_slots === 1 ? "" : "s"} discovered.`
+        );
+      } else {
+        setNotice(result.item.name + " sync complete.");
+      }
+    } catch (err) {
+      try {
+        const refreshed = await apiFetch("/api/settings/printing-integrations/");
+        setIntegrations(refreshed.rows || []);
+      } catch {}
       setError(err.message);
     } finally {
       setIntegrationBusy("");
