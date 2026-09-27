@@ -22,19 +22,21 @@ def migrate_legacy_revision_files(apps, schema_editor):
                 continue
 
             original_name = Path(file_name).name
-            asset = FileAsset.objects.create(
-                project_id=revision.model.project_id,
-                name=f"{revision.model.name} {revision.version} {label}"[:255],
-                category=category,
-                file=file_name,
-                version=revision.version[:80],
-                description=f"Migrated from legacy ModelRevision.{field_name}",
-                metadata={
-                    "original_name": original_name,
-                    "extension": Path(original_name).suffix.lower(),
-                    "migrated_from": f"ModelRevision.{field_name}",
-                },
-            )
+            asset = FileAsset.objects.filter(file=file_name).first()
+            if asset is None:
+                asset = FileAsset.objects.create(
+                    project_id=revision.model.project_id,
+                    name=f"{revision.model.name} {revision.version} {label}"[:255],
+                    category=category,
+                    file=file_name,
+                    version=revision.version[:80],
+                    description=f"Migrated from legacy ModelRevision.{field_name}",
+                    metadata={
+                        "original_name": original_name,
+                        "extension": Path(original_name).suffix.lower(),
+                        "migrated_from": f"ModelRevision.{field_name}",
+                    },
+                )
             ModelRevisionAsset.objects.get_or_create(
                 revision_id=revision.pk,
                 file_asset_id=asset.pk,
