@@ -2,6 +2,7 @@ from django.core.management.base import BaseCommand
 from django.utils.text import slugify
 
 from core.catalogue_seed import BOARD_DEFINITIONS, CATEGORY_TREE, COMPONENT_DEFINITIONS
+from core.catalogue_profiles import apply_board_profile, apply_component_profile
 from core.models import (
     BoardCompatibility,
     BoardModel,
@@ -35,7 +36,7 @@ class Command(BaseCommand):
         source, _ = CatalogSource.objects.get_or_create(
             name="MakerVault starter catalogue",
             source_type="manual",
-            defaults={"raw_metadata": {"managed_by": "seed_catalogue", "catalogue_version": "0.2.1"}},
+            defaults={"raw_metadata": {"managed_by": "seed_catalogue", "catalogue_version": "0.3.6"}},
         )
         metadata = dict(source.raw_metadata or {})
         metadata.update({"managed_by": "seed_catalogue", "catalogue_version": "0.2.1"})
@@ -45,7 +46,8 @@ class Command(BaseCommand):
         board_created = 0
         board_enriched = 0
         compatibility_created = 0
-        for definition in BOARD_DEFINITIONS:
+        for raw_definition in BOARD_DEFINITIONS:
+            definition = apply_board_profile(raw_definition)
             maker, _ = Manufacturer.objects.get_or_create(name=definition["manufacturer"])
             defaults = {
                 key: value
@@ -112,7 +114,8 @@ class Command(BaseCommand):
 
         component_created = 0
         component_enriched = 0
-        for definition in COMPONENT_DEFINITIONS:
+        for raw_definition in COMPONENT_DEFINITIONS:
+            definition = apply_component_profile(raw_definition)
             maker, _ = Manufacturer.objects.get_or_create(name=definition["manufacturer"])
             category = categories[definition["category"]]
             specs = {
