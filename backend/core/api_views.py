@@ -608,6 +608,14 @@ def _parse_decimal(value, field_name, allow_none=True):
         raise ValidationError({field_name: "Enter a valid number."}) from exc
 
 
+def _catalogue_decimal(value, field_name, decimal_places):
+    parsed = _parse_decimal(value, field_name)
+    if parsed is None:
+        return None
+    quantum = Decimal("1").scaleb(-decimal_places)
+    return parsed.quantize(quantum)
+
+
 def _next_inventory_id(item_type):
     prefix = {
         "board": "MCU",
@@ -2386,6 +2394,13 @@ def _serialise_filament_product(filament):
         "material": filament.material,
         "color_name": filament.color_name,
         "color_hex": filament.color_hex,
+        "color_hexes": filament.color_hexes or [],
+        "transparency": filament.transparency,
+        "transparency_label": filament.get_transparency_display(),
+        "multi_color_direction": filament.multi_color_direction,
+        "finish": filament.finish,
+        "pattern": filament.pattern,
+        "glow": filament.glow,
         "diameter_mm": _float(filament.diameter_mm),
         "density_g_cm3": _float(filament.density_g_cm3),
         "nominal_weight_g": _float(filament.nominal_weight_g),
@@ -2408,7 +2423,7 @@ def _serialise_filament_product(filament):
 @require_http_methods(["GET", "POST"])
 def printing_filaments(request):
     if request.method == "GET":
-        qs = FilamentProduct.objects.select_related("manufacturer").all()
+        qs = FilamentProduct.objects.select_related("manufacturer", "source").all()
         return JsonResponse({"rows": [_serialise_filament_product(item) for item in qs]})
 
     denied = _require_permission(request, "core.add_filamentproduct")
@@ -2560,7 +2575,7 @@ def printing_filament_catalogue_import(request):
             manufacturer=manufacturer,
             name=data["name"],
             material=data["material"],
-            diameter_mm=data["diameter_mm"],
+            diameter_mm=_catalogue_decimal(data["diameter_mm"], "diameter_mm", 2),
             color_hex=data["color_hex"],
         ).first()
 
@@ -2577,10 +2592,10 @@ def printing_filament_catalogue_import(request):
             "finish": data["finish"],
             "pattern": data["pattern"],
             "glow": data["glow"],
-            "diameter_mm": data["diameter_mm"],
-            "density_g_cm3": data["density_g_cm3"],
-            "nominal_weight_g": data["nominal_weight_g"],
-            "empty_spool_weight_g": data["empty_spool_weight_g"],
+            "diameter_mm": _catalogue_decimal(data["diameter_mm"], "diameter_mm", 2),
+            "density_g_cm3": _catalogue_decimal(data["density_g_cm3"], "density_g_cm3", 3),
+            "nominal_weight_g": _catalogue_decimal(data["nominal_weight_g"], "nominal_weight_g", 2),
+            "empty_spool_weight_g": _catalogue_decimal(data["empty_spool_weight_g"], "empty_spool_weight_g", 2),
             "nozzle_temp_min_c": data["nozzle_temp_min_c"],
             "nozzle_temp_max_c": data["nozzle_temp_max_c"],
             "bed_temp_min_c": data["bed_temp_min_c"],
