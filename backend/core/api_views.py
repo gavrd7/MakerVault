@@ -2671,6 +2671,20 @@ def printing_filament_catalogue(request):
 
 
 @login_required
+@require_http_methods(["GET"])
+def printing_filament_catalogue_meta(request):
+    try:
+        data = spoolmandb_meta()
+        data["materials"] = sorted(
+            set(COMMON_FILAMENT_MATERIALS) | set(data.get("materials") or []),
+            key=str.casefold,
+        )
+        return JsonResponse(data)
+    except FilamentCatalogueError as exc:
+        return _error(str(exc), status=502)
+
+
+@login_required
 @require_http_methods(["POST"])
 def printing_filament_catalogue_import(request):
     denied = _require_permission(request, "core.add_filamentproduct")
@@ -2680,7 +2694,9 @@ def printing_filament_catalogue_import(request):
         payload = _read_json(request)
         data = get_spoolmandb_item(payload.get("external_id"))
 
-        manufacturer, _ = Manufacturer.objects.get_or_create(name=data["manufacturer"] or "Generic")
+        manufacturer, _ = FilamentManufacturer.objects.get_or_create(
+            name=data["manufacturer"] or "Generic"
+        )
         source, _ = CatalogSource.objects.update_or_create(
             source_type="spoolmandb",
             external_id=data["external_id"],
@@ -2695,12 +2711,14 @@ def printing_filament_catalogue_import(request):
             },
         )
 
-        existing = FilamentProduct.objects.filter(source=source).first()
+        existing = FilamentProduct.objects.select_related(
+            "filament_manufacturer", "manufacturer", "source"
+        ).filter(source=source).first()
         if existing:
             return JsonResponse({"item": _serialise_filament_product(existing), "created": False})
 
         existing = FilamentProduct.objects.filter(
-            manufacturer=manufacturer,
+            filament_manufacturer=manufacturer,
             name=data["name"],
             material=data["material"],
             diameter_mm=_catalogue_decimal(data["diameter_mm"], "diameter_mm", 2),
@@ -2709,7 +2727,7 @@ def printing_filament_catalogue_import(request):
 
         defaults = {
             "source": source,
-            "manufacturer": manufacturer,
+            "filament_manufacturer": manufacturer,
             "name": data["name"],
             "material": data["material"],
             "color_name": data["color_name"],
@@ -2742,8 +2760,11 @@ def printing_filament_catalogue_import(request):
             if not existing.source:
                 existing.source = source
                 changed = True
+            if not existing.filament_manufacturer_id:
+                existing.filament_manufacturer = manufacturer
+                changed = True
             for field, value in defaults.items():
-                if field in {"source", "manufacturer", "name", "material", "diameter_mm"}:
+                if field in {"source", "filament_manufacturer", "name", "material", "diameter_mm"}:
                     continue
                 current = getattr(existing, field)
                 if current in (None, "", [], {}) and value not in (None, "", [], {}):
@@ -2760,6 +2781,9 @@ def printing_filament_catalogue_import(request):
             item.save()
             created = True
 
+        item = FilamentProduct.objects.select_related(
+            "filament_manufacturer", "manufacturer", "source"
+        ).get(pk=item.pk)
         return JsonResponse({"item": _serialise_filament_product(item), "created": created}, status=201 if created else 200)
     except FilamentCatalogueError as exc:
         return _error(str(exc), status=502)
