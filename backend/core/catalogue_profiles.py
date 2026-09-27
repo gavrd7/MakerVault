@@ -530,7 +530,6 @@ COMPONENT_PART_PROFILES = {
     "HC-SR04": {"function": "Ultrasonic ranging module", "typical_range": "2–400 cm"},
     "HC-SR501": {"function": "PIR motion detector module"},
     "LD2410B": {"function": "24 GHz mmWave presence sensor", "frequency": "24 GHz"},
-    "MFRC522": {"function": "13.56 MHz RFID reader/writer", "frequency": "13.56 MHz"},
 }
 
 
@@ -564,12 +563,14 @@ def _profile_key(definition: dict) -> str:
 
 def apply_board_profile(definition: dict) -> dict:
     enriched = deepcopy(definition)
-    profile_key = _profile_key(enriched)
-    if profile_key:
-        enriched = _merge_missing(enriched, MCU_PROFILES[profile_key])
+    # Exact board facts are more specific than MCU capabilities, so apply them
+    # first. The generic MCU profile only fills fields still missing afterwards.
     key = (enriched.get("manufacturer", ""), enriched.get("name", ""))
     if key in BOARD_PROFILES:
         enriched = _merge_missing(enriched, BOARD_PROFILES[key])
+    profile_key = _profile_key(enriched)
+    if profile_key:
+        enriched = _merge_missing(enriched, MCU_PROFILES[profile_key])
     return enriched
 
 
