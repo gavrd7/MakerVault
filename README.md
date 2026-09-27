@@ -1,4 +1,4 @@
-# MakerVault v0.3.8
+# MakerVault v0.4.0
 
 MakerVault is a self-hosted makerspace inventory and project system for electronics, firmware, fabrication and 3D-printing assets.
 
@@ -21,7 +21,8 @@ v0.3 turns physical inventory into first-class asset records and begins automati
 - richer board technical details including CPU clock/cores, SRAM, ADC/DAC, buses, PWM, pins, voltage and native USB where available
 - manual board/component creation
 - secure ESPBoards.dev URL import with preview and duplicate-aware enrichment
-- existing schema for projects, BOMs, files, repositories, listings, filament/spools, printers, 3D models/revisions and print history
+- full project workspace with status, dates, descriptions, build notes, cover/gallery images, assigned inventory and cost rollups
+- existing schema for BOMs, files, repositories, listings, filament/spools, printers, 3D models/revisions and print history
 - bind-mount or Docker-volume storage selected through .env
 - configurable timezone, language, currency, measurement system, PUID, PGID and umask
 
@@ -327,3 +328,14 @@ Board technical fields now distinguish between three cases:
 Unknown fields are retained in `technical_unresolved_fields`, while `technical_field_status` records the state of each displayed field. This gives future manufacturer/source adapters a concrete backlog to target instead of treating a board as simply enriched or not enriched. Known unsupported capabilities can be marked `not_applicable` and display as `N/A`.
 
 MakerVault does not guess that an absent value means unsupported. A field only becomes N/A when a profile or trusted source explicitly establishes that state.
+
+
+## Project workspace (v0.4.0)
+
+Projects are now first-class MakerVault workspaces rather than placeholder records. Editors can create and update projects with status, dates, summary, description, build notes, tags and an external reference URL. Physical inventory assigned from the Inventory page is automatically shown in the corresponding project workspace, including a simple purchase-cost rollup.
+
+Project media uses the existing authenticated MakerVault media storage. Cover photos and gallery images are sanitised and stored as local WebP files. Gallery images are implemented on the existing FileAsset model so later v0.4.x work can add wiring diagrams, firmware, CAD and documents without creating a parallel storage system.
+
+Catalogue and project images can be opened in MakerVault's image viewer. The viewer supports zoom in/out, mouse-wheel zoom, drag/pan while zoomed, fit/reset, keyboard shortcuts (+, -, 0) and browser fullscreen. This is particularly useful for pinout diagrams, board photography and wiring references.
+
+v0.4.1 will build BOM/inventory allocation on top of this workspace, followed by project files/repositories in v0.4.2.
