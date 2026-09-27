@@ -225,6 +225,12 @@ CELERY_TASK_TIME_LIMIT = 900
 CELERY_TASK_SOFT_TIME_LIMIT = 840
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_ENABLE_UTC = True
+CELERY_BEAT_SCHEDULE = {
+    "catalogue-maintenance-tick": {
+        "task": "core.tasks.catalogue_maintenance_tick",
+        "schedule": 60.0,
+    },
+}
 
 DATA_UPLOAD_MAX_MEMORY_SIZE = int(os.getenv("DATA_UPLOAD_MAX_MEMORY_SIZE", str(1024 * 1024 * 1024)))
 FILE_UPLOAD_MAX_MEMORY_SIZE = int(os.getenv("FILE_UPLOAD_MAX_MEMORY_SIZE", str(10 * 1024 * 1024)))
