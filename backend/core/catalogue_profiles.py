@@ -115,9 +115,9 @@ MCU_PROFILES = {
         },
     },
     "ATmega328P": {
-        "flash_mb": 0.03125,
         "ram_kb": 2,
         "specifications": {
+            "flash_kb": 32,
             "clock_mhz": 16,
             "cpu_cores": 1,
             "operating_voltage": "5 V",
@@ -137,9 +137,9 @@ MCU_PROFILES = {
         },
     },
     "ATmega32U4": {
-        "flash_mb": 0.03125,
         "ram_kb": 2.5,
         "specifications": {
+            "flash_kb": 32,
             "clock_mhz": 16,
             "cpu_cores": 1,
             "operating_voltage": "5 V",
@@ -149,9 +149,9 @@ MCU_PROFILES = {
         },
     },
     "ATmega4809": {
-        "flash_mb": 0.046875,
         "ram_kb": 6,
         "specifications": {
+            "flash_kb": 48,
             "clock_mhz": 20,
             "cpu_cores": 1,
             "operating_voltage": "5 V",
@@ -399,7 +399,6 @@ BOARD_PROFILES = {
         },
     },
     ("Arduino", "Nano"): {
-        "flash_mb": 0.03125,
         "ram_kb": 2,
         "gpio_count": 22,
         "dimensions_mm": {"length": 45, "width": 18},
@@ -414,7 +413,6 @@ BOARD_PROFILES = {
         },
     },
     ("Arduino", "Leonardo"): {
-        "flash_mb": 0.03125,
         "ram_kb": 2.5,
         "gpio_count": 20,
         "dimensions_mm": {"length": 68.6, "width": 53.3},
@@ -429,7 +427,6 @@ BOARD_PROFILES = {
         },
     },
     ("Arduino", "Micro"): {
-        "flash_mb": 0.03125,
         "ram_kb": 2.5,
         "gpio_count": 20,
         "dimensions_mm": {"length": 48, "width": 18},
