@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { apiFetch } from "../api";
-import { Badge, LoadingBlock } from "./Common";
+import { Badge, LoadingBlock, Modal } from "./Common";
 
 function formatWhen(value) {
   if (!value) return "Not yet";
@@ -18,6 +18,8 @@ export default function SettingsPage({ config }) {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [reviewState, setReviewState] = useState(null);
+  const [reviewBusy, setReviewBusy] = useState("");
 
   async function load() {
     setError("");
@@ -122,7 +124,7 @@ export default function SettingsPage({ config }) {
       const details = result.result || {};
       if (provider === "spoolman") {
         setNotice(
-          `Spoolman sync complete: ${details.created || 0} added, ${details.linked_existing || 0} matched to existing, ${details.updated || 0} updated, ${details.exported || 0} exported.`
+          `Spoolman sync complete: ${details.created || 0} added, ${details.updated || 0} linked records refreshed, ${details.pending_review || 0} awaiting review, ${details.exported || 0} exported.`
         );
       } else if (provider === "creality_cfs") {
         setNotice(
@@ -139,6 +141,47 @@ export default function SettingsPage({ config }) {
       setError(err.message);
     } finally {
       setIntegrationBusy("");
+    }
+  }
+
+  async function openIntegrationReviews(provider) {
+    setError(""); setNotice("");
+    try {
+      const [reviews, spools, filaments] = await Promise.all([
+        apiFetch("/api/settings/printing-integrations/" + provider + "/reviews/"),
+        apiFetch("/api/printing/spools/"),
+        apiFetch("/api/printing/filaments/"),
+      ]);
+      setReviewState({
+        provider,
+        rows: reviews.rows || [],
+        spools: spools.rows || [],
+        filaments: filaments.rows || [],
+      });
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function resolveIntegrationReview(externalId, body) {
+    if (!reviewState) return;
+    setReviewBusy(externalId); setError(""); setNotice("");
+    try {
+      const provider = reviewState.provider;
+      const result = await apiFetch(
+        "/api/settings/printing-integrations/" + provider + "/reviews/" + encodeURIComponent(externalId) + "/",
+        { method: "POST", body }
+      );
+      setIntegrations(rows => rows.map(item => item.provider === provider ? result.item : item));
+      const refreshed = await apiFetch("/api/settings/printing-integrations/" + provider + "/reviews/");
+      setReviewState(current => current ? { ...current, rows: refreshed.rows || [] } : current);
+      const action = result.result?.action || "resolved";
+      const code = result.result?.spool_code ? " · " + result.result.spool_code : "";
+      setNotice("Import review " + action + code + ".");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setReviewBusy("");
     }
   }
 
@@ -234,6 +277,11 @@ export default function SettingsPage({ config }) {
               <label><span>Server URL</span><input value={item.endpoint_url || ""} onChange={e => updateIntegrationLocal(item.provider, "endpoint_url", e.target.value)} placeholder="http://spoolman.local:7912" /></label>
               <label><span>Sync direction</span><select value={item.sync_direction} onChange={e => updateIntegrationLocal(item.provider, "sync_direction", e.target.value)}><option value="import">External → MakerVault</option><option value="export">MakerVault → external</option><option value="bidirectional">Bidirectional</option></select></label>
               <small>{item.linked_spools || 0} Spoolman link{item.linked_spools === 1 ? "" : "s"} mapped in MakerVault.</small>
+              <div className="settingsCallout integrationAuthorityCallout">
+                <strong>MakerVault is authoritative</strong>
+                <p>Existing MakerVault filament identity, placement, notes and status are not silently replaced by Spoolman. Missing Spoolman location names are added to the location catalogue; only genuinely new imports inherit their remote location.</p>
+              </div>
+              {item.pending_review_count > 0 && <button className="integrationReviewButton" type="button" onClick={() => openIntegrationReviews(item.provider)}>Review {item.pending_review_count} possible duplicate{item.pending_review_count === 1 ? "" : "s"}</button>}
             </>}
 
             {item.provider === "creality_cfs" && <>
@@ -276,5 +324,84 @@ export default function SettingsPage({ config }) {
       <p>The scheduler does not blindly redownload the whole catalogue every day. It re-checks supported online board sources and retries records still missing images on the saved cadence. Existing local images are skipped, confidence/licence rules remain enforced, and populated/user-edited specification values are not overwritten.</p>
       <p>Restarting or rebuilding the MakerVault container does not reset the interval. The schedule is stored in the database and resumes from the saved next-run time.</p>
     </section>
+    {reviewState && <IntegrationReviewModal
+      state={reviewState}
+      busyId={reviewBusy}
+      onClose={() => setReviewState(null)}
+      onResolve={resolveIntegrationReview}
+    />}
   </div>;
+}
+
+
+function IntegrationReviewModal({ state, busyId, onClose, onResolve }) {
+  return <Modal
+    title="Review integration imports"
+    subtitle="MakerVault pauses ambiguous imports instead of creating or overwriting inventory automatically."
+    onClose={onClose}
+    wide
+  >
+    <div className="integrationReviewList">
+      {!state.rows.length && <div className="printingEmptyInline">There are no imports waiting for review.</div>}
+      {state.rows.map(review => <IntegrationReviewRow
+        key={review.external_id}
+        review={review}
+        spools={state.spools}
+        filaments={state.filaments}
+        busy={busyId === review.external_id}
+        onResolve={body => onResolve(review.external_id, body)}
+      />)}
+    </div>
+  </Modal>;
+}
+
+
+function IntegrationReviewRow({ review, spools, filaments, busy, onResolve }) {
+  const suggestedFilament = review.filament_candidates?.[0]?.id || "";
+  const [filamentChoice, setFilamentChoice] = useState(suggestedFilament || "__detected__");
+  const [spoolChoice, setSpoolChoice] = useState(review.spool_candidates?.[0]?.id || "");
+  const remote = review.remote || {};
+
+  return <article className="integrationReviewCard">
+    <div className="integrationReviewHead">
+      <div>
+        <span className="settingsEyebrow">Spoolman #{review.external_id}</span>
+        <h3>{[remote.vendor, remote.name].filter(Boolean).join(" · ") || remote.material || "Unknown spool"}</h3>
+        <p>{[remote.material, remote.color_hex, remote.remaining_weight_g != null ? remote.remaining_weight_g + " g remaining" : "", remote.location].filter(Boolean).join(" · ")}</p>
+      </div>
+      <Badge tone="accent">{review.reason === "ambiguous_filament" ? "Filament needs review" : "Possible duplicate"}</Badge>
+    </div>
+
+    {!!review.spool_candidates?.length && <div className="integrationCandidateList">
+      <strong>Likely MakerVault spool matches</strong>
+      {review.spool_candidates.map(candidate => <div className="integrationCandidateRow" key={candidate.id}>
+        <div><strong>{candidate.spool_id} · {candidate.filament}</strong><small>{candidate.score}% match{candidate.location ? " · " + candidate.location : ""}</small></div>
+        <button type="button" disabled={busy} onClick={() => onResolve({ action: "link", spool_id: candidate.id })}>Link this spool</button>
+      </div>)}
+    </div>}
+
+    <div className="integrationReviewChoices">
+      <label>Link a different MakerVault spool<select value={spoolChoice} onChange={e => setSpoolChoice(e.target.value)}>
+        <option value="">Choose spool…</option>
+        {spools.filter(spool => !(spool.external_links || []).some(link => link.provider === "spoolman")).map(spool => <option key={spool.id} value={spool.id}>{spool.spool_id} · {spool.filament}</option>)}
+      </select></label>
+      <button type="button" disabled={busy || !spoolChoice} onClick={() => onResolve({ action: "link", spool_id: spoolChoice })}>Link selected spool</button>
+    </div>
+
+    <div className="integrationReviewChoices">
+      <label>Import as a new spool using<select value={filamentChoice} onChange={e => setFilamentChoice(e.target.value)}>
+        <option value="__detected__">Create filament from detected Spoolman data</option>
+        {filaments.map(filament => <option key={filament.id} value={filament.id}>{filament.display_name} · {filament.material}</option>)}
+      </select></label>
+      <button className="primary" type="button" disabled={busy} onClick={() => onResolve({
+        action: "create",
+        filament_id: filamentChoice === "__detected__" ? "" : filamentChoice,
+      })}>Import as new spool</button>
+    </div>
+
+    <div className="integrationReviewFooter">
+      <small>Ignoring keeps this Spoolman record out of future automatic import attempts until the integration configuration is reset.</small>
+      <button type="button" disabled={busy} onClick={() => onResolve({ action: "ignore" })}>{busy ? "Working…" : "Ignore remote spool"}</button>
+    </div>
+  </article>;
 }
