@@ -89,6 +89,9 @@ Planned scope:
 - Creality CFS discovery for supported printers: query local printer/CFS state to show which filament is currently loaded in each slot, including material, colour, remaining amount and RFID identity when exposed by the printer.
 - Allow discovered CFS slots/RFID identities to be matched to MakerVault spool records and, where configured, to corresponding Spoolman/SimplyPrint records.
 - Treat Creality CFS integration as capability-detected and read-only first; do not depend on undocumented write/control behaviour or RFID programming for the core workflow.
+- Design printer filament discovery around a generic multi-material-system adapter interface so additional ecosystems can be added without changing MakerVault's native spool model.
+- Reserve future adapters for Bambu Lab AMS/AMS Lite/AMS 2 Pro and comparable multi-material systems from manufacturers such as Elegoo, QIDI, Snapmaker and others where a reliable local or documented interface is available.
+- Prefer documented/local APIs where available; community/reverse-engineered protocols may be supported behind clearly marked experimental adapters and must fail safely when firmware/protocols change.
 - Print history linking a model revision, printer and consumed spool(s), including quantity, duration, outcome and notes.
 - Surface model/print information naturally inside Projects and the global Files library rather than creating isolated silos.
 - Preserve MakerVault permissions, authenticated file delivery and existing file-extension/security rules.
