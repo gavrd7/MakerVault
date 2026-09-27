@@ -1,7 +1,10 @@
+from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
+
+from core.filament_catalogue import normalise_spoolmandb_row
 
 from core.models import (
     ExternalSpoolLink,
@@ -17,6 +20,116 @@ from core.models import (
     PrintMaterialUsage,
     Spool,
 )
+
+
+class FilamentCatalogueTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_superuser(
+            username="catalogue-admin",
+            email="catalogue@example.com",
+            password="test-password",
+        )
+        self.client.force_login(self.user)
+
+    def sample_catalogue_item(self):
+        return {
+            "external_id": "example_pla_rainbow_1000_175_p",
+            "manufacturer": "Example",
+            "name": "Rainbow PLA",
+            "material": "PLA",
+            "density_g_cm3": 1.24,
+            "diameter_mm": 1.75,
+            "nominal_weight_g": 1000,
+            "empty_spool_weight_g": 220,
+            "spool_type": "plastic",
+            "color_name": "",
+            "color_hex": "#ff0000",
+            "color_hexes": ["#ff0000", "#00ff0080", "#0000ff"],
+            "transparency": "transparent",
+            "multi_color_direction": "longitudinal",
+            "finish": "glossy",
+            "pattern": "",
+            "glow": False,
+            "nozzle_temp_min_c": 200,
+            "nozzle_temp_max_c": 220,
+            "bed_temp_min_c": 50,
+            "bed_temp_max_c": 60,
+            "source_name": "SpoolmanDB",
+            "source_url": "https://donkie.github.io/SpoolmanDB/",
+            "source_license": "MIT",
+            "raw": {"id": "example_pla_rainbow_1000_175_p"},
+        }
+
+    def test_spoolmandb_normaliser_preserves_multicolour_and_alpha(self):
+        item = normalise_spoolmandb_row({
+            "id": "example_pla_rainbow_1000_175_p",
+            "manufacturer": "Example",
+            "name": "Rainbow PLA",
+            "material": "PLA",
+            "density": 1.24,
+            "weight": 1000,
+            "spool_weight": 220,
+            "spool_type": "plastic",
+            "diameter": 1.75,
+            "color_hexes": ["FF0000", "00FF0080", "0000FF"],
+            "multi_color_direction": "longitudinal",
+            "extruder_temp_range": [200, 220],
+            "bed_temp_range": [50, 60],
+        })
+        self.assertIsNotNone(item)
+        self.assertEqual(item["color_hex"], "#ff0000")
+        self.assertEqual(item["color_hexes"], ["#ff0000", "#00ff0080", "#0000ff"])
+        self.assertEqual(item["transparency"], "transparent")
+        self.assertEqual(item["multi_color_direction"], "longitudinal")
+        self.assertEqual(item["nozzle_temp_min_c"], 200)
+        self.assertEqual(item["nozzle_temp_max_c"], 220)
+
+    @patch("core.api_views.search_spoolmandb")
+    def test_catalogue_search_api_returns_source_and_rows(self, search_mock):
+        sample = self.sample_catalogue_item()
+        search_mock.return_value = {
+            "rows": [sample],
+            "total": 1,
+            "offset": 0,
+            "limit": 50,
+            "source": {"name": "SpoolmanDB", "url": sample["source_url"], "license": "MIT"},
+        }
+        response = self.client.get("/api/printing/catalogue/filaments/?q=rainbow")
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["total"], 1)
+        self.assertEqual(payload["rows"][0]["external_id"], sample["external_id"])
+        self.assertEqual(payload["source"]["license"], "MIT")
+
+    @patch("core.api_views.get_spoolmandb_item")
+    def test_catalogue_import_creates_native_filament_with_provenance(self, item_mock):
+        sample = self.sample_catalogue_item()
+        item_mock.return_value = sample
+        response = self.client.post(
+            "/api/printing/catalogue/filaments/import/",
+            data={"external_id": sample["external_id"]},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        payload = response.json()
+        self.assertTrue(payload["created"])
+        filament = FilamentProduct.objects.get(pk=payload["item"]["id"])
+        self.assertEqual(filament.manufacturer.name, "Example")
+        self.assertEqual(filament.source.source_type, "spoolmandb")
+        self.assertEqual(filament.source.external_id, sample["external_id"])
+        self.assertEqual(filament.color_hexes, sample["color_hexes"])
+        self.assertEqual(filament.transparency, "transparent")
+        self.assertEqual(filament.multi_color_direction, "longitudinal")
+        self.assertEqual(filament.profile_data["source_license"], "MIT")
+
+        second = self.client.post(
+            "/api/printing/catalogue/filaments/import/",
+            data={"external_id": sample["external_id"]},
+            content_type="application/json",
+        )
+        self.assertEqual(second.status_code, 200, second.content)
+        self.assertFalse(second.json()["created"])
+        self.assertEqual(FilamentProduct.objects.filter(source__external_id=sample["external_id"]).count(), 1)
 
 
 class PrintingFoundationTests(TestCase):
