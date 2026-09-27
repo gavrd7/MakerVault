@@ -2126,7 +2126,7 @@ def _serialise_printing_file_link(link):
             "category": asset.category,
             "category_label": asset.get_category_display(),
             "filename": Path(asset.file.name).name if asset.file else "",
-            "url": f"/media/{asset.id}/",
+            "url": _file_url(asset.file),
             "project_id": str(asset.project_id) if asset.project_id else None,
             "project": asset.project.name if asset.project else "",
         },
