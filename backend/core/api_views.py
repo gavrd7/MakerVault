@@ -870,35 +870,147 @@ def component_image(request, component_id):
 
 
 @login_required
-@require_http_methods(["GET"])
+@require_http_methods(["GET", "POST"])
 def files_lookup(request):
-    qs = FileAsset.objects.exclude(category="image").select_related(
-        "project", "board__manufacturer", "component__manufacturer"
-    )
-    query = request.GET.get("q", "").strip()
-    category = request.GET.get("category", "").strip()
-    project_id = request.GET.get("project", "").strip()
-    if query:
-        qs = qs.filter(
-            Q(name__icontains=query)
-            | Q(description__icontains=query)
-            | Q(version__icontains=query)
-            | Q(project__name__icontains=query)
+    if request.method == "GET":
+        qs = FileAsset.objects.exclude(category="image").select_related(
+            "project", "board__manufacturer", "component__manufacturer"
         )
-    if category:
-        if category not in dict(FileAsset.CATEGORIES) or category == "image":
-            return _error("Unknown file category.")
-        qs = qs.filter(category=category)
+        query = request.GET.get("q", "").strip()
+        category = request.GET.get("category", "").strip()
+        project_id = request.GET.get("project", "").strip()
+        if query:
+            qs = qs.filter(
+                Q(name__icontains=query)
+                | Q(description__icontains=query)
+                | Q(version__icontains=query)
+                | Q(project__name__icontains=query)
+            )
+        if category:
+            if category not in dict(FileAsset.CATEGORIES) or category == "image":
+                return _error("Unknown file category.")
+            qs = qs.filter(category=category)
+        if project_id == "__standalone__":
+            qs = qs.filter(project__isnull=True)
+        elif project_id:
+            qs = qs.filter(project_id=project_id)
+        return JsonResponse({
+            "rows": [_serialise_file_asset(asset) for asset in qs.order_by("category", "-updated_at")[:5000]],
+            "categories": [
+                {"value": value, "label": label}
+                for value, label in FileAsset.CATEGORIES
+                if value != "image"
+            ],
+        })
+
+    denied = _require_permission(request, "core.add_fileasset")
+    if denied:
+        return denied
+    uploaded = request.FILES.get("file")
+    if not uploaded:
+        return _error("Choose a file to upload.")
+
+    category = str(request.POST.get("category") or "other").strip()
+    if category == "image" or category not in dict(FileAsset.CATEGORIES):
+        return _error("Unknown file category.")
+
+    project = None
+    project_id = str(request.POST.get("project_id") or "").strip()
     if project_id:
-        qs = qs.filter(project_id=project_id)
-    return JsonResponse({
-        "rows": [_serialise_file_asset(asset) for asset in qs.order_by("category", "-updated_at")[:5000]],
-        "categories": [
-            {"value": value, "label": label}
-            for value, label in FileAsset.CATEGORIES
-            if value != "image"
-        ],
-    })
+        project = Project.objects.filter(pk=project_id).first()
+        if not project:
+            return _error("Selected project was not found.")
+        project_denied = _require_permission(request, "core.change_project")
+        if project_denied:
+            return project_denied
+
+    original_name = Path(uploaded.name or "file").name
+    try:
+        checksum = _sha256_upload(uploaded)
+        asset = FileAsset(
+            project=project,
+            category=category,
+            name=str(request.POST.get("name") or original_name).strip()[:255],
+            version=str(request.POST.get("version") or "").strip()[:80],
+            description=str(request.POST.get("description") or "").strip(),
+            sha256=checksum,
+            metadata={
+                "original_name": original_name,
+                "size_bytes": getattr(uploaded, "size", 0) or 0,
+                "extension": Path(original_name).suffix.lower(),
+                "uploaded_from": "files",
+            },
+        )
+        asset.file = uploaded
+        asset.full_clean()
+        asset.save()
+        if project:
+            project.save(update_fields=["updated_at"])
+        return JsonResponse({"file": _serialise_file_asset(asset)}, status=201)
+    except ValidationError as exc:
+        return _validation_response(exc)
+
+
+@login_required
+@require_http_methods(["PATCH", "DELETE"])
+def file_detail(request, asset_id):
+    asset = FileAsset.objects.select_related("project").filter(pk=asset_id).exclude(category="image").first()
+    if not asset:
+        return _error("File not found.", status=404)
+    denied = _require_permission(request, "core.change_fileasset")
+    if denied:
+        return denied
+    if asset.project:
+        project_denied = _require_permission(request, "core.change_project")
+        if project_denied:
+            return project_denied
+
+    previous_project = asset.project
+    if request.method == "DELETE":
+        if asset.file:
+            try:
+                asset.file.delete(save=False)
+            except OSError:
+                pass
+        asset.delete()
+        if previous_project:
+            previous_project.save(update_fields=["updated_at"])
+        return JsonResponse({"deleted": True})
+
+    try:
+        payload = _read_json(request)
+        if "name" in payload:
+            asset.name = str(payload.get("name") or "").strip()[:255]
+        if "version" in payload:
+            asset.version = str(payload.get("version") or "").strip()[:80]
+        if "description" in payload:
+            asset.description = str(payload.get("description") or "").strip()
+        if "category" in payload:
+            category = str(payload.get("category") or "other").strip()
+            if category == "image" or category not in dict(FileAsset.CATEGORIES):
+                return _error("Unknown file category.")
+            asset.category = category
+        if "project_id" in payload:
+            project_id = str(payload.get("project_id") or "").strip()
+            if project_id:
+                new_project = Project.objects.filter(pk=project_id).first()
+                if not new_project:
+                    return _error("Selected project was not found.")
+                project_denied = _require_permission(request, "core.change_project")
+                if project_denied:
+                    return project_denied
+                asset.project = new_project
+            else:
+                asset.project = None
+        asset.full_clean()
+        asset.save()
+        if previous_project:
+            previous_project.save(update_fields=["updated_at"])
+        if asset.project and asset.project_id != getattr(previous_project, "id", None):
+            asset.project.save(update_fields=["updated_at"])
+        return JsonResponse({"file": _serialise_file_asset(asset)})
+    except ValidationError as exc:
+        return _validation_response(exc)
 
 
 @login_required
@@ -1497,6 +1609,8 @@ def public_config(request):
             "add_project": request.user.has_perm("core.add_project"),
             "change_project": request.user.has_perm("core.change_project"),
             "delete_project": request.user.has_perm("core.delete_project"),
+            "add_file": request.user.has_perm("core.add_fileasset"),
+            "change_file": request.user.has_perm("core.change_fileasset"),
         },
         "importers": ["ESPBoards.dev"],
     })
