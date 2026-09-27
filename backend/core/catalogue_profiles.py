@@ -10,6 +10,15 @@ from copy import deepcopy
 
 
 MCU_PROFILES = {
+    "ESP8266": {
+        "specifications": {
+            "clock_mhz": 80,
+            "cpu_cores": 1,
+            "operating_voltage": "3.3 V",
+            "wifi_standard": "802.11 b/g/n",
+            "reference_provider": "Espressif",
+        },
+    },
     "ESP32": {
         "ram_kb": 520,
         "specifications": {
@@ -176,6 +185,137 @@ MCU_PROFILES = {
 
 
 BOARD_PROFILES = {
+    ("Generic", "ESP32 C3 Super Mini"): {
+        "flash_mb": 4,
+        "ram_kb": 400,
+        "gpio_count": 13,
+        "dimensions_mm": {"length": 22.5, "width": 18},
+        "specifications": {
+            "adc_channels": 6,
+            "uart_count": 2,
+            "i2c_count": 1,
+            "spi_count": 1,
+            "pwm_channels": 6,
+            "pin_count": 16,
+            "reference_provider": "ESPBoards.dev",
+            "reference_url": "https://www.espboards.dev/esp32/esp32-c3-super-mini/",
+        },
+    },
+    ("Generic", "ESP32-S3 Super Mini"): {
+        "flash_mb": 4,
+        "gpio_count": 32,
+        "dimensions_mm": {"length": 22.52, "width": 18},
+        "specifications": {
+            "adc_channels": 16,
+            "uart_count": 3,
+            "i2c_count": 2,
+            "spi_count": 2,
+            "pwm_channels": 8,
+            "pin_count": 37,
+            "reference_provider": "ESPBoards.dev",
+            "reference_url": "https://www.espboards.dev/esp32/esp32-s3-super-mini/",
+        },
+    },
+    ("Generic", "ESP32-C6 Super Mini"): {
+        "flash_mb": 4,
+        "gpio_count": 20,
+        "dimensions_mm": {"length": 22.5, "width": 18},
+        "specifications": {
+            "adc_channels": 7,
+            "uart_count": 2,
+            "i2c_count": 1,
+            "spi_count": 1,
+            "pwm_channels": 6,
+            "pin_count": 25,
+            "reference_provider": "ESPBoards.dev",
+            "reference_url": "https://www.espboards.dev/esp32/esp32-c6-super-mini/",
+        },
+    },
+    ("Seeed Studio", "XIAO ESP32C3"): {
+        "flash_mb": 4,
+        "ram_kb": 400,
+        "gpio_count": 11,
+        "dimensions_mm": {"length": 21, "width": 17.8},
+        "specifications": {
+            "adc_channels": 4,
+            "uart_count": 2,
+            "i2c_count": 1,
+            "spi_count": 1,
+            "pwm_channels": 6,
+            "pin_count": 14,
+            "input_voltage": "5 V USB-C / 3.7 V LiPo",
+            "reference_provider": "ESPBoards.dev / Seeed Studio",
+            "reference_url": "https://www.espboards.dev/esp32/xiao-esp32c3/",
+        },
+    },
+    ("Seeed Studio", "XIAO ESP32C6"): {
+        "flash_mb": 4,
+        "ram_kb": 512,
+        "gpio_count": 11,
+        "dimensions_mm": {"length": 21, "width": 17.8},
+        "specifications": {
+            "adc_channels": 3,
+            "uart_count": 2,
+            "i2c_count": 1,
+            "spi_count": 1,
+            "pwm_channels": 6,
+            "pin_count": 14,
+            "input_voltage": "5 V USB-C / 3.7 V LiPo",
+            "reference_provider": "ESPBoards.dev / Seeed Studio",
+            "reference_url": "https://www.espboards.dev/esp32/xiao-esp32c6/",
+        },
+    },
+    ("Seeed Studio", "XIAO ESP32S3"): {
+        "flash_mb": 8,
+        "psram_mb": 8,
+        "ram_kb": 512,
+        "gpio_count": 11,
+        "dimensions_mm": {"length": 21, "width": 17.8},
+        "specifications": {
+            "adc_channels": 9,
+            "uart_count": 3,
+            "i2c_count": 2,
+            "spi_count": 2,
+            "pwm_channels": 8,
+            "pin_count": 14,
+            "input_voltage": "5 V USB-C / 3.7 V LiPo",
+            "reference_provider": "ESPBoards.dev / Seeed Studio",
+            "reference_url": "https://www.espboards.dev/esp32/xiao-esp32s3/",
+        },
+    },
+    ("Waveshare", "ESP32-S3-Zero"): {
+        "flash_mb": 4,
+        "psram_mb": 2,
+        "ram_kb": 512,
+        "gpio_count": 24,
+        "dimensions_mm": {"length": 23.5, "width": 18},
+        "specifications": {
+            "adc_channels": 18,
+            "uart_count": 3,
+            "i2c_count": 2,
+            "spi_count": 2,
+            "pwm_channels": 8,
+            "pin_count": 27,
+            "reference_provider": "ESPBoards.dev / Waveshare",
+            "reference_url": "https://www.espboards.dev/esp32/esp32-s3-zero/",
+        },
+    },
+    ("Waveshare", "ESP32-C6-Zero"): {
+        "flash_mb": 4,
+        "ram_kb": 512,
+        "gpio_count": 20,
+        "dimensions_mm": {"length": 23.5, "width": 18},
+        "specifications": {
+            "adc_channels": 7,
+            "uart_count": 2,
+            "i2c_count": 1,
+            "spi_count": 1,
+            "pwm_channels": 6,
+            "pin_count": 25,
+            "reference_provider": "ESPBoards.dev / Waveshare",
+            "reference_url": "https://www.espboards.dev/esp32/esp32-c6-zero-mini/",
+        },
+    },
     ("Raspberry Pi", "Raspberry Pi Pico"): {
         "flash_mb": 2,
         "gpio_count": 26,
@@ -258,7 +398,54 @@ BOARD_PROFILES = {
             "reference_url": "https://docs.arduino.cc/hardware/nano-every/",
         },
     },
+    ("Arduino", "Nano"): {
+        "flash_mb": 0.03125,
+        "ram_kb": 2,
+        "gpio_count": 22,
+        "dimensions_mm": {"length": 45, "width": 18},
+        "specifications": {
+            "adc_channels": 8,
+            "pwm_channels": 6,
+            "uart_count": 1,
+            "spi_count": 1,
+            "i2c_count": 1,
+            "reference_provider": "Arduino",
+            "reference_url": "https://docs.arduino.cc/hardware/nano/",
+        },
+    },
+    ("Arduino", "Leonardo"): {
+        "flash_mb": 0.03125,
+        "ram_kb": 2.5,
+        "gpio_count": 20,
+        "dimensions_mm": {"length": 68.6, "width": 53.3},
+        "specifications": {
+            "adc_channels": 12,
+            "pwm_channels": 7,
+            "uart_count": 1,
+            "spi_count": 1,
+            "i2c_count": 1,
+            "reference_provider": "Arduino",
+            "reference_url": "https://docs.arduino.cc/retired/boards/arduino-leonardo/",
+        },
+    },
+    ("Arduino", "Micro"): {
+        "flash_mb": 0.03125,
+        "ram_kb": 2.5,
+        "gpio_count": 20,
+        "dimensions_mm": {"length": 48, "width": 18},
+        "specifications": {
+            "adc_channels": 12,
+            "pwm_channels": 7,
+            "uart_count": 1,
+            "spi_count": 1,
+            "i2c_count": 1,
+            "reference_provider": "Arduino",
+            "reference_url": "https://docs.arduino.cc/retired/boards/arduino-micro/",
+        },
+    },
     ("Arduino", "Uno R4 Minima"): {
+        "flash_mb": 0.25,
+        "ram_kb": 32,
         "gpio_count": 14,
         "specifications": {
             "adc_channels": 6,
@@ -271,6 +458,8 @@ BOARD_PROFILES = {
         },
     },
     ("Arduino", "Uno R4 WiFi"): {
+        "flash_mb": 0.25,
+        "ram_kb": 32,
         "gpio_count": 14,
         "specifications": {
             "adc_channels": 6,
@@ -359,11 +548,25 @@ def _merge_missing(target: dict, incoming: dict) -> dict:
     return out
 
 
+def _profile_key(definition: dict) -> str:
+    family = str(definition.get("family") or "").strip()
+    mcu = str(definition.get("mcu") or "").strip()
+    for candidate in (family, mcu):
+        if candidate in MCU_PROFILES:
+            return candidate
+    for candidate in (family, mcu):
+        upper = candidate.upper()
+        for key in sorted(MCU_PROFILES, key=len, reverse=True):
+            if key.upper() in upper:
+                return key
+    return ""
+
+
 def apply_board_profile(definition: dict) -> dict:
     enriched = deepcopy(definition)
-    mcu = str(enriched.get("mcu") or "").strip()
-    if mcu in MCU_PROFILES:
-        enriched = _merge_missing(enriched, MCU_PROFILES[mcu])
+    profile_key = _profile_key(enriched)
+    if profile_key:
+        enriched = _merge_missing(enriched, MCU_PROFILES[profile_key])
     key = (enriched.get("manufacturer", ""), enriched.get("name", ""))
     if key in BOARD_PROFILES:
         enriched = _merge_missing(enriched, BOARD_PROFILES[key])
