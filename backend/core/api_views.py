@@ -3326,6 +3326,153 @@ def printing_spools(request):
 
 
 @login_required
+@require_http_methods(["POST"])
+def printing_slot_add_to_inventory(request, slot_id):
+    """Turn an unmatched provider-discovered printer slot into native MakerVault inventory."""
+    denied = _require_permission(request, "core.add_spool")
+    if denied:
+        return denied
+
+    slot = PrinterFilamentSlot.objects.select_related(
+        "printer",
+        "spool__filament",
+    ).filter(pk=slot_id).first()
+    if not slot:
+        return _error("Discovered filament slot not found.", status=404)
+    if not slot.is_loaded:
+        return _error("That filament slot is no longer loaded.", status=409)
+    if slot.spool_id:
+        return _error(
+            f"That slot is already linked to {slot.spool.spool_id}.",
+            status=409,
+        )
+
+    try:
+        payload = _read_json(request)
+        created_filament = False
+
+        with transaction.atomic():
+            filament = None
+            if payload.get("filament_id"):
+                filament = FilamentProduct.objects.filter(pk=payload.get("filament_id")).first()
+                if not filament:
+                    return _error("Selected filament product was not found.")
+            else:
+                denied = _require_permission(request, "core.add_filamentproduct")
+                if denied:
+                    return denied
+
+                filament_payload = payload.get("new_filament")
+                if not isinstance(filament_payload, dict):
+                    return _error("Choose an existing filament or provide the detected filament details.")
+
+                manufacturer = _resolve_filament_manufacturer(filament_payload)
+                name = str(
+                    filament_payload.get("name")
+                    or (slot.metadata or {}).get("product_name")
+                    or slot.material
+                    or "Detected filament"
+                ).strip()
+                material = str(
+                    filament_payload.get("material")
+                    or slot.material
+                    or ""
+                ).strip()
+                if not material:
+                    return _error("Material is required for a new filament product.")
+
+                filament = FilamentProduct(
+                    filament_manufacturer=manufacturer,
+                    name=name,
+                    material=material,
+                    color_name=str(filament_payload.get("color_name") or "").strip(),
+                    color_hex=str(
+                        filament_payload.get("color_hex")
+                        or slot.color_hex
+                        or ""
+                    ).strip(),
+                    transparency=str(filament_payload.get("transparency") or "opaque").strip(),
+                    diameter_mm=_parse_decimal(
+                        filament_payload.get("diameter_mm", "1.75"),
+                        "diameter_mm",
+                        allow_none=False,
+                    ),
+                    nominal_weight_g=_parse_decimal(
+                        filament_payload.get("nominal_weight_g"),
+                        "nominal_weight_g",
+                    ),
+                    profile_data={
+                        "discovered_from": {
+                            "system": slot.system,
+                            "system_label": slot.get_system_display(),
+                            "printer_id": str(slot.printer_id),
+                            "printer": slot.printer.name,
+                            "external_ref": slot.external_ref,
+                            "rfid_uid": slot.rfid_uid,
+                            "vendor": (slot.metadata or {}).get("vendor", ""),
+                            "product_name": (slot.metadata or {}).get("product_name", ""),
+                        }
+                    },
+                )
+                filament.full_clean()
+                filament.save()
+                created_filament = True
+
+            initial_weight = _parse_decimal(payload.get("initial_weight_g"), "initial_weight_g")
+            remaining_weight = _parse_decimal(payload.get("remaining_weight_g"), "remaining_weight_g")
+            if remaining_weight is None and initial_weight is not None:
+                detected_percent = (slot.metadata or {}).get("remaining_percent")
+                try:
+                    percent = Decimal(str(detected_percent)) if detected_percent is not None else None
+                except (InvalidOperation, TypeError, ValueError):
+                    percent = None
+                if percent is not None and Decimal("0") <= percent <= Decimal("100"):
+                    remaining_weight = (
+                        initial_weight * percent / Decimal("100")
+                    ).quantize(Decimal("0.01"))
+
+            spool = Spool(
+                spool_id=next_spool_id(),
+                filament=filament,
+                initial_weight_g=initial_weight,
+                remaining_weight_g=remaining_weight,
+                purchase_cost=_parse_decimal(payload.get("purchase_cost"), "purchase_cost"),
+                currency=str(payload.get("currency") or settings.MAKERVAULT_CURRENCY).upper()[:3],
+                assigned_printer=slot.printer,
+                status=str(payload.get("status") or "open"),
+                opened_on=_parse_date(payload.get("opened_on"), "opened_on"),
+                notes=str(payload.get("notes") or "").strip(),
+            )
+            spool.full_clean()
+            spool.save()
+
+            slot.spool = spool
+            if remaining_weight is not None:
+                slot.remaining_weight_g = remaining_weight
+            slot.save(update_fields=["spool", "remaining_weight_g", "updated_at"])
+
+        spool = Spool.objects.select_related(
+            "filament__manufacturer",
+            "filament__filament_manufacturer",
+            "storage_location",
+            "assigned_printer",
+        ).prefetch_related("external_links", "printer_slots__printer").get(pk=spool.pk)
+        slot = PrinterFilamentSlot.objects.select_related(
+            "printer",
+            "spool__filament",
+        ).get(pk=slot.pk)
+        return JsonResponse({
+            "item": _serialise_spool(spool),
+            "slot": _serialise_printer_slot(slot),
+            "created_filament": created_filament,
+        }, status=201)
+    except ValidationError as exc:
+        return _validation_response(exc)
+    except IntegrityError:
+        return _error("MakerVault could not create the detected spool; please retry.")
+
+
+@login_required
 @require_http_methods(["PATCH", "DELETE"])
 def printing_spool_detail(request, spool_id):
     item = Spool.objects.select_related(
