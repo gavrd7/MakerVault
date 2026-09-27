@@ -28,7 +28,7 @@
 - Added project permissions to the SPA configuration for role-aware controls.
 - Added a reusable image viewer/lightbox with zoom, pan, fit/reset and browser fullscreen.
 - Board catalogue images now open directly in the image viewer; project cover/gallery images use the same viewer.
-- Prepared the project workspace for v0.4.1 BOM/inventory allocation and v0.4.2 file/repository workflows.
+- Prepared the project workspace for follow-on catalogue maintenance, project file/repository workflows, and BOM/inventory allocation.
 
 
 ## v0.3.8
