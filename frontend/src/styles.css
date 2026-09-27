@@ -4,7 +4,7 @@
 
 .aboutStack{display:grid;gap:18px;max-width:1200px}.legalHero{padding:28px}.legalHero h2{font-size:30px;margin:8px 0}.legalHero>p{color:#aab5c4;line-height:1.6;max-width:820px}.legalActions{display:flex;gap:10px;flex-wrap:wrap;margin:20px 0 12px}.legalFine{font-size:12px!important;color:#758195!important}.attributionCount{color:#8e9aac;font-size:13px}.licenceWarning{margin:16px 20px 0;padding:12px 14px;border:1px solid #735f2f;background:#2b2412;color:#ead393;border-radius:10px}.attributionGroups{padding:0 20px 20px}.attributionGroup{margin-top:20px}.attributionGroup h4{display:flex;gap:8px;align-items:center;margin:0 0 8px}.attributionGroup h4 span{font-size:11px;color:#8995a7;background:#18202a;border-radius:999px;padding:3px 7px}.attributionTable{border:1px solid #29313c;border-radius:12px;overflow:hidden}.attributionRow{display:grid;grid-template-columns:minmax(240px,2fr) minmax(190px,1.4fr) 90px;gap:14px;align-items:center;padding:11px 13px;border-bottom:1px solid #29313c}.attributionRow:last-child{border-bottom:0}.attributionRow strong,.attributionRow span,.attributionRow small{display:block}.attributionRow small{color:#778397;margin-top:3px}.attributionRow a{color:#a99bff}.legalPolicy{padding:22px}.legalPolicy h3{margin-top:0}.legalPolicy p{color:#9aa6b7;line-height:1.6}@media(max-width:700px){.attributionRow{grid-template-columns:1fr}.legalActions{display:grid}.legalActions>*{text-align:center}}
 
-.inventoryDetailPane{align-content:start}
+.inventoryDetailPane{align-content:start;gap:0}
 .inventoryDetailPane>*{flex-shrink:0}
 .inventoryDetailPane .boardImage-large{
   width:100%;
