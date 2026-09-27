@@ -79,4 +79,4 @@ class Migration(migrations.Migration):
             model_name="modelrevisionasset",
             constraint=models.UniqueConstraint(fields=("revision", "file_asset"), name="unique_revision_file_asset"),
         ),
-    ]]
+    ]
