@@ -2969,7 +2969,12 @@ def printing_printer_detail(request, printer_id):
 @require_http_methods(["GET", "POST"])
 def printing_spools(request):
     if request.method == "GET":
-        qs = Spool.objects.select_related("filament__manufacturer").prefetch_related(
+        qs = Spool.objects.select_related(
+            "filament__manufacturer",
+            "filament__filament_manufacturer",
+            "storage_location",
+            "assigned_printer",
+        ).prefetch_related(
             "external_links", "printer_slots__printer"
         )
         return JsonResponse({"rows": [_serialise_spool(item) for item in qs]})
@@ -2982,6 +2987,18 @@ def printing_spools(request):
         filament = FilamentProduct.objects.filter(pk=payload.get("filament_id")).first()
         if not filament:
             return _error("Choose a filament product.")
+
+        storage_location = _resolve_printing_location(
+            payload.get("storage_location_id"), "storage_location_id"
+        )
+        assigned_printer = None
+        if payload.get("assigned_printer_id"):
+            assigned_printer = Printer.objects.filter(pk=payload.get("assigned_printer_id")).first()
+            if not assigned_printer:
+                return _error("Selected printer was not found.")
+        if storage_location and assigned_printer:
+            return _error("Choose either a storage location or a printer.")
+
         item = Spool(
             spool_id=str(payload.get("spool_id") or "").strip(),
             filament=filament,
@@ -2989,13 +3006,21 @@ def printing_spools(request):
             remaining_weight_g=_parse_decimal(payload.get("remaining_weight_g"), "remaining_weight_g"),
             purchase_cost=_parse_decimal(payload.get("purchase_cost"), "purchase_cost"),
             currency=str(payload.get("currency") or settings.MAKERVAULT_CURRENCY).upper()[:3],
-            location=str(payload.get("location") or "").strip(),
+            storage_location=storage_location,
+            assigned_printer=assigned_printer,
+            location=str(payload.get("location") or "").strip() if not (storage_location or assigned_printer) else "",
             status=str(payload.get("status") or "sealed"),
             opened_on=_parse_date(payload.get("opened_on"), "opened_on"),
             notes=str(payload.get("notes") or "").strip(),
         )
         item.full_clean()
         item.save()
+        item = Spool.objects.select_related(
+            "filament__manufacturer",
+            "filament__filament_manufacturer",
+            "storage_location",
+            "assigned_printer",
+        ).prefetch_related("external_links", "printer_slots__printer").get(pk=item.pk)
         return JsonResponse({"item": _serialise_spool(item)}, status=201)
     except ValidationError as exc:
         return _validation_response(exc)
@@ -3006,7 +3031,12 @@ def printing_spools(request):
 @login_required
 @require_http_methods(["PATCH", "DELETE"])
 def printing_spool_detail(request, spool_id):
-    item = Spool.objects.select_related("filament__manufacturer").prefetch_related(
+    item = Spool.objects.select_related(
+        "filament__manufacturer",
+        "filament__filament_manufacturer",
+        "storage_location",
+        "assigned_printer",
+    ).prefetch_related(
         "external_links", "printer_slots__printer"
     ).filter(pk=spool_id).first()
     if not item:
@@ -3031,10 +3061,27 @@ def printing_spool_detail(request, spool_id):
             if not filament:
                 return _error("Choose a filament product.")
             item.filament = filament
-        for field in ["spool_id", "status", "location", "currency", "notes"]:
+        if "storage_location_id" in payload:
+            item.storage_location = _resolve_printing_location(
+                payload.get("storage_location_id"), "storage_location_id"
+            )
+            if item.storage_location:
+                item.assigned_printer = None
+                item.location = ""
+        if "assigned_printer_id" in payload:
+            printer_id = payload.get("assigned_printer_id")
+            item.assigned_printer = Printer.objects.filter(pk=printer_id).first() if printer_id else None
+            if printer_id and not item.assigned_printer:
+                return _error("Selected printer was not found.")
+            if item.assigned_printer:
+                item.storage_location = None
+                item.location = ""
+        for field in ["spool_id", "status", "currency", "notes"]:
             if field in payload:
                 value = str(payload.get(field) or "").strip()
                 setattr(item, field, value.upper()[:3] if field == "currency" else value)
+        if "location" in payload and not item.storage_location_id and not item.assigned_printer_id:
+            item.location = str(payload.get("location") or "").strip()
         for field in ["initial_weight_g", "remaining_weight_g", "purchase_cost"]:
             if field in payload:
                 setattr(item, field, _parse_decimal(payload.get(field), field))
