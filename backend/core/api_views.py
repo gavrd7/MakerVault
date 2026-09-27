@@ -2850,6 +2850,199 @@ def printing_revision_asset_detail(request, model_id, revision_id, link_id):
     return JsonResponse({"deleted": True})
 
 
+def _parse_positive_int(value, field_name, *, allow_none=True):
+    if value in (None, "") and allow_none:
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValidationError({field_name: "Enter a whole number."}) from exc
+    if parsed <= 0:
+        raise ValidationError({field_name: "Enter a number greater than zero."})
+    return parsed
+
+
+def _build_print_material_usage(job, printer, payload):
+    spool = None
+    filament = None
+    slot = None
+
+    if payload.get("spool_id"):
+        spool = Spool.objects.select_related("filament").filter(pk=payload["spool_id"]).first()
+        if not spool:
+            raise ValidationError({"material_usages": "Selected spool was not found."})
+        filament = spool.filament
+
+    if payload.get("filament_id"):
+        requested_filament = FilamentProduct.objects.filter(pk=payload["filament_id"]).first()
+        if not requested_filament:
+            raise ValidationError({"material_usages": "Selected filament was not found."})
+        if spool and spool.filament_id != requested_filament.id:
+            raise ValidationError({"material_usages": "Selected filament does not match the selected spool."})
+        filament = requested_filament
+
+    if payload.get("printer_slot_id"):
+        slot = PrinterFilamentSlot.objects.select_related("spool__filament").filter(
+            pk=payload["printer_slot_id"],
+            printer=printer,
+        ).first()
+        if not slot:
+            raise ValidationError({"material_usages": "Selected filament slot does not belong to this printer."})
+        if not spool and slot.spool_id:
+            spool = slot.spool
+            filament = slot.spool.filament
+        elif spool and slot.spool_id and slot.spool_id != spool.id:
+            raise ValidationError({"material_usages": "Selected spool does not match the spool currently mapped to that slot."})
+
+    if not spool and not filament:
+        raise ValidationError({"material_usages": "Choose a spool, filament, or mapped printer slot for each material usage."})
+
+    usage = PrintMaterialUsage(
+        print_job=job,
+        spool=spool,
+        filament=filament,
+        printer_slot=slot,
+        used_g=_parse_decimal(payload.get("used_g", 0), "used_g", allow_none=False),
+        waste_g=_parse_decimal(payload.get("waste_g", 0), "waste_g", allow_none=False),
+        material_cost=_parse_decimal(payload.get("material_cost"), "material_cost"),
+        currency=str(payload.get("currency") or settings.MAKERVAULT_CURRENCY).upper()[:3],
+        notes=str(payload.get("notes") or "").strip(),
+    )
+    usage.full_clean()
+    return usage
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def printing_jobs(request):
+    if request.method == "GET":
+        qs = PrintJob.objects.select_related(
+            "printer", "project", "model_revision__model"
+        ).prefetch_related(
+            "material_usages__spool__filament__manufacturer",
+            "material_usages__filament__manufacturer",
+            "material_usages__printer_slot",
+        )
+        return JsonResponse({"rows": [_serialise_print_job(job) for job in qs[:2000]]})
+
+    denied = _require_permission(request, "core.add_printjob")
+    if denied:
+        return denied
+
+    try:
+        payload = _read_json(request)
+        printer = Printer.objects.filter(pk=payload.get("printer_id")).first()
+        if not printer:
+            return _error("Choose a printer.")
+
+        project = None
+        if payload.get("project_id"):
+            project = Project.objects.filter(pk=payload["project_id"]).first()
+            if not project:
+                return _error("Selected project was not found.")
+
+        revision = None
+        if payload.get("model_revision_id"):
+            revision = ModelRevision.objects.select_related("model").filter(pk=payload["model_revision_id"]).first()
+            if not revision:
+                return _error("Selected model revision was not found.")
+            if project and revision.model.project_id and revision.model.project_id != project.id:
+                return _error("Selected model revision belongs to a different project.")
+            if not project and revision.model.project_id:
+                project = revision.model.project
+
+        status = str(payload.get("status") or "planned")
+        if status not in dict(PrintJob.STATUS):
+            return _error("Unknown print status.")
+
+        material_payloads = payload.get("material_usages") or []
+        if not isinstance(material_payloads, list):
+            return _error("Material usages must be a list.")
+
+        with transaction.atomic():
+            job = PrintJob(
+                model_revision=revision,
+                project=project,
+                printer=printer,
+                status=status,
+                quantity=_parse_positive_int(payload.get("quantity", 1), "quantity", allow_none=False),
+                currency=str(payload.get("currency") or settings.MAKERVAULT_CURRENCY).upper()[:3],
+                estimated_minutes=_parse_positive_int(payload.get("estimated_minutes"), "estimated_minutes"),
+                actual_minutes=_parse_positive_int(payload.get("actual_minutes"), "actual_minutes"),
+                layer_height_mm=_parse_decimal(payload.get("layer_height_mm"), "layer_height_mm"),
+                nozzle_mm=_parse_decimal(payload.get("nozzle_mm"), "nozzle_mm"),
+                slicer=str(payload.get("slicer") or "").strip(),
+                settings=payload.get("settings") if isinstance(payload.get("settings"), dict) else {},
+                notes=str(payload.get("notes") or "").strip(),
+            )
+            job.full_clean()
+            job.save()
+
+            for material_payload in material_payloads:
+                if not isinstance(material_payload, dict):
+                    raise ValidationError({"material_usages": "Each material usage must be an object."})
+                _build_print_material_usage(job, printer, material_payload).save()
+
+        job = PrintJob.objects.select_related(
+            "printer", "project", "model_revision__model"
+        ).prefetch_related(
+            "material_usages__spool__filament__manufacturer",
+            "material_usages__filament__manufacturer",
+            "material_usages__printer_slot",
+        ).get(pk=job.pk)
+        return JsonResponse({"job": _serialise_print_job(job)}, status=201)
+    except ValidationError as exc:
+        return _validation_response(exc)
+
+
+@login_required
+@require_http_methods(["PATCH", "DELETE"])
+def printing_job_detail(request, job_id):
+    job = PrintJob.objects.select_related(
+        "printer", "project", "model_revision__model"
+    ).prefetch_related(
+        "material_usages__spool__filament__manufacturer",
+        "material_usages__filament__manufacturer",
+        "material_usages__printer_slot",
+    ).filter(pk=job_id).first()
+    if not job:
+        return _error("Print job not found.", status=404)
+
+    if request.method == "DELETE":
+        denied = _require_permission(request, "core.delete_printjob")
+        if denied:
+            return denied
+        job.delete()
+        return JsonResponse({"deleted": True})
+
+    denied = _require_permission(request, "core.change_printjob")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        if "status" in payload:
+            status = str(payload.get("status") or "")
+            if status not in dict(PrintJob.STATUS):
+                return _error("Unknown print status.")
+            job.status = status
+        if "quantity" in payload:
+            job.quantity = _parse_positive_int(payload.get("quantity"), "quantity", allow_none=False)
+        for field in ["estimated_minutes", "actual_minutes"]:
+            if field in payload:
+                setattr(job, field, _parse_positive_int(payload.get(field), field))
+        for field in ["layer_height_mm", "nozzle_mm"]:
+            if field in payload:
+                setattr(job, field, _parse_decimal(payload.get(field), field))
+        for field in ["slicer", "notes"]:
+            if field in payload:
+                setattr(job, field, str(payload.get(field) or "").strip())
+        job.full_clean()
+        job.save()
+        return JsonResponse({"job": _serialise_print_job(job)})
+    except ValidationError as exc:
+        return _validation_response(exc)
+
+
 @login_required
 @require_http_methods(["GET"])
 def public_config(request):
@@ -2886,6 +3079,8 @@ def public_config(request):
             "change_spool": request.user.has_perm("core.change_spool"),
             "add_model3d": request.user.has_perm("core.add_model3d"),
             "change_model3d": request.user.has_perm("core.change_model3d"),
+            "add_printjob": request.user.has_perm("core.add_printjob"),
+            "change_printjob": request.user.has_perm("core.change_printjob"),
         },
         "importers": ["ESPBoards.dev"],
     })
