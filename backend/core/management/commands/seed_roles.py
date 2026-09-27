@@ -10,5 +10,7 @@ class Command(BaseCommand):
         editor, _ = Group.objects.get_or_create(name="Editor")
         core_permissions = Permission.objects.filter(content_type__app_label="core")
         viewer.permissions.set(core_permissions.filter(codename__startswith="view_"))
-        editor.permissions.set(core_permissions.filter(codename__regex=r"^(view|add|change)_"))
+        editor_permissions = core_permissions.filter(codename__regex=r"^(view|add|change)_")
+        delete_inventory = core_permissions.filter(codename="delete_inventoryitem")
+        editor.permissions.set(editor_permissions | delete_inventory)
         self.stdout.write(self.style.SUCCESS("MakerVault roles are ready: Viewer, Editor."))
