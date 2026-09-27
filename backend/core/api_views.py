@@ -1158,12 +1158,19 @@ def file_detail(request, asset_id):
 
     previous_project = asset.project
     if request.method == "DELETE":
-        if asset.file:
+        stored_file = asset.file
+        try:
+            asset.delete()
+        except ProtectedError:
+            return _error(
+                "This file is attached to a 3D model revision. Detach it from the model before deleting it.",
+                status=409,
+            )
+        if stored_file:
             try:
-                asset.file.delete(save=False)
+                stored_file.delete(save=False)
             except OSError:
                 pass
-        asset.delete()
         if previous_project:
             previous_project.save(update_fields=["updated_at"])
         return JsonResponse({"deleted": True})
