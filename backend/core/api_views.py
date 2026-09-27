@@ -1359,7 +1359,7 @@ def project_bom_item_detail(request, project_id, bom_id):
 
     with transaction.atomic():
         item = BOMItem.objects.select_for_update().select_related(
-            "board__manufacturer", "component__manufacturer", "project"
+            "project"
         ).filter(pk=bom_id, project=project).first()
         if not item:
             return _error("BOM item not found.", status=404)
@@ -1435,13 +1435,11 @@ def project_bom_allocations(request, project_id, bom_id):
 
         with transaction.atomic():
             bom_item = BOMItem.objects.select_for_update().select_related(
-                "project", "board", "component"
+                "project"
             ).filter(pk=bom_id, project=project).first()
             if not bom_item:
                 return _error("BOM item not found.", status=404)
-            inventory = InventoryItem.objects.select_for_update().select_related(
-                "board", "component", "project"
-            ).filter(pk=inventory_id).first()
+            inventory = InventoryItem.objects.select_for_update().filter(pk=inventory_id).first()
             if not inventory:
                 return _error("Inventory item not found.", status=404)
             if BOMAllocation.objects.filter(bom_item=bom_item, inventory_item=inventory).exists():
@@ -1480,8 +1478,7 @@ def project_bom_allocation_detail(request, project_id, bom_id, allocation_id):
     try:
         with transaction.atomic():
             allocation = BOMAllocation.objects.select_for_update().select_related(
-                "bom_item__project", "bom_item__board", "bom_item__component",
-                "inventory_item__board", "inventory_item__component", "inventory_item__project",
+                "bom_item", "bom_item__project", "inventory_item",
             ).filter(
                 pk=allocation_id,
                 bom_item_id=bom_id,
