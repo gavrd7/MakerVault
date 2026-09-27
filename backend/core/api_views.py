@@ -9,7 +9,8 @@ from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Q
+from django.db.models import Q, Sum
+from django.db.models.deletion import ProtectedError
 from django.http import JsonResponse
 from django.utils import timezone
 from django.utils.text import slugify
@@ -27,6 +28,8 @@ from .tasks import queue_catalogue_maintenance_now
 from .models import (
     BoardCompatibility,
     BoardModel,
+    BOMAllocation,
+    BOMItem,
     CatalogSource,
     CatalogueMaintenanceSettings,
     ComponentCategory,
@@ -167,6 +170,13 @@ def _serialise_component(component):
     }
 
 
+def _inventory_allocated_quantity(item):
+    allocated = getattr(item, "allocated_quantity", None)
+    if allocated is None:
+        allocated = item.bom_allocations.aggregate(total=Sum("quantity"))["total"]
+    return allocated or Decimal("0")
+
+
 def _serialise_inventory(item):
     image_url = ""
     if item.image:
@@ -178,6 +188,8 @@ def _serialise_inventory(item):
         image_url = _image_url(item.board)
     if not image_url and item.component:
         image_url = _image_url(item.component)
+    allocated = _inventory_allocated_quantity(item)
+    available = max((item.quantity or Decimal("0")) - allocated, Decimal("0"))
     return {
         "id": str(item.id),
         "inventory_id": item.inventory_id,
@@ -188,6 +200,8 @@ def _serialise_inventory(item):
         "board_id": str(item.board_id) if item.board_id else "",
         "component_id": str(item.component_id) if item.component_id else "",
         "quantity": _float(item.quantity),
+        "allocated_quantity": _float(allocated),
+        "available_quantity": _float(available),
         "status": item.status,
         "status_label": item.get_status_display(),
         "project_id": str(item.project_id) if item.project_id else "",
@@ -297,6 +311,121 @@ def _record_inventory_history(item, user, before=None, *, created=False):
         changed_by=user,
     )
 
+
+
+def _record_bom_allocation_history(allocation, user, event_type, *, previous_quantity=None):
+    inventory = allocation.inventory_item
+    bom_item = allocation.bom_item
+    if event_type == "bom_released":
+        summary = f"Released {allocation.quantity} from BOM: {bom_item.display_name}"
+    elif previous_quantity is not None:
+        summary = f"Changed BOM allocation for {bom_item.display_name}: {previous_quantity} → {allocation.quantity}"
+    else:
+        summary = f"Allocated {allocation.quantity} to BOM: {bom_item.display_name}"
+    InventoryHistory.objects.create(
+        inventory_item=inventory,
+        event_type=event_type,
+        summary=summary[:500],
+        changes={
+            "bom_item_id": bom_item.pk,
+            "bom_item": bom_item.display_name,
+            "quantity": str(allocation.quantity),
+            "previous_quantity": str(previous_quantity) if previous_quantity is not None else "",
+        },
+        project=bom_item.project,
+        changed_by=user,
+    )
+
+
+def _serialise_bom_allocation(allocation):
+    inventory = allocation.inventory_item
+    return {
+        "id": allocation.pk,
+        "inventory_item_id": str(inventory.pk),
+        "inventory_id": inventory.inventory_id,
+        "inventory_name": inventory.display_name,
+        "quantity": _float(allocation.quantity),
+        "inventory_total_quantity": _float(inventory.quantity),
+        "inventory_available_quantity": _float(_inventory_allocated_quantity(inventory) and max(
+            (inventory.quantity or Decimal("0")) - _inventory_allocated_quantity(inventory),
+            Decimal("0"),
+        ) or (inventory.quantity or Decimal("0"))),
+        "status": inventory.status,
+        "status_label": inventory.get_status_display(),
+        "location": inventory.location,
+        "notes": allocation.notes,
+        "allocated_by": allocation.allocated_by.get_username() if allocation.allocated_by else "",
+        "created_at": allocation.created_at.isoformat(),
+        "updated_at": allocation.updated_at.isoformat(),
+    }
+
+
+def _serialise_bom_item(item):
+    allocations = list(item.allocations.select_related(
+        "inventory_item__board__manufacturer",
+        "inventory_item__component__manufacturer",
+        "allocated_by",
+    ).all())
+    allocated = sum((allocation.quantity for allocation in allocations), Decimal("0"))
+    required = item.quantity or Decimal("0")
+    remaining = max(required - allocated, Decimal("0"))
+    if allocated <= 0:
+        allocation_status = "unallocated"
+    elif remaining > 0:
+        allocation_status = "partial"
+    else:
+        allocation_status = "complete"
+    estimated_cost = (
+        item.unit_cost * required
+        if item.unit_cost is not None else None
+    )
+    source_type = "board" if item.board_id else "component" if item.component_id else "custom"
+    return {
+        "id": item.pk,
+        "name": item.display_name,
+        "custom_name": item.custom_name,
+        "source_type": source_type,
+        "board_id": str(item.board_id) if item.board_id else "",
+        "board": str(item.board) if item.board else "",
+        "component_id": str(item.component_id) if item.component_id else "",
+        "component": str(item.component) if item.component else "",
+        "quantity": _float(required),
+        "unit": item.unit,
+        "unit_cost": _float(item.unit_cost),
+        "estimated_cost": _float(estimated_cost),
+        "currency": item.currency,
+        "notes": item.notes,
+        "allocated_quantity": _float(allocated),
+        "remaining_quantity": _float(remaining),
+        "allocation_status": allocation_status,
+        "allocations": [_serialise_bom_allocation(allocation) for allocation in allocations],
+        "created_at": item.created_at.isoformat(),
+        "updated_at": item.updated_at.isoformat(),
+    }
+
+
+def _project_bom(project):
+    items = list(project.bom_items.select_related(
+        "board__manufacturer", "component__manufacturer"
+    ).prefetch_related(
+        "allocations__inventory_item__board__manufacturer",
+        "allocations__inventory_item__component__manufacturer",
+        "allocations__allocated_by",
+    ).all())
+    rows = [_serialise_bom_item(item) for item in items]
+    complete = sum(1 for item in rows if item["allocation_status"] == "complete")
+    costs = [item for item in rows if item["estimated_cost"] is not None]
+    currencies = {item["currency"] for item in costs}
+    estimated_cost = sum((Decimal(str(item["estimated_cost"])) for item in costs), Decimal("0")) if len(currencies) <= 1 else None
+    return rows, {
+        "line_count": len(rows),
+        "complete_lines": complete,
+        "partial_lines": sum(1 for item in rows if item["allocation_status"] == "partial"),
+        "unallocated_lines": sum(1 for item in rows if item["allocation_status"] == "unallocated"),
+        "estimated_cost": _float(estimated_cost),
+        "currency": next(iter(currencies), settings.MAKERVAULT_CURRENCY),
+        "mixed_currency": len(currencies) > 1,
+    }
 
 
 def _file_url(field):
