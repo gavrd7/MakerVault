@@ -93,7 +93,11 @@ def _spoolman_get_spools(endpoint_url: str) -> tuple[str, list[dict]]:
     return root, payload
 
 
-def _spoolman_filament(remote: dict) -> FilamentProduct:
+def _normalise_match_text(value) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", str(value or "").casefold()).strip()
+
+
+def _spoolman_snapshot(remote: dict) -> dict:
     filament_data = remote.get("filament") or {}
     if not isinstance(filament_data, dict):
         filament_data = {}
@@ -101,95 +105,209 @@ def _spoolman_filament(remote: dict) -> FilamentProduct:
     if not isinstance(vendor_data, dict):
         vendor_data = {}
 
-    remote_filament_id = str(filament_data.get("id") or "")
-    maker_name = str(vendor_data.get("name") or "Generic").strip()[:200] or "Generic"
-    maker, _ = FilamentManufacturer.objects.get_or_create(name=maker_name)
+    remaining = _as_decimal(remote.get("remaining_weight"))
+    initial = _as_decimal(remote.get("initial_weight"))
+    if initial is None:
+        initial = _as_decimal(filament_data.get("weight"))
 
-    existing = None
-    if remote_filament_id:
-        existing = FilamentProduct.objects.filter(
-            profile_data__spoolman__filament_id=remote_filament_id
-        ).first()
-
-    name = str(filament_data.get("name") or filament_data.get("material") or "Spoolman filament").strip()[:255]
-    material = str(filament_data.get("material") or "Unknown").strip()[:80]
-    color_hex = _normalise_hex(filament_data.get("color_hex"))
-
-    if existing is None:
-        existing = FilamentProduct.objects.filter(
-            filament_manufacturer=maker,
-            name=name,
-            material=material,
-            color_hex=color_hex,
-        ).first()
-
-    if existing is None:
-        candidates = FilamentProduct.objects.filter(
-            filament_manufacturer=maker,
-            material__iexact=material,
-        )
-        if color_hex:
-            candidates = candidates.filter(color_hex__iexact=color_hex)
-        candidate_ids = list(candidates.values_list("pk", flat=True)[:2])
-        if len(candidate_ids) == 1:
-            existing = FilamentProduct.objects.get(pk=candidate_ids[0])
-
-    profile = {
-        "spoolman": {
-            "filament_id": remote_filament_id,
-            "vendor_id": str(vendor_data.get("id") or ""),
-        }
-    }
-
-    if existing is None:
-        existing = FilamentProduct(
-            filament_manufacturer=maker,
-            name=name,
-            material=material,
-            color_name=str(filament_data.get("name") or "").strip()[:120],
-            color_hex=color_hex,
-            diameter_mm=_as_decimal(filament_data.get("diameter")) or Decimal("1.75"),
-            density_g_cm3=_as_decimal(filament_data.get("density")),
-            nominal_weight_g=_as_decimal(filament_data.get("weight")),
-            empty_spool_weight_g=_as_decimal(filament_data.get("spool_weight")),
-            nozzle_temp_min_c=filament_data.get("settings_extruder_temp") or None,
-            bed_temp_min_c=filament_data.get("settings_bed_temp") or None,
-            profile_data=profile,
-        )
-        existing.full_clean()
-        existing.save()
-        return existing
-
-    changed = False
-    if not existing.filament_manufacturer_id:
-        existing.filament_manufacturer = maker
-        changed = True
-    merged_profile = {**(existing.profile_data or {}), **profile}
-    if merged_profile != existing.profile_data:
-        existing.profile_data = merged_profile
-        changed = True
-    for field, value in {
+    return {
+        "external_id": str(remote.get("id") or "").strip(),
+        "filament_external_id": str(filament_data.get("id") or "").strip(),
+        "vendor_external_id": str(vendor_data.get("id") or "").strip(),
+        "vendor": str(vendor_data.get("name") or "").strip()[:200],
+        "name": str(filament_data.get("name") or filament_data.get("material") or "Spoolman filament").strip()[:255],
+        "material": str(filament_data.get("material") or "Unknown").strip()[:80],
+        "color_hex": _normalise_hex(filament_data.get("color_hex")),
+        "diameter_mm": _as_decimal(filament_data.get("diameter")) or Decimal("1.75"),
         "density_g_cm3": _as_decimal(filament_data.get("density")),
         "nominal_weight_g": _as_decimal(filament_data.get("weight")),
         "empty_spool_weight_g": _as_decimal(filament_data.get("spool_weight")),
-    }.items():
-        if getattr(existing, field) is None and value is not None:
-            setattr(existing, field, value)
-            changed = True
-    if changed:
-        existing.save()
-    return existing
+        "nozzle_temp_c": filament_data.get("settings_extruder_temp") or None,
+        "bed_temp_c": filament_data.get("settings_bed_temp") or None,
+        "initial_weight_g": initial,
+        "remaining_weight_g": remaining,
+        "purchase_cost": _as_decimal(remote.get("price")),
+        "location": str(remote.get("location") or "").strip()[:200],
+        "comment": str(remote.get("comment") or "").strip(),
+        "archived": bool(remote.get("archived")),
+        "status": "retired" if bool(remote.get("archived")) else (
+            "empty" if remaining is not None and remaining <= 0 else "open"
+        ),
+    }
+
+
+def _decimal_near(left, right, tolerance=Decimal("0.08")) -> bool:
+    left = _as_decimal(left)
+    right = _as_decimal(right)
+    if left is None or right is None:
+        return False
+    scale = max(abs(left), abs(right), Decimal("1"))
+    return abs(left - right) / scale <= tolerance
+
+
+def _spoolman_filament_score(snapshot: dict, filament: FilamentProduct) -> int:
+    maker = filament.filament_manufacturer or filament.manufacturer
+    score = 0
+    remote_material = _normalise_match_text(snapshot.get("material"))
+    local_material = _normalise_match_text(filament.material)
+    if remote_material and local_material == remote_material:
+        score += 30
+
+    remote_vendor = _normalise_match_text(snapshot.get("vendor"))
+    local_vendor = _normalise_match_text(maker.name if maker else "")
+    if remote_vendor and local_vendor == remote_vendor:
+        score += 25
+
+    remote_name = _normalise_match_text(snapshot.get("name"))
+    local_name = _normalise_match_text(filament.name)
+    if remote_name and local_name:
+        if remote_name == local_name:
+            score += 25
+        elif remote_name in local_name or local_name in remote_name:
+            score += 15
+
+    remote_color = str(snapshot.get("color_hex") or "").casefold()
+    local_color = str(filament.color_hex or "").casefold()
+    if remote_color and local_color and remote_color == local_color:
+        score += 15
+
+    if _decimal_near(snapshot.get("diameter_mm"), filament.diameter_mm, Decimal("0.01")):
+        score += 5
+    return score
+
+
+def _rank_spoolman_filaments(snapshot: dict) -> list[tuple[int, FilamentProduct]]:
+    rows = []
+    for filament in FilamentProduct.objects.select_related(
+        "filament_manufacturer", "manufacturer"
+    ).all():
+        score = _spoolman_filament_score(snapshot, filament)
+        if score >= 45:
+            rows.append((score, filament))
+    rows.sort(key=lambda item: (-item[0], str(item[1])))
+    return rows[:8]
+
+
+def _create_filament_from_spoolman(snapshot: dict) -> FilamentProduct:
+    maker_name = snapshot.get("vendor") or "Generic"
+    maker, _ = FilamentManufacturer.objects.get_or_create(name=maker_name)
+    profile = {
+        "spoolman": {
+            "filament_id": snapshot.get("filament_external_id", ""),
+            "vendor_id": snapshot.get("vendor_external_id", ""),
+        },
+        "import_policy": "created_after_duplicate_check",
+    }
+    filament = FilamentProduct(
+        filament_manufacturer=maker,
+        name=snapshot.get("name") or snapshot.get("material") or "Spoolman filament",
+        material=snapshot.get("material") or "Unknown",
+        color_hex=snapshot.get("color_hex") or "",
+        diameter_mm=snapshot.get("diameter_mm") or Decimal("1.75"),
+        density_g_cm3=snapshot.get("density_g_cm3"),
+        nominal_weight_g=snapshot.get("nominal_weight_g"),
+        empty_spool_weight_g=snapshot.get("empty_spool_weight_g"),
+        nozzle_temp_min_c=snapshot.get("nozzle_temp_c"),
+        bed_temp_min_c=snapshot.get("bed_temp_c"),
+        profile_data=profile,
+    )
+    filament.full_clean()
+    filament.save()
+    return filament
 
 
 def _spoolman_location(name: str):
     value = str(name or "").strip()[:200]
     if not value:
         return None
-    location, _ = PrintingLocation.objects.get_or_create(
+    location, created = PrintingLocation.objects.get_or_create(
         name=value,
-        defaults={"kind": "storage"},
+        defaults={
+            "kind": "storage",
+            "notes": "Location discovered from Spoolman. MakerVault remains authoritative for spool placement.",
+        },
     )
     return location
+
+
+def _rank_spoolman_spools(snapshot: dict) -> list[dict]:
+    rows = []
+    qs = Spool.objects.select_related(
+        "filament__filament_manufacturer",
+        "filament__manufacturer",
+        "storage_location",
+        "assigned_printer",
+    ).exclude(external_links__provider="spoolman")
+    for spool in qs:
+        score = _spoolman_filament_score(snapshot, spool.filament)
+        if _decimal_near(snapshot.get("initial_weight_g"), spool.initial_weight_g):
+            score += 8
+        if _decimal_near(snapshot.get("remaining_weight_g"), spool.remaining_weight_g):
+            score += 8
+
+        remote_location = _normalise_match_text(snapshot.get("location"))
+        local_location = _normalise_match_text(
+            spool.assigned_printer.name if spool.assigned_printer_id
+            else spool.storage_location.name if spool.storage_location_id
+            else spool.location
+        )
+        if remote_location and local_location and remote_location == local_location:
+            score += 4
+
+        if score >= 70:
+            rows.append({
+                "score": score,
+                "spool": spool,
+            })
+    rows.sort(key=lambda item: (-item["score"], item["spool"].spool_id))
+    return rows[:8]
+
+
+def _spoolman_review_payload(remote: dict, snapshot: dict, filament_matches, spool_matches, reason: str) -> dict:
+    return {
+        "provider": "spoolman",
+        "external_id": snapshot.get("external_id", ""),
+        "reason": reason,
+        "detected_at": timezone.now().isoformat(),
+        "remote": {
+            "vendor": snapshot.get("vendor", ""),
+            "name": snapshot.get("name", ""),
+            "material": snapshot.get("material", ""),
+            "color_hex": snapshot.get("color_hex", ""),
+            "diameter_mm": float(snapshot["diameter_mm"]) if snapshot.get("diameter_mm") is not None else None,
+            "initial_weight_g": float(snapshot["initial_weight_g"]) if snapshot.get("initial_weight_g") is not None else None,
+            "remaining_weight_g": float(snapshot["remaining_weight_g"]) if snapshot.get("remaining_weight_g") is not None else None,
+            "location": snapshot.get("location", ""),
+            "status": snapshot.get("status", ""),
+            "comment": snapshot.get("comment", ""),
+        },
+        "filament_candidates": [
+            {
+                "score": score,
+                "id": str(filament.id),
+                "name": str(filament),
+                "material": filament.material,
+                "color_hex": filament.color_hex,
+            }
+            for score, filament in filament_matches[:5]
+        ],
+        "spool_candidates": [
+            {
+                "score": row["score"],
+                "id": str(row["spool"].id),
+                "spool_id": row["spool"].spool_id,
+                "filament": str(row["spool"].filament),
+                "remaining_weight_g": float(row["spool"].remaining_weight_g) if row["spool"].remaining_weight_g is not None else None,
+                "location": (
+                    row["spool"].assigned_printer.name if row["spool"].assigned_printer_id
+                    else row["spool"].storage_location.name if row["spool"].storage_location_id
+                    else row["spool"].location
+                ),
+            }
+            for row in spool_matches[:5]
+        ],
+        "raw": remote,
+    }
 
 
 def _create_spool_with_generated_id(**kwargs) -> Spool:
@@ -205,6 +323,114 @@ def _create_spool_with_generated_id(**kwargs) -> Spool:
     raise PrintingSyncError("MakerVault could not allocate a unique spool ID.")
 
 
+def _update_linked_spool_from_spoolman(spool: Spool, snapshot: dict):
+    """Import useful telemetry without replacing MakerVault-owned identity or placement."""
+    changed = []
+    remaining = snapshot.get("remaining_weight_g")
+    if remaining is not None and spool.remaining_weight_g != remaining:
+        spool.remaining_weight_g = remaining
+        changed.append("remaining_weight_g")
+    if spool.initial_weight_g is None and snapshot.get("initial_weight_g") is not None:
+        spool.initial_weight_g = snapshot["initial_weight_g"]
+        changed.append("initial_weight_g")
+    if spool.purchase_cost is None and snapshot.get("purchase_cost") is not None:
+        spool.purchase_cost = snapshot["purchase_cost"]
+        changed.append("purchase_cost")
+    if changed:
+        spool.full_clean()
+        spool.save(update_fields=changed + ["updated_at"])
+
+
+def _spoolman_pending_reviews(setting: PrintingIntegrationSetting) -> list[dict]:
+    config = setting.config or {}
+    rows = config.get("pending_reviews") or []
+    return rows if isinstance(rows, list) else []
+
+
+def resolve_spoolman_review(
+    setting: PrintingIntegrationSetting,
+    external_id: str,
+    action: str,
+    *,
+    spool_id: str | None = None,
+    filament_id: str | None = None,
+) -> dict:
+    if setting.provider != "spoolman":
+        raise PrintingSyncError("Review resolution is not implemented for this integration yet.")
+
+    external_id = str(external_id or "").strip()
+    reviews = _spoolman_pending_reviews(setting)
+    review = next((row for row in reviews if str(row.get("external_id")) == external_id), None)
+    if not review:
+        raise PrintingSyncError("That pending import review no longer exists.")
+
+    config = dict(setting.config or {})
+    ignored = {str(value) for value in (config.get("ignored_external_ids") or [])}
+    remote = review.get("raw") or {}
+    snapshot = _spoolman_snapshot(remote)
+    root = _spoolman_api_root(setting.endpoint_url)
+    now = timezone.now()
+
+    if action == "ignore":
+        ignored.add(external_id)
+        result = {"action": "ignored", "external_id": external_id}
+    elif action == "link":
+        spool = Spool.objects.select_related("filament").filter(pk=spool_id).first()
+        if not spool:
+            raise PrintingSyncError("Choose a MakerVault spool to link.")
+        if ExternalSpoolLink.objects.filter(spool=spool, provider="spoolman").exists():
+            raise PrintingSyncError("That MakerVault spool already has a Spoolman link.")
+        _update_linked_spool_from_spoolman(spool, snapshot)
+        link = ExternalSpoolLink.objects.create(
+            spool=spool,
+            provider="spoolman",
+            external_id=external_id,
+            external_url=f"{root.rsplit('/api/v1', 1)[0]}/spool/show/{external_id}",
+            sync_direction=setting.sync_direction,
+            last_synced_at=now,
+            sync_metadata={"remote": remote, "linked_by_review": True},
+        )
+        result = {"action": "linked", "external_id": external_id, "spool_id": str(spool.id), "spool_code": spool.spool_id}
+    elif action == "create":
+        filament = None
+        if filament_id:
+            filament = FilamentProduct.objects.filter(pk=filament_id).first()
+            if not filament:
+                raise PrintingSyncError("Selected MakerVault filament was not found.")
+        if filament is None:
+            filament = _create_filament_from_spoolman(snapshot)
+        location = _spoolman_location(snapshot.get("location"))
+        spool = _create_spool_with_generated_id(
+            filament=filament,
+            initial_weight_g=snapshot.get("initial_weight_g"),
+            remaining_weight_g=snapshot.get("remaining_weight_g"),
+            purchase_cost=snapshot.get("purchase_cost"),
+            storage_location=location,
+            status=snapshot.get("status") or "open",
+            notes=snapshot.get("comment") or "",
+        )
+        ExternalSpoolLink.objects.create(
+            spool=spool,
+            provider="spoolman",
+            external_id=external_id,
+            external_url=f"{root.rsplit('/api/v1', 1)[0]}/spool/show/{external_id}",
+            sync_direction=setting.sync_direction,
+            last_synced_at=now,
+            sync_metadata={"remote": remote, "created_by_review": True},
+        )
+        result = {"action": "created", "external_id": external_id, "spool_id": str(spool.id), "spool_code": spool.spool_id}
+    else:
+        raise PrintingSyncError("Unknown review action.")
+
+    config["pending_reviews"] = [
+        row for row in reviews if str(row.get("external_id")) != external_id
+    ]
+    config["ignored_external_ids"] = sorted(ignored)
+    setting.config = config
+    setting.save(update_fields=["config", "updated_at"])
+    return result
+
+
 def sync_spoolman(setting: PrintingIntegrationSetting) -> dict:
     root, remote_spools = _spoolman_get_spools(setting.endpoint_url)
     direction = setting.sync_direction
@@ -216,91 +442,115 @@ def sync_spoolman(setting: PrintingIntegrationSetting) -> dict:
     updated = 0
     exported = 0
     skipped_unlinked = 0
+    review_queued = 0
+    ignored_count = 0
+    locations_discovered = 0
     now = timezone.now()
+
+    config = dict(setting.config or {})
+    pending = {
+        str(row.get("external_id")): row
+        for row in _spoolman_pending_reviews(setting)
+        if row.get("external_id") not in (None, "")
+    }
+    ignored = {str(value) for value in (config.get("ignored_external_ids") or [])}
+    seen_remote_ids = set()
 
     if do_import:
         for remote in remote_spools:
-            external_id = str(remote.get("id") or "").strip()
+            snapshot = _spoolman_snapshot(remote)
+            external_id = snapshot["external_id"]
             if not external_id:
                 continue
-            filament = _spoolman_filament(remote)
+            seen_remote_ids.add(external_id)
+
+            if external_id in ignored:
+                ignored_count += 1
+                pending.pop(external_id, None)
+                continue
+
+            location = None
+            if snapshot.get("location"):
+                before = PrintingLocation.objects.filter(name=snapshot["location"]).exists()
+                location = _spoolman_location(snapshot["location"])
+                if location and not before:
+                    locations_discovered += 1
+
             link = ExternalSpoolLink.objects.select_related("spool").filter(
                 provider="spoolman",
                 external_id=external_id,
             ).first()
 
-            remaining = _as_decimal(remote.get("remaining_weight"))
-            initial = _as_decimal(remote.get("initial_weight"))
-            if initial is None:
-                initial = _as_decimal((remote.get("filament") or {}).get("weight"))
-            purchase_cost = _as_decimal(remote.get("price"))
-            archived = bool(remote.get("archived"))
-            status = "retired" if archived else ("empty" if remaining is not None and remaining <= 0 else "open")
-            location = _spoolman_location(remote.get("location"))
-
             if link:
-                spool = link.spool
-                spool.filament = filament
-                if remaining is not None:
-                    spool.remaining_weight_g = remaining
-                if spool.initial_weight_g is None and initial is not None:
-                    spool.initial_weight_g = initial
-                if spool.purchase_cost is None and purchase_cost is not None:
-                    spool.purchase_cost = purchase_cost
-                spool.status = status
-                if location and not spool.assigned_printer_id:
-                    spool.storage_location = location
-                    spool.location = ""
-                spool.full_clean()
-                spool.save()
+                _update_linked_spool_from_spoolman(link.spool, snapshot)
+                link.sync_direction = direction
+                link.last_synced_at = now
+                link.sync_metadata = {
+                    "remote": remote,
+                    "authority": {
+                        "makervault_primary": True,
+                        "remote_location": snapshot.get("location", ""),
+                        "remote_status": snapshot.get("status", ""),
+                    },
+                }
+                link.save(update_fields=["sync_direction", "last_synced_at", "sync_metadata", "updated_at"])
+                pending.pop(external_id, None)
                 updated += 1
-            else:
-                candidates = list(
-                    Spool.objects.filter(filament=filament)
-                    .exclude(external_links__provider="spoolman")
-                    .order_by("created_at")[:2]
-                )
-                if len(candidates) == 1:
-                    spool = candidates[0]
-                    if remaining is not None:
-                        spool.remaining_weight_g = remaining
-                    if spool.initial_weight_g is None and initial is not None:
-                        spool.initial_weight_g = initial
-                    if spool.purchase_cost is None and purchase_cost is not None:
-                        spool.purchase_cost = purchase_cost
-                    spool.status = status
-                    if location and not spool.assigned_printer_id:
-                        spool.storage_location = location
-                        spool.location = ""
-                    spool.full_clean()
-                    spool.save()
-                    linked_existing += 1
-                else:
-                    spool = _create_spool_with_generated_id(
-                        filament=filament,
-                        initial_weight_g=initial,
-                        remaining_weight_g=remaining,
-                        purchase_cost=purchase_cost,
-                        storage_location=location,
-                        status=status,
-                        notes=str(remote.get("comment") or "").strip(),
-                    )
-                    created += 1
+                continue
 
-                link = ExternalSpoolLink.objects.create(
-                    spool=spool,
-                    provider="spoolman",
-                    external_id=external_id,
-                    external_url=f"{root.rsplit('/api/v1', 1)[0]}/spool/show/{external_id}",
-                    sync_direction=direction,
-                    last_synced_at=now,
-                    sync_metadata={"remote": remote},
-                )
+            filament_matches = _rank_spoolman_filaments(snapshot)
+            spool_matches = _rank_spoolman_spools(snapshot)
 
-            link.sync_direction = direction
-            link.last_synced_at = now
-            link.sync_metadata = {"remote": remote}
-            link.save(update_fields=["sync_direction", "last_synced_at", "sync_metadata", "updated_at"])
+            filament_ambiguous = False
+            selected_filament = None
+            if filament_matches:
+                top_score = filament_matches[0][0]
+                second_score = filament_matches[1][0] if len(filament_matches) > 1 else 0
+                if top_score >= 75 and (len(filament_matches) == 1 or top_score - second_score >= 12):
+                    selected_filament = filament_matches[0][1]
+                elif top_score >= 55:
+                    filament_ambiguous = True
+
+            if spool_matches or filament_ambiguous:
+                reason = "possible_duplicate_spool" if spool_matches else "ambiguous_filament"
+                pending[external_id] = _spoolman_review_payload(
+                    remote, snapshot, filament_matches, spool_matches, reason
+                )
+                review_queued += 1
+                continue
+
+            if selected_filament is None:
+                selected_filament = _create_filament_from_spoolman(snapshot)
+
+            spool = _create_spool_with_generated_id(
+                filament=selected_filament,
+                initial_weight_g=snapshot.get("initial_weight_g"),
+                remaining_weight_g=snapshot.get("remaining_weight_g"),
+                purchase_cost=snapshot.get("purchase_cost"),
+                storage_location=location,
+                status=snapshot.get("status") or "open",
+                notes=snapshot.get("comment") or "",
+            )
+            ExternalSpoolLink.objects.create(
+                spool=spool,
+                provider="spoolman",
+                external_id=external_id,
+                external_url=f"{root.rsplit('/api/v1', 1)[0]}/spool/show/{external_id}",
+                sync_direction=direction,
+                last_synced_at=now,
+                sync_metadata={"remote": remote, "auto_imported_after_duplicate_check": True},
+            )
+            pending.pop(external_id, None)
+            created += 1
+
+        pending = {
+            external_id: row
+            for external_id, row in pending.items()
+            if external_id in seen_remote_ids
+        }
+        config["pending_reviews"] = list(pending.values())
+        config["ignored_external_ids"] = sorted(ignored)
+        setting.config = config
 
     if do_export:
         links = list(
@@ -354,7 +604,12 @@ def sync_spoolman(setting: PrintingIntegrationSetting) -> dict:
         "linked_existing": linked_existing,
         "updated": updated,
         "exported": exported,
+        "pending_review": len(config.get("pending_reviews") or []),
+        "review_queued": review_queued,
+        "ignored": ignored_count,
+        "locations_discovered": locations_discovered,
         "unlinked_local_spools_skipped": skipped_unlinked,
+        "authority": "makervault_primary",
     }
 
 
