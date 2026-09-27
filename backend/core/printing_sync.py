@@ -494,7 +494,7 @@ def _sync_cfs_printer(printer: Printer, boxs_info: dict) -> dict:
                         "product_name": raw.get("name") or "",
                         "material_code": str(raw.get("rfid") or ""),
                         "rfid_detected": state == 2,
-                        "remaining_percent": float(percent) if percent is not None else None,
+                        "remaining_percent": float(percent) if state == 2 and percent is not None else None,
                         "selected": bool(raw.get("selected")),
                         "min_temp_c": raw.get("minTemp"),
                         "max_temp_c": raw.get("maxTemp"),
