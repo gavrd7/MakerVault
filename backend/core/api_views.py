@@ -2184,6 +2184,8 @@ def _serialise_spool(spool):
         "material": filament.material,
         "color_name": filament.color_name,
         "color_hex": filament.color_hex,
+        "transparency": filament.transparency,
+        "transparency_label": filament.get_transparency_display(),
         "diameter_mm": _float(filament.diameter_mm),
         "initial_weight_g": _float(spool.initial_weight_g),
         "remaining_weight_g": _float(spool.remaining_weight_g),
@@ -2411,6 +2413,7 @@ def printing_filaments(request):
             material=str(payload.get("material") or "").strip(),
             color_name=str(payload.get("color_name") or "").strip(),
             color_hex=str(payload.get("color_hex") or "").strip(),
+            transparency=str(payload.get("transparency") or "opaque").strip(),
             diameter_mm=_parse_decimal(payload.get("diameter_mm", "1.75"), "diameter_mm", allow_none=False),
             density_g_cm3=_parse_decimal(payload.get("density_g_cm3"), "density_g_cm3"),
             nominal_weight_g=_parse_decimal(payload.get("nominal_weight_g"), "nominal_weight_g"),
@@ -2460,6 +2463,8 @@ def printing_filament_detail(request, filament_id):
         for field in ["name", "material", "color_name", "color_hex"]:
             if field in payload:
                 setattr(item, field, str(payload.get(field) or "").strip())
+        if "transparency" in payload:
+            item.transparency = str(payload.get("transparency") or "opaque").strip()
         for field in ["diameter_mm", "density_g_cm3", "nominal_weight_g", "empty_spool_weight_g", "drying_time_hours"]:
             if field in payload:
                 setattr(item, field, _parse_decimal(payload.get(field), field, allow_none=field != "diameter_mm"))
