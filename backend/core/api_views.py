@@ -32,7 +32,7 @@ from .filament_catalogue import (
 )
 from .printing_catalogue_seed import COMMON_FILAMENT_MATERIALS
 from .printing_integrations import PrintingIntegrationError, probe_spoolman
-from .printing_sync import PrintingSyncError, next_spool_id, sync_printing_integration
+from .printing_sync import PrintingSyncError, next_spool_id, resolve_spoolman_review, sync_printing_integration
 from .tasks import queue_catalogue_maintenance_now
 from .models import (
     BoardCompatibility,
@@ -2166,8 +2166,13 @@ def _serialise_printing_integration(item):
             "configured_printers": configured.count(),
         }
     elif item.provider == "spoolman":
+        pending_reviews = (item.config or {}).get("pending_reviews") or []
+        ignored_ids = (item.config or {}).get("ignored_external_ids") or []
         extra = {
             "linked_spools": ExternalSpoolLink.objects.filter(provider="spoolman").count(),
+            "pending_review_count": len(pending_reviews) if isinstance(pending_reviews, list) else 0,
+            "ignored_import_count": len(ignored_ids) if isinstance(ignored_ids, list) else 0,
+            "authority_policy": "makervault_primary",
         }
     return {
         "provider": item.provider,
@@ -2330,6 +2335,50 @@ def printing_integration_test(request, provider):
             {"error": str(exc), "item": _serialise_printing_integration(item)},
             status=502,
         )
+
+
+@login_required
+@require_http_methods(["GET"])
+def printing_integration_reviews(request, provider):
+    if not request.user.is_staff:
+        return _error("Administrator access is required.", status=403)
+    item = PrintingIntegrationSetting.objects.filter(provider=provider).first()
+    if not item:
+        return _error("Integration is not configured.", status=404)
+    if provider != "spoolman":
+        return JsonResponse({"rows": [], "provider": provider})
+    rows = (item.config or {}).get("pending_reviews") or []
+    if not isinstance(rows, list):
+        rows = []
+    return JsonResponse({"rows": rows, "provider": provider})
+
+
+@login_required
+@require_http_methods(["POST"])
+def printing_integration_review_resolve(request, provider, external_id):
+    if not request.user.is_staff:
+        return _error("Administrator access is required.", status=403)
+    item = PrintingIntegrationSetting.objects.filter(provider=provider).first()
+    if not item:
+        return _error("Integration is not configured.", status=404)
+    try:
+        payload = _read_json(request)
+        if provider != "spoolman":
+            return _error("Review resolution is not implemented for this integration yet.", status=409)
+        result = resolve_spoolman_review(
+            item,
+            external_id,
+            str(payload.get("action") or "").strip(),
+            spool_id=payload.get("spool_id"),
+            filament_id=payload.get("filament_id"),
+        )
+        item.refresh_from_db()
+        return JsonResponse({
+            "item": _serialise_printing_integration(item),
+            "result": result,
+        })
+    except PrintingSyncError as exc:
+        return _error(str(exc), status=409)
 
 
 @login_required
