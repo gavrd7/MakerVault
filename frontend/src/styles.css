@@ -532,3 +532,54 @@
   .filesHeroActions .primary{width:100%}
   .filesNameRow{align-items:flex-start;flex-direction:column;gap:5px}
 }
+
+
+/* v0.5.0 BOM and inventory allocation */
+.projectBomSection{display:grid;gap:12px}
+.bomHeadActions{display:flex;align-items:center;gap:8px}
+.bomHeadActions>span{color:#7f8a9c;font-size:10px;white-space:nowrap}
+.bomHeadActions button{min-height:30px;padding:5px 9px}
+.bomSummaryGrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.bomSummaryGrid>div{padding:10px 11px;border:1px solid #29313c;border-radius:10px;background:#0d131a}
+.bomSummaryGrid span,.bomSummaryGrid strong{display:block}
+.bomSummaryGrid span{color:#778397;font-size:9px;text-transform:uppercase;letter-spacing:.04em}
+.bomSummaryGrid strong{margin-top:4px;font-size:13px;color:#d6dde7}
+.bomList{display:grid;gap:10px}
+.bomRow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;padding:13px;border:1px solid #29313c;border-radius:12px;background:#0d131a}
+.bomMain{min-width:0}
+.bomTitleRow{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.bomTitleRow>div{min-width:0}.bomTitleRow strong,.bomTitleRow small{display:block}
+.bomTitleRow strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+.bomTitleRow small{margin-top:3px;color:#778397;font-size:9px}
+.bomProgressMeta{display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;color:#7f8a9c;font-size:10px}
+.bomProgressMeta strong{color:#c8d1de;font-weight:700}
+.bomProgressTrack{height:6px;margin-top:9px;border-radius:999px;overflow:hidden;background:#1c2632}
+.bomProgressTrack span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#6f84ff,#86d7b6)}
+.bomNotes{margin:9px 0 0;color:#98a5b6;font-size:11px;line-height:1.45}
+.bomAllocations{display:grid;gap:6px;margin-top:11px}
+.bomAllocationRow{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:9px;align-items:center;padding:8px 9px;border:1px solid #25303d;border-radius:9px;background:#111923}
+.bomAllocationRow>div:nth-child(2){min-width:0}
+.bomAllocationRow strong,.bomAllocationRow small{display:block}
+.bomAllocationRow strong{font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bomAllocationRow small{margin-top:2px;color:#738095;font-size:9px}
+.bomAllocationRow>span{font-size:11px;font-weight:800;color:#d6dde7}
+.bomAllocationActions,.bomRowActions{display:flex;gap:5px}
+.bomAllocationActions button,.bomRowActions button{min-height:28px;padding:4px 8px;font-size:9px}
+.bomAllocationEmpty{padding:8px 9px;border:1px dashed #313d4c;border-radius:9px;color:#6f7b8c;font-size:10px}
+.bomRowActions{align-items:flex-start;flex-direction:column}
+.bomRowActions button{width:100%;min-width:66px}
+.bomRowActions .assetDanger,.bomAllocationActions .assetDanger{color:#e29ba0;border-color:#57353b;background:#24151a}
+
+@media(max-width:900px){
+  .bomSummaryGrid{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:700px){
+  .projectSectionHead:has(.bomHeadActions){align-items:flex-start}
+  .bomHeadActions{align-items:flex-end;flex-direction:column}
+  .bomSummaryGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .bomRow{grid-template-columns:1fr}
+  .bomRowActions{flex-direction:row}
+  .bomRowActions button{flex:1}
+  .bomAllocationRow{grid-template-columns:auto minmax(0,1fr) auto}
+  .bomAllocationActions{grid-column:1/-1;justify-content:flex-end}
+}
