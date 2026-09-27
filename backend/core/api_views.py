@@ -714,6 +714,23 @@ def inventory_detail(request, item_id):
         payload["board"] = _serialise_board(item.board, detailed=True) if item.board else None
         payload["component"] = _serialise_component(item.component) if item.component else None
         payload["history"] = [_serialise_inventory_history(entry) for entry in history]
+        payload["bom_allocations"] = [
+            {
+                "id": allocation.id,
+                "project_id": str(allocation.bom_item.project_id),
+                "project_name": allocation.bom_item.project.name,
+                "bom_item_id": allocation.bom_item_id,
+                "bom_item_name": allocation.bom_item.display_name,
+                "quantity": _float(allocation.quantity),
+                "unit": allocation.bom_item.unit,
+                "notes": allocation.notes,
+            }
+            for allocation in item.bom_allocations.select_related(
+                "bom_item__project",
+                "bom_item__board__manufacturer",
+                "bom_item__component__manufacturer",
+            ).order_by("bom_item__project__name", "bom_item__created_at")
+        ]
         return JsonResponse({"item": payload})
 
     if request.method == "DELETE":
