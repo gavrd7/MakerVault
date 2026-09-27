@@ -2353,7 +2353,7 @@ def printing_overview(request):
         "spools": [_serialise_spool(spool) for spool in spools],
         "filaments": [
             _serialise_filament_product(item)
-            for item in FilamentProduct.objects.select_related("manufacturer").all()
+            for item in FilamentProduct.objects.select_related("manufacturer", "source").all()
         ],
         "manufacturers": [
             {"id": item.id, "name": item.name}
@@ -2396,6 +2396,10 @@ def _serialise_filament_product(filament):
         "bed_temp_max_c": filament.bed_temp_max_c,
         "drying_temp_c": filament.drying_temp_c,
         "drying_time_hours": _float(filament.drying_time_hours),
+        "source": filament.source.name if filament.source else "Manual",
+        "source_type": filament.source.source_type if filament.source else "manual",
+        "source_url": filament.source.url if filament.source else "",
+        "source_license": (filament.source.raw_metadata or {}).get("license", "") if filament.source else "",
         "updated_at": filament.updated_at.isoformat(),
     }
 
@@ -2452,7 +2456,7 @@ def printing_filaments(request):
 @login_required
 @require_http_methods(["PATCH", "DELETE"])
 def printing_filament_detail(request, filament_id):
-    item = FilamentProduct.objects.select_related("manufacturer").filter(pk=filament_id).first()
+    item = FilamentProduct.objects.select_related("manufacturer", "source").filter(pk=filament_id).first()
     if not item:
         return _error("Filament product not found.", status=404)
     if request.method == "DELETE":
