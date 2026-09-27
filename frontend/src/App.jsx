@@ -54,14 +54,14 @@ export default function App() {
     if (section === "Components") return <ComponentsPage components={components} setComponents={setComponents} config={config} refreshDashboard={refreshDashboard} />;
     if (section === "Projects") return <ProjectsPage projects={projects} setProjects={setProjects} config={config} refreshDashboard={refreshDashboard} />;
     if (section === "3D Printing") return <EmptyModule title="3D printing data is ready">Printer, filament, spool, 3D model/revision and print-job schemas are already present. SpoolmanDB and 3D model workflows are planned for the next importer milestone.</EmptyModule>;
-    if (section === "Files") return <EmptyModule title="File library is ready">MakerVault already stores authenticated project, firmware, wiring, CAD, STL and 3MF assets. The dedicated browser and 3D preview workflow is a following milestone.</EmptyModule>;
+    if (section === "Files") return <EmptyModule title="File library is ready">Project files now live inside each project workspace with category-aware grouping and repository links. A dedicated cross-project file browser and 3D preview remain future milestones.</EmptyModule>;
     if (section === "Settings") return <SettingsPage config={config} />;
     return <AboutPage config={config} />;
   }
 
   return <div className="shell">
     <aside>
-      <div className="brand"><span className="brandmark">M</span><div><strong>MakerVault</strong><small>v0.4.1 · AGPL</small></div></div>
+      <div className="brand"><span className="brandmark">M</span><div><strong>MakerVault</strong><small>v0.4.2 · AGPL</small></div></div>
       <nav>{NAV.filter(n => n !== "Settings" || config?.is_staff).map(n => <button key={n} className={section === n ? "active" : ""} onClick={() => setSection(n)}>{n}</button>)}</nav>
       <div className="asideBottom"><a href="/admin/">Administration</a><a href="/accounts/2fa/">Account &amp; Security</a><a href="/accounts/logout/">Sign out</a></div>
     </aside>
