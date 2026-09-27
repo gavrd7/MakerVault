@@ -16,6 +16,7 @@ urlpatterns = [
     path("printing/printers/<uuid:printer_id>/", api_views.printing_printer_detail, name="api-printing-printer-detail"),
     path("printing/spools/", api_views.printing_spools, name="api-printing-spools"),
     path("printing/spools/<uuid:spool_id>/", api_views.printing_spool_detail, name="api-printing-spool-detail"),
+    path("printing/slots/<uuid:slot_id>/add-to-inventory/", api_views.printing_slot_add_to_inventory, name="api-printing-slot-add-to-inventory"),
     path("printing/models/", api_views.printing_models, name="api-printing-models"),
     path("printing/models/<uuid:model_id>/", api_views.printing_model_detail, name="api-printing-model-detail"),
     path("printing/models/<uuid:model_id>/revisions/", api_views.printing_model_revisions, name="api-printing-model-revisions"),
