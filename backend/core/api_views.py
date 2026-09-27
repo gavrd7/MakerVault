@@ -754,6 +754,10 @@ def inventory_detail(request, item_id):
             item.currency = str(payload["currency"] or settings.MAKERVAULT_CURRENCY).upper()[:3]
         if "status" in payload:
             item.status = str(payload["status"])
+            if item.status in {"repair", "retired"} and item.bom_allocations.exists():
+                raise ValidationError({
+                    "status": "Release BOM allocations before marking this inventory item as repair or retired."
+                })
         if "purchased_on" in payload:
             raw_date = str(payload["purchased_on"] or "").strip()
             if raw_date:
@@ -769,6 +773,13 @@ def inventory_detail(request, item_id):
                 project = Project.objects.filter(pk=payload["project_id"]).first()
                 if not project:
                     return _error("Selected project was not found.")
+                allocation_projects = set(
+                    item.bom_allocations.values_list("bom_item__project_id", flat=True).distinct()
+                )
+                if allocation_projects and allocation_projects != {project.id}:
+                    raise ValidationError({
+                        "project_id": "This inventory item has BOM allocations for another project. Release them before changing its project assignment."
+                    })
                 item.project = project
             else:
                 item.project = None
