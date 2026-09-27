@@ -1,7 +1,7 @@
 import shutil
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -624,6 +624,162 @@ class PrintingFoundationTests(TestCase):
         self.assertEqual(cfs.json()["item"]["status"], "disconnected")
         self.assertEqual(cfs.json()["item"]["compatible_printers"], 1)
         self.assertEqual(cfs.json()["item"]["configured_printers"], 1)
+
+    @patch("core.printing_sync.requests.get")
+    def test_spoolman_sync_imports_remote_spool_with_generated_local_id(self, get_mock):
+        response = Mock(status_code=200)
+        response.json.return_value = [
+            {
+                "id": 42,
+                "remaining_weight": 612.5,
+                "archived": False,
+                "location": "Filament shelf",
+                "comment": "Imported from Spoolman",
+                "filament": {
+                    "id": 7,
+                    "name": "Hyper ABS",
+                    "material": "ABS",
+                    "color_hex": "FFFFFF",
+                    "diameter": 1.75,
+                    "density": 1.04,
+                    "weight": 1000,
+                    "spool_weight": 220,
+                    "vendor": {"id": 3, "name": "Creality"},
+                },
+            }
+        ]
+        get_mock.return_value = response
+        PrintingIntegrationSetting.objects.create(
+            provider="spoolman",
+            enabled=True,
+            endpoint_url="https://spoolman.example.test",
+            sync_direction="import",
+        )
+
+        synced = self.client.post("/api/settings/printing-integrations/spoolman/sync/")
+        self.assertEqual(synced.status_code, 200, synced.content)
+        result = synced.json()["result"]
+        self.assertEqual(result["created"], 1)
+        self.assertEqual(result["remote_spools"], 1)
+
+        imported = Spool.objects.get(spool_id="SPL-0002")
+        self.assertEqual(imported.remaining_weight_g, Decimal("612.5"))
+        self.assertEqual(imported.storage_location.name, "Filament shelf")
+        self.assertEqual(imported.filament.material, "ABS")
+        self.assertEqual(imported.filament.filament_manufacturer.name, "Creality")
+        link = ExternalSpoolLink.objects.get(spool=imported, provider="spoolman")
+        self.assertEqual(link.external_id, "42")
+        setting = PrintingIntegrationSetting.objects.get(provider="spoolman")
+        self.assertEqual(setting.status, "connected")
+        self.assertIsNotNone(setting.last_sync_at)
+
+    @patch("core.printing_sync._fetch_cfs_boxs_info", new_callable=AsyncMock)
+    def test_creality_cfs_sync_populates_slots_and_matches_assigned_spool(self, fetch_mock):
+        maker = PrinterManufacturer.objects.create(name="Creality")
+        model = PrinterCatalogModel.objects.create(
+            manufacturer=maker,
+            name="K2",
+            multi_material_system="creality_cfs",
+        )
+        printer = Printer.objects.create(
+            name="Dining room K2",
+            printer_manufacturer=maker,
+            catalog_model=model,
+            model="K2",
+            connection_host="192.168.1.34",
+            is_active=True,
+        )
+        filament_maker = FilamentManufacturer.objects.create(name="Creality")
+        filament = FilamentProduct.objects.create(
+            filament_manufacturer=filament_maker,
+            name="White Hyper ABS",
+            material="ABS",
+            color_name="White",
+            color_hex="#ffffff",
+            nominal_weight_g="1000",
+            diameter_mm="1.75",
+        )
+        spool = Spool.objects.create(
+            spool_id="SPL-CFS-LOCAL",
+            filament=filament,
+            assigned_printer=printer,
+            initial_weight_g="1000",
+            remaining_weight_g="900",
+            status="open",
+        )
+        fetch_mock.return_value = {
+            "materialBoxs": [
+                {
+                    "id": 1,
+                    "state": 1,
+                    "type": 0,
+                    "temp": 27.0,
+                    "humidity": 42.0,
+                    "materials": [
+                        {
+                            "id": 0,
+                            "vendor": "Creality",
+                            "type": "ABS",
+                            "name": "Hyper ABS",
+                            "rfid": "12345",
+                            "color": "#0ffffff",
+                            "percent": 30,
+                            "state": 2,
+                            "selected": 1,
+                            "minTemp": 240,
+                            "maxTemp": 280,
+                        }
+                    ],
+                }
+            ]
+        }
+        PrintingIntegrationSetting.objects.create(
+            provider="creality_cfs",
+            enabled=True,
+            sync_direction="import",
+        )
+
+        synced = self.client.post("/api/settings/printing-integrations/creality_cfs/sync/")
+        self.assertEqual(synced.status_code, 200, synced.content)
+        result = synced.json()["result"]
+        self.assertEqual(result["loaded_slots"], 1)
+        self.assertEqual(result["matched_spools"], 1)
+
+        slot = PrinterFilamentSlot.objects.get(
+            printer=printer,
+            system="creality_cfs",
+            unit_index=0,
+            slot_index=0,
+        )
+        self.assertEqual(slot.spool_id, spool.id)
+        self.assertEqual(slot.material, "ABS")
+        self.assertEqual(slot.color_hex, "#ffffff")
+        self.assertEqual(slot.metadata["vendor"], "Creality")
+        self.assertTrue(slot.metadata["rfid_detected"])
+        self.assertEqual(slot.metadata["remaining_percent"], 30.0)
+        spool.refresh_from_db()
+        self.assertEqual(spool.remaining_weight_g, Decimal("300.00"))
+        setting = PrintingIntegrationSetting.objects.get(provider="creality_cfs")
+        self.assertEqual(setting.status, "connected")
+        self.assertIsNotNone(setting.last_sync_at)
+
+    def test_printing_overview_only_lists_enabled_integrations(self):
+        PrintingIntegrationSetting.objects.create(
+            provider="spoolman",
+            enabled=True,
+            status="connected",
+        )
+        PrintingIntegrationSetting.objects.create(
+            provider="creality_cfs",
+            enabled=False,
+            status="disabled",
+        )
+        response = self.client.get("/api/printing/")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(
+            [item["provider"] for item in response.json()["integrations"]],
+            ["spoolman"],
+        )
 
     def test_regular_user_cannot_create_native_printing_records(self):
         regular = get_user_model().objects.create_user(
