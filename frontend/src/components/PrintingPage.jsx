@@ -17,6 +17,7 @@ export default function PrintingPage({ config, projects }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [modal, setModal] = useState("");
+  const [manageModel, setManageModel] = useState(null);
 
   async function load() {
     setError("");
@@ -41,6 +42,7 @@ export default function PrintingPage({ config, projects }) {
   const canAddFilament = Boolean(config?.permissions?.add_filament);
   const canAddSpool = Boolean(config?.permissions?.add_spool);
   const canAddModel = Boolean(config?.permissions?.add_model3d);
+  const canChangeModel = Boolean(config?.permissions?.change_model3d);
 
   return <div className="printingStack">
     <section className="panel printingHero">
@@ -105,6 +107,7 @@ export default function PrintingPage({ config, projects }) {
           {(data?.models || []).map(model => <article className="printingListRow printingModelRow" key={model.id}>
             <div><strong>{model.name}</strong><small>{model.project || "Standalone model"} · {model.revision_count} revision{model.revision_count === 1 ? "" : "s"}</small></div>
             <div className="printingBadges">{model.revisions.flatMap(r => r.assets).slice(0,3).map(asset => <Badge key={asset.id}>{asset.file.category_label}</Badge>)}</div>
+            {canChangeModel && <button onClick={() => setManageModel(model)}>Manage</button>}
           </article>)}
           {!data?.models?.length && <div className="printingEmptyInline">No 3D models yet.</div>}
         </div>
@@ -135,6 +138,12 @@ export default function PrintingPage({ config, projects }) {
     {modal === "filament" && <FilamentModal manufacturers={data?.manufacturers || []} onClose={() => setModal("")} onSaved={saved} />}
     {modal === "spool" && <SpoolModal filaments={data?.filaments || []} currency={config?.currency || "GBP"} onClose={() => setModal("")} onSaved={saved} />}
     {modal === "model" && <ModelModal projects={projects || []} onClose={() => setModal("")} onSaved={saved} />}
+    {manageModel && <ModelManageModal
+      model={manageModel}
+      files={data?.model_files || []}
+      onClose={() => setManageModel(null)}
+      onChanged={async () => { setManageModel(null); await load(); }}
+    />}
   </div>;
 }
 
@@ -240,5 +249,114 @@ function ModelModal({ projects, onClose, onSaved }) {
       <label className="full">Tags<input value={form.tags} onChange={e => set("tags", e.target.value)} placeholder="Comma-separated" /></label>
       <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Saving…" : "Add model"}</button></div>
     </form>
+  </Modal>;
+}
+
+
+function ModelManageModal({ model, files, onClose, onChanged }) {
+  const [version, setVersion] = useState("");
+  const [revisionNotes, setRevisionNotes] = useState("");
+  const [revisionId, setRevisionId] = useState(model.revisions[0]?.id || "");
+  const [fileId, setFileId] = useState("");
+  const [role, setRole] = useState("model");
+  const [primary, setPrimary] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const compatibleFiles = (files || []).filter(file => {
+    if (!model.project_id || !file.project_id) return true;
+    return model.project_id === file.project_id;
+  });
+
+  async function addRevision(event) {
+    event.preventDefault();
+    setBusy(true); setError("");
+    try {
+      await apiFetch("/api/printing/models/" + model.id + "/revisions/", {
+        method: "POST",
+        body: { version, notes: revisionNotes },
+      });
+      await onChanged();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function attachFile(event) {
+    event.preventDefault();
+    if (!revisionId || !fileId) return;
+    setBusy(true); setError("");
+    try {
+      await apiFetch(
+        "/api/printing/models/" + model.id + "/revisions/" + revisionId + "/assets/",
+        {
+          method: "POST",
+          body: { file_asset_id: fileId, role, is_primary: primary },
+        },
+      );
+      await onChanged();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function detach(revision, asset) {
+    if (!window.confirm('Detach "' + asset.file.name + '" from revision ' + revision.version + "? The file itself will remain in MakerVault.")) return;
+    setBusy(true); setError("");
+    try {
+      await apiFetch(
+        "/api/printing/models/" + model.id + "/revisions/" + revision.id + "/assets/" + asset.id + "/",
+        { method: "DELETE" },
+      );
+      await onChanged();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <Modal title={"Manage model · " + model.name} subtitle="Revisions reuse existing MakerVault files; attaching or detaching does not duplicate or delete the stored asset." onClose={onClose} wide>
+    <div className="printingModelManage">
+      {error && <div className="formError">{error}</div>}
+
+      <section>
+        <h3>Revisions</h3>
+        <div className="printingRevisionList">
+          {model.revisions.map(revision => <article key={revision.id}>
+            <div className="printingRevisionHead"><strong>Revision {revision.version}</strong><small>{revision.notes || "No notes"}</small></div>
+            <div className="printingRevisionAssets">
+              {revision.assets.map(asset => <div key={asset.id}>
+                <div><strong>{asset.file.name}</strong><small>{asset.role_label}{asset.is_primary ? " · Primary" : ""} · {asset.file.filename}</small></div>
+                <button type="button" disabled={busy} onClick={() => detach(revision, asset)}>Detach</button>
+              </div>)}
+              {!revision.assets.length && <span className="muted">No files attached.</span>}
+            </div>
+          </article>)}
+          {!model.revisions.length && <div className="printingEmptyInline">No revisions yet.</div>}
+        </div>
+      </section>
+
+      <form className="printingManageForm" onSubmit={addRevision}>
+        <h3>Add revision</h3>
+        <label>Version<input required value={version} onChange={e => setVersion(e.target.value)} placeholder="1.0, A, 2026-09…" /></label>
+        <label>Notes<textarea rows="2" value={revisionNotes} onChange={e => setRevisionNotes(e.target.value)} /></label>
+        <button className="primary" disabled={busy}>{busy ? "Saving…" : "Add revision"}</button>
+      </form>
+
+      <form className="printingManageForm" onSubmit={attachFile}>
+        <h3>Attach existing MakerVault file</h3>
+        <label>Revision<select required value={revisionId} onChange={e => setRevisionId(e.target.value)}><option value="">Choose revision…</option>{model.revisions.map(x => <option key={x.id} value={x.id}>{x.version}</option>)}</select></label>
+        <label>File<select required value={fileId} onChange={e => setFileId(e.target.value)}><option value="">Choose STL / 3MF / CAD file…</option>{compatibleFiles.map(x => <option key={x.id} value={x.id}>{x.name} · {x.category_label}{x.project ? " · " + x.project : ""}</option>)}</select></label>
+        <label>Role<select value={role} onChange={e => setRole(e.target.value)}><option value="model">Printable model</option><option value="slicer">Slicer project</option><option value="cad">CAD / source</option><option value="reference">Reference</option><option value="other">Other</option></select></label>
+        <label className="checkRow"><input type="checkbox" checked={primary} onChange={e => setPrimary(e.target.checked)} /><span>Primary file for this role</span></label>
+        {!compatibleFiles.length && <div className="printingEmptyInline">Upload an STL, 3MF or CAD file in Files first, then attach it here.</div>}
+        <button className="primary" disabled={busy || !model.revisions.length || !compatibleFiles.length}>{busy ? "Saving…" : "Attach file"}</button>
+      </form>
+    </div>
   </Modal>;
 }
