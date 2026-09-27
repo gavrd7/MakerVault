@@ -219,6 +219,7 @@ function PrinterModal({ manufacturers, models, locations, onClose, onSaved }) {
     nozzle_mm: "0.4",
     notes: "",
   });
+  const [customModel, setCustomModel] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const set = (key, value) => setForm(value0 => ({ ...value0, [key]: value }));
@@ -227,6 +228,7 @@ function PrinterModal({ manufacturers, models, locations, onClose, onSaved }) {
   const selectedModel = models.find(item => item.id === form.catalog_model_id);
 
   function manufacturerChanged(value) {
+    setCustomModel(false);
     setForm(current => ({
       ...current,
       printer_manufacturer_id: value,
@@ -241,6 +243,7 @@ function PrinterModal({ manufacturers, models, locations, onClose, onSaved }) {
 
   function modelChanged(value) {
     if (value === "__custom__") {
+      setCustomModel(true);
       setForm(current => ({
         ...current,
         catalog_model_id: "",
@@ -254,6 +257,7 @@ function PrinterModal({ manufacturers, models, locations, onClose, onSaved }) {
     }
     const selected = models.find(item => item.id === value);
     if (!selected) return;
+    setCustomModel(false);
     setForm(current => ({
       ...current,
       catalog_model_id: selected.id,
@@ -285,12 +289,12 @@ function PrinterModal({ manufacturers, models, locations, onClose, onSaved }) {
         <option value="">Choose manufacturer…</option>
         {manufacturers.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
       </select></label>
-      <label>Model<select required={!!form.printer_manufacturer_id} value={form.catalog_model_id || (form.model ? "__custom__" : "")} onChange={e => modelChanged(e.target.value)} disabled={!form.printer_manufacturer_id}>
+      <label>Model<select required={!!form.printer_manufacturer_id} value={customModel ? "__custom__" : form.catalog_model_id} onChange={e => modelChanged(e.target.value)} disabled={!form.printer_manufacturer_id}>
         <option value="">Choose model…</option>
         {modelOptions.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
         <option value="__custom__">Other / custom model</option>
       </select></label>
-      {!form.catalog_model_id && form.printer_manufacturer_id && <label>Custom model<input required value={form.model} onChange={e => set("model", e.target.value)} placeholder="Printer model" /></label>}
+      {customModel && form.printer_manufacturer_id && <label>Custom model<input required value={form.model} onChange={e => set("model", e.target.value)} placeholder="Printer model" /></label>}
       <label>Printer name<input required value={form.name} onChange={e => set("name", e.target.value)} placeholder={selectedModel ? selectedModel.display_name : "Desk printer"} /></label>
       <label>Serial number<input value={form.serial_number} onChange={e => set("serial_number", e.target.value)} /></label>
       <label>Location<select value={form.location_id} onChange={e => set("location_id", e.target.value)}><option value="">Unassigned</option>{locations.map(x => <option key={x.id} value={x.id}>{x.name} · {x.kind_label}</option>)}</select></label>
