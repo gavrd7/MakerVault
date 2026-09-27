@@ -2821,8 +2821,14 @@ def printing_filament_catalogue_import(request):
 @require_http_methods(["GET", "POST"])
 def printing_printers(request):
     if request.method == "GET":
-        qs = Printer.objects.select_related("manufacturer").prefetch_related(
-            "filament_slots__spool__filament__manufacturer"
+        qs = Printer.objects.select_related(
+            "manufacturer",
+            "printer_manufacturer",
+            "catalog_model__manufacturer",
+            "printing_location",
+        ).prefetch_related(
+            "filament_slots__spool__filament__manufacturer",
+            "filament_slots__spool__filament__filament_manufacturer",
         )
         return JsonResponse({"rows": [_serialise_printer(item) for item in qs]})
 
@@ -2831,25 +2837,65 @@ def printing_printers(request):
         return denied
     try:
         payload = _read_json(request)
-        manufacturer = None
-        if payload.get("manufacturer_id"):
-            manufacturer = Manufacturer.objects.filter(pk=payload["manufacturer_id"]).first()
-            if not manufacturer:
-                return _error("Selected manufacturer was not found.")
+        printer_manufacturer, catalog_model = _resolve_printer_catalogue(payload)
+        location = _resolve_printing_location(payload.get("location_id"))
+        model_name = (
+            catalog_model.name
+            if catalog_model
+            else str(payload.get("model") or "").strip()
+        )
+        if not model_name:
+            return _error("Choose a printer model or enter a custom model name.")
+
+        def chosen_decimal(field, catalogue_value=None, default=None):
+            raw = payload.get(field)
+            if raw not in (None, ""):
+                return _parse_decimal(raw, field)
+            if catalogue_value is not None:
+                return catalogue_value
+            return default
+
         item = Printer(
-            name=str(payload.get("name") or "").strip(),
-            manufacturer=manufacturer,
-            model=str(payload.get("model") or "").strip(),
+            name=str(payload.get("name") or model_name).strip(),
+            printer_manufacturer=printer_manufacturer,
+            catalog_model=catalog_model,
+            model=model_name,
             serial_number=str(payload.get("serial_number") or "").strip(),
-            location=str(payload.get("location") or "").strip(),
-            build_volume_x_mm=_parse_decimal(payload.get("build_volume_x_mm"), "build_volume_x_mm"),
-            build_volume_y_mm=_parse_decimal(payload.get("build_volume_y_mm"), "build_volume_y_mm"),
-            build_volume_z_mm=_parse_decimal(payload.get("build_volume_z_mm"), "build_volume_z_mm"),
-            nozzle_mm=_parse_decimal(payload.get("nozzle_mm", "0.4"), "nozzle_mm", allow_none=False),
+            printing_location=location,
+            is_active=payload.get("is_active") is not False,
+            connection_host=str(payload.get("connection_host") or "").strip(),
+            build_volume_x_mm=chosen_decimal(
+                "build_volume_x_mm",
+                catalog_model.build_volume_x_mm if catalog_model else None,
+            ),
+            build_volume_y_mm=chosen_decimal(
+                "build_volume_y_mm",
+                catalog_model.build_volume_y_mm if catalog_model else None,
+            ),
+            build_volume_z_mm=chosen_decimal(
+                "build_volume_z_mm",
+                catalog_model.build_volume_z_mm if catalog_model else None,
+            ),
+            nozzle_mm=chosen_decimal(
+                "nozzle_mm",
+                catalog_model.nozzle_mm if catalog_model else None,
+                Decimal("0.4"),
+            ),
+            profile_data={
+                "catalogue_features": catalog_model.features if catalog_model else {},
+                "multi_material_system": catalog_model.multi_material_system if catalog_model else "",
+                "catalogue_source_url": catalog_model.source_url if catalog_model else "",
+            },
             notes=str(payload.get("notes") or "").strip(),
         )
         item.full_clean()
         item.save()
+        item = Printer.objects.select_related(
+            "manufacturer",
+            "printer_manufacturer",
+            "catalog_model__manufacturer",
+            "printing_location",
+        ).prefetch_related("filament_slots__spool__filament").get(pk=item.pk)
         return JsonResponse({"item": _serialise_printer(item)}, status=201)
     except ValidationError as exc:
         return _validation_response(exc)
@@ -2858,8 +2904,14 @@ def printing_printers(request):
 @login_required
 @require_http_methods(["PATCH", "DELETE"])
 def printing_printer_detail(request, printer_id):
-    item = Printer.objects.select_related("manufacturer").prefetch_related(
-        "filament_slots__spool__filament__manufacturer"
+    item = Printer.objects.select_related(
+        "manufacturer",
+        "printer_manufacturer",
+        "catalog_model__manufacturer",
+        "printing_location",
+    ).prefetch_related(
+        "filament_slots__spool__filament__manufacturer",
+        "filament_slots__spool__filament__filament_manufacturer",
     ).filter(pk=printer_id).first()
     if not item:
         return _error("Printer not found.", status=404)
@@ -2878,12 +2930,29 @@ def printing_printer_detail(request, printer_id):
         return denied
     try:
         payload = _read_json(request)
-        if "manufacturer_id" in payload:
-            manufacturer_id = payload.get("manufacturer_id")
-            item.manufacturer = Manufacturer.objects.filter(pk=manufacturer_id).first() if manufacturer_id else None
-            if manufacturer_id and not item.manufacturer:
-                return _error("Selected manufacturer was not found.")
-        for field in ["name", "model", "serial_number", "location", "notes"]:
+        if any(key in payload for key in ["catalog_model_id", "printer_manufacturer_id", "manufacturer_id", "manufacturer_name"]):
+            maker, catalog_model = _resolve_printer_catalogue(payload)
+            item.printer_manufacturer = maker
+            item.catalog_model = catalog_model
+            item.manufacturer = None
+            if catalog_model:
+                item.model = catalog_model.name
+                item.build_volume_x_mm = catalog_model.build_volume_x_mm
+                item.build_volume_y_mm = catalog_model.build_volume_y_mm
+                item.build_volume_z_mm = catalog_model.build_volume_z_mm
+                item.nozzle_mm = catalog_model.nozzle_mm
+                item.profile_data = {
+                    **(item.profile_data or {}),
+                    "catalogue_features": catalog_model.features or {},
+                    "multi_material_system": catalog_model.multi_material_system,
+                    "catalogue_source_url": catalog_model.source_url,
+                }
+        if "location_id" in payload:
+            item.printing_location = _resolve_printing_location(payload.get("location_id"))
+            item.location = ""
+        if "is_active" in payload:
+            item.is_active = bool(payload.get("is_active"))
+        for field in ["name", "model", "serial_number", "connection_host", "notes"]:
             if field in payload:
                 setattr(item, field, str(payload.get(field) or "").strip())
         for field in ["build_volume_x_mm", "build_volume_y_mm", "build_volume_z_mm", "nozzle_mm"]:
