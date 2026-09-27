@@ -84,11 +84,16 @@ Planned scope:
 - Add richer model/file previews, beginning with interactive STL/3MF viewing where practical.
 - First-class printer records for the machines available to MakerVault.
 - Filament/spool inventory with material, colour, diameter, supplier, purchase data and remaining quantity.
+- Optional Spoolman integration using its REST API, with configurable one-way or bidirectional spool inventory synchronisation and explicit conflict/source-of-truth handling.
+- Optional SimplyPrint filament integration where API access is available, with import/export compatibility retained for installations without API access.
+- Creality CFS discovery for supported printers: query local printer/CFS state to show which filament is currently loaded in each slot, including material, colour, remaining amount and RFID identity when exposed by the printer.
+- Allow discovered CFS slots/RFID identities to be matched to MakerVault spool records and, where configured, to corresponding Spoolman/SimplyPrint records.
+- Treat Creality CFS integration as capability-detected and read-only first; do not depend on undocumented write/control behaviour or RFID programming for the core workflow.
 - Print history linking a model revision, printer and consumed spool(s), including quantity, duration, outcome and notes.
 - Surface model/print information naturally inside Projects and the global Files library rather than creating isolated silos.
 - Preserve MakerVault permissions, authenticated file delivery and existing file-extension/security rules.
 
-Initial scope deliberately excludes live printer control, slicer automation and OctoPrint/Moonraker-style telemetry integrations. Those can be considered after the core model/printer/spool/history workflow is proven.
+Initial scope deliberately excludes live printer control, slicer automation, RFID tag writing/programming and broad OctoPrint/Moonraker-style telemetry control. External filament integrations should degrade gracefully when unavailable, and MakerVault must remain usable as a standalone source of truth.
 
 ## After v0.6.0
 
