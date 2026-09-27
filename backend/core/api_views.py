@@ -326,6 +326,12 @@ def _serialise_file_asset(asset):
         "description": asset.description,
         "sha256": asset.sha256,
         "size_bytes": size_bytes,
+        "project_id": str(asset.project_id) if asset.project_id else "",
+        "project": asset.project.name if asset.project else "",
+        "board_id": str(asset.board_id) if asset.board_id else "",
+        "board": str(asset.board) if asset.board else "",
+        "component_id": str(asset.component_id) if asset.component_id else "",
+        "component": str(asset.component) if asset.component else "",
         "created_at": asset.created_at.isoformat(),
         "updated_at": asset.updated_at.isoformat(),
     }
@@ -861,6 +867,38 @@ def component_image(request, component_id):
         request, component, "core.change_componentmodel",
         _serialise_component, "component",
     )
+
+
+@login_required
+@require_http_methods(["GET"])
+def files_lookup(request):
+    qs = FileAsset.objects.exclude(category="image").select_related(
+        "project", "board__manufacturer", "component__manufacturer"
+    )
+    query = request.GET.get("q", "").strip()
+    category = request.GET.get("category", "").strip()
+    project_id = request.GET.get("project", "").strip()
+    if query:
+        qs = qs.filter(
+            Q(name__icontains=query)
+            | Q(description__icontains=query)
+            | Q(version__icontains=query)
+            | Q(project__name__icontains=query)
+        )
+    if category:
+        if category not in dict(FileAsset.CATEGORIES) or category == "image":
+            return _error("Unknown file category.")
+        qs = qs.filter(category=category)
+    if project_id:
+        qs = qs.filter(project_id=project_id)
+    return JsonResponse({
+        "rows": [_serialise_file_asset(asset) for asset in qs.order_by("category", "-updated_at")[:5000]],
+        "categories": [
+            {"value": value, "label": label}
+            for value, label in FileAsset.CATEGORIES
+            if value != "image"
+        ],
+    })
 
 
 @login_required
