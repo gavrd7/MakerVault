@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { apiFetch } from "../api";
 
@@ -21,6 +21,100 @@ export function BoardImage({ src, alt = "", size = "normal", placeholder = "MCU"
   return <div className={`boardImage boardImage-${size}`}>
     {src ? <img src={src} alt={alt} loading="lazy" /> : <span>{placeholder}</span>}
   </div>;
+}
+
+
+export function ImageViewer({ src, alt = "", title = "Image", onClose }) {
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+  const dragRef = useRef(null);
+  const viewerRef = useRef(null);
+
+  useEffect(() => {
+    function keydown(event) {
+      if (event.key === "Escape") onClose?.();
+      if (event.key === "+" || event.key === "=") setScale(value => Math.min(8, value + 0.25));
+      if (event.key === "-") setScale(value => Math.max(0.25, value - 0.25));
+      if (event.key === "0") { setScale(1); setOffset({ x: 0, y: 0 }); }
+    }
+    window.addEventListener("keydown", keydown);
+    return () => window.removeEventListener("keydown", keydown);
+  }, [onClose]);
+
+  if (!src) return null;
+
+  function zoom(delta) {
+    setScale(value => Math.min(8, Math.max(0.25, value + delta)));
+  }
+
+  function reset() {
+    setScale(1);
+    setOffset({ x: 0, y: 0 });
+  }
+
+  async function fullscreen() {
+    try {
+      if (!document.fullscreenElement) await viewerRef.current?.requestFullscreen?.();
+      else await document.exitFullscreen?.();
+    } catch {
+      // Browser may deny fullscreen outside a user gesture; no further action needed.
+    }
+  }
+
+  function pointerDown(event) {
+    if (scale <= 1) return;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    dragRef.current = { x: event.clientX - offset.x, y: event.clientY - offset.y };
+    setDragging(true);
+  }
+
+  function pointerMove(event) {
+    if (!dragging || !dragRef.current) return;
+    setOffset({ x: event.clientX - dragRef.current.x, y: event.clientY - dragRef.current.y });
+  }
+
+  function pointerUp() {
+    dragRef.current = null;
+    setDragging(false);
+  }
+
+  const viewer = <div className="imageViewerBackdrop" onMouseDown={event => {
+    if (event.target === event.currentTarget) onClose?.();
+  }}>
+    <section className="imageViewer" ref={viewerRef} role="dialog" aria-modal="true" aria-label={title}>
+      <div className="imageViewerToolbar">
+        <strong>{title}</strong>
+        <div className="imageViewerControls">
+          <button type="button" onClick={() => zoom(-0.25)} aria-label="Zoom out">−</button>
+          <span>{Math.round(scale * 100)}%</span>
+          <button type="button" onClick={() => zoom(0.25)} aria-label="Zoom in">＋</button>
+          <button type="button" onClick={reset}>Fit</button>
+          <button type="button" onClick={fullscreen}>Fullscreen</button>
+          <button type="button" className="iconButton" onClick={onClose} aria-label="Close">×</button>
+        </div>
+      </div>
+      <div
+        className={`imageViewerStage ${dragging ? "dragging" : ""}`}
+        onWheel={event => {
+          event.preventDefault();
+          zoom(event.deltaY > 0 ? -0.15 : 0.15);
+        }}
+        onPointerDown={pointerDown}
+        onPointerMove={pointerMove}
+        onPointerUp={pointerUp}
+        onPointerCancel={pointerUp}
+      >
+        <img
+          src={src}
+          alt={alt}
+          draggable={false}
+          style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` }}
+        />
+      </div>
+    </section>
+  </div>;
+  return createPortal(viewer, document.body);
 }
 
 export function Badge({ children, tone = "neutral" }) {
