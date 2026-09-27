@@ -777,3 +777,20 @@
   .printingModelManage{grid-template-columns:1fr}
   .printingModelManage>section{grid-row:auto}
 }
+
+.printingUsageEditor{display:grid;gap:9px;border:1px solid #29313c;border-radius:10px;padding:12px;background:#0d131a}
+.printingUsageTitle{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.printingUsageTitle strong,.printingUsageTitle small{display:block}
+.printingUsageTitle small{color:#7f8a9c;margin-top:2px}
+.printingUsageRow{display:grid;grid-template-columns:minmax(180px,2fr) repeat(3,minmax(90px,1fr)) auto;gap:8px;align-items:end;padding-top:9px;border-top:1px solid #242e3a}
+.printingUsageRow label{display:grid;gap:6px;color:#aeb8c7;font-size:12px}
+.printingUsageRow button{min-height:39px}
+@media(max-width:800px){
+  .printingUsageRow{grid-template-columns:1fr 1fr}
+  .printingUsageRow label:first-child{grid-column:1/-1}
+}
+@media(max-width:520px){
+  .printingUsageTitle{align-items:stretch;flex-direction:column}
+  .printingUsageRow{grid-template-columns:1fr}
+  .printingUsageRow label:first-child{grid-column:auto}
+}
