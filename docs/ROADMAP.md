@@ -71,8 +71,6 @@ This file tracks completed MakerVault milestones and the next candidate areas. T
 - Per-printer job/success/time summaries and richer recent-print history rows.
 - Currency-safe aggregation that does not silently combine unrelated currencies.
 
-## In development
-
 ### v0.6.6 — Slicer metadata intelligence
 
 - Read slicer metadata stored inside compatible 3MF packages without invoking or depending on a slicer.
@@ -80,6 +78,12 @@ This file tracks completed MakerVault milestones and the next candidate areas. T
 - Normalise common saved settings such as layer height, nozzle diameter, infill, wall count, support state and brim configuration.
 - Surface those settings alongside MakerVault's geometry/mesh/orientation intelligence with clear provenance and limitations.
 - Keep parsing local, bounded and safe for self-hosted deployments.
+- Production-style multi-file 3MF rendering with multicolour/material-slot awareness.
+- Multi-plate project detection and interactive per-plate viewer filtering.
+
+## In development
+
+No active development milestone on the stable branch.
 
 ## Next candidates
 
