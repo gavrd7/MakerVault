@@ -500,6 +500,8 @@ class PrinterCatalogModel(TimeStampedModel):
     )
     max_multi_material_units = models.PositiveSmallIntegerField(blank=True, null=True)
     features = models.JSONField(default=dict, blank=True)
+    image = models.ImageField(upload_to="printers/catalog/", blank=True, null=True)
+    image_metadata = models.JSONField(default=dict, blank=True)
     source_url = models.URLField(blank=True)
 
     class Meta:
