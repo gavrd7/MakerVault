@@ -254,7 +254,7 @@ export default function SettingsPage({ config }) {
             <input type="checkbox" checked={form.check_board_data} onChange={e => set("check_board_data", e.target.checked)} />
           </label>
           <label className="settingsToggle">
-            <div><strong>3D printer catalogue</strong><small>Refresh supported printer models from OrcaSlicer without overwriting MakerVault's populated hardware specifications.</small></div>
+            <div><strong>3D printer catalogue</strong><small>Refresh supported printer models from OrcaSlicer without overwriting MakerVault's populated hardware specifications. Current catalogue: {settings.printer_catalogue_models || 0} models across {settings.printer_catalogue_manufacturers || 0} manufacturers · upstream ref {settings.server_printer_catalogue_ref || "main"}.</small></div>
             <input type="checkbox" checked={form.check_printer_data} onChange={e => set("check_printer_data", e.target.checked)} />
           </label>
           <label className="settingsToggle">
