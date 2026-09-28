@@ -55,6 +55,7 @@ export default function SettingsPage({ config }) {
           enabled: form.enabled,
           interval_hours: Number(form.interval_hours),
           check_board_data: form.check_board_data,
+          check_printer_data: form.check_printer_data,
           check_images: form.check_images,
         },
       });
@@ -253,6 +254,10 @@ export default function SettingsPage({ config }) {
             <input type="checkbox" checked={form.check_board_data} onChange={e => set("check_board_data", e.target.checked)} />
           </label>
           <label className="settingsToggle">
+            <div><strong>3D printer catalogue</strong><small>Refresh supported printer models from OrcaSlicer without overwriting MakerVault's populated hardware specifications.</small></div>
+            <input type="checkbox" checked={form.check_printer_data} onChange={e => set("check_printer_data", e.target.checked)} />
+          </label>
+          <label className="settingsToggle">
             <div><strong>Catalogue images</strong><small>Retry missing catalogue images on the saved maintenance cadence.</small></div>
             <input type="checkbox" checked={form.check_images} onChange={e => set("check_images", e.target.checked)} />
           </label>
@@ -263,9 +268,9 @@ export default function SettingsPage({ config }) {
           <div><span>Next scheduled run</span><strong>{settings.enabled ? formatWhen(settings.next_run_at) : "Disabled"}</strong><small>{config.timezone}</small></div>
         </div>
 
-        {(!settings.server_board_enrichment_enabled || !settings.server_image_seeding_enabled) && <div className="settingsCallout">
+        {(!settings.server_board_enrichment_enabled || !settings.server_printer_catalogue_enabled || !settings.server_image_seeding_enabled) && <div className="settingsCallout">
           <strong>Server-level restriction</strong>
-          <p>{!settings.server_board_enrichment_enabled ? "Technical enrichment is disabled by ENRICH_BOARD_CATALOGUE. " : ""}{!settings.server_image_seeding_enabled ? "Image seeding is disabled by SEED_CATALOGUE_IMAGES." : ""} GUI scheduling cannot override a server-level disable.</p>
+          <p>{!settings.server_board_enrichment_enabled ? "Technical enrichment is disabled by ENRICH_BOARD_CATALOGUE. " : ""}{!settings.server_printer_catalogue_enabled ? "OrcaSlicer printer catalogue sync is disabled by SYNC_ORCASLICER_PRINTER_CATALOGUE. " : ""}{!settings.server_image_seeding_enabled ? "Image seeding is disabled by SEED_CATALOGUE_IMAGES." : ""} GUI scheduling cannot override a server-level disable.</p>
         </div>}
 
         <div className="settingsActions">
@@ -338,7 +343,7 @@ export default function SettingsPage({ config }) {
 
     <section className="panel settingsInfo">
       <h3>How scheduled checks behave</h3>
-      <p>The scheduler does not blindly redownload the whole catalogue every day. It re-checks supported online board sources and retries records still missing images on the saved cadence. Existing local images are skipped, confidence/licence rules remain enforced, and populated/user-edited specification values are not overwritten.</p>
+      <p>The scheduler re-checks supported online board sources, refreshes OrcaSlicer's printer-model manifests when enabled, and retries records still missing images on the saved cadence. OrcaSlicer expands catalogue breadth but does not overwrite populated MakerVault hardware specifications; existing local images are skipped and confidence/licence rules remain enforced.</p>
       <p>Restarting or rebuilding the MakerVault container does not reset the interval. The schedule is stored in the database and resumes from the saved next-run time.</p>
     </section>
     {reviewState && <IntegrationReviewModal
