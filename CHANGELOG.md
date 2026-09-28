@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Model intelligence analysis now refreshes the selected model in place instead of closing the viewer/manage workflow and returning to the Model Library.
+- Normalised View/Download/Detach and Files/Project action sizing and spacing so download links visually match surrounding buttons.
 - Extended the STL/3MF viewer into model management, the global Files library and project file lists.
 - Added lazy rendered STL/3MF thumbnail previews in Files and Projects, replacing generic extension badges for viewable 3D assets.
 - Model revision rows now provide direct **View** and **Download** actions.
