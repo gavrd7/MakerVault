@@ -453,7 +453,7 @@ function PrinterManageModal({ printer, manufacturers, models, locations, onClose
       catalog_model_id: "",
       model: "",
       multi_material_installed: false,
-      build_volume_x_mm: ""
+      build_volume_x_mm: "",
       build_volume_y_mm: "",
       build_volume_z_mm: "",
       nozzle_mm: "0.4",
