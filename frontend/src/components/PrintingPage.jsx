@@ -202,8 +202,10 @@ export default function PrintingPage({ config, projects }) {
       printer={claimSlot.printer}
       slot={claimSlot.slot}
       filaments={data?.filaments || []}
+      spools={data?.spools || []}
       currency={config?.currency || "GBP"}
       canCreateFilament={canAddFilament}
+      canLinkExisting={canChangeSpool}
       onClose={() => setClaimSlot(null)}
       onSaved={async () => { setClaimSlot(null); await load(); }}
     />}
@@ -948,8 +950,10 @@ function findDetectedFilamentMatch(filaments, slot) {
   return bestScore >= 6 ? best : null;
 }
 
-function DiscoveredSpoolModal({ printer, slot, filaments, currency, canCreateFilament, onClose, onSaved }) {
+function DiscoveredSpoolModal({ printer, slot, filaments, spools, currency, canCreateFilament, canLinkExisting, onClose, onSaved }) {
   const initialMatch = findDetectedFilamentMatch(filaments, slot);
+  const [physicalMode, setPhysicalMode] = useState("create");
+  const [existingSpoolId, setExistingSpoolId] = useState("");
   const [availableFilaments, setAvailableFilaments] = useState(filaments || []);
   const [mode, setMode] = useState(initialMatch ? "existing" : "new");
   const [form, setForm] = useState({
@@ -1013,15 +1017,31 @@ function DiscoveredSpoolModal({ printer, slot, filaments, currency, canCreateFil
     }));
   }
 
+  const candidateSpools = [...(spools || [])]
+    .filter(spool => !spool.loaded_slots?.length)
+    .sort((a, b) => {
+      const score = spool => {
+        let value = 0;
+        if (normaliseDetectedText(spool.material) === normaliseDetectedText(slot.material)) value += 4;
+        if (slot.color_hex && normaliseDetectedText(spool.color_hex) === normaliseDetectedText(slot.color_hex)) value += 5;
+        if (slot.vendor && normaliseDetectedText(spool.manufacturer) === normaliseDetectedText(slot.vendor)) value += 3;
+        if (slot.product_name && normaliseDetectedText(spool.filament).includes(normaliseDetectedText(slot.product_name))) value += 2;
+        return value;
+      };
+      return score(b) - score(a);
+    });
+
   async function submit(event) {
     event.preventDefault();
     setBusy(true); setError("");
     try {
-      const body = {
-        ...form,
-        filament_id: mode === "existing" ? form.filament_id : "",
-        new_filament: mode === "new" ? newFilament : undefined,
-      };
+      const body = physicalMode === "link"
+        ? { existing_spool_id: existingSpoolId }
+        : {
+            ...form,
+            filament_id: mode === "existing" ? form.filament_id : "",
+            new_filament: mode === "new" ? newFilament : undefined,
+          };
       await apiFetch("/api/printing/slots/" + slot.id + "/add-to-inventory/", {
         method: "POST",
         body,
@@ -1035,10 +1055,11 @@ function DiscoveredSpoolModal({ printer, slot, filaments, currency, canCreateFil
   }
 
   const detectedPercent = slot.remaining_percent != null ? Math.round(slot.remaining_percent) : null;
+  const cfsWithoutPhysicalUid = slot.system === "creality_cfs" && !slot.physical_tag_uid_available;
 
   return <Modal
-    title="Add detected spool to inventory"
-    subtitle={"MakerVault discovered this material through " + slot.system_label + ". Review the detected values before creating the native spool record."}
+    title="Identify detected physical spool"
+    subtitle={"MakerVault discovered this material through " + slot.system_label + ". Confirm whether it is an existing physical spool or a new inventory item."}
     onClose={onClose}
     wide
   >
@@ -1052,43 +1073,72 @@ function DiscoveredSpoolModal({ printer, slot, filaments, currency, canCreateFil
           {slot.vendor && <Badge>{slot.vendor}</Badge>}
           {slot.product_name && <Badge tone="accent">{slot.product_name}</Badge>}
           {slot.material && <Badge>{slot.material}</Badge>}
-          {slot.rfid_detected && <Badge tone="good">RFID detected</Badge>}
-          {slot.rfid_uid && <Badge>{slot.rfid_uid}</Badge>}
+          {slot.rfid_detected && <Badge tone="good">RFID material detected</Badge>}
+          {slot.rfid_uid && <Badge>Tag {slot.rfid_uid}</Badge>}
         </div>
       </div>
 
-      <label>Filament record<select value={mode} onChange={e => setMode(e.target.value)}>
-        <option value="existing">Use existing MakerVault filament</option>
-        {canCreateFilament && <option value="new">Create a new filament product from detected data</option>}
+      {cfsWithoutPhysicalUid && <div className="settingsCallout full">
+        <strong>CFS cannot uniquely identify this physical reel</strong>
+        <p>Creality's local CFS feed reports an RFID material/profile code{slot.material_code ? " (" + slot.material_code + ")" : ""}, but not the unique serial of the RFID chip. MakerVault therefore will not auto-link this slot to a physical spool. Confirm the reel below.</p>
+      </div>}
+
+      <label className="full">Physical spool action<select value={physicalMode} onChange={e => setPhysicalMode(e.target.value)}>
+        <option value="create">Create a new physical spool</option>
+        {canLinkExisting && <option value="link">Link an existing MakerVault spool</option>}
       </select></label>
 
-      {mode === "existing" && <label>Existing filament<select required value={form.filament_id} onChange={e => existingFilamentChanged(e.target.value)} disabled={loadingFilaments}>
-        <option value="">{loadingFilaments ? "Loading filaments…" : "Choose filament…"}</option>
-        {availableFilaments.map(item => <option key={item.id} value={item.id}>{item.display_name} · {item.material}{item.color_name ? " · " + item.color_name : ""}</option>)}
-      </select></label>}
-
-      {mode === "new" && <>
-        <label>Manufacturer<input value={newFilament.manufacturer_name} onChange={e => setNew("manufacturer_name", e.target.value)} placeholder="eSUN" /></label>
-        <label>Product name<input required value={newFilament.name} onChange={e => setNew("name", e.target.value)} placeholder="PLA+ HS" /></label>
-        <label>Material<input required value={newFilament.material} onChange={e => setNew("material", e.target.value)} placeholder="PLA" /></label>
-        <label>Colour name<input value={newFilament.color_name} onChange={e => setNew("color_name", e.target.value)} placeholder="Purple" /></label>
-        <label>Detected colour<div className="colorInputRow"><input type="color" value={(newFilament.color_hex || "#777777").slice(0, 7)} onChange={e => setNew("color_hex", e.target.value)} /><input value={newFilament.color_hex} onChange={e => setNew("color_hex", e.target.value)} placeholder="#7b1fa2" /></div></label>
-        <label>Filament diameter (mm)<input type="number" min="0.5" step="0.01" value={newFilament.diameter_mm} onChange={e => setNew("diameter_mm", e.target.value)} /></label>
-        <label>Nominal spool weight (g)<input type="number" min="0" step="0.1" value={newFilament.nominal_weight_g} onChange={e => { setNew("nominal_weight_g", e.target.value); if (!form.initial_weight_g) set("initial_weight_g", e.target.value); }} placeholder="1000" /></label>
+      {physicalMode === "link" && <>
+        <label className="full">Existing physical spool<select required value={existingSpoolId} onChange={e => setExistingSpoolId(e.target.value)}>
+          <option value="">Choose an unloaded spool…</option>
+          {candidateSpools.map(spool => <option key={spool.id} value={spool.id}>
+            {spool.spool_id} · {spool.filament}{spool.color_name ? " · " + spool.color_name : ""}{spool.rfid_uid ? " · RFID " + spool.rfid_uid : ""}
+          </option>)}
+        </select><small>Matching material and colour are shown first, but the final choice is yours.</small></label>
+        {!candidateSpools.length && <div className="formError full">There are no currently unloaded MakerVault spools available to link.</div>}
       </>}
 
-      <label>RFID tag ID<input value={form.rfid_uid} onChange={e => set("rfid_uid", e.target.value.toUpperCase())} placeholder="Detected tag ID" /><small>{slot.rfid_uid ? "Detected from the loaded spool. This uniquely identifies the physical reel." : "Optional when the provider cannot read an RFID tag."}</small></label>
-      <label>Initial filament weight (g)<input type="number" min="0" step="0.1" value={form.initial_weight_g} onChange={e => set("initial_weight_g", e.target.value)} placeholder="1000" /></label>
-      <label>Remaining weight (g)<input type="number" min="0" step="0.1" value={form.remaining_weight_g} onChange={e => set("remaining_weight_g", e.target.value)} placeholder={detectedPercent != null ? "Auto from " + detectedPercent + "% if left blank" : ""} /></label>
-      <label>Status<select value={form.status} onChange={e => set("status", e.target.value)}><option value="open">Open</option><option value="sealed">Sealed</option><option value="drying">Drying</option><option value="empty">Empty</option><option value="retired">Retired</option></select></label>
-      <label>Purchase cost<input type="number" min="0" step="0.01" value={form.purchase_cost} onChange={e => set("purchase_cost", e.target.value)} /></label>
-      <label>Opened on<input type="date" value={form.opened_on} onChange={e => set("opened_on", e.target.value)} /></label>
-      <div className="settingsCallout"><strong>Placement</strong><p>This spool is currently loaded in {printer.name}, so MakerVault will assign it to that printer automatically.</p></div>
-      <label className="full">Notes<textarea rows="3" value={form.notes} onChange={e => set("notes", e.target.value)} /></label>
+      {physicalMode === "create" && <>
+        <label>Filament record<select value={mode} onChange={e => setMode(e.target.value)}>
+          <option value="existing">Use existing MakerVault filament</option>
+          {canCreateFilament && <option value="new">Create a new filament product from detected data</option>}
+        </select></label>
+
+        {mode === "existing" && <label>Existing filament<select required value={form.filament_id} onChange={e => existingFilamentChanged(e.target.value)} disabled={loadingFilaments}>
+          <option value="">{loadingFilaments ? "Loading filaments…" : "Choose filament…"}</option>
+          {availableFilaments.map(item => <option key={item.id} value={item.id}>{item.display_name} · {item.material}{item.color_name ? " · " + item.color_name : ""}</option>)}
+        </select></label>}
+
+        {mode === "new" && <>
+          <label>Manufacturer<input value={newFilament.manufacturer_name} onChange={e => setNew("manufacturer_name", e.target.value)} placeholder="eSUN" /></label>
+          <label>Product name<input required value={newFilament.name} onChange={e => setNew("name", e.target.value)} placeholder="PLA+ HS" /></label>
+          <label>Material<input required value={newFilament.material} onChange={e => setNew("material", e.target.value)} placeholder="PLA" /></label>
+          <label>Colour name<input value={newFilament.color_name} onChange={e => setNew("color_name", e.target.value)} placeholder="Manufacturer colour name" /></label>
+          <label>Detected colour<div className="colorInputRow"><input type="color" value={(newFilament.color_hex || "#777777").slice(0, 7)} onChange={e => setNew("color_hex", e.target.value)} /><input value={newFilament.color_hex} onChange={e => setNew("color_hex", e.target.value)} placeholder="#7b1fa2" /></div></label>
+          <label>Filament diameter (mm)<input type="number" min="0.5" step="0.01" value={newFilament.diameter_mm} onChange={e => setNew("diameter_mm", e.target.value)} /></label>
+          <label>Nominal spool weight (g)<input type="number" min="0" step="0.1" value={newFilament.nominal_weight_g} onChange={e => { setNew("nominal_weight_g", e.target.value); if (!form.initial_weight_g) set("initial_weight_g", e.target.value); }} placeholder="1000" /></label>
+        </>}
+
+        <label>Physical RFID tag ID<input value={form.rfid_uid} onChange={e => set("rfid_uid", e.target.value.toUpperCase())} placeholder="Optional unique chip/tag serial" /><small>{slot.rfid_uid ? "A unique tag ID was supplied by this integration." : "Optional. Do not enter the CFS material code here; this field is for a genuinely unique physical tag ID."}</small></label>
+        <label>Initial filament weight (g)<input type="number" min="0" step="0.1" value={form.initial_weight_g} onChange={e => set("initial_weight_g", e.target.value)} placeholder="1000" /></label>
+        <label>Remaining weight (g)<input type="number" min="0" step="0.1" value={form.remaining_weight_g} onChange={e => set("remaining_weight_g", e.target.value)} placeholder={detectedPercent != null ? "Auto from " + detectedPercent + "% if left blank" : ""} /></label>
+        <label>Status<select value={form.status} onChange={e => set("status", e.target.value)}><option value="open">Open</option><option value="sealed">Sealed</option><option value="drying">Drying</option><option value="empty">Empty</option><option value="retired">Retired</option></select></label>
+        <label>Purchase cost<input type="number" min="0" step="0.01" value={form.purchase_cost} onChange={e => set("purchase_cost", e.target.value)} /></label>
+        <label>Opened on<input type="date" value={form.opened_on} onChange={e => set("opened_on", e.target.value)} /></label>
+        <div className="settingsCallout"><strong>Placement</strong><p>This spool is currently loaded in {printer.name}, so MakerVault will assign it to that printer automatically.</p></div>
+        <label className="full">Notes<textarea rows="3" value={form.notes} onChange={e => set("notes", e.target.value)} /></label>
+      </>}
 
       <div className="formActions full">
         <button type="button" onClick={onClose}>Cancel</button>
-        <button className="primary" disabled={busy || (mode === "existing" && !form.filament_id) || (mode === "new" && (!newFilament.name || !newFilament.material))}>{busy ? "Adding…" : "Add to inventory & link slot"}</button>
+        <button className="primary" disabled={
+          busy ||
+          (physicalMode === "link" && !existingSpoolId) ||
+          (physicalMode === "create" && mode === "existing" && !form.filament_id) ||
+          (physicalMode === "create" && mode === "new" && (!newFilament.name || !newFilament.material))
+        }>
+          {busy ? "Saving…" : physicalMode === "link" ? "Link physical spool" : "Add to inventory & link slot"}
+        </button>
       </div>
     </form>
   </Modal>;
