@@ -28,14 +28,13 @@ export default function ComponentsPage({ components, setComponents, boards, proj
     const q = query.trim().toLowerCase();
     return components.filter(c =>
       (!category || c.category === category)
-      && (!q || [c.name, c.manufacturer, c.category, c.part_number, c.type, c.interface].join(" ").toLowerCase().includes(q))
+      && (!q || [c.name, c.category, c.part_number, c.type, c.interface].join(" ").toLowerCase().includes(q))
     );
   }, [components, query, category]);
 
   const columns = useMemo(() => [
     { headerName: "", field: "image", width: 72, sortable: false, filter: false, cellRenderer: p => <BoardImage src={p.value} alt={p.data?.name || ""} size="tiny" placeholder="PART" /> },
     { field: "category", minWidth: 155 },
-    { field: "manufacturer", minWidth: 145 },
     { field: "name", headerName: "Component", minWidth: 255, flex: 1 },
     { field: "part_number", headerName: "Part / IC", minWidth: 135 },
     { field: "type", headerName: "Type", minWidth: 130 },
@@ -119,7 +118,7 @@ function ComponentDetail({ component, loading, canEdit, canAddInventory, boards,
     <div className="detailHead"><h3>Component details</h3><button className="iconButton" onClick={onClose}>×</button></div>
     {loading ? <LoadingBlock label="Loading component details…" /> : <>
       <BoardImage src={component.image} alt={component.name} size="large" placeholder="PART" />
-      <div className="detailTitleRow"><div><h2>{component.name}</h2><p className="muted detailMaker">{component.manufacturer} · {component.category}</p></div><div className="detailActions">{canAddInventory && <button className="primary" onClick={() => setInventoryOpen(true)}>＋ Add to inventory</button>}{canEdit && <button onClick={() => setImageOpen(true)}>Image</button>}</div></div>
+      <div className="detailTitleRow"><div><h2>{component.name}</h2><p className="muted detailMaker">{component.category}</p></div><div className="detailActions">{canAddInventory && <button className="primary" onClick={() => setInventoryOpen(true)}>＋ Add to inventory</button>}{canEdit && <button onClick={() => setImageOpen(true)}>Image</button>}</div></div>
       <p className="muted">{component.description || "Reusable makerspace component definition."}</p>
       <div className="badgeRow">
         {component.type && <Badge tone="accent">{component.type}</Badge>}
@@ -128,7 +127,6 @@ function ComponentDetail({ component, loading, canEdit, canAddInventory, boards,
         {component.image_cached && <Badge tone="good">Image cached</Badge>}
       </div>
       <dl className="specList">
-        <div><dt>Manufacturer</dt><dd>{component.manufacturer}</dd></div>
         <div><dt>Part / IC</dt><dd>{component.part_number || "—"}</dd></div>
         <div><dt>Category</dt><dd>{component.category}</dd></div>
         <div><dt>Source</dt><dd>{component.source_url ? <a href={component.source_url} target="_blank" rel="noreferrer">{component.source} ↗</a> : component.source}</dd></div>
@@ -164,7 +162,7 @@ function ComponentDetail({ component, loading, canEdit, canAddInventory, boards,
 
 function AddComponentModal({ onClose, onCreated, categories }) {
   const [form, setForm] = useState({
-    manufacturer: "", category: categories[0] || "", name: "", part_number: "", description: "",
+    category: categories[0] || "", name: "", part_number: "", description: "",
     type: "", interface: "", voltage: "", package: ""
   });
   const [busy, setBusy] = useState(false);
@@ -183,7 +181,6 @@ function AddComponentModal({ onClose, onCreated, categories }) {
       const result = await apiFetch("/api/components/", {
         method: "POST",
         body: {
-          manufacturer: form.manufacturer,
           category: form.category,
           name: form.name,
           part_number: form.part_number,
@@ -202,7 +199,6 @@ function AddComponentModal({ onClose, onCreated, categories }) {
   return <Modal title="Add component" subtitle="Create a reusable component definition for BOMs and physical stock." onClose={onClose} wide>
     <form className="formGrid" onSubmit={submit}>
       {error && <div className="formError full">{error}</div>}
-      <label>Manufacturer<input value={form.manufacturer} onChange={e => set("manufacturer", e.target.value)} placeholder="Generic" /></label>
       <label>Category<input list="component-categories" value={form.category} onChange={e => set("category", e.target.value)} /><datalist id="component-categories">{categories.map(x => <option key={x} value={x} />)}</datalist></label>
       <label className="full">Name<input required value={form.name} onChange={e => set("name", e.target.value)} /></label>
       <label>Part / IC<input value={form.part_number} onChange={e => set("part_number", e.target.value)} /></label>
