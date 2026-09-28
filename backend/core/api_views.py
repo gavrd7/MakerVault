@@ -2171,9 +2171,11 @@ def _serialise_printing_integration(item):
             is_active=True,
             catalog_model__multi_material_system="creality_cfs",
         )
-        configured = compatible.exclude(connection_host="")
+        installed = compatible.filter(multi_material_installed=True)
+        configured = installed.exclude(connection_host="")
         extra = {
             "compatible_printers": compatible.count(),
+            "installed_printers": installed.count(),
             "configured_printers": configured.count(),
         }
     elif item.provider == "spoolman":
@@ -2279,6 +2281,7 @@ def printing_integration_detail(request, provider):
         elif item.provider == "creality_cfs":
             configured = Printer.objects.filter(
                 is_active=True,
+                multi_material_installed=True,
                 catalog_model__multi_material_system="creality_cfs",
             ).exclude(connection_host="").exists()
             if not configured:
@@ -2683,6 +2686,17 @@ def _serialise_printer(printer):
         "location_id": str(printer.printing_location_id) if printer.printing_location_id else None,
         "location": printer.printing_location.name if printer.printing_location else printer.location,
         "is_active": printer.is_active,
+        "multi_material_installed": printer.multi_material_installed,
+        "installed_multi_material_system": (
+            catalogue.multi_material_system
+            if catalogue and printer.multi_material_installed
+            else ""
+        ),
+        "installed_multi_material_label": (
+            catalogue.get_multi_material_system_display()
+            if catalogue and printer.multi_material_installed and catalogue.multi_material_system
+            else ""
+        ),
         "connection_host": printer.connection_host,
         "build_volume": {
             "x": _float(printer.build_volume_x_mm),
@@ -3234,6 +3248,7 @@ def printing_printers(request):
             serial_number=str(payload.get("serial_number") or "").strip(),
             printing_location=location,
             is_active=payload.get("is_active") is not False,
+            multi_material_installed=bool(payload.get("multi_material_installed", False)),
             connection_host=str(payload.get("connection_host") or "").strip(),
             build_volume_x_mm=chosen_decimal(
                 "build_volume_x_mm",
@@ -3259,6 +3274,10 @@ def printing_printers(request):
             },
             notes=str(payload.get("notes") or "").strip(),
         )
+        if item.multi_material_installed and (
+            not catalog_model or not catalog_model.multi_material_system
+        ):
+            return _error("This printer model does not have a supported multi-material add-on in the catalogue.")
         item.full_clean()
         item.save()
         item = Printer.objects.select_related(
@@ -3301,6 +3320,8 @@ def printing_printer_detail(request, printer_id):
         return denied
     try:
         payload = _read_json(request)
+        previous_system = item.catalog_model.multi_material_system if item.catalog_model else ""
+        previous_installed = item.multi_material_installed
         if any(key in payload for key in ["catalog_model_id", "printer_manufacturer_id", "manufacturer_id", "manufacturer_name"]):
             maker, catalog_model = _resolve_printer_catalogue(payload)
             item.printer_manufacturer = maker
@@ -3318,11 +3339,22 @@ def printing_printer_detail(request, printer_id):
                     "multi_material_system": catalog_model.multi_material_system,
                     "catalogue_source_url": catalog_model.source_url,
                 }
+                if previous_system != catalog_model.multi_material_system:
+                    item.multi_material_installed = False
+            else:
+                item.multi_material_installed = False
         if "location_id" in payload:
             item.printing_location = _resolve_printing_location(payload.get("location_id"))
             item.location = ""
         if "is_active" in payload:
             item.is_active = bool(payload.get("is_active"))
+        if "multi_material_installed" in payload:
+            requested_installed = bool(payload.get("multi_material_installed"))
+            if requested_installed and (
+                not item.catalog_model or not item.catalog_model.multi_material_system
+            ):
+                return _error("This printer model does not have a supported multi-material add-on in the catalogue.")
+            item.multi_material_installed = requested_installed
         for field in ["name", "model", "serial_number", "connection_host", "notes"]:
             if field in payload:
                 setattr(item, field, str(payload.get(field) or "").strip())
@@ -3331,6 +3363,35 @@ def printing_printer_detail(request, printer_id):
                 setattr(item, field, _parse_decimal(payload.get(field), field, allow_none=field != "nozzle_mm"))
         item.full_clean()
         item.save()
+
+        current_system = item.catalog_model.multi_material_system if item.catalog_model else ""
+        systems_to_retire = set()
+        if previous_installed and (not item.multi_material_installed or previous_system != current_system):
+            if previous_system:
+                systems_to_retire.add(previous_system)
+        for system in systems_to_retire:
+            for slot in item.filament_slots.filter(system=system):
+                slot.is_loaded = False
+                slot.spool = None
+                slot.remaining_weight_g = None
+                metadata = dict(slot.metadata or {})
+                metadata.pop("link_source", None)
+                metadata.pop("link_confirmed_at", None)
+                metadata.pop("material_fingerprint", None)
+                slot.metadata = metadata
+                slot.save(update_fields=[
+                    "is_loaded", "spool", "remaining_weight_g", "metadata", "updated_at"
+                ])
+
+        item = Printer.objects.select_related(
+            "manufacturer",
+            "printer_manufacturer",
+            "catalog_model__manufacturer",
+            "printing_location",
+        ).prefetch_related(
+            "filament_slots__spool__filament__manufacturer",
+            "filament_slots__spool__filament__filament_manufacturer",
+        ).get(pk=item.pk)
         return JsonResponse({"item": _serialise_printer(item)})
     except ValidationError as exc:
         return _validation_response(exc)
