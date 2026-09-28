@@ -176,8 +176,13 @@ def fetch_public_image(raw_url: str, stem: str) -> tuple[ContentFile, str, str]:
     raise CatalogueImageError("The image source redirected too many times.")
 
 
-def catalogue_image_metadata(obj) -> tuple[dict, str]:
-    """Return mutable image provenance metadata and the model field that stores it."""
+def catalogue_image_metadata(obj, variant: str = "base") -> tuple[dict, str]:
+    """Return mutable image provenance metadata and its model field."""
+    if variant == "multi_material" and hasattr(obj, "image_multi_material_metadata"):
+        return (
+            dict(getattr(obj, "image_multi_material_metadata", {}) or {}),
+            "image_multi_material_metadata",
+        )
     if hasattr(obj, "specifications"):
         return dict(getattr(obj, "specifications", {}) or {}), "specifications"
     if hasattr(obj, "image_metadata"):
@@ -185,21 +190,30 @@ def catalogue_image_metadata(obj) -> tuple[dict, str]:
     return {}, ""
 
 
-def set_catalogue_image_metadata(obj, metadata: dict):
-    _, field = catalogue_image_metadata(obj)
+def set_catalogue_image_metadata(obj, metadata: dict, variant: str = "base"):
+    _, field = catalogue_image_metadata(obj, variant=variant)
     if field:
         setattr(obj, field, metadata)
     return field
 
 
-def apply_catalogue_image(obj, content: ContentFile, filename: str, source_url: str = "", source_type: str = "upload"):
-    if obj.image:
+def apply_catalogue_image(
+    obj,
+    content: ContentFile,
+    filename: str,
+    source_url: str = "",
+    source_type: str = "upload",
+    variant: str = "base",
+):
+    image_field = "image_multi_material" if variant == "multi_material" else "image"
+    image = getattr(obj, image_field)
+    if image:
         try:
-            obj.image.delete(save=False)
+            image.delete(save=False)
         except OSError:
             pass
-    obj.image.save(filename, content, save=False)
-    metadata, _ = catalogue_image_metadata(obj)
+    getattr(obj, image_field).save(filename, content, save=False)
+    metadata, _ = catalogue_image_metadata(obj, variant=variant)
     metadata["image_source_type"] = source_type
     if source_url:
         metadata["image_source_url"] = source_url
@@ -208,7 +222,7 @@ def apply_catalogue_image(obj, content: ContentFile, filename: str, source_url: 
         metadata.pop("external_image_url", None)
         metadata.pop("image_source_url", None)
     metadata["image_cached_at"] = timezone.now().isoformat()
-    set_catalogue_image_metadata(obj, metadata)
+    set_catalogue_image_metadata(obj, metadata, variant=variant)
     obj.save()
     return obj
 
