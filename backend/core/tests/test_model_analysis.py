@@ -202,7 +202,7 @@ class ModelGeometryAnalysisTests(TestCase):
         self.assertEqual(project["plates"][0]["name"], "Body")
         self.assertEqual(project["plates"][0]["object_count"], 1)
         self.assertEqual(project["materials"][0]["colour"], "#00AEEF")
-        self.assertEqual(project["materials"][1]["profile"], "Generic PLA @K2")
+        self.assertEqual(project["materials"][0]["profile"], "Generic PLA @K2")
 
     def test_3mf_analysis_uses_declared_units_and_objects(self):
         result = analyse_3mf(simple_3mf())
