@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { ThreeMFLoader } from "three/examples/jsm/loaders/3MFLoader.js";
+import * as fflate from "three/examples/jsm/libs/fflate.module.js";
 import { apiFetch } from "../api";
 import { Badge, Modal } from "./Common";
 
@@ -97,6 +98,246 @@ function humaniseSlicerKey(value) {
   return String(value || "")
     .replace(/_/g, " ")
     .replace(/\b\w/g, letter => letter.toUpperCase());
+}
+
+
+
+function threeMfLocalName(value) {
+  return String(value || "").split(":").pop().toLowerCase();
+}
+
+
+function threeMfAttr(element, name) {
+  const target = String(name).toLowerCase();
+  for (const attribute of Array.from(element?.attributes || [])) {
+    if (threeMfLocalName(attribute.name) === target) return attribute.value;
+  }
+  return "";
+}
+
+
+function threeMfChildren(element, name) {
+  const target = String(name).toLowerCase();
+  return Array.from(element?.children || []).filter(child => threeMfLocalName(child.tagName) === target);
+}
+
+
+function threeMfTransform(value) {
+  const values = String(value || "").trim().split(/\s+/).map(Number);
+  if (values.length !== 12 || values.some(item => !Number.isFinite(item))) return new THREE.Matrix4();
+  const [m00,m01,m02,m10,m11,m12,m20,m21,m22,m30,m31,m32] = values;
+  return new THREE.Matrix4().set(
+    m00, m10, m20, m30,
+    m01, m11, m21, m31,
+    m02, m12, m22, m32,
+    0,   0,   0,   1,
+  );
+}
+
+
+function threeMfUnitScale(value) {
+  return {
+    micron: 0.001,
+    millimeter: 1,
+    centimeter: 10,
+    inch: 25.4,
+    foot: 304.8,
+    meter: 1000,
+  }[String(value || "millimeter").toLowerCase()] || 1;
+}
+
+
+function threeMfHasVisibleMesh(root) {
+  let found = false;
+  root?.traverse?.(child => {
+    if (child.isMesh && child.geometry?.attributes?.position?.count) found = true;
+  });
+  return found;
+}
+
+
+function parseProduction3mf(buffer) {
+  const archive = fflate.unzipSync(new Uint8Array(buffer));
+  const decoder = new TextDecoder();
+  const documents = new Map();
+
+  for (const [rawPath, bytes] of Object.entries(archive)) {
+    const path = String(rawPath).replace(/^\/+/, "");
+    if (!path.toLowerCase().endsWith(".model")) continue;
+    const xml = new DOMParser().parseFromString(decoder.decode(bytes), "application/xml");
+    if (xml.querySelector("parsererror")) continue;
+    const root = xml.documentElement;
+    const objects = new Map();
+    const resources = threeMfChildren(root, "resources")[0];
+    for (const object of threeMfChildren(resources, "object")) {
+      const id = threeMfAttr(object, "id");
+      if (id) objects.set(id, object);
+    }
+    documents.set(path, {
+      path,
+      root,
+      objects,
+      scale: threeMfUnitScale(threeMfAttr(root, "unit")),
+    });
+  }
+
+  if (!documents.size) throw new Error("No readable 3MF model documents were found.");
+
+  const projectSettingsBytes = archive["Metadata/project_settings.config"] || archive["metadata/project_settings.config"];
+  let projectSettings = {};
+  if (projectSettingsBytes) {
+    try { projectSettings = JSON.parse(decoder.decode(projectSettingsBytes)); } catch { projectSettings = {}; }
+  }
+  const filamentColours = Array.isArray(projectSettings.filament_colour)
+    ? projectSettings.filament_colour
+    : Array.isArray(projectSettings.default_filament_colour)
+      ? projectSettings.default_filament_colour
+      : [];
+
+  const objectExtruders = new Map();
+  const modelSettingsBytes = archive["Metadata/model_settings.config"] || archive["metadata/model_settings.config"];
+  if (modelSettingsBytes) {
+    const settingsXml = new DOMParser().parseFromString(decoder.decode(modelSettingsBytes), "application/xml");
+    for (const object of Array.from(settingsXml.getElementsByTagName("object"))) {
+      const id = object.getAttribute("id");
+      let extruder = 0;
+      for (const meta of Array.from(object.children || [])) {
+        if (threeMfLocalName(meta.tagName) !== "metadata") continue;
+        if (meta.getAttribute("key") === "extruder") extruder = Number(meta.getAttribute("value")) || 0;
+      }
+      if (id && extruder) objectExtruders.set(id, extruder);
+    }
+  }
+
+  function colourForExtruder(extruder) {
+    const raw = filamentColours[Math.max(0, Number(extruder || 1) - 1)];
+    try {
+      return raw ? new THREE.Color(String(raw).slice(0, 7)) : new THREE.Color(0x8fa9c2);
+    } catch {
+      return new THREE.Color(0x8fa9c2);
+    }
+  }
+
+  function paintState(value) {
+    const text = String(value || "").trim();
+    if (!text || text.length > 2) return 0;
+    const nibbles = text.toUpperCase().split("").reverse().map(char => parseInt(char, 16));
+    if (nibbles.some(value => !Number.isFinite(value))) return 0;
+    const token = nibbles[0];
+    if ((token & 3) !== 0) return 0;
+    const state = token >> 2;
+    if (state < 3) return state;
+    return 3 + (nibbles[1] || 0);
+  }
+
+  function meshFromObject(object, scale, inheritedExtruder) {
+    const meshElement = threeMfChildren(object, "mesh")[0];
+    if (!meshElement) return null;
+    const verticesElement = threeMfChildren(meshElement, "vertices")[0];
+    const trianglesElement = threeMfChildren(meshElement, "triangles")[0];
+    if (!verticesElement || !trianglesElement) return null;
+
+    const vertices = threeMfChildren(verticesElement, "vertex").map(vertex => [
+      Number(threeMfAttr(vertex, "x")) * scale,
+      Number(threeMfAttr(vertex, "y")) * scale,
+      Number(threeMfAttr(vertex, "z")) * scale,
+    ]);
+    const positions = [];
+    const colours = [];
+    let hasPaint = false;
+    const baseExtruder = objectExtruders.get(threeMfAttr(object, "id")) || inheritedExtruder || 1;
+
+    for (const triangle of threeMfChildren(trianglesElement, "triangle")) {
+      const ids = ["v1","v2","v3"].map(key => Number(threeMfAttr(triangle, key)));
+      if (ids.some(id => !Number.isInteger(id) || !vertices[id])) continue;
+      const painted = paintState(threeMfAttr(triangle, "paint_color") || threeMfAttr(triangle, "mmu_segmentation"));
+      const extruder = painted || baseExtruder;
+      const colour = colourForExtruder(extruder);
+      if (painted) hasPaint = true;
+      for (const id of ids) {
+        positions.push(...vertices[id]);
+        colours.push(colour.r, colour.g, colour.b);
+      }
+    }
+    if (!positions.length) return null;
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    if (hasPaint || filamentColours.length) geometry.setAttribute("color", new THREE.Float32BufferAttribute(colours, 3));
+    geometry.computeVertexNormals();
+    const material = new THREE.MeshStandardMaterial({
+      color: hasPaint || filamentColours.length ? 0xffffff : colourForExtruder(baseExtruder),
+      vertexColors: hasPaint || filamentColours.length,
+      roughness: 0.7,
+      metalness: 0.03,
+      side: THREE.DoubleSide,
+    });
+    return new THREE.Mesh(geometry, material);
+  }
+
+  function resolvePath(currentPath, referencedPath) {
+    if (!referencedPath) return currentPath;
+    const clean = String(referencedPath).replace(/^\/+/, "");
+    if (documents.has(clean)) return clean;
+    const base = currentPath.split("/").slice(0, -1);
+    for (const part of clean.split("/")) {
+      if (!part || part === ".") continue;
+      if (part === "..") base.pop();
+      else base.push(part);
+    }
+    const joined = base.join("/");
+    return documents.has(joined) ? joined : clean;
+  }
+
+  const group = new THREE.Group();
+  const mainPath = documents.has("3D/3dmodel.model") ? "3D/3dmodel.model" : documents.keys().next().value;
+
+  function addObject(path, objectId, matrix, inheritedExtruder, stack = new Set()) {
+    const key = path + "#" + objectId;
+    if (stack.has(key)) return;
+    const document = documents.get(path);
+    const object = document?.objects.get(String(objectId));
+    if (!document || !object) return;
+    const nextStack = new Set(stack);
+    nextStack.add(key);
+    const objectExtruder = objectExtruders.get(String(objectId)) || inheritedExtruder || 1;
+
+    const mesh = meshFromObject(object, document.scale, objectExtruder);
+    if (mesh) {
+      mesh.applyMatrix4(matrix);
+      group.add(mesh);
+    }
+
+    const components = threeMfChildren(object, "components")[0];
+    for (const component of threeMfChildren(components, "component")) {
+      const componentPath = resolvePath(path, threeMfAttr(component, "path"));
+      const componentMatrix = matrix.clone().multiply(threeMfTransform(threeMfAttr(component, "transform")));
+      addObject(componentPath, threeMfAttr(component, "objectid"), componentMatrix, objectExtruder, nextStack);
+    }
+  }
+
+  const main = documents.get(mainPath);
+  const build = threeMfChildren(main?.root, "build")[0];
+  const items = threeMfChildren(build, "item");
+  for (const item of items) {
+    addObject(mainPath, threeMfAttr(item, "objectid"), threeMfTransform(threeMfAttr(item, "transform")), 1);
+  }
+
+  // Production/Bambu projects can keep all printable meshes in child model
+  // documents while the root build is intentionally sparse. Fall back to the
+  // child meshes rather than presenting a blank viewer.
+  if (!threeMfHasVisibleMesh(group)) {
+    for (const [path, document] of documents) {
+      for (const [objectId, object] of document.objects) {
+        if (!threeMfChildren(object, "mesh")[0]) continue;
+        const mesh = meshFromObject(object, document.scale, objectExtruders.get(objectId) || 1);
+        if (mesh) group.add(mesh);
+      }
+    }
+  }
+
+  if (!threeMfHasVisibleMesh(group)) throw new Error("The 3MF package contains no renderable mesh geometry.");
+  return group;
 }
 
 
@@ -219,14 +460,25 @@ function ThreeScene({ option, wireframe, showGrid, showAxes, onLoaded, onError, 
         },
       );
     } else {
-      new ThreeMFLoader(manager).load(
-        option.asset.file.url,
-        group => addObject(group),
-        undefined,
-        error => {
+      fetch(option.asset.file.url, { credentials: "same-origin" })
+        .then(response => {
+          if (!response.ok) throw new Error("Could not load 3MF geometry.");
+          return response.arrayBuffer();
+        })
+        .then(data => {
+          if (disposed) return;
+          let group = null;
+          try {
+            group = new ThreeMFLoader(manager).parse(data);
+          } catch {
+            group = null;
+          }
+          if (!threeMfHasVisibleMesh(group)) group = parseProduction3mf(data);
+          addObject(group);
+        })
+        .catch(error => {
           if (!disposed) onError?.(error?.message || "Could not load 3MF geometry.");
-        },
-      );
+        });
     }
 
     const observer = new ResizeObserver(resize);
