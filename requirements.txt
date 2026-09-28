@@ -12,7 +12,7 @@ requests>=2.32,<3
 websockets>=15,<16
 beautifulsoup4>=4.13,<5
 defusedxml>=0.7.1,<0.8
-cryptography>=46,<47
+cryptography>=50,<51
 
 # Explicit security floors for runtime/transitive packages scanned in the final image.
 msgpack>=1.2.1,<2
