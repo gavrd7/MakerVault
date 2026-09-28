@@ -44,6 +44,20 @@ class GenericComponentCatalogueTests(TestCase):
             Manufacturer.objects.filter(name="Legacy Component Brand").exists()
         )
 
+    def test_starter_catalogue_tolerates_existing_duplicate_component_identity(self):
+        ComponentModel.objects.create(name="220 ohm resistor", part_number="")
+        ComponentModel.objects.create(name="220 ohm resistor", part_number="")
+
+        call_command("seed_catalogue")
+
+        self.assertEqual(
+            ComponentModel.objects.filter(
+                name="220 ohm resistor",
+                part_number="",
+            ).count(),
+            2,
+        )
+
     def test_starter_catalogue_does_not_create_component_brand_manufacturers(self):
         call_command("seed_catalogue")
         self.assertTrue(ComponentModel.objects.filter(name__icontains="BME280").exists())
