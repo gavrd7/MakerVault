@@ -106,8 +106,11 @@ def _image_url(obj):
             return obj.image.url
         except ValueError:
             pass
-    specs = getattr(obj, "specifications", {}) or {}
-    return specs.get("external_image_url") or ""
+    metadata = getattr(obj, "specifications", None)
+    if metadata is None:
+        metadata = getattr(obj, "image_metadata", {})
+    metadata = metadata or {}
+    return metadata.get("external_image_url") or ""
 
 
 def _serialise_board(board, detailed=False):
@@ -2090,10 +2093,13 @@ def import_board_commit(request):
 
 
 def _attribution_row(kind, obj):
-    specs = obj.specifications or {}
-    provider = specs.get("image_source_provider") or ""
-    page = specs.get("image_source_page") or ""
-    image_url = specs.get("image_source_url") or specs.get("external_image_url") or ""
+    metadata = getattr(obj, "specifications", None)
+    if metadata is None:
+        metadata = getattr(obj, "image_metadata", {})
+    metadata = metadata or {}
+    provider = metadata.get("image_source_provider") or ""
+    page = metadata.get("image_source_page") or ""
+    image_url = metadata.get("image_source_url") or metadata.get("external_image_url") or ""
     if not (provider or page or image_url):
         return None
     return {
@@ -2101,8 +2107,8 @@ def _attribution_row(kind, obj):
         "id": str(obj.id),
         "name": str(obj),
         "provider": provider or "External source",
-        "author": specs.get("image_author") or "",
-        "license": specs.get("image_license") or "",
+        "author": metadata.get("image_author") or "",
+        "license": metadata.get("image_license") or "",
         "source_page": page or image_url,
         "cached": bool(obj.image),
     }
@@ -2118,6 +2124,10 @@ def attributions(request):
             rows.append(row)
     for component in ComponentModel.objects.select_related("manufacturer", "category").exclude(specifications={}):
         row = _attribution_row("Component", component)
+        if row:
+            rows.append(row)
+    for printer_model in PrinterCatalogModel.objects.select_related("manufacturer").exclude(image_metadata={}):
+        row = _attribution_row("3D printer", printer_model)
         if row:
             rows.append(row)
     rows.sort(key=lambda row: (row["provider"].lower(), row["name"].lower()))
@@ -2553,6 +2563,12 @@ def _serialise_printer_catalog_model(item):
         "multi_material_label": item.get_multi_material_system_display() if item.multi_material_system else "",
         "max_multi_material_units": item.max_multi_material_units,
         "features": item.features or {},
+        "image": _image_url(item),
+        "image_cached": bool(item.image),
+        "image_source_page": (item.image_metadata or {}).get("image_source_page") or "",
+        "image_source_provider": (item.image_metadata or {}).get("image_source_provider") or "",
+        "image_license": (item.image_metadata or {}).get("image_license") or "",
+        "image_author": (item.image_metadata or {}).get("image_author") or "",
         "source_url": item.source_url,
     }
 
