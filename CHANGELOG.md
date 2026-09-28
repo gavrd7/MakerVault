@@ -1,6 +1,17 @@
 # Changelog
 
-## v0.6.0.2 — in development
+## v0.6.0.3 — in development
+
+- Added an optional OrcaSlicer-backed 3D-printer catalogue synchroniser using Orca's vendor `machine_model_list` manifests.
+- Expanded catalogue maintenance with a dedicated **3D printer catalogue** toggle, scheduled refresh and server-level enable/disable setting.
+- Fresh/sparse MakerVault installations perform a best-effort OrcaSlicer catalogue expansion during startup; populated catalogues rely on the normal persistent maintenance schedule.
+- OrcaSlicer catalogue imports are idempotent, preserve source/ref/vendor-version provenance and never delete local printer models or overwrite populated MakerVault hardware specifications.
+- Normalised Orca manufacturer naming (including Bambu Lab/QIDI/ELEGOO aliases) and collapse Creality `_CFS-C` slicer variants into the base printer model plus optional CFS compatibility.
+- Bambu Lab model imports are marked as AMS-family compatible while the actual installed AMS/AMS Lite hardware remains an owned-printer setting.
+- Added printer-catalogue model/manufacturer coverage counts to Settings so catalogue growth is visible after a sync.
+- Added OrcaSlicer AGPL-3.0 catalogue-source attribution to MakerVault's third-party notices.
+
+## v0.6.0.2 — development revision
 
 - Separated printer-model multi-material compatibility from the hardware actually installed on each owned printer.
 - Added per-printer add-on controls such as Creality CFS / Bambu AMS installed, with safe removal that retires stale live slot assignments.
