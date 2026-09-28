@@ -160,8 +160,12 @@ export default function AdminUsersPanel({ config }) {
           <h3>Instance storage policy</h3>
           <p>New and default-policy accounts inherit this limit. Individual users can override it or be set to Unlimited.</p>
         </div>
-        <Badge tone="accent">{formatBytes(totals.used)} across {users.length} account{users.length === 1 ? "" : "s"}</Badge>
+        <div className="adminUserBadges">
+          <Badge tone={policy.encryption?.configured ? "good" : "danger"}>{policy.encryption?.configured ? "Encrypted storage ready" : "Encryption key missing"}</Badge>
+          <Badge tone="accent">{formatBytes(totals.used)} across {users.length} account{users.length === 1 ? "" : "s"}</Badge>
+        </div>
       </div>
+      {!policy.encryption?.configured && <div className="settingsCallout"><strong>Private storage key is not available</strong><p>New private uploads cannot be encrypted until the key file or environment key is restored. Do not replace a lost key if encrypted data already exists.</p></div>}
       <form className="settingsForm" onSubmit={savePolicy}>
         <label><span>Default policy</span><select value={policy.mode} onChange={e => setPolicy(current => ({ ...current, mode: e.target.value }))}><option value="limited">Limited</option><option value="unlimited">Unlimited</option></select></label>
         {policy.mode === "limited" && <label><span>Default quota</span><div className="intervalInput"><input type="number" min="0" step="0.25" value={defaultQuotaGiB} onChange={e => setDefaultQuotaGiB(e.target.value)} /><span>GiB</span></div><small>Applied to users whose quota mode is Instance default.</small></label>}
