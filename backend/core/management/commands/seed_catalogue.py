@@ -3,6 +3,9 @@ from django.utils.text import slugify
 
 from core.catalogue_seed import BOARD_DEFINITIONS, CATEGORY_TREE, COMPONENT_DEFINITIONS
 from core.catalogue_profiles import apply_board_profile, apply_component_profile
+STARTER_CATALOGUE_VERSION = "0.7.0.1"
+
+
 from core.models import (
     BoardCompatibility,
     BoardModel,
@@ -36,10 +39,10 @@ class Command(BaseCommand):
         source, _ = CatalogSource.objects.get_or_create(
             name="MakerVault starter catalogue",
             source_type="manual",
-            defaults={"raw_metadata": {"managed_by": "seed_catalogue", "catalogue_version": "0.3.6"}},
+            defaults={"raw_metadata": {"managed_by": "seed_catalogue", "catalogue_version": STARTER_CATALOGUE_VERSION}},
         )
         metadata = dict(source.raw_metadata or {})
-        metadata.update({"managed_by": "seed_catalogue", "catalogue_version": "0.2.1"})
+        metadata.update({"managed_by": "seed_catalogue", "catalogue_version": STARTER_CATALOGUE_VERSION})
         source.raw_metadata = metadata
         source.save(update_fields=["raw_metadata", "updated_at"])
 
@@ -59,7 +62,7 @@ class Command(BaseCommand):
             defaults["specifications"] = {
                 **defaults["specifications"],
                 "starter_catalogue": True,
-                "catalogue_version": "0.2.1",
+                "catalogue_version": STARTER_CATALOGUE_VERSION,
             }
             board, created = BoardModel.objects.get_or_create(
                 manufacturer=maker,
@@ -152,7 +155,7 @@ class Command(BaseCommand):
                 if not component.description and definition.get("description"):
                     component.description = definition["description"]
                     changed = True
-                merged_specs = {**specs, **(component.specifications or {})}
+                merged_specs = {**specs, **(component.specifications or {})}\n                merged_specs["starter_catalogue"] = True\n                merged_specs["catalogue_version"] = STARTER_CATALOGUE_VERSION
                 if merged_specs != component.specifications:
                     component.specifications = merged_specs
                     changed = True
