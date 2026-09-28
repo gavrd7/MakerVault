@@ -1,12 +1,14 @@
-# MakerVault v0.6.2.1
+# MakerVault v0.6.3.2
 
 MakerVault is a self-hosted makerspace inventory and project system for electronics, firmware, fabrication and 3D-printing assets.
 
-Development builds within a feature milestone use a fourth numeric segment (for example `v0.6.0.1`, `v0.6.0.2`). The fourth segment identifies iterative builds and fixes; the next feature milestone remains `v0.6.1`.
+Development builds within a feature milestone use a fourth numeric segment. The current usability/catalogue development line is `v0.6.3.x`; the stable milestone will become `v0.6.3` when this stacked branch is ready to merge.
 
 v0.6 begins the first-class 3D printing workspace: native printer, filament/spool and model records remain usable standalone, while optional external services and multi-material systems integrate through provider-neutral links.
 
 v0.6.2 introduces the SimplyPrint cloud adapter as a read-only MakerVault-primary integration: printer state, loaded filament/extruders and recent print history can be imported, while physical spool creation/linking remains an explicit MakerVault action.
+
+v0.6.3 focuses on responsive/mobile usability and simplifies the generic electronics component catalogue by removing manufacturer branding from component definitions entirely.
 
 The 3D-printer catalogue starts with MakerVault's curated hardware profiles and can optionally expand/refresh manufacturer and model coverage from OrcaSlicer's public printer manifests. Orca-derived records retain source provenance, while MakerVault's populated specifications and user edits remain authoritative.
 

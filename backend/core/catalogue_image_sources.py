@@ -481,7 +481,7 @@ def run_catalogue_image_seed(*, limit: int | None = None, force_retry: bool = Fa
     try:
         querysets = [
             BoardModel.objects.select_related("manufacturer").order_by("manufacturer__name", "name"),
-            ComponentModel.objects.select_related("manufacturer", "category").order_by("category__name", "name"),
+            ComponentModel.objects.select_related("category").order_by("category__name", "name"),
             PrinterCatalogModel.objects.select_related("manufacturer").order_by("manufacturer__name", "name"),
         ]
         for queryset in querysets:

@@ -20,6 +20,7 @@ export default function SettingsPage({ config }) {
   const [notice, setNotice] = useState("");
   const [reviewState, setReviewState] = useState(null);
   const [reviewBusy, setReviewBusy] = useState("");
+  const [activeTab, setActiveTab] = useState("library");
 
   async function load() {
     setError("");
@@ -249,21 +250,49 @@ export default function SettingsPage({ config }) {
     }
   }
 
+  const enabledIntegrations = integrations.filter(item => item.enabled).length;
+
   return <div className="settingsStack">
     <section className="panel settingsHero">
       <div>
         <span className="settingsEyebrow">Administration</span>
         <h2>MakerVault settings</h2>
-        <p>Manage scheduled catalogue maintenance and optional external integrations from one place.</p>
+        <p>Settings are grouped by the part of MakerVault they belong to, so unrelated controls no longer compete for the same page.</p>
       </div>
       <div className="settingsStatus">
-        <span className={settings.enabled ? "status-pill status-on" : "status-pill"}>{settings.enabled ? "Enabled" : "Disabled"}</span>
+        {activeTab === "library"
+          ? <span className={settings.enabled ? "status-pill status-on" : "status-pill"}>{settings.enabled ? "Updates enabled" : "Updates disabled"}</span>
+          : <span className={enabledIntegrations ? "status-pill status-on" : "status-pill"}>{enabledIntegrations} integration{enabledIntegrations === 1 ? "" : "s"} enabled</span>}
       </div>
     </section>
+
+    <div className="settingsTabs" role="tablist" aria-label="Settings sections">
+      <button
+        type="button"
+        role="tab"
+        aria-selected={activeTab === "library"}
+        className={activeTab === "library" ? "active" : ""}
+        onClick={() => setActiveTab("library")}
+      >
+        <strong>Library updates</strong>
+        <small>Catalogue data, images and maintenance schedule</small>
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={activeTab === "printing"}
+        className={activeTab === "printing" ? "active" : ""}
+        onClick={() => setActiveTab("printing")}
+      >
+        <strong>3D Printing</strong>
+        <small>Spool, printer and multi-material integrations</small>
+      </button>
+    </div>
 
     {error && <div className="error">{error}</div>}
     {notice && <div className="notice">{notice}<button onClick={() => setNotice("")}>×</button></div>}
 
+    {activeTab === "library" && <>
     <section className="panel settingsPanel">
       <div className="panelHead">
         <div><h3>Catalogue maintenance schedule</h3><p>The default interval is 24 hours. The next-run timestamp is stored in PostgreSQL.</p></div>
@@ -312,9 +341,12 @@ export default function SettingsPage({ config }) {
       </form>
     </section>
 
-    <section className="panel settingsPanel">
+    </>}
+
+    {activeTab === "printing" && <>
+    <section className="panel settingsPanel settingsPrintingPanel">
       <div className="panelHead">
-        <div><h3>3D printing integrations</h3><p>Enable the services you use. Connected services can be synchronised manually or on their own schedule.</p></div>
+        <div><h3>3D printing integrations</h3><p>Enable and configure the services used by the 3D Printing area. Connected services can be synchronised manually or on their own schedule.</p></div>
       </div>
       <div className="printingIntegrationGrid settingsIntegrationGrid">
         {integrations.map(item => {
@@ -386,11 +418,13 @@ export default function SettingsPage({ config }) {
       </div>
     </section>
 
-    <section className="panel settingsInfo">
+    </>}
+
+    {activeTab === "library" && <section className="panel settingsInfo">
       <h3>How scheduled checks behave</h3>
       <p>The scheduler re-checks supported online board sources, refreshes OrcaSlicer's printer-model manifests when enabled, and retries records still missing images on the saved cadence. OrcaSlicer expands catalogue breadth but does not overwrite populated MakerVault hardware specifications; existing local images are skipped and confidence/licence rules remain enforced.</p>
       <p>Restarting or rebuilding the MakerVault container does not reset the interval. The schedule is stored in the database and resumes from the saved next-run time.</p>
-    </section>
+    </section>}
     {reviewState && <IntegrationReviewModal
       state={reviewState}
       busyId={reviewBusy}

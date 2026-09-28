@@ -175,7 +175,6 @@ def _serialise_component(component):
     return {
         "id": str(component.id),
         "name": component.name,
-        "manufacturer": component.manufacturer.name if component.manufacturer else "Generic",
         "category": component.category.name if component.category else "Uncategorised",
         "category_id": component.category_id,
         "part_number": component.part_number,
@@ -394,7 +393,7 @@ def _serialise_bom_allocation(allocation):
 def _serialise_bom_item(item):
     allocations = list(item.allocations.select_related(
         "inventory_item__board__manufacturer",
-        "inventory_item__component__manufacturer",
+        "inventory_item__component",
         "allocated_by",
     ).all())
     allocated = sum((allocation.quantity for allocation in allocations), Decimal("0"))
@@ -437,10 +436,10 @@ def _serialise_bom_item(item):
 
 def _project_bom(project):
     items = list(project.bom_items.select_related(
-        "board__manufacturer", "component__manufacturer"
+        "board__manufacturer", "component__category"
     ).prefetch_related(
         "allocations__inventory_item__board__manufacturer",
-        "allocations__inventory_item__component__manufacturer",
+        "allocations__inventory_item__component",
         "allocations__allocated_by",
     ).all())
     rows = [_serialise_bom_item(item) for item in items]
@@ -569,7 +568,7 @@ def _serialise_project(project, detailed=False):
             "tags": project.tags or [],
             "reference_url": project.reference_url,
             "inventory": [_serialise_inventory(item) for item in project.inventory_items.select_related(
-                "board__manufacturer", "component__manufacturer", "project"
+                "board__manufacturer", "project"
             ).order_by("inventory_id")],
             "gallery": [
                 {
@@ -735,7 +734,7 @@ def dashboard(request):
 def inventory(request):
     if request.method == "GET":
         qs = InventoryItem.objects.select_related(
-            "board__manufacturer", "component__manufacturer", "project"
+            "board__manufacturer", "component", "project"
         ).annotate(allocated_quantity=Sum("bom_allocations__quantity")).all()[:5000]
         return JsonResponse({"rows": [_serialise_inventory(item) for item in qs]})
 
@@ -797,7 +796,7 @@ def inventory(request):
 @require_http_methods(["GET", "PATCH", "DELETE"])
 def inventory_detail(request, item_id):
     base_qs = InventoryItem.objects.select_related(
-        "board__manufacturer", "board__source", "component__manufacturer",
+        "board__manufacturer", "board__source", "component",
         "component__category", "component__source", "project"
     )
     if request.method == "GET":
@@ -823,7 +822,7 @@ def inventory_detail(request, item_id):
             for allocation in item.bom_allocations.select_related(
                 "bom_item__project",
                 "bom_item__board__manufacturer",
-                "bom_item__component__manufacturer",
+                "bom_item__component",
             ).order_by("bom_item__project__name", "bom_item__created_at")
         ]
         return JsonResponse({"item": payload})
@@ -909,7 +908,7 @@ def inventory_detail(request, item_id):
             item.save()
             _record_inventory_history(item, request.user, before)
             item = InventoryItem.objects.select_related(
-                "board__manufacturer", "component__manufacturer", "project"
+                "board__manufacturer", "project"
             ).get(pk=item.pk)
             return JsonResponse({"item": _serialise_inventory(item)})
     except ValidationError as exc:
@@ -955,8 +954,6 @@ def boards(request):
         name = str(payload.get("name") or "").strip()
         if not name:
             return _error("Board name is required.", fields={"name": ["This field is required."]})
-        manufacturer_name = str(payload.get("manufacturer") or "Generic").strip() or "Generic"
-        manufacturer, _ = Manufacturer.objects.get_or_create(name=manufacturer_name)
         board = BoardModel(
             manufacturer=manufacturer,
             name=name,
@@ -1022,12 +1019,11 @@ def board_enrich(request, board_id):
 @require_http_methods(["GET", "POST"])
 def components(request):
     if request.method == "GET":
-        qs = ComponentModel.objects.select_related("manufacturer", "category", "source")
+        qs = ComponentModel.objects.select_related("category", "source")
         query = request.GET.get("q", "").strip()
         if query:
             qs = qs.filter(
                 Q(name__icontains=query)
-                | Q(manufacturer__name__icontains=query)
                 | Q(category__name__icontains=query)
                 | Q(part_number__icontains=query)
             )
@@ -1043,8 +1039,6 @@ def components(request):
         name = str(payload.get("name") or "").strip()
         if not name:
             return _error("Component name is required.")
-        manufacturer_name = str(payload.get("manufacturer") or "Generic").strip() or "Generic"
-        manufacturer, _ = Manufacturer.objects.get_or_create(name=manufacturer_name)
         category = None
         category_name = str(payload.get("category") or "").strip()
         if category_name:
@@ -1055,7 +1049,6 @@ def components(request):
         if not isinstance(specifications, dict):
             return _error("Component specifications must be an object.")
         component = ComponentModel(
-            manufacturer=manufacturer,
             category=category,
             name=name,
             part_number=str(payload.get("part_number") or "").strip(),
@@ -1075,7 +1068,7 @@ def components(request):
 @login_required
 @require_http_methods(["GET"])
 def component_detail(request, component_id):
-    component = ComponentModel.objects.select_related("manufacturer", "category", "source").filter(pk=component_id).first()
+    component = ComponentModel.objects.select_related("category", "source").filter(pk=component_id).first()
     if not component:
         return _error("Component not found.", status=404)
     return JsonResponse({"component": _serialise_component(component)})
@@ -1141,7 +1134,7 @@ def board_image(request, board_id):
 @login_required
 @require_http_methods(["POST", "DELETE"])
 def component_image(request, component_id):
-    component = ComponentModel.objects.select_related("manufacturer", "category", "source").filter(pk=component_id).first()
+    component = ComponentModel.objects.select_related("category", "source").filter(pk=component_id).first()
     if not component:
         return _error("Component not found.", status=404)
     return _catalogue_image_response(
@@ -1155,7 +1148,7 @@ def component_image(request, component_id):
 def files_lookup(request):
     if request.method == "GET":
         qs = FileAsset.objects.exclude(category="image").select_related(
-            "project", "board__manufacturer", "component__manufacturer"
+            "project", "board__manufacturer", "component__category"
         )
         query = request.GET.get("q", "").strip()
         category = request.GET.get("category", "").strip()
@@ -1346,7 +1339,7 @@ def projects_lookup(request):
 def project_detail(request, project_id):
     project = Project.objects.select_related("created_by").prefetch_related(
         "inventory_items__board__manufacturer",
-        "inventory_items__component__manufacturer",
+        "inventory_items__component",
         "files",
         "repositories",
     ).filter(pk=project_id).first()
@@ -1386,7 +1379,7 @@ def project_detail(request, project_id):
         project.save()
         project = Project.objects.select_related("created_by").prefetch_related(
             "inventory_items__board__manufacturer",
-            "inventory_items__component__manufacturer",
+            "inventory_items__component",
             "files",
             "repositories",
         ).get(pk=project.pk)
@@ -1467,7 +1460,7 @@ def project_bom_items(request, project_id):
         item.full_clean()
         item.save()
         project.save(update_fields=["updated_at"])
-        item = BOMItem.objects.select_related("board__manufacturer", "component__manufacturer").get(pk=item.pk)
+        item = BOMItem.objects.select_related("board__manufacturer", "component__category").get(pk=item.pk)
         return JsonResponse({"bom_item": _serialise_bom_item(item)}, status=201)
     except ValidationError as exc:
         return _validation_response(exc)
@@ -1654,7 +1647,7 @@ def project_bom_allocations(request, project_id, bom_id):
             project.save(update_fields=["updated_at"])
 
             inventory = InventoryItem.objects.select_related(
-                "board__manufacturer", "component__manufacturer", "project"
+                "board__manufacturer", "project"
             ).get(pk=inventory.pk)
             allocation.inventory_item = inventory
             return JsonResponse({
@@ -2132,7 +2125,7 @@ def attributions(request):
         row = _attribution_row("Board", board)
         if row:
             rows.append(row)
-    for component in ComponentModel.objects.select_related("manufacturer", "category").exclude(specifications={}):
+    for component in ComponentModel.objects.select_related("category").exclude(specifications={}):
         row = _attribution_row("Component", component)
         if row:
             rows.append(row)
@@ -2964,7 +2957,7 @@ def printing_overview(request):
         "model_files": [
             _serialise_file_asset(asset)
             for asset in FileAsset.objects.filter(category__in=["mesh", "slicer", "cad"])
-                .select_related("project", "board__manufacturer", "component__manufacturer")
+                .select_related("project", "board__manufacturer", "component__category")
                 .order_by("category", "name")[:5000]
         ],
         "models": [_serialise_printing_model(model) for model in models_3d],
