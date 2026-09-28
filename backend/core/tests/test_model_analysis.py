@@ -201,6 +201,8 @@ class ModelGeometryAnalysisTests(TestCase):
         self.assertEqual(project["used_material_slots"], [1, 2])
         self.assertEqual(project["plates"][0]["name"], "Body")
         self.assertEqual(project["plates"][0]["object_count"], 1)
+        self.assertEqual(project["plates"][0]["material_slots"], [1])
+        self.assertEqual(project["plates"][1]["material_slots"], [2])
         self.assertEqual(project["materials"][0]["colour"], "#00AEEF")
         self.assertEqual(project["materials"][0]["profile"], "Generic PLA @K2")
 
