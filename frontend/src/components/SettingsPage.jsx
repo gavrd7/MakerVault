@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { apiFetch } from "../api";
 import { Badge, LoadingBlock, Modal } from "./Common";
+import AdminUsersPanel from "./AdminUsersPanel";
 
 function formatWhen(value) {
   if (!value) return "Not yet";
@@ -262,7 +263,9 @@ export default function SettingsPage({ config }) {
       <div className="settingsStatus">
         {activeTab === "library"
           ? <span className={settings.enabled ? "status-pill status-on" : "status-pill"}>{settings.enabled ? "Updates enabled" : "Updates disabled"}</span>
-          : <span className={enabledIntegrations ? "status-pill status-on" : "status-pill"}>{enabledIntegrations} integration{enabledIntegrations === 1 ? "" : "s"} enabled</span>}
+          : activeTab === "printing"
+            ? <span className={enabledIntegrations ? "status-pill status-on" : "status-pill"}>{enabledIntegrations} integration{enabledIntegrations === 1 ? "" : "s"} enabled</span>
+            : <span className="status-pill status-on">Account administration</span>}
       </div>
     </section>
 
@@ -287,6 +290,17 @@ export default function SettingsPage({ config }) {
         <strong>3D Printing</strong>
         <small>Spool, printer and multi-material integrations</small>
       </button>
+
+      {config?.is_superuser && <button
+        type="button"
+        role="tab"
+        aria-selected={activeTab === "users"}
+        className={activeTab === "users" ? "active" : ""}
+        onClick={() => setActiveTab("users")}
+      >
+        <strong>Users &amp; storage</strong>
+        <small>Accounts, quotas and destructive data controls</small>
+      </button>}
     </div>
 
     {error && <div className="error">{error}</div>}
@@ -419,6 +433,8 @@ export default function SettingsPage({ config }) {
     </section>
 
     </>}
+
+    {activeTab === "users" && <AdminUsersPanel config={config} />}
 
     {activeTab === "library" && <section className="panel settingsInfo">
       <h3>How scheduled checks behave</h3>
