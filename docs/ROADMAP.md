@@ -63,8 +63,6 @@ This file tracks completed MakerVault milestones and the next candidate areas. T
 - Six-way axis-aligned orientation guidance comparing support-risk surface, bed contact and build height.
 - Slicer output remains authoritative; MakerVault's orientation guidance is deliberately a local geometry heuristic.
 
-## In development
-
 ### v0.6.5 — Print cost & history analytics
 
 - Automatic material-cost estimation from physical-spool purchase price and initial filament weight.
