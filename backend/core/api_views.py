@@ -2643,6 +2643,8 @@ def _serialise_printer_slot(slot):
         "vendor": (slot.metadata or {}).get("vendor", ""),
         "product_name": (slot.metadata or {}).get("product_name", ""),
         "rfid_detected": bool((slot.metadata or {}).get("rfid_detected")),
+        "material_code": (slot.metadata or {}).get("material_code", ""),
+        "physical_tag_uid_available": bool((slot.metadata or {}).get("physical_tag_uid_available")),
         "selected": bool((slot.metadata or {}).get("selected")),
         "rfid_uid": slot.rfid_uid,
         "external_ref": slot.external_ref,
@@ -3389,7 +3391,7 @@ def printing_spools(request):
 @login_required
 @require_http_methods(["POST"])
 def printing_slot_add_to_inventory(request, slot_id):
-    """Turn an unmatched provider-discovered printer slot into native MakerVault inventory."""
+    """Explicitly link or create a physical spool for a provider-discovered slot."""
     denied = _require_permission(request, "core.add_spool")
     if denied:
         return denied
@@ -3410,6 +3412,64 @@ def printing_slot_add_to_inventory(request, slot_id):
 
     try:
         payload = _read_json(request)
+        existing_spool_id = str(payload.get("existing_spool_id") or "").strip()
+
+        if existing_spool_id:
+            change_denied = _require_permission(request, "core.change_spool")
+            if change_denied:
+                return change_denied
+
+            with transaction.atomic():
+                spool = Spool.objects.select_for_update().select_related(
+                    "filament__manufacturer",
+                    "filament__filament_manufacturer",
+                    "storage_location",
+                    "assigned_printer",
+                ).filter(pk=existing_spool_id).first()
+                if not spool:
+                    return _error("Selected MakerVault spool was not found.", status=404)
+
+                other_loaded = PrinterFilamentSlot.objects.filter(
+                    spool=spool,
+                    is_loaded=True,
+                ).exclude(pk=slot.pk).select_related("printer").first()
+                if other_loaded:
+                    return _error(
+                        f"{spool.spool_id} is already linked to a loaded slot on {other_loaded.printer.name}.",
+                        status=409,
+                    )
+
+                spool.assigned_printer = slot.printer
+                spool.storage_location = None
+                spool.location = ""
+                spool.full_clean()
+                spool.save(update_fields=[
+                    "assigned_printer", "storage_location", "location", "updated_at"
+                ])
+
+                metadata = dict(slot.metadata or {})
+                metadata["link_source"] = "user_linked_existing"
+                metadata["link_confirmed_at"] = timezone.now().isoformat()
+                slot.spool = spool
+                slot.metadata = metadata
+                slot.save(update_fields=["spool", "metadata", "updated_at"])
+
+            spool = Spool.objects.select_related(
+                "filament__manufacturer",
+                "filament__filament_manufacturer",
+                "storage_location",
+                "assigned_printer",
+            ).prefetch_related("external_links", "printer_slots__printer").get(pk=spool.pk)
+            slot = PrinterFilamentSlot.objects.select_related(
+                "printer", "spool__filament"
+            ).get(pk=slot.pk)
+            return JsonResponse({
+                "item": _serialise_spool(spool),
+                "slot": _serialise_printer_slot(slot),
+                "created_filament": False,
+                "linked_existing": True,
+            })
+
         created_filament = False
         rfid_uid = str(payload.get("rfid_uid") or slot.rfid_uid or "").strip().upper()
         if rfid_uid:
@@ -3427,9 +3487,9 @@ def printing_slot_add_to_inventory(request, slot_id):
                 if not filament:
                     return _error("Selected filament product was not found.")
             else:
-                denied = _require_permission(request, "core.add_filamentproduct")
-                if denied:
-                    return denied
+                filament_denied = _require_permission(request, "core.add_filamentproduct")
+                if filament_denied:
+                    return filament_denied
 
                 filament_payload = payload.get("new_filament")
                 if not isinstance(filament_payload, dict):
@@ -3477,7 +3537,8 @@ def printing_slot_add_to_inventory(request, slot_id):
                             "printer_id": str(slot.printer_id),
                             "printer": slot.printer.name,
                             "external_ref": slot.external_ref,
-                            "rfid_uid": slot.rfid_uid,
+                            "physical_tag_uid": slot.rfid_uid,
+                            "material_code": (slot.metadata or {}).get("material_code", ""),
                             "vendor": (slot.metadata or {}).get("vendor", ""),
                             "product_name": (slot.metadata or {}).get("product_name", ""),
                         }
@@ -3516,10 +3577,16 @@ def printing_slot_add_to_inventory(request, slot_id):
             spool.full_clean()
             spool.save()
 
+            metadata = dict(slot.metadata or {})
+            metadata["link_source"] = "inventory_created_from_slot"
+            metadata["link_confirmed_at"] = timezone.now().isoformat()
             slot.spool = spool
+            slot.metadata = metadata
             if remaining_weight is not None:
                 slot.remaining_weight_g = remaining_weight
-            slot.save(update_fields=["spool", "remaining_weight_g", "updated_at"])
+            slot.save(update_fields=[
+                "spool", "metadata", "remaining_weight_g", "updated_at"
+            ])
 
         spool = Spool.objects.select_related(
             "filament__manufacturer",
@@ -3535,11 +3602,14 @@ def printing_slot_add_to_inventory(request, slot_id):
             "item": _serialise_spool(spool),
             "slot": _serialise_printer_slot(slot),
             "created_filament": created_filament,
+            "linked_existing": False,
         }, status=201)
     except ValidationError as exc:
         return _validation_response(exc)
     except IntegrityError:
-        return _error("MakerVault could not create the detected spool; please retry.")
+        return _error("MakerVault could not create or link the detected spool; please retry.")
+
+
 
 
 @login_required
