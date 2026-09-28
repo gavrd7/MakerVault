@@ -145,7 +145,6 @@ class ComponentCategory(TimeStampedModel):
 
 class ComponentModel(TimeStampedModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    manufacturer = models.ForeignKey(Manufacturer, on_delete=models.SET_NULL, null=True, blank=True, related_name="components")
     category = models.ForeignKey(ComponentCategory, on_delete=models.SET_NULL, null=True, blank=True, related_name="components")
     source = models.ForeignKey(CatalogSource, on_delete=models.SET_NULL, null=True, blank=True, related_name="components")
     name = models.CharField(max_length=255)
