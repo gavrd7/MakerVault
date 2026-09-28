@@ -173,7 +173,7 @@ class ModelGeometryAnalysisTests(TestCase):
 
     def test_3mf_extracts_slicer_profiles_and_settings(self):
         result = analyse_3mf(slicer_3mf())
-        self.assertEqual(result["analysis_version"], 3)
+        self.assertEqual(result["analysis_version"], 4)
         slicer = result["slicer_metadata"]
         self.assertTrue(slicer["detected"])
         self.assertEqual(slicer["application"], "OrcaSlicer")
