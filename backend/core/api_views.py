@@ -2455,6 +2455,8 @@ def _serialise_catalogue_maintenance(config):
         "server_board_enrichment_enabled": bool(settings.ENRICH_BOARD_CATALOGUE),
         "server_printer_catalogue_enabled": bool(settings.SYNC_ORCASLICER_PRINTER_CATALOGUE),
         "server_printer_catalogue_ref": settings.ORCASLICER_PRINTER_CATALOGUE_REF,
+        "printer_catalogue_models": PrinterCatalogModel.objects.count(),
+        "printer_catalogue_manufacturers": PrinterManufacturer.objects.count(),
         "server_image_seeding_enabled": bool(settings.SEED_CATALOGUE_IMAGES),
     }
 
