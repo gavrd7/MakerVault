@@ -23,6 +23,8 @@ ORCA_LICENSE = "AGPL-3.0"
 
 VENDOR_ALIASES = {
     "bambulab": "Bambu Lab",
+    "bambu lab": "Bambu Lab",
+    "bbl": "Bambu Lab",
     "elegoo": "ELEGOO",
     "qidi": "QIDI",
     "flsun": "FLSUN",
@@ -78,23 +80,28 @@ def _default_multi_material_system(vendor, model_name):
     return ""
 
 
-def _extract_machine_model_list(response, max_bytes=1024 * 1024):
-    """Read only the leading part of a large Orca vendor manifest.
-
-    machine_model_list is near the top of every vendor manifest, while process
-    and filament presets can make the complete JSON several megabytes.
-    """
+def _extract_vendor_manifest(response, max_bytes=1024 * 1024):
+    """Read vendor name + machine list without downloading huge process presets."""
     chunks = []
     total = 0
     decoder = json.JSONDecoder()
     marker = '"machine_model_list"'
+    manifest_name = ""
 
     for chunk in response.iter_content(chunk_size=32768, decode_unicode=True):
         if not chunk:
             continue
+        if isinstance(chunk, bytes):
+            chunk = chunk.decode("utf-8", errors="replace")
         chunks.append(chunk)
         total += len(chunk.encode("utf-8", errors="ignore"))
         text = "".join(chunks)
+
+        if not manifest_name:
+            match = re.search(r'"name"\s*:\s*"([^"]+)"', text)
+            if match:
+                manifest_name = match.group(1).strip()
+
         marker_at = text.find(marker)
         if marker_at >= 0:
             array_at = text.find("[", marker_at + len(marker))
@@ -102,11 +109,16 @@ def _extract_machine_model_list(response, max_bytes=1024 * 1024):
                 try:
                     value, _ = decoder.raw_decode(text[array_at:])
                     if isinstance(value, list):
-                        return value
+                        return manifest_name, value
                 except json.JSONDecodeError:
                     pass
         if total >= max_bytes:
             break
+
+    # Some top-level profile files are filament-only libraries rather than
+    # printer vendors. Treat those as an empty source, not a failed vendor.
+    if marker not in "".join(chunks):
+        return manifest_name, []
     raise OrcaCatalogueError("OrcaSlicer vendor manifest did not expose a readable machine model list.")
 
 
@@ -126,15 +138,13 @@ def _fetch_vendor_manifest(entry, ref):
     )
     try:
         response.raise_for_status()
-        machines = _extract_machine_model_list(response)
+        manifest_name, machines = _extract_vendor_manifest(response)
     finally:
         response.close()
 
     vendor_file = str(entry.get("name") or "")
-    # Vendor display name normally matches the filename. Prefer the filename so
-    # we don't need to download the complete JSON merely for its top-level name.
     raw_vendor = vendor_file[:-5] if vendor_file.lower().endswith(".json") else vendor_file
-    vendor = _canonical_vendor(raw_vendor)
+    vendor = _canonical_vendor(manifest_name or raw_vendor)
     rows = []
     for machine in machines:
         if not isinstance(machine, dict):
@@ -255,7 +265,7 @@ def sync_orcaslicer_printer_catalogue(*, ref=None, max_workers=8):
         if isinstance(entry, dict)
         and entry.get("type") == "file"
         and str(entry.get("name") or "").lower().endswith(".json")
-        and str(entry.get("name") or "") not in {"blacklist.json"}
+        and str(entry.get("name") or "") not in {"blacklist.json", "OrcaFilamentLibrary.json"}
     ]
 
     vendors_seen = 0
