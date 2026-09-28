@@ -8,6 +8,7 @@ from django.utils import timezone
 from .catalogue_image_sources import run_catalogue_image_seed
 from .catalogue_enrichment import run_board_catalogue_enrichment
 from .models import CatalogueMaintenanceSettings, PrintingIntegrationSetting
+from .orcaslicer_catalogue import OrcaCatalogueError, sync_orcaslicer_printer_catalogue
 from .printing_sync import PrintingSyncError, sync_printing_integration
 
 
@@ -29,11 +30,22 @@ def enrich_board_catalogue_task(self, limit=None, force_retry=False):
     return run_board_catalogue_enrichment(limit=limit, force_retry=force_retry)
 
 
+@shared_task(bind=True, acks_late=True)
+def sync_orcaslicer_printer_catalogue_task(self):
+    try:
+        return sync_orcaslicer_printer_catalogue()
+    except OrcaCatalogueError as exc:
+        return {"status": "error", "error": str(exc)}
+
+
 def _queue_catalogue_maintenance(config):
     queued = []
     if config.check_board_data and getattr(settings, "ENRICH_BOARD_CATALOGUE", True):
         enrich_board_catalogue_task.delay(force_retry=True)
         queued.append("board-data")
+    if config.check_printer_data and getattr(settings, "SYNC_ORCASLICER_PRINTER_CATALOGUE", True):
+        sync_orcaslicer_printer_catalogue_task.delay()
+        queued.append("printer-data")
     if config.check_images and getattr(settings, "SEED_CATALOGUE_IMAGES", True):
         seed_catalogue_images_task.delay(force_retry=True)
         queued.append("images")
