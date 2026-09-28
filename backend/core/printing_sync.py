@@ -515,6 +515,7 @@ def sync_spoolman(setting: PrintingIntegrationSetting) -> dict:
                     locations_discovered += 1
 
             link = ExternalSpoolLink.objects.select_related("spool").filter(
+                spool__owner=setting.owner,
                 provider="spoolman",
                 external_id=external_id,
             ).first()
@@ -596,7 +597,7 @@ def sync_spoolman(setting: PrintingIntegrationSetting) -> dict:
             ExternalSpoolLink.objects.select_related(
                 "spool__storage_location",
                 "spool__assigned_printer",
-            ).filter(provider="spoolman")
+            ).filter(provider="spoolman", spool__owner=setting.owner)
         )
         linked_ids = {link.spool_id for link in links}
         skipped_unlinked = Spool.objects.filter(owner=setting.owner).exclude(pk__in=linked_ids).count()
@@ -786,6 +787,7 @@ def _simplyprint_link_printer(row: dict, now, owner=None):
         return None, False, False
 
     link = ExternalPrinterLink.objects.select_related("printer").filter(
+        printer__owner=owner,
         provider="simplyprint",
         external_id=external_id,
     ).first()
@@ -898,6 +900,7 @@ def _sync_simplyprint_slots(printer, row, inventory, now) -> dict:
         linked_spool = None
         if external_spool_id:
             external_link = ExternalSpoolLink.objects.select_related("spool").filter(
+                spool__owner=printer.owner,
                 provider="simplyprint",
                 external_id=external_spool_id,
             ).first()
