@@ -127,7 +127,7 @@ class BoardModel(TimeStampedModel):
     manufacturer = models.ForeignKey(Manufacturer, on_delete=models.SET_NULL, null=True, blank=True, related_name="boards")
     source = models.ForeignKey(CatalogSource, on_delete=models.SET_NULL, null=True, blank=True, related_name="boards")
     name = models.CharField(max_length=255)
-    slug = models.SlugField(max_length=280, unique=True, blank=True)
+    slug = models.SlugField(max_length=280, blank=True)
     family = models.CharField(max_length=120, blank=True)
     variant = models.CharField(max_length=120, blank=True)
     description = models.TextField(blank=True)
@@ -224,10 +224,13 @@ class Project(TimeStampedModel):
     started_on = models.DateField(blank=True, null=True)
     completed_on = models.DateField(blank=True, null=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="makervault_projects")
-    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True, related_name="owned_makervault_projects")
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="owned_makervault_projects")
 
     class Meta:
         ordering = ["-updated_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["owner", "slug"], name="uniq_project_slug_per_owner"),
+        ]
 
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -242,8 +245,8 @@ class InventoryItem(TimeStampedModel):
     ITEM_TYPES = [("board", "Board"), ("component", "Component"), ("tool", "Tool / asset"), ("printed_part", "Printed part"), ("other", "Other")]
     STATUS = [("available", "Available"), ("in_use", "In use"), ("reserved", "Reserved"), ("repair", "Needs repair"), ("retired", "Retired")]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    inventory_id = models.CharField(max_length=40, unique=True)
-    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True, related_name="makervault_inventory_items")
+    inventory_id = models.CharField(max_length=40)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="makervault_inventory_items")
     item_type = models.CharField(max_length=20, choices=ITEM_TYPES)
     board = models.ForeignKey(BoardModel, on_delete=models.PROTECT, null=True, blank=True, related_name="inventory_items")
     component = models.ForeignKey(ComponentModel, on_delete=models.PROTECT, null=True, blank=True, related_name="inventory_items")
@@ -263,6 +266,9 @@ class InventoryItem(TimeStampedModel):
 
     class Meta:
         ordering = ["inventory_id"]
+        constraints = [
+            models.UniqueConstraint(fields=["owner", "inventory_id"], name="uniq_inventory_id_per_owner"),
+        ]
 
     def clean(self):
         if self.item_type == "board" and not self.board:
@@ -391,7 +397,7 @@ class FileAsset(TimeStampedModel):
     CATEGORIES = [("image", "Image"), ("wiring", "Wiring / schematic"), ("firmware", "Firmware"), ("source", "Source code"), ("binary", "Executable / binary"), ("document", "Document"), ("cad", "CAD"), ("mesh", "STL / mesh"), ("slicer", "3MF / slicer project"), ("pcb", "PCB"), ("archive", "Archive"), ("other", "Other")]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
-    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True, related_name="makervault_file_assets")
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="makervault_file_assets")
     category = models.CharField(max_length=20, choices=CATEGORIES, default="other")
     file = models.FileField(upload_to="files/%Y/%m/", validators=[validate_maker_file])
     project = models.ForeignKey(Project, on_delete=models.CASCADE, null=True, blank=True, related_name="files")
@@ -467,13 +473,16 @@ class PrintingLocation(TimeStampedModel):
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=200, unique=True)
-    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True, related_name="makervault_printing_locations")
+    name = models.CharField(max_length=200)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="makervault_printing_locations")
     kind = models.CharField(max_length=20, choices=KINDS, default="storage")
     notes = models.TextField(blank=True)
 
     class Meta:
         ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(fields=["owner", "name"], name="uniq_print_location_per_owner"),
+        ]
 
     def __str__(self):
         return self.name
@@ -504,8 +513,8 @@ class PrintingIntegrationSetting(TimeStampedModel):
         ("planned", "Planned"),
     ]
 
-    provider = models.CharField(max_length=30, choices=PROVIDERS, unique=True)
-    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True, related_name="makervault_printing_integrations")
+    provider = models.CharField(max_length=30, choices=PROVIDERS)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="makervault_printing_integrations")
     enabled = models.BooleanField(default=False)
     endpoint_url = models.CharField(max_length=500, blank=True)
     sync_direction = models.CharField(max_length=20, choices=SYNC_DIRECTIONS, default="import")
@@ -527,6 +536,9 @@ class PrintingIntegrationSetting(TimeStampedModel):
 
     class Meta:
         ordering = ["provider"]
+        constraints = [
+            models.UniqueConstraint(fields=["owner", "provider"], name="uniq_print_integration_per_owner"),
+        ]
 
     def __str__(self):
         return self.get_provider_display()
@@ -630,8 +642,8 @@ class FilamentProduct(TimeStampedModel):
 class Spool(TimeStampedModel):
     STATUS = [("sealed", "Sealed"), ("open", "Open"), ("drying", "Drying"), ("empty", "Empty"), ("retired", "Retired")]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    spool_id = models.CharField(max_length=40, unique=True)
-    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True, related_name="makervault_spools")
+    spool_id = models.CharField(max_length=40)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="makervault_spools")
     rfid_uid = models.CharField(max_length=255, blank=True, default="", db_index=True)
     filament = models.ForeignKey(FilamentProduct, on_delete=models.PROTECT, related_name="spools")
     initial_weight_g = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
@@ -656,6 +668,7 @@ class Spool(TimeStampedModel):
     class Meta:
         ordering = ["spool_id"]
         constraints = [
+            models.UniqueConstraint(fields=["owner", "spool_id"], name="uniq_spool_id_per_owner"),
             models.UniqueConstraint(
                 fields=["rfid_uid"],
                 condition=~models.Q(rfid_uid=""),
@@ -743,7 +756,7 @@ class ExternalPrinterLink(TimeStampedModel):
 class Printer(TimeStampedModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
-    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True, related_name="makervault_printers")
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="makervault_printers")
     manufacturer = models.ForeignKey(Manufacturer, on_delete=models.SET_NULL, null=True, blank=True, related_name="printers")
     printer_manufacturer = models.ForeignKey(
         PrinterManufacturer, on_delete=models.SET_NULL, null=True, blank=True,
@@ -819,7 +832,7 @@ class PrinterFilamentSlot(TimeStampedModel):
 
 class Model3D(TimeStampedModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True, related_name="makervault_models_3d")
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="makervault_models_3d")
     project = models.ForeignKey(Project, on_delete=models.CASCADE, null=True, blank=True, related_name="models_3d")
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
@@ -908,7 +921,7 @@ class ProductListing(TimeStampedModel):
 class PrintJob(TimeStampedModel):
     STATUS = [("planned", "Planned"), ("printing", "Printing"), ("success", "Success"), ("failed", "Failed"), ("cancelled", "Cancelled")]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True, related_name="makervault_print_jobs")
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="makervault_print_jobs")
     model_revision = models.ForeignKey(ModelRevision, on_delete=models.SET_NULL, null=True, blank=True, related_name="prints")
     project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True, related_name="print_jobs")
     printer = models.ForeignKey(Printer, on_delete=models.PROTECT, related_name="print_jobs")
