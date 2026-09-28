@@ -346,7 +346,7 @@ export default function SettingsPage({ config }) {
     {activeTab === "printing" && <>
     <section className="panel settingsPanel settingsPrintingPanel">
       <div className="panelHead">
-        <div><h3>3D printing integrations</h3><p>Enable and configure the services used by the 3D Printing area. Cards expand to a practical width instead of being forced into a four-column layout.</p></div>
+        <div><h3>3D printing integrations</h3><p>Enable and configure the services used by the 3D Printing area. Connected services can be synchronised manually or on their own schedule.</p></div>
       </div>
       <div className="printingIntegrationGrid settingsIntegrationGrid">
         {integrations.map(item => {
