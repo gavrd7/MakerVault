@@ -719,6 +719,16 @@
 .printingCardHead{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
 .printingCardHead strong,.printingCardHead small{display:block}
 .printingCardHead small{color:#7f8a9c;margin-top:3px}
+.printingPrinterHeader{display:grid;grid-template-columns:96px minmax(0,1fr);gap:14px;align-items:center}
+.printingPrinterHeaderMain{min-width:0}
+.printingPrinterImage{display:flex;align-items:center;justify-content:center;width:96px;height:82px;overflow:hidden;border:1px solid #2b3644;border-radius:10px;background:#111821}
+.printingPrinterImage img{display:block;width:100%;height:100%;object-fit:contain;padding:5px}
+.printingPrinterImage span{font-size:18px;font-weight:800;letter-spacing:.04em;color:#637187}
+.printingPrinterImageCredit{display:block;margin-top:7px;color:#657286;font-size:9px}
+@media(max-width:620px){
+  .printingPrinterHeader{grid-template-columns:70px minmax(0,1fr)}
+  .printingPrinterImage{width:70px;height:66px}
+}
 .printingSlotGrid{display:grid;gap:8px;margin-top:12px}
 .printingSlot{display:grid;grid-template-columns:18px minmax(0,1fr);gap:9px;align-items:start;padding:9px;border:1px solid #252f3b;border-radius:9px;background:#101821}
 .printingSlot strong,.printingSlot small{display:block}
