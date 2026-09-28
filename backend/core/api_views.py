@@ -3883,7 +3883,7 @@ def printing_slot_add_to_inventory(request, slot_id):
     slot = PrinterFilamentSlot.objects.select_related(
         "printer",
         "spool__filament",
-    ).filter(pk=slot_id).first()
+    ).filter(pk=slot_id, printer__owner=request.user).first()
     if not slot:
         return _error("Discovered filament slot not found.", status=404)
     if not slot.is_loaded:
@@ -4753,7 +4753,7 @@ def printing_jobs(request):
 
         revision = None
         if payload.get("model_revision_id"):
-            revision = ModelRevision.objects.select_related("model").filter(pk=payload["model_revision_id"]).first()
+            revision = ModelRevision.objects.select_related("model").filter(pk=payload["model_revision_id"], model__owner=request.user).first()
             if not revision:
                 return _error("Selected model revision was not found.")
             if project and revision.model.project_id and revision.model.project_id != project.id:
