@@ -83,7 +83,17 @@ This file tracks completed MakerVault milestones and the next candidate areas. T
 
 ## In development
 
-No active development milestone on the stable branch.
+### v0.7.0 — Multi-user isolation & secure storage
+
+- Enforce backend ownership boundaries for private user data while retaining shared reference catalogues.
+- Migrate existing private records safely to an existing administrator/owner account.
+- Add administrator-only user management with account status, quota controls, storage usage and destructive account/storage actions without a private-file browser.
+- Add configurable instance-default and per-user storage quotas, including an Unlimited option and server-side enforcement before storage grows.
+- Add a personal storage dashboard with total usage, quota percentage and category breakdowns for models/3MF, project files, images and other files.
+- Count immutable file revisions and persistent generated user assets toward quota while excluding temporary processing/decryption files.
+- Encrypt user-created stored files at rest using authenticated encryption and opaque on-disk object names, with key material separated from the media volume.
+- Preserve server-side MakerVault capabilities such as Model Intelligence by decrypting only through controlled application storage paths.
+- Allow administrators to disable users and purge/delete user storage without granting a normal browse/download path into another user's private files.
 
 ## Next candidates
 
