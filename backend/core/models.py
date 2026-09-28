@@ -648,6 +648,37 @@ class ExternalSpoolLink(TimeStampedModel):
         return f"{self.get_provider_display()} {self.external_id} → {self.spool.spool_id}"
 
 
+class ExternalPrinterLink(TimeStampedModel):
+    PROVIDERS = [
+        ("simplyprint", "SimplyPrint"),
+        ("other", "Other"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    printer = models.ForeignKey("Printer", on_delete=models.CASCADE, related_name="external_links")
+    provider = models.CharField(max_length=30, choices=PROVIDERS)
+    external_id = models.CharField(max_length=255)
+    external_url = models.URLField(blank=True)
+    last_synced_at = models.DateTimeField(blank=True, null=True)
+    sync_metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["provider", "external_id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["provider", "external_id"],
+                name="unique_external_printer_provider_id",
+            ),
+            models.UniqueConstraint(
+                fields=["printer", "provider"],
+                name="unique_printer_provider_link",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.get_provider_display()} {self.external_id} → {self.printer.name}"
+
+
 class Printer(TimeStampedModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
@@ -687,6 +718,7 @@ class Printer(TimeStampedModel):
 class PrinterFilamentSlot(TimeStampedModel):
     SYSTEMS = [
         ("creality_cfs", "Creality CFS"),
+        ("simplyprint", "SimplyPrint"),
         ("bambu_ams", "Bambu Lab AMS"),
         ("elegoo", "Elegoo multi-material"),
         ("qidi", "QIDI multi-material"),
