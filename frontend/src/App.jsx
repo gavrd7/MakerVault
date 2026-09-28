@@ -68,7 +68,7 @@ export default function App() {
 
   return <div className="shell">
     <aside>
-      <div className="brand"><span className="brandmark">M</span><div><strong>MakerVault</strong><small>v0.6.0 · AGPL</small></div></div>
+      <div className="brand"><span className="brandmark">M</span><div><strong>MakerVault</strong><small>{config?.version ? "v" + config.version : "version loading…"} · AGPL</small></div></div>
       <nav>{NAV.filter(n => n !== "Settings" || config?.is_staff).map(n => <button key={n} className={section === n ? "active" : ""} onClick={() => setSection(n)}>{n}</button>)}</nav>
       <div className="asideBottom"><a href="/admin/">Administration</a><a href="/accounts/2fa/">Account &amp; Security</a><a href="/accounts/logout/">Sign out</a></div>
     </aside>
