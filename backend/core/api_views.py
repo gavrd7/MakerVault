@@ -2587,6 +2587,7 @@ def _serialise_spool(spool):
     return {
         "id": str(spool.id),
         "spool_id": spool.spool_id,
+        "rfid_uid": spool.rfid_uid,
         "filament": str(filament),
         "filament_id": str(filament.id),
         "manufacturer": maker.name if maker else "",
@@ -3351,8 +3352,13 @@ def printing_spools(request):
         if storage_location and assigned_printer:
             return _error("Choose either a storage location or a printer.")
 
+        rfid_uid = str(payload.get("rfid_uid") or "").strip().upper()
+        if rfid_uid and Spool.objects.filter(rfid_uid=rfid_uid).exists():
+            return _error("That RFID tag ID is already assigned to another MakerVault spool.", status=409)
+
         item = Spool(
             spool_id=next_spool_id(),
+            rfid_uid=rfid_uid,
             filament=filament,
             initial_weight_g=_parse_decimal(payload.get("initial_weight_g"), "initial_weight_g"),
             remaining_weight_g=_parse_decimal(payload.get("remaining_weight_g"), "remaining_weight_g"),
@@ -3405,6 +3411,14 @@ def printing_slot_add_to_inventory(request, slot_id):
     try:
         payload = _read_json(request)
         created_filament = False
+        rfid_uid = str(payload.get("rfid_uid") or slot.rfid_uid or "").strip().upper()
+        if rfid_uid:
+            existing_rfid_spool = Spool.objects.filter(rfid_uid=rfid_uid).first()
+            if existing_rfid_spool:
+                return _error(
+                    f"RFID tag {rfid_uid} already belongs to {existing_rfid_spool.spool_id}.",
+                    status=409,
+                )
 
         with transaction.atomic():
             filament = None
@@ -3488,6 +3502,7 @@ def printing_slot_add_to_inventory(request, slot_id):
 
             spool = Spool(
                 spool_id=next_spool_id(),
+                rfid_uid=rfid_uid,
                 filament=filament,
                 initial_weight_g=initial_weight,
                 remaining_weight_g=remaining_weight,
@@ -3560,6 +3575,11 @@ def printing_spool_detail(request, spool_id):
             if not filament:
                 return _error("Choose a filament product.")
             item.filament = filament
+        if "rfid_uid" in payload:
+            rfid_uid = str(payload.get("rfid_uid") or "").strip().upper()
+            if rfid_uid and Spool.objects.exclude(pk=item.pk).filter(rfid_uid=rfid_uid).exists():
+                return _error("That RFID tag ID is already assigned to another MakerVault spool.", status=409)
+            item.rfid_uid = rfid_uid
         if "storage_location_id" in payload:
             item.storage_location = _resolve_printing_location(
                 payload.get("storage_location_id"), "storage_location_id"
@@ -3592,7 +3612,7 @@ def printing_spool_detail(request, spool_id):
     except ValidationError as exc:
         return _validation_response(exc)
     except IntegrityError:
-        return _error("Spool ID must be unique.")
+        return _error("Spool ID and RFID tag ID must be unique.")
 
 
 @login_required
