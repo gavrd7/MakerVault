@@ -1,6 +1,14 @@
 # Changelog
 
-## v0.6.0 — in development
+## v0.6.0.1 — in development
+
+- Introduced four-part development build versions so iterative v0.6.0 work can be identified precisely without advancing the v0.6.1 feature milestone.
+- The running version is now sourced centrally by the backend and displayed dynamically in the MakerVault sidebar/About page.
+- Repaired pre-v0.6.0.1 CFS slot links: live colour/material/vendor conflicts always detach an incorrect physical spool, while compatible legacy links are retained and marked for future syncs.
+- Added printer-catalogue image fields and extended MakerVault's open-licensed Wikimedia/Openverse image seeder and attribution register to 3D-printer models.
+- Added compact printer-model thumbnails beside owned printer entries with a neutral fallback when no confidently matched open image is available.
+
+## v0.6.0 — milestone baseline
 
 - Replaced the 3D Printing placeholder with the first native printing/model workspace.
 - Added provider-neutral external spool links so MakerVault spools can map to optional services such as Spoolman or SimplyPrint without making those services required.
@@ -31,7 +39,7 @@
 - Added model revision creation and existing MakerVault file attachment/detachment workflows.
 - Protected model-linked files from deletion until they are detached from the revision.
 - Added PostgreSQL regression coverage for printing overview, native CRUD, external spool identity, revision file reuse and project/file integrity.
-- Live Spoolman, SimplyPrint and printer/CFS network adapters are not enabled yet; MakerVault remains standalone-first.
+- Spoolman and Creality CFS have live adapters; SimplyPrint and the remaining future multi-material integrations stay optional/planned while MakerVault remains standalone-first.
 
 
 ## v0.5.0
