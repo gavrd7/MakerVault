@@ -382,6 +382,8 @@ class BOMAllocation(TimeStampedModel):
         if self.quantity is not None and self.quantity <= 0:
             raise ValidationError({"quantity": "Allocation quantity must be greater than zero."})
         if self.bom_item_id and self.inventory_item_id:
+            if self.inventory_item.owner_id != self.bom_item.project.owner_id:
+                raise ValidationError({"inventory_item": "This inventory item belongs to a different user."})
             if self.bom_item.board_id and self.inventory_item.board_id != self.bom_item.board_id:
                 raise ValidationError({"inventory_item": "This inventory item does not match the BOM board."})
             if self.bom_item.component_id and self.inventory_item.component_id != self.bom_item.component_id:
