@@ -2125,7 +2125,7 @@ def attributions(request):
         row = _attribution_row("Board", board)
         if row:
             rows.append(row)
-    for component in ComponentModel.objects.select_related("manufacturer", "category").exclude(specifications={}):
+    for component in ComponentModel.objects.select_related("category").exclude(specifications={}):
         row = _attribution_row("Component", component)
         if row:
             rows.append(row)
