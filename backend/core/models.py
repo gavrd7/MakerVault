@@ -213,7 +213,7 @@ class Project(TimeStampedModel):
     STATUS = [("idea", "Idea"), ("planning", "Planning"), ("active", "Active"), ("paused", "Paused"), ("complete", "Complete"), ("archived", "Archived")]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
-    slug = models.SlugField(max_length=280, unique=True, blank=True)
+    slug = models.SlugField(max_length=280, blank=True)
     status = models.CharField(max_length=20, choices=STATUS, default="idea")
     summary = models.CharField(max_length=500, blank=True)
     description = models.TextField(blank=True)
