@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 import re
 import struct
@@ -14,7 +15,9 @@ from defusedxml.common import DefusedXmlException
 
 MAX_ANALYSIS_BYTES = 250 * 1024 * 1024
 MAX_3MF_XML_BYTES = 64 * 1024 * 1024
-ANALYSIS_VERSION = 2
+ANALYSIS_VERSION = 5
+MAX_3MF_METADATA_FILE_BYTES = 4 * 1024 * 1024
+MAX_3MF_METADATA_TOTAL_BYTES = 12 * 1024 * 1024
 MAX_TOPOLOGY_TRIANGLES = 500_000
 OVERHANG_ANGLE_DEGREES = 45.0
 
@@ -403,6 +406,409 @@ def _local_name(tag):
     return tag.rsplit("}", 1)[-1]
 
 
+def _normalise_meta_key(value):
+    return re.sub(r"[^a-z0-9]+", "_", str(value or "").strip().lower()).strip("_")
+
+
+def _flatten_metadata(value, *, prefix="", out=None, limit=800):
+    if out is None:
+        out = {}
+    if len(out) >= limit:
+        return out
+    if isinstance(value, dict):
+        for key, item in value.items():
+            child = f"{prefix}.{key}" if prefix else str(key)
+            _flatten_metadata(item, prefix=child, out=out, limit=limit)
+            if len(out) >= limit:
+                break
+    elif isinstance(value, list):
+        if all(not isinstance(item, (dict, list)) for item in value):
+            out[prefix] = value
+        else:
+            for index, item in enumerate(value[:50]):
+                _flatten_metadata(item, prefix=f"{prefix}.{index}", out=out, limit=limit)
+                if len(out) >= limit:
+                    break
+    elif prefix:
+        out[prefix] = value
+    return out
+
+
+def _parse_metadata_text(raw):
+    text = raw.decode("utf-8", errors="replace").lstrip("\ufeff").strip()
+    if not text:
+        return {}
+    if text[:1] in {"{", "["}:
+        try:
+            return _flatten_metadata(json.loads(text))
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+    if text.startswith("<"):
+        try:
+            root = ET.fromstring(text)
+            parsed = {}
+            for element in root.iter():
+                key = (
+                    element.attrib.get("key")
+                    or element.attrib.get("name")
+                    or element.attrib.get("id")
+                )
+                value = element.attrib.get("value")
+                if value is None and element.text and element.text.strip():
+                    value = element.text.strip()
+                if key and value not in (None, ""):
+                    parsed[str(key)] = value
+            if parsed:
+                return parsed
+        except (ET.ParseError, DefusedXmlException):
+            pass
+
+    parsed = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith(("#", ";", "//", "[")):
+            continue
+        separator = "=" if "=" in line else ":" if ":" in line else None
+        if not separator:
+            continue
+        key, value = line.split(separator, 1)
+        key = key.strip()
+        value = value.strip().strip('"')
+        if key and value:
+            parsed[key] = value
+    return parsed
+
+
+def _metadata_lookup(flat, *aliases):
+    normalised_aliases = {_normalise_meta_key(alias) for alias in aliases}
+    for key, value in flat.items():
+        key_text = str(key)
+        candidates = {
+            _normalise_meta_key(key_text),
+            _normalise_meta_key(key_text.split(".")[-1]),
+            _normalise_meta_key(key_text.split(":")[-1]),
+        }
+        if candidates & normalised_aliases and value not in (None, "", []):
+            return value
+    return None
+
+
+def _coerce_metadata_number(value):
+    if isinstance(value, list):
+        value = next((item for item in value if item not in (None, "")), None)
+    if value in (None, ""):
+        return None
+    match = re.search(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)", str(value))
+    if not match:
+        return None
+    try:
+        return _round(float(match.group(0)))
+    except ValueError:
+        return None
+
+
+def _coerce_metadata_bool(value):
+    if isinstance(value, list):
+        value = next((item for item in value if item not in (None, "")), None)
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    if text in {"1", "true", "yes", "on", "enabled"}:
+        return True
+    if text in {"0", "false", "no", "off", "disabled", "none"}:
+        return False
+    return None
+
+
+def _metadata_display(value):
+    if isinstance(value, list):
+        return [str(item) for item in value if item not in (None, "")]
+    if value in (None, ""):
+        return None
+    return str(value)
+
+
+def _detect_slicer_application(core_metadata, flat):
+    values = [str(value) for value in core_metadata.values()]
+    values.extend(str(value) for value in flat.values() if not isinstance(value, (dict, list)))
+    haystack = " ".join(values).lower()
+    if "orcaslicer" in haystack or "orca slicer" in haystack:
+        return "OrcaSlicer"
+    if "bambustudio" in haystack or "bambu studio" in haystack:
+        return "Bambu Studio"
+    if "prusaslicer" in haystack or "prusa slicer" in haystack:
+        return "PrusaSlicer"
+    if "slic3r" in haystack:
+        return "Slic3r"
+    if "cura" in haystack:
+        return "Cura"
+    app = (
+        core_metadata.get("Application")
+        or core_metadata.get("application")
+        or _metadata_lookup(flat, "application", "generator")
+    )
+    return str(app).strip() if app else ""
+
+
+def _xml_metadata_values(element):
+    values = {}
+    for child in list(element):
+        if _local_name(child.tag) != "metadata":
+            continue
+        key = str(child.attrib.get("key") or child.attrib.get("name") or "").strip()
+        value = child.attrib.get("value")
+        if value is None and child.text:
+            value = child.text.strip()
+        if key and value not in (None, ""):
+            values[key] = value
+    return values
+
+
+def _extract_3mf_project_structure(package, model_roots):
+    names = {info.filename.lower(): info.filename for info in package.infolist()}
+    settings_name = names.get("metadata/model_settings.config")
+    project_name = names.get("metadata/project_settings.config")
+
+    project_settings = {}
+    if project_name:
+        try:
+            raw = package.read(project_name)
+            if len(raw) <= MAX_3MF_METADATA_FILE_BYTES:
+                project_settings = json.loads(raw.decode("utf-8-sig"))
+        except (KeyError, UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
+            project_settings = {}
+
+    colours = project_settings.get("filament_colour")
+    if not isinstance(colours, list):
+        colours = project_settings.get("default_filament_colour")
+    if not isinstance(colours, list):
+        colours = []
+    filament_types = project_settings.get("filament_type")
+    if not isinstance(filament_types, list):
+        filament_types = []
+    filament_profiles = project_settings.get("filament_settings_id")
+    if not isinstance(filament_profiles, list):
+        filament_profiles = []
+
+    objects = {}
+    plates = []
+    used_extruders = set()
+    if settings_name:
+        try:
+            raw = package.read(settings_name)
+            if len(raw) <= MAX_3MF_METADATA_FILE_BYTES:
+                root = ET.fromstring(raw)
+                for child in list(root):
+                    name = _local_name(child.tag)
+                    if name == "object":
+                        object_id = str(child.attrib.get("id") or "").strip()
+                        metadata = _xml_metadata_values(child)
+                        parts = []
+                        for part in list(child):
+                            if _local_name(part.tag) != "part":
+                                continue
+                            part_meta = _xml_metadata_values(part)
+                            extruder = part_meta.get("extruder")
+                            if extruder:
+                                try:
+                                    used_extruders.add(int(extruder))
+                                except (TypeError, ValueError):
+                                    pass
+                            parts.append({
+                                "id": str(part.attrib.get("id") or ""),
+                                "name": part_meta.get("name") or "",
+                                "subtype": str(part.attrib.get("subtype") or ""),
+                                "extruder": extruder or "",
+                            })
+                        extruder = metadata.get("extruder")
+                        if extruder:
+                            try:
+                                used_extruders.add(int(extruder))
+                            except (TypeError, ValueError):
+                                pass
+                        if object_id:
+                            objects[object_id] = {
+                                "id": object_id,
+                                "name": metadata.get("name") or "",
+                                "extruder": extruder or "",
+                                "parts": parts,
+                            }
+                    elif name == "plate":
+                        metadata = _xml_metadata_values(child)
+                        instances = []
+                        for instance in list(child):
+                            if _local_name(instance.tag) != "model_instance":
+                                continue
+                            instance_meta = _xml_metadata_values(instance)
+                            if instance_meta:
+                                instances.append({
+                                    "object_id": str(instance_meta.get("object_id") or ""),
+                                    "instance_id": str(instance_meta.get("instance_id") or ""),
+                                    "identify_id": str(instance_meta.get("identify_id") or ""),
+                                })
+                        plates.append({
+                            "id": str(metadata.get("plater_id") or metadata.get("index") or len(plates) + 1),
+                            "name": str(metadata.get("plater_name") or ""),
+                            "bed_type": str(metadata.get("bed_type") or ""),
+                            "thumbnail_file": str(metadata.get("thumbnail_file") or ""),
+                            "instances": instances,
+                            "object_count": len(instances),
+                        })
+        except (KeyError, ET.ParseError, DefusedXmlException):
+            pass
+
+    for plate in plates:
+        plate_slots = set()
+        for instance in plate.get("instances", []):
+            object_info = objects.get(str(instance.get("object_id") or ""))
+            if not object_info:
+                continue
+            candidates = [object_info.get("extruder")]
+            candidates.extend(part.get("extruder") for part in object_info.get("parts", []))
+            for candidate in candidates:
+                try:
+                    slot = int(candidate)
+                except (TypeError, ValueError):
+                    continue
+                if slot > 0:
+                    plate_slots.add(slot)
+        plate["material_slots"] = sorted(plate_slots)
+
+    painted_facets = 0
+    for root in model_roots:
+        for element in root.iter():
+            if _local_name(element.tag) != "triangle":
+                continue
+            attr_names = {_local_name(key) for key in element.attrib}
+            if "paint_color" in attr_names or "mmu_segmentation" in attr_names:
+                painted_facets += 1
+
+    materials = []
+    slot_count = max(len(colours), len(filament_types), len(filament_profiles))
+    for index in range(slot_count):
+        materials.append({
+            "slot": index + 1,
+            "colour": str(colours[index] if index < len(colours) else ""),
+            "type": str(filament_types[index] if index < len(filament_types) else ""),
+            "profile": str(filament_profiles[index] if index < len(filament_profiles) else ""),
+            "used": (index + 1) in used_extruders,
+        })
+
+    return {
+        "detected": bool(settings_name or plates or objects),
+        "plate_count": len(plates),
+        "object_count": len(objects),
+        "plates": plates,
+        "materials": materials,
+        "used_material_slots": sorted(used_extruders),
+        "painted_facets": painted_facets,
+        "multicolour": len(used_extruders) > 1 or painted_facets > 0,
+        "multi_plate": len(plates) > 1,
+        "note": (
+            "Plate membership comes from slicer project metadata. Geometry statistics above describe "
+            "the meshes stored in the 3MF package and are not a per-plate slicing result."
+        ) if len(plates) > 1 else "",
+    }
+
+
+def _extract_3mf_slicer_metadata(package, model_roots):
+    core_metadata = {}
+    for root in model_roots:
+        for element in root.iter():
+            if _local_name(element.tag) != "metadata":
+                continue
+            name = str(element.attrib.get("name") or "").strip()
+            value = (element.text or "").strip()
+            if name and value and name not in core_metadata:
+                core_metadata[name] = value
+
+    flat = {}
+    metadata_files = []
+    total_bytes = 0
+    for info in package.infolist():
+        lower_name = info.filename.lower()
+        suffix = Path(lower_name).suffix
+        interesting = (
+            lower_name.startswith("metadata/")
+            or "slic3r" in lower_name
+            or "prusaslicer" in lower_name
+            or "orcaslicer" in lower_name
+            or "bambu" in lower_name
+        )
+        if not interesting or suffix not in {".config", ".ini", ".json", ".txt", ".xml"}:
+            continue
+        if info.file_size <= 0 or info.file_size > MAX_3MF_METADATA_FILE_BYTES:
+            continue
+        if total_bytes + info.file_size > MAX_3MF_METADATA_TOTAL_BYTES:
+            break
+        try:
+            parsed = _parse_metadata_text(package.read(info))
+        except (KeyError, RuntimeError, ValueError):
+            continue
+        if not parsed:
+            continue
+        total_bytes += info.file_size
+        metadata_files.append(info.filename)
+        for key, value in parsed.items():
+            flat.setdefault(f"{info.filename}:{key}", value)
+
+    for key, value in core_metadata.items():
+        flat.setdefault(f"3mf:{key}", value)
+
+    application = _detect_slicer_application(core_metadata, flat)
+    printer_profile = _metadata_display(_metadata_lookup(
+        flat, "printer_settings_id", "printer_profile", "printer_model", "machine_name"
+    ))
+    print_profile = _metadata_display(_metadata_lookup(
+        flat, "print_settings_id", "process_settings_id", "process_profile", "print_profile"
+    ))
+    filament_profile = _metadata_display(_metadata_lookup(
+        flat, "filament_settings_id", "filament_profile", "filament_type", "filament_types"
+    ))
+
+    settings = {
+        "layer_height_mm": _coerce_metadata_number(_metadata_lookup(flat, "layer_height")),
+        "first_layer_height_mm": _coerce_metadata_number(_metadata_lookup(
+            flat, "initial_layer_print_height", "first_layer_height", "initial_layer_height"
+        )),
+        "nozzle_diameter_mm": _coerce_metadata_number(_metadata_lookup(flat, "nozzle_diameter")),
+        "infill_density": _metadata_display(_metadata_lookup(
+            flat, "sparse_infill_density", "fill_density", "infill_density"
+        )),
+        "infill_pattern": _metadata_display(_metadata_lookup(
+            flat, "sparse_infill_pattern", "fill_pattern", "infill_pattern"
+        )),
+        "perimeters": _coerce_metadata_number(_metadata_lookup(flat, "wall_loops", "perimeters")),
+        "top_layers": _coerce_metadata_number(_metadata_lookup(flat, "top_shell_layers", "top_solid_layers")),
+        "bottom_layers": _coerce_metadata_number(_metadata_lookup(flat, "bottom_shell_layers", "bottom_solid_layers")),
+        "supports_enabled": _coerce_metadata_bool(_metadata_lookup(
+            flat, "enable_support", "support_material", "support_enable"
+        )),
+        "brim_type": _metadata_display(_metadata_lookup(flat, "brim_type")),
+        "brim_width_mm": _coerce_metadata_number(_metadata_lookup(flat, "brim_width")),
+    }
+    settings = {key: value for key, value in settings.items() if value is not None}
+
+    detected = bool(application or printer_profile or print_profile or filament_profile or settings or metadata_files)
+    return {
+        "detected": detected,
+        "application": application,
+        "profiles": {
+            "printer": printer_profile,
+            "print": print_profile,
+            "filament": filament_profile,
+        },
+        "settings": settings,
+        "metadata_files": metadata_files,
+        "metadata_items": len(flat),
+        "note": (
+            "Slicer settings are read from metadata stored inside the 3MF package. "
+            "MakerVault does not run a slicer and does not treat these values as authoritative "
+            "unless the source 3MF was saved by a compatible slicer."
+        ),
+    }
+
+
 def analyse_3mf(data):
     try:
         package = zipfile.ZipFile(BytesIO(data))
@@ -425,6 +831,7 @@ def analyse_3mf(data):
     area_total = 0.0
     volume_total = 0.0
     source_units = set()
+    model_roots = []
     has_components = False
     has_build_transforms = False
 
@@ -435,6 +842,7 @@ def analyse_3mf(data):
         except (ET.ParseError, DefusedXmlException, KeyError) as exc:
             raise ModelAnalysisError(f"Could not parse 3MF geometry document {model_name}.") from exc
 
+        model_roots.append(root)
         unit = str(root.attrib.get("unit") or "millimeter").lower()
         scale = _UNIT_TO_MM.get(unit)
         if scale is None:
@@ -497,9 +905,11 @@ def analyse_3mf(data):
     if has_build_transforms:
         warnings.append("3MF build-item transforms were detected; build placement transforms are not yet applied to geometry statistics.")
 
+    slicer_metadata = _extract_3mf_slicer_metadata(package, model_roots)
+    project_structure = _extract_3mf_project_structure(package, model_roots)
     package.close()
 
-    return _result(
+    result = _result(
         fmt="3mf",
         source_units=", ".join(sorted(source_units)) or "millimeter",
         size_bytes=len(data),
@@ -512,6 +922,9 @@ def analyse_3mf(data):
         encoding="zip/xml",
         warnings=warnings,
     )
+    result["slicer_metadata"] = slicer_metadata
+    result["project_structure"] = project_structure
+    return result
 
 
 def _asset_filename(asset):

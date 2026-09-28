@@ -15,7 +15,7 @@ export default function Dashboard({ dashboard, inventory, onNavigate }) {
       <div>
         <span className="eyebrow">Your makerspace, connected</span>
         <h2>Electronics, projects, filament and fabrication in one inventory.</h2>
-        <p>MakerVault v0.2 adds a working board/component catalogue, spreadsheet-style inventory editing and the first secure URL importer for ESPBoards.dev.</p>
+        <p>MakerVault brings together inventory, projects, files, BOMs, 3D printing, model intelligence and print history in one self-hosted workspace.</p>
       </div>
     </section>
     <section className="cards">

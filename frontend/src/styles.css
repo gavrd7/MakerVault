@@ -1126,8 +1126,21 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
     padding-top:max(8px,env(safe-area-inset-top));
   }
   .shell>aside .brand{
-    display:none;
+    display:flex;
+    width:100%;
+    min-height:52px;
+    align-items:center;
+    justify-content:flex-start;
+    padding:2px 2px 6px;
   }
+  .shell>aside .brandLogo{
+    width:min(190px,58vw);
+    max-height:52px;
+    object-fit:contain;
+    object-position:left center;
+    border-radius:8px;
+  }
+  .shell>aside .brandVersion{display:none}
   .shell>aside nav{
     margin:0 -2px;
   }
@@ -1536,3 +1549,100 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
   .printingRecentPrintRow{grid-template-columns:1fr}
   .printingRecentPrintStats{text-align:left}
 }
+
+
+/* v0.6.6 slicer metadata intelligence */
+.modelSlicerMetadata{display:grid;gap:10px;padding:12px;border:1px solid #2b3644;border-radius:10px;background:#0d131b}
+.modelSlicerMetadataHead{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.modelSlicerMetadataHead strong,.modelSlicerMetadataHead small{display:block}
+.modelSlicerMetadataHead small{margin-top:3px;color:#7f8c9e;font-size:10px}
+.modelSlicerProfiles{display:grid;gap:7px}
+.modelSlicerProfiles article{padding:9px 10px;border:1px solid #283442;border-radius:8px;background:#101821}
+.modelSlicerProfiles span,.modelSlicerProfiles strong{display:block}
+.modelSlicerProfiles span{font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#748196}
+.modelSlicerProfiles strong{margin-top:3px;font-size:11px;overflow-wrap:anywhere}
+.modelSlicerSettings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.modelSlicerSettings article{padding:8px 9px;border:1px solid #26313e;border-radius:8px;background:#0b1219}
+.modelSlicerSettings span,.modelSlicerSettings strong{display:block}
+.modelSlicerSettings span{font-size:8px;text-transform:uppercase;letter-spacing:.05em;color:#718095}
+.modelSlicerSettings strong{margin-top:3px;font-size:11px}
+.modelSlicerSources{border-top:1px solid #25303d;padding-top:8px}
+.modelSlicerSources summary{cursor:pointer;color:#aab6c6;font-size:10px}
+.modelSlicerSources>div{display:grid;gap:4px;margin-top:7px}
+.modelSlicerSources code{padding:5px 7px;border-radius:6px;background:#090f15;color:#8fa0b4;font-size:9px;overflow-wrap:anywhere}
+.modelSlicerNote{color:#758297;line-height:1.45}
+@media(max-width:560px){
+  .modelSlicerMetadataHead{flex-direction:column}
+  .modelSlicerSettings{grid-template-columns:1fr}
+}
+
+
+/* Compact MakerVault branding on very narrow phones. */
+@media(max-width:380px){
+  .shell>aside .brandLogo{width:min(168px,58vw);max-height:46px}
+}
+
+
+/* v0.6.6 multi-plate 3MF project intelligence */
+.modelProjectStructure{display:grid;gap:10px;padding:12px;border:1px solid #35405a;border-radius:10px;background:#101522}
+.modelProjectBadges{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.modelProjectSummary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.modelProjectSummary article{padding:8px 9px;border:1px solid #293446;border-radius:8px;background:#0b121b}
+.modelProjectSummary span,.modelProjectSummary strong{display:block}
+.modelProjectSummary span{font-size:8px;text-transform:uppercase;letter-spacing:.05em;color:#718095}
+.modelProjectSummary strong{margin-top:3px;font-size:12px}
+.modelProjectPlates{display:grid;gap:6px}
+.modelProjectPlates button{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 9px;border:1px solid #293446;border-radius:8px;background:#0b1219;color:inherit;text-align:left;cursor:pointer;transition:border-color .15s ease,background .15s ease}
+.modelProjectPlates button:hover{border-color:#53627b;background:#101927}
+.modelProjectPlates button.active{border-color:#7659d6;background:#17162a;box-shadow:inset 0 0 0 1px rgba(147,117,255,.16)}
+.modelProjectPlates span,.modelProjectPlates strong{display:block}
+.modelProjectPlates span{font-size:8px;text-transform:uppercase;letter-spacing:.05em;color:#718095}
+.modelProjectPlates strong{margin-top:2px;font-size:11px}
+.modelProjectPlates small{color:#8390a3;text-align:right}
+.modelProjectMaterials{border-top:1px solid #293446;padding-top:8px}
+.modelProjectMaterials summary{cursor:pointer;color:#aab6c6;font-size:10px}
+.modelProjectMaterials>div{display:grid;gap:5px;margin-top:7px}
+.modelProjectMaterials article{display:flex;gap:8px;align-items:center;padding:6px 7px;border-radius:7px;background:#0b1219;opacity:.62}
+.modelProjectMaterials article.used{opacity:1}
+.modelProjectMaterials i{width:16px;height:16px;border-radius:50%;border:1px solid rgba(255,255,255,.25);flex:0 0 auto}
+.modelProjectMaterials strong,.modelProjectMaterials small{display:block}
+.modelProjectMaterials strong{font-size:10px}
+.modelProjectMaterials small{margin-top:2px;color:#7e8b9e;font-size:9px;overflow-wrap:anywhere}
+@media(max-width:560px){
+  .modelProjectBadges{justify-content:flex-start}
+  .modelProjectSummary{grid-template-columns:1fr 1fr}
+}
+
+
+/* Keep the desktop 3D viewport visible without scrolling the whole modal. */
+@media(min-width:901px){
+  .modelViewerModal{
+    height:calc(100dvh - 48px);
+  }
+  .modelViewerModal .modalBody{
+    display:flex;
+    flex:1 1 auto;
+    min-height:0;
+    overflow:hidden;
+  }
+  .modelViewerModal .modelViewerLayout{
+    width:100%;
+    height:100%;
+    min-height:0;
+  }
+  .modelViewerModal .modelViewerStage{
+    height:100%;
+    min-height:0;
+  }
+  .modelViewerModal .modelViewerCanvasShell{
+    min-height:0;
+  }
+  .modelViewerModal .modelIntelligencePanel{
+    height:100%;
+    min-height:0;
+    max-height:none;
+    overflow:auto;
+  }
+}
+
+.modelPlateSelect{min-width:170px;border-color:#6551b9;background:#15152a}

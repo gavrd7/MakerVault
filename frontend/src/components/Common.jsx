@@ -2,11 +2,11 @@ import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { apiFetch } from "../api";
 
-export function Modal({ title, subtitle, onClose, children, wide = false }) {
+export function Modal({ title, subtitle, onClose, children, wide = false, className = "" }) {
   const modal = <div className="modalBackdrop" role="presentation" onMouseDown={e => {
     if (e.target === e.currentTarget) onClose();
   }}>
-    <section className={`modal ${wide ? "modalWide" : ""}`} role="dialog" aria-modal="true" aria-label={title}>
+    <section className={`modal ${wide ? "modalWide" : ""} ${className}`.trim()} role="dialog" aria-modal="true" aria-label={title}>
       <div className="modalHead">
         <div><h2>{title}</h2>{subtitle && <p>{subtitle}</p>}</div>
         <button type="button" className="iconButton" onClick={onClose} aria-label="Close">×</button>
