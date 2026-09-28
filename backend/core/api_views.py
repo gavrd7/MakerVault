@@ -3940,8 +3940,14 @@ def printing_model_detail(request, model_id):
         denied = _require_permission(request, "core.delete_model3d")
         if denied:
             return denied
-        item.delete()
-        return JsonResponse({"deleted": True})
+        try:
+            item.delete()
+            return JsonResponse({"deleted": True})
+        except ProtectedError:
+            return _error(
+                "This model is referenced by protected records and cannot be deleted.",
+                status=409,
+            )
 
     denied = _require_permission(request, "core.change_model3d")
     if denied:
@@ -4337,8 +4343,10 @@ def public_config(request):
             "change_filament": request.user.has_perm("core.change_filamentproduct"),
             "add_spool": request.user.has_perm("core.add_spool"),
             "change_spool": request.user.has_perm("core.change_spool"),
+            "delete_spool": request.user.has_perm("core.delete_spool"),
             "add_model3d": request.user.has_perm("core.add_model3d"),
             "change_model3d": request.user.has_perm("core.change_model3d"),
+            "delete_model3d": request.user.has_perm("core.delete_model3d"),
             "add_printjob": request.user.has_perm("core.add_printjob"),
             "change_printjob": request.user.has_perm("core.change_printjob"),
         },
