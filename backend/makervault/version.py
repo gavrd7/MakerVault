@@ -1,3 +1,3 @@
 """Single source of truth for the MakerVault application version."""
 
-VERSION = "0.6.0.2"
+VERSION = "0.6.0.3"
