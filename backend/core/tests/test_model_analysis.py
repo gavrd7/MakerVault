@@ -10,7 +10,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 
 from core.model_analysis import analyse_3mf, analyse_stl
-from core.models import Model3D, ModelRevision
+from core.models import FileAsset, Model3D, ModelRevision
 
 
 def binary_stl_boxish():
@@ -125,6 +125,46 @@ class ModelAnalysisApiTests(TestCase):
         stored = ModelRevision.objects.get(pk=revision["id"])
         self.assertEqual(stored.geometry_metadata["analysis"]["triangle_count"], 4)
         self.assertTrue(stored.geometry_metadata["analysis"]["source_asset_id"])
+
+    def test_model_manager_can_upload_new_immutable_revision(self):
+        created = self.client.post(
+            "/api/printing/models/",
+            data={
+                "name": "Versioned enclosure",
+                "revision_version": "1.0",
+                "file": SimpleUploadedFile("enclosure-v1.stl", binary_stl_boxish(), content_type="model/stl"),
+            },
+        )
+        self.assertEqual(created.status_code, 201, created.content)
+        model = Model3D.objects.get(name="Versioned enclosure")
+        first_revision = model.revisions.get(version="1.0")
+        first_asset = first_revision.assets.get(is_primary=True).file_asset
+        first_stored_name = first_asset.file.name
+
+        updated = self.client.post(
+            f"/api/printing/models/{model.id}/revisions/upload/",
+            data={
+                "version": "1.1",
+                "notes": "Updated mounting tabs",
+                "file": SimpleUploadedFile("enclosure-v1.1.stl", binary_stl_boxish(), content_type="model/stl"),
+            },
+        )
+        self.assertEqual(updated.status_code, 201, updated.content)
+
+        model.refresh_from_db()
+        self.assertEqual(model.revisions.count(), 2)
+        second_revision = model.revisions.get(version="1.1")
+        second_asset = second_revision.assets.get(is_primary=True).file_asset
+        self.assertEqual(second_asset.supersedes_id, first_asset.id)
+        self.assertEqual(second_asset.version, "1.1")
+        self.assertTrue(first_asset.file.storage.exists(first_stored_name))
+        self.assertTrue(second_asset.file.storage.exists(second_asset.file.name))
+        self.assertEqual(second_revision.geometry_metadata["analysis_status"], "ready")
+
+        library = self.client.get("/api/files/")
+        self.assertEqual(library.status_code, 200)
+        self.assertEqual([row["id"] for row in library.json()["rows"]], [str(second_asset.id)])
+        self.assertEqual(FileAsset.objects.count(), 2)
 
     def test_existing_revision_can_be_reanalysed(self):
         upload = SimpleUploadedFile(
