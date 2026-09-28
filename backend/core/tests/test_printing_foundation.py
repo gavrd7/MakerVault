@@ -702,6 +702,105 @@ class PrintingFoundationTests(TestCase):
         )
         self.assertEqual(invalid.status_code, 400)
 
+    def test_spool_delete_removes_physical_record_but_keeps_filament(self):
+        link = ExternalSpoolLink.objects.create(
+            spool=self.spool,
+            provider="spoolman",
+            external_id="77",
+            sync_direction="import",
+        )
+        slot = PrinterFilamentSlot.objects.create(
+            printer=self.printer,
+            system="generic",
+            unit_index=0,
+            slot_index=0,
+            spool=self.spool,
+            material="PLA",
+            is_loaded=True,
+        )
+
+        response = self.client.delete(f"/api/printing/spools/{self.spool.id}/")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertFalse(Spool.objects.filter(pk=self.spool.id).exists())
+        self.assertFalse(ExternalSpoolLink.objects.filter(pk=link.id).exists())
+        self.assertTrue(FilamentProduct.objects.filter(pk=self.filament.id).exists())
+
+        slot.refresh_from_db()
+        self.assertIsNone(slot.spool_id)
+        self.assertTrue(slot.is_loaded)
+
+    def test_model_delete_keeps_shared_file_and_print_history(self):
+        model = Model3D.objects.create(name="Delete-me model")
+        revision = ModelRevision.objects.create(model=model, version="1.0")
+        asset = FileAsset.objects.create(
+            name="Shared model STL",
+            category="mesh",
+            file="files/shared-delete-test.stl",
+        )
+        ModelRevisionAsset.objects.create(
+            revision=revision,
+            file_asset=asset,
+            role="model",
+            is_primary=True,
+        )
+        print_job = PrintJob.objects.create(
+            model_revision=revision,
+            printer=self.printer,
+            status="success",
+        )
+
+        response = self.client.delete(f"/api/printing/models/{model.id}/")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertFalse(Model3D.objects.filter(pk=model.id).exists())
+        self.assertFalse(ModelRevision.objects.filter(pk=revision.id).exists())
+        self.assertTrue(FileAsset.objects.filter(pk=asset.id).exists())
+
+        print_job.refresh_from_db()
+        self.assertIsNone(print_job.model_revision_id)
+
+    @patch("core.printing_sync._spoolman_get_spools")
+    def test_unexpected_spoolman_sync_failure_sets_error_instead_of_stale_connected(self, get_spools_mock):
+        get_spools_mock.side_effect = ValueError("unexpected remote value")
+        setting, _ = PrintingIntegrationSetting.objects.update_or_create(
+            provider="spoolman",
+            defaults={
+                "enabled": True,
+                "endpoint_url": "https://spoolman.example.test",
+                "sync_direction": "import",
+                "status": "connected",
+            },
+        )
+
+        response = self.client.post("/api/settings/printing-integrations/spoolman/sync/")
+        self.assertEqual(response.status_code, 502, response.content)
+
+        setting.refresh_from_db()
+        self.assertEqual(setting.status, "error")
+        self.assertIn("unexpected remote value", setting.last_error)
+        self.assertEqual(setting.last_sync_result["exception_type"], "ValueError")
+
+    @patch("core.printing_sync.requests.get")
+    def test_spoolman_http_error_includes_remote_message(self, get_mock):
+        response = Mock(status_code=422)
+        response.json.return_value = {"message": "Example Spoolman validation error"}
+        get_mock.return_value = response
+        setting, _ = PrintingIntegrationSetting.objects.update_or_create(
+            provider="spoolman",
+            defaults={
+                "enabled": True,
+                "endpoint_url": "https://spoolman.example.test",
+                "sync_direction": "import",
+                "status": "connected",
+            },
+        )
+
+        result = self.client.post("/api/settings/printing-integrations/spoolman/sync/")
+        self.assertEqual(result.status_code, 502, result.content)
+        self.assertIn("HTTP 422: Example Spoolman validation error", result.json()["error"])
+
+        setting.refresh_from_db()
+        self.assertEqual(setting.status, "error")
+
     def test_model_create_can_upload_local_stl_and_create_initial_revision(self):
         response = self.client.post(
             "/api/printing/models/",
