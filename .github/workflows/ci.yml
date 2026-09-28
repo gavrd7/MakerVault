@@ -2,6 +2,7 @@ name: MakerVault CI
 
 on:
   pull_request:
+    types: [opened, reopened, ready_for_review, synchronize]
   push:
     branches: [main]
   workflow_dispatch:
