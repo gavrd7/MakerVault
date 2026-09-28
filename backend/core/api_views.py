@@ -436,7 +436,7 @@ def _serialise_bom_item(item):
 
 def _project_bom(project):
     items = list(project.bom_items.select_related(
-        "board__manufacturer", "component__manufacturer"
+        "board__manufacturer", "component__category"
     ).prefetch_related(
         "allocations__inventory_item__board__manufacturer",
         "allocations__inventory_item__component",
@@ -568,7 +568,7 @@ def _serialise_project(project, detailed=False):
             "tags": project.tags or [],
             "reference_url": project.reference_url,
             "inventory": [_serialise_inventory(item) for item in project.inventory_items.select_related(
-                "board__manufacturer", ""project"
+                "board__manufacturer", "project"
             ).order_by("inventory_id")],
             "gallery": [
                 {
@@ -734,7 +734,7 @@ def dashboard(request):
 def inventory(request):
     if request.method == "GET":
         qs = InventoryItem.objects.select_related(
-            "board__manufacturer", ""project"
+            "board__manufacturer", "component", "project"
         ).annotate(allocated_quantity=Sum("bom_allocations__quantity")).all()[:5000]
         return JsonResponse({"rows": [_serialise_inventory(item) for item in qs]})
 
@@ -908,7 +908,7 @@ def inventory_detail(request, item_id):
             item.save()
             _record_inventory_history(item, request.user, before)
             item = InventoryItem.objects.select_related(
-                "board__manufacturer", ""project"
+                "board__manufacturer", "project"
             ).get(pk=item.pk)
             return JsonResponse({"item": _serialise_inventory(item)})
     except ValidationError as exc:
@@ -1039,8 +1039,6 @@ def components(request):
         name = str(payload.get("name") or "").strip()
         if not name:
             return _error("Component name is required.")
-        manufacturer_name = str(payload.get("manufacturer") or "Generic").strip() or "Generic"
-        manufacturer, _ = Manufacturer.objects.get_or_create(name=manufacturer_name)
         category = None
         category_name = str(payload.get("category") or "").strip()
         if category_name:
@@ -1136,7 +1134,7 @@ def board_image(request, board_id):
 @login_required
 @require_http_methods(["POST", "DELETE"])
 def component_image(request, component_id):
-    component = ComponentModel.objects.select_related("manufacturer", "category", "source").filter(pk=component_id).first()
+    component = ComponentModel.objects.select_related("category", "source").filter(pk=component_id).first()
     if not component:
         return _error("Component not found.", status=404)
     return _catalogue_image_response(
@@ -1150,7 +1148,7 @@ def component_image(request, component_id):
 def files_lookup(request):
     if request.method == "GET":
         qs = FileAsset.objects.exclude(category="image").select_related(
-            "project", "board__manufacturer", "component__manufacturer"
+            "project", "board__manufacturer", "component__category"
         )
         query = request.GET.get("q", "").strip()
         category = request.GET.get("category", "").strip()
@@ -1462,7 +1460,7 @@ def project_bom_items(request, project_id):
         item.full_clean()
         item.save()
         project.save(update_fields=["updated_at"])
-        item = BOMItem.objects.select_related("board__manufacturer", "component__manufacturer").get(pk=item.pk)
+        item = BOMItem.objects.select_related("board__manufacturer", "component__category").get(pk=item.pk)
         return JsonResponse({"bom_item": _serialise_bom_item(item)}, status=201)
     except ValidationError as exc:
         return _validation_response(exc)
@@ -1649,7 +1647,7 @@ def project_bom_allocations(request, project_id, bom_id):
             project.save(update_fields=["updated_at"])
 
             inventory = InventoryItem.objects.select_related(
-                "board__manufacturer", ""project"
+                "board__manufacturer", "project"
             ).get(pk=inventory.pk)
             allocation.inventory_item = inventory
             return JsonResponse({
@@ -2959,7 +2957,7 @@ def printing_overview(request):
         "model_files": [
             _serialise_file_asset(asset)
             for asset in FileAsset.objects.filter(category__in=["mesh", "slicer", "cad"])
-                .select_related("project", "board__manufacturer", "component__manufacturer")
+                .select_related("project", "board__manufacturer", "component__category")
                 .order_by("category", "name")[:5000]
         ],
         "models": [_serialise_printing_model(model) for model in models_3d],
