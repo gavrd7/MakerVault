@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.6.5.1 — in development
+## v0.6.5 — 2026-09-28
 
 - Added automatic material-cost estimation for print-history usage rows when a physical spool has a purchase cost and starting filament weight. Manually entered costs remain authoritative.
 - Physical spool API records now expose purchase cost, currency and derived cost-per-gram for client-side estimates.
@@ -11,7 +11,7 @@
 - Cost aggregation is currency-safe: the configured MakerVault currency is totalled separately and other-currency rows are reported as excluded.
 
 
-## v0.6.4.1 — in development
+## v0.6.4 — 2026-09-28
 
 - Model intelligence analysis now refreshes the selected model in place instead of closing the viewer/manage workflow and returning to the Model Library.
 - Added local mesh-topology health checks for boundary edges, non-manifold edges, degenerate triangles and watertightness.
