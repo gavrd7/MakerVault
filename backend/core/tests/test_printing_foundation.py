@@ -168,14 +168,14 @@ class PrintingFoundationTests(TestCase):
             color_hex="#3366ff",
             diameter_mm="1.75",
         )
-        self.spool = Spool.objects.create(
+        self.spool = Spool.objects.create(owner=self.user, 
             spool_id="SPL-0001",
             filament=self.filament,
             initial_weight_g="1000",
             remaining_weight_g="725",
             status="open",
         )
-        self.printer = Printer.objects.create(
+        self.printer = Printer.objects.create(owner=self.user, 
             name="Workshop printer",
             model="K2",
             nozzle_mm="0.4",
@@ -264,9 +264,9 @@ class PrintingFoundationTests(TestCase):
             is_loaded=True,
             last_seen_at=timezone.now(),
         )
-        model = Model3D.objects.create(name="Desk enclosure", tags=["case"])
+        model = Model3D.objects.create(owner=self.user, name="Desk enclosure", tags=["case"])
         revision = ModelRevision.objects.create(model=model, version="1.0")
-        asset = FileAsset.objects.create(
+        asset = FileAsset.objects.create(owner=self.user, 
             name="Desk enclosure STL",
             category="mesh",
             file="files/desk-enclosure.stl",
@@ -277,7 +277,7 @@ class PrintingFoundationTests(TestCase):
             role="model",
             is_primary=True,
         )
-        print_job = PrintJob.objects.create(
+        print_job = PrintJob.objects.create(owner=self.user, 
             model_revision=revision,
             printer=self.printer,
             status="success",
@@ -415,14 +415,14 @@ class PrintingFoundationTests(TestCase):
             color_hex="#ffffff",
             diameter_mm="1.75",
         )
-        second_spool = Spool.objects.create(
+        second_spool = Spool.objects.create(owner=self.user, 
             spool_id="SPL-0002",
             filament=second_filament,
             initial_weight_g="1000",
             remaining_weight_g="800",
             status="open",
         )
-        job = PrintJob.objects.create(
+        job = PrintJob.objects.create(owner=self.user, 
             printer=self.printer,
             status="success",
             quantity=1,
@@ -464,7 +464,7 @@ class PrintingFoundationTests(TestCase):
             color_name="White",
             diameter_mm="1.75",
         )
-        second_spool = Spool.objects.create(
+        second_spool = Spool.objects.create(owner=self.user, 
             spool_id="SPL-HISTORY-2",
             filament=second_filament,
             initial_weight_g="1000",
@@ -570,7 +570,7 @@ class PrintingFoundationTests(TestCase):
         self.assertEqual(analytics["printers"][0]["success_rate"], 50.0)
 
     def test_print_history_rejects_slot_from_another_printer(self):
-        other_printer = Printer.objects.create(name="Other printer", model="Other")
+        other_printer = Printer.objects.create(owner=self.user, name="Other printer", model="Other")
         foreign_slot = PrinterFilamentSlot.objects.create(
             printer=other_printer,
             system="creality_cfs",
@@ -593,9 +593,9 @@ class PrintingFoundationTests(TestCase):
         self.assertEqual(PrintMaterialUsage.objects.count(), 0)
 
     def test_model_revision_asset_reuses_fileasset_and_validates_printable_role(self):
-        model = Model3D.objects.create(name="Calibration part")
+        model = Model3D.objects.create(owner=self.user, name="Calibration part")
         revision = ModelRevision.objects.create(model=model, version="A")
-        document = FileAsset.objects.create(
+        document = FileAsset.objects.create(owner=self.user, 
             name="Instructions",
             category="document",
             file="files/instructions.pdf",
@@ -690,7 +690,7 @@ class PrintingFoundationTests(TestCase):
             multi_material_system="creality_cfs",
             features={"cfs": True},
         )
-        location = PrintingLocation.objects.create(name="Office", kind="room")
+        location = PrintingLocation.objects.create(owner=self.user, name="Office", kind="room")
 
         response = self.client.post(
             "/api/printing/printers/",
@@ -724,7 +724,7 @@ class PrintingFoundationTests(TestCase):
             name="Optional CFS Model",
             multi_material_system="creality_cfs",
         )
-        printer = Printer.objects.create(
+        printer = Printer.objects.create(owner=self.user, 
             name="Optional CFS Printer",
             printer_manufacturer=maker,
             catalog_model=model,
@@ -776,7 +776,7 @@ class PrintingFoundationTests(TestCase):
         )
 
     def test_spool_can_use_structured_location_or_printer(self):
-        location = PrintingLocation.objects.create(name="Dry box 1", kind="drybox")
+        location = PrintingLocation.objects.create(owner=self.user, name="Dry box 1", kind="drybox")
         stored = self.client.post(
             "/api/printing/spools/",
             data={
@@ -844,9 +844,9 @@ class PrintingFoundationTests(TestCase):
         self.assertTrue(slot.is_loaded)
 
     def test_model_delete_keeps_shared_file_and_print_history(self):
-        model = Model3D.objects.create(name="Delete-me model")
+        model = Model3D.objects.create(owner=self.user, name="Delete-me model")
         revision = ModelRevision.objects.create(model=model, version="1.0")
-        asset = FileAsset.objects.create(
+        asset = FileAsset.objects.create(owner=self.user, 
             name="Shared model STL",
             category="mesh",
             file="files/shared-delete-test.stl",
@@ -857,7 +857,7 @@ class PrintingFoundationTests(TestCase):
             role="model",
             is_primary=True,
         )
-        print_job = PrintJob.objects.create(
+        print_job = PrintJob.objects.create(owner=self.user, 
             model_revision=revision,
             printer=self.printer,
             status="success",
@@ -875,7 +875,7 @@ class PrintingFoundationTests(TestCase):
     @patch("core.printing_sync._spoolman_get_spools")
     def test_unexpected_spoolman_sync_failure_sets_error_instead_of_stale_connected(self, get_spools_mock):
         get_spools_mock.side_effect = ValueError("unexpected remote value")
-        setting, _ = PrintingIntegrationSetting.objects.update_or_create(
+        setting, _ = PrintingIntegrationSetting.objects.update_or_create(owner=self.user, 
             provider="spoolman",
             defaults={
                 "enabled": True,
@@ -898,7 +898,7 @@ class PrintingFoundationTests(TestCase):
         response = Mock(status_code=422)
         response.json.return_value = {"message": "Example Spoolman validation error"}
         get_mock.return_value = response
-        setting, _ = PrintingIntegrationSetting.objects.update_or_create(
+        setting, _ = PrintingIntegrationSetting.objects.update_or_create(owner=self.user, 
             provider="spoolman",
             defaults={
                 "enabled": True,
@@ -951,7 +951,7 @@ class PrintingFoundationTests(TestCase):
             name="K2",
             multi_material_system="creality_cfs",
         )
-        Printer.objects.create(
+        Printer.objects.create(owner=self.user, 
             name="CFS printer",
             printer_manufacturer=maker,
             catalog_model=model,
@@ -1017,7 +1017,7 @@ class PrintingFoundationTests(TestCase):
             }
         ]
         get_mock.return_value = response
-        PrintingIntegrationSetting.objects.update_or_create(
+        PrintingIntegrationSetting.objects.update_or_create(owner=self.user, 
             provider="spoolman",
             defaults={
                 "enabled": True,
@@ -1068,7 +1068,7 @@ class PrintingFoundationTests(TestCase):
             }
         ]
         get_mock.return_value = response
-        PrintingIntegrationSetting.objects.update_or_create(
+        PrintingIntegrationSetting.objects.update_or_create(owner=self.user, 
             provider="spoolman",
             defaults={
                 "enabled": True,
@@ -1100,11 +1100,11 @@ class PrintingFoundationTests(TestCase):
             color_hex="#ffffff",
             diameter_mm="1.75",
         )
-        local_location = PrintingLocation.objects.create(
+        local_location = PrintingLocation.objects.create(owner=self.user, 
             name="MakerVault shelf",
             kind="shelf",
         )
-        local = Spool.objects.create(
+        local = Spool.objects.create(owner=self.user, 
             spool_id="SPL-LOCAL",
             filament=filament,
             initial_weight_g="1000",
@@ -1135,7 +1135,7 @@ class PrintingFoundationTests(TestCase):
             }
         ]
         get_mock.return_value = response
-        PrintingIntegrationSetting.objects.update_or_create(
+        PrintingIntegrationSetting.objects.update_or_create(owner=self.user, 
             provider="spoolman",
             defaults={
                 "enabled": True,
@@ -1192,7 +1192,7 @@ class PrintingFoundationTests(TestCase):
             name="K2",
             multi_material_system="creality_cfs",
         )
-        printer = Printer.objects.create(
+        printer = Printer.objects.create(owner=self.user, 
             name="Dining room K2",
             printer_manufacturer=maker,
             catalog_model=model,
@@ -1211,7 +1211,7 @@ class PrintingFoundationTests(TestCase):
             nominal_weight_g="1000",
             diameter_mm="1.75",
         )
-        spool = Spool.objects.create(
+        spool = Spool.objects.create(owner=self.user, 
             spool_id="SPL-CFS-LOCAL",
             rfid_uid="REAL-PHYSICAL-TAG-WHITE",
             filament=filament,
@@ -1245,7 +1245,7 @@ class PrintingFoundationTests(TestCase):
                 }
             ]
         }
-        PrintingIntegrationSetting.objects.update_or_create(
+        PrintingIntegrationSetting.objects.update_or_create(owner=self.user, 
             provider="creality_cfs",
             defaults={
                 "enabled": True,
@@ -1305,7 +1305,7 @@ class PrintingFoundationTests(TestCase):
             name="K2 Variant Test",
             multi_material_system="creality_cfs",
         )
-        printer = Printer.objects.create(
+        printer = Printer.objects.create(owner=self.user, 
             name="Variant K2",
             printer_manufacturer=maker,
             catalog_model=model,
@@ -1333,7 +1333,7 @@ class PrintingFoundationTests(TestCase):
             nominal_weight_g="1000",
             diameter_mm="1.75",
         )
-        white_spool = Spool.objects.create(
+        white_spool = Spool.objects.create(owner=self.user, 
             spool_id="SPL-WHITE",
             rfid_uid="PHYSICAL-WHITE-1",
             filament=white,
@@ -1341,7 +1341,7 @@ class PrintingFoundationTests(TestCase):
             remaining_weight_g="800",
             status="open",
         )
-        first_black = Spool.objects.create(
+        first_black = Spool.objects.create(owner=self.user, 
             spool_id="SPL-BLACK-1",
             rfid_uid="PHYSICAL-BLACK-1",
             filament=black,
@@ -1371,7 +1371,7 @@ class PrintingFoundationTests(TestCase):
                 ],
             }],
         }
-        PrintingIntegrationSetting.objects.update_or_create(
+        PrintingIntegrationSetting.objects.update_or_create(owner=self.user, 
             provider="creality_cfs",
             defaults={
                 "enabled": True,
@@ -1445,7 +1445,7 @@ class PrintingFoundationTests(TestCase):
             name="K2 Legacy Link",
             multi_material_system="creality_cfs",
         )
-        printer = Printer.objects.create(
+        printer = Printer.objects.create(owner=self.user, 
             name="Legacy K2",
             printer_manufacturer=maker,
             catalog_model=model,
@@ -1473,7 +1473,7 @@ class PrintingFoundationTests(TestCase):
             color_hex="#6f8798",
             nominal_weight_g="1000",
         )
-        white_spool = Spool.objects.create(
+        white_spool = Spool.objects.create(owner=self.user, 
             spool_id="SPL-LEGACY-WHITE",
             filament=white_abs,
             assigned_printer=printer,
@@ -1481,7 +1481,7 @@ class PrintingFoundationTests(TestCase):
             remaining_weight_g="800",
             status="open",
         )
-        grey_spool = Spool.objects.create(
+        grey_spool = Spool.objects.create(owner=self.user, 
             spool_id="SPL-LEGACY-GREY",
             filament=grey_pla,
             assigned_printer=printer,
@@ -1543,7 +1543,7 @@ class PrintingFoundationTests(TestCase):
                 ],
             }],
         }
-        PrintingIntegrationSetting.objects.update_or_create(
+        PrintingIntegrationSetting.objects.update_or_create(owner=self.user, 
             provider="creality_cfs",
             defaults={"enabled": True, "sync_direction": "import", "status": "disconnected"},
         )
@@ -1605,11 +1605,11 @@ class PrintingFoundationTests(TestCase):
         self.assertEqual(duplicate.status_code, 409, duplicate.content)
 
     def test_printing_overview_only_lists_enabled_integrations(self):
-        PrintingIntegrationSetting.objects.update_or_create(
+        PrintingIntegrationSetting.objects.update_or_create(owner=self.user, 
             provider="spoolman",
             defaults={"enabled": True, "status": "connected"},
         )
-        PrintingIntegrationSetting.objects.update_or_create(
+        PrintingIntegrationSetting.objects.update_or_create(owner=self.user, 
             provider="creality_cfs",
             defaults={"enabled": False, "status": "disabled"},
         )
@@ -1622,7 +1622,7 @@ class PrintingFoundationTests(TestCase):
 
     @patch("core.tasks.printing_integration_sync_task.delay")
     def test_enabled_scheduled_integration_is_queued_when_due(self, delay_mock):
-        setting, _ = PrintingIntegrationSetting.objects.update_or_create(
+        setting, _ = PrintingIntegrationSetting.objects.update_or_create(owner=self.user, 
             provider="spoolman",
             defaults={
                 "enabled": True,
@@ -1654,8 +1654,8 @@ class PrintingFoundationTests(TestCase):
         self.assertFalse(Printer.objects.filter(name="Blocked printer").exists())
 
     def test_model_revision_can_attach_existing_fileasset_without_duplication(self):
-        model = Model3D.objects.create(name="Bracket")
-        asset = FileAsset.objects.create(
+        model = Model3D.objects.create(owner=self.user, name="Bracket")
+        asset = FileAsset.objects.create(owner=self.user, 
             name="Bracket STL",
             category="mesh",
             file="files/bracket.stl",
@@ -1682,9 +1682,9 @@ class PrintingFoundationTests(TestCase):
         self.assertEqual(FileAsset.objects.filter(pk=asset.id).count(), 1)
 
     def test_model_linked_file_cannot_be_deleted_until_detached(self):
-        model = Model3D.objects.create(name="Protected model")
+        model = Model3D.objects.create(owner=self.user, name="Protected model")
         revision = ModelRevision.objects.create(model=model, version="1")
-        asset = FileAsset.objects.create(
+        asset = FileAsset.objects.create(owner=self.user, 
             name="Protected STL",
             category="mesh",
             file="files/protected.stl",
@@ -1711,11 +1711,11 @@ class PrintingFoundationTests(TestCase):
     def test_cross_project_model_file_attachment_is_rejected(self):
         from core.models import Project
 
-        model_project = Project.objects.create(name="Model project")
-        other_project = Project.objects.create(name="Other project")
-        model = Model3D.objects.create(name="Project model", project=model_project)
+        model_project = Project.objects.create(owner=self.user, name="Model project")
+        other_project = Project.objects.create(owner=self.user, name="Other project")
+        model = Model3D.objects.create(owner=self.user, name="Project model", project=model_project)
         revision = ModelRevision.objects.create(model=model, version="1")
-        asset = FileAsset.objects.create(
+        asset = FileAsset.objects.create(owner=self.user, 
             name="Other STL",
             category="mesh",
             file="files/other.stl",
