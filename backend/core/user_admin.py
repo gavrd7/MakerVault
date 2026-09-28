@@ -53,43 +53,52 @@ def admin_user_summary(user) -> dict:
     }
 
 
-def _delete_field_file(field) -> None:
-    if not field:
-        return
-    try:
-        field.delete(save=False)
-    except (FileNotFoundError, OSError, ValueError):
-        pass
+def _private_blob_refs(user):
+    """Capture storage/name pairs without returning private names to the API caller."""
+    refs = []
+    for field in FileAsset.objects.filter(owner=user).only("file").values_list("file", flat=True):
+        if field:
+            refs.append((FileAsset._meta.get_field("file").storage, str(field)))
+    for field in Project.objects.filter(owner=user).only("cover_image").values_list("cover_image", flat=True):
+        if field:
+            refs.append((Project._meta.get_field("cover_image").storage, str(field)))
+    for field in InventoryItem.objects.filter(owner=user).only("image").values_list("image", flat=True):
+        if field:
+            refs.append((InventoryItem._meta.get_field("image").storage, str(field)))
+    return refs
 
 
-def delete_user_file_blobs(user) -> None:
-    """Delete physical private blobs without exposing their names to an administrator."""
-    for asset in FileAsset.objects.filter(owner=user).only("file").iterator():
-        _delete_field_file(asset.file)
-    for project in Project.objects.filter(owner=user).only("cover_image").iterator():
-        _delete_field_file(project.cover_image)
-    for item in InventoryItem.objects.filter(owner=user).only("image").iterator():
-        _delete_field_file(item.image)
+def _delete_blob_refs(refs) -> None:
+    for storage, name in refs:
+        try:
+            storage.delete(name)
+        except (FileNotFoundError, OSError, ValueError):
+            # A stale/orphaned blob is not exposed by the private media view and
+            # can be cleaned later; DB integrity takes priority over disk cleanup.
+            pass
 
 
-@transaction.atomic
 def purge_user_private_data(user) -> dict:
     """Remove a user's MakerVault-private workspace while preserving the account."""
     before = admin_user_summary(user)
-    delete_user_file_blobs(user)
+    blob_refs = _private_blob_refs(user)
 
-    # Delete dependants before protected parents. Shared catalogue/reference data is untouched.
-    PrintJob.objects.filter(owner=user).delete()
-    Model3D.objects.filter(owner=user).delete()
-    FileAsset.objects.filter(owner=user).delete()
-    Project.objects.filter(owner=user).delete()
-    InventoryItem.objects.filter(owner=user).delete()
-    Spool.objects.filter(owner=user).delete()
-    Printer.objects.filter(owner=user).delete()
-    PrintingLocation.objects.filter(owner=user).delete()
-    PrintingIntegrationSetting.objects.filter(owner=user).delete()
+    # Commit database deletion before touching physical blobs. If a protected
+    # relation or another database constraint fails, all live file records remain
+    # intact and their blobs are not removed.
+    with transaction.atomic():
+        PrintJob.objects.filter(owner=user).delete()
+        Model3D.objects.filter(owner=user).delete()
+        FileAsset.objects.filter(owner=user).delete()
+        Project.objects.filter(owner=user).delete()
+        InventoryItem.objects.filter(owner=user).delete()
+        Spool.objects.filter(owner=user).delete()
+        Printer.objects.filter(owner=user).delete()
+        PrintingLocation.objects.filter(owner=user).delete()
+        PrintingIntegrationSetting.objects.filter(owner=user).delete()
+        refresh_user_storage_profile(user)
 
-    refresh_user_storage_profile(user)
+    _delete_blob_refs(blob_refs)
     return {
         "storage_bytes_removed": int(before["storage"]["used_bytes"]),
         "counts_removed": before["counts"],
