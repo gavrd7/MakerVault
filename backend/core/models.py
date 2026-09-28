@@ -23,6 +23,7 @@ class UserStorageProfile(TimeStampedModel):
         related_name="makervault_storage_profile",
     )
     quota_override_bytes = models.BigIntegerField(blank=True, null=True)
+    quota_unlimited = models.BooleanField(default=False)
     storage_used_bytes = models.BigIntegerField(default=0)
     models_bytes = models.BigIntegerField(default=0)
     project_files_bytes = models.BigIntegerField(default=0)
@@ -38,6 +39,28 @@ class UserStorageProfile(TimeStampedModel):
 
     def __str__(self):
         return f"{self.user} storage"
+
+
+class StorageSettings(TimeStampedModel):
+    """Instance-wide defaults for private user storage."""
+
+    singleton_key = models.PositiveSmallIntegerField(default=1, unique=True, editable=False)
+    default_quota_bytes = models.BigIntegerField(default=10 * 1024 * 1024 * 1024)
+
+    class Meta:
+        verbose_name = "Storage settings"
+        verbose_name_plural = "Storage settings"
+
+    def clean(self):
+        if self.default_quota_bytes is not None and self.default_quota_bytes < 0:
+            raise ValidationError({"default_quota_bytes": "Default storage quota cannot be negative."})
+
+    def save(self, *args, **kwargs):
+        self.singleton_key = 1
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return "MakerVault storage settings"
 
 
 class CatalogueMaintenanceSettings(TimeStampedModel):
