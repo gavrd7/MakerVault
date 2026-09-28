@@ -192,6 +192,64 @@ class ProjectAssetApiTests(TestCase):
         self.assertFalse(FileAsset.objects.filter(pk=asset.id).exists())
         self.assertFalse(storage.exists(stored_name))
 
+    def test_uploading_new_file_version_preserves_history_and_shows_latest_only(self):
+        first_payload = b"solid v1\nendsolid v1\n"
+        upload = self.client.post(
+            f"/api/projects/{self.project.id}/files/",
+            {
+                "file": SimpleUploadedFile("speaker-base.stl", first_payload, content_type="model/stl"),
+                "category": "mesh",
+                "name": "Speaker base",
+                "version": "1.0",
+            },
+        )
+        self.assertEqual(upload.status_code, 201, upload.content)
+        first = FileAsset.objects.get(pk=upload.json()["file"]["id"])
+        first_stored_name = first.file.name
+
+        second_payload = b"solid v2\nendsolid v2\n"
+        versioned = self.client.post(
+            f"/api/files/{first.id}/versions/",
+            {
+                "file": SimpleUploadedFile("speaker-base-v1.1.stl", second_payload, content_type="model/stl"),
+                "version": "1.1",
+                "description": "Second printable revision",
+            },
+        )
+        self.assertEqual(versioned.status_code, 201, versioned.content)
+        second = FileAsset.objects.get(pk=versioned.json()["file"]["id"])
+        self.assertEqual(second.supersedes_id, first.id)
+        self.assertEqual(second.project_id, self.project.id)
+        self.assertEqual(second.name, first.name)
+        self.assertEqual(second.version, "1.1")
+        self.assertTrue(first.file.storage.exists(first_stored_name))
+        self.assertTrue(second.file.storage.exists(second.file.name))
+
+        library = self.client.get("/api/files/")
+        self.assertEqual(library.status_code, 200)
+        self.assertEqual([row["id"] for row in library.json()["rows"]], [str(second.id)])
+
+        detail = self.client.get(f"/api/projects/{self.project.id}/")
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(detail.json()["project"]["file_count"], 1)
+        self.assertEqual(detail.json()["project"]["files"][0]["id"], str(second.id))
+
+        history = self.client.get(f"/api/files/{second.id}/versions/")
+        self.assertEqual(history.status_code, 200)
+        self.assertEqual(
+            [item["version"] for item in history.json()["versions"]],
+            ["1.1", "1.0"],
+        )
+
+        stale_upload = self.client.post(
+            f"/api/files/{first.id}/versions/",
+            {
+                "file": SimpleUploadedFile("speaker-base-v1.2.stl", b"solid stale\nendsolid stale\n", content_type="model/stl"),
+                "version": "1.2",
+            },
+        )
+        self.assertEqual(stale_upload.status_code, 409)
+
     def test_repository_link_is_returned_with_project(self):
         response = self.client.post(
             f"/api/projects/{self.project.id}/repositories/",

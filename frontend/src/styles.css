@@ -1413,3 +1413,69 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
   .modelViewerToolbar select{min-width:100%}
   .modelIntelligenceStats{grid-template-columns:1fr 1fr}
 }
+
+
+/* model/file previews and immutable file versions */
+.modelThumbnailButton{width:76px;height:52px;padding:0;border:1px solid #354154;border-radius:9px;overflow:hidden;background:#0c1219}
+.modelThumbnailButton:hover{border-color:#6d7f98}
+.modelFileThumbnail{display:grid;place-items:center;width:100%;height:100%;overflow:hidden;background:#111820;color:#7f8fa4;font-size:9px;font-weight:800;letter-spacing:.06em}
+.modelFileThumbnail img{display:block;width:100%;height:100%;object-fit:cover}
+.projectAssetActions{flex-wrap:wrap;justify-content:flex-end}
+.printingManageSectionHead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.printingManageSectionHead h3{margin:0}
+.printingRevisionAssetActions{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap}
+.printingRevisionAssetActions .assetButton{min-height:38px}
+.fileVersionLayout{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(280px,.85fr);gap:16px}
+.fileVersionHistory{align-self:start;border:1px solid #29313c;border-radius:11px;overflow:hidden;background:#0d131a}
+.fileVersionHistoryHead{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:11px 12px;border-bottom:1px solid #29313c;background:#111923}
+.fileVersionHistoryHead span{color:#7f8a9c;font-size:11px}
+.fileVersionHistoryRow{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px 12px;border-bottom:1px solid #242e3a}
+.fileVersionHistoryRow:last-child{border-bottom:0}
+.fileVersionHistoryRow strong,.fileVersionHistoryRow small{display:block}
+.fileVersionHistoryRow small{margin-top:3px;color:#778397;font-size:10px;overflow-wrap:anywhere}
+@media(max-width:800px){
+  .fileVersionLayout{grid-template-columns:1fr}
+  .printingManageSectionHead{align-items:stretch;flex-direction:column}
+  .printingManageSectionHead button{width:100%}
+}
+@media(max-width:560px){
+  .modelThumbnailButton{width:64px;height:46px}
+  .printingRevisionAssets>div{align-items:flex-start;flex-direction:column}
+  .printingRevisionAssetActions{width:100%;justify-content:flex-start}
+  .printingRevisionAssetActions>*{flex:1}
+}
+
+.modelViewerLayoutSolo{grid-template-columns:minmax(0,1fr)}
+
+
+/* polish model/file action spacing */
+.projectAssetActions{gap:8px}
+.projectAssetActions>.assetButton,
+.projectAssetActions>button{
+  min-height:34px;
+  padding:7px 11px;
+  border-radius:8px;
+  font-size:11px;
+  font-weight:650;
+  line-height:1.2;
+}
+.printingRevisionAssets>div{gap:14px}
+.printingRevisionAssetActions{gap:8px}
+.printingRevisionAssetActions>button,
+.printingRevisionAssetActions>.assetButton{
+  min-height:38px;
+  padding:8px 11px;
+  border:1px solid #374251;
+  border-radius:9px;
+  background:#151d27;
+  color:#dce5f2;
+  font-size:12px;
+  font-weight:650;
+  line-height:1.2;
+  text-decoration:none;
+}
+.printingRevisionAssetActions>.assetButton:hover{
+  border-color:#526176;
+  background:#1a2430;
+  color:#fff;
+}

@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../api";
 import { Badge, LoadingBlock, Modal } from "./Common";
+import FileVersionModal from "./FileVersionModal";
+import { FileModelViewerModal, ModelThumbnail, isViewableModelFile } from "./ModelViewer";
 
 const CATEGORY_ORDER = ["source", "firmware", "binary", "cad", "mesh", "slicer", "pcb", "wiring", "document", "archive", "other"];
 const ALLOWED_FILE_TYPES = [
@@ -45,6 +47,8 @@ export default function FilesPage({ projects, onOpenProject, config }) {
   const [error, setError] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [versioning, setVersioning] = useState(null);
+  const [viewerFile, setViewerFile] = useState(null);
 
   async function load() {
     setLoading(true);
@@ -126,7 +130,9 @@ export default function FilesPage({ projects, onOpenProject, config }) {
           <div className="filesCategoryHead"><div><h3>{group.label}</h3><p>{group.rows.length} {group.rows.length === 1 ? "asset" : "assets"}</p></div><Badge>{group.value}</Badge></div>
           <div className="filesRows">
             {group.rows.map(file => <article className="filesRow" key={file.id}>
-              <div className="projectFileBadge">{(file.filename?.split(".").pop() || "FILE").slice(0,5).toUpperCase()}</div>
+              {isViewableModelFile(file)
+                ? <button className="modelThumbnailButton" type="button" onClick={() => setViewerFile(file)} title={"View " + file.filename}><ModelThumbnail file={file} /></button>
+                : <div className="projectFileBadge">{(file.filename?.split(".").pop() || "FILE").slice(0,5).toUpperCase()}</div>}
               <div className="filesRowMain">
                 <div className="filesNameRow"><strong>{file.name}</strong>{!file.project_id && <Badge tone="accent">Standalone</Badge>}</div>
                 <small>{file.filename}{file.version ? ` · v${file.version}` : ""} · {formatBytes(file.size_bytes)}</small>
@@ -138,7 +144,9 @@ export default function FilesPage({ projects, onOpenProject, config }) {
                 </div>
               </div>
               <div className="projectAssetActions">
+                {isViewableModelFile(file) && <button type="button" onClick={() => setViewerFile(file)}>View</button>}
                 <a href={file.url} className="assetButton">Download</a>
+                {config?.permissions?.change_file && <button onClick={() => setVersioning(file)}>Upload new version</button>}
                 {config?.permissions?.change_file && <button onClick={() => setEditing(file)}>Manage</button>}
                 {config?.permissions?.change_file && <button className="assetDanger" onClick={() => removeFile(file)}>Remove</button>}
               </div>
@@ -162,6 +170,12 @@ export default function FilesPage({ projects, onOpenProject, config }) {
       onClose={() => setEditing(null)}
       onSaved={async () => { setEditing(null); await load(); }}
     />}
+    {versioning && <FileVersionModal
+      file={versioning}
+      onClose={() => setVersioning(null)}
+      onSaved={async () => { setVersioning(null); await load(); }}
+    />}
+    {viewerFile && <FileModelViewerModal file={viewerFile} onClose={() => setViewerFile(null)} />}
   </div>;
 }
 
