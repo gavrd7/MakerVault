@@ -21,6 +21,7 @@ class CatalogueMaintenanceSettings(TimeStampedModel):
     enabled = models.BooleanField(default=True)
     interval_hours = models.PositiveIntegerField(default=24)
     check_board_data = models.BooleanField(default=True)
+    check_printer_data = models.BooleanField(default=True)
     check_images = models.BooleanField(default=True)
     last_run_at = models.DateTimeField(blank=True, null=True)
     next_run_at = models.DateTimeField(blank=True, null=True)
