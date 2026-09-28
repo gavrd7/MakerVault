@@ -550,6 +550,150 @@ def _detect_slicer_application(core_metadata, flat):
     return str(app).strip() if app else ""
 
 
+def _xml_metadata_values(element):
+    values = {}
+    for child in list(element):
+        if _local_name(child.tag) != "metadata":
+            continue
+        key = str(child.attrib.get("key") or child.attrib.get("name") or "").strip()
+        value = child.attrib.get("value")
+        if value is None and child.text:
+            value = child.text.strip()
+        if key and value not in (None, ""):
+            values[key] = value
+    return values
+
+
+def _extract_3mf_project_structure(package, model_roots):
+    names = {info.filename.lower(): info.filename for info in package.infolist()}
+    settings_name = names.get("metadata/model_settings.config")
+    project_name = names.get("metadata/project_settings.config")
+
+    project_settings = {}
+    if project_name:
+        try:
+            raw = package.read(project_name)
+            if len(raw) <= MAX_3MF_METADATA_FILE_BYTES:
+                project_settings = json.loads(raw.decode("utf-8-sig"))
+        except (KeyError, UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
+            project_settings = {}
+
+    colours = project_settings.get("filament_colour")
+    if not isinstance(colours, list):
+        colours = project_settings.get("default_filament_colour")
+    if not isinstance(colours, list):
+        colours = []
+    filament_types = project_settings.get("filament_type")
+    if not isinstance(filament_types, list):
+        filament_types = []
+    filament_profiles = project_settings.get("filament_settings_id")
+    if not isinstance(filament_profiles, list):
+        filament_profiles = []
+
+    objects = {}
+    plates = []
+    used_extruders = set()
+    if settings_name:
+        try:
+            raw = package.read(settings_name)
+            if len(raw) <= MAX_3MF_METADATA_FILE_BYTES:
+                root = ET.fromstring(raw)
+                for child in list(root):
+                    name = _local_name(child.tag)
+                    if name == "object":
+                        object_id = str(child.attrib.get("id") or "").strip()
+                        metadata = _xml_metadata_values(child)
+                        parts = []
+                        for part in list(child):
+                            if _local_name(part.tag) != "part":
+                                continue
+                            part_meta = _xml_metadata_values(part)
+                            extruder = part_meta.get("extruder")
+                            if extruder:
+                                try:
+                                    used_extruders.add(int(extruder))
+                                except (TypeError, ValueError):
+                                    pass
+                            parts.append({
+                                "id": str(part.attrib.get("id") or ""),
+                                "name": part_meta.get("name") or "",
+                                "subtype": str(part.attrib.get("subtype") or ""),
+                                "extruder": extruder or "",
+                            })
+                        extruder = metadata.get("extruder")
+                        if extruder:
+                            try:
+                                used_extruders.add(int(extruder))
+                            except (TypeError, ValueError):
+                                pass
+                        if object_id:
+                            objects[object_id] = {
+                                "id": object_id,
+                                "name": metadata.get("name") or "",
+                                "extruder": extruder or "",
+                                "parts": parts,
+                            }
+                    elif name == "plate":
+                        metadata = _xml_metadata_values(child)
+                        instances = []
+                        for instance in list(child):
+                            if _local_name(instance.tag) != "model_instance":
+                                continue
+                            instance_meta = _xml_metadata_values(instance)
+                            if instance_meta:
+                                instances.append({
+                                    "object_id": str(instance_meta.get("object_id") or ""),
+                                    "instance_id": str(instance_meta.get("instance_id") or ""),
+                                    "identify_id": str(instance_meta.get("identify_id") or ""),
+                                })
+                        plates.append({
+                            "id": str(metadata.get("plater_id") or metadata.get("index") or len(plates) + 1),
+                            "name": str(metadata.get("plater_name") or ""),
+                            "bed_type": str(metadata.get("bed_type") or ""),
+                            "thumbnail_file": str(metadata.get("thumbnail_file") or ""),
+                            "instances": instances,
+                            "object_count": len(instances),
+                        })
+        except (KeyError, ET.ParseError, DefusedXmlException):
+            pass
+
+    painted_facets = 0
+    for root in model_roots:
+        for element in root.iter():
+            if _local_name(element.tag) != "triangle":
+                continue
+            attr_names = {_local_name(key) for key in element.attrib}
+            if "paint_color" in attr_names or "mmu_segmentation" in attr_names:
+                painted_facets += 1
+
+    materials = []
+    slot_count = max(len(colours), len(filament_types), len(filament_profiles))
+    for index in range(slot_count):
+        materials.append({
+            "slot": index + 1,
+            "colour": str(colours[index] if index < len(colours) else ""),
+            "type": str(filament_types[index] if index < len(filament_types) else ""),
+            "profile": str(filament_profiles[index] if index < len(filament_profiles) else ""),
+            "used": (index + 1) in used_extruders,
+        })
+
+    return {
+        "detected": bool(settings_name or plates or objects),
+        "plate_count": len(plates),
+        "object_count": len(objects),
+        "plates": plates,
+        "materials": materials,
+        "used_material_slots": sorted(used_extruders),
+        "painted_facets": painted_facets,
+        "multicolour": len(used_extruders) > 1 or painted_facets > 0,
+        "multi_plate": len(plates) > 1,
+        "note": (
+            "Plate membership comes from slicer project metadata. Geometry statistics above describe "
+            "the meshes stored in the 3MF package and are not a per-plate slicing result."
+        ) if len(plates) > 1 else "",
+    }
+
+
 def _extract_3mf_slicer_metadata(package, model_roots):
     core_metadata = {}
     for root in model_roots:
@@ -745,6 +889,7 @@ def analyse_3mf(data):
         warnings.append("3MF build-item transforms were detected; build placement transforms are not yet applied to geometry statistics.")
 
     slicer_metadata = _extract_3mf_slicer_metadata(package, model_roots)
+    project_structure = _extract_3mf_project_structure(package, model_roots)
     package.close()
 
     result = _result(
@@ -761,6 +906,7 @@ def analyse_3mf(data):
         warnings=warnings,
     )
     result["slicer_metadata"] = slicer_metadata
+    result["project_structure"] = project_structure
     return result
 
 
