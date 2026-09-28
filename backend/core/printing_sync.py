@@ -688,16 +688,55 @@ def _cfs_material_fingerprint(material: dict) -> str:
     ])
 
 
-def _confirmed_cfs_spool(existing_slot, fingerprint: str):
-    """Preserve only an association the user explicitly confirmed/created."""
+def _cfs_slot_spool_compatible(existing_slot, material: dict) -> bool:
+    """Reject a physical-spool association when live material facts conflict."""
     if not existing_slot or not existing_slot.spool_id:
-        return None
+        return False
+
+    spool = existing_slot.spool
+    filament = spool.filament
+    maker = filament.filament_manufacturer or filament.manufacturer
+
+    remote_color = _normalise_hex(material.get("color"))
+    local_color = _normalise_hex(filament.color_hex)
+    if remote_color and local_color and remote_color != local_color:
+        return False
+
+    remote_material = _normalise_match_text(material.get("type"))
+    local_material = _normalise_match_text(filament.material)
+    if remote_material and local_material and remote_material != local_material:
+        return False
+
+    remote_vendor = _normalise_match_text(material.get("vendor"))
+    local_vendor = _normalise_match_text(maker.name if maker else "")
+    if remote_vendor and local_vendor and remote_vendor != local_vendor:
+        return False
+
+    return True
+
+
+def _confirmed_cfs_spool(existing_slot, material: dict, fingerprint: str):
+    """Preserve explicit links, plus compatible pre-v0.6.0.1 legacy user links."""
+    if not _cfs_slot_spool_compatible(existing_slot, material):
+        return None, ""
+
     metadata = existing_slot.metadata or {}
-    if metadata.get("link_source") not in {"inventory_created_from_slot", "user_linked_existing"}:
-        return None
-    if metadata.get("material_fingerprint") != fingerprint:
-        return None
-    return existing_slot.spool
+    source = metadata.get("link_source") or ""
+    explicit_sources = {
+        "inventory_created_from_slot",
+        "user_linked_existing",
+        "legacy_compatible_link",
+    }
+
+    if source in explicit_sources:
+        if metadata.get("material_fingerprint") and metadata.get("material_fingerprint") != fingerprint:
+            return None, ""
+        return existing_slot.spool, source
+
+    # Older MakerVault builds did not record how the slot/spool link was created.
+    # Keep only links whose live vendor/material/colour remain compatible and mark
+    # them so future syncs no longer need this inference.
+    return existing_slot.spool, "legacy_compatible_link"
 
 
 def _sync_cfs_printer(printer: Printer, boxs_info: dict) -> dict:
@@ -747,7 +786,9 @@ def _sync_cfs_printer(printer: Printer, boxs_info: dict) -> dict:
                 unit_index=unit_index,
                 slot_index=slot_index,
             ).first()
-            local_spool = _confirmed_cfs_spool(existing_slot, fingerprint)
+            local_spool, confirmed_source = _confirmed_cfs_spool(
+                existing_slot, raw, fingerprint
+            )
 
             percent = _as_decimal(raw.get("percent"))
             remaining_weight = None
@@ -761,7 +802,7 @@ def _sync_cfs_printer(printer: Printer, boxs_info: dict) -> dict:
                         updated_weights += 1
 
             previous_metadata = (existing_slot.metadata or {}) if existing_slot else {}
-            link_source = previous_metadata.get("link_source") if local_spool else ""
+            link_source = confirmed_source if local_spool else ""
             metadata = {
                 "vendor": raw.get("vendor") or "",
                 "product_name": raw.get("name") or "",
