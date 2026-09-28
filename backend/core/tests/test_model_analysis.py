@@ -1,3 +1,4 @@
+import json
 import shutil
 import struct
 import tempfile
@@ -73,6 +74,53 @@ def simple_3mf():
     return buffer.getvalue()
 
 
+def slicer_3mf():
+    model_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <metadata name="Application">OrcaSlicer 2.3.0</metadata>
+  <resources>
+    <object id="1" type="model">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="20" y="0" z="0"/>
+          <vertex x="0" y="20" z="0"/>
+          <vertex x="0" y="0" z="20"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="2" v3="1"/>
+          <triangle v1="0" v2="1" v3="3"/>
+          <triangle v1="0" v2="3" v3="2"/>
+          <triangle v1="1" v2="2" v3="3"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build><item objectid="1"/></build>
+</model>"""
+    project_settings = {
+        "layer_height": "0.20",
+        "initial_layer_print_height": "0.28",
+        "nozzle_diameter": ["0.4"],
+        "sparse_infill_density": "15%",
+        "sparse_infill_pattern": "gyroid",
+        "wall_loops": "3",
+        "top_shell_layers": "5",
+        "bottom_shell_layers": "4",
+        "enable_support": "1",
+        "brim_type": "outer_only",
+        "brim_width": "5",
+        "printer_settings_id": "Creality K2 0.4 nozzle",
+        "print_settings_id": "0.20mm Standard",
+        "filament_settings_id": ["Generic PLA @K2"],
+    }
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("3D/3dmodel.model", model_xml)
+        archive.writestr("Metadata/project_settings.config", json.dumps(project_settings))
+    return buffer.getvalue()
+
+
 class ModelGeometryAnalysisTests(TestCase):
     def test_binary_stl_analysis_reports_geometry(self):
         result = analyse_stl(binary_stl_boxish())
@@ -102,6 +150,25 @@ class ModelGeometryAnalysisTests(TestCase):
         self.assertEqual(result["mesh_quality"]["non_manifold_edges"], 0)
         self.assertEqual(len(result["orientation"]["candidates"]), 6)
         self.assertTrue(any("boundary edge" in warning for warning in result["warnings"]))
+
+    def test_3mf_extracts_slicer_profiles_and_settings(self):
+        result = analyse_3mf(slicer_3mf())
+        self.assertEqual(result["analysis_version"], 3)
+        slicer = result["slicer_metadata"]
+        self.assertTrue(slicer["detected"])
+        self.assertEqual(slicer["application"], "OrcaSlicer")
+        self.assertEqual(slicer["profiles"]["printer"], "Creality K2 0.4 nozzle")
+        self.assertEqual(slicer["profiles"]["print"], "0.20mm Standard")
+        self.assertEqual(slicer["profiles"]["filament"], ["Generic PLA @K2"])
+        self.assertEqual(slicer["settings"]["layer_height_mm"], 0.2)
+        self.assertEqual(slicer["settings"]["first_layer_height_mm"], 0.28)
+        self.assertEqual(slicer["settings"]["nozzle_diameter_mm"], 0.4)
+        self.assertEqual(slicer["settings"]["infill_density"], "15%")
+        self.assertEqual(slicer["settings"]["infill_pattern"], "gyroid")
+        self.assertEqual(slicer["settings"]["perimeters"], 3.0)
+        self.assertEqual(slicer["settings"]["supports_enabled"], True)
+        self.assertEqual(slicer["settings"]["brim_type"], "outer_only")
+        self.assertIn("Metadata/project_settings.config", slicer["metadata_files"])
 
     def test_3mf_analysis_uses_declared_units_and_objects(self):
         result = analyse_3mf(simple_3mf())
