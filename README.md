@@ -14,7 +14,7 @@ v0.6.3 adds full responsive/mobile behaviour, feature-specific Settings tabs, ma
 
 The 3D-printer catalogue starts with MakerVault's curated hardware profiles and can optionally expand/refresh manufacturer and model coverage from OrcaSlicer's public printer manifests. Orca-derived records retain source provenance, while MakerVault's populated specifications and user edits remain authoritative.
 
-v0.3 turns physical inventory into first-class asset records and begins automatic technical board-specification enrichment:
+Current core capabilities include:
 
 - Django 5.2 LTS backend and authentication
 - local accounts, MFA-capable django-allauth, and optional generic OIDC client support
@@ -25,7 +25,7 @@ v0.3 turns physical inventory into first-class asset records and begins automati
 - expanded starter catalogue with 65+ board definitions and 130+ common maker-component definitions across sensors, displays, communications, power, audio, controls, motors, connectors, prototyping and more
 - structured component attributes such as type, interface, voltage/input and package/form factor
 - catalogue image upload and secure remote-image caching into MakerVault media storage
-- automatic background image seeding for default boards/components, preferring ESPBoards.dev for supported ESP32-family boards and freely licensed raster media from Wikimedia Commons as a fallback
+- automatic background image seeding for default boards/components using open-licensed Wikimedia Commons/Openverse media by default, with ESPBoards artwork available as an explicit non-commercial opt-in
 - spreadsheet-style physical inventory with inline editing
 - clickable physical inventory records with full detail/edit views
 - lifecycle history for assignments, status changes, locations and general edits
@@ -34,7 +34,7 @@ v0.3 turns physical inventory into first-class asset records and begins automati
 - manual board/component creation
 - secure ESPBoards.dev URL import with preview and duplicate-aware enrichment
 - full project workspace with status, dates, descriptions, build notes, cover/gallery images, assigned inventory and cost rollups
-- existing schema for BOMs, files, repositories, listings, filament/spools, printers, 3D models/revisions and print history
+- first-class BOM allocation, project/standalone files, repository links, filament/spool inventory, owned printers, 3D model revisions, local model analysis and print history
 - bind-mount or Docker-volume storage selected through .env
 - configurable timezone, language, currency, measurement system, PUID, PGID and umask
 
