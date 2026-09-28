@@ -1,14 +1,16 @@
-# MakerVault v0.6.3.2
+# MakerVault v0.6.3
 
 MakerVault is a self-hosted makerspace inventory and project system for electronics, firmware, fabrication and 3D-printing assets.
 
-Development builds within a feature milestone use a fourth numeric segment. The current usability/catalogue development line is `v0.6.3.x`; the stable milestone will become `v0.6.3` when this stacked branch is ready to merge.
+**v0.6.3 is the current stable release.**
 
 v0.6 begins the first-class 3D printing workspace: native printer, filament/spool and model records remain usable standalone, while optional external services and multi-material systems integrate through provider-neutral links.
 
-v0.6.2 introduces the SimplyPrint cloud adapter as a read-only MakerVault-primary integration: printer state, loaded filament/extruders and recent print history can be imported, while physical spool creation/linking remains an explicit MakerVault action.
+v0.6.1 adds local STL/3MF model intelligence and an interactive Three.js viewer with geometry analysis and owned-printer build-volume fit checks.
 
-v0.6.3 focuses on responsive/mobile usability and simplifies the generic electronics component catalogue by removing manufacturer branding from component definitions entirely.
+v0.6.2 adds the SimplyPrint cloud adapter as a read-only MakerVault-primary integration: printer state, loaded filament/extruders and recent print history can be imported, while physical spool creation/linking remains an explicit MakerVault action.
+
+v0.6.3 adds full responsive/mobile behaviour, feature-specific Settings tabs, manufacturer-neutral generic components, upgrade hardening and the MakerVault application branding.
 
 The 3D-printer catalogue starts with MakerVault's curated hardware profiles and can optionally expand/refresh manufacturer and model coverage from OrcaSlicer's public printer manifests. Orca-derived records retain source provenance, while MakerVault's populated specifications and user edits remain authoritative.
 
@@ -69,14 +71,16 @@ docker compose logs -f makervault
 
 Open http://SERVER-IP:8765 by default, or your configured reverse-proxy hostname.
 
-## Updating an existing v0.1 deployment
+## Updating an existing deployment
 
 The normal Git deployment update is:
 
 ~~~bash
 cd /mnt/Server/MakerVault/app
-git pull --ff-only
-sudo docker compose up -d --build --no-deps makervault
+git fetch origin
+git switch main
+git pull --ff-only origin main
+sudo docker compose up -d --build
 ~~~
 
 or, where your Docker permissions permit it:
@@ -207,7 +211,7 @@ Uploaded media is served through an authenticated Django endpoint. Raster images
 
 Project workspaces can upload and classify firmware/source files, wiring/schematics, documents, PCB files, CAD, STL/mesh, 3MF/slicer projects, archives and other build assets. Files are stored in authenticated MakerVault media storage and non-image assets are served download-only.
 
-Project workspaces can also link GitHub, GitLab, local or other repositories alongside their stored build files. The main **Files** page provides a categorized library for both project-linked and standalone assets. Files can be uploaded directly with no project, then attached to or detached from a project later without duplicating the stored asset. MakerVault continues to enforce its established supported extension list and authenticated download rules. A Three.js STL/3MF viewer remains planned for a later milestone.
+Project workspaces can also link GitHub, GitLab, local or other repositories alongside their stored build files. The main **Files** page provides a categorized library for both project-linked and standalone assets. Files can be uploaded directly with no project, then attached to or detached from a project later without duplicating the stored asset. MakerVault continues to enforce its established supported extension list and authenticated download rules. STL and 3MF model revisions can be opened in MakerVault's interactive Three.js viewer, with local geometry analysis for dimensions, triangle/vertex counts, surface area, approximate volume and owned-printer build-volume fit.
 
 ### Bill of materials and stock allocation
 
@@ -356,14 +360,14 @@ Project media uses the existing authenticated MakerVault media storage. Cover ph
 
 Catalogue and project images can be opened in MakerVault's image viewer. The viewer supports zoom in/out, mouse-wheel zoom, drag/pan while zoomed, fit/reset, keyboard shortcuts (+, -, 0) and browser fullscreen. This is particularly useful for pinout diagrams, board photography and wiring references.
 
-The current v0.4.x roadmap continues with **v0.4.2 project files/repositories**, using the existing FileAsset model to attach and group code, firmware, CAD/STL/3MF, PCB/schematic, document and other project assets. **BOM/inventory allocation follows after v0.4.2**.
+Project files/repositories and quantity-aware BOM/inventory allocation are now implemented and use the same FileAsset and inventory records described above.
 
 
 ## Scheduled catalogue maintenance (v0.4.1)
 
 MakerVault now uses a persistent catalogue-maintenance schedule instead of automatically re-running enrichment on every application-container restart. The default schedule is every 24 hours and is stored in PostgreSQL, so rebuilding or restarting the container does not reset the clock.
 
-Administrators can open **Settings → Catalogue maintenance** to:
+Administrators can open **Settings → Library updates** to:
 
 - enable or disable automatic maintenance;
 - choose an interval from 1 to 720 hours;
