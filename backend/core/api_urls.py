@@ -21,6 +21,7 @@ urlpatterns = [
     path("printing/models/<uuid:model_id>/", api_views.printing_model_detail, name="api-printing-model-detail"),
     path("printing/models/<uuid:model_id>/revisions/", api_views.printing_model_revisions, name="api-printing-model-revisions"),
     path("printing/models/<uuid:model_id>/revisions/<uuid:revision_id>/", api_views.printing_model_revision_detail, name="api-printing-model-revision-detail"),
+    path("printing/models/<uuid:model_id>/revisions/<uuid:revision_id>/analyse/", api_views.printing_revision_analyse, name="api-printing-revision-analyse"),
     path("printing/models/<uuid:model_id>/revisions/<uuid:revision_id>/assets/", api_views.printing_revision_assets, name="api-printing-revision-assets"),
     path("printing/models/<uuid:model_id>/revisions/<uuid:revision_id>/assets/<uuid:link_id>/", api_views.printing_revision_asset_detail, name="api-printing-revision-asset-detail"),
     path("printing/jobs/", api_views.printing_jobs, name="api-printing-jobs"),

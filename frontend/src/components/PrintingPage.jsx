@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { apiFetch } from "../api";
 import { Badge, LoadingBlock, Modal } from "./Common";
+import ModelViewerModal from "./ModelViewer";
 
 function grams(value) {
   if (value == null) return "—";
@@ -19,6 +20,22 @@ function newestFirst(rows) {
     ...((row.revisions || []).map(revision => new Date(revision.created_at || 0).getTime() || 0))
   );
   return [...(rows || [])].sort((a, b) => activityTime(b) - activityTime(a));
+}
+
+function hasViewableModelAsset(model) {
+  return (model?.revisions || []).some(revision =>
+    (revision.assets || []).some(asset => {
+      const filename = (asset.file?.filename || asset.file?.name || "").toLowerCase();
+      return Boolean(asset.file?.url) && (filename.endsWith(".stl") || filename.endsWith(".3mf"));
+    })
+  );
+}
+
+function newestGeometryAnalysis(model) {
+  for (const revision of model?.revisions || []) {
+    if (revision.geometry_analysis) return revision.geometry_analysis;
+  }
+  return null;
 }
 
 export default function PrintingPage({ config, projects }) {
@@ -94,6 +111,7 @@ export default function PrintingPage({ config, projects }) {
     return <ModelLibraryPage
       models={data?.models || []}
       files={data?.model_files || []}
+      printers={data?.printers || []}
       projects={projects || []}
       canAddModel={canAddModel}
       canChangeModel={canChangeModel}
@@ -107,7 +125,7 @@ export default function PrintingPage({ config, projects }) {
   return <div className="printingStack">
     <section className="panel printingHero">
       <div>
-        <span className="settingsEyebrow">v0.6.0 foundation</span>
+        <span className="settingsEyebrow">Model intelligence</span>
         <h2>3D Printing &amp; Model Library</h2>
         <p>Native MakerVault models, printers and spool inventory stay authoritative. External services and printer filament systems plug into this data rather than replacing it.</p>
       </div>
@@ -382,10 +400,11 @@ function SpoolIdentityModal({ spool, onClose, onSaved }) {
 }
 
 
-function ModelLibraryPage({ models, files, projects, canAddModel, canChangeModel, canDeleteModel, canUpload, onBack, onChanged }) {
+function ModelLibraryPage({ models, files, printers, projects, canAddModel, canChangeModel, canDeleteModel, canUpload, onBack, onChanged }) {
   const [query, setQuery] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [manageModel, setManageModel] = useState(null);
+  const [viewerModel, setViewerModel] = useState(null);
   const [deleteModel, setDeleteModel] = useState(null);
   const term = query.trim().toLowerCase();
   const rows = newestFirst(models).filter(model => !term || [
@@ -411,23 +430,42 @@ function ModelLibraryPage({ models, files, projects, canAddModel, canChangeModel
         <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search model, project, description or tag…" />
       </div>
       <div className="printingList">
-        {rows.map(model => <article className="printingListRow printingModelRow printingLibraryRow" key={model.id}>
-          <div>
-            <strong>{model.name}</strong>
-            <small>{model.project || "Standalone model"} · {model.revision_count} revision{model.revision_count === 1 ? "" : "s"} · updated {formatDate(model.updated_at)}</small>
-          </div>
-          <div className="printingBadges">{model.revisions.flatMap(r => r.assets).slice(0, 4).map(asset => <Badge key={asset.id}>{asset.file.category_label}</Badge>)}</div>
-          <div className="printingLibraryActions">
-            {canChangeModel && <button onClick={() => setManageModel(model)}>Manage</button>}
-            {canDeleteModel && <button className="dangerButton" type="button" onClick={() => setDeleteModel(model)}>Delete</button>}
-          </div>
-        </article>)}
+        {rows.map(model => {
+          const analysis = newestGeometryAnalysis(model);
+          const dims = analysis?.dimensions_mm;
+          return <article className="printingListRow printingModelRow printingLibraryRow" key={model.id}>
+            <div>
+              <strong>{model.name}</strong>
+              <small>{model.project || "Standalone model"} · {model.revision_count} revision{model.revision_count === 1 ? "" : "s"} · updated {formatDate(model.updated_at)}</small>
+              {analysis && <small className="modelAnalysisInline">
+                {dims ? [dims.x, dims.y, dims.z].map(value => Number(value).toFixed(1)).join(" × ") + " mm" : "Geometry analysed"}
+                {analysis.triangle_count != null ? " · " + Number(analysis.triangle_count).toLocaleString() + " triangles" : ""}
+              </small>}
+            </div>
+            <div className="printingBadges">
+              {model.revisions.flatMap(r => r.assets).slice(0, 4).map(asset => <Badge key={asset.id}>{asset.file.category_label}</Badge>)}
+              {analysis && <Badge tone="good">Analysed</Badge>}
+            </div>
+            <div className="printingLibraryActions">
+              {hasViewableModelAsset(model) && <button className="primary" type="button" onClick={() => setViewerModel(model)}>View 3D</button>}
+              {canChangeModel && <button onClick={() => setManageModel(model)}>Manage</button>}
+              {canDeleteModel && <button className="dangerButton" type="button" onClick={() => setDeleteModel(model)}>Delete</button>}
+            </div>
+          </article>;
+        })}
         {!rows.length && <div className="printingEmptyInline">{term ? "No models match this search." : "No 3D models yet."}</div>}
       </div>
     </section>
 
     {addOpen && <ModelModal projects={projects} canUpload={canUpload} onClose={() => setAddOpen(false)} onSaved={async () => { setAddOpen(false); await onChanged(); }} />}
     {manageModel && <ModelManageModal model={manageModel} files={files} onClose={() => setManageModel(null)} onChanged={async () => { setManageModel(null); await onChanged(); }} />}
+    {viewerModel && <ModelViewerModal
+      model={viewerModel}
+      printers={printers}
+      canAnalyse={canChangeModel}
+      onClose={() => setViewerModel(null)}
+      onChanged={onChanged}
+    />}
     {deleteModel && <DeletePrintingRecordModal
       title={"Delete model · " + deleteModel.name}
       description={"Delete " + deleteModel.name + " and its " + deleteModel.revision_count + " revision" + (deleteModel.revision_count === 1 ? "" : "s") + "?"}

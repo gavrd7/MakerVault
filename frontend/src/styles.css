@@ -1370,3 +1370,46 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
     height:140px!important;
   }
 }
+
+
+/* model intelligence + 3D viewer */
+.modelAnalysisInline{color:#8da0b6!important;margin-top:5px!important}
+.modelViewerLayout{display:grid;grid-template-columns:minmax(0,1.8fr) minmax(290px,.75fr);gap:16px;min-height:620px}
+.modelViewerStage{display:flex;flex-direction:column;min-width:0;min-height:0}
+.modelViewerToolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+.modelViewerToolbar select{min-width:240px;max-width:100%;flex:1}
+.modelViewerToolbar button.active{border-color:#6856d9;background:#211d3d}
+.modelViewerCanvasShell{position:relative;flex:1;min-height:520px;overflow:hidden;border:1px solid #2b3644;border-radius:12px;background:#0c1118}
+.modelViewerCanvas{position:absolute;inset:0}
+.modelViewerCanvas canvas{display:block;width:100%;height:100%}
+.modelViewerLoading{position:absolute;z-index:2;left:50%;top:50%;transform:translate(-50%,-50%);padding:9px 13px;border:1px solid #324052;border-radius:9px;background:#101721;color:#aeb9c8;pointer-events:none}
+.modelViewerHint{display:block;margin-top:7px;color:#738197}
+.modelIntelligencePanel{display:flex;flex-direction:column;gap:12px;min-width:0;overflow:auto;padding:14px;border:1px solid #2b3644;border-radius:12px;background:#10161e}
+.modelIntelligenceHead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.modelIntelligenceHead strong,.modelIntelligenceHead small{display:block}
+.modelIntelligenceHead small{margin-top:3px;color:#7e8b9d}
+.modelIntelligenceStats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.modelIntelligenceStats article{padding:10px;border:1px solid #26313e;border-radius:9px;background:#0c1219}
+.modelIntelligenceStats span,.modelIntelligenceStats strong{display:block}
+.modelIntelligenceStats span{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#728096}
+.modelIntelligenceStats strong{margin-top:4px;font-size:14px}
+.modelIntelligenceMeta{display:grid;gap:5px;padding:10px;border-top:1px solid #25303d;border-bottom:1px solid #25303d;color:#9ba8ba;font-size:11px}
+.modelFitList{display:grid;gap:8px}
+.modelFitList>strong{font-size:12px}
+.modelFitList>div{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid #222d39}
+.modelFitList>div:last-child{border-bottom:0}
+.modelIntelligenceEmpty{padding:14px;border:1px dashed #344154;border-radius:10px;color:#8f9daf}
+.modelIntelligenceEmpty strong{display:block;color:#d5dce6;margin-bottom:5px}
+.modelIntelligenceEmpty p{margin:0;line-height:1.55}
+.modelViewerLayout:fullscreen{padding:14px;background:#091018}
+.modelViewerLayout:fullscreen .modelViewerCanvasShell{min-height:calc(100vh - 100px)}
+@media(max-width:900px){
+  .modelViewerLayout{grid-template-columns:1fr;min-height:0}
+  .modelViewerCanvasShell{min-height:430px}
+  .modelIntelligencePanel{max-height:none}
+}
+@media(max-width:560px){
+  .modelViewerCanvasShell{min-height:340px}
+  .modelViewerToolbar select{min-width:100%}
+  .modelIntelligenceStats{grid-template-columns:1fr 1fr}
+}
