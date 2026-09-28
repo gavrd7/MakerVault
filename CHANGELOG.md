@@ -1,6 +1,16 @@
 # Changelog
 
-## v0.6.0.1 — in development
+## v0.6.0.2 — in development
+
+- Separated printer-model multi-material compatibility from the hardware actually installed on each owned printer.
+- Added per-printer add-on controls such as Creality CFS / Bambu AMS installed, with safe removal that retires stale live slot assignments.
+- CFS synchronisation now only targets active printers where the compatible CFS add-on is explicitly installed.
+- Existing printers with previously discovered non-generic multi-material slots are migrated as having the add-on installed so current setups keep working.
+- Added separate printer catalogue images for bare printers and printer + multi-material/Combo configurations.
+- Printer cards automatically prefer the Combo/add-on image when the owned printer has the add-on installed, with fallback to the bare-printer image.
+- Catalogue image maintenance now searches and caches bare and Combo/add-on printer images independently with separate open-media attribution metadata.
+
+## v0.6.0.1 — development revision
 
 - Introduced four-part development build versions so iterative v0.6.0 work can be identified precisely without advancing the v0.6.1 feature milestone.
 - The running version is now sourced centrally by the backend and displayed dynamically in the MakerVault sidebar/About page.
