@@ -237,7 +237,7 @@ function SpoolInventoryPage({ spools, filaments, locations, printers, currency, 
   const [addOpen, setAddOpen] = useState(false);
   const term = query.trim().toLowerCase();
   const rows = newestFirst(spools).filter(spool => !term || [
-    spool.spool_id, spool.filament, spool.manufacturer, spool.material, spool.color_name, spool.location,
+    spool.spool_id, spool.rfid_uid, spool.filament, spool.manufacturer, spool.material, spool.color_name, spool.location,
     ...(spool.external_links || []).map(link => link.provider_label),
   ].filter(Boolean).join(" ").toLowerCase().includes(term));
 
@@ -265,7 +265,7 @@ function SpoolInventoryPage({ spools, filaments, locations, printers, currency, 
           <div>
             <strong>{spool.spool_id} · {spool.filament}</strong>
             <small>{[spool.manufacturer, spool.material, spool.color_name].filter(Boolean).join(" · ")} · {grams(spool.remaining_weight_g)} remaining{spool.location ? " · " + spool.location : ""}</small>
-            <small>Updated {formatDate(spool.updated_at)}</small>
+            <small>{spool.rfid_uid ? "RFID " + spool.rfid_uid + " · " : ""}Updated {formatDate(spool.updated_at)}</small>
           </div>
           <div className="printingBadges">
             {spool.loaded_slots?.length > 0 && <Badge tone="accent">Loaded</Badge>}
@@ -887,6 +887,7 @@ function findDetectedFilamentMatch(filaments, slot) {
     const candidateMaterial = normaliseDetectedText(filament.material);
     const candidateColour = normaliseDetectedText(filament.color_hex);
 
+    if (colour && candidateColour !== colour) continue;
     if (material && candidateMaterial === material) score += 6;
     if (vendor && candidateVendor === vendor) score += 5;
     if (product && candidateName) {
@@ -909,6 +910,7 @@ function DiscoveredSpoolModal({ printer, slot, filaments, currency, canCreateFil
   const [mode, setMode] = useState(initialMatch ? "existing" : "new");
   const [form, setForm] = useState({
     filament_id: initialMatch?.id || "",
+    rfid_uid: slot.rfid_uid || "",
     initial_weight_g: initialMatch?.nominal_weight_g || "",
     remaining_weight_g: "",
     purchase_cost: "",
@@ -1007,6 +1009,7 @@ function DiscoveredSpoolModal({ printer, slot, filaments, currency, canCreateFil
           {slot.product_name && <Badge tone="accent">{slot.product_name}</Badge>}
           {slot.material && <Badge>{slot.material}</Badge>}
           {slot.rfid_detected && <Badge tone="good">RFID detected</Badge>}
+          {slot.rfid_uid && <Badge>{slot.rfid_uid}</Badge>}
         </div>
       </div>
 
@@ -1030,6 +1033,7 @@ function DiscoveredSpoolModal({ printer, slot, filaments, currency, canCreateFil
         <label>Nominal spool weight (g)<input type="number" min="0" step="0.1" value={newFilament.nominal_weight_g} onChange={e => { setNew("nominal_weight_g", e.target.value); if (!form.initial_weight_g) set("initial_weight_g", e.target.value); }} placeholder="1000" /></label>
       </>}
 
+      <label>RFID tag ID<input value={form.rfid_uid} onChange={e => set("rfid_uid", e.target.value.toUpperCase())} placeholder="Detected tag ID" /><small>{slot.rfid_uid ? "Detected from the loaded spool. This uniquely identifies the physical reel." : "Optional when the provider cannot read an RFID tag."}</small></label>
       <label>Initial filament weight (g)<input type="number" min="0" step="0.1" value={form.initial_weight_g} onChange={e => set("initial_weight_g", e.target.value)} placeholder="1000" /></label>
       <label>Remaining weight (g)<input type="number" min="0" step="0.1" value={form.remaining_weight_g} onChange={e => set("remaining_weight_g", e.target.value)} placeholder={detectedPercent != null ? "Auto from " + detectedPercent + "% if left blank" : ""} /></label>
       <label>Status<select value={form.status} onChange={e => set("status", e.target.value)}><option value="open">Open</option><option value="sealed">Sealed</option><option value="drying">Drying</option><option value="empty">Empty</option><option value="retired">Retired</option></select></label>
@@ -1052,6 +1056,7 @@ function SpoolModal({ filaments, locations, printers, currency, onClose, onSaved
   const [placementType, setPlacementType] = useState("location");
   const [form, setForm] = useState({
     filament_id: filaments[0]?.id || "",
+    rfid_uid: "",
     initial_weight_g: "",
     remaining_weight_g: "",
     purchase_cost: "",
@@ -1136,6 +1141,7 @@ function SpoolModal({ filaments, locations, printers, currency, onClose, onSaved
         {printers.filter(x => x.is_active).map(x => <option key={x.id} value={x.id}>{x.name} · {x.model}</option>)}
       </select></label>}
 
+      <label>RFID tag ID<input value={form.rfid_uid} onChange={e => set("rfid_uid", e.target.value.toUpperCase())} placeholder="Optional physical tag ID" /><small>Use this to distinguish otherwise identical physical spools.</small></label>
       <label>Initial weight (g)<input type="number" min="0" step="0.1" value={form.initial_weight_g} onChange={e => set("initial_weight_g", e.target.value)} /></label>
       <label>Remaining weight (g)<input type="number" min="0" step="0.1" value={form.remaining_weight_g} onChange={e => set("remaining_weight_g", e.target.value)} /></label>
       <label>Status<select value={form.status} onChange={e => set("status", e.target.value)}><option value="sealed">Sealed</option><option value="open">Open</option><option value="drying">Drying</option><option value="empty">Empty</option><option value="retired">Retired</option></select></label>
