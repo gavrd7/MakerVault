@@ -13,6 +13,9 @@
 - Isolated printing integrations, scheduled sync jobs and external provider links per user so identical remote IDs can safely exist in different accounts.
 - Protected private MEDIA_URL delivery with database ownership checks and removed private user records from the Django admin browser.
 - Added two-user regression coverage for list isolation, guessed-UUID 404 behaviour, cross-owner linking and owner-scoped identifiers.
+- Enforced effective per-user storage quotas before private uploads can grow persistent storage, including general files, immutable file versions, project files/images and STL/3MF model revisions.
+- Project cover replacements are charged only for positive net growth, while immutable revisions continue to count in full.
+- Added a personal dashboard storage card showing used/quota capacity, remaining space, Models/3MF, project files, images and other-file breakdowns, plus 80%/90%/full warning states.
 
 - Expanded the built-in generic component catalogue from 180 to 387 entries, adding common starter-kit parts, passives, semiconductors, sensors, displays, communications modules, controls, power modules, connectors, logic ICs, motors and maker hardware.
 - Added catalogue regression coverage for representative maker-project staples and raised the minimum component-coverage guard.
