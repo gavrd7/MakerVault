@@ -8,7 +8,7 @@
 - AG Grid catalogue/inventory tables now stay readable on narrow screens using horizontal touch scrolling instead of crushing columns.
 - Mobile modals behave as bottom sheets with dynamic-viewport sizing and safe-area padding.
 - Removed `ComponentModel.manufacturer` from the database schema; board, printer and filament manufacturer models remain unchanged.
-- Removed manufacturer from the component API, search, catalogue table, detail view, add-component form and BOM component selector.
+- Removed manufacturer from the component API, search, catalogue table, detail view and add-component form.
 - Removed manufacturer metadata from the starter component catalogue and stopped seed jobs from creating component-brand manufacturer records.
 - Migration `0020_remove_component_manufacturer` removes the component relation and deletes legacy manufacturer rows that were used only by components, while preserving manufacturers still referenced by boards, printers or filaments.
 - Older clients may still submit a legacy `manufacturer` field when creating a component; MakerVault safely ignores it rather than recreating the removed dataset.
