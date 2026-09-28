@@ -242,14 +242,19 @@ class PrivateEncryptedStorage(FileSystemStorage):
 
     def size(self, name):
         try:
-            with open(self.path(name), "rb") as handle:
+            path = self.path(name)
+            with open(path, "rb") as handle:
                 prefix = handle.read(len(MAGIC))
                 if prefix != MAGIC:
                     return super().size(name)
                 rest = handle.read(NONCE_BYTES + SIZE_BYTES)
                 if len(rest) != NONCE_BYTES + SIZE_BYTES:
                     raise OSError("Encrypted MakerVault object has a truncated header.")
-                return int(struct.unpack(">Q", rest[NONCE_BYTES:])[0])
+                plaintext_size = int(struct.unpack(">Q", rest[NONCE_BYTES:])[0])
+            expected_total = HEADER_BYTES + plaintext_size + TAG_BYTES
+            if os.path.getsize(path) != expected_total:
+                raise OSError("Encrypted MakerVault object length does not match its authenticated header.")
+            return plaintext_size
         except FileNotFoundError:
             raise
 
