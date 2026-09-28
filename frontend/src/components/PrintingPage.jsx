@@ -51,9 +51,12 @@ export default function PrintingPage({ config, projects }) {
   async function load() {
     setError("");
     try {
-      setData(await apiFetch("/api/printing/"));
+      const fresh = await apiFetch("/api/printing/");
+      setData(fresh);
+      return fresh;
     } catch (err) {
       setError(err.message);
+      return null;
     }
   }
 
@@ -296,7 +299,12 @@ export default function PrintingPage({ config, projects }) {
       printers={data?.printers || []}
       canUpload={Boolean(config?.permissions?.add_file)}
       onClose={() => setManageModel(null)}
-      onChanged={async () => { setManageModel(null); await load(); }}
+      onChanged={async () => {
+        const fresh = await load();
+        const updated = fresh?.models?.find(item => item.id === manageModel.id);
+        if (updated) setManageModel(updated);
+        return fresh;
+      }}
     />}
   </div>;
 }
@@ -409,6 +417,14 @@ function ModelLibraryPage({ models, files, printers, projects, canAddModel, canC
   const [manageModel, setManageModel] = useState(null);
   const [viewerModel, setViewerModel] = useState(null);
   const [deleteModel, setDeleteModel] = useState(null);
+
+  async function refreshSelectedModel(modelId, setter) {
+    const fresh = await onChanged();
+    const updated = fresh?.models?.find(item => item.id === modelId);
+    if (updated) setter(updated);
+    return fresh;
+  }
+
   const term = query.trim().toLowerCase();
   const rows = newestFirst(models).filter(model => !term || [
     model.name, model.project, model.description, ...(model.tags || []),
@@ -461,13 +477,20 @@ function ModelLibraryPage({ models, files, printers, projects, canAddModel, canC
     </section>
 
     {addOpen && <ModelModal projects={projects} canUpload={canUpload} onClose={() => setAddOpen(false)} onSaved={async () => { setAddOpen(false); await onChanged(); }} />}
-    {manageModel && <ModelManageModal model={manageModel} files={files} printers={printers} canUpload={canUpload} onClose={() => setManageModel(null)} onChanged={async () => { setManageModel(null); await onChanged(); }} />}
+    {manageModel && <ModelManageModal
+      model={manageModel}
+      files={files}
+      printers={printers}
+      canUpload={canUpload}
+      onClose={() => setManageModel(null)}
+      onChanged={() => refreshSelectedModel(manageModel.id, setManageModel)}
+    />}
     {viewerModel && <ModelViewerModal
       model={viewerModel}
       printers={printers}
       canAnalyse={canChangeModel}
       onClose={() => setViewerModel(null)}
-      onChanged={onChanged}
+      onChanged={() => refreshSelectedModel(viewerModel.id, setViewerModel)}
     />}
     {deleteModel && <DeletePrintingRecordModal
       title={"Delete model · " + deleteModel.name}
@@ -1772,7 +1795,10 @@ function ModelManageModal({ model, files, printers, canUpload, onClose, onChange
     {versionUploadOpen && <ModelRevisionUploadModal
       model={model}
       onClose={() => setVersionUploadOpen(false)}
-      onSaved={onChanged}
+      onSaved={async () => {
+        setVersionUploadOpen(false);
+        await onChanged?.();
+      }}
     />}
   </Modal>;
 }
