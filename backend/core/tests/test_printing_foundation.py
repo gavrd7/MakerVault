@@ -600,6 +600,66 @@ class PrintingFoundationTests(TestCase):
         self.assertEqual(payload["connection_host"], "192.168.1.34")
         self.assertTrue(payload["is_active"])
         self.assertEqual(payload["catalogue"]["multi_material_system"], "creality_cfs")
+        self.assertFalse(payload["multi_material_installed"])
+        self.assertEqual(payload["installed_multi_material_system"], "")
+
+    def test_optional_multi_material_addon_can_be_enabled_and_removed(self):
+        maker = PrinterManufacturer.objects.create(name="Optional CFS Maker")
+        model = PrinterCatalogModel.objects.create(
+            manufacturer=maker,
+            name="Optional CFS Model",
+            multi_material_system="creality_cfs",
+        )
+        printer = Printer.objects.create(
+            name="Optional CFS Printer",
+            printer_manufacturer=maker,
+            catalog_model=model,
+            model=model.name,
+            connection_host="192.0.2.55",
+            is_active=True,
+            multi_material_installed=True,
+        )
+        slot = PrinterFilamentSlot.objects.create(
+            printer=printer,
+            system="creality_cfs",
+            unit_index=0,
+            slot_index=0,
+            spool=self.spool,
+            material=self.filament.material,
+            color_hex=self.filament.color_hex,
+            is_loaded=True,
+            metadata={
+                "link_source": "user_linked_existing",
+                "material_fingerprint": "legacy-test",
+            },
+        )
+
+        updated = self.client.patch(
+            f"/api/printing/printers/{printer.id}/",
+            data={"multi_material_installed": False},
+            content_type="application/json",
+        )
+        self.assertEqual(updated.status_code, 200, updated.content)
+        self.assertFalse(updated.json()["item"]["multi_material_installed"])
+        self.assertEqual(updated.json()["item"]["installed_multi_material_system"], "")
+
+        slot.refresh_from_db()
+        self.assertFalse(slot.is_loaded)
+        self.assertIsNone(slot.spool_id)
+        self.assertNotIn("link_source", slot.metadata)
+        self.assertNotIn("material_fingerprint", slot.metadata)
+
+        reenabled = self.client.patch(
+            f"/api/printing/printers/{printer.id}/",
+            data={"multi_material_installed": True},
+            content_type="application/json",
+        )
+        self.assertEqual(reenabled.status_code, 200, reenabled.content)
+        self.assertTrue(reenabled.json()["item"]["multi_material_installed"])
+        self.assertEqual(
+            reenabled.json()["item"]["installed_multi_material_system"],
+            "creality_cfs",
+        )
 
     def test_spool_can_use_structured_location_or_printer(self):
         location = PrintingLocation.objects.create(name="Dry box 1", kind="drybox")
@@ -685,6 +745,7 @@ class PrintingFoundationTests(TestCase):
             model="K2",
             connection_host="192.168.1.34",
             is_active=True,
+            multi_material_installed=True,
         )
 
         settings_response = self.client.get("/api/settings/printing-integrations/")
@@ -716,6 +777,7 @@ class PrintingFoundationTests(TestCase):
         self.assertEqual(cfs.status_code, 200, cfs.content)
         self.assertEqual(cfs.json()["item"]["status"], "disconnected")
         self.assertEqual(cfs.json()["item"]["compatible_printers"], 1)
+        self.assertEqual(cfs.json()["item"]["installed_printers"], 1)
         self.assertEqual(cfs.json()["item"]["configured_printers"], 1)
 
     @patch("core.printing_sync.requests.get")
@@ -878,6 +940,7 @@ class PrintingFoundationTests(TestCase):
             model="K2",
             connection_host="192.168.1.34",
             is_active=True,
+            multi_material_installed=True,
         )
         filament_maker = FilamentManufacturer.objects.create(name="Creality")
         filament = FilamentProduct.objects.create(
@@ -990,6 +1053,7 @@ class PrintingFoundationTests(TestCase):
             model="K2 Variant Test",
             connection_host="192.0.2.10",
             is_active=True,
+            multi_material_installed=True,
         )
         filament_maker = FilamentManufacturer.objects.create(name="Creality Variant Test")
         white = FilamentProduct.objects.create(
@@ -1129,6 +1193,7 @@ class PrintingFoundationTests(TestCase):
             model="K2 Legacy Link",
             connection_host="192.0.2.44",
             is_active=True,
+            multi_material_installed=True,
         )
 
         creality = FilamentManufacturer.objects.create(name="Creality Legacy Link")
