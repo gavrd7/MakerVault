@@ -247,6 +247,146 @@ function ThreeScene({ option, wireframe, showGrid, showAxes, onLoaded, onError, 
 }
 
 
+
+export function isViewableModelFile(file) {
+  const filename = file?.filename || file?.name || file?.url || "";
+  return /\.(stl|3mf)(?:$|\?)/i.test(String(filename)) && Boolean(file?.url);
+}
+
+
+export function ModelThumbnail({ file, className = "" }) {
+  const hostRef = useRef(null);
+  const [src, setSrc] = useState("");
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host || !isViewableModelFile(file)) return undefined;
+
+    let disposed = false;
+    let started = false;
+    let objectUrl = "";
+    const controller = new AbortController();
+
+    async function buildThumbnail() {
+      if (started) return;
+      started = true;
+      let root = null;
+      let renderer = null;
+      try {
+        const response = await fetch(file.url, {
+          credentials: "same-origin",
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error("Could not load model preview.");
+        const data = await response.arrayBuffer();
+        const extension = String(file.filename || file.name || file.url || "").toLowerCase().includes(".3mf") ? ".3mf" : ".stl";
+
+        if (extension === ".stl") {
+          const geometry = new STLLoader().parse(data);
+          geometry.computeVertexNormals();
+          root = new THREE.Mesh(
+            geometry,
+            new THREE.MeshStandardMaterial({ color: 0x8fa9c2, roughness: 0.72, metalness: 0.03 }),
+          );
+        } else {
+          root = new ThreeMFLoader().parse(data);
+        }
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x111820);
+        scene.add(new THREE.HemisphereLight(0xffffff, 0x334155, 2.4));
+        const key = new THREE.DirectionalLight(0xffffff, 2.8);
+        key.position.set(4, -5, 7);
+        scene.add(key);
+        const fill = new THREE.DirectionalLight(0x9ec5ff, 1.1);
+        fill.position.set(-4, 2, 3);
+        scene.add(fill);
+        scene.add(root);
+
+        const box = new THREE.Box3().setFromObject(root);
+        if (box.isEmpty()) throw new Error("Model preview has no visible geometry.");
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z, 1);
+        const camera = new THREE.PerspectiveCamera(40, 1.5, 0.01, 100000);
+        camera.up.set(0, 0, 1);
+        const distance = (maxDim / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2))) * 1.7;
+        const direction = new THREE.Vector3(1.15, -1.35, 0.9).normalize();
+        camera.position.copy(center).add(direction.multiplyScalar(distance));
+        camera.lookAt(center);
+        camera.near = Math.max(distance / 1000, 0.01);
+        camera.far = Math.max(distance * 100, 1000);
+        camera.updateProjectionMatrix();
+
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: true });
+        renderer.setPixelRatio(1);
+        renderer.setSize(180, 120, false);
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        renderer.render(scene, camera);
+
+        const blob = await new Promise(resolve => renderer.domElement.toBlob(resolve, "image/webp", 0.82));
+        if (!blob) throw new Error("Could not create model thumbnail.");
+        objectUrl = URL.createObjectURL(blob);
+        if (!disposed) setSrc(objectUrl);
+      } catch (error) {
+        if (!disposed && error?.name !== "AbortError") setFailed(true);
+      } finally {
+        disposeObject(root);
+        renderer?.dispose();
+        renderer?.forceContextLoss?.();
+      }
+    }
+
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) {
+        observer.disconnect();
+        buildThumbnail();
+      }
+    }, { rootMargin: "160px" });
+    observer.observe(host);
+
+    return () => {
+      disposed = true;
+      controller.abort();
+      observer.disconnect();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [file?.id, file?.url, file?.filename]);
+
+  const extension = (file?.filename?.split(".").pop() || "3D").slice(0, 5).toUpperCase();
+  return <div ref={hostRef} className={"modelFileThumbnail " + className}>
+    {src ? <img src={src} alt="" /> : <span>{failed ? extension : "3D"}</span>}
+  </div>;
+}
+
+
+export function FileModelViewerModal({ file, onClose }) {
+  const model = useMemo(() => ({
+    id: "file:" + file.id,
+    name: file.name || file.filename || "3D file",
+    revisions: [{
+      id: "file-revision:" + file.id,
+      version: file.version || "Current",
+      geometry_analysis: null,
+      assets: [{
+        id: "file-asset:" + file.id,
+        role: file.category === "slicer" ? "slicer" : "model",
+        is_primary: true,
+        file,
+      }],
+    }],
+  }), [file]);
+
+  return <ModelViewerModal
+    model={model}
+    printers={[]}
+    canAnalyse={false}
+    onClose={onClose}
+  />;
+}
+
+
 export default function ModelViewerModal({ model, printers, canAnalyse, onClose, onChanged }) {
   const options = useMemo(() => modelOptions(model), [model]);
   const [selectedKey, setSelectedKey] = useState(options[0]?.key || "");
