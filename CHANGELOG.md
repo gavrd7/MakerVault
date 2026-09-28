@@ -1,6 +1,15 @@
 # Changelog
 
-## v0.6.0.4 — in development
+## v0.6.0.5 — in development
+
+- Fixed Spoolman sync failures caused by high-precision floating-point weights/costs by quantizing imported numeric values to MakerVault field precision before validation.
+- Added regression coverage for long-decimal Spoolman remaining weight, initial weight, purchase cost, filament diameter, density and spool weights.
+- Added a dedicated **Filament Library** view for saved MakerVault filament products.
+- Saved filament products now have an **Edit** action covering manufacturer, product/material identity, colour/appearance, finish/pattern/glow, diameter/density/weights, print temperatures and drying settings.
+- Editing a filament product preserves the same database identity, so all existing physical spools continue to reference the corrected product.
+- Original catalogue/source provenance is retained when a saved filament product is edited.
+
+## v0.6.0.4 — development revision
 
 - Added confirmed **Delete** actions to the full Spool Inventory and Model Library.
 - Spool deletion removes the physical inventory record and provider links while retaining the filament product; nullable printer-slot/history references are preserved without the deleted spool.
