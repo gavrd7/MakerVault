@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.6.6.2 — in development
+## v0.6.6.3 — in development
 
 - Raised local model-analysis format to version 3 for slicer-aware 3MF metadata.
 - Added bounded parsing of slicer metadata/config files embedded inside 3MF packages.
@@ -14,6 +14,9 @@
 - Added multi-plate project structure extraction from `model_settings.config`, including plate membership, object counts, material slots and multicolour detection.
 - Multi-plate projects no longer show misleading combined-project orientation or owned-printer-fit guidance; those are reserved for future per-plate evaluation.
 - Improved initial/reset camera framing so loaded geometry is centred against both horizontal and vertical viewport dimensions.
+- Added interactive **All plates / Plate N** filtering to the 3D viewer for Bambu/Orca-style slicer projects, with automatic re-framing when the active plate changes.
+- Plate cards in Model Intelligence now act as viewer controls and show their stored material-slot assignments.
+- Slicer-project 3MFs preferentially use MakerVault's project-aware renderer so object placement, plate membership and stored filament colours remain available to the viewer.
 
 
 ## v0.6.5 — 2026-09-28
