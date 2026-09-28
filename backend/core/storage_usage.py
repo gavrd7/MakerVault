@@ -48,7 +48,7 @@ def _asset_size(asset: FileAsset) -> int:
 def calculate_user_storage(user) -> StorageUsage:
     models_bytes = project_files_bytes = images_bytes = other_files_bytes = 0
 
-    assets = FileAsset.objects.filter(owner=user).prefetch_related("model_revisions")
+    assets = FileAsset.objects.filter(owner=user)
     for asset in assets.iterator():
         size = _asset_size(asset)
         if asset.category == "image":
