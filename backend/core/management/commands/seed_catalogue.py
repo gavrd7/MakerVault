@@ -122,16 +122,24 @@ class Command(BaseCommand):
                 "starter_catalogue": True,
                 "catalogue_version": "0.2.1",
             }
-            component, created = ComponentModel.objects.get_or_create(
-                name=definition["name"],
-                part_number=definition.get("part_number", ""),
-                defaults={
-                    "category": category,
-                    "source": source,
-                    "description": definition.get("description", ""),
-                    "specifications": specs,
-                },
+            component = (
+                ComponentModel.objects.filter(
+                    name=definition["name"],
+                    part_number=definition.get("part_number", ""),
+                )
+                .order_by("created_at", "pk")
+                .first()
             )
+            created = component is None
+            if created:
+                component = ComponentModel.objects.create(
+                    name=definition["name"],
+                    part_number=definition.get("part_number", ""),
+                    category=category,
+                    source=source,
+                    description=definition.get("description", ""),
+                    specifications=specs,
+                )
             component_created += int(created)
             if not created and (component.source_id == source.id or component.source_id is None):
                 changed = False
