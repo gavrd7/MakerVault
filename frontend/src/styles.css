@@ -963,3 +963,372 @@
   .integrationReviewChoices{grid-template-columns:1fr}
   .printingLibraryActions{justify-content:flex-start}
 }
+
+
+/* v0.6.3 responsive application shell */
+html{min-width:320px;overflow-x:hidden}
+body{min-width:320px;overflow-x:hidden}
+img,svg,canvas{max-width:100%}
+main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.settingsStack{min-width:0}
+.gridWrap{width:100%;overflow:hidden}
+.ag-root-wrapper{max-width:100%}
+
+/* Tablet and narrower: the desktop rail becomes a sticky application bar. */
+@media(max-width:900px){
+  .shell{
+    display:block;
+    min-height:100dvh;
+  }
+  .shell>aside{
+    position:sticky;
+    top:0;
+    z-index:70;
+    display:grid;
+    grid-template-columns:auto minmax(0,1fr);
+    grid-template-areas:
+      "brand nav"
+      "actions actions";
+    gap:8px 12px;
+    padding:10px max(12px,env(safe-area-inset-right)) 8px max(12px,env(safe-area-inset-left));
+    border-right:0;
+    border-bottom:1px solid #242b35;
+    background:rgba(16,22,30,.96);
+    backdrop-filter:blur(14px);
+  }
+  .shell>aside .brand{
+    grid-area:brand;
+    display:flex;
+    padding:0;
+    align-self:center;
+  }
+  .shell>aside .brandmark{
+    width:34px;
+    height:34px;
+    border-radius:9px;
+  }
+  .shell>aside .brand>div{display:none}
+  .shell>aside nav{
+    grid-area:nav;
+    display:flex;
+    gap:4px;
+    min-width:0;
+    overflow-x:auto;
+    overscroll-behavior-x:contain;
+    scrollbar-width:none;
+    -webkit-overflow-scrolling:touch;
+  }
+  .shell>aside nav::-webkit-scrollbar{display:none}
+  .shell>aside nav button{
+    flex:0 0 auto;
+    min-height:42px;
+    padding:9px 12px;
+    white-space:nowrap;
+    text-align:center;
+  }
+  .shell>aside .asideBottom{
+    grid-area:actions;
+    display:flex;
+    gap:6px;
+    margin:0;
+    padding:0;
+    overflow-x:auto;
+    scrollbar-width:none;
+  }
+  .shell>aside .asideBottom::-webkit-scrollbar{display:none}
+  .shell>aside .asideBottom a{
+    flex:0 0 auto;
+    min-height:34px;
+    display:inline-flex;
+    align-items:center;
+    padding:6px 9px;
+    border:1px solid #2a3543;
+    border-radius:8px;
+    background:#0d131a;
+    font-size:12px;
+  }
+  main{
+    padding:18px max(16px,env(safe-area-inset-right)) calc(34px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));
+  }
+  header{
+    margin-bottom:18px;
+  }
+  .pagePanel,.detailPane{
+    height:auto;
+    min-height:0;
+  }
+  .pagePanel.cataloguePanel{
+    height:min(72dvh,720px);
+    min-height:480px;
+  }
+  .printingColumns,
+  .printingCards,
+  .printingStats,
+  .settingsSubgrid,
+  .settingsIntegrationGrid,
+  .projectGrid,
+  .filesGrid{
+    grid-template-columns:minmax(0,1fr)!important;
+  }
+  .panelHead{
+    align-items:flex-start;
+  }
+}
+
+/* Phone layout: single-column, touch-size controls, full-screen detail sheets/modals. */
+@media(max-width:620px){
+  :root{font-size:15px}
+  body{-webkit-text-size-adjust:100%}
+  .shell>aside{
+    grid-template-columns:1fr;
+    grid-template-areas:
+      "brand"
+      "nav"
+      "actions";
+    gap:7px;
+    padding-top:max(8px,env(safe-area-inset-top));
+  }
+  .shell>aside .brand{
+    display:none;
+  }
+  .shell>aside nav{
+    margin:0 -2px;
+  }
+  .shell>aside nav button{
+    min-height:44px;
+    padding:9px 12px;
+  }
+  .shell>aside .asideBottom a{
+    min-height:36px;
+    font-size:11px;
+  }
+  main{
+    padding:14px max(10px,env(safe-area-inset-right)) calc(26px + env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left));
+  }
+  header{
+    display:grid;
+    grid-template-columns:minmax(0,1fr);
+    gap:10px;
+    align-items:start;
+    margin-bottom:14px;
+  }
+  header h1{font-size:24px}
+  header p{
+    font-size:12px;
+    overflow-wrap:anywhere;
+  }
+  header>button,
+  header>.primary{
+    width:100%;
+  }
+  button,.buttonLink{
+    min-height:44px;
+  }
+  input,select,textarea{
+    min-height:44px;
+    font-size:16px;
+  }
+  textarea{min-height:88px}
+  .hero{
+    padding:20px 16px;
+    border-radius:14px;
+  }
+  .hero h2{font-size:25px}
+  .panel{
+    border-radius:13px;
+  }
+  .panelHead{
+    display:grid;
+    grid-template-columns:minmax(0,1fr);
+    gap:12px;
+    padding:15px 14px;
+  }
+  .toolbarActions{
+    display:grid;
+    grid-template-columns:minmax(0,1fr);
+    width:100%;
+    gap:8px;
+  }
+  .toolbarActions>*{
+    width:100%;
+    min-width:0;
+  }
+  .cards{grid-template-columns:minmax(0,1fr)}
+  .metricCard{padding:15px}
+  .empty{
+    margin:22px 0;
+    padding:28px 16px;
+  }
+  .pagePanel.cataloguePanel{
+    height:64dvh;
+    min-height:420px;
+  }
+  .gridWrap{
+    min-height:320px;
+    overflow:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+  .ag-root-wrapper{
+    min-width:680px;
+  }
+  .ag-paging-panel{
+    justify-content:flex-start!important;
+    min-width:max-content;
+    overflow-x:auto;
+  }
+  .catalogueLayout.hasDetail{
+    display:block;
+  }
+  .catalogueLayout.hasDetail>.detailPane,
+  .catalogueLayout>.detailPane{
+    position:fixed;
+    inset:0;
+    z-index:120;
+    width:100vw;
+    height:100dvh!important;
+    max-height:100dvh;
+    overflow:auto;
+    border-radius:0;
+    border:0;
+    padding:max(14px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) calc(18px + env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));
+    background:#10161e;
+  }
+  .detailHead{
+    position:sticky;
+    top:calc(-1 * max(14px,env(safe-area-inset-top)));
+    z-index:4;
+    margin:-14px -14px 14px;
+    padding:max(12px,env(safe-area-inset-top)) 14px 10px;
+    background:rgba(16,22,30,.97);
+    border-bottom:1px solid #29313c;
+    backdrop-filter:blur(12px);
+  }
+  .detailTitleRow{
+    display:grid;
+    grid-template-columns:minmax(0,1fr);
+  }
+  .detailActions,
+  .inventoryDetailActions{
+    display:grid!important;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    width:100%;
+    justify-content:stretch;
+  }
+  .detailActions button,
+  .inventoryDetailActions button{
+    width:100%;
+  }
+  .specList{
+    grid-template-columns:minmax(0,1fr);
+  }
+  .specList div:nth-child(odd){
+    border-right:0;
+  }
+  .detailSpecs>div{
+    grid-template-columns:minmax(90px,.7fr) minmax(0,1.3fr);
+  }
+  .modalBackdrop{
+    align-items:flex-end;
+    padding:0;
+  }
+  .modal,
+  .modalWide{
+    width:100%;
+    max-width:none;
+    max-height:94dvh;
+    overflow:auto;
+    border-radius:16px 16px 0 0;
+    border-left:0;
+    border-right:0;
+    border-bottom:0;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  .modalHead{
+    position:sticky;
+    top:0;
+    z-index:3;
+    padding:15px 14px;
+    background:rgba(16,22,30,.98);
+    backdrop-filter:blur(12px);
+  }
+  .modalBody{padding:14px}
+  .formGrid{
+    grid-template-columns:minmax(0,1fr);
+    gap:12px;
+  }
+  .full{grid-column:auto}
+  .formActions{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:8px;
+  }
+  .formActions button{width:100%}
+  .printingCard,
+  .printingListRow,
+  .printingLibraryRow,
+  .settingsIntegrationGrid>article{
+    min-width:0;
+  }
+  .printingCardHead,
+  .printingLibraryRow,
+  .printingListRow{
+    grid-template-columns:minmax(0,1fr)!important;
+  }
+  .printingBadges,
+  .printingLibraryActions{
+    justify-content:flex-start!important;
+  }
+  .printingPrinterHeader{
+    grid-template-columns:76px minmax(0,1fr)!important;
+    align-items:start;
+  }
+  .printingPrinterImage{
+    width:76px!important;
+    min-width:76px!important;
+    height:76px!important;
+  }
+  .printingSlotGrid{
+    grid-template-columns:minmax(0,1fr)!important;
+  }
+  .settingsActions,
+  .settingsActions.compact,
+  .legalActions{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr);
+    width:100%;
+  }
+  .settingsActions button,
+  .legalActions>*{width:100%}
+  .integrationTimes{
+    grid-template-columns:minmax(0,1fr)!important;
+  }
+  .projectHero,
+  .projectSummaryGrid,
+  .projectColumns,
+  .bomSummary,
+  .fileSummary{
+    grid-template-columns:minmax(0,1fr)!important;
+  }
+  .notice{
+    align-items:flex-start;
+  }
+}
+
+/* Very narrow phones: keep content readable rather than shrinking controls. */
+@media(max-width:380px){
+  main{
+    padding-left:8px;
+    padding-right:8px;
+  }
+  .shell>aside nav button{padding-left:10px;padding-right:10px}
+  .detailSpecs>div{
+    grid-template-columns:minmax(0,1fr);
+    gap:4px;
+  }
+  .printingPrinterHeader{
+    grid-template-columns:minmax(0,1fr)!important;
+  }
+  .printingPrinterImage{
+    width:100%!important;
+    height:140px!important;
+  }
+}
