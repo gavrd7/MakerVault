@@ -382,12 +382,13 @@ export function FileModelViewerModal({ file, onClose }) {
     model={model}
     printers={[]}
     canAnalyse={false}
+    viewerOnly
     onClose={onClose}
   />;
 }
 
 
-export default function ModelViewerModal({ model, printers, canAnalyse, onClose, onChanged, initialAssetId = "" }) {
+export default function ModelViewerModal({ model, printers, canAnalyse, onClose, onChanged, initialAssetId = "", viewerOnly = false }) {
   const options = useMemo(() => modelOptions(model), [model]);
   const initialKey = options.find(item => item.asset?.id === initialAssetId)?.key || options[0]?.key || "";
   const [selectedKey, setSelectedKey] = useState(initialKey);
@@ -452,7 +453,7 @@ export default function ModelViewerModal({ model, printers, canAnalyse, onClose,
     wide
   >
     {!options.length ? <div className="formError">Attach an STL or 3MF file to a revision before opening the 3D viewer.</div> :
-      <div className="modelViewerLayout" ref={shellRef}>
+      <div className={"modelViewerLayout" + (viewerOnly ? " modelViewerLayoutSolo" : "")} ref={shellRef}>
         <section className="modelViewerStage">
           <div className="modelViewerToolbar">
             <select value={option?.key || ""} onChange={e => setSelectedKey(e.target.value)}>
@@ -481,7 +482,7 @@ export default function ModelViewerModal({ model, printers, canAnalyse, onClose,
           <small className="modelViewerHint">Drag to orbit · wheel/pinch to zoom · right-drag to pan</small>
         </section>
 
-        <aside className="modelIntelligencePanel">
+        {!viewerOnly && <aside className="modelIntelligencePanel">
           <div className="modelIntelligenceHead">
             <div><strong>Model intelligence</strong><small>{analysis ? "Geometry analysed by MakerVault" : "No analysis for this file yet"}</small></div>
             {canAnalyse && <button type="button" onClick={analyse} disabled={analysing}>{analysing ? "Analysing…" : analysis ? "Re-analyse" : "Analyse"}</button>}
@@ -525,7 +526,7 @@ export default function ModelViewerModal({ model, printers, canAnalyse, onClose,
             <strong>Analyse this revision</strong>
             <p>MakerVault can calculate dimensions, geometry counts, surface area, approximate volume and build-volume fit without sending the model to an external service.</p>
           </div>}
-        </aside>
+        </aside>}
       </div>}
   </Modal>;
 }
