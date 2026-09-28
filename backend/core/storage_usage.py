@@ -115,7 +115,10 @@ def effective_quota_bytes(profile: UserStorageProfile) -> int | None:
         return None
     if profile.quota_override_bytes is not None:
         return int(profile.quota_override_bytes)
-    return int(storage_settings().default_quota_bytes)
+    instance = storage_settings()
+    if instance.default_quota_unlimited:
+        return None
+    return int(instance.default_quota_bytes)
 
 
 def ensure_storage_capacity(user, incoming_bytes: int, *, replacing_bytes: int = 0) -> int:
