@@ -8,7 +8,8 @@ import struct
 import zipfile
 from io import BytesIO
 from pathlib import Path
-from xml.etree import ElementTree as ET
+from defusedxml import ElementTree as ET
+from defusedxml.common import DefusedXmlException
 
 
 MAX_ANALYSIS_BYTES = 250 * 1024 * 1024
@@ -228,7 +229,7 @@ def analyse_3mf(data):
     for model_name in model_files:
         try:
             root = ET.fromstring(package.read(model_name))
-        except (ET.ParseError, KeyError) as exc:
+        except (ET.ParseError, DefusedXmlException, KeyError) as exc:
             raise ModelAnalysisError(f"Could not parse 3MF geometry document {model_name}.") from exc
 
         unit = str(root.attrib.get("unit") or "millimeter").lower()
