@@ -726,7 +726,6 @@ class ExternalSpoolLink(TimeStampedModel):
     class Meta:
         ordering = ["provider", "external_id"]
         constraints = [
-            models.UniqueConstraint(fields=["provider", "external_id"], name="unique_external_spool_provider_id"),
             models.UniqueConstraint(fields=["spool", "provider"], name="unique_spool_provider_link"),
         ]
 
@@ -751,10 +750,6 @@ class ExternalPrinterLink(TimeStampedModel):
     class Meta:
         ordering = ["provider", "external_id"]
         constraints = [
-            models.UniqueConstraint(
-                fields=["provider", "external_id"],
-                name="unique_external_printer_provider_id",
-            ),
             models.UniqueConstraint(
                 fields=["printer", "provider"],
                 name="unique_printer_provider_link",
