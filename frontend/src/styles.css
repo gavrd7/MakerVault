@@ -1446,3 +1446,36 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
 }
 
 .modelViewerLayoutSolo{grid-template-columns:minmax(0,1fr)}
+
+
+/* polish model/file action spacing */
+.projectAssetActions{gap:8px}
+.projectAssetActions>.assetButton,
+.projectAssetActions>button{
+  min-height:34px;
+  padding:7px 11px;
+  border-radius:8px;
+  font-size:11px;
+  font-weight:650;
+  line-height:1.2;
+}
+.printingRevisionAssets>div{gap:14px}
+.printingRevisionAssetActions{gap:8px}
+.printingRevisionAssetActions>button,
+.printingRevisionAssetActions>.assetButton{
+  min-height:38px;
+  padding:8px 11px;
+  border:1px solid #374251;
+  border-radius:9px;
+  background:#151d27;
+  color:#dce5f2;
+  font-size:12px;
+  font-weight:650;
+  line-height:1.2;
+  text-decoration:none;
+}
+.printingRevisionAssetActions>.assetButton:hover{
+  border-color:#526176;
+  background:#1a2430;
+  color:#fff;
+}
