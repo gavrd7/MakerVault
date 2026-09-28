@@ -12,14 +12,20 @@ from django.core.cache import cache
 from django.utils import timezone
 from django.utils.text import slugify
 
-from .catalogue_images import CatalogueImageError, apply_catalogue_image, fetch_public_image
+from .catalogue_images import (
+    CatalogueImageError,
+    apply_catalogue_image,
+    catalogue_image_metadata,
+    fetch_public_image,
+    set_catalogue_image_metadata,
+)
 from .importers import ImporterError, fetch_import_html
 
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 OPENVERSE_API = "https://api.openverse.org/v1/images/"
-IMAGE_SEED_VERSION = "0.3.6"
-USER_AGENT = "MakerVault/0.3.6 (+self-hosted catalogue image seeder)"
+IMAGE_SEED_VERSION = "0.6.0.1"
+USER_AGENT = "MakerVault/0.6.0.1 (+self-hosted catalogue image seeder)"
 def _commons_license_allowed(license_name: str) -> bool:
     """Allow only licences suitable for normal open redistribution."""
     value = " ".join((license_name or "").strip().upper().split())
@@ -128,6 +134,20 @@ def _commons_query_for_component(component) -> str:
 def _commons_query_for_board(board) -> str:
     maker = board.manufacturer.name if board.manufacturer else ""
     return f"{maker} {board.name} microcontroller board".strip()
+
+
+def _printer_image_queries(printer_model) -> list[str]:
+    maker = printer_model.manufacturer.name if printer_model.manufacturer else ""
+    name = re.sub(r"\s+", " ", printer_model.name or "").strip()
+    queries = [
+        f"{maker} {name} 3D printer".strip(),
+        f"{maker} {name} printer".strip(),
+    ]
+    out = []
+    for query in queries:
+        if query and query not in out:
+            out.append(query)
+    return out
 
 
 def search_wikimedia_commons(query: str, *, minimum_score: float = 0.18) -> ImageCandidate | None:
@@ -355,7 +375,7 @@ def find_espboards_image(board) -> ImageCandidate | None:
 
 
 def resolve_catalogue_image(obj) -> ImageCandidate | None:
-    from .models import BoardModel, ComponentModel
+    from .models import BoardModel, ComponentModel, PrinterCatalogModel
 
     if isinstance(obj, BoardModel):
         if settings.CATALOGUE_IMAGE_PREFER_ESPBOARDS:
@@ -373,6 +393,11 @@ def resolve_catalogue_image(obj) -> ImageCandidate | None:
         # more permissive for that fallback while still requiring token overlap.
         if len(queries) > 3:
             return _search_open_media(queries[3:], minimum_score=0.12)
+
+    if isinstance(obj, PrinterCatalogModel):
+        # Printer model names such as "K2" are highly ambiguous, so require a
+        # much stronger title/tag match than boards/components.
+        return _search_open_media(_printer_image_queries(obj), minimum_score=0.45)
     return None
 
 
@@ -386,8 +411,8 @@ def cache_candidate(obj, candidate: ImageCandidate):
         source_url=final_image_url,
         source_type=f"auto-{candidate.provider.lower().replace(' ', '-').replace('.', '')}",
     )
-    specs = dict(obj.specifications or {})
-    specs.update({
+    metadata, _ = catalogue_image_metadata(obj)
+    metadata.update({
         "image_source_provider": candidate.provider,
         "image_source_page": candidate.source_page_url,
         "image_source_query": candidate.query,
@@ -396,8 +421,8 @@ def cache_candidate(obj, candidate: ImageCandidate):
         "auto_image_seeded": True,
         "auto_image_seeded_at": timezone.now().isoformat(),
     })
-    obj.specifications = specs
-    obj.save(update_fields=["specifications", "updated_at"])
+    field = set_catalogue_image_metadata(obj, metadata)
+    obj.save(update_fields=[field, "updated_at"] if field else ["updated_at"])
 
 
 def _recent_attempt(specs: dict, retry_days: int) -> bool:
@@ -418,7 +443,7 @@ def _recent_attempt(specs: dict, retry_days: int) -> bool:
 
 
 def run_catalogue_image_seed(*, limit: int | None = None, force_retry: bool = False) -> dict:
-    from .models import BoardModel, ComponentModel
+    from .models import BoardModel, ComponentModel, PrinterCatalogModel
 
     limit = settings.CATALOGUE_IMAGE_MAX_PER_RUN if limit is None else max(int(limit), 0)
     retry_days = max(int(settings.CATALOGUE_IMAGE_RETRY_DAYS), 1)
@@ -431,6 +456,7 @@ def run_catalogue_image_seed(*, limit: int | None = None, force_retry: bool = Fa
         querysets = [
             BoardModel.objects.select_related("manufacturer").order_by("manufacturer__name", "name"),
             ComponentModel.objects.select_related("manufacturer", "category").order_by("category__name", "name"),
+            PrinterCatalogModel.objects.select_related("manufacturer").order_by("manufacturer__name", "name"),
         ]
         for queryset in querysets:
             for obj in queryset.iterator():
@@ -439,19 +465,19 @@ def run_catalogue_image_seed(*, limit: int | None = None, force_retry: bool = Fa
                 if obj.image:
                     skipped += 1
                     continue
-                specs = dict(obj.specifications or {})
-                if specs.get("auto_image_opt_out"):
+                metadata, _ = catalogue_image_metadata(obj)
+                if metadata.get("auto_image_opt_out"):
                     skipped += 1
                     continue
-                if not force_retry and _recent_attempt(specs, retry_days):
+                if not force_retry and _recent_attempt(metadata, retry_days):
                     skipped += 1
                     continue
 
                 processed += 1
-                specs["auto_image_last_attempt"] = timezone.now().isoformat()
-                specs["auto_image_attempt_version"] = IMAGE_SEED_VERSION
-                obj.specifications = specs
-                obj.save(update_fields=["specifications", "updated_at"])
+                metadata["auto_image_last_attempt"] = timezone.now().isoformat()
+                metadata["auto_image_attempt_version"] = IMAGE_SEED_VERSION
+                field = set_catalogue_image_metadata(obj, metadata)
+                obj.save(update_fields=[field, "updated_at"] if field else ["updated_at"])
 
                 try:
                     candidate = resolve_catalogue_image(obj)
