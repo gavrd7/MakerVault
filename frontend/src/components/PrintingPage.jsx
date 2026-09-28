@@ -145,7 +145,7 @@ export default function PrintingPage({ config, projects }) {
             <div className="printingPrinterHeaderMain">
               <div className="printingCardHead">
                 <div><strong>{printer.name}</strong><small>{[printer.manufacturer, printer.model, printer.location].filter(Boolean).join(" · ")}</small></div>
-                <div className="printingBadges">{printer.is_active ? <Badge tone="good">Active</Badge> : <Badge>Inactive</Badge>}{printer.catalogue?.multi_material_label && <Badge>{printer.catalogue.multi_material_label}</Badge>}<Badge>{printer.slots.length} slots</Badge>{canChangePrinter && <button type="button" onClick={() => setManagePrinter(printer)}>Manage</button>}</div>
+                <div className="printingBadges">{printer.is_active ? <Badge tone="good">Active</Badge> : <Badge>Inactive</Badge>}{printer.installed_multi_material_label && <Badge>{printer.installed_multi_material_label}</Badge>}{printer.multi_material_installed && <Badge>{printer.slots.length} slots</Badge>}{canChangePrinter && <button type="button" onClick={() => setManagePrinter(printer)}>Manage</button>}</div>
               </div>
               {printer.catalogue?.image_source_provider && <small className="printingPrinterImageCredit">Image: {printer.catalogue.image_source_provider}{printer.catalogue.image_license ? " · " + printer.catalogue.image_license : ""}</small>}
             </div>
@@ -160,7 +160,7 @@ export default function PrintingPage({ config, projects }) {
                 {!slot.spool_id && canAddSpool && <button className="slotInventoryAction" type="button" onClick={() => setClaimSlot({ printer, slot })}>＋ Add to inventory</button>}
               </div>
             </div>)}
-            {!printer.slots.some(slot => slot.is_loaded) && <div className="printingEmptyInline">No loaded filament slots have been discovered yet.</div>}
+            {!printer.multi_material_installed ? <div className="printingEmptyInline">No multi-material add-on installed.</div> : !printer.slots.some(slot => slot.is_loaded) && <div className="printingEmptyInline">No loaded filament slots have been discovered yet.</div>}
           </div>
         </article>)}
         {!data?.printers?.length && <div className="projectEmpty"><strong>No printers yet.</strong><span>Add your first printer to begin the 3D printing workspace.</span></div>}
@@ -432,6 +432,7 @@ function PrinterManageModal({ printer, manufacturers, models, locations, onClose
     location_id: printer.location_id || "",
     connection_host: printer.connection_host || "",
     is_active: printer.is_active !== false,
+    multi_material_installed: printer.multi_material_installed === true,
     build_volume_x_mm: printer.build_volume?.x ?? "",
     build_volume_y_mm: printer.build_volume?.y ?? "",
     build_volume_z_mm: printer.build_volume?.z ?? "",
@@ -442,6 +443,7 @@ function PrinterManageModal({ printer, manufacturers, models, locations, onClose
   const [error, setError] = useState("");
   const set = (key, value) => setForm(current => ({ ...current, [key]: value }));
   const modelOptions = models.filter(item => item.manufacturer_id === form.printer_manufacturer_id);
+  const selectedModel = models.find(item => item.id === form.catalog_model_id);
 
   function makerChanged(value) {
     setCustomModel(false);
@@ -450,7 +452,8 @@ function PrinterManageModal({ printer, manufacturers, models, locations, onClose
       printer_manufacturer_id: value,
       catalog_model_id: "",
       model: "",
-      build_volume_x_mm: "",
+      multi_material_installed: false,
+      build_volume_x_mm: ""
       build_volume_y_mm: "",
       build_volume_z_mm: "",
       nozzle_mm: "0.4",
@@ -460,7 +463,7 @@ function PrinterManageModal({ printer, manufacturers, models, locations, onClose
   function modelChanged(value) {
     if (value === "__custom__") {
       setCustomModel(true);
-      setForm(current => ({ ...current, catalog_model_id: "", model: "" }));
+      setForm(current => ({ ...current, catalog_model_id: "", model: "", multi_material_installed: false }));
       return;
     }
     const selected = models.find(item => item.id === value);
@@ -470,6 +473,7 @@ function PrinterManageModal({ printer, manufacturers, models, locations, onClose
       ...current,
       catalog_model_id: selected.id,
       model: selected.name,
+      multi_material_installed: false,
       build_volume_x_mm: selected.build_volume?.x ?? "",
       build_volume_y_mm: selected.build_volume?.y ?? "",
       build_volume_z_mm: selected.build_volume?.z ?? "",
@@ -510,6 +514,7 @@ function PrinterManageModal({ printer, manufacturers, models, locations, onClose
       <label>Serial number<input value={form.serial_number} onChange={e => set("serial_number", e.target.value)} /></label>
       <label>Location<select value={form.location_id} onChange={e => set("location_id", e.target.value)}><option value="">Unassigned</option>{locations.map(x => <option key={x.id} value={x.id}>{x.name} · {x.kind_label}</option>)}</select></label>
       <label>Local host / IP<input value={form.connection_host} onChange={e => set("connection_host", e.target.value)} placeholder="192.168.1.34" /></label>
+      {selectedModel?.multi_material_system && <label className="settingsToggle full"><div><strong>{selectedModel.multi_material_label} installed</strong><small>This is an optional add-on for this owned printer. Turning it off retires its live slot assignments until it is enabled and synced again.</small></div><input type="checkbox" checked={form.multi_material_installed} onChange={e => set("multi_material_installed", e.target.checked)} /></label>}
       <label>Nozzle (mm)<input type="number" min="0.1" step="0.05" value={form.nozzle_mm} onChange={e => set("nozzle_mm", e.target.value)} /></label>
       <label>Build X (mm)<input type="number" min="1" step="0.1" value={form.build_volume_x_mm} onChange={e => set("build_volume_x_mm", e.target.value)} /></label>
       <label>Build Y (mm)<input type="number" min="1" step="0.1" value={form.build_volume_y_mm} onChange={e => set("build_volume_y_mm", e.target.value)} /></label>
@@ -530,6 +535,7 @@ function PrinterModal({ manufacturers, models, locations, onClose, onSaved }) {
     location_id: "",
     connection_host: "",
     is_active: true,
+    multi_material_installed: false,
     build_volume_x_mm: "",
     build_volume_y_mm: "",
     build_volume_z_mm: "",
@@ -551,6 +557,7 @@ function PrinterModal({ manufacturers, models, locations, onClose, onSaved }) {
       printer_manufacturer_id: value,
       catalog_model_id: "",
       model: "",
+      multi_material_installed: false,
       build_volume_x_mm: "",
       build_volume_y_mm: "",
       build_volume_z_mm: "",
@@ -565,6 +572,7 @@ function PrinterModal({ manufacturers, models, locations, onClose, onSaved }) {
         ...current,
         catalog_model_id: "",
         model: "",
+        multi_material_installed: false,
         build_volume_x_mm: "",
         build_volume_y_mm: "",
         build_volume_z_mm: "",
@@ -580,6 +588,7 @@ function PrinterModal({ manufacturers, models, locations, onClose, onSaved }) {
       catalog_model_id: selected.id,
       model: selected.name,
       name: current.name || selected.name,
+      multi_material_installed: false,
       build_volume_x_mm: selected.build_volume?.x ?? "",
       build_volume_y_mm: selected.build_volume?.y ?? "",
       build_volume_z_mm: selected.build_volume?.z ?? "",
@@ -616,6 +625,7 @@ function PrinterModal({ manufacturers, models, locations, onClose, onSaved }) {
       <label>Serial number<input value={form.serial_number} onChange={e => set("serial_number", e.target.value)} /></label>
       <label>Location<select value={form.location_id} onChange={e => set("location_id", e.target.value)}><option value="">Unassigned</option>{locations.map(x => <option key={x.id} value={x.id}>{x.name} · {x.kind_label}</option>)}</select></label>
       <label>Local host / IP<input value={form.connection_host} onChange={e => set("connection_host", e.target.value)} placeholder="192.168.1.34" /><small>Used by optional local printer/CFS adapters.</small></label>
+      {selectedModel?.multi_material_system && <label className="settingsToggle full"><div><strong>{selectedModel.multi_material_label} installed</strong><small>This printer model supports the add-on, but it is optional. Check this only when the hardware is actually fitted.</small></div><input type="checkbox" checked={form.multi_material_installed} onChange={e => set("multi_material_installed", e.target.checked)} /></label>}
       <label>Nozzle (mm)<input type="number" min="0.1" step="0.05" value={form.nozzle_mm} onChange={e => set("nozzle_mm", e.target.value)} /></label>
       <label>Build X (mm)<input type="number" min="1" step="0.1" value={form.build_volume_x_mm} onChange={e => set("build_volume_x_mm", e.target.value)} /></label>
       <label>Build Y (mm)<input type="number" min="1" step="0.1" value={form.build_volume_y_mm} onChange={e => set("build_volume_y_mm", e.target.value)} /></label>
