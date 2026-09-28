@@ -596,6 +596,8 @@ class Spool(TimeStampedModel):
         ]
 
     def clean(self):
+        super().clean()
+        self.rfid_uid = str(self.rfid_uid or "").strip().upper()
         if self.storage_location_id and self.assigned_printer_id:
             raise ValidationError("A spool can be stored at a location or assigned to a printer, not both.")
 
