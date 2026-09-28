@@ -44,12 +44,15 @@ class PrintingSyncConnectionError(PrintingSyncError):
 
 def next_spool_id() -> str:
     highest = 0
-    for value in Spool.objects.filter(spool_id__startswith="SPL-").values_list("spool_id", flat=True):
+    qs = Spool.objects.all()
+    if owner is not None:
+        qs = qs.filter(owner=owner)
+    for value in qs.filter(spool_id__startswith="SPL-").values_list("spool_id", flat=True):
         match = re.fullmatch(r"SPL-(\d+)", value or "")
         if match:
             highest = max(highest, int(match.group(1)))
     candidate = highest + 1
-    while Spool.objects.filter(spool_id=f"SPL-{candidate:04d}").exists():
+    while qs.filter(spool_id=f"SPL-{candidate:04d}").exists():
         candidate += 1
     return f"SPL-{candidate:04d}"
 
@@ -264,9 +267,9 @@ def _spoolman_location(name: str, owner=None):
     )
 
 
-def _rank_spoolman_spools(snapshot: dict) -> list[dict]:
+def _rank_spoolman_spools(snapshot: dict, owner) -> list[dict]:
     rows = []
-    qs = Spool.objects.select_related(
+    qs = Spool.objects.filter(owner=owner).select_related(
         "filament__filament_manufacturer",
         "filament__manufacturer",
         "storage_location",
@@ -344,11 +347,11 @@ def _spoolman_review_payload(remote: dict, snapshot: dict, filament_matches, spo
     }
 
 
-def _create_spool_with_generated_id(**kwargs) -> Spool:
+def _create_spool_with_generated_id(*, owner, **kwargs) -> Spool:
     for _ in range(5):
         try:
             with transaction.atomic():
-                item = Spool(spool_id=next_spool_id(), **kwargs)
+                item = Spool(owner=owner, spool_id=next_spool_id(owner), **kwargs)
                 item.full_clean()
                 item.save()
                 return item
@@ -409,7 +412,7 @@ def resolve_spoolman_review(
         ignored.add(external_id)
         result = {"action": "ignored", "external_id": external_id}
     elif action == "link":
-        spool = Spool.objects.select_related("filament").filter(pk=spool_id).first()
+        spool = Spool.objects.select_related("filament").filter(pk=spool_id, owner=setting.owner).first()
         if not spool:
             raise PrintingSyncError("Choose a MakerVault spool to link.")
         if ExternalSpoolLink.objects.filter(spool=spool, provider="spoolman").exists():
@@ -534,7 +537,7 @@ def sync_spoolman(setting: PrintingIntegrationSetting) -> dict:
                 continue
 
             filament_matches = _rank_spoolman_filaments(snapshot)
-            spool_matches = _rank_spoolman_spools(snapshot)
+            spool_matches = _rank_spoolman_spools(snapshot, setting.owner)
 
             filament_ambiguous = False
             selected_filament = None
@@ -596,7 +599,7 @@ def sync_spoolman(setting: PrintingIntegrationSetting) -> dict:
             ).filter(provider="spoolman")
         )
         linked_ids = {link.spool_id for link in links}
-        skipped_unlinked = Spool.objects.exclude(pk__in=linked_ids).count()
+        skipped_unlinked = Spool.objects.filter(owner=setting.owner).exclude(pk__in=linked_ids).count()
         for link in links:
             spool = link.spool
             location = ""
@@ -793,7 +796,7 @@ def _simplyprint_link_printer(row: dict, now, owner=None):
         printer = link.printer
     else:
         remote_name = _simplyprint_remote_name(row)
-        candidates = list(Printer.objects.filter(name__iexact=remote_name)[:2])
+        candidates = list(Printer.objects.filter(owner=owner, name__iexact=remote_name)[:2])
         if len(candidates) == 1 and not candidates[0].external_links.filter(provider="simplyprint").exists():
             printer = candidates[0]
             linked_existing = True
@@ -1007,6 +1010,7 @@ def _sync_simplyprint_jobs(rows, printer_links) -> tuple[int, int]:
             continue
 
         existing = PrintJob.objects.filter(
+            owner=printer.owner,
             settings__external_provider="simplyprint",
             settings__external_id=external_id,
         ).first()
@@ -1381,6 +1385,7 @@ def _sync_cfs_printer(printer: Printer, boxs_info: dict) -> dict:
 def sync_creality_cfs(setting: PrintingIntegrationSetting) -> dict:
     printers = list(
         Printer.objects.filter(
+            owner=setting.owner,
             is_active=True,
             multi_material_installed=True,
             catalog_model__multi_material_system="creality_cfs",
@@ -1413,8 +1418,15 @@ def sync_creality_cfs(setting: PrintingIntegrationSetting) -> dict:
     }
 
 
-def sync_printing_integration(provider: str, triggered_by: str = "manual") -> tuple[PrintingIntegrationSetting, dict]:
-    setting = PrintingIntegrationSetting.objects.filter(provider=provider).first()
+def sync_printing_integration(provider: str, triggered_by: str = "manual", *, owner=None, setting_id=None) -> tuple[PrintingIntegrationSetting, dict]:
+    settings_qs = PrintingIntegrationSetting.objects.all()
+    if setting_id is not None:
+        settings_qs = settings_qs.filter(pk=setting_id)
+    else:
+        settings_qs = settings_qs.filter(provider=provider)
+        if owner is not None:
+            settings_qs = settings_qs.filter(owner=owner)
+    setting = settings_qs.first()
     if not setting:
         raise PrintingSyncError("Integration is not configured.")
     if not setting.enabled:
