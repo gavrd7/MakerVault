@@ -176,6 +176,22 @@ def fetch_public_image(raw_url: str, stem: str) -> tuple[ContentFile, str, str]:
     raise CatalogueImageError("The image source redirected too many times.")
 
 
+def catalogue_image_metadata(obj) -> tuple[dict, str]:
+    """Return mutable image provenance metadata and the model field that stores it."""
+    if hasattr(obj, "specifications"):
+        return dict(getattr(obj, "specifications", {}) or {}), "specifications"
+    if hasattr(obj, "image_metadata"):
+        return dict(getattr(obj, "image_metadata", {}) or {}), "image_metadata"
+    return {}, ""
+
+
+def set_catalogue_image_metadata(obj, metadata: dict):
+    _, field = catalogue_image_metadata(obj)
+    if field:
+        setattr(obj, field, metadata)
+    return field
+
+
 def apply_catalogue_image(obj, content: ContentFile, filename: str, source_url: str = "", source_type: str = "upload"):
     if obj.image:
         try:
@@ -183,16 +199,16 @@ def apply_catalogue_image(obj, content: ContentFile, filename: str, source_url: 
         except OSError:
             pass
     obj.image.save(filename, content, save=False)
-    specs = dict(obj.specifications or {})
-    specs["image_source_type"] = source_type
+    metadata, _ = catalogue_image_metadata(obj)
+    metadata["image_source_type"] = source_type
     if source_url:
-        specs["image_source_url"] = source_url
-        specs["external_image_url"] = source_url
+        metadata["image_source_url"] = source_url
+        metadata["external_image_url"] = source_url
     elif source_type == "upload":
-        specs.pop("external_image_url", None)
-        specs.pop("image_source_url", None)
-    specs["image_cached_at"] = timezone.now().isoformat()
-    obj.specifications = specs
+        metadata.pop("external_image_url", None)
+        metadata.pop("image_source_url", None)
+    metadata["image_cached_at"] = timezone.now().isoformat()
+    set_catalogue_image_metadata(obj, metadata)
     obj.save()
     return obj
 
