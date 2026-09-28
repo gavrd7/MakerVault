@@ -349,6 +349,13 @@ class FileAsset(TimeStampedModel):
     sha256 = models.CharField(max_length=64, blank=True, db_index=True)
     description = models.TextField(blank=True)
     metadata = models.JSONField(default=dict, blank=True)
+    supersedes = models.OneToOneField(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="superseded_by",
+    )
 
     class Meta:
         ordering = ["-created_at"]
