@@ -437,13 +437,39 @@
 }
 
 /* v0.4.1 catalogue maintenance settings */
-.settingsStack{display:grid;gap:18px;max-width:1100px}
+.settingsStack{display:grid;gap:18px;max-width:1400px}
 .settingsHero{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;padding:24px}
 .settingsHero h2{margin:4px 0 8px;font-size:28px}
 .settingsHero p{margin:0;max-width:760px;color:#98a5b6;line-height:1.6}
 .settingsEyebrow{display:block;color:#9d8cff;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px}
 .status-pill{display:inline-flex;align-items:center;min-height:26px;padding:4px 9px;border:1px solid #3b4656;border-radius:999px;color:#a9b5c5;background:#151d27;font-size:11px}
 .status-pill.status-on{border-color:#2c6a49;background:#12271c;color:#9ce0b7}
+.settingsTabs{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  padding:6px;
+  border:1px solid #29313c;
+  border-radius:14px;
+  background:#0d131a;
+}
+.settingsTabs button{
+  flex:0 1 320px;
+  display:grid;
+  gap:3px;
+  text-align:left;
+  padding:12px 14px;
+  border-color:transparent;
+  background:transparent;
+}
+.settingsTabs button strong{font-size:14px}
+.settingsTabs button small{color:#7f8a9c;font-weight:500;line-height:1.35}
+.settingsTabs button.active{
+  border-color:#4f4590;
+  background:#1a1830;
+  color:#f0edff;
+}
+.settingsTabs button.active small{color:#aaa1e7}
 .settingsPanel{overflow:hidden}
 .settingsForm{display:grid;gap:18px;padding:20px}
 .settingsForm>label{display:grid;gap:7px;color:#aeb8c7;font-size:13px}
@@ -466,6 +492,8 @@
 .settingsCallout p{margin:5px 0 0;color:#98a5b6}
 @media(max-width:700px){
   .settingsHero{display:grid}
+  .settingsTabs{display:grid;grid-template-columns:1fr}
+  .settingsTabs button{width:100%;max-width:none}
   .settingsSubgrid,.settingsTimes{grid-template-columns:1fr}
   .settingsActions{display:grid;grid-template-columns:1fr}
   .settingsActions button{width:100%}
@@ -864,13 +892,22 @@
 
 /* v0.6.0 printing catalogue / integration refinements */
 .badge-danger{border-color:#7a3b43;background:#31191d;color:#ffbec6}
-.settingsIntegrationGrid{padding:16px}
-.settingsIntegrationGrid article{align-content:start}
+.settingsIntegrationGrid{
+  padding:16px;
+  grid-template-columns:repeat(auto-fit,minmax(min(430px,100%),1fr));
+  gap:16px;
+}
+.settingsIntegrationGrid article{
+  align-content:start;
+  min-width:0;
+  padding:16px;
+}
 .settingsIntegrationHead{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .settingsIntegrationGrid label{display:grid;gap:6px;color:#aeb8c7;font-size:12px}
 .settingsIntegrationGrid .settingsToggle.compact{display:flex;align-items:center;justify-content:space-between}
 .settingsIntegrationGrid .settingsToggle.compact input{width:auto}
-.settingsIntegrationGrid .settingsActions.compact{margin-top:2px;justify-content:flex-start}
+.settingsIntegrationGrid .settingsActions.compact{margin-top:2px;justify-content:flex-start;flex-wrap:wrap}
+.settingsIntegrationGrid .settingsActions.compact button{flex:1 1 130px;min-width:0}
 .settingsIntegrationGrid .integrationError{color:#ff9ea8}
 .modelFilePicker{border:1px dashed #485568;border-radius:10px;padding:12px;background:#0d131a}
 .modelFilePicker input[type="file"]{padding:8px;background:#101821}
