@@ -891,6 +891,7 @@ class PrintingFoundationTests(TestCase):
         )
         spool = Spool.objects.create(
             spool_id="SPL-CFS-LOCAL",
+            rfid_uid="12345",
             filament=filament,
             assigned_printer=printer,
             initial_weight_g="1000",
@@ -945,6 +946,8 @@ class PrintingFoundationTests(TestCase):
             slot_index=0,
         )
         self.assertEqual(slot.spool_id, spool.id)
+        self.assertEqual(slot.rfid_uid, "12345")
+        self.assertEqual(slot.spool.rfid_uid, "12345")
         self.assertEqual(slot.material, "ABS")
         self.assertEqual(slot.color_hex, "#ffffff")
         self.assertEqual(slot.metadata["vendor"], "Creality")
@@ -955,6 +958,147 @@ class PrintingFoundationTests(TestCase):
         setting = PrintingIntegrationSetting.objects.get(provider="creality_cfs")
         self.assertEqual(setting.status, "connected")
         self.assertIsNotNone(setting.last_sync_at)
+
+    @patch("core.printing_sync._fetch_cfs_boxs_info", new_callable=AsyncMock)
+    def test_cfs_does_not_merge_same_filament_or_different_colour_without_matching_rfid(self, fetch_mock):
+        maker = PrinterManufacturer.objects.create(name="Creality RFID Test")
+        model = PrinterCatalogModel.objects.create(
+            manufacturer=maker,
+            name="K2 RFID Test",
+            multi_material_system="creality_cfs",
+        )
+        printer = Printer.objects.create(
+            name="RFID K2",
+            printer_manufacturer=maker,
+            catalog_model=model,
+            model="K2 RFID Test",
+            connection_host="192.0.2.10",
+            is_active=True,
+        )
+        filament_maker = FilamentManufacturer.objects.create(name="Creality RFID Test")
+        white = FilamentProduct.objects.create(
+            filament_manufacturer=filament_maker,
+            name="Hyper ABS",
+            material="ABS",
+            color_name="White",
+            color_hex="#ffffff",
+            nominal_weight_g="1000",
+            diameter_mm="1.75",
+        )
+        black = FilamentProduct.objects.create(
+            filament_manufacturer=filament_maker,
+            name="Hyper ABS",
+            material="ABS",
+            color_name="Black",
+            color_hex="#000000",
+            nominal_weight_g="1000",
+            diameter_mm="1.75",
+        )
+        white_spool = Spool.objects.create(
+            spool_id="SPL-RFID-WHITE",
+            rfid_uid="RFID-WHITE",
+            filament=white,
+            assigned_printer=printer,
+            initial_weight_g="1000",
+            remaining_weight_g="800",
+            status="open",
+        )
+        first_black = Spool.objects.create(
+            spool_id="SPL-RFID-BLACK-1",
+            rfid_uid="RFID-BLACK-1",
+            filament=black,
+            initial_weight_g="1000",
+            remaining_weight_g="950",
+            status="open",
+        )
+
+        fetch_mock.return_value = {
+            "materialBoxs": [{
+                "id": 1,
+                "state": 1,
+                "type": 0,
+                "materials": [
+                    {
+                        "id": 0, "vendor": "Creality RFID Test", "type": "ABS",
+                        "name": "Hyper ABS", "rfid": "RFID-WHITE",
+                        "color": "#0ffffff", "percent": 70, "state": 2,
+                    },
+                    {
+                        "id": 1, "vendor": "Creality RFID Test", "type": "ABS",
+                        "name": "Hyper ABS", "rfid": "RFID-BLACK-2",
+                        "color": "#000000", "percent": 90, "state": 2,
+                    },
+                ],
+            }],
+        }
+        PrintingIntegrationSetting.objects.update_or_create(
+            provider="creality_cfs",
+            defaults={
+                "enabled": True,
+                "sync_direction": "import",
+                "status": "disconnected",
+            },
+        )
+
+        synced = self.client.post("/api/settings/printing-integrations/creality_cfs/sync/")
+        self.assertEqual(synced.status_code, 200, synced.content)
+        self.assertEqual(synced.json()["result"]["matched_spools"], 1)
+
+        white_slot = PrinterFilamentSlot.objects.get(
+            printer=printer, system="creality_cfs", unit_index=0, slot_index=0
+        )
+        black_slot = PrinterFilamentSlot.objects.get(
+            printer=printer, system="creality_cfs", unit_index=0, slot_index=1
+        )
+        self.assertEqual(white_slot.spool_id, white_spool.id)
+        self.assertEqual(white_slot.rfid_uid, "RFID-WHITE")
+        self.assertIsNone(black_slot.spool_id)
+        self.assertEqual(black_slot.rfid_uid, "RFID-BLACK-2")
+        first_black.refresh_from_db()
+        self.assertEqual(first_black.remaining_weight_g, Decimal("950"))
+
+        added = self.client.post(
+            f"/api/printing/slots/{black_slot.id}/add-to-inventory/",
+            data={
+                "filament_id": str(black.id),
+                "initial_weight_g": "1000",
+                "status": "open",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(added.status_code, 201, added.content)
+        created = Spool.objects.get(pk=added.json()["item"]["id"])
+        self.assertEqual(created.rfid_uid, "RFID-BLACK-2")
+        self.assertEqual(created.filament_id, black.id)
+        self.assertNotEqual(created.id, first_black.id)
+        self.assertEqual(
+            Spool.objects.filter(filament=black).count(),
+            2,
+        )
+
+    def test_physical_spool_rfid_is_unique_and_serialised(self):
+        response = self.client.post(
+            "/api/printing/spools/",
+            data={
+                "filament_id": str(self.filament.id),
+                "rfid_uid": " abc-123 ",
+                "status": "open",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(response.json()["item"]["rfid_uid"], "ABC-123")
+
+        duplicate = self.client.post(
+            "/api/printing/spools/",
+            data={
+                "filament_id": str(self.filament.id),
+                "rfid_uid": "abc-123",
+                "status": "open",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(duplicate.status_code, 409, duplicate.content)
 
     def test_printing_overview_only_lists_enabled_integrations(self):
         PrintingIntegrationSetting.objects.update_or_create(
