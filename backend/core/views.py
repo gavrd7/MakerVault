@@ -7,7 +7,7 @@ from django.db import connection
 from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
-\nfrom .models import FileAsset, InventoryItem, Project
+from .models import FileAsset, InventoryItem, Project
 
 logger = logging.getLogger(__name__)
 
