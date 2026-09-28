@@ -502,6 +502,10 @@ class PrinterCatalogModel(TimeStampedModel):
     features = models.JSONField(default=dict, blank=True)
     image = models.ImageField(upload_to="printers/catalog/", blank=True, null=True)
     image_metadata = models.JSONField(default=dict, blank=True)
+    image_multi_material = models.ImageField(
+        upload_to="printers/catalog/multi-material/", blank=True, null=True
+    )
+    image_multi_material_metadata = models.JSONField(default=dict, blank=True)
     source_url = models.URLField(blank=True)
 
     class Meta:
