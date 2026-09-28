@@ -1479,3 +1479,33 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
   background:#1a2430;
   color:#fff;
 }
+
+
+/* v0.6.4 printability intelligence */
+.modelPrintability{display:grid;gap:10px;padding:12px;border:1px solid #2b3644;border-radius:10px;background:#0c1219}
+.modelPrintabilityHead{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.modelPrintabilityGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.modelPrintabilityGrid article{padding:9px;border:1px solid #26313e;border-radius:8px;background:#101720}
+.modelPrintabilityGrid span,.modelPrintabilityGrid strong{display:block}
+.modelPrintabilityGrid span{font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#738095}
+.modelPrintabilityGrid strong{margin-top:3px;font-size:13px}
+.modelOrientationCard{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px;border:1px solid #39445a;border-radius:9px;background:#14192a}
+.modelOrientationCard span,.modelOrientationCard strong,.modelOrientationCard small{display:block}
+.modelOrientationCard span{color:#8f9caf;font-size:10px;text-transform:uppercase;letter-spacing:.05em}
+.modelOrientationCard strong{margin-top:3px;color:#ece9ff}
+.modelOrientationCard small{margin-top:4px;color:#98a5b8;line-height:1.4}
+.modelOrientationCompare{min-width:86px;padding-left:12px;border-left:1px solid #354052;text-align:right}
+.modelOrientationDetails{border-top:1px solid #25303d;padding-top:8px}
+.modelOrientationDetails summary{cursor:pointer;color:#aeb9c8;font-size:11px}
+.modelOrientationDetails>div{display:grid;gap:4px;margin-top:8px}
+.modelOrientationDetails>div>div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 10px;padding:6px 0;border-bottom:1px solid #212a35}
+.modelOrientationDetails>div>div:last-child{border-bottom:0}
+.modelOrientationDetails span{font-size:11px}
+.modelOrientationDetails strong{font-size:11px}
+.modelOrientationDetails small{grid-column:1/-1;color:#738095;font-size:9px}
+.modelPrintabilityNote{color:#758297;line-height:1.45}
+@media(max-width:560px){
+  .modelPrintabilityGrid{grid-template-columns:1fr}
+  .modelOrientationCard{grid-template-columns:1fr}
+  .modelOrientationCompare{padding-left:0;padding-top:8px;border-left:0;border-top:1px solid #354052;text-align:left}
+}
