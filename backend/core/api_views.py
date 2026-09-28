@@ -2265,10 +2265,11 @@ PRINTING_INTEGRATION_DEFAULTS = {
 }
 
 
-def _ensure_printing_integrations():
+def _ensure_printing_integrations(owner):
     rows = []
     for provider, defaults in PRINTING_INTEGRATION_DEFAULTS.items():
         row, created = PrintingIntegrationSetting.objects.get_or_create(
+            owner=owner,
             provider=provider,
             defaults=defaults,
         )
@@ -2300,6 +2301,7 @@ def _serialise_printing_integration(item):
         safe_config["api_key_configured"] = bool((item.config or {}).get("api_key"))
     if item.provider == "creality_cfs":
         compatible = Printer.objects.filter(
+            owner=item.owner,
             is_active=True,
             catalog_model__multi_material_system="creality_cfs",
         )
@@ -2314,16 +2316,17 @@ def _serialise_printing_integration(item):
         pending_reviews = (item.config or {}).get("pending_reviews") or []
         ignored_ids = (item.config or {}).get("ignored_external_ids") or []
         extra = {
-            "linked_spools": ExternalSpoolLink.objects.filter(provider="spoolman").count(),
+            "linked_spools": ExternalSpoolLink.objects.filter(provider="spoolman", spool__owner=item.owner).count(),
             "pending_review_count": len(pending_reviews) if isinstance(pending_reviews, list) else 0,
             "ignored_import_count": len(ignored_ids) if isinstance(ignored_ids, list) else 0,
             "authority_policy": "makervault_primary",
         }
     elif item.provider == "simplyprint":
         extra = {
-            "linked_printers": ExternalPrinterLink.objects.filter(provider="simplyprint").count(),
-            "linked_spools": ExternalSpoolLink.objects.filter(provider="simplyprint").count(),
+            "linked_printers": ExternalPrinterLink.objects.filter(provider="simplyprint", printer__owner=item.owner).count(),
+            "linked_spools": ExternalSpoolLink.objects.filter(provider="simplyprint", spool__owner=item.owner).count(),
             "imported_print_jobs": PrintJob.objects.filter(
+                owner=item.owner,
                 settings__external_provider="simplyprint"
             ).count(),
             "authority_policy": "makervault_primary",
@@ -2370,7 +2373,7 @@ def _serialise_printing_integration_status(item):
 def printing_integration_settings(request):
     if not request.user.is_staff:
         return _error("Administrator access is required.", status=403)
-    rows = _ensure_printing_integrations()
+    rows = _ensure_printing_integrations(request.user)
     return JsonResponse({
         "rows": [_serialise_printing_integration(item) for item in rows],
     })
@@ -3001,37 +3004,37 @@ def _serialise_print_material_usage(usage):
     }
 
 
-def _printing_analytics():
+def _printing_analytics(owner):
     status_rows = {
         row["status"]: row["count"]
-        for row in PrintJob.objects.values("status").annotate(count=Count("id"))
+        for row in PrintJob.objects.filter(owner=owner).values("status").annotate(count=Count("id"))
     }
     successful = int(status_rows.get("success", 0))
     failed = int(status_rows.get("failed", 0))
     completed = successful + failed
     total_jobs = sum(int(value) for value in status_rows.values())
 
-    job_totals = PrintJob.objects.aggregate(
+    job_totals = PrintJob.objects.filter(owner=owner).aggregate(
         actual_minutes=Sum("actual_minutes"),
         estimated_minutes=Sum("estimated_minutes"),
     )
-    usage_totals = PrintMaterialUsage.objects.aggregate(
+    usage_totals = PrintMaterialUsage.objects.filter(print_job__owner=owner).aggregate(
         used_g=Sum("used_g"),
         waste_g=Sum("waste_g"),
     )
     default_currency = settings.MAKERVAULT_CURRENCY
     material_cost = (
-        PrintMaterialUsage.objects.filter(currency=default_currency)
+        PrintMaterialUsage.objects.filter(print_job__owner=owner, currency=default_currency)
         .aggregate(total=Sum("material_cost"))
         .get("total")
     )
-    foreign_cost_rows = PrintMaterialUsage.objects.exclude(
+    foreign_cost_rows = PrintMaterialUsage.objects.filter(print_job__owner=owner).exclude(
         currency=default_currency
     ).exclude(material_cost=None).count()
 
     printer_rows = []
     for row in (
-        PrintJob.objects.values("printer_id", "printer__name")
+        PrintJob.objects.filter(owner=owner).values("printer_id", "printer__name")
         .annotate(
             jobs=Count("id"),
             successes=Count("id", filter=Q(status="success")),
@@ -3199,7 +3202,7 @@ def printing_overview(request):
         ],
         "models": [_serialise_printing_model(model) for model in models_3d],
         "recent_prints": [_serialise_print_job(job) for job in recent_prints],
-        "analytics": _printing_analytics(),
+        "analytics": _printing_analytics(request.user),
         "integrations": [
             _serialise_printing_integration_status(item)
             for item in PrintingIntegrationSetting.objects.filter(owner=request.user).filter(enabled=True).order_by("provider")
@@ -4658,7 +4661,7 @@ def _build_print_material_usage(job, printer, payload):
     slot = None
 
     if payload.get("spool_id"):
-        spool = Spool.objects.select_related("filament").filter(pk=payload["spool_id"]).first()
+        spool = Spool.objects.select_related("filament").filter(owner=job.owner, pk=payload["spool_id"]).first()
         if not spool:
             raise ValidationError({"material_usages": "Selected spool was not found."})
         filament = spool.filament
