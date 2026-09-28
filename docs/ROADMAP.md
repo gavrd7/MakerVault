@@ -85,6 +85,8 @@ This file tracks completed MakerVault milestones and the next candidate areas. T
 
 ### v0.7.0 — Multi-user isolation & secure storage
 
+**Foundation in progress:** explicit ownership fields, guarded legacy-data attribution, per-user storage profiles, instance quota defaults and storage accounting/API are now implemented. API-wide isolation, quota enforcement, administration UI and encrypted blob storage remain to follow.
+
 - Enforce backend ownership boundaries for private user data while retaining shared reference catalogues.
 - Migrate existing private records safely to an existing administrator/owner account.
 - Add administrator-only user management with account status, quota controls, storage usage and destructive account/storage actions without a private-file browser.
