@@ -46,6 +46,7 @@ class StorageSettings(TimeStampedModel):
 
     singleton_key = models.PositiveSmallIntegerField(default=1, unique=True, editable=False)
     default_quota_bytes = models.BigIntegerField(default=10 * 1024 * 1024 * 1024)
+    default_quota_unlimited = models.BooleanField(default=False)
 
     class Meta:
         verbose_name = "Storage settings"
