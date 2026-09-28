@@ -527,7 +527,7 @@ def _sha256_upload(uploaded):
 def _project_cost(project):
     total = Decimal("0")
     currency = settings.MAKERVAULT_CURRENCY
-    for item in project.inventory_items.all():
+    for item in project.inventory_items.filter(owner=project.owner):
         if item.purchase_price is not None:
             total += item.purchase_price * item.quantity
             currency = item.currency or currency
@@ -535,8 +535,8 @@ def _project_cost(project):
 
 
 def _serialise_project(project, detailed=False):
-    gallery_qs = project.files.filter(category="image").order_by("-created_at")
-    asset_qs = project.files.exclude(category="image").filter(superseded_by__isnull=True).order_by("category", "-created_at")
+    gallery_qs = project.files.filter(owner=project.owner, category="image").order_by("-created_at")
+    asset_qs = project.files.filter(owner=project.owner).exclude(category="image").filter(superseded_by__isnull=True).order_by("category", "-created_at")
     repository_qs = project.repositories.all().order_by("provider", "name")
     bom_count = getattr(project, "bom_count_value", None)
     if bom_count is None:
@@ -553,7 +553,7 @@ def _serialise_project(project, detailed=False):
         "started_on": project.started_on.isoformat() if project.started_on else "",
         "completed_on": project.completed_on.isoformat() if project.completed_on else "",
         "created_by": project.created_by.get_username() if project.created_by else "",
-        "inventory_count": project.inventory_items.count(),
+        "inventory_count": project.inventory_items.filter(owner=project.owner).count(),
         "gallery_count": gallery_qs.count(),
         "file_count": asset_qs.count(),
         "repository_count": repository_qs.count(),
@@ -570,7 +570,7 @@ def _serialise_project(project, detailed=False):
             "notes": project.notes,
             "tags": project.tags or [],
             "reference_url": project.reference_url,
-            "inventory": [_serialise_inventory(item) for item in project.inventory_items.select_related(
+            "inventory": [_serialise_inventory(item) for item in project.inventory_items.filter(owner=project.owner).select_related(
                 "board__manufacturer", "project"
             ).order_by("inventory_id")],
             "gallery": [
