@@ -66,10 +66,6 @@ def _normalise_hex(value: str | None) -> str:
     return ""
 
 
-def _normalise_rfid_uid(value) -> str:
-    return str(value or "").strip().upper()
-
-
 def _spoolman_api_root(endpoint_url: str) -> str:
     base = normalise_service_url(endpoint_url)
     return base if base.endswith("/api/v1") else base + "/api/v1"
@@ -681,23 +677,27 @@ async def _fetch_cfs_boxs_info(host: str) -> dict:
     raise PrintingSyncError("The printer connected but did not return CFS box information.")
 
 
-def _match_cfs_spool(printer: Printer, material: dict):
-    """Identify a physical spool only from the RFID tag reported by the CFS."""
-    try:
-        state = int(material.get("state") or 0)
-    except (TypeError, ValueError):
-        state = 0
-    if state != 2:
-        return None
+def _cfs_material_fingerprint(material: dict) -> str:
+    """Stable fingerprint for the loaded filament variant, not the physical reel."""
+    return "|".join([
+        str(material.get("rfid") or "").strip().casefold(),
+        _normalise_hex(material.get("color")).casefold(),
+        str(material.get("vendor") or "").strip().casefold(),
+        str(material.get("type") or "").strip().casefold(),
+        str(material.get("name") or "").strip().casefold(),
+    ])
 
-    remote_rfid = _normalise_rfid_uid(material.get("rfid"))
-    if not remote_rfid:
-        return None
 
-    return Spool.objects.select_related(
-        "filament__filament_manufacturer",
-        "filament__manufacturer",
-    ).filter(rfid_uid=remote_rfid).first()
+def _confirmed_cfs_spool(existing_slot, fingerprint: str):
+    """Preserve only an association the user explicitly confirmed/created."""
+    if not existing_slot or not existing_slot.spool_id:
+        return None
+    metadata = existing_slot.metadata or {}
+    if metadata.get("link_source") not in {"inventory_created_from_slot", "user_linked_existing"}:
+        return None
+    if metadata.get("material_fingerprint") != fingerprint:
+        return None
+    return existing_slot.spool
 
 
 def _sync_cfs_printer(printer: Printer, boxs_info: dict) -> dict:
@@ -729,18 +729,28 @@ def _sync_cfs_printer(printer: Printer, boxs_info: dict) -> dict:
                 slot_index = int(raw.get("id"))
             except (TypeError, ValueError):
                 continue
-            state = int(raw.get("state") or 0)
-            is_loaded = state > 0
-            if not is_loaded:
+            try:
+                state = int(raw.get("state") or 0)
+            except (TypeError, ValueError):
+                state = 0
+            if state <= 0:
                 continue
 
             unit_index = max(box_id - 1, 0)
             seen.add((unit_index, slot_index))
-            rfid_uid = _normalise_rfid_uid(raw.get("rfid")) if state == 2 else ""
-            local_spool = _match_cfs_spool(printer, raw)
+            fingerprint = _cfs_material_fingerprint(raw)
+            existing_slot = PrinterFilamentSlot.objects.select_related(
+                "spool__filament",
+            ).filter(
+                printer=printer,
+                system="creality_cfs",
+                unit_index=unit_index,
+                slot_index=slot_index,
+            ).first()
+            local_spool = _confirmed_cfs_spool(existing_slot, fingerprint)
+
             percent = _as_decimal(raw.get("percent"))
             remaining_weight = None
-
             if local_spool and state == 2 and percent is not None:
                 basis = local_spool.initial_weight_g or local_spool.filament.nominal_weight_g
                 if basis is not None:
@@ -750,6 +760,27 @@ def _sync_cfs_printer(printer: Printer, boxs_info: dict) -> dict:
                         local_spool.save(update_fields=["remaining_weight_g", "updated_at"])
                         updated_weights += 1
 
+            previous_metadata = (existing_slot.metadata or {}) if existing_slot else {}
+            link_source = previous_metadata.get("link_source") if local_spool else ""
+            metadata = {
+                "vendor": raw.get("vendor") or "",
+                "product_name": raw.get("name") or "",
+                "material_code": str(raw.get("rfid") or ""),
+                "rfid_detected": state == 2,
+                "physical_tag_uid_available": False,
+                "remaining_percent": float(percent) if state == 2 and percent is not None else None,
+                "selected": bool(raw.get("selected")),
+                "min_temp_c": raw.get("minTemp"),
+                "max_temp_c": raw.get("maxTemp"),
+                "box_id": box_id,
+                "box_temperature_c": box.get("temp"),
+                "box_humidity_percent": box.get("humidity"),
+                "material_fingerprint": fingerprint,
+            }
+            if link_source:
+                metadata["link_source"] = link_source
+                metadata["link_confirmed_at"] = previous_metadata.get("link_confirmed_at")
+
             slot, _ = PrinterFilamentSlot.objects.update_or_create(
                 printer=printer,
                 system="creality_cfs",
@@ -758,26 +789,14 @@ def _sync_cfs_printer(printer: Printer, boxs_info: dict) -> dict:
                 defaults={
                     "spool": local_spool,
                     "external_ref": f"cfs:{box_id}:{slot_index}",
-                    "rfid_uid": rfid_uid,
+                    "rfid_uid": "",
                     "material": str(raw.get("type") or "").strip()[:80],
                     "color_name": str(raw.get("name") or "").strip()[:120],
                     "color_hex": _normalise_hex(raw.get("color")),
                     "remaining_weight_g": remaining_weight,
                     "is_loaded": True,
                     "last_seen_at": now,
-                    "metadata": {
-                        "vendor": raw.get("vendor") or "",
-                        "product_name": raw.get("name") or "",
-                        "rfid_uid": rfid_uid,
-                        "rfid_detected": bool(rfid_uid),
-                        "remaining_percent": float(percent) if state == 2 and percent is not None else None,
-                        "selected": bool(raw.get("selected")),
-                        "min_temp_c": raw.get("minTemp"),
-                        "max_temp_c": raw.get("maxTemp"),
-                        "box_id": box_id,
-                        "box_temperature_c": box.get("temp"),
-                        "box_humidity_percent": box.get("humidity"),
-                    },
+                    "metadata": metadata,
                 },
             )
             loaded += 1
@@ -794,7 +813,12 @@ def _sync_cfs_printer(printer: Printer, boxs_info: dict) -> dict:
             slot.is_loaded = False
             slot.spool = None
             slot.last_seen_at = now
-            slot.save(update_fields=["is_loaded", "spool", "last_seen_at", "updated_at"])
+            metadata = dict(slot.metadata or {})
+            metadata.pop("link_source", None)
+            metadata.pop("link_confirmed_at", None)
+            metadata.pop("material_fingerprint", None)
+            slot.metadata = metadata
+            slot.save(update_fields=["is_loaded", "spool", "last_seen_at", "metadata", "updated_at"])
 
     return {
         "printer_id": str(printer.id),
