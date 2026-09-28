@@ -2,7 +2,7 @@
 
 MakerVault is a self-hosted makerspace inventory, project and 3D-printing management platform for electronics, firmware, fabrication, CAD and workshop assets.
 
-**Current development build: v0.6.6.1**
+**Current development build: v0.6.6.2**
 
 MakerVault is designed as a single local source of truth for a maker workspace. Catalogue records describe what a part or printer *is*; physical inventory records what you actually own; projects connect inventory, files, BOMs, models and repositories; and the 3D-printing workspace adds printers, filament, spools, models, print history, analytics and optional external integrations.
 
