@@ -6,6 +6,7 @@ from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
@@ -35,7 +36,8 @@ from .model_analysis import ModelAnalysisError, analyse_file_asset
 from .printing_integrations import PrintingIntegrationError, probe_simplyprint, probe_spoolman
 from .printing_sync import PrintingSyncError, next_spool_id, resolve_spoolman_review, sync_printing_integration
 from .tasks import queue_catalogue_maintenance_now
-from .storage_usage import StorageQuotaExceeded, ensure_storage_capacity, storage_summary
+from .storage_usage import StorageQuotaExceeded, ensure_storage_capacity, storage_settings, storage_summary
+from .user_admin import admin_user_summary, purge_user_private_data
 from .models import (
     BoardCompatibility,
     BoardModel,
@@ -729,6 +731,156 @@ def _next_inventory_id(owner, item_type):
 def user_storage(request):
     """Return the authenticated user's logical storage usage and effective quota."""
     return JsonResponse(storage_summary(request.user))
+
+
+def _superuser_required(request):
+    if request.user.is_superuser:
+        return None
+    return _error("Superuser access is required.", status=403)
+
+
+def _quota_bytes(value, field_name="quota_bytes"):
+    try:
+        result = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValidationError({field_name: "Enter a whole number of bytes."}) from exc
+    if result < 0:
+        raise ValidationError({field_name: "Storage quota cannot be negative."})
+    return result
+
+
+@login_required
+@require_http_methods(["GET", "PATCH"])
+def admin_storage_policy(request):
+    denied = _superuser_required(request)
+    if denied:
+        return denied
+    policy = storage_settings()
+    if request.method == "PATCH":
+        try:
+            payload = _read_json(request)
+            mode = str(payload.get("mode") or ("unlimited" if policy.default_quota_unlimited else "limited")).strip().lower()
+            if mode not in {"limited", "unlimited"}:
+                return _error("Unknown instance storage policy.")
+            policy.default_quota_unlimited = mode == "unlimited"
+            if "default_quota_bytes" in payload:
+                policy.default_quota_bytes = _quota_bytes(payload.get("default_quota_bytes"), "default_quota_bytes")
+            policy.full_clean()
+            policy.save()
+        except ValidationError as exc:
+            return _validation_response(exc)
+    return JsonResponse({
+        "policy": {
+            "mode": "unlimited" if policy.default_quota_unlimited else "limited",
+            "default_quota_bytes": int(policy.default_quota_bytes),
+        }
+    })
+
+
+@login_required
+@require_http_methods(["GET"])
+def admin_users(request):
+    denied = _superuser_required(request)
+    if denied:
+        return denied
+    User = get_user_model()
+    rows = [admin_user_summary(user) for user in User.objects.order_by("username")]
+    return JsonResponse({"rows": rows})
+
+
+@login_required
+@require_http_methods(["PATCH"])
+def admin_user_detail(request, user_id):
+    denied = _superuser_required(request)
+    if denied:
+        return denied
+    User = get_user_model()
+    target = User.objects.filter(pk=user_id).first()
+    if not target:
+        return _error("User not found.", status=404)
+
+    try:
+        payload = _read_json(request)
+        if "is_active" in payload:
+            active = bool(payload.get("is_active"))
+            if target.pk == request.user.pk and not active:
+                return _error("You cannot disable the account you are currently using.")
+            if target.is_superuser and target.is_active and not active:
+                active_superusers = User.objects.filter(is_superuser=True, is_active=True).count()
+                if active_superusers <= 1:
+                    return _error("The last active superuser cannot be disabled.")
+            target.is_active = active
+            target.save(update_fields=["is_active"])
+
+        if "quota_mode" in payload:
+            mode = str(payload.get("quota_mode") or "").strip().lower()
+            if mode not in {"default", "override", "unlimited"}:
+                return _error("Unknown user quota mode.")
+            from .models import UserStorageProfile
+            profile, _ = UserStorageProfile.objects.get_or_create(user=target)
+            if mode == "default":
+                profile.quota_unlimited = False
+                profile.quota_override_bytes = None
+            elif mode == "unlimited":
+                profile.quota_unlimited = True
+                profile.quota_override_bytes = None
+            else:
+                profile.quota_unlimited = False
+                profile.quota_override_bytes = _quota_bytes(payload.get("quota_bytes"))
+            profile.full_clean()
+            profile.save(update_fields=["quota_unlimited", "quota_override_bytes", "updated_at"])
+
+        return JsonResponse({"item": admin_user_summary(target)})
+    except ValidationError as exc:
+        return _validation_response(exc)
+
+
+@login_required
+@require_http_methods(["POST"])
+def admin_user_purge(request, user_id):
+    denied = _superuser_required(request)
+    if denied:
+        return denied
+    User = get_user_model()
+    target = User.objects.filter(pk=user_id).first()
+    if not target:
+        return _error("User not found.", status=404)
+    if target.pk == request.user.pk:
+        return _error("You cannot purge the account you are currently using.")
+    try:
+        payload = _read_json(request)
+    except ValueError as exc:
+        return _error(str(exc))
+    if str(payload.get("confirm") or "") != target.get_username():
+        return _error("Type the exact username to confirm this destructive action.")
+    result = purge_user_private_data(target)
+    return JsonResponse({"result": result, "item": admin_user_summary(target)})
+
+
+@login_required
+@require_http_methods(["DELETE"])
+def admin_user_delete(request, user_id):
+    denied = _superuser_required(request)
+    if denied:
+        return denied
+    User = get_user_model()
+    target = User.objects.filter(pk=user_id).first()
+    if not target:
+        return _error("User not found.", status=404)
+    if target.pk == request.user.pk:
+        return _error("You cannot delete the account you are currently using.")
+    if target.is_superuser and User.objects.filter(is_superuser=True).count() <= 1:
+        return _error("The last superuser account cannot be deleted.")
+    try:
+        payload = _read_json(request)
+    except ValueError as exc:
+        return _error(str(exc))
+    if str(payload.get("confirm") or "") != target.get_username():
+        return _error("Type the exact username to confirm account deletion.")
+    purge_user_private_data(target)
+    username = target.get_username()
+    target.delete()
+    return JsonResponse({"deleted": True, "username": username})
 
 
 @login_required
@@ -4916,6 +5068,8 @@ def public_config(request):
         "language": settings.LANGUAGE_CODE,
         "user": request.user.get_username(),
         "is_staff": request.user.is_staff,
+        "is_superuser": request.user.is_superuser,
+        "user_id": request.user.pk,
         "permissions": {
             "add_board": request.user.has_perm("core.add_boardmodel"),
             "change_board": request.user.has_perm("core.change_boardmodel"),
