@@ -940,6 +940,7 @@
 .printingLibraryToolbar small{margin-top:3px;color:#7f8a9c}
 .printingLibraryToolbar input{width:min(520px,50vw)}
 .printingLibraryRow{min-height:64px}
+.printingLibraryActions{display:flex;gap:8px;align-items:center;justify-content:flex-end}
 .integrationAuthorityCallout{margin-top:3px}
 .integrationReviewButton{border-color:#6a5b2f;background:#211d12;color:#e8d79a}
 .integrationReviewList{display:grid;gap:12px}
@@ -960,4 +961,5 @@
   .printingLibraryHero,.printingLibraryToolbar,.integrationReviewHead,.integrationCandidateRow,.integrationReviewFooter{display:grid}
   .printingLibraryToolbar input{width:100%}
   .integrationReviewChoices{grid-template-columns:1fr}
+  .printingLibraryActions{justify-content:flex-start}
 }
