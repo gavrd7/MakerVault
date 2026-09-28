@@ -1,5 +1,8 @@
 import logging
 import mimetypes
+from pathlib import Path
+
+import magic
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
@@ -20,25 +23,59 @@ def app_shell(request):
 
 @login_required
 def media_file(request, path):
-    # Private media must be authorised by database ownership, not merely by
-    # possession of a MEDIA_URL path. Unknown files under private prefixes are
-    # intentionally treated as not found so stale/orphaned blobs cannot leak.
+    # Private media is authorised by database ownership. The storage backend
+    # transparently decrypts authenticated blobs; raw encrypted bytes are never
+    # returned by this view.
     normalised = str(path or "").lstrip("/")
-    if normalised.startswith("files/"):
-        allowed = FileAsset.objects.filter(owner=request.user, file=normalised).exists()
-        if not allowed:
-            raise Http404
-    elif normalised.startswith("projects/covers/"):
-        allowed = Project.objects.filter(owner=request.user, cover_image=normalised).exists()
-        if not allowed:
-            raise Http404
-    elif normalised.startswith("inventory/"):
-        allowed = InventoryItem.objects.filter(owner=request.user, image=normalised).exists()
-        if not allowed:
+    private_prefix = normalised.startswith(("private/", "files/", "projects/covers/", "inventory/"))
+
+    asset = FileAsset.objects.filter(owner=request.user, file=normalised).first()
+    project = None if asset else Project.objects.filter(owner=request.user, cover_image=normalised).first()
+    inventory = None if asset or project else InventoryItem.objects.filter(owner=request.user, image=normalised).first()
+
+    if asset or project or inventory:
+        field = asset.file if asset else project.cover_image if project else inventory.image
+        try:
+            stream = field.storage.open(field.name, "rb")
+        except (FileNotFoundError, OSError, ValueError):
             raise Http404
 
+        if asset:
+            metadata = asset.metadata or {}
+            download_name = Path(str(metadata.get("original_name") or asset.name or "file")).name
+        elif project:
+            download_name = "project-cover"
+        else:
+            download_name = "inventory-image"
+
+        try:
+            head = stream.read(4096)
+            stream.seek(0)
+            content_type = magic.from_buffer(head, mime=True) if head else None
+        except Exception:
+            try:
+                stream.seek(0)
+            except Exception:
+                pass
+            content_type, _ = mimetypes.guess_type(download_name)
+
+        inline_types = {"image/png", "image/jpeg", "image/webp", "image/gif"}
+        return FileResponse(
+            stream,
+            as_attachment=content_type not in inline_types,
+            filename=download_name,
+            content_type=content_type or "application/octet-stream",
+        )
+
+    # A private-looking path with no owned database record is never served. This
+    # also blocks possession of another user's opaque object name from becoming
+    # an access mechanism.
+    if private_prefix:
+        raise Http404
+
+    # Shared catalogue/reference media remains ordinary authenticated media.
     root = settings.MEDIA_ROOT.resolve()
-    requested = (root / path).resolve()
+    requested = (root / normalised).resolve()
     try:
         requested.relative_to(root)
     except ValueError as exc:
@@ -47,14 +84,10 @@ def media_file(request, path):
         raise Http404
 
     content_type, _ = mimetypes.guess_type(requested.name)
-    # Only raster images are displayed inline. Everything else is download-only,
-    # preventing active uploads such as SVGs or executables from running in the
-    # MakerVault origin.
     inline_types = {"image/png", "image/jpeg", "image/webp", "image/gif"}
-    as_attachment = content_type not in inline_types
     return FileResponse(
         requested.open("rb"),
-        as_attachment=as_attachment,
+        as_attachment=content_type not in inline_types,
         filename=requested.name,
         content_type=content_type or "application/octet-stream",
     )
