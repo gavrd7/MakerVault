@@ -1,7 +1,9 @@
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
 
+from core.storage_usage import StorageQuotaExceeded, ensure_storage_capacity, storage_summary
 from core.models import (
     FileAsset,
     InventoryItem,
@@ -91,6 +93,42 @@ class UserOwnershipFoundationTests(TestCase):
             payload["categories"],
             {"models": 0, "project_files": 0, "images": 0, "other_files": 0},
         )
+
+
+    def test_quota_preflight_rejects_growth_beyond_effective_limit(self):
+        profile, _ = UserStorageProfile.objects.get_or_create(user=self.user)
+        profile.quota_override_bytes = 4
+        profile.save(update_fields=["quota_override_bytes", "updated_at"])
+
+        with self.assertRaises(StorageQuotaExceeded):
+            ensure_storage_capacity(self.user, 5)
+
+    def test_private_file_upload_is_blocked_before_storage_grows(self):
+        profile, _ = UserStorageProfile.objects.get_or_create(user=self.user)
+        profile.quota_override_bytes = 4
+        profile.save(update_fields=["quota_override_bytes", "updated_at"])
+
+        response = self.client.post(
+            "/api/files/",
+            data={
+                "category": "other",
+                "name": "Too large",
+                "file": SimpleUploadedFile("quota-test.bin", b"12345"),
+            },
+        )
+        self.assertEqual(response.status_code, 413, response.content)
+        self.assertEqual(response.json()["code"], "storage_quota_exceeded")
+        self.assertFalse(FileAsset.objects.filter(owner=self.user).exists())
+
+    def test_storage_warning_levels_follow_80_90_100_thresholds(self):
+        profile, _ = UserStorageProfile.objects.get_or_create(user=self.user)
+        profile.quota_override_bytes = 100
+
+        for used, expected in ((79, "ok"), (80, "warning"), (90, "critical"), (100, "full")):
+            with self.subTest(used=used):
+                profile.storage_used_bytes = used
+                profile.save(update_fields=["quota_override_bytes", "storage_used_bytes", "updated_at"])
+                self.assertEqual(storage_summary(self.user, refresh=False)["warning_level"], expected)
 
 
 class UserIsolationApiTests(TestCase):
