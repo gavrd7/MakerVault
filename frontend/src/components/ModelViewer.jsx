@@ -685,7 +685,19 @@ export function ModelThumbnail({ file, className = "" }) {
             new THREE.MeshStandardMaterial({ color: 0x8fa9c2, roughness: 0.72, metalness: 0.03 }),
           );
         } else {
-          root = new ThreeMFLoader().parse(data);
+          try {
+            root = parseProduction3mf(data, true);
+          } catch {
+            root = null;
+          }
+          if (!threeMfHasVisibleMesh(root)) {
+            try {
+              root = new ThreeMFLoader().parse(data);
+            } catch {
+              root = null;
+            }
+          }
+          if (!threeMfHasVisibleMesh(root)) root = parseProduction3mf(data);
         }
 
         const scene = new THREE.Scene();
