@@ -7,6 +7,7 @@ from core.catalogue_image_sources import (
     _component_image_queries,
     _espboards_slug_candidates,
     _openverse_license_name,
+    _printer_image_queries,
     search_openverse,
     search_wikimedia_commons,
 )
@@ -37,6 +38,15 @@ class DummyComponent:
     name = "BME280 temperature/humidity/pressure sensor"
     part_number = "BME280"
     specifications = {"type": "environment"}
+
+
+class DummyPrinterManufacturer:
+    name = "Creality"
+
+
+class DummyPrinterModel:
+    name = "K2"
+    manufacturer = DummyPrinterManufacturer()
 
 
 class CatalogueImageSourceTests(unittest.TestCase):
@@ -108,6 +118,11 @@ class CatalogueImageSourceTests(unittest.TestCase):
         queries = _component_image_queries(DummyComponent())
         self.assertEqual(queries[0], "BME280 module")
         self.assertIn("BME280", queries)
+
+    def test_printer_image_query_disambiguates_short_model_names(self):
+        queries = _printer_image_queries(DummyPrinterModel())
+        self.assertEqual(queries[0], "Creality K2 3D printer")
+        self.assertIn("Creality K2 printer", queries)
 
     def test_openverse_license_mapping_is_restrictive(self):
         self.assertEqual(_openverse_license_name("by", "4.0"), "CC BY 4.0")
