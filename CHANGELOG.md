@@ -7,6 +7,12 @@
 - Added `MAKERVAULT_LEGACY_OWNER_USERNAME` as an upgrade escape hatch for existing installations with multiple accounts and ambiguous legacy private data.
 - New private records created through the main MakerVault APIs now record their authenticated owner, including model/file revision workflows and printing imports.
 - Added per-user storage profiles, an instance-wide 10 GiB default quota policy, category counters and the authenticated `/api/storage/` usage-summary endpoint as the basis for quota enforcement and the personal storage dashboard.
+- Enforced authenticated-owner isolation across private API querysets: lists, detail routes, edits and deletes no longer expose another user's private records, including to staff/superusers through ordinary MakerVault APIs.
+- Added cross-owner relationship validation for projects, inventory, files/revisions, printers/locations, spools, model assets, print jobs and material usage.
+- Changed project slugs, inventory IDs, printing-location names, integration providers and spool IDs from instance-global uniqueness to owner-scoped uniqueness.
+- Isolated printing integrations, scheduled sync jobs and external provider links per user so identical remote IDs can safely exist in different accounts.
+- Protected private MEDIA_URL delivery with database ownership checks and removed private user records from the Django admin browser.
+- Added two-user regression coverage for list isolation, guessed-UUID 404 behaviour, cross-owner linking and owner-scoped identifiers.
 
 - Expanded the built-in generic component catalogue from 180 to 387 entries, adding common starter-kit parts, passives, semiconductors, sensors, displays, communications modules, controls, power modules, connectors, logic ICs, motors and maker hardware.
 - Added catalogue regression coverage for representative maker-project staples and raised the minimum component-coverage guard.
