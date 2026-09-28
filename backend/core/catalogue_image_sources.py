@@ -25,7 +25,7 @@ from .importers import ImporterError, fetch_import_html
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 OPENVERSE_API = "https://api.openverse.org/v1/images/"
 IMAGE_SEED_VERSION = "0.6.0.2"
-USER_AGENT = "MakerVault/0.6.0.2 (+self-hosted catalogue image seeder)"
+USER_AGENT = f"MakerVault/{getattr(settings, 'MAKERVAULT_VERSION', 'dev')} (+self-hosted catalogue image seeder)"
 def _commons_license_allowed(license_name: str) -> bool:
     """Allow only licences suitable for normal open redistribution."""
     value = " ".join((license_name or "").strip().upper().split())
