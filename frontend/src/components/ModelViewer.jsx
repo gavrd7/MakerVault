@@ -387,9 +387,10 @@ export function FileModelViewerModal({ file, onClose }) {
 }
 
 
-export default function ModelViewerModal({ model, printers, canAnalyse, onClose, onChanged }) {
+export default function ModelViewerModal({ model, printers, canAnalyse, onClose, onChanged, initialAssetId = "" }) {
   const options = useMemo(() => modelOptions(model), [model]);
-  const [selectedKey, setSelectedKey] = useState(options[0]?.key || "");
+  const initialKey = options.find(item => item.asset?.id === initialAssetId)?.key || options[0]?.key || "";
+  const [selectedKey, setSelectedKey] = useState(initialKey);
   const [wireframe, setWireframe] = useState(false);
   const [showGrid, setShowGrid] = useState(true);
   const [showAxes, setShowAxes] = useState(false);
