@@ -31,7 +31,7 @@ from .filament_catalogue import (
     spoolmandb_meta,
 )
 from .printing_catalogue_seed import COMMON_FILAMENT_MATERIALS
-from .printing_integrations import PrintingIntegrationError, probe_spoolman
+from .printing_integrations import PrintingIntegrationError, probe_simplyprint, probe_spoolman
 from .printing_sync import PrintingSyncError, next_spool_id, resolve_spoolman_review, sync_printing_integration
 from .tasks import queue_catalogue_maintenance_now
 from .models import (
@@ -63,6 +63,7 @@ from .models import (
     Project,
     RepositoryLink,
     Spool,
+    ExternalPrinterLink,
     ExternalSpoolLink,
 )
 
@@ -2160,7 +2161,7 @@ def attributions(request):
 
 PRINTING_INTEGRATION_DEFAULTS = {
     "spoolman": {"status": "not_configured", "sync_direction": "bidirectional"},
-    "simplyprint": {"status": "planned", "sync_direction": "import"},
+    "simplyprint": {"status": "not_configured", "sync_direction": "import", "endpoint_url": "https://api.simplyprint.io"},
     "creality_cfs": {"status": "ready", "sync_direction": "import"},
     "bambu_ams": {"status": "planned", "sync_direction": "import"},
     "elegoo": {"status": "planned", "sync_direction": "import"},
@@ -2182,7 +2183,13 @@ def _ensure_printing_integrations():
 
 def _serialise_printing_integration(item):
     extra = {}
-    safe_config = {key: value for key, value in (item.config or {}).items() if key != "pending_reviews"}
+    safe_config = {
+        key: value
+        for key, value in (item.config or {}).items()
+        if key not in {"pending_reviews", "api_key"}
+    }
+    if item.provider == "simplyprint":
+        safe_config["api_key_configured"] = bool((item.config or {}).get("api_key"))
     if item.provider == "creality_cfs":
         compatible = Printer.objects.filter(
             is_active=True,
@@ -2204,6 +2211,16 @@ def _serialise_printing_integration(item):
             "ignored_import_count": len(ignored_ids) if isinstance(ignored_ids, list) else 0,
             "authority_policy": "makervault_primary",
         }
+    elif item.provider == "simplyprint":
+        extra = {
+            "linked_printers": ExternalPrinterLink.objects.filter(provider="simplyprint").count(),
+            "linked_spools": ExternalSpoolLink.objects.filter(provider="simplyprint").count(),
+            "imported_print_jobs": PrintJob.objects.filter(
+                settings__external_provider="simplyprint"
+            ).count(),
+            "authority_policy": "makervault_primary",
+            "read_only": True,
+        }
     return {
         "provider": item.provider,
         "name": item.get_provider_display(),
@@ -2221,7 +2238,7 @@ def _serialise_printing_integration(item):
         "last_sync_triggered_by": item.last_sync_triggered_by,
         "last_sync_result": item.last_sync_result or {},
         "last_error": item.last_error,
-        "can_sync": item.provider in {"spoolman", "creality_cfs"},
+        "can_sync": item.provider in {"spoolman", "simplyprint", "creality_cfs"},
         "config": safe_config,
         **extra,
     }
@@ -2283,6 +2300,30 @@ def printing_integration_detail(request, provider):
                     "sync_interval_minutes": "Enter a whole number of minutes."
                 }) from exc
 
+        if item.provider == "simplyprint":
+            config = dict(item.config or {})
+            if "company_id" in payload:
+                config["company_id"] = str(payload.get("company_id") or "").strip()
+            if "api_key" in payload and str(payload.get("api_key") or "").strip():
+                config["api_key"] = str(payload.get("api_key") or "").strip()
+            if payload.get("clear_api_key") is True:
+                config.pop("api_key", None)
+            if "history_page_size" in payload:
+                try:
+                    history_page_size = int(payload.get("history_page_size"))
+                except (TypeError, ValueError) as exc:
+                    raise ValidationError({
+                        "history_page_size": "Enter a whole number between 1 and 100."
+                    }) from exc
+                if history_page_size < 1 or history_page_size > 100:
+                    raise ValidationError({
+                        "history_page_size": "Enter a whole number between 1 and 100."
+                    })
+                config["history_page_size"] = history_page_size
+            item.config = config
+            item.endpoint_url = item.endpoint_url or "https://api.simplyprint.io"
+            item.sync_direction = "import"
+
         if payload.get("reset_ignored_imports") is True:
             config = dict(item.config or {})
             config["ignored_external_ids"] = []
@@ -2306,14 +2347,21 @@ def printing_integration_detail(request, provider):
                 item.next_sync_at = None
             elif item.status in {"disabled", "not_configured", "ready"}:
                 item.status = "disconnected"
-        elif item.provider in {"simplyprint", "bambu_ams", "elegoo", "qidi", "snapmaker"}:
+        elif item.provider == "simplyprint":
+            config = item.config or {}
+            if not str(config.get("company_id") or "").strip() or not str(config.get("api_key") or "").strip():
+                item.status = "not_configured"
+                item.next_sync_at = None
+            elif item.status in {"disabled", "not_configured", "ready", "planned"}:
+                item.status = "disconnected"
+        elif item.provider in {"bambu_ams", "elegoo", "qidi", "snapmaker"}:
             item.status = "planned"
             item.auto_sync = False
             item.next_sync_at = None
         elif item.status in {"disabled", "not_configured", "ready"}:
             item.status = "disconnected"
 
-        if item.enabled and item.auto_sync and item.provider in {"spoolman", "creality_cfs"}:
+        if item.enabled and item.auto_sync and item.provider in {"spoolman", "simplyprint", "creality_cfs"}:
             item.next_sync_at = timezone.now() + timedelta(minutes=item.sync_interval_minutes)
         elif not item.auto_sync:
             item.next_sync_at = None
@@ -2348,6 +2396,20 @@ def printing_integration_test(request, provider):
                 **(item.config or {}),
                 "server_info": result.get("info") or {},
             }
+            item.save()
+        elif provider == "simplyprint":
+            config = dict(item.config or {})
+            result = probe_simplyprint(
+                item.endpoint_url or "https://api.simplyprint.io",
+                config.get("company_id"),
+                config.get("api_key"),
+            )
+            item.endpoint_url = result["endpoint_url"]
+            item.status = "connected"
+            item.last_error = ""
+            item.last_checked_at = timezone.now()
+            config["last_probe_message"] = result.get("message") or ""
+            item.config = config
             item.save()
         elif provider == "creality_cfs":
             item, _ = sync_printing_integration(
@@ -2422,7 +2484,7 @@ def printing_integration_review_resolve(request, provider, external_id):
 def printing_integration_sync_now(request, provider):
     if not request.user.is_staff:
         return _error("Administrator access is required.", status=403)
-    if provider not in {"spoolman", "creality_cfs"}:
+    if provider not in {"spoolman", "simplyprint", "creality_cfs"}:
         return _error("This integration does not have a sync adapter yet.", status=409)
     try:
         item, result = sync_printing_integration(
