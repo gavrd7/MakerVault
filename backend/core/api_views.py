@@ -768,6 +768,7 @@ def inventory(request):
 
         with transaction.atomic():
             item = InventoryItem(
+                owner=request.user,
                 inventory_id=(str(payload.get("inventory_id") or "").strip() or _next_inventory_id(item_type)),
                 item_type=item_type,
                 board=board,
@@ -1204,6 +1205,7 @@ def files_lookup(request):
     try:
         checksum = _sha256_upload(uploaded)
         asset = FileAsset(
+            owner=request.user,
             project=project,
             category=category,
             name=str(request.POST.get("name") or original_name).strip()[:255],
@@ -1348,6 +1350,7 @@ def file_versions(request, asset_id):
             "supersedes_id": str(asset.id),
         })
         stored_asset = FileAsset(
+            owner=asset.owner or request.user,
             project=asset.project,
             board=asset.board,
             component=asset.component,
@@ -1395,6 +1398,7 @@ def projects_lookup(request):
         if status not in dict(Project.STATUS):
             return _error("Unknown project status.")
         project = Project(
+            owner=request.user,
             name=name,
             status=status,
             summary=str(payload.get("summary") or "").strip(),
@@ -1677,6 +1681,7 @@ def project_bom_allocations(request, project_id, bom_id):
                     assigned_project = project
 
                 inventory = InventoryItem(
+                    owner=project.owner or request.user,
                     inventory_id=(
                         str(create_payload.get("inventory_id") or "").strip()
                         or _next_inventory_id(item_type)
@@ -1843,6 +1848,7 @@ def project_gallery(request, project_id):
     try:
         content, filename = sanitise_uploaded_image(uploaded, f"{project.slug}-gallery")
         asset = FileAsset(
+            owner=project.owner or request.user,
             project=project,
             category="image",
             name=str(request.POST.get("name") or uploaded.name or "Project image")[:255],
@@ -3495,6 +3501,7 @@ def printing_locations(request):
     try:
         payload = _read_json(request)
         item = PrintingLocation(
+            owner=request.user,
             name=str(payload.get("name") or "").strip(),
             kind=str(payload.get("kind") or "storage").strip(),
             notes=str(payload.get("notes") or "").strip(),
@@ -3578,6 +3585,7 @@ def printing_printers(request):
             return default
 
         item = Printer(
+            owner=request.user,
             name=str(payload.get("name") or model_name).strip(),
             printer_manufacturer=printer_manufacturer,
             catalog_model=catalog_model,
@@ -3773,6 +3781,7 @@ def printing_spools(request):
             return _error("That RFID tag ID is already assigned to another MakerVault spool.", status=409)
 
         item = Spool(
+            owner=request.user,
             spool_id=next_spool_id(),
             rfid_uid=rfid_uid,
             filament=filament,
@@ -4021,6 +4030,7 @@ def printing_slot_add_to_inventory(request, slot_id):
                     ).quantize(Decimal("0.01"))
 
             spool = Spool(
+                owner=slot.printer.owner or request.user,
                 spool_id=next_spool_id(),
                 rfid_uid=rfid_uid,
                 filament=filament,
@@ -4194,6 +4204,7 @@ def printing_models(request):
             checksum = _sha256_upload(uploaded)
             with transaction.atomic():
                 item = Model3D(
+                    owner=request.user,
                     project=project,
                     name=model_name,
                     description=str(payload.get("description") or "").strip(),
@@ -4213,6 +4224,7 @@ def printing_models(request):
                 revision.save()
 
                 stored_asset = FileAsset(
+                    owner=request.user,
                     project=project,
                     category=category,
                     name=str(payload.get("file_name") or original_name).strip()[:255],
@@ -4267,6 +4279,7 @@ def printing_models(request):
             if not project:
                 return _error("Selected project was not found.")
         item = Model3D(
+            owner=request.user,
             project=project,
             name=str(payload.get("name") or "").strip(),
             description=str(payload.get("description") or "").strip(),
@@ -4422,6 +4435,7 @@ def printing_model_revision_upload(request, model_id):
             revision.save()
 
             stored_asset = FileAsset(
+                owner=model.owner or request.user,
                 project=model.project,
                 category=category,
                 name=str(request.POST.get("name") or (previous_link.file_asset.name if previous_link else Path(original_name).stem)).strip()[:255],
@@ -4743,6 +4757,7 @@ def printing_jobs(request):
 
         with transaction.atomic():
             job = PrintJob(
+                owner=request.user,
                 model_revision=revision,
                 project=project,
                 printer=printer,
