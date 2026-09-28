@@ -486,6 +486,7 @@ def _serialise_file_asset(asset):
         "description": asset.description,
         "sha256": asset.sha256,
         "size_bytes": size_bytes,
+        "supersedes_id": str(asset.supersedes_id) if asset.supersedes_id else "",
         "project_id": str(asset.project_id) if asset.project_id else "",
         "project": asset.project.name if asset.project else "",
         "board_id": str(asset.board_id) if asset.board_id else "",
@@ -534,7 +535,7 @@ def _project_cost(project):
 
 def _serialise_project(project, detailed=False):
     gallery_qs = project.files.filter(category="image").order_by("-created_at")
-    asset_qs = project.files.exclude(category="image").order_by("category", "-created_at")
+    asset_qs = project.files.exclude(category="image").filter(superseded_by__isnull=True).order_by("category", "-created_at")
     repository_qs = project.repositories.all().order_by("provider", "name")
     bom_count = getattr(project, "bom_count_value", None)
     if bom_count is None:
@@ -1148,7 +1149,7 @@ def component_image(request, component_id):
 @require_http_methods(["GET", "POST"])
 def files_lookup(request):
     if request.method == "GET":
-        qs = FileAsset.objects.exclude(category="image").select_related(
+        qs = FileAsset.objects.exclude(category="image").filter(superseded_by__isnull=True).select_related(
             "project", "board__manufacturer", "component__category"
         )
         query = request.GET.get("q", "").strip()
@@ -1292,6 +1293,84 @@ def file_detail(request, asset_id):
             asset.project.save(update_fields=["updated_at"])
         return JsonResponse({"file": _serialise_file_asset(asset)})
     except ValidationError as exc:
+        return _validation_response(exc)
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def file_versions(request, asset_id):
+    asset = FileAsset.objects.select_related(
+        "project", "board", "component", "supersedes"
+    ).filter(pk=asset_id).exclude(category="image").first()
+    if not asset:
+        return _error("File not found.", status=404)
+
+    if request.method == "GET":
+        versions = []
+        current = asset
+        seen = set()
+        while current and current.pk not in seen:
+            seen.add(current.pk)
+            versions.append(_serialise_file_asset(current))
+            current = current.supersedes
+        return JsonResponse({"versions": versions})
+
+    denied = _require_permission(request, "core.change_fileasset")
+    if denied:
+        return denied
+    if asset.project:
+        project_denied = _require_permission(request, "core.change_project")
+        if project_denied:
+            return project_denied
+    if FileAsset.objects.filter(supersedes=asset).exists():
+        return _error(
+            "A newer version already exists. Refresh MakerVault and upload from the latest version.",
+            status=409,
+        )
+
+    uploaded = request.FILES.get("file")
+    if not uploaded:
+        return _error("Choose a file to upload.")
+    version = str(request.POST.get("version") or "").strip()[:80]
+    if not version:
+        return _error("Enter a version label for the new file.")
+
+    original_name = Path(uploaded.name or "file").name
+    stored_asset = None
+    try:
+        checksum = _sha256_upload(uploaded)
+        metadata = dict(asset.metadata or {})
+        metadata.update({
+            "original_name": original_name,
+            "size_bytes": getattr(uploaded, "size", 0) or 0,
+            "extension": Path(original_name).suffix.lower(),
+            "uploaded_from": "file_new_version",
+            "supersedes_id": str(asset.id),
+        })
+        stored_asset = FileAsset(
+            project=asset.project,
+            board=asset.board,
+            component=asset.component,
+            category=asset.category,
+            name=asset.name,
+            version=version,
+            description=str(request.POST.get("description") or asset.description or "").strip(),
+            sha256=checksum,
+            metadata=metadata,
+            supersedes=asset,
+        )
+        stored_asset.file = uploaded
+        stored_asset.full_clean()
+        stored_asset.save()
+        if asset.project:
+            asset.project.save(update_fields=["updated_at"])
+        return JsonResponse({"file": _serialise_file_asset(stored_asset)}, status=201)
+    except ValidationError as exc:
+        if stored_asset and stored_asset.file:
+            try:
+                stored_asset.file.delete(save=False)
+            except OSError:
+                pass
         return _validation_response(exc)
 
 
@@ -2999,7 +3078,10 @@ def printing_overview(request):
         "common_filament_materials": COMMON_FILAMENT_MATERIALS,
         "model_files": [
             _serialise_file_asset(asset)
-            for asset in FileAsset.objects.filter(category__in=["mesh", "slicer", "cad"])
+            for asset in FileAsset.objects.filter(
+                category__in=["mesh", "slicer", "cad"],
+                superseded_by__isnull=True,
+            )
                 .select_related("project", "board__manufacturer", "component__category")
                 .order_by("category", "name")[:5000]
         ],
@@ -4173,6 +4255,121 @@ def printing_model_revisions(request, model_id):
     except ValidationError as exc:
         return _validation_response(exc)
     except IntegrityError:
+        return _error("That revision version already exists for this model.")
+
+
+@login_required
+@require_http_methods(["POST"])
+def printing_model_revision_upload(request, model_id):
+    model = Model3D.objects.select_related("project").filter(pk=model_id).first()
+    if not model:
+        return _error("3D model not found.", status=404)
+
+    denied = _require_permission(request, "core.change_model3d")
+    if denied:
+        return denied
+    file_denied = _require_permission(request, "core.add_fileasset")
+    if file_denied:
+        return file_denied
+    if model.project:
+        project_denied = _require_permission(request, "core.change_project")
+        if project_denied:
+            return project_denied
+
+    uploaded = request.FILES.get("file")
+    if not uploaded:
+        return _error("Choose an STL or 3MF file to upload.")
+
+    original_name = Path(uploaded.name or "model").name
+    extension = Path(original_name).suffix.lower()
+    if extension == ".stl":
+        category = "mesh"
+        role = "model"
+    elif extension == ".3mf":
+        category = "slicer"
+        role = "slicer"
+    else:
+        return _error("Choose an STL or 3MF file.")
+
+    version = str(request.POST.get("version") or "").strip()[:80]
+    if not version:
+        return _error("Revision version is required.")
+    if ModelRevision.objects.filter(model=model, version=version).exists():
+        return _error("That revision version already exists for this model.")
+
+    previous_link = (
+        ModelRevisionAsset.objects.filter(
+            revision__model=model,
+            is_primary=True,
+            role__in=["model", "slicer"],
+        )
+        .select_related("file_asset", "revision")
+        .order_by("-revision__created_at", "-created_at")
+        .first()
+    )
+    predecessor = previous_link.file_asset if previous_link else None
+    if predecessor and FileAsset.objects.filter(supersedes=predecessor).exists():
+        predecessor = None
+
+    stored_asset = None
+    try:
+        checksum = _sha256_upload(uploaded)
+        with transaction.atomic():
+            revision = ModelRevision(
+                model=model,
+                version=version,
+                notes=str(request.POST.get("notes") or "").strip(),
+            )
+            revision.full_clean()
+            revision.save()
+
+            stored_asset = FileAsset(
+                project=model.project,
+                category=category,
+                name=str(request.POST.get("name") or (previous_link.file_asset.name if previous_link else Path(original_name).stem)).strip()[:255],
+                version=version,
+                description=str(request.POST.get("description") or "").strip(),
+                sha256=checksum,
+                metadata={
+                    "original_name": original_name,
+                    "size_bytes": getattr(uploaded, "size", 0) or 0,
+                    "extension": extension,
+                    "uploaded_from": "printing_model_revision",
+                    "supersedes_id": str(predecessor.id) if predecessor else "",
+                },
+                supersedes=predecessor,
+            )
+            stored_asset.file = uploaded
+            stored_asset.full_clean()
+            stored_asset.save()
+
+            link = ModelRevisionAsset(
+                revision=revision,
+                file_asset=stored_asset,
+                role=role,
+                is_primary=True,
+            )
+            link.full_clean()
+            link.save()
+
+        _analyse_revision_link(revision, link)
+        model = Model3D.objects.select_related("project").prefetch_related(
+            "revisions__assets__file_asset__project"
+        ).get(pk=model.pk)
+        return JsonResponse({"model": _serialise_printing_model(model)}, status=201)
+    except ValidationError as exc:
+        if stored_asset and stored_asset.file:
+            try:
+                stored_asset.file.delete(save=False)
+            except OSError:
+                pass
+        return _validation_response(exc)
+    except IntegrityError:
+        if stored_asset and stored_asset.file:
+            try:
+                stored_asset.file.delete(save=False)
+            except OSError:
+                pass
         return _error("That revision version already exists for this model.")
 
 
