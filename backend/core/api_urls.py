@@ -64,4 +64,9 @@ urlpatterns = [
     path("settings/printing-integrations/<str:provider>/reviews/<str:external_id>/", api_views.printing_integration_review_resolve, name="api-printing-integration-review-resolve"),
     path("settings/catalogue-maintenance/", api_views.catalogue_maintenance_settings, name="api-catalogue-maintenance-settings"),
     path("settings/catalogue-maintenance/run/", api_views.catalogue_maintenance_run_now, name="api-catalogue-maintenance-run"),
+    path("settings/storage-policy/", api_views.admin_storage_policy, name="api-admin-storage-policy"),
+    path("settings/users/", api_views.admin_users, name="api-admin-users"),
+    path("settings/users/<int:user_id>/", api_views.admin_user_detail, name="api-admin-user-detail"),
+    path("settings/users/<int:user_id>/purge/", api_views.admin_user_purge, name="api-admin-user-purge"),
+    path("settings/users/<int:user_id>/delete/", api_views.admin_user_delete, name="api-admin-user-delete"),
 ]
