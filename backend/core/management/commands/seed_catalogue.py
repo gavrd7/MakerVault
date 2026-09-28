@@ -116,7 +116,6 @@ class Command(BaseCommand):
         component_enriched = 0
         for raw_definition in COMPONENT_DEFINITIONS:
             definition = apply_component_profile(raw_definition)
-            maker, _ = Manufacturer.objects.get_or_create(name=definition["manufacturer"])
             category = categories[definition["category"]]
             specs = {
                 **definition.get("specifications", {}),
@@ -124,7 +123,6 @@ class Command(BaseCommand):
                 "catalogue_version": "0.2.1",
             }
             component, created = ComponentModel.objects.get_or_create(
-                manufacturer=maker,
                 name=definition["name"],
                 part_number=definition.get("part_number", ""),
                 defaults={
