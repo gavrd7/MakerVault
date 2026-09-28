@@ -27,6 +27,7 @@ services:
       - "${MAKERVAULT_BIND_ADDRESS:-0.0.0.0}:${MAKERVAULT_PORT:-8765}:8000"
     volumes:
       - ${MEDIA_STORAGE:-makervault_media}:/app/media
+      - ${KEY_STORAGE:-makervault_keys}:/app/keys
     depends_on:
       postgres:
         condition: service_healthy
@@ -86,5 +87,6 @@ networks:
 # path instead, Compose treats it as a bind mount and these declarations remain harmless.
 volumes:
   makervault_media:
+  makervault_keys:
   makervault_postgres:
   makervault_redis:
