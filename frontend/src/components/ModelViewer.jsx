@@ -727,6 +727,7 @@ export default function ModelViewerModal({ model, printers, canAnalyse, onClose,
     subtitle="Interactive local viewer for MakerVault STL and 3MF revisions."
     onClose={onClose}
     wide
+    className="modelViewerModal"
   >
     {!options.length ? <div className="formError">Attach an STL or 3MF file to a revision before opening the 3D viewer.</div> :
       <div className={"modelViewerLayout" + (viewerOnly ? " modelViewerLayoutSolo" : "")} ref={shellRef}>
