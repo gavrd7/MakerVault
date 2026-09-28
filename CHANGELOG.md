@@ -2,6 +2,10 @@
 
 ## v0.7.0.1 — in development
 
+- Expanded the built-in generic component catalogue from 180 to 387 entries, adding common starter-kit parts, passives, semiconductors, sensors, displays, communications modules, controls, power modules, connectors, logic ICs, motors and maker hardware.
+- Added catalogue regression coverage for representative maker-project staples and raised the minimum component-coverage guard.
+- Versioned starter-catalogue records consistently so existing installations receive the expanded catalogue idempotently on startup without replacing user-maintained component data.
+
 - Started the v0.7.0 multi-user isolation and secure-storage milestone.
 - Defined shared catalogue data versus private user-owned workspace data as an explicit application boundary.
 - Planned per-user storage quotas, personal storage usage reporting, administrator user management and encrypted-at-rest user uploads.
