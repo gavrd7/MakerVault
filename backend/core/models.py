@@ -663,6 +663,7 @@ class Printer(TimeStampedModel):
         related_name="printers"
     )
     is_active = models.BooleanField(default=True)
+    multi_material_installed = models.BooleanField(default=False)
     connection_host = models.CharField(max_length=255, blank=True)
     build_volume_x_mm = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
     build_volume_y_mm = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
