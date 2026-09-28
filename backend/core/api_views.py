@@ -1916,6 +1916,7 @@ def project_files(request, project_id):
     try:
         checksum = _sha256_upload(uploaded)
         asset = FileAsset(
+            owner=project.owner or request.user,
             project=project,
             category=category,
             name=str(request.POST.get("name") or original_name)[:255],
