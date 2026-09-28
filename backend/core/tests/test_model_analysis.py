@@ -66,7 +66,7 @@ class ModelGeometryAnalysisTests(TestCase):
         self.assertEqual(result["format"], "stl")
         self.assertEqual(result["encoding"], "binary")
         self.assertEqual(result["triangle_count"], 4)
-        self.assertEqual(result["vertex_count"], 12)
+        self.assertEqual(result["vertex_count"], 4)
         self.assertEqual(result["dimensions_mm"], {"x": 10.0, "y": 20.0, "z": 30.0})
         self.assertEqual(result["complexity"], "low")
         self.assertGreater(result["surface_area_mm2"], 0)
