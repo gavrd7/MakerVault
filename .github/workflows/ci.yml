@@ -99,6 +99,13 @@ jobs:
     timeout-minutes: 30
     needs: [backend, frontend]
     steps:
+      - name: Restore self-hosted workspace ownership
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.runner == 'self-hosted' }}
+        run: |
+          docker run --rm \
+            -v "${GITHUB_WORKSPACE}:/workspace" \
+            python:3.13-bookworm \
+            chown -R 1001:1001 /workspace
       - uses: actions/checkout@v4
       - name: Build MakerVault image
         run: docker build --pull -t makervault-ci .
