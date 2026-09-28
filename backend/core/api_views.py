@@ -38,6 +38,7 @@ from .printing_sync import PrintingSyncError, next_spool_id, resolve_spoolman_re
 from .tasks import queue_catalogue_maintenance_now
 from .storage_usage import StorageQuotaExceeded, ensure_storage_capacity, storage_settings, storage_summary
 from .user_admin import admin_user_summary, purge_user_private_data
+from .private_storage import private_storage_key_status
 from .models import (
     BoardCompatibility,
     BoardModel,
@@ -773,6 +774,7 @@ def admin_storage_policy(request):
         "policy": {
             "mode": "unlimited" if policy.default_quota_unlimited else "limited",
             "default_quota_bytes": int(policy.default_quota_bytes),
+            "encryption": private_storage_key_status(),
         }
     })
 
