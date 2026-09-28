@@ -29,6 +29,8 @@ jobs:
     runs-on: ${{ github.event_name == 'workflow_dispatch' && inputs.runner == 'github-hosted' && 'ubuntu-latest' || 'makervault-ci' }}
     timeout-minutes: 30
     container: python:3.13-bookworm
+    env:
+      MAKERVAULT_STORAGE_KEY: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
     services:
       postgres:
         image: postgres:18.6
