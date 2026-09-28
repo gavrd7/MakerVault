@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.7.0.1 — in development
+
+- Started the v0.7.0 multi-user isolation and secure-storage milestone.
+- Defined shared catalogue data versus private user-owned workspace data as an explicit application boundary.
+- Planned per-user storage quotas, personal storage usage reporting, administrator user management and encrypted-at-rest user uploads.
+
+
 ## v0.6.6 — 2026-09-28
 
 - Raised local model-analysis format to version 5 for slicer-aware 3MF metadata.
