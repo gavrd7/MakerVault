@@ -31,6 +31,7 @@ from .filament_catalogue import (
     spoolmandb_meta,
 )
 from .printing_catalogue_seed import COMMON_FILAMENT_MATERIALS
+from .model_analysis import ModelAnalysisError, analyse_file_asset
 from .printing_integrations import PrintingIntegrationError, probe_spoolman
 from .printing_sync import PrintingSyncError, next_spool_id, resolve_spoolman_review, sync_printing_integration
 from .tasks import queue_catalogue_maintenance_now
@@ -2512,6 +2513,44 @@ def catalogue_maintenance_run_now(request):
     })
 
 
+def _analyse_revision_link(revision, link):
+    metadata = dict(revision.geometry_metadata or {})
+    try:
+        analysis = analyse_file_asset(link.file_asset)
+        analysis["analysed_at"] = timezone.now().isoformat()
+        analysis["source_link_id"] = str(link.id)
+        metadata["analysis"] = analysis
+        metadata["analysis_status"] = "ready"
+        metadata["analysis_error"] = ""
+    except ModelAnalysisError as exc:
+        metadata["analysis_status"] = "error"
+        metadata["analysis_error"] = str(exc)
+    revision.geometry_metadata = metadata
+    revision.save(update_fields=["geometry_metadata", "updated_at"])
+    return metadata
+
+
+def _select_revision_analysis_link(revision, asset_id=None):
+    links = list(revision.assets.select_related("file_asset").all())
+    if asset_id:
+        return next((link for link in links if str(link.file_asset_id) == str(asset_id)), None)
+    supported = []
+    for link in links:
+        asset = link.file_asset
+        original_name = str((asset.metadata or {}).get("original_name") or "")
+        filename = original_name or (Path(asset.file.name).name if asset.file else "") or asset.name
+        if Path(filename).suffix.lower() not in {".stl", ".3mf"}:
+            continue
+        score = (
+            int(link.is_primary) * 10
+            + int(link.role == "model") * 4
+            + int(link.role == "slicer") * 2
+        )
+        supported.append((score, link))
+    supported.sort(key=lambda item: item[0], reverse=True)
+    return supported[0][1] if supported else None
+
+
 def _serialise_printing_file_link(link):
     asset = link.file_asset
     return {
@@ -2541,6 +2580,10 @@ def _serialise_printing_model(model):
             "version": revision.version,
             "notes": revision.notes,
             "source_url": revision.source_url,
+            "geometry_metadata": revision.geometry_metadata or {},
+            "geometry_analysis": (revision.geometry_metadata or {}).get("analysis"),
+            "analysis_status": (revision.geometry_metadata or {}).get("analysis_status", ""),
+            "analysis_error": (revision.geometry_metadata or {}).get("analysis_error", ""),
             "assets": [_serialise_printing_file_link(link) for link in revision.assets.all()],
             "created_at": revision.created_at.isoformat(),
         })
@@ -3887,6 +3930,7 @@ def printing_models(request):
                 link.full_clean()
                 link.save()
 
+            _analyse_revision_link(revision, link)
             item = Model3D.objects.select_related("project").prefetch_related(
                 "revisions__assets__file_asset__project"
             ).get(pk=item.pk)
@@ -4085,6 +4129,8 @@ def printing_revision_assets(request, model_id, revision_id):
             link.full_clean()
             link.save()
 
+        if link.is_primary and link.role in {"model", "slicer"}:
+            _analyse_revision_link(revision, link)
         model = Model3D.objects.select_related("project").prefetch_related(
             "revisions__assets__file_asset__project"
         ).get(pk=model.pk)
@@ -4093,6 +4139,39 @@ def printing_revision_assets(request, model_id, revision_id):
         return _validation_response(exc)
     except IntegrityError:
         return _error("That file is already attached to this revision.")
+
+
+@login_required
+@require_http_methods(["POST"])
+def printing_revision_analyse(request, model_id, revision_id):
+    model = Model3D.objects.filter(pk=model_id).first()
+    if not model:
+        return _error("3D model not found.", status=404)
+    revision = ModelRevision.objects.filter(pk=revision_id, model=model).first()
+    if not revision:
+        return _error("Model revision not found.", status=404)
+    denied = _require_permission(request, "core.change_model3d")
+    if denied:
+        return denied
+
+    try:
+        payload = _read_json(request)
+    except ValueError as exc:
+        return _error(str(exc))
+
+    link = _select_revision_analysis_link(revision, payload.get("file_asset_id"))
+    if not link:
+        return _error("Attach an STL or 3MF file to this revision before analysing it.", status=409)
+
+    metadata = _analyse_revision_link(revision, link)
+    if metadata.get("analysis_status") == "error":
+        return _error(metadata.get("analysis_error") or "Model analysis failed.", status=422)
+
+    return JsonResponse({
+        "analysis": metadata.get("analysis") or {},
+        "revision_id": str(revision.id),
+        "model_id": str(model.id),
+    })
 
 
 @login_required
