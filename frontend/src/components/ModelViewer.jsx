@@ -783,7 +783,54 @@ export default function ModelViewerModal({ model, printers, canAnalyse, onClose,
               <span><b>Surface:</b> {analysis.surface_area_mm2 != null ? Number(analysis.surface_area_mm2).toLocaleString() + " mm²" : "—"}</span>
             </div>
 
-            {(analysis.mesh_quality || analysis.orientation) && <section className="modelPrintability">
+            {analysis.project_structure?.detected && <section className="modelProjectStructure">
+              <div className="modelSlicerMetadataHead">
+                <div>
+                  <strong>3MF project structure</strong>
+                  <small>Slicer project layout stored inside this package.</small>
+                </div>
+                <div className="modelProjectBadges">
+                  {analysis.project_structure.multi_plate && <Badge tone="accent">{analysis.project_structure.plate_count} plates</Badge>}
+                  {analysis.project_structure.multicolour && <Badge tone="accent">Multicolour</Badge>}
+                </div>
+              </div>
+
+              <div className="modelProjectSummary">
+                <article><span>Build plates</span><strong>{analysis.project_structure.plate_count || "—"}</strong></article>
+                <article><span>Project objects</span><strong>{analysis.project_structure.object_count || "—"}</strong></article>
+                <article><span>Material slots</span><strong>{analysis.project_structure.materials?.length || "—"}</strong></article>
+                <article><span>Painted facets</span><strong>{Number(analysis.project_structure.painted_facets || 0).toLocaleString()}</strong></article>
+              </div>
+
+              {!!analysis.project_structure.plates?.length && <div className="modelProjectPlates">
+                {analysis.project_structure.plates.map((plate, index) => <article key={plate.id || index}>
+                  <div>
+                    <span>Plate {plate.id || index + 1}</span>
+                    <strong>{plate.name || (plate.object_count + " object" + (plate.object_count === 1 ? "" : "s"))}</strong>
+                  </div>
+                  {plate.bed_type && <small>{plate.bed_type}</small>}
+                </article>)}
+              </div>}
+
+              {!!analysis.project_structure.materials?.length && <details className="modelProjectMaterials">
+                <summary>{analysis.project_structure.materials.length} material slot{analysis.project_structure.materials.length === 1 ? "" : "s"}</summary>
+                <div>
+                  {analysis.project_structure.materials.map(material => <article key={material.slot} className={material.used ? "used" : ""}>
+                    <i style={{ background: material.colour || "#8fa9c2" }} />
+                    <div><strong>Slot {material.slot}{material.type ? " · " + material.type : ""}</strong><small>{material.profile || material.colour || "No stored profile"}</small></div>
+                  </article>)}
+                </div>
+              </details>}
+
+              {analysis.project_structure.note && <small className="modelSlicerNote">{analysis.project_structure.note}</small>}
+            </section>}
+
+            {analysis.project_structure?.multi_plate && <div className="settingsCallout">
+              <strong>Multi-plate project</strong>
+              <p>Orientation and owned-printer fit are not shown for the combined project because each build plate needs to be evaluated independently. Geometry totals above describe the stored meshes, not one printable plate.</p>
+            </div>}
+
+            {(analysis.mesh_quality || (!analysis.project_structure?.multi_plate && analysis.orientation)) && <section className="modelPrintability">
               <div className="modelPrintabilityHead">
                 <strong>Printability estimate</strong>
                 {analysis.mesh_quality?.checked && <Badge tone={analysis.mesh_quality.watertight ? "good" : "danger"}>
@@ -809,7 +856,7 @@ export default function ModelViewerModal({ model, printers, canAnalyse, onClose,
                 </article>
               </div>}
 
-              {analysis.orientation?.recommended && <div className="modelOrientationCard">
+              {!analysis.project_structure?.multi_plate && analysis.orientation?.recommended && <div className="modelOrientationCard">
                 <div>
                   <span>Suggested axis-aligned orientation</span>
                   <strong>{analysis.orientation.recommended.label}</strong>
@@ -826,7 +873,7 @@ export default function ModelViewerModal({ model, printers, canAnalyse, onClose,
                 </div>}
               </div>}
 
-              {analysis.orientation?.candidates?.length > 0 && <details className="modelOrientationDetails">
+              {!analysis.project_structure?.multi_plate && analysis.orientation?.candidates?.length > 0 && <details className="modelOrientationDetails">
                 <summary>Compare all 6 axis orientations</summary>
                 <div>
                   {analysis.orientation.candidates.map(candidate => <div key={candidate.key}>
@@ -837,7 +884,7 @@ export default function ModelViewerModal({ model, printers, canAnalyse, onClose,
                 </div>
               </details>}
 
-              {analysis.orientation?.note && <small className="modelPrintabilityNote">{analysis.orientation.note}</small>}
+              {!analysis.project_structure?.multi_plate && analysis.orientation?.note && <small className="modelPrintabilityNote">{analysis.orientation.note}</small>}
             </section>}
 
             {analysis.slicer_metadata?.detected && <section className="modelSlicerMetadata">
@@ -879,7 +926,7 @@ export default function ModelViewerModal({ model, printers, canAnalyse, onClose,
               {analysis.slicer_metadata.note && <small className="modelSlicerNote">{analysis.slicer_metadata.note}</small>}
             </section>}
 
-            {!!printers?.length && <div className="modelFitList">
+            {!!printers?.length && !analysis.project_structure?.multi_plate && <div className="modelFitList">
               <strong>Owned printer fit</strong>
               {printers.map(printer => {
                 const fit = fitSummary(analysis, printer);
