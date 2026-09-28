@@ -368,8 +368,6 @@ function SpoolIdentityModal({ spool, onClose, onSaved }) {
   const [rfidUid, setRfidUid] = useState(spool.rfid_uid || "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [viewerAsset, setViewerAsset] = useState(null);
-  const [versionUploadOpen, setVersionUploadOpen] = useState(false);
 
   async function submit(event) {
     event.preventDefault();
@@ -1658,6 +1656,8 @@ function ModelManageModal({ model, files, printers, canUpload, onClose, onChange
   const [primary, setPrimary] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [viewerAsset, setViewerAsset] = useState(null);
+  const [versionUploadOpen, setVersionUploadOpen] = useState(false);
 
   const compatibleFiles = (files || []).filter(file => {
     if (!model.project_id || !file.project_id) return true;
