@@ -20,7 +20,7 @@
 - Physical spool IDs are now allocated automatically as `SPL-####` and are no longer entered manually.
 - Added real Spoolman inventory synchronisation with native spool/link creation, remote weight/location updates and safe linked-record export for bidirectional mode.
 - Added a read-only local Creality CFS adapter using the K-series WebSocket `boxsInfo` feed to discover loaded slots, filament metadata and RFID-derived remaining percentage.
-- Added spool-level RFID identity so physically distinct reels remain separate even when brand/material/product are identical; CFS now auto-links physical spools only on exact RFID matches, respects colour when suggesting filament products, and safely seeds unambiguous legacy CFS tag links during migration.
+- Added optional unique RFID/tag identity to physical spool records so otherwise identical reels can remain distinct. Creality CFS material/profile codes are deliberately not treated as physical tag serials: CFS now respects exact colour when suggesting filament products and requires explicit user confirmation to link/create the physical spool for a loaded slot.
 - Added per-integration `Sync now`, optional scheduled background sync, configurable sync interval, last/next sync timestamps and persisted sync results.
 - Replaced the hard-coded 3D Printing integration roadmap cards with a compact status strip that only shows integrations the user has enabled, including connected/disconnected/error state.
 - Added dedicated filament manufacturer/material selectors and manufacturer-product suggestions backed by the open SpoolmanDB catalogue, with custom values retained as a fallback.
