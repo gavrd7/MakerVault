@@ -226,7 +226,7 @@ function BomItemModal({ project, item, boards, components, currency, onClose, on
       {sourceType === "component" && <label>Component
         <select required value={componentId} onChange={e => setComponentId(e.target.value)}>
           <option value="">Choose component…</option>
-          {(components || []).map(component => <option key={component.id} value={component.id}>{component.manufacturer ? `${component.manufacturer} · ` : ""}{component.name}</option>)}
+          {(components || []).map(component => <option key={component.id} value={component.id}>{component.name}</option>)}
         </select>
       </label>}
 

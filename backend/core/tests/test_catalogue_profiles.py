@@ -30,7 +30,6 @@ class CatalogueProfileTests(unittest.TestCase):
 
     def test_component_profile_fills_missing_part_metadata(self):
         item = apply_component_profile({
-            "manufacturer": "Bosch",
             "name": "BME280 sensor",
             "part_number": "BME280",
             "specifications": {"interface": "I2C/SPI"},
