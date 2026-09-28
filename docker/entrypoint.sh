@@ -41,6 +41,13 @@ fi
 if [ -z "${MAKERVAULT_STORAGE_KEY:-}" ]; then
   mkdir -p "$(dirname "$STORAGE_KEY_FILE")"
   if [ ! -s "$STORAGE_KEY_FILE" ]; then
+    # Never silently replace a lost key when encrypted blobs already exist.
+    # A newly generated key would make those blobs permanently unreadable.
+    if [ -d /app/media/private ] && find /app/media/private -type f -name '*.blob' -print -quit | grep -q .; then
+      echo "ERROR: Encrypted MakerVault private files exist but the storage key is missing." >&2
+      echo "Restore KEY_STORAGE / MAKERVAULT_STORAGE_KEY_FILE from backup. A new key cannot decrypt existing data." >&2
+      exit 1
+    fi
     echo "Generating MakerVault private-storage encryption key..."
     python - "$STORAGE_KEY_FILE" <<'PY'
 import base64
