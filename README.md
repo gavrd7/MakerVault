@@ -1,8 +1,8 @@
-# MakerVault v0.6.5.1
+# MakerVault v0.6.5
 
 MakerVault is a self-hosted makerspace inventory and project system for electronics, firmware, fabrication and 3D-printing assets.
 
-**v0.6.4 is the current stable model/file intelligence milestone. v0.6.5.x is the active print-cost and analytics development line.**
+**v0.6.5 is the current stable release.**
 
 v0.6 begins the first-class 3D printing workspace: native printer, filament/spool and model records remain usable standalone, while optional external services and multi-material systems integrate through provider-neutral links.
 
