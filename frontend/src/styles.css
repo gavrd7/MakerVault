@@ -1126,8 +1126,21 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
     padding-top:max(8px,env(safe-area-inset-top));
   }
   .shell>aside .brand{
-    display:none;
+    display:flex;
+    width:100%;
+    min-height:52px;
+    align-items:center;
+    justify-content:flex-start;
+    padding:2px 2px 6px;
   }
+  .shell>aside .brandLogo{
+    width:min(190px,58vw);
+    max-height:52px;
+    object-fit:contain;
+    object-position:left center;
+    border-radius:8px;
+  }
+  .shell>aside .brandVersion{display:none}
   .shell>aside nav{
     margin:0 -2px;
   }
@@ -1561,4 +1574,10 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
 @media(max-width:560px){
   .modelSlicerMetadataHead{flex-direction:column}
   .modelSlicerSettings{grid-template-columns:1fr}
+}
+
+
+/* Compact MakerVault branding on very narrow phones. */
+@media(max-width:380px){
+  .shell>aside .brandLogo{width:min(168px,58vw);max-height:46px}
 }
