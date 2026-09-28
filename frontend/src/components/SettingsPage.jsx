@@ -73,6 +73,12 @@ export default function SettingsPage({ config }) {
     setIntegrations(rows => rows.map(row => row.provider === provider ? { ...row, [key]: value } : row));
   }
 
+  function updateIntegrationConfigLocal(provider, key, value) {
+    setIntegrations(rows => rows.map(row => row.provider === provider
+      ? { ...row, config: { ...(row.config || {}), [key]: value } }
+      : row));
+  }
+
   async function saveIntegration(provider, patch = null) {
     const row = integrations.find(item => item.provider === provider);
     if (!row) return;
@@ -84,9 +90,14 @@ export default function SettingsPage({ config }) {
         body: {
           enabled: merged.enabled,
           endpoint_url: merged.endpoint_url,
-          sync_direction: merged.sync_direction,
+          sync_direction: merged.provider === "simplyprint" ? "import" : merged.sync_direction,
           auto_sync: merged.auto_sync,
           sync_interval_minutes: Number(merged.sync_interval_minutes || 15),
+          ...(merged.provider === "simplyprint" ? {
+            company_id: merged.config?.company_id || "",
+            history_page_size: Number(merged.config?.history_page_size || 50),
+            api_key: merged.api_key_input || undefined,
+          } : {}),
         },
       });
       setIntegrations(rows => rows.map(item => item.provider === provider ? result.item : item));
@@ -101,6 +112,23 @@ export default function SettingsPage({ config }) {
   async function testIntegration(provider) {
     setIntegrationBusy(provider); setError(""); setNotice("");
     try {
+      const row = integrations.find(item => item.provider === provider);
+      if (provider === "simplyprint" && row) {
+        const saved = await apiFetch("/api/settings/printing-integrations/" + provider + "/", {
+          method: "PATCH",
+          body: {
+            enabled: row.enabled,
+            endpoint_url: row.endpoint_url || "https://api.simplyprint.io",
+            sync_direction: "import",
+            auto_sync: row.auto_sync,
+            sync_interval_minutes: Number(row.sync_interval_minutes || 15),
+            company_id: row.config?.company_id || "",
+            history_page_size: Number(row.config?.history_page_size || 50),
+            api_key: row.api_key_input || undefined,
+          },
+        });
+        setIntegrations(rows => rows.map(item => item.provider === provider ? saved.item : item));
+      }
       const result = await apiFetch("/api/settings/printing-integrations/" + provider + "/test/", { method: "POST" });
       setIntegrations(rows => rows.map(item => item.provider === provider ? result.item : item));
       setNotice(result.item.name + ": " + result.item.status_label + ".");
@@ -126,6 +154,10 @@ export default function SettingsPage({ config }) {
       if (provider === "spoolman") {
         setNotice(
           `Spoolman sync complete: ${details.remote_spools || 0} remote read, ${details.created || 0} added, ${details.updated || 0} linked records refreshed, ${details.pending_review || 0} awaiting review, ${details.locations_discovered || 0} new locations, ${details.exported || 0} exported.`
+        );
+      } else if (provider === "simplyprint") {
+        setNotice(
+          `SimplyPrint sync complete: ${details.remote_printers || 0} printers, ${details.remote_filaments || 0} remote filament records, ${details.loaded_slots || 0} loaded slots, ${details.jobs_created || 0} new print jobs and ${details.jobs_updated || 0} refreshed.`
         );
       } else if (provider === "creality_cfs") {
         setNotice(
@@ -306,13 +338,26 @@ export default function SettingsPage({ config }) {
               {item.ignored_import_count > 0 && <button type="button" onClick={() => resetIgnoredImports(item.provider)} disabled={isBusy}>Reconsider {item.ignored_import_count} ignored import{item.ignored_import_count === 1 ? "" : "s"}</button>}
             </>}
 
+            {item.provider === "simplyprint" && <>
+              <span>Read printer state, loaded filament and recent print history from your SimplyPrint account.</span>
+              <label className="settingsToggle compact"><div><strong>Enable integration</strong><small>Read-only import. MakerVault remains authoritative for inventory and spool identity.</small></div><input type="checkbox" checked={item.enabled} onChange={e => saveIntegration(item.provider, { enabled: e.target.checked, sync_direction: "import" })} /></label>
+              <label><span>Account / company ID</span><input value={item.config?.company_id || ""} onChange={e => updateIntegrationConfigLocal(item.provider, "company_id", e.target.value)} placeholder="12345" inputMode="numeric" /></label>
+              <label><span>API key</span><input type="password" value={item.api_key_input || ""} onChange={e => updateIntegrationLocal(item.provider, "api_key_input", e.target.value)} placeholder={item.config?.api_key_configured ? "API key saved — enter only to replace" : "Paste SimplyPrint API key"} autoComplete="new-password" /></label>
+              <label><span>Recent history per sync</span><div className="intervalInput"><input type="number" min="1" max="100" step="1" value={item.config?.history_page_size || 50} onChange={e => updateIntegrationConfigLocal(item.provider, "history_page_size", e.target.value)} /><span>jobs</span></div></label>
+              <small>{item.linked_printers || 0} linked printer{item.linked_printers === 1 ? "" : "s"} · {item.linked_spools || 0} confirmed physical spool link{item.linked_spools === 1 ? "" : "s"} · {item.imported_print_jobs || 0} imported print job{item.imported_print_jobs === 1 ? "" : "s"}.</small>
+              <div className="settingsCallout integrationAuthorityCallout">
+                <strong>Read-only, MakerVault-primary</strong>
+                <p>SimplyPrint printer status and print history are imported as context. Loaded filament appears as discovered slots, but MakerVault will not create or overwrite a physical spool until you explicitly link or add it.</p>
+              </div>
+              <small>Requires SimplyPrint API access and your account/company ID. The saved API key is never returned to the browser.</small>
+            </>}
+
             {item.provider === "creality_cfs" && <>
               <span>Read CFS boxes and loaded filament slots directly from compatible Creality printers on your local network.</span>
               <label className="settingsToggle compact"><div><strong>Enable integration</strong><small>The CFS adapter is read-only.</small></div><input type="checkbox" checked={item.enabled} onChange={e => saveIntegration(item.provider, { enabled: e.target.checked, sync_direction: "import" })} /></label>
               <small>{item.compatible_printers || 0} compatible printer{item.compatible_printers === 1 ? "" : "s"} · {item.installed_printers || 0} with CFS installed · {item.configured_printers || 0} installed printer{item.configured_printers === 1 ? "" : "s"} with local host/IP.</small>
             </>}
 
-            {!supported && item.provider === "simplyprint" && <><span>Optional SimplyPrint filament inventory integration.</span><small>Adapter placeholder — not selectable yet.</small></>}
             {!supported && item.provider === "bambu_ams" && <><span>Bambu Lab AMS / AMS Lite integration.</span><small>Adapter placeholder — not selectable yet.</small></>}
             {!supported && item.provider === "elegoo" && <><span>Elegoo multi-material integration.</span><small>Adapter placeholder — not selectable yet.</small></>}
             {!supported && item.provider === "qidi" && <><span>QIDI multi-material integration.</span><small>Adapter placeholder — not selectable yet.</small></>}
@@ -330,7 +375,7 @@ export default function SettingsPage({ config }) {
             {item.last_error && <small className="integrationError">{item.last_error}</small>}
 
             {supported && <div className="settingsActions compact">
-              {item.provider === "spoolman" && <button onClick={() => testIntegration(item.provider)} disabled={isBusy || !item.enabled}>{isBusy ? "Working…" : "Test connection"}</button>}
+              {["spoolman", "simplyprint"].includes(item.provider) && <button onClick={() => testIntegration(item.provider)} disabled={isBusy || !item.enabled}>{isBusy ? "Working…" : "Test connection"}</button>}
               <button onClick={() => syncIntegration(item.provider)} disabled={isBusy || !item.enabled}>{isBusy ? "Synchronising…" : "Sync now"}</button>
               <button className="primary" onClick={() => saveIntegration(item.provider)} disabled={isBusy}>{isBusy ? "Saving…" : "Save"}</button>
             </div>}
