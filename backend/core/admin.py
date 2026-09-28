@@ -2,7 +2,7 @@ from django.contrib import admin
 from .models import (
     Manufacturer, CatalogSource, CatalogueMaintenanceSettings, BoardModel, BoardCompatibility, ComponentCategory,
     ComponentModel, Project, InventoryItem, InventoryHistory, BOMItem, BOMAllocation, FileAsset, RepositoryLink,
-    FilamentProduct, Spool, ExternalSpoolLink, PrinterManufacturer, PrinterCatalogModel,
+    FilamentProduct, Spool, ExternalSpoolLink, ExternalPrinterLink, PrinterManufacturer, PrinterCatalogModel,
     Printer, PrinterFilamentSlot,
     Model3D, ModelRevision, ModelRevisionAsset, ProductListing, PrintJob, PrintMaterialUsage,
 )
@@ -67,7 +67,7 @@ class ProjectAdmin(admin.ModelAdmin):
 
 admin.site.register([
     Manufacturer, CatalogSource, BoardCompatibility, ComponentCategory, ComponentModel,
-    FileAsset, RepositoryLink, FilamentProduct, Spool, ExternalSpoolLink,
+    FileAsset, RepositoryLink, FilamentProduct, Spool, ExternalSpoolLink, ExternalPrinterLink,
     PrinterManufacturer, PrinterCatalogModel, Printer, PrinterFilamentSlot,
     Model3D, ModelRevision, ModelRevisionAsset,
     ProductListing, PrintJob, PrintMaterialUsage,
