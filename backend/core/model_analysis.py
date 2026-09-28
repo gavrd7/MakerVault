@@ -13,6 +13,7 @@ from defusedxml.common import DefusedXmlException
 
 
 MAX_ANALYSIS_BYTES = 250 * 1024 * 1024
+MAX_3MF_XML_BYTES = 64 * 1024 * 1024
 ANALYSIS_VERSION = 1
 
 _UNIT_TO_MM = {
@@ -213,9 +214,14 @@ def analyse_3mf(data):
     except zipfile.BadZipFile as exc:
         raise ModelAnalysisError("The 3MF package is not a valid ZIP container.") from exc
 
-    model_files = [name for name in package.namelist() if name.lower().endswith(".model")]
+    model_files = [info for info in package.infolist() if info.filename.lower().endswith(".model")]
     if not model_files:
         raise ModelAnalysisError("The 3MF package does not contain a .model geometry document.")
+    total_model_bytes = sum(info.file_size for info in model_files)
+    if total_model_bytes > MAX_3MF_XML_BYTES:
+        raise ModelAnalysisError(
+            f"3MF geometry expands beyond the {MAX_3MF_XML_BYTES // 1024 // 1024} MB analysis safety limit."
+        )
 
     all_vertices = []
     triangle_count = 0
@@ -226,9 +232,10 @@ def analyse_3mf(data):
     has_components = False
     has_build_transforms = False
 
-    for model_name in model_files:
+    for model_info in model_files:
+        model_name = model_info.filename
         try:
-            root = ET.fromstring(package.read(model_name))
+            root = ET.fromstring(package.read(model_info))
         except (ET.ParseError, DefusedXmlException, KeyError) as exc:
             raise ModelAnalysisError(f"Could not parse 3MF geometry document {model_name}.") from exc
 
@@ -292,6 +299,8 @@ def analyse_3mf(data):
         warnings.append("3MF component assemblies were detected; component transforms are not yet applied to geometry statistics.")
     if has_build_transforms:
         warnings.append("3MF build-item transforms were detected; build placement transforms are not yet applied to geometry statistics.")
+
+    package.close()
 
     return _result(
         fmt="3mf",
