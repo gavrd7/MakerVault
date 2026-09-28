@@ -54,8 +54,6 @@ This file tracks completed MakerVault milestones and the next candidate areas. T
 - Upgrade migrations consolidate legacy duplicate generic components while preserving references.
 - MakerVault application branding added to the main interface.
 
-## Completed milestones
-
 ### v0.6.4 — Model/file intelligence & version workflow
 
 - Immutable FileAsset version lineage with latest-version library/project views and downloadable history.
