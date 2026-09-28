@@ -170,8 +170,7 @@ def _fetch_vendor_manifest(entry, ref):
             "multi_material_system": addon_system or _default_multi_material_system(vendor, name),
             "source_url": (
                 f"{ORCA_SOURCE_ROOT}/{quote(ref, safe='')}/"
-                f"{ORCA_PROFILES_PATH}/{quote(raw_vendor, safe='')}/"
-                f"{quote(sub_path, safe='/')}"
+                f"{ORCA_PROFILES_PATH}/{quote(vendor_file, safe='')}"
             ),
         })
     return vendor, rows
@@ -270,7 +269,7 @@ def sync_orcaslicer_printer_catalogue(*, ref=None, max_workers=8):
         if isinstance(entry, dict)
         and entry.get("type") == "file"
         and str(entry.get("name") or "").lower().endswith(".json")
-        and str(entry.get("name") or "") not in {"blacklist.json", "OrcaFilamentLibrary.json"}
+        and str(entry.get("name") or "") not in {"blacklist.json", "Custom.json", "OrcaFilamentLibrary.json"}
     ]
 
     vendors_seen = 0
