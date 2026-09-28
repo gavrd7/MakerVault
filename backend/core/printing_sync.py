@@ -1422,6 +1422,8 @@ def sync_creality_cfs(setting: PrintingIntegrationSetting) -> dict:
 
 
 def sync_printing_integration(provider: str, triggered_by: str = "manual", *, owner=None, setting_id=None) -> tuple[PrintingIntegrationSetting, dict]:
+    if setting_id is None and owner is None:
+        raise PrintingSyncError("An integration owner is required.")
     settings_qs = PrintingIntegrationSetting.objects.all()
     if setting_id is not None:
         settings_qs = settings_qs.filter(pk=setting_id)
