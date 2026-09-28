@@ -495,7 +495,7 @@ class PrinterCatalogModel(TimeStampedModel):
     filament_diameter_mm = models.DecimalField(max_digits=5, decimal_places=2, default=1.75)
     max_nozzle_temp_c = models.SmallIntegerField(blank=True, null=True)
     max_bed_temp_c = models.SmallIntegerField(blank=True, null=True)
-    enclosed = models.BooleanField(default=False)
+    enclosed = models.BooleanField(blank=True, null=True, default=None)
     multi_material_system = models.CharField(
         max_length=30, choices=MULTI_MATERIAL_SYSTEMS, blank=True
     )
