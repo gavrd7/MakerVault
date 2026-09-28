@@ -1,6 +1,19 @@
 # Changelog
 
-## v0.6.0.5 — in development
+## v0.6.1.1 — in development
+
+- Added local STL and 3MF geometry analysis using MakerVault's existing `ModelRevision.geometry_metadata` field; no schema migration is required for this first v0.6.1 slice.
+- New model uploads are analysed automatically, while existing revision files can be analysed or re-analysed on demand.
+- Geometry intelligence records physical dimensions, triangle/vertex counts, source units/encoding, mesh complexity, surface area, approximate enclosed volume, file/checksum provenance and analysis warnings.
+- STL analysis supports binary and ASCII files and explicitly records the unit assumption inherent to STL.
+- 3MF analysis reads package geometry and declared units, and warns when component/build transforms exist that are not yet folded into the statistical geometry pass.
+- Added an interactive Three.js STL/3MF viewer to the Model Library with orbit, zoom, pan, reset, wireframe, grid, axes and fullscreen controls.
+- Analysed models show compact dimensions/triangle summaries directly in the Model Library.
+- The viewer's intelligence panel compares model dimensions with owned-printer build volumes and reports direct fit, XY-rotation fit, oversize status or unknown build volume.
+- Model analysis stays local to MakerVault; the model file is not sent to an external analysis service.
+- Added regression tests for binary STL, 3MF packages, automatic upload analysis and manual revision re-analysis.
+
+## v0.6.0.5 — development revision
 
 - Fixed Spoolman sync failures caused by high-precision floating-point weights/costs by quantizing imported numeric values to MakerVault field precision before validation.
 - Added regression coverage for long-decimal Spoolman remaining weight, initial weight, purchase cost, filament diameter, density and spool weights.
