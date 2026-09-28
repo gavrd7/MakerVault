@@ -1,9 +1,13 @@
 import os
 import tempfile
+from pathlib import Path
 
+from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
-from django.test import SimpleTestCase, override_settings
+from django.core.management import call_command
+from django.test import SimpleTestCase, TestCase, override_settings
 
+from core.models import FileAsset
 from core.private_storage import (
     HEADER_BYTES,
     MAGIC,
@@ -81,4 +85,81 @@ class PrivateEncryptedStorageTests(SimpleTestCase):
         self.assertFalse(self.storage.is_encrypted(legacy_name))
         self.assertEqual(self.storage.size(legacy_name), len(payload))
         with self.storage.open(legacy_name, "rb") as handle:
+            self.assertEqual(handle.read(), payload)
+
+
+class PrivateStorageApplicationIntegrationTests(TestCase):
+    def setUp(self):
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tempdir.cleanup)
+        self.override = override_settings(
+            MEDIA_ROOT=Path(self.tempdir.name),
+            MAKERVAULT_STORAGE_KEY=TEST_KEY,
+            MAKERVAULT_STORAGE_KEY_FILE=None,
+        )
+        self.override.enable()
+        self.addCleanup(self.override.disable)
+        private_storage_key.cache_clear()
+
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username="encrypted-owner",
+            email="encrypted-owner@example.com",
+            password="test-password",
+        )
+        self.other = User.objects.create_user(
+            username="encrypted-other",
+            email="encrypted-other@example.com",
+            password="test-password",
+        )
+
+    def tearDown(self):
+        private_storage_key.cache_clear()
+
+    def test_fileasset_write_and_authenticated_media_delivery_use_encrypted_storage(self):
+        payload = b"private CAD/model content"
+        asset = FileAsset.objects.create(
+            owner=self.user,
+            name="private-model.3mf",
+            category="slicer",
+            file=ContentFile(payload, name="private-model.3mf"),
+            metadata={"original_name": "private-model.3mf", "size_bytes": len(payload)},
+        )
+
+        self.assertTrue(asset.file.name.startswith("private/"))
+        raw_path = Path(asset.file.path)
+        self.assertTrue(raw_path.exists())
+        self.assertNotEqual(raw_path.read_bytes(), payload)
+
+        self.client.force_login(self.user)
+        response = self.client.get(asset.file.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(b"".join(response.streaming_content), payload)
+
+        self.client.force_login(self.other)
+        denied = self.client.get(asset.file.url)
+        self.assertEqual(denied.status_code, 404)
+
+    def test_management_command_migrates_legacy_plaintext_and_updates_database_name(self):
+        legacy_name = "files/2026/09/legacy-project-file.bin"
+        legacy_path = Path(self.tempdir.name) / legacy_name
+        legacy_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = b"old plaintext private content"
+        legacy_path.write_bytes(payload)
+
+        asset = FileAsset.objects.create(
+            owner=self.user,
+            name="legacy-project-file.bin",
+            category="other",
+            file=legacy_name,
+            metadata={"original_name": "legacy-project-file.bin", "size_bytes": len(payload)},
+        )
+
+        call_command("migrate_private_storage", verbosity=0)
+        asset.refresh_from_db()
+
+        self.assertTrue(asset.file.name.startswith("private/"))
+        self.assertFalse(legacy_path.exists())
+        self.assertTrue(asset.file.storage.is_encrypted(asset.file.name))
+        with asset.file.storage.open(asset.file.name, "rb") as handle:
             self.assertEqual(handle.read(), payload)
