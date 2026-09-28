@@ -494,6 +494,81 @@ class PrintingFoundationTests(TestCase):
         self.assertEqual(PrintJob.objects.count(), 1)
         self.assertEqual(PrintMaterialUsage.objects.count(), 2)
 
+    def test_print_history_auto_costs_material_from_spool_purchase(self):
+        self.spool.purchase_cost = Decimal("20.00")
+        self.spool.currency = "GBP"
+        self.spool.save(update_fields=["purchase_cost", "currency", "updated_at"])
+
+        response = self.client.post(
+            "/api/printing/jobs/",
+            data={
+                "printer_id": str(self.printer.id),
+                "status": "success",
+                "quantity": 1,
+                "actual_minutes": 90,
+                "material_usages": [
+                    {"spool_id": str(self.spool.id), "used_g": "50", "waste_g": "5"},
+                ],
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        usage = PrintMaterialUsage.objects.get()
+        self.assertEqual(usage.material_cost, Decimal("1.10"))
+        self.assertEqual(usage.currency, "GBP")
+        self.assertEqual(usage.source_metadata["material_cost_source"], "spool_purchase_cost")
+        self.assertEqual(response.json()["job"]["material_cost"], 1.1)
+
+    def test_printing_overview_returns_cost_and_success_analytics(self):
+        self.spool.purchase_cost = Decimal("25.00")
+        self.spool.currency = "GBP"
+        self.spool.save(update_fields=["purchase_cost", "currency", "updated_at"])
+
+        success = self.client.post(
+            "/api/printing/jobs/",
+            data={
+                "printer_id": str(self.printer.id),
+                "status": "success",
+                "actual_minutes": 120,
+                "estimated_minutes": 110,
+                "material_usages": [
+                    {"spool_id": str(self.spool.id), "used_g": "40", "waste_g": "2"},
+                ],
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(success.status_code, 201, success.content)
+
+        failed = self.client.post(
+            "/api/printing/jobs/",
+            data={
+                "printer_id": str(self.printer.id),
+                "status": "failed",
+                "actual_minutes": 30,
+                "material_usages": [
+                    {"spool_id": str(self.spool.id), "used_g": "5", "waste_g": "3"},
+                ],
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(failed.status_code, 201, failed.content)
+
+        overview = self.client.get("/api/printing/")
+        self.assertEqual(overview.status_code, 200)
+        analytics = overview.json()["analytics"]
+        self.assertEqual(analytics["jobs"], 2)
+        self.assertEqual(analytics["successful"], 1)
+        self.assertEqual(analytics["failed"], 1)
+        self.assertEqual(analytics["success_rate"], 50.0)
+        self.assertEqual(analytics["actual_minutes"], 150)
+        self.assertEqual(analytics["estimated_minutes"], 110)
+        self.assertEqual(analytics["filament_used_g"], 45.0)
+        self.assertEqual(analytics["waste_g"], 5.0)
+        self.assertEqual(analytics["material_cost"], 1.25)
+        self.assertEqual(analytics["currency"], "GBP")
+        self.assertEqual(analytics["printers"][0]["jobs"], 2)
+        self.assertEqual(analytics["printers"][0]["success_rate"], 50.0)
+
     def test_print_history_rejects_slot_from_another_printer(self):
         other_printer = Printer.objects.create(name="Other printer", model="Other")
         foreign_slot = PrinterFilamentSlot.objects.create(
