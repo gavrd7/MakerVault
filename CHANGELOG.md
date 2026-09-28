@@ -1,6 +1,16 @@
 # Changelog
 
-## v0.6.0.3 — in development
+## v0.6.0.4 — in development
+
+- Added confirmed **Delete** actions to the full Spool Inventory and Model Library.
+- Spool deletion removes the physical inventory record and provider links while retaining the filament product; nullable printer-slot/history references are preserved without the deleted spool.
+- Model deletion removes the model/revision/link records while retaining shared MakerVault FileAsset records and print-history entries.
+- Added explicit delete permissions to the frontend configuration so destructive controls only appear for authorised users.
+- Hardened Spoolman sync error handling so unexpected failures no longer leave a stale **Connected** status.
+- Spoolman HTTP failures now include the API's returned validation/error message when available, making per-spool sync failures diagnosable from the Settings UI.
+- Added regression coverage for deletion semantics, Spoolman unexpected exceptions and Spoolman API validation-error reporting.
+
+## v0.6.0.3 — development revision
 
 - Added an optional OrcaSlicer-backed 3D-printer catalogue synchroniser using Orca's vendor `machine_model_list` manifests.
 - Expanded catalogue maintenance with a dedicated **3D printer catalogue** toggle, scheduled refresh and server-level enable/disable setting.
