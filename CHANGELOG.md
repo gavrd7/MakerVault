@@ -1,19 +1,41 @@
 # Changelog
 
-## v0.6.1.1 — in development
+## v0.6.3.2 — in development
 
-- Added local STL and 3MF geometry analysis using MakerVault's existing `ModelRevision.geometry_metadata` field; no schema migration is required for this first v0.6.1 slice.
-- New model uploads are analysed automatically, while existing revision files can be analysed or re-analysed on demand.
-- Geometry intelligence records physical dimensions, triangle/vertex counts, source units/encoding, mesh complexity, surface area, approximate enclosed volume, file/checksum provenance and analysis warnings.
-- STL analysis supports binary and ASCII files and explicitly records the unit assumption inherent to STL.
-- 3MF analysis reads package geometry and declared units, and warns when component/build transforms exist that are not yet folded into the statistical geometry pass.
-- Added an interactive Three.js STL/3MF viewer to the Model Library with orbit, zoom, pan, reset, wireframe, grid, axes and fullscreen controls.
-- Analysed models show compact dimensions/triangle summaries directly in the Model Library.
-- The viewer's intelligence panel compares model dimensions with owned-printer build volumes and reports direct fit, XY-rotation fit, oversize status or unknown build volume.
-- Model analysis stays local to MakerVault; the model file is not sent to an external analysis service.
-- Added regression tests for binary STL, 3MF packages, automatic upload analysis and manual revision re-analysis.
+- Added an explicit responsive viewport and mobile browser metadata so MakerVault scales correctly on phones and tablets.
+- Reworked the application shell below 900px into a sticky, horizontally scrollable touch navigation bar while preserving Administration, Account & Security and Sign out actions on small screens.
+- Added app-wide phone breakpoints with safe-area support, 44px touch targets, 16px form controls to avoid iOS input zoom, single-column forms/panels, responsive printer/settings/project layouts and full-screen mobile detail sheets.
+- AG Grid catalogue/inventory tables now stay readable on narrow screens using horizontal touch scrolling instead of crushing columns.
+- Mobile modals behave as bottom sheets with dynamic-viewport sizing and safe-area padding.
+- Removed `ComponentModel.manufacturer` from the database schema; board, printer and filament manufacturer models remain unchanged.
+- Removed manufacturer from the component API, search, catalogue table, detail view and add-component form.
+- Removed manufacturer metadata from the starter component catalogue and stopped seed jobs from creating component-brand manufacturer records.
+- Migration `0020_remove_component_manufacturer` removes the component relation and deletes legacy manufacturer rows that were used only by components, while preserving manufacturers still referenced by boards, printers or filaments.
+- Older clients may still submit a legacy `manufacturer` field when creating a component; MakerVault safely ignores it rather than recreating the removed dataset.
+- Added regression coverage proving components have no manufacturer field, the API does not recreate legacy brands, and starter seed data no longer creates component-only manufacturers.
+- Hardened the component-manufacturer migration sequence for PostgreSQL by separating data cleanup from the schema change, avoiding deferred-trigger conflicts during upgrade.
+- Added a follow-up migration that merges duplicate generic components exposed by manufacturer removal while preserving and re-pointing inventory, BOM, file and product-listing references.
+- Made starter component seeding tolerant of pre-existing duplicate identities so catalogue startup cannot fail with `MultipleObjectsReturned`.
+- Reorganised Settings into dedicated **Library updates** and **3D Printing** tabs, establishing a per-feature settings pattern for future areas of MakerVault.
+- Reworked 3D-printing integration cards to use responsive, practical-width columns with wrapping actions instead of compressing four cards into one row.
+- Replaced the temporary sidebar “M” mark and text title with the committed MakerVault brand logo, while retaining a compact responsive treatment and version label.
 
-## v0.6.0.5 — development revision
+## v0.6.2.1 — in development
+
+- Added a live SimplyPrint REST API adapter using account/company ID plus API-key authentication.
+- SimplyPrint API keys are retained server-side in integration configuration and are never returned by the Settings API; the frontend only receives an `api_key_configured` flag.
+- SimplyPrint is deliberately **read-only/import-only** in this first build so MakerVault remains authoritative.
+- Printer discovery uses persistent provider-neutral `ExternalPrinterLink` records; exact existing MakerVault printer-name matches can be linked without overwriting native model/serial/location/notes.
+- Imported printer state records SimplyPrint online/state/group/API/UI/firmware/temperature context in printer profile metadata and surfaces the current SimplyPrint state on the printer card.
+- SimplyPrint assigned filament/extruders are mapped into provider-neutral `PrinterFilamentSlot` records without automatically creating MakerVault physical spools.
+- SimplyPrint filament UID/NFC/colour/material metadata is retained on discovered slots; exact physical spool links become persistent only after the user explicitly links/creates the spool.
+- The existing **Add to inventory / Link existing spool** flow now records exact SimplyPrint filament IDs as `ExternalSpoolLink` mappings for future deterministic syncs.
+- Recent SimplyPrint print history imports into native MakerVault `PrintJob` records with status, duration, filename/provenance and aggregate reported filament usage, without guessing which MakerVault spool supplied the material.
+- Added manual connection testing, manual Sync now and persistent scheduled sync controls to the SimplyPrint Settings card.
+- Legacy SimplyPrint placeholder settings are upgraded from **Planned** to **Not configured** automatically.
+- Added regression coverage for credential masking, API-key probe headers, existing-printer linking, no-automatic-spool creation, print-history import and explicit SimplyPrint spool mapping.
+
+## v0.6.0.5 — stable v0.6.0 baseline
 
 - Fixed Spoolman sync failures caused by high-precision floating-point weights/costs by quantizing imported numeric values to MakerVault field precision before validation.
 - Added regression coverage for long-decimal Spoolman remaining weight, initial weight, purchase cost, filament diameter, density and spool weights.
