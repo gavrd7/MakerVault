@@ -54,8 +54,10 @@ export default function PrintingPage({ config, projects }) {
   const canAddFilament = Boolean(config?.permissions?.add_filament);
   const canAddSpool = Boolean(config?.permissions?.add_spool);
   const canChangeSpool = Boolean(config?.permissions?.change_spool);
+  const canDeleteSpool = Boolean(config?.permissions?.delete_spool);
   const canAddModel = Boolean(config?.permissions?.add_model3d);
   const canChangeModel = Boolean(config?.permissions?.change_model3d);
+  const canDeleteModel = Boolean(config?.permissions?.delete_model3d);
   const canAddPrintJob = Boolean(config?.permissions?.add_printjob);
   const canAddLocation = Boolean(config?.permissions?.add_printing_location);
   const recentSpools = newestFirst(data?.spools).slice(0, 5);
@@ -70,6 +72,7 @@ export default function PrintingPage({ config, projects }) {
       currency={config?.currency || "GBP"}
       canAddSpool={canAddSpool}
       canChangeSpool={canChangeSpool}
+      canDeleteSpool={canDeleteSpool}
       onBack={() => setWorkspaceView("overview")}
       onChanged={load}
     />;
@@ -82,6 +85,7 @@ export default function PrintingPage({ config, projects }) {
       projects={projects || []}
       canAddModel={canAddModel}
       canChangeModel={canChangeModel}
+      canDeleteModel={canDeleteModel}
       canUpload={Boolean(config?.permissions?.add_file)}
       onBack={() => setWorkspaceView("overview")}
       onChanged={load}
@@ -253,10 +257,11 @@ export default function PrintingPage({ config, projects }) {
   </div>;
 }
 
-function SpoolInventoryPage({ spools, filaments, locations, printers, currency, canAddSpool, canChangeSpool, onBack, onChanged }) {
+function SpoolInventoryPage({ spools, filaments, locations, printers, currency, canAddSpool, canChangeSpool, canDeleteSpool, onBack, onChanged }) {
   const [query, setQuery] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [manageSpool, setManageSpool] = useState(null);
+  const [deleteSpool, setDeleteSpool] = useState(null);
   const term = query.trim().toLowerCase();
   const rows = newestFirst(spools).filter(spool => !term || [
     spool.spool_id, spool.rfid_uid, spool.filament, spool.manufacturer, spool.material, spool.color_name, spool.location,
@@ -294,6 +299,7 @@ function SpoolInventoryPage({ spools, filaments, locations, printers, currency, 
             <Badge>{spool.status_label || spool.status}</Badge>
             {(spool.external_links || []).map(link => <Badge key={link.id}>{link.provider_label}</Badge>)}
             {canChangeSpool && <button type="button" onClick={() => setManageSpool(spool)}>RFID / identity</button>}
+            {canDeleteSpool && <button className="dangerButton" type="button" onClick={() => setDeleteSpool(spool)}>Delete</button>}
           </div>
         </article>)}
         {!rows.length && <div className="printingEmptyInline">{term ? "No spools match this search." : "No spool records yet."}</div>}
@@ -302,6 +308,14 @@ function SpoolInventoryPage({ spools, filaments, locations, printers, currency, 
 
     {addOpen && <SpoolModal filaments={filaments} locations={locations} printers={printers} currency={currency} onClose={() => setAddOpen(false)} onSaved={async () => { setAddOpen(false); await onChanged(); }} />}
     {manageSpool && <SpoolIdentityModal spool={manageSpool} onClose={() => setManageSpool(null)} onSaved={async () => { setManageSpool(null); await onChanged(); }} />}
+    {deleteSpool && <DeletePrintingRecordModal
+      title={"Delete spool · " + deleteSpool.spool_id}
+      description={"Delete " + deleteSpool.spool_id + " from MakerVault spool inventory?"}
+      warning="This removes the physical spool record and its external integration links. Any currently loaded printer slot will become unmatched. The filament product itself is not deleted."
+      endpoint={"/api/printing/spools/" + deleteSpool.id + "/"}
+      onClose={() => setDeleteSpool(null)}
+      onDeleted={async () => { setDeleteSpool(null); await onChanged(); }}
+    />}
   </div>;
 }
 
@@ -345,10 +359,11 @@ function SpoolIdentityModal({ spool, onClose, onSaved }) {
 }
 
 
-function ModelLibraryPage({ models, files, projects, canAddModel, canChangeModel, canUpload, onBack, onChanged }) {
+function ModelLibraryPage({ models, files, projects, canAddModel, canChangeModel, canDeleteModel, canUpload, onBack, onChanged }) {
   const [query, setQuery] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [manageModel, setManageModel] = useState(null);
+  const [deleteModel, setDeleteModel] = useState(null);
   const term = query.trim().toLowerCase();
   const rows = newestFirst(models).filter(model => !term || [
     model.name, model.project, model.description, ...(model.tags || []),
@@ -379,7 +394,10 @@ function ModelLibraryPage({ models, files, projects, canAddModel, canChangeModel
             <small>{model.project || "Standalone model"} · {model.revision_count} revision{model.revision_count === 1 ? "" : "s"} · updated {formatDate(model.updated_at)}</small>
           </div>
           <div className="printingBadges">{model.revisions.flatMap(r => r.assets).slice(0, 4).map(asset => <Badge key={asset.id}>{asset.file.category_label}</Badge>)}</div>
-          {canChangeModel && <button onClick={() => setManageModel(model)}>Manage</button>}
+          <div className="printingLibraryActions">
+            {canChangeModel && <button onClick={() => setManageModel(model)}>Manage</button>}
+            {canDeleteModel && <button className="dangerButton" type="button" onClick={() => setDeleteModel(model)}>Delete</button>}
+          </div>
         </article>)}
         {!rows.length && <div className="printingEmptyInline">{term ? "No models match this search." : "No 3D models yet."}</div>}
       </div>
@@ -387,7 +405,47 @@ function ModelLibraryPage({ models, files, projects, canAddModel, canChangeModel
 
     {addOpen && <ModelModal projects={projects} canUpload={canUpload} onClose={() => setAddOpen(false)} onSaved={async () => { setAddOpen(false); await onChanged(); }} />}
     {manageModel && <ModelManageModal model={manageModel} files={files} onClose={() => setManageModel(null)} onChanged={async () => { setManageModel(null); await onChanged(); }} />}
+    {deleteModel && <DeletePrintingRecordModal
+      title={"Delete model · " + deleteModel.name}
+      description={"Delete " + deleteModel.name + " and its " + deleteModel.revision_count + " revision" + (deleteModel.revision_count === 1 ? "" : "s") + "?"}
+      warning="Model revisions and their attachment links are removed. Shared MakerVault file records and stored STL/3MF/CAD files are kept, and print-history records are retained."
+      endpoint={"/api/printing/models/" + deleteModel.id + "/"}
+      onClose={() => setDeleteModel(null)}
+      onDeleted={async () => { setDeleteModel(null); await onChanged(); }}
+    />}
   </div>;
+}
+
+
+function DeletePrintingRecordModal({ title, description, warning, endpoint, onClose, onDeleted }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function remove() {
+    setBusy(true); setError("");
+    try {
+      await apiFetch(endpoint, { method: "DELETE" });
+      await onDeleted();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <Modal title={title} subtitle="This action cannot be undone." onClose={busy ? () => {} : onClose}>
+    <div className="formGrid">
+      {error && <div className="formError full">{error}</div>}
+      <div className="settingsCallout full">
+        <strong>{description}</strong>
+        <p>{warning}</p>
+      </div>
+      <div className="formActions full">
+        <button type="button" onClick={onClose} disabled={busy}>Cancel</button>
+        <button className="dangerButton" type="button" onClick={remove} disabled={busy}>{busy ? "Deleting…" : "Delete permanently"}</button>
+      </div>
+    </div>
+  </Modal>;
 }
 
 
