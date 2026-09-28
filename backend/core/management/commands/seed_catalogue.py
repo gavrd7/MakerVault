@@ -3,9 +3,6 @@ from django.utils.text import slugify
 
 from core.catalogue_seed import BOARD_DEFINITIONS, CATEGORY_TREE, COMPONENT_DEFINITIONS
 from core.catalogue_profiles import apply_board_profile, apply_component_profile
-STARTER_CATALOGUE_VERSION = "0.7.0.1"
-
-
 from core.models import (
     BoardCompatibility,
     BoardModel,
@@ -14,6 +11,9 @@ from core.models import (
     ComponentModel,
     Manufacturer,
 )
+
+
+STARTER_CATALOGUE_VERSION = "0.7.0.1"
 
 
 def merge_missing_fields(instance, definition, fields):
