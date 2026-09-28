@@ -6,7 +6,6 @@ from urllib.parse import quote
 import requests
 from django.conf import settings
 from django.db import transaction
-from django.utils import timezone
 
 from .models import PrinterCatalogModel, PrinterManufacturer
 
@@ -87,6 +86,7 @@ def _extract_vendor_manifest(response, max_bytes=1024 * 1024):
     decoder = json.JSONDecoder()
     marker = '"machine_model_list"'
     manifest_name = ""
+    manifest_version = ""
 
     for chunk in response.iter_content(chunk_size=32768, decode_unicode=True):
         if not chunk:
@@ -101,6 +101,10 @@ def _extract_vendor_manifest(response, max_bytes=1024 * 1024):
             match = re.search(r'"name"\s*:\s*"([^"]+)"', text)
             if match:
                 manifest_name = match.group(1).strip()
+        if not manifest_version:
+            match = re.search(r'"version"\s*:\s*"([^"]+)"', text)
+            if match:
+                manifest_version = match.group(1).strip()
 
         marker_at = text.find(marker)
         if marker_at >= 0:
@@ -109,7 +113,7 @@ def _extract_vendor_manifest(response, max_bytes=1024 * 1024):
                 try:
                     value, _ = decoder.raw_decode(text[array_at:])
                     if isinstance(value, list):
-                        return manifest_name, value
+                        return manifest_name, manifest_version, value
                 except json.JSONDecodeError:
                     pass
         if total >= max_bytes:
@@ -118,7 +122,7 @@ def _extract_vendor_manifest(response, max_bytes=1024 * 1024):
     # Some top-level profile files are filament-only libraries rather than
     # printer vendors. Treat those as an empty source, not a failed vendor.
     if marker not in "".join(chunks):
-        return manifest_name, []
+        return manifest_name, manifest_version, []
     raise OrcaCatalogueError("OrcaSlicer vendor manifest did not expose a readable machine model list.")
 
 
@@ -138,7 +142,7 @@ def _fetch_vendor_manifest(entry, ref):
     )
     try:
         response.raise_for_status()
-        manifest_name, machines = _extract_vendor_manifest(response)
+        manifest_name, manifest_version, machines = _extract_vendor_manifest(response)
     finally:
         response.close()
 
@@ -161,6 +165,7 @@ def _fetch_vendor_manifest(entry, ref):
             "name": name,
             "raw_name": raw_name,
             "vendor_file": vendor_file,
+            "vendor_version": manifest_version,
             "sub_path": sub_path,
             "multi_material_system": addon_system or _default_multi_material_system(vendor, name),
             "source_url": (
@@ -191,9 +196,9 @@ def _merge_model(row, ref):
         "ref": ref,
         "license": ORCA_LICENSE,
         "vendor_file": row["vendor_file"],
+        "vendor_version": row.get("vendor_version", ""),
         "machine_profile": row["sub_path"],
         "upstream_name": row["raw_name"],
-        "synced_at": timezone.now().isoformat(),
     }
 
     if item is None:
