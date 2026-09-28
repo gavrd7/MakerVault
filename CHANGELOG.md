@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.6.3.1 — in development
+
+- Added an explicit responsive viewport and mobile browser metadata so MakerVault scales correctly on phones and tablets.
+- Reworked the application shell below 900px into a sticky, horizontally scrollable touch navigation bar while preserving Administration, Account & Security and Sign out actions on small screens.
+- Added app-wide phone breakpoints with safe-area support, 44px touch targets, 16px form controls to avoid iOS input zoom, single-column forms/panels, responsive printer/settings/project layouts and full-screen mobile detail sheets.
+- AG Grid catalogue/inventory tables now stay readable on narrow screens using horizontal touch scrolling instead of crushing columns.
+- Mobile modals behave as bottom sheets with dynamic-viewport sizing and safe-area padding.
+- Removed `ComponentModel.manufacturer` from the database schema; board, printer and filament manufacturer models remain unchanged.
+- Removed manufacturer from the component API, search, catalogue table, detail view, add-component form and BOM component selector.
+- Removed manufacturer metadata from the starter component catalogue and stopped seed jobs from creating component-brand manufacturer records.
+- Migration `0020_remove_component_manufacturer` removes the component relation and deletes legacy manufacturer rows that were used only by components, while preserving manufacturers still referenced by boards, printers or filaments.
+- Older clients may still submit a legacy `manufacturer` field when creating a component; MakerVault safely ignores it rather than recreating the removed dataset.
+- Added regression coverage proving components have no manufacturer field, the API does not recreate legacy brands, and starter seed data no longer creates component-only manufacturers.
+
 ## v0.6.2.1 — in development
 
 - Added a live SimplyPrint REST API adapter using account/company ID plus API-key authentication.
