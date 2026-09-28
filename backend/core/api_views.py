@@ -3420,12 +3420,9 @@ def printing_slot_add_to_inventory(request, slot_id):
                 return change_denied
 
             with transaction.atomic():
-                spool = Spool.objects.select_for_update().select_related(
-                    "filament__manufacturer",
-                    "filament__filament_manufacturer",
-                    "storage_location",
-                    "assigned_printer",
-                ).filter(pk=existing_spool_id).first()
+                spool = Spool.objects.select_for_update().filter(
+                    pk=existing_spool_id
+                ).first()
                 if not spool:
                     return _error("Selected MakerVault spool was not found.", status=404)
 
