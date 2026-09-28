@@ -135,10 +135,20 @@ export default function PrintingPage({ config, projects }) {
     <section className="panel printingSection">
       <div className="panelHead"><div><h3>Printers &amp; loaded filament</h3><p>Filament slots are provider-neutral so CFS, AMS and later systems can use the same model.</p></div></div>
       <div className="printingCards">
-        {(data?.printers || []).map(printer => <article className="printingCard" key={printer.id}>
-          <div className="printingCardHead">
-            <div><strong>{printer.name}</strong><small>{[printer.manufacturer, printer.model, printer.location].filter(Boolean).join(" · ")}</small></div>
-            <div className="printingBadges">{printer.is_active ? <Badge tone="good">Active</Badge> : <Badge>Inactive</Badge>}{printer.catalogue?.multi_material_label && <Badge>{printer.catalogue.multi_material_label}</Badge>}<Badge>{printer.slots.length} slots</Badge>{canChangePrinter && <button type="button" onClick={() => setManagePrinter(printer)}>Manage</button>}</div>
+        {(data?.printers || []).map(printer => <article className="printingCard printingPrinterCard" key={printer.id}>
+          <div className="printingPrinterHeader">
+            <div className="printingPrinterImage">
+              {printer.catalogue?.image
+                ? <img src={printer.catalogue.image} alt={printer.catalogue.display_name || printer.model || printer.name} loading="lazy" />
+                : <span aria-hidden="true">3D</span>}
+            </div>
+            <div className="printingPrinterHeaderMain">
+              <div className="printingCardHead">
+                <div><strong>{printer.name}</strong><small>{[printer.manufacturer, printer.model, printer.location].filter(Boolean).join(" · ")}</small></div>
+                <div className="printingBadges">{printer.is_active ? <Badge tone="good">Active</Badge> : <Badge>Inactive</Badge>}{printer.catalogue?.multi_material_label && <Badge>{printer.catalogue.multi_material_label}</Badge>}<Badge>{printer.slots.length} slots</Badge>{canChangePrinter && <button type="button" onClick={() => setManagePrinter(printer)}>Manage</button>}</div>
+              </div>
+              {printer.catalogue?.image_source_provider && <small className="printingPrinterImageCredit">Image: {printer.catalogue.image_source_provider}{printer.catalogue.image_license ? " · " + printer.catalogue.image_license : ""}</small>}
+            </div>
           </div>
           <div className="printingSlotGrid">
             {printer.slots.filter(slot => slot.is_loaded).map(slot => <div className="printingSlot" key={slot.id}>
