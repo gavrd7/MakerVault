@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
 
+from .version import VERSION
+
 from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -39,7 +41,7 @@ USE_TZ = True
 
 MAKERVAULT_CURRENCY = os.getenv("MAKERVAULT_CURRENCY", "GBP")
 MAKERVAULT_MEASUREMENT_SYSTEM = os.getenv("MAKERVAULT_MEASUREMENT_SYSTEM", "metric")
-MAKERVAULT_VERSION = "0.6.0"
+MAKERVAULT_VERSION = VERSION
 MAKERVAULT_LICENSE = "AGPL-3.0-or-later"
 MAKERVAULT_SOURCE_URL = os.getenv("MAKERVAULT_SOURCE_URL", "https://github.com/gavrd7/MakerVault")
 ALLOW_LOCAL_REGISTRATION = env_bool("ALLOW_LOCAL_REGISTRATION", False)
