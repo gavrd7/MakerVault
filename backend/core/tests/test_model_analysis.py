@@ -31,6 +31,19 @@ def binary_stl_boxish():
     return bytes(data)
 
 
+def open_triangle_stl():
+    return b"""solid open
+facet normal 0 0 1
+outer loop
+vertex 0 0 0
+vertex 20 0 0
+vertex 0 20 0
+endloop
+endfacet
+endsolid open
+"""
+
+
 def simple_3mf():
     model_xml = """<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
@@ -71,7 +84,24 @@ class ModelGeometryAnalysisTests(TestCase):
         self.assertEqual(result["complexity"], "low")
         self.assertGreater(result["surface_area_mm2"], 0)
         self.assertGreater(result["volume_mm3"], 0)
+        self.assertEqual(result["analysis_version"], 2)
+        self.assertTrue(result["mesh_quality"]["watertight"])
+        self.assertEqual(result["mesh_quality"]["boundary_edges"], 0)
+        self.assertEqual(result["mesh_quality"]["non_manifold_edges"], 0)
+        self.assertEqual(len(result["orientation"]["candidates"]), 6)
+        self.assertIn(result["orientation"]["recommended"]["key"], {"x+", "x-", "y+", "y-", "z+", "z-"})
+        self.assertGreaterEqual(result["orientation"]["recommended"]["support_risk_pct"], 0)
+        self.assertLessEqual(result["orientation"]["recommended"]["support_risk_pct"], 100)
         self.assertIn("assumes millimetres", result["warnings"][0])
+
+    def test_open_mesh_reports_boundary_edges_and_orientation_estimate(self):
+        result = analyse_stl(open_triangle_stl())
+        self.assertFalse(result["mesh_quality"]["watertight"])
+        self.assertEqual(result["mesh_quality"]["status"], "open")
+        self.assertEqual(result["mesh_quality"]["boundary_edges"], 3)
+        self.assertEqual(result["mesh_quality"]["non_manifold_edges"], 0)
+        self.assertEqual(len(result["orientation"]["candidates"]), 6)
+        self.assertTrue(any("boundary edge" in warning for warning in result["warnings"]))
 
     def test_3mf_analysis_uses_declared_units_and_objects(self):
         result = analyse_3mf(simple_3mf())
@@ -82,6 +112,8 @@ class ModelGeometryAnalysisTests(TestCase):
         self.assertEqual(result["vertex_count"], 4)
         self.assertEqual(result["dimensions_mm"], {"x": 15.0, "y": 25.0, "z": 35.0})
         self.assertGreater(result["volume_cm3"], 0)
+        self.assertTrue(result["mesh_quality"]["watertight"])
+        self.assertEqual(len(result["orientation"]["candidates"]), 6)
 
 
 class ModelAnalysisApiTests(TestCase):
