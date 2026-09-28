@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.6.3.1 — in development
+## v0.6.3.2 — in development
 
 - Added an explicit responsive viewport and mobile browser metadata so MakerVault scales correctly on phones and tablets.
 - Reworked the application shell below 900px into a sticky, horizontally scrollable touch navigation bar while preserving Administration, Account & Security and Sign out actions on small screens.
@@ -13,6 +13,11 @@
 - Migration `0020_remove_component_manufacturer` removes the component relation and deletes legacy manufacturer rows that were used only by components, while preserving manufacturers still referenced by boards, printers or filaments.
 - Older clients may still submit a legacy `manufacturer` field when creating a component; MakerVault safely ignores it rather than recreating the removed dataset.
 - Added regression coverage proving components have no manufacturer field, the API does not recreate legacy brands, and starter seed data no longer creates component-only manufacturers.
+- Hardened the component-manufacturer migration sequence for PostgreSQL by separating data cleanup from the schema change, avoiding deferred-trigger conflicts during upgrade.
+- Added a follow-up migration that merges duplicate generic components exposed by manufacturer removal while preserving and re-pointing inventory, BOM, file and product-listing references.
+- Made starter component seeding tolerant of pre-existing duplicate identities so catalogue startup cannot fail with `MultipleObjectsReturned`.
+- Reorganised Settings into dedicated **Library updates** and **3D Printing** tabs, establishing a per-feature settings pattern for future areas of MakerVault.
+- Reworked 3D-printing integration cards to use responsive, practical-width columns with wrapping actions instead of compressing four cards into one row.
 
 ## v0.6.2.1 — in development
 
