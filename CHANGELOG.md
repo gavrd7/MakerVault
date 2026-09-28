@@ -1,6 +1,21 @@
 # Changelog
 
-## v0.6.0.5 — in development
+## v0.6.2.1 — in development
+
+- Added a live SimplyPrint REST API adapter using account/company ID plus API-key authentication.
+- SimplyPrint API keys are retained server-side in integration configuration and are never returned by the Settings API; the frontend only receives an `api_key_configured` flag.
+- SimplyPrint is deliberately **read-only/import-only** in this first build so MakerVault remains authoritative.
+- Printer discovery uses persistent provider-neutral `ExternalPrinterLink` records; exact existing MakerVault printer-name matches can be linked without overwriting native model/serial/location/notes.
+- Imported printer state records SimplyPrint online/state/group/API/UI/firmware/temperature context in printer profile metadata and surfaces the current SimplyPrint state on the printer card.
+- SimplyPrint assigned filament/extruders are mapped into provider-neutral `PrinterFilamentSlot` records without automatically creating MakerVault physical spools.
+- SimplyPrint filament UID/NFC/colour/material metadata is retained on discovered slots; exact physical spool links become persistent only after the user explicitly links/creates the spool.
+- The existing **Add to inventory / Link existing spool** flow now records exact SimplyPrint filament IDs as `ExternalSpoolLink` mappings for future deterministic syncs.
+- Recent SimplyPrint print history imports into native MakerVault `PrintJob` records with status, duration, filename/provenance and aggregate reported filament usage, without guessing which MakerVault spool supplied the material.
+- Added manual connection testing, manual Sync now and persistent scheduled sync controls to the SimplyPrint Settings card.
+- Legacy SimplyPrint placeholder settings are upgraded from **Planned** to **Not configured** automatically.
+- Added regression coverage for credential masking, API-key probe headers, existing-printer linking, no-automatic-spool creation, print-history import and explicit SimplyPrint spool mapping.
+
+## v0.6.0.5 — stable v0.6.0 baseline
 
 - Fixed Spoolman sync failures caused by high-precision floating-point weights/costs by quantizing imported numeric values to MakerVault field precision before validation.
 - Added regression coverage for long-decimal Spoolman remaining weight, initial weight, purchase cost, filament diameter, density and spool weights.
