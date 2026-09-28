@@ -1635,7 +1635,7 @@ class PrintingFoundationTests(TestCase):
         )
         result = printing_integrations_tick()
         self.assertEqual(result["queued"], ["spoolman"])
-        delay_mock.assert_called_once_with("spoolman", triggered_by="schedule")
+        delay_mock.assert_called_once_with(setting.pk, triggered_by="schedule")
         setting.refresh_from_db()
         self.assertGreater(setting.next_sync_at, timezone.now())
 
