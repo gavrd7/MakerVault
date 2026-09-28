@@ -138,8 +138,12 @@ export default function PrintingPage({ config, projects }) {
         {(data?.printers || []).map(printer => <article className="printingCard printingPrinterCard" key={printer.id}>
           <div className="printingPrinterHeader">
             <div className="printingPrinterImage">
-              {printer.catalogue?.image
-                ? <img src={printer.catalogue.image} alt={printer.catalogue.display_name || printer.model || printer.name} loading="lazy" />
+              {(printer.multi_material_installed && printer.catalogue?.image_multi_material) || printer.catalogue?.image
+                ? <img
+                    src={(printer.multi_material_installed && printer.catalogue?.image_multi_material) || printer.catalogue?.image}
+                    alt={printer.catalogue.display_name || printer.model || printer.name}
+                    loading="lazy"
+                  />
                 : <span aria-hidden="true">3D</span>}
             </div>
             <div className="printingPrinterHeaderMain">
@@ -147,7 +151,10 @@ export default function PrintingPage({ config, projects }) {
                 <div><strong>{printer.name}</strong><small>{[printer.manufacturer, printer.model, printer.location].filter(Boolean).join(" · ")}</small></div>
                 <div className="printingBadges">{printer.is_active ? <Badge tone="good">Active</Badge> : <Badge>Inactive</Badge>}{printer.installed_multi_material_label && <Badge>{printer.installed_multi_material_label}</Badge>}{printer.multi_material_installed && <Badge>{printer.slots.length} slots</Badge>}{canChangePrinter && <button type="button" onClick={() => setManagePrinter(printer)}>Manage</button>}</div>
               </div>
-              {printer.catalogue?.image_source_provider && <small className="printingPrinterImageCredit">Image: {printer.catalogue.image_source_provider}{printer.catalogue.image_license ? " · " + printer.catalogue.image_license : ""}</small>}
+              {((printer.multi_material_installed && printer.catalogue?.image_multi_material && printer.catalogue?.image_multi_material_source_provider) || printer.catalogue?.image_source_provider) && <small className="printingPrinterImageCredit">
+                Image: {(printer.multi_material_installed && printer.catalogue?.image_multi_material && printer.catalogue?.image_multi_material_source_provider) || printer.catalogue?.image_source_provider}
+                {((printer.multi_material_installed && printer.catalogue?.image_multi_material && printer.catalogue?.image_multi_material_license) || printer.catalogue?.image_license) ? " · " + ((printer.multi_material_installed && printer.catalogue?.image_multi_material && printer.catalogue?.image_multi_material_license) || printer.catalogue?.image_license) : ""}
+              </small>}
             </div>
           </div>
           <div className="printingSlotGrid">
