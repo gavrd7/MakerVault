@@ -52,6 +52,7 @@ export default function PrintingPage({ config, projects }) {
   const canAddPrinter = Boolean(config?.permissions?.add_printer);
   const canChangePrinter = Boolean(config?.permissions?.change_printer);
   const canAddFilament = Boolean(config?.permissions?.add_filament);
+  const canChangeFilament = Boolean(config?.permissions?.change_filament);
   const canAddSpool = Boolean(config?.permissions?.add_spool);
   const canChangeSpool = Boolean(config?.permissions?.change_spool);
   const canDeleteSpool = Boolean(config?.permissions?.delete_spool);
@@ -62,6 +63,17 @@ export default function PrintingPage({ config, projects }) {
   const canAddLocation = Boolean(config?.permissions?.add_printing_location);
   const recentSpools = newestFirst(data?.spools).slice(0, 5);
   const recentModels = newestFirst(data?.models).slice(0, 5);
+
+  if (workspaceView === "filaments") {
+    return <FilamentLibraryPage
+      filaments={data?.filaments || []}
+      manufacturers={data?.filament_manufacturers || []}
+      materials={data?.common_filament_materials || []}
+      canChangeFilament={canChangeFilament}
+      onBack={() => setWorkspaceView("overview")}
+      onChanged={load}
+    />;
+  }
 
   if (workspaceView === "spools") {
     return <SpoolInventoryPage
@@ -103,6 +115,7 @@ export default function PrintingPage({ config, projects }) {
         {canAddPrinter && <button onClick={() => setModal("printer")}>＋ Printer</button>}
         {canAddLocation && <button onClick={() => setModal("location")}>＋ Location</button>}
         {canAddFilament && <button onClick={() => setModal("filament")}>＋ Filament</button>}
+        <button onClick={() => setWorkspaceView("filaments")}>Filament library</button>
         {canAddFilament && <button onClick={() => setModal("filamentCatalogue")}>⌕ Filament catalogue</button>}
         {canAddSpool && <button onClick={() => setModal("spool")}>＋ Spool</button>}
         {canAddModel && <button className="primary" onClick={() => setModal("model")}>＋ Model</button>}
@@ -699,6 +712,191 @@ function PrinterModal({ manufacturers, models, locations, onClose, onSaved }) {
       {selectedModel && <div className="settingsCallout full"><strong>Catalogue profile</strong><p>{selectedModel.build_volume?.x || "?"} × {selectedModel.build_volume?.y || "?"} × {selectedModel.build_volume?.z || "?"} mm · {selectedModel.enclosed === true ? "Enclosed" : selectedModel.enclosed === false ? "Open" : "Enclosure unknown"}{selectedModel.multi_material_label ? " · " + selectedModel.multi_material_label : ""}</p></div>}
       <label className="full">Notes<textarea rows="3" value={form.notes} onChange={e => set("notes", e.target.value)} /></label>
       <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy || !form.printer_manufacturer_id}>{busy ? "Saving…" : "Add printer"}</button></div>
+    </form>
+  </Modal>;
+}
+
+
+function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFilament, onBack, onChanged }) {
+  const [query, setQuery] = useState("");
+  const [editFilament, setEditFilament] = useState(null);
+  const term = query.trim().toLowerCase();
+  const rows = newestFirst(filaments).filter(item => !term || [
+    item.display_name, item.name, item.manufacturer, item.material, item.color_name,
+    item.finish, item.pattern, item.source,
+  ].filter(Boolean).join(" ").toLowerCase().includes(term));
+
+  return <div className="printingStack">
+    <section className="panel printingLibraryHero">
+      <div>
+        <span className="settingsEyebrow">3D Printing</span>
+        <h2>Filament Library</h2>
+        <p>Saved filament products shared by physical spools. Editing a product updates its descriptive data everywhere that product is used.</p>
+      </div>
+      <div className="printingHeroActions">
+        <button onClick={onBack}>← Printing overview</button>
+      </div>
+    </section>
+
+    <section className="panel printingSection">
+      <div className="printingLibraryToolbar">
+        <div><strong>{filaments.length} filament product{filaments.length === 1 ? "" : "s"}</strong><small>{rows.length !== filaments.length ? rows.length + " matching" : "Newest updated first"}</small></div>
+        <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search manufacturer, product, material, colour or source…" />
+      </div>
+      <div className="printingList">
+        {rows.map(item => <article className="printingListRow printingLibraryRow" key={item.id}>
+          <span className={"printingSwatch filamentPreview-" + (item.transparency || "opaque")} style={filamentSwatchStyle(item)} />
+          <div>
+            <strong>{item.display_name || item.name}</strong>
+            <small>{[item.manufacturer, item.material, item.color_name].filter(Boolean).join(" · ")}</small>
+            <small>{item.diameter_mm || "?"} mm · {grams(item.nominal_weight_g)} nominal · {item.source || "Manual"}</small>
+          </div>
+          <div className="printingBadges">
+            {item.transparency && item.transparency !== "opaque" && <Badge>{item.transparency_label || item.transparency}</Badge>}
+            {item.glow && <Badge>Glow</Badge>}
+            {canChangeFilament && <button type="button" onClick={() => setEditFilament(item)}>Edit</button>}
+          </div>
+        </article>)}
+        {!rows.length && <div className="printingEmptyInline">{term ? "No filament products match this search." : "No saved filament products yet."}</div>}
+      </div>
+    </section>
+
+    {editFilament && <FilamentEditModal
+      filament={editFilament}
+      manufacturers={manufacturers}
+      materials={materials}
+      onClose={() => setEditFilament(null)}
+      onSaved={async () => { setEditFilament(null); await onChanged(); }}
+    />}
+  </div>;
+}
+
+
+function FilamentEditModal({ filament, manufacturers, materials, onClose, onSaved }) {
+  const manufacturerNames = Array.from(new Set([
+    ...manufacturers.map(item => item.name),
+    filament.manufacturer,
+  ].filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  const materialNames = Array.from(new Set([
+    ...materials,
+    filament.material,
+  ].filter(Boolean))).sort((a, b) => a.localeCompare(b));
+
+  const [customManufacturer, setCustomManufacturer] = useState(
+    Boolean(filament.manufacturer) && !manufacturerNames.includes(filament.manufacturer)
+  );
+  const [customMaterial, setCustomMaterial] = useState(
+    Boolean(filament.material) && !materialNames.includes(filament.material)
+  );
+  const [form, setForm] = useState({
+    manufacturer_name: filament.manufacturer || "",
+    name: filament.name || "",
+    material: filament.material || "",
+    color_name: filament.color_name || "",
+    color_hex: filament.color_hex || "#777777",
+    color_hexes: filament.color_hexes || [],
+    transparency: filament.transparency || "opaque",
+    multi_color_direction: filament.multi_color_direction || "",
+    finish: filament.finish || "",
+    pattern: filament.pattern || "",
+    glow: Boolean(filament.glow),
+    diameter_mm: filament.diameter_mm ?? "1.75",
+    density_g_cm3: filament.density_g_cm3 ?? "",
+    nominal_weight_g: filament.nominal_weight_g ?? "",
+    empty_spool_weight_g: filament.empty_spool_weight_g ?? "",
+    nozzle_temp_min_c: filament.nozzle_temp_min_c ?? "",
+    nozzle_temp_max_c: filament.nozzle_temp_max_c ?? "",
+    bed_temp_min_c: filament.bed_temp_min_c ?? "",
+    bed_temp_max_c: filament.bed_temp_max_c ?? "",
+    drying_temp_c: filament.drying_temp_c ?? "",
+    drying_time_hours: filament.drying_time_hours ?? "",
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const set = (key, value) => setForm(current => ({ ...current, [key]: value }));
+
+  async function submit(event) {
+    event.preventDefault();
+    setBusy(true); setError("");
+    try {
+      await apiFetch("/api/printing/filaments/" + filament.id + "/", {
+        method: "PATCH",
+        body: form,
+      });
+      await onSaved();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <Modal
+    title={"Edit filament · " + (filament.display_name || filament.name)}
+    subtitle="Changes apply to this shared filament product and therefore to every spool that uses it."
+    onClose={onClose}
+    wide
+  >
+    <form className="formGrid" onSubmit={submit}>
+      {error && <div className="formError full">{error}</div>}
+
+      <label>Manufacturer<select value={customManufacturer ? "__custom__" : form.manufacturer_name} onChange={e => {
+        if (e.target.value === "__custom__") {
+          setCustomManufacturer(true);
+          set("manufacturer_name", "");
+        } else {
+          setCustomManufacturer(false);
+          set("manufacturer_name", e.target.value);
+        }
+      }}>
+        <option value="">Choose manufacturer…</option>
+        {manufacturerNames.map(name => <option key={name} value={name}>{name}</option>)}
+        <option value="__custom__">Other / custom manufacturer</option>
+      </select></label>
+      {customManufacturer && <label>Custom manufacturer<input required value={form.manufacturer_name} onChange={e => set("manufacturer_name", e.target.value)} /></label>}
+
+      <label>Material<select value={customMaterial ? "__custom__" : form.material} onChange={e => {
+        if (e.target.value === "__custom__") {
+          setCustomMaterial(true);
+          set("material", "");
+        } else {
+          setCustomMaterial(false);
+          set("material", e.target.value);
+        }
+      }}>
+        <option value="">Choose material…</option>
+        {materialNames.map(name => <option key={name} value={name}>{name}</option>)}
+        <option value="__custom__">Other / custom material</option>
+      </select></label>
+      {customMaterial && <label>Custom material<input required value={form.material} onChange={e => set("material", e.target.value)} /></label>}
+
+      <label>Product name<input required value={form.name} onChange={e => set("name", e.target.value)} /></label>
+      <label>Colour name<input value={form.color_name} onChange={e => set("color_name", e.target.value)} /></label>
+      <label>Appearance<select value={form.transparency} onChange={e => set("transparency", e.target.value)}><option value="opaque">Opaque</option><option value="translucent">Translucent</option><option value="transparent">Transparent</option></select></label>
+      <label>Colour<div className="filamentCustomColour"><input type="color" value={form.color_hex || "#777777"} onChange={e => setForm(current => ({ ...current, color_hex: e.target.value, color_hexes: [] }))} /><input value={form.color_hex} onChange={e => setForm(current => ({ ...current, color_hex: e.target.value, color_hexes: [] }))} maxLength="9" placeholder="#RRGGBB" /></div></label>
+      <label>Finish<input value={form.finish} onChange={e => set("finish", e.target.value)} placeholder="Matte, silk, textured…" /></label>
+      <label>Pattern<input value={form.pattern} onChange={e => set("pattern", e.target.value)} placeholder="Optional pattern" /></label>
+      <label>Multi-colour direction<input value={form.multi_color_direction} onChange={e => set("multi_color_direction", e.target.value)} placeholder="Optional" /></label>
+      <label className="settingsToggle"><div><strong>Glow filament</strong><small>Mark this product as glow-in-the-dark.</small></div><input type="checkbox" checked={form.glow} onChange={e => set("glow", e.target.checked)} /></label>
+      <label>Diameter (mm)<input type="number" min="0.1" step="0.01" value={form.diameter_mm} onChange={e => set("diameter_mm", e.target.value)} /></label>
+      <label>Density (g/cm³)<input type="number" min="0" step="0.001" value={form.density_g_cm3} onChange={e => set("density_g_cm3", e.target.value)} /></label>
+      <label>Nominal weight (g)<input type="number" min="0" step="0.01" value={form.nominal_weight_g} onChange={e => set("nominal_weight_g", e.target.value)} /></label>
+      <label>Empty spool weight (g)<input type="number" min="0" step="0.01" value={form.empty_spool_weight_g} onChange={e => set("empty_spool_weight_g", e.target.value)} /></label>
+      <label>Nozzle temp min (°C)<input type="number" value={form.nozzle_temp_min_c} onChange={e => set("nozzle_temp_min_c", e.target.value)} /></label>
+      <label>Nozzle temp max (°C)<input type="number" value={form.nozzle_temp_max_c} onChange={e => set("nozzle_temp_max_c", e.target.value)} /></label>
+      <label>Bed temp min (°C)<input type="number" value={form.bed_temp_min_c} onChange={e => set("bed_temp_min_c", e.target.value)} /></label>
+      <label>Bed temp max (°C)<input type="number" value={form.bed_temp_max_c} onChange={e => set("bed_temp_max_c", e.target.value)} /></label>
+      <label>Drying temp (°C)<input type="number" value={form.drying_temp_c} onChange={e => set("drying_temp_c", e.target.value)} /></label>
+      <label>Drying time (hours)<input type="number" min="0" step="0.1" value={form.drying_time_hours} onChange={e => set("drying_time_hours", e.target.value)} /></label>
+
+      <div className="settingsCallout full">
+        <strong>Source provenance is preserved</strong>
+        <p>{filament.source || "Manual"}{filament.source_type && filament.source_type !== "manual" ? " · " + filament.source_type : ""}. Editing does not discard the original catalogue/source attribution.</p>
+      </div>
+      <div className="formActions full">
+        <button type="button" onClick={onClose}>Cancel</button>
+        <button className="primary" disabled={busy || !form.manufacturer_name || !form.material || !form.name}>{busy ? "Saving…" : "Save filament changes"}</button>
+      </div>
     </form>
   </Modal>;
 }
