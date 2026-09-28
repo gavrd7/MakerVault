@@ -156,7 +156,7 @@ function threeMfHasVisibleMesh(root) {
 }
 
 
-function parseProduction3mf(buffer) {
+function parseProduction3mf(buffer, projectOnly = false) {
   const archive = fflate.unzipSync(new Uint8Array(buffer));
   const decoder = new TextDecoder();
   const documents = new Map();
@@ -195,17 +195,61 @@ function parseProduction3mf(buffer) {
       : [];
 
   const objectExtruders = new Map();
+  const objectNames = new Map();
+  const plateMembershipQueues = new Map();
+  const projectPlates = [];
   const modelSettingsBytes = archive["Metadata/model_settings.config"] || archive["metadata/model_settings.config"];
+  if (projectOnly && !modelSettingsBytes) return null;
   if (modelSettingsBytes) {
     const settingsXml = new DOMParser().parseFromString(decoder.decode(modelSettingsBytes), "application/xml");
-    for (const object of Array.from(settingsXml.getElementsByTagName("object"))) {
-      const id = object.getAttribute("id");
-      let extruder = 0;
-      for (const meta of Array.from(object.children || [])) {
-        if (threeMfLocalName(meta.tagName) !== "metadata") continue;
-        if (meta.getAttribute("key") === "extruder") extruder = Number(meta.getAttribute("value")) || 0;
+
+    function metadataMap(element) {
+      const values = {};
+      for (const child of Array.from(element?.children || [])) {
+        if (threeMfLocalName(child.tagName) !== "metadata") continue;
+        const key = child.getAttribute("key") || child.getAttribute("name");
+        const value = child.getAttribute("value") ?? child.textContent?.trim();
+        if (key && value != null) values[key] = value;
       }
-      if (id && extruder) objectExtruders.set(id, extruder);
+      return values;
+    }
+
+    for (const child of Array.from(settingsXml.documentElement?.children || [])) {
+      const kind = threeMfLocalName(child.tagName);
+      if (kind === "object") {
+        const id = child.getAttribute("id");
+        const metadata = metadataMap(child);
+        const extruder = Number(metadata.extruder) || 0;
+        if (id && extruder) objectExtruders.set(id, extruder);
+        if (id && metadata.name) objectNames.set(id, metadata.name);
+        continue;
+      }
+      if (kind !== "plate") continue;
+
+      const metadata = metadataMap(child);
+      const plateId = String(metadata.plater_id || metadata.index || projectPlates.length + 1);
+      const instances = [];
+      for (const instance of Array.from(child.children || [])) {
+        if (threeMfLocalName(instance.tagName) !== "model_instance") continue;
+        const instanceMetadata = metadataMap(instance);
+        const objectId = String(instanceMetadata.object_id || "");
+        if (!objectId) continue;
+        instances.push({
+          objectId,
+          instanceId: String(instanceMetadata.instance_id || ""),
+          identifyId: String(instanceMetadata.identify_id || ""),
+        });
+        const queue = plateMembershipQueues.get(objectId) || [];
+        queue.push(plateId);
+        plateMembershipQueues.set(objectId, queue);
+      }
+      projectPlates.push({
+        id: plateId,
+        name: String(metadata.plater_name || ""),
+        bedType: String(metadata.bed_type || ""),
+        objectCount: instances.length,
+        instances,
+      });
     }
   }
 
@@ -292,7 +336,7 @@ function parseProduction3mf(buffer) {
   const group = new THREE.Group();
   const mainPath = documents.has("3D/3dmodel.model") ? "3D/3dmodel.model" : documents.keys().next().value;
 
-  function addObject(path, objectId, matrix, inheritedExtruder, stack = new Set()) {
+  function addObject(path, objectId, matrix, inheritedExtruder, plateId = "", rootObjectId = "", stack = new Set()) {
     const key = path + "#" + objectId;
     if (stack.has(key)) return;
     const document = documents.get(path);
@@ -301,10 +345,15 @@ function parseProduction3mf(buffer) {
     const nextStack = new Set(stack);
     nextStack.add(key);
     const objectExtruder = objectExtruders.get(String(objectId)) || inheritedExtruder || 1;
+    const topObjectId = String(rootObjectId || objectId);
 
     const mesh = meshFromObject(object, document.scale, objectExtruder);
     if (mesh) {
       mesh.applyMatrix4(matrix);
+      mesh.userData.plateId = String(plateId || "");
+      mesh.userData.objectId = topObjectId;
+      mesh.userData.objectName = objectNames.get(topObjectId) || "";
+      mesh.userData.extruder = objectExtruder;
       group.add(mesh);
     }
 
@@ -312,7 +361,15 @@ function parseProduction3mf(buffer) {
     for (const component of threeMfChildren(components, "component")) {
       const componentPath = resolvePath(path, threeMfAttr(component, "path"));
       const componentMatrix = matrix.clone().multiply(threeMfTransform(threeMfAttr(component, "transform")));
-      addObject(componentPath, threeMfAttr(component, "objectid"), componentMatrix, objectExtruder, nextStack);
+      addObject(
+        componentPath,
+        threeMfAttr(component, "objectid"),
+        componentMatrix,
+        objectExtruder,
+        plateId,
+        topObjectId,
+        nextStack,
+      );
     }
   }
 
@@ -320,7 +377,10 @@ function parseProduction3mf(buffer) {
   const build = threeMfChildren(main?.root, "build")[0];
   const items = threeMfChildren(build, "item");
   for (const item of items) {
-    addObject(mainPath, threeMfAttr(item, "objectid"), threeMfTransform(threeMfAttr(item, "transform")), 1);
+    const objectId = String(threeMfAttr(item, "objectid"));
+    const queue = plateMembershipQueues.get(objectId) || [];
+    const plateId = queue.length ? queue.shift() : "";
+    addObject(mainPath, objectId, threeMfTransform(threeMfAttr(item, "transform")), 1, plateId, objectId);
   }
 
   // Production/Bambu projects can keep all printable meshes in child model
@@ -331,17 +391,26 @@ function parseProduction3mf(buffer) {
       for (const [objectId, object] of document.objects) {
         if (!threeMfChildren(object, "mesh")[0]) continue;
         const mesh = meshFromObject(object, document.scale, objectExtruders.get(objectId) || 1);
-        if (mesh) group.add(mesh);
+        if (mesh) {
+          mesh.userData.objectId = String(objectId);
+          mesh.userData.objectName = objectNames.get(String(objectId)) || "";
+          mesh.userData.extruder = objectExtruders.get(String(objectId)) || 1;
+          group.add(mesh);
+        }
       }
     }
   }
 
   if (!threeMfHasVisibleMesh(group)) throw new Error("The 3MF package contains no renderable mesh geometry.");
+  group.userData.projectStructure = modelSettingsBytes ? {
+    plates: projectPlates,
+    materialSlots: filamentColours.map((colour, index) => ({ slot: index + 1, colour: String(colour || "") })),
+  } : null;
   return group;
 }
 
 
-function ThreeScene({ option, wireframe, showGrid, showAxes, onLoaded, onError, viewerRef }) {
+function ThreeScene({ option, wireframe, showGrid, showAxes, selectedPlate, onLoaded, onError, viewerRef }) {
   const mountRef = useRef(null);
   const sceneRef = useRef(null);
 
@@ -393,9 +462,19 @@ function ThreeScene({ option, wireframe, showGrid, showAxes, onLoaded, onError, 
       camera.updateProjectionMatrix();
     }
 
+    function visibleBounds(root) {
+      const box = new THREE.Box3();
+      root?.traverse?.(child => {
+        if (child.isMesh && child.visible !== false && child.geometry?.attributes?.position?.count) {
+          box.expandByObject(child);
+        }
+      });
+      return box;
+    }
+
     function fitCamera(root) {
       if (!root) return;
-      const box = new THREE.Box3().setFromObject(root);
+      const box = visibleBounds(root);
       if (box.isEmpty()) return;
       const size = box.getSize(new THREE.Vector3());
       const center = box.getCenter(new THREE.Vector3());
@@ -425,6 +504,27 @@ function ThreeScene({ option, wireframe, showGrid, showAxes, onLoaded, onError, 
       axes.scale.setScalar(Math.max(maxDim / 40, 0.5));
     }
 
+    function applyPlateFilter(root, plateId) {
+      if (!root) return;
+      const wanted = String(plateId || "all");
+      let tagged = 0;
+      let visible = 0;
+      root.traverse?.(child => {
+        if (!child.isMesh) return;
+        const meshPlate = String(child.userData?.plateId || "");
+        if (meshPlate) tagged += 1;
+        child.visible = wanted === "all" || (meshPlate && meshPlate === wanted);
+        if (child.visible) visible += 1;
+      });
+      // Never turn a model blank if a third-party 3MF uses a plate mapping we
+      // do not yet understand. In that case retain the complete project view.
+      if (wanted !== "all" && (!tagged || !visible)) {
+        root.traverse?.(child => { if (child.isMesh) child.visible = true; });
+        return false;
+      }
+      return true;
+    }
+
     function addObject(root) {
       if (disposed) {
         disposeObject(root);
@@ -433,8 +533,9 @@ function ThreeScene({ option, wireframe, showGrid, showAxes, onLoaded, onError, 
       objectRoot = root;
       scene.add(root);
       setWireframe(root, wireframe);
+      applyPlateFilter(root, selectedPlate);
       fitCamera(root);
-      onLoaded?.();
+      onLoaded?.(root.userData?.projectStructure || null);
     }
 
     const manager = new THREE.LoadingManager();
@@ -468,10 +569,21 @@ function ThreeScene({ option, wireframe, showGrid, showAxes, onLoaded, onError, 
         .then(data => {
           if (disposed) return;
           let group = null;
+          // Bambu/Orca project 3MFs carry plate/material semantics outside the
+          // core 3MF model. Prefer MakerVault's project-aware parser for those
+          // packages so meshes can be filtered by build plate and coloured by
+          // their stored filament assignments.
           try {
-            group = new ThreeMFLoader(manager).parse(data);
+            group = parseProduction3mf(data, true);
           } catch {
             group = null;
+          }
+          if (!threeMfHasVisibleMesh(group)) {
+            try {
+              group = new ThreeMFLoader(manager).parse(data);
+            } catch {
+              group = null;
+            }
           }
           if (!threeMfHasVisibleMesh(group)) group = parseProduction3mf(data);
           addObject(group);
@@ -490,7 +602,7 @@ function ThreeScene({ option, wireframe, showGrid, showAxes, onLoaded, onError, 
       renderer.render(scene, camera);
     });
 
-    sceneRef.current = { scene, camera, renderer, controls, grid, axes, get object() { return objectRoot; }, fitCamera };
+    sceneRef.current = { scene, camera, renderer, controls, grid, axes, get object() { return objectRoot; }, fitCamera, applyPlateFilter };
     if (viewerRef) viewerRef.current = sceneRef.current;
 
     return () => {
@@ -518,6 +630,13 @@ function ThreeScene({ option, wireframe, showGrid, showAxes, onLoaded, onError, 
   useEffect(() => {
     if (sceneRef.current) sceneRef.current.axes.visible = showAxes;
   }, [showAxes]);
+
+  useEffect(() => {
+    const state = sceneRef.current;
+    if (!state?.object || !state.applyPlateFilter) return;
+    state.applyPlateFilter(state.object, selectedPlate);
+    state.fitCamera(state.object);
+  }, [selectedPlate]);
 
   return <div ref={mountRef} className="modelViewerCanvas" />;
 }
