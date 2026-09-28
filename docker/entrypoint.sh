@@ -71,6 +71,11 @@ echo "Applying database migrations..."
 gosu makervault python manage.py migrate --noinput
 gosu makervault python manage.py seed_roles
 
+echo "Encrypting any legacy user-private media..."
+if ! gosu makervault python manage.py migrate_private_storage; then
+  echo "WARNING: Some legacy private media could not be encrypted. MakerVault will continue and retry on the next start." >&2
+fi
+
 echo "Ensuring starter catalogue..."
 gosu makervault python manage.py seed_catalogue
 
