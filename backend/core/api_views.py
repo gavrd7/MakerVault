@@ -35,7 +35,7 @@ from .model_analysis import ModelAnalysisError, analyse_file_asset
 from .printing_integrations import PrintingIntegrationError, probe_simplyprint, probe_spoolman
 from .printing_sync import PrintingSyncError, next_spool_id, resolve_spoolman_review, sync_printing_integration
 from .tasks import queue_catalogue_maintenance_now
-from .storage_usage import storage_summary
+from .storage_usage import StorageQuotaExceeded, ensure_storage_capacity, storage_summary
 from .models import (
     BoardCompatibility,
     BoardModel,
@@ -75,6 +75,17 @@ def _error(message, status=400, fields=None):
     if fields:
         payload["fields"] = fields
     return JsonResponse(payload, status=status)
+
+
+def _storage_quota_response(request, exc):
+    summary = storage_summary(request.user)
+    return JsonResponse({
+        "error": "This upload would exceed your MakerVault storage quota.",
+        "code": "storage_quota_exceeded",
+        "requested_growth_bytes": exc.requested_bytes,
+        "projected_bytes": exc.projected_bytes,
+        "storage": summary,
+    }, status=413)
 
 
 def _read_json(request):
@@ -1211,6 +1222,10 @@ def files_lookup(request):
 
     original_name = Path(uploaded.name or "file").name
     try:
+        ensure_storage_capacity(request.user, getattr(uploaded, "size", 0) or 0)
+    except StorageQuotaExceeded as exc:
+        return _storage_quota_response(request, exc)
+    try:
         checksum = _sha256_upload(uploaded)
         asset = FileAsset(
             owner=request.user,
@@ -1346,6 +1361,10 @@ def file_versions(request, asset_id):
         return _error("Enter a version label for the new file.")
 
     original_name = Path(uploaded.name or "file").name
+    try:
+        ensure_storage_capacity(request.user, getattr(uploaded, "size", 0) or 0)
+    except StorageQuotaExceeded as exc:
+        return _storage_quota_response(request, exc)
     stored_asset = None
     try:
         checksum = _sha256_upload(uploaded)
@@ -1832,6 +1851,16 @@ def project_cover(request, project_id):
         return _error("Choose an image file.")
     try:
         content, filename = sanitise_uploaded_image(uploaded, project.slug or project.name)
+        existing_size = 0
+        if project.cover_image:
+            try:
+                existing_size = max(int(project.cover_image.size or 0), 0)
+            except (FileNotFoundError, OSError, ValueError, TypeError):
+                existing_size = 0
+        try:
+            ensure_storage_capacity(request.user, getattr(content, "size", 0) or 0, replacing_bytes=existing_size)
+        except StorageQuotaExceeded as exc:
+            return _storage_quota_response(request, exc)
         if project.cover_image:
             project.cover_image.delete(save=False)
         project.cover_image.save(filename, content, save=False)
@@ -1855,6 +1884,10 @@ def project_gallery(request, project_id):
         return _error("Choose an image file.")
     try:
         content, filename = sanitise_uploaded_image(uploaded, f"{project.slug}-gallery")
+        try:
+            ensure_storage_capacity(request.user, getattr(content, "size", 0) or 0)
+        except StorageQuotaExceeded as exc:
+            return _storage_quota_response(request, exc)
         asset = FileAsset(
             owner=project.owner or request.user,
             project=project,
@@ -1921,6 +1954,10 @@ def project_files(request, project_id):
         return _error("Unknown file category.")
 
     original_name = Path(uploaded.name or "project-file").name
+    try:
+        ensure_storage_capacity(request.user, getattr(uploaded, "size", 0) or 0)
+    except StorageQuotaExceeded as exc:
+        return _storage_quota_response(request, exc)
     try:
         checksum = _sha256_upload(uploaded)
         asset = FileAsset(
@@ -4214,6 +4251,10 @@ def printing_models(request):
         revision_version = str(payload.get("revision_version") or "1.0").strip()
         if not revision_version:
             return _error("Revision version is required.")
+        try:
+            ensure_storage_capacity(request.user, getattr(uploaded, "size", 0) or 0)
+        except StorageQuotaExceeded as exc:
+            return _storage_quota_response(request, exc)
 
         stored_asset = None
         try:
@@ -4423,6 +4464,10 @@ def printing_model_revision_upload(request, model_id):
         return _error("Revision version is required.")
     if ModelRevision.objects.filter(model=model, version=version).exists():
         return _error("That revision version already exists for this model.")
+    try:
+        ensure_storage_capacity(request.user, getattr(uploaded, "size", 0) or 0)
+    except StorageQuotaExceeded as exc:
+        return _storage_quota_response(request, exc)
 
     previous_link = (
         ModelRevisionAsset.objects.filter(
