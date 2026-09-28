@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.6.6.1 — in development
+## v0.6.6.2 — in development
 
 - Raised local model-analysis format to version 3 for slicer-aware 3MF metadata.
 - Added bounded parsing of slicer metadata/config files embedded inside 3MF packages.
@@ -10,6 +10,10 @@
 - Added a dedicated Slicer metadata section to the Model Intelligence panel with source-file disclosure and explicit guidance that MakerVault is reading saved package metadata rather than running a slicer.
 - Slicer metadata parsing is size-bounded and uses safe XML parsing; model files remain local to MakerVault.
 - Added regression coverage using an OrcaSlicer-style 3MF project settings package.
+- Added a production-style 3MF viewer fallback for Bambu/Orca multi-file packages that the stock Three.js 3MF loader can otherwise render as an empty scene.
+- Added multi-plate project structure extraction from `model_settings.config`, including plate membership, object counts, material slots and multicolour detection.
+- Multi-plate projects no longer show misleading combined-project orientation or owned-printer-fit guidance; those are reserved for future per-plate evaluation.
+- Improved initial/reset camera framing so loaded geometry is centred against both horizontal and vertical viewport dimensions.
 
 
 ## v0.6.5 — 2026-09-28
