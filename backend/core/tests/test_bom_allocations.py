@@ -18,9 +18,9 @@ class BomAllocationApiTests(TestCase):
             password="test-password",
         )
         self.client.force_login(self.user)
-        self.project = Project.objects.create(name="Voice speaker", created_by=self.user)
-        self.other_project = Project.objects.create(name="Other build", created_by=self.user)
-        self.stock = InventoryItem.objects.create(
+        self.project = Project.objects.create(owner=self.user, name="Voice speaker", created_by=self.user)
+        self.other_project = Project.objects.create(owner=self.user, name="Other build", created_by=self.user)
+        self.stock = InventoryItem.objects.create(owner=self.user, 
             inventory_id="OTH-0001",
             item_type="other",
             custom_name="M3 screws",
@@ -85,7 +85,7 @@ class BomAllocationApiTests(TestCase):
         first = self.allocate(bom["id"], 1.5)
         self.assertEqual(first.status_code, 201, first.content)
 
-        second_stock = InventoryItem.objects.create(
+        second_stock = InventoryItem.objects.create(owner=self.user, 
             inventory_id="OTH-0002",
             item_type="other",
             custom_name="More screws",
@@ -315,7 +315,7 @@ class BomAllocationApiTests(TestCase):
         self.assertEqual(created.project_id, self.project.id)
 
     def test_unallocated_inventory_can_be_deleted(self):
-        disposable = InventoryItem.objects.create(
+        disposable = InventoryItem.objects.create(owner=self.user, 
             inventory_id="OTH-MISTAKE",
             item_type="other",
             custom_name="Mistaken record",
@@ -337,7 +337,7 @@ class BomAllocationApiTests(TestCase):
         self.assertTrue(editor.has_perm("core.delete_inventoryitem"))
         self.assertFalse(editor.has_perm("core.delete_project"))
 
-        disposable = InventoryItem.objects.create(
+        disposable = InventoryItem.objects.create(owner=self.user, 
             inventory_id="OTH-EDITOR-MISTAKE",
             item_type="other",
             custom_name="Editor mistake",
@@ -376,8 +376,8 @@ class BomAllocationConcurrencyTests(TransactionTestCase):
             email="bom-race@example.com",
             password="test-password",
         )
-        self.project = Project.objects.create(name="Concurrent build", created_by=self.user)
-        self.stock = InventoryItem.objects.create(
+        self.project = Project.objects.create(owner=self.user, name="Concurrent build", created_by=self.user)
+        self.stock = InventoryItem.objects.create(owner=self.user, 
             inventory_id="OTH-RACE",
             item_type="other",
             custom_name="Single stock item",
