@@ -59,6 +59,17 @@ def assign_legacy_ownership(apps, schema_editor):
 
     owner = _legacy_owner(apps)
 
+    # Migration 0011 seeded disabled/planned integration placeholders before any
+    # account necessarily existed. On a pristine database they are templates,
+    # not private user configuration, so do not make a fresh install fail.
+    User = apps.get_model(*settings.AUTH_USER_MODEL.split("."))
+    if not User.objects.exists():
+        PrintingIntegrationSetting.objects.filter(
+            owner__isnull=True,
+            enabled=False,
+            endpoint_url="",
+        ).delete()
+
     # Relationship-based attribution is safe even when an installation already has
     # multiple users. Anything genuinely ambiguous falls back to the explicit/sole owner.
     for item in InventoryItem.objects.filter(owner__isnull=True, project__owner__isnull=False).iterator():
