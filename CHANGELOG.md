@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.6.6.3 — in development
+## v0.6.6 — 2026-09-28
 
 - Raised local model-analysis format to version 5 for slicer-aware 3MF metadata.
 - Added bounded parsing of slicer metadata/config files embedded inside 3MF packages.
