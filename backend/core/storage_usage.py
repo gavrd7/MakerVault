@@ -10,6 +10,17 @@ from .models import FileAsset, InventoryItem, Project, StorageSettings, UserStor
 GIB = 1024 * 1024 * 1024
 
 
+class StorageQuotaExceeded(Exception):
+    """Raised before a write would grow a user's persistent storage beyond quota."""
+
+    def __init__(self, *, used_bytes: int, quota_bytes: int, requested_bytes: int, projected_bytes: int):
+        super().__init__("Storage quota exceeded.")
+        self.used_bytes = used_bytes
+        self.quota_bytes = quota_bytes
+        self.requested_bytes = requested_bytes
+        self.projected_bytes = projected_bytes
+
+
 @dataclass(frozen=True)
 class StorageUsage:
     models_bytes: int = 0
@@ -107,19 +118,66 @@ def effective_quota_bytes(profile: UserStorageProfile) -> int | None:
     return int(storage_settings().default_quota_bytes)
 
 
+def ensure_storage_capacity(user, incoming_bytes: int, *, replacing_bytes: int = 0) -> int:
+    """Reject a persistent write before it grows storage beyond the effective quota.
+
+    Returns the logical growth in bytes. Replacement writes are charged only for
+    positive net growth, while immutable revisions always pass replacing_bytes=0.
+    The usage profile is refreshed from real stored files before every decision so
+    stale cached counters cannot be used to bypass quota enforcement.
+    """
+    try:
+        incoming = max(int(incoming_bytes or 0), 0)
+    except (TypeError, ValueError):
+        incoming = 0
+    try:
+        replacing = max(int(replacing_bytes or 0), 0)
+    except (TypeError, ValueError):
+        replacing = 0
+
+    growth = max(incoming - replacing, 0)
+    profile = refresh_user_storage_profile(user)
+    quota = effective_quota_bytes(profile)
+    used = int(profile.storage_used_bytes)
+    projected = used + growth
+    if quota is not None and projected > quota:
+        raise StorageQuotaExceeded(
+            used_bytes=used,
+            quota_bytes=int(quota),
+            requested_bytes=growth,
+            projected_bytes=projected,
+        )
+    return growth
+
+
+def _warning_level(used: int, quota: int | None) -> str:
+    if quota is None:
+        return "unlimited"
+    if quota <= 0 or used >= quota:
+        return "full"
+    ratio = used / quota
+    if ratio >= 0.90:
+        return "critical"
+    if ratio >= 0.80:
+        return "warning"
+    return "ok"
+
+
 def storage_summary(user, *, refresh: bool = True) -> dict:
     profile = refresh_user_storage_profile(user) if refresh else UserStorageProfile.objects.get_or_create(user=user)[0]
     quota = effective_quota_bytes(profile)
     used = int(profile.storage_used_bytes)
     percent = None
     if quota is not None:
-        percent = 100.0 if quota == 0 and used else (0.0 if quota == 0 else round((used / quota) * 100, 1))
+        percent = 100.0 if quota == 0 else round((used / quota) * 100, 1)
     return {
         "used_bytes": used,
         "quota_bytes": quota,
         "unlimited": quota is None,
         "percent_used": percent,
         "remaining_bytes": None if quota is None else max(quota - used, 0),
+        "warning_level": _warning_level(used, quota),
+        "can_upload": quota is None or used < quota,
         "categories": {
             "models": int(profile.models_bytes),
             "project_files": int(profile.project_files_bytes),
