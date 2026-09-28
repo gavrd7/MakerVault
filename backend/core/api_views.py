@@ -661,10 +661,10 @@ def _resolve_filament_manufacturer(payload):
     return None
 
 
-def _resolve_printing_location(location_id, field_name="location_id"):
+def _resolve_printing_location(location_id, owner, field_name="location_id"):
     if not location_id:
         return None
-    location = PrintingLocation.objects.filter(pk=location_id).first()
+    location = PrintingLocation.objects.filter(owner=owner, pk=location_id).first()
     if not location:
         raise ValidationError({field_name: "Selected location was not found."})
     return location
@@ -694,7 +694,7 @@ def _resolve_printer_catalogue(payload):
     return manufacturer, None
 
 
-def _next_inventory_id(item_type):
+def _next_inventory_id(owner, item_type):
     prefix = {
         "board": "MCU",
         "component": "CMP",
@@ -703,12 +703,12 @@ def _next_inventory_id(item_type):
         "other": "OTH",
     }.get(item_type, "INV")
     highest = 0
-    for existing in InventoryItem.objects.filter(inventory_id__startswith=f"{prefix}-").values_list("inventory_id", flat=True):
+    for existing in InventoryItem.objects.filter(owner=owner, inventory_id__startswith=f"{prefix}-").values_list("inventory_id", flat=True):
         match = re.fullmatch(rf"{re.escape(prefix)}-(\d+)", existing or "")
         if match:
             highest = max(highest, int(match.group(1)))
     candidate = highest + 1
-    while InventoryItem.objects.filter(inventory_id=f"{prefix}-{candidate:04d}").exists():
+    while InventoryItem.objects.filter(owner=owner, inventory_id=f"{prefix}-{candidate:04d}").exists():
         candidate += 1
     return f"{prefix}-{candidate:04d}"
 
@@ -724,17 +724,17 @@ def user_storage(request):
 @require_http_methods(["GET"])
 def dashboard(request):
     data = {
-        "inventory_total": InventoryItem.objects.count(),
-        "inventory_available": InventoryItem.objects.filter(status="available").count(),
-        "inventory_in_use": InventoryItem.objects.filter(status="in_use").count(),
-        "projects_active": Project.objects.filter(status="active").count(),
-        "projects_total": Project.objects.count(),
+        "inventory_total": InventoryItem.objects.filter(owner=request.user).count(),
+        "inventory_available": InventoryItem.objects.filter(owner=request.user).filter(status="available").count(),
+        "inventory_in_use": InventoryItem.objects.filter(owner=request.user).filter(status="in_use").count(),
+        "projects_active": Project.objects.filter(owner=request.user).filter(status="active").count(),
+        "projects_total": Project.objects.filter(owner=request.user).count(),
         "board_models": BoardModel.objects.count(),
         "component_models": ComponentModel.objects.count(),
         "filament_products": FilamentProduct.objects.count(),
-        "spools": Spool.objects.count(),
-        "printers": Printer.objects.count(),
-        "models_3d": Model3D.objects.count(),
+        "spools": Spool.objects.filter(owner=request.user).count(),
+        "printers": Printer.objects.filter(owner=request.user).count(),
+        "models_3d": Model3D.objects.filter(owner=request.user).count(),
     }
     return JsonResponse(data)
 
@@ -743,7 +743,7 @@ def dashboard(request):
 @require_http_methods(["GET", "POST"])
 def inventory(request):
     if request.method == "GET":
-        qs = InventoryItem.objects.select_related(
+        qs = InventoryItem.objects.filter(owner=request.user).select_related(
             "board__manufacturer", "component", "project"
         ).annotate(allocated_quantity=Sum("bom_allocations__quantity")).all()[:5000]
         return JsonResponse({"rows": [_serialise_inventory(item) for item in qs]})
@@ -770,14 +770,14 @@ def inventory(request):
 
         project = None
         if payload.get("project_id"):
-            project = Project.objects.filter(pk=payload["project_id"]).first()
+            project = Project.objects.filter(owner=request.user).filter(pk=payload["project_id"]).first()
             if not project:
                 return _error("Selected project was not found.")
 
         with transaction.atomic():
             item = InventoryItem(
                 owner=request.user,
-                inventory_id=(str(payload.get("inventory_id") or "").strip() or _next_inventory_id(item_type)),
+                inventory_id=(str(payload.get("inventory_id") or "").strip() or _next_inventory_id(request.user, item_type)),
                 item_type=item_type,
                 board=board,
                 component=component,
@@ -806,7 +806,7 @@ def inventory(request):
 @login_required
 @require_http_methods(["GET", "PATCH", "DELETE"])
 def inventory_detail(request, item_id):
-    base_qs = InventoryItem.objects.select_related(
+    base_qs = InventoryItem.objects.filter(owner=request.user).select_related(
         "board__manufacturer", "board__source", "component",
         "component__category", "component__source", "project"
     )
@@ -843,7 +843,7 @@ def inventory_detail(request, item_id):
         if denied:
             return denied
         with transaction.atomic():
-            item = InventoryItem.objects.select_for_update().filter(pk=item_id).first()
+            item = InventoryItem.objects.filter(owner=request.user).select_for_update().filter(pk=item_id).first()
             if not item:
                 return _error("Inventory item not found.", status=404)
             try:
@@ -861,7 +861,7 @@ def inventory_detail(request, item_id):
     try:
         payload = _read_json(request)
         with transaction.atomic():
-            item = InventoryItem.objects.select_for_update().filter(pk=item_id).first()
+            item = InventoryItem.objects.filter(owner=request.user).select_for_update().filter(pk=item_id).first()
             if not item:
                 return _error("Inventory item not found.", status=404)
             before = _inventory_snapshot(item)
@@ -901,7 +901,7 @@ def inventory_detail(request, item_id):
                     item.purchased_on = None
             if "project_id" in payload:
                 if payload["project_id"]:
-                    project = Project.objects.filter(pk=payload["project_id"]).first()
+                    project = Project.objects.filter(owner=request.user).filter(pk=payload["project_id"]).first()
                     if not project:
                         return _error("Selected project was not found.")
                     allocation_projects = set(
@@ -918,7 +918,7 @@ def inventory_detail(request, item_id):
             item.full_clean()
             item.save()
             _record_inventory_history(item, request.user, before)
-            item = InventoryItem.objects.select_related(
+            item = InventoryItem.objects.filter(owner=request.user).select_related(
                 "board__manufacturer", "project"
             ).get(pk=item.pk)
             return JsonResponse({"item": _serialise_inventory(item)})
@@ -1158,7 +1158,7 @@ def component_image(request, component_id):
 @require_http_methods(["GET", "POST"])
 def files_lookup(request):
     if request.method == "GET":
-        qs = FileAsset.objects.exclude(category="image").filter(superseded_by__isnull=True).select_related(
+        qs = FileAsset.objects.filter(owner=request.user).exclude(category="image").filter(superseded_by__isnull=True).select_related(
             "project", "board__manufacturer", "component__category"
         )
         query = request.GET.get("q", "").strip()
@@ -1202,7 +1202,7 @@ def files_lookup(request):
     project = None
     project_id = str(request.POST.get("project_id") or "").strip()
     if project_id:
-        project = Project.objects.filter(pk=project_id).first()
+        project = Project.objects.filter(owner=request.user).filter(pk=project_id).first()
         if not project:
             return _error("Selected project was not found.")
         project_denied = _require_permission(request, "core.change_project")
@@ -1240,7 +1240,7 @@ def files_lookup(request):
 @login_required
 @require_http_methods(["PATCH", "DELETE"])
 def file_detail(request, asset_id):
-    asset = FileAsset.objects.select_related("project").filter(pk=asset_id).exclude(category="image").first()
+    asset = FileAsset.objects.filter(owner=request.user).select_related("project").filter(pk=asset_id).exclude(category="image").first()
     if not asset:
         return _error("File not found.", status=404)
     denied = _require_permission(request, "core.change_fileasset")
@@ -1286,7 +1286,7 @@ def file_detail(request, asset_id):
         if "project_id" in payload:
             project_id = str(payload.get("project_id") or "").strip()
             if project_id:
-                new_project = Project.objects.filter(pk=project_id).first()
+                new_project = Project.objects.filter(owner=request.user).filter(pk=project_id).first()
                 if not new_project:
                     return _error("Selected project was not found.")
                 project_denied = _require_permission(request, "core.change_project")
@@ -1309,7 +1309,7 @@ def file_detail(request, asset_id):
 @login_required
 @require_http_methods(["GET", "POST"])
 def file_versions(request, asset_id):
-    asset = FileAsset.objects.select_related(
+    asset = FileAsset.objects.filter(owner=request.user).select_related(
         "project", "board", "component", "supersedes"
     ).filter(pk=asset_id).exclude(category="image").first()
     if not asset:
@@ -1332,7 +1332,7 @@ def file_versions(request, asset_id):
         project_denied = _require_permission(request, "core.change_project")
         if project_denied:
             return project_denied
-    if FileAsset.objects.filter(supersedes=asset).exists():
+    if FileAsset.objects.filter(owner=request.user).filter(supersedes=asset).exists():
         return _error(
             "A newer version already exists. Refresh MakerVault and upload from the latest version.",
             status=409,
@@ -1389,7 +1389,7 @@ def file_versions(request, asset_id):
 @require_http_methods(["GET", "POST"])
 def projects_lookup(request):
     if request.method == "GET":
-        qs = Project.objects.select_related("created_by").prefetch_related(
+        qs = Project.objects.filter(owner=request.user).select_related("created_by").prefetch_related(
             "inventory_items", "files", "repositories"
         ).annotate(bom_count_value=Count("bom_items", distinct=True)).all()
         return JsonResponse({"rows": [_serialise_project(project) for project in qs[:2000]]})
@@ -1420,7 +1420,7 @@ def projects_lookup(request):
         )
         project.full_clean()
         project.save()
-        project = Project.objects.select_related("created_by").prefetch_related("inventory_items", "files", "repositories").get(pk=project.pk)
+        project = Project.objects.filter(owner=request.user).select_related("created_by").prefetch_related("inventory_items", "files", "repositories").get(pk=project.pk)
         return JsonResponse({"project": _serialise_project(project, detailed=True)}, status=201)
     except ValidationError as exc:
         return _validation_response(exc)
@@ -1429,7 +1429,7 @@ def projects_lookup(request):
 @login_required
 @require_http_methods(["GET", "PATCH", "DELETE"])
 def project_detail(request, project_id):
-    project = Project.objects.select_related("created_by").prefetch_related(
+    project = Project.objects.filter(owner=request.user).select_related("created_by").prefetch_related(
         "inventory_items__board__manufacturer",
         "inventory_items__component",
         "files",
@@ -1469,7 +1469,7 @@ def project_detail(request, project_id):
             project.completed_on = _parse_date(payload.get("completed_on"), "completed_on")
         project.full_clean()
         project.save()
-        project = Project.objects.select_related("created_by").prefetch_related(
+        project = Project.objects.filter(owner=request.user).select_related("created_by").prefetch_related(
             "inventory_items__board__manufacturer",
             "inventory_items__component",
             "files",
@@ -1528,7 +1528,7 @@ def _validate_allocation_capacity(bom_item, inventory, quantity, *, excluding_id
 @login_required
 @require_http_methods(["POST"])
 def project_bom_items(request, project_id):
-    project = Project.objects.filter(pk=project_id).first()
+    project = Project.objects.filter(owner=request.user).filter(pk=project_id).first()
     if not project:
         return _error("Project not found.", status=404)
     denied = _require_permission(request, "core.change_project")
@@ -1563,7 +1563,7 @@ def project_bom_items(request, project_id):
 @login_required
 @require_http_methods(["PATCH", "DELETE"])
 def project_bom_item_detail(request, project_id, bom_id):
-    project = Project.objects.filter(pk=project_id).first()
+    project = Project.objects.filter(owner=request.user).filter(pk=project_id).first()
     if not project:
         return _error("Project not found.", status=404)
     denied = _require_permission(request, "core.change_project")
@@ -1633,7 +1633,7 @@ def project_bom_item_detail(request, project_id, bom_id):
 @login_required
 @require_http_methods(["POST"])
 def project_bom_allocations(request, project_id, bom_id):
-    project = Project.objects.filter(pk=project_id).first()
+    project = Project.objects.filter(owner=request.user).filter(pk=project_id).first()
     if not project:
         return _error("Project not found.", status=404)
     denied = _require_permission(request, "core.change_project")
@@ -1692,7 +1692,7 @@ def project_bom_allocations(request, project_id, bom_id):
                     owner=project.owner or request.user,
                     inventory_id=(
                         str(create_payload.get("inventory_id") or "").strip()
-                        or _next_inventory_id(item_type)
+                        or _next_inventory_id(request.user, item_type)
                     ),
                     item_type=item_type,
                     board=board,
@@ -1718,7 +1718,7 @@ def project_bom_allocations(request, project_id, bom_id):
                 inventory.save()
                 _record_inventory_history(inventory, request.user, created=True)
             else:
-                inventory = InventoryItem.objects.select_for_update().filter(pk=inventory_id).first()
+                inventory = InventoryItem.objects.filter(owner=request.user).select_for_update().filter(pk=inventory_id).first()
                 if not inventory:
                     return _error("Inventory item not found.", status=404)
                 if BOMAllocation.objects.filter(
@@ -1739,7 +1739,7 @@ def project_bom_allocations(request, project_id, bom_id):
             _record_bom_allocation_history(allocation, request.user, "bom_allocated")
             project.save(update_fields=["updated_at"])
 
-            inventory = InventoryItem.objects.select_related(
+            inventory = InventoryItem.objects.filter(owner=request.user).select_related(
                 "board__manufacturer", "project"
             ).get(pk=inventory.pk)
             allocation.inventory_item = inventory
@@ -1757,7 +1757,7 @@ def project_bom_allocations(request, project_id, bom_id):
 @login_required
 @require_http_methods(["PATCH", "DELETE"])
 def project_bom_allocation_detail(request, project_id, bom_id, allocation_id):
-    project = Project.objects.filter(pk=project_id).first()
+    project = Project.objects.filter(owner=request.user).filter(pk=project_id).first()
     if not project:
         return _error("Project not found.", status=404)
     denied = _require_permission(request, "core.change_project")
@@ -1776,7 +1776,7 @@ def project_bom_allocation_detail(request, project_id, bom_id, allocation_id):
             if not allocation:
                 return _error("BOM allocation not found.", status=404)
 
-            inventory = InventoryItem.objects.select_for_update().get(pk=allocation.inventory_item_id)
+            inventory = InventoryItem.objects.filter(owner=request.user).select_for_update().get(pk=allocation.inventory_item_id)
             bom_item = BOMItem.objects.select_for_update().get(pk=allocation.bom_item_id)
 
             if request.method == "DELETE":
@@ -1813,7 +1813,7 @@ def project_bom_allocation_detail(request, project_id, bom_id, allocation_id):
 @login_required
 @require_http_methods(["POST", "DELETE"])
 def project_cover(request, project_id):
-    project = Project.objects.select_related("created_by").prefetch_related("inventory_items", "files", "repositories").filter(pk=project_id).first()
+    project = Project.objects.filter(owner=request.user).select_related("created_by").prefetch_related("inventory_items", "files", "repositories").filter(pk=project_id).first()
     if not project:
         return _error("Project not found.", status=404)
     denied = _require_permission(request, "core.change_project")
@@ -1844,7 +1844,7 @@ def project_cover(request, project_id):
 @login_required
 @require_http_methods(["POST"])
 def project_gallery(request, project_id):
-    project = Project.objects.filter(pk=project_id).first()
+    project = Project.objects.filter(owner=request.user).filter(pk=project_id).first()
     if not project:
         return _error("Project not found.", status=404)
     denied = _require_permission(request, "core.change_project")
@@ -1881,13 +1881,13 @@ def project_gallery(request, project_id):
 @login_required
 @require_http_methods(["DELETE"])
 def project_gallery_delete(request, project_id, asset_id):
-    project = Project.objects.filter(pk=project_id).first()
+    project = Project.objects.filter(owner=request.user).filter(pk=project_id).first()
     if not project:
         return _error("Project not found.", status=404)
     denied = _require_permission(request, "core.change_project")
     if denied:
         return denied
-    asset = FileAsset.objects.filter(pk=asset_id, project=project, category="image").first()
+    asset = FileAsset.objects.filter(owner=request.user).filter(pk=asset_id, project=project, category="image").first()
     if not asset:
         return _error("Project image not found.", status=404)
     if asset.file:
@@ -1902,7 +1902,7 @@ def project_gallery_delete(request, project_id, asset_id):
 @login_required
 @require_http_methods(["POST"])
 def project_files(request, project_id):
-    project = Project.objects.filter(pk=project_id).first()
+    project = Project.objects.filter(owner=request.user).filter(pk=project_id).first()
     if not project:
         return _error("Project not found.", status=404)
     denied = _require_permission(request, "core.change_project")
@@ -1949,13 +1949,13 @@ def project_files(request, project_id):
 @login_required
 @require_http_methods(["PATCH", "DELETE"])
 def project_file_detail(request, project_id, asset_id):
-    project = Project.objects.filter(pk=project_id).first()
+    project = Project.objects.filter(owner=request.user).filter(pk=project_id).first()
     if not project:
         return _error("Project not found.", status=404)
     denied = _require_permission(request, "core.change_project")
     if denied:
         return denied
-    asset = FileAsset.objects.filter(pk=asset_id, project=project).exclude(category="image").first()
+    asset = FileAsset.objects.filter(owner=request.user).filter(pk=asset_id, project=project).exclude(category="image").first()
     if not asset:
         return _error("Project file not found.", status=404)
 
@@ -2000,7 +2000,7 @@ def project_file_detail(request, project_id, asset_id):
 @login_required
 @require_http_methods(["POST"])
 def project_repositories(request, project_id):
-    project = Project.objects.filter(pk=project_id).first()
+    project = Project.objects.filter(owner=request.user).filter(pk=project_id).first()
     if not project:
         return _error("Project not found.", status=404)
     denied = _require_permission(request, "core.change_project")
@@ -2037,7 +2037,7 @@ def project_repositories(request, project_id):
 @login_required
 @require_http_methods(["PATCH", "DELETE"])
 def project_repository_detail(request, project_id, repository_id):
-    project = Project.objects.filter(pk=project_id).first()
+    project = Project.objects.filter(owner=request.user).filter(pk=project_id).first()
     if not project:
         return _error("Project not found.", status=404)
     denied = _require_permission(request, "core.change_project")
@@ -2383,7 +2383,7 @@ def printing_integration_detail(request, provider):
         return _error("Administrator access is required.", status=403)
     if provider not in dict(PrintingIntegrationSetting.PROVIDERS):
         return _error("Unknown printing integration.", status=404)
-    item, _ = PrintingIntegrationSetting.objects.get_or_create(
+    item, _ = PrintingIntegrationSetting.objects.filter(owner=request.user).get_or_create(
         provider=provider,
         defaults=PRINTING_INTEGRATION_DEFAULTS.get(provider, {}),
     )
@@ -2445,7 +2445,7 @@ def printing_integration_detail(request, provider):
             item.status = "not_configured"
             item.next_sync_at = None
         elif item.provider == "creality_cfs":
-            configured = Printer.objects.filter(
+            configured = Printer.objects.filter(owner=request.user).filter(
                 is_active=True,
                 multi_material_installed=True,
                 catalog_model__multi_material_system="creality_cfs",
@@ -2488,7 +2488,7 @@ def printing_integration_test(request, provider):
         return _error("Administrator access is required.", status=403)
     if provider not in dict(PrintingIntegrationSetting.PROVIDERS):
         return _error("Unknown printing integration.", status=404)
-    item, _ = PrintingIntegrationSetting.objects.get_or_create(
+    item, _ = PrintingIntegrationSetting.objects.filter(owner=request.user).get_or_create(
         provider=provider,
         defaults=PRINTING_INTEGRATION_DEFAULTS.get(provider, {}),
     )
@@ -2548,7 +2548,7 @@ def printing_integration_test(request, provider):
 def printing_integration_reviews(request, provider):
     if not request.user.is_staff:
         return _error("Administrator access is required.", status=403)
-    item = PrintingIntegrationSetting.objects.filter(provider=provider).first()
+    item = PrintingIntegrationSetting.objects.filter(owner=request.user).filter(provider=provider).first()
     if not item:
         return _error("Integration is not configured.", status=404)
     if provider != "spoolman":
@@ -2564,7 +2564,7 @@ def printing_integration_reviews(request, provider):
 def printing_integration_review_resolve(request, provider, external_id):
     if not request.user.is_staff:
         return _error("Administrator access is required.", status=403)
-    item = PrintingIntegrationSetting.objects.filter(provider=provider).first()
+    item = PrintingIntegrationSetting.objects.filter(owner=request.user).filter(provider=provider).first()
     if not item:
         return _error("Integration is not configured.", status=404)
     try:
@@ -2604,7 +2604,7 @@ def printing_integration_sync_now(request, provider):
             "result": result,
         })
     except PrintingSyncError as exc:
-        item = PrintingIntegrationSetting.objects.filter(provider=provider).first()
+        item = PrintingIntegrationSetting.objects.filter(owner=request.user).filter(provider=provider).first()
         payload = {"error": str(exc)}
         if item:
             payload["item"] = _serialise_printing_integration(item)
@@ -3103,7 +3103,7 @@ def _serialise_print_job(job):
 @require_http_methods(["GET"])
 def printing_overview(request):
     printers = list(
-        Printer.objects.select_related(
+        Printer.objects.filter(owner=request.user).select_related(
             "manufacturer",
             "printer_manufacturer",
             "catalog_model__manufacturer",
@@ -3115,7 +3115,7 @@ def printing_overview(request):
         )
     )
     spools = list(
-        Spool.objects.select_related(
+        Spool.objects.filter(owner=request.user).select_related(
             "filament__manufacturer",
             "filament__filament_manufacturer",
             "storage_location",
@@ -3126,12 +3126,12 @@ def printing_overview(request):
         )
     )
     models_3d = list(
-        Model3D.objects.select_related("project").prefetch_related(
+        Model3D.objects.filter(owner=request.user).select_related("project").prefetch_related(
             "revisions__assets__file_asset__project"
         )
     )
     recent_prints = list(
-        PrintJob.objects.select_related(
+        PrintJob.objects.filter(owner=request.user).select_related(
             "printer",
             "project",
             "model_revision__model",
@@ -3161,7 +3161,7 @@ def printing_overview(request):
             "filaments": FilamentProduct.objects.count(),
             "loaded_slots": loaded_slots,
             "externally_linked_spools": linked_spools,
-            "print_jobs": PrintJob.objects.count(),
+            "print_jobs": PrintJob.objects.filter(owner=request.user).count(),
         },
         "printers": [_serialise_printer(printer) for printer in printers],
         "spools": [_serialise_spool(spool) for spool in spools],
@@ -3185,12 +3185,12 @@ def printing_overview(request):
         ],
         "locations": [
             _serialise_printing_location(item)
-            for item in PrintingLocation.objects.order_by("name")
+            for item in PrintingLocation.objects.filter(owner=request.user).order_by("name")
         ],
         "common_filament_materials": COMMON_FILAMENT_MATERIALS,
         "model_files": [
             _serialise_file_asset(asset)
-            for asset in FileAsset.objects.filter(
+            for asset in FileAsset.objects.filter(owner=request.user).filter(
                 category__in=["mesh", "slicer", "cad"],
                 superseded_by__isnull=True,
             )
@@ -3202,7 +3202,7 @@ def printing_overview(request):
         "analytics": _printing_analytics(),
         "integrations": [
             _serialise_printing_integration_status(item)
-            for item in PrintingIntegrationSetting.objects.filter(enabled=True).order_by("provider")
+            for item in PrintingIntegrationSetting.objects.filter(owner=request.user).filter(enabled=True).order_by("provider")
         ],
     })
 
@@ -3500,7 +3500,7 @@ def printing_locations(request):
         return JsonResponse({
             "rows": [
                 _serialise_printing_location(item)
-                for item in PrintingLocation.objects.order_by("name")
+                for item in PrintingLocation.objects.filter(owner=request.user).order_by("name")
             ]
         })
 
@@ -3527,7 +3527,7 @@ def printing_locations(request):
 @login_required
 @require_http_methods(["PATCH", "DELETE"])
 def printing_location_detail(request, location_id):
-    item = PrintingLocation.objects.filter(pk=location_id).first()
+    item = PrintingLocation.objects.filter(owner=request.user).filter(pk=location_id).first()
     if not item:
         return _error("Location not found.", status=404)
 
@@ -3559,7 +3559,7 @@ def printing_location_detail(request, location_id):
 @require_http_methods(["GET", "POST"])
 def printing_printers(request):
     if request.method == "GET":
-        qs = Printer.objects.select_related(
+        qs = Printer.objects.filter(owner=request.user).select_related(
             "manufacturer",
             "printer_manufacturer",
             "catalog_model__manufacturer",
@@ -3576,7 +3576,7 @@ def printing_printers(request):
     try:
         payload = _read_json(request)
         printer_manufacturer, catalog_model = _resolve_printer_catalogue(payload)
-        location = _resolve_printing_location(payload.get("location_id"))
+        location = _resolve_printing_location(payload.get("location_id"), request.user)
         model_name = (
             catalog_model.name
             if catalog_model
@@ -3634,7 +3634,7 @@ def printing_printers(request):
             return _error("This printer model does not have a supported multi-material add-on in the catalogue.")
         item.full_clean()
         item.save()
-        item = Printer.objects.select_related(
+        item = Printer.objects.filter(owner=request.user).select_related(
             "manufacturer",
             "printer_manufacturer",
             "catalog_model__manufacturer",
@@ -3648,7 +3648,7 @@ def printing_printers(request):
 @login_required
 @require_http_methods(["PATCH", "DELETE"])
 def printing_printer_detail(request, printer_id):
-    item = Printer.objects.select_related(
+    item = Printer.objects.filter(owner=request.user).select_related(
         "manufacturer",
         "printer_manufacturer",
         "catalog_model__manufacturer",
@@ -3698,7 +3698,7 @@ def printing_printer_detail(request, printer_id):
             else:
                 item.multi_material_installed = False
         if "location_id" in payload:
-            item.printing_location = _resolve_printing_location(payload.get("location_id"))
+            item.printing_location = _resolve_printing_location(payload.get("location_id"), request.user)
             item.location = ""
         if "is_active" in payload:
             item.is_active = bool(payload.get("is_active"))
@@ -3737,7 +3737,7 @@ def printing_printer_detail(request, printer_id):
                     "is_loaded", "spool", "remaining_weight_g", "metadata", "updated_at"
                 ])
 
-        item = Printer.objects.select_related(
+        item = Printer.objects.filter(owner=request.user).select_related(
             "manufacturer",
             "printer_manufacturer",
             "catalog_model__manufacturer",
@@ -3755,7 +3755,7 @@ def printing_printer_detail(request, printer_id):
 @require_http_methods(["GET", "POST"])
 def printing_spools(request):
     if request.method == "GET":
-        qs = Spool.objects.select_related(
+        qs = Spool.objects.filter(owner=request.user).select_related(
             "filament__manufacturer",
             "filament__filament_manufacturer",
             "storage_location",
@@ -3775,18 +3775,18 @@ def printing_spools(request):
             return _error("Choose a filament product.")
 
         storage_location = _resolve_printing_location(
-            payload.get("storage_location_id"), "storage_location_id"
+            payload.get("storage_location_id"), request.user, "storage_location_id"
         )
         assigned_printer = None
         if payload.get("assigned_printer_id"):
-            assigned_printer = Printer.objects.filter(pk=payload.get("assigned_printer_id")).first()
+            assigned_printer = Printer.objects.filter(owner=request.user).filter(pk=payload.get("assigned_printer_id")).first()
             if not assigned_printer:
                 return _error("Selected printer was not found.")
         if storage_location and assigned_printer:
             return _error("Choose either a storage location or a printer.")
 
         rfid_uid = str(payload.get("rfid_uid") or "").strip().upper()
-        if rfid_uid and Spool.objects.filter(rfid_uid=rfid_uid).exists():
+        if rfid_uid and Spool.objects.filter(owner=request.user).filter(rfid_uid=rfid_uid).exists():
             return _error("That RFID tag ID is already assigned to another MakerVault spool.", status=409)
 
         item = Spool(
@@ -3807,7 +3807,7 @@ def printing_spools(request):
         )
         item.full_clean()
         item.save()
-        item = Spool.objects.select_related(
+        item = Spool.objects.filter(owner=request.user).select_related(
             "filament__manufacturer",
             "filament__filament_manufacturer",
             "storage_location",
@@ -3899,7 +3899,7 @@ def printing_slot_add_to_inventory(request, slot_id):
                 return change_denied
 
             with transaction.atomic():
-                spool = Spool.objects.select_for_update().filter(
+                spool = Spool.objects.filter(owner=request.user).select_for_update().filter(
                     pk=existing_spool_id
                 ).first()
                 if not spool:
@@ -3931,7 +3931,7 @@ def printing_slot_add_to_inventory(request, slot_id):
                 slot.metadata = metadata
                 slot.save(update_fields=["spool", "metadata", "updated_at"])
 
-            spool = Spool.objects.select_related(
+            spool = Spool.objects.filter(owner=request.user).select_related(
                 "filament__manufacturer",
                 "filament__filament_manufacturer",
                 "storage_location",
@@ -3950,7 +3950,7 @@ def printing_slot_add_to_inventory(request, slot_id):
         created_filament = False
         rfid_uid = str(payload.get("rfid_uid") or slot.rfid_uid or "").strip().upper()
         if rfid_uid:
-            existing_rfid_spool = Spool.objects.filter(rfid_uid=rfid_uid).first()
+            existing_rfid_spool = Spool.objects.filter(owner=request.user).filter(rfid_uid=rfid_uid).first()
             if existing_rfid_spool:
                 return _error(
                     f"RFID tag {rfid_uid} already belongs to {existing_rfid_spool.spool_id}.",
@@ -4067,7 +4067,7 @@ def printing_slot_add_to_inventory(request, slot_id):
                 "spool", "metadata", "remaining_weight_g", "updated_at"
             ])
 
-        spool = Spool.objects.select_related(
+        spool = Spool.objects.filter(owner=request.user).select_related(
             "filament__manufacturer",
             "filament__filament_manufacturer",
             "storage_location",
@@ -4094,7 +4094,7 @@ def printing_slot_add_to_inventory(request, slot_id):
 @login_required
 @require_http_methods(["PATCH", "DELETE"])
 def printing_spool_detail(request, spool_id):
-    item = Spool.objects.select_related(
+    item = Spool.objects.filter(owner=request.user).select_related(
         "filament__manufacturer",
         "filament__filament_manufacturer",
         "storage_location",
@@ -4126,7 +4126,7 @@ def printing_spool_detail(request, spool_id):
             item.filament = filament
         if "rfid_uid" in payload:
             rfid_uid = str(payload.get("rfid_uid") or "").strip().upper()
-            if rfid_uid and Spool.objects.exclude(pk=item.pk).filter(rfid_uid=rfid_uid).exists():
+            if rfid_uid and Spool.objects.filter(owner=request.user).exclude(pk=item.pk).filter(rfid_uid=rfid_uid).exists():
                 return _error("That RFID tag ID is already assigned to another MakerVault spool.", status=409)
             item.rfid_uid = rfid_uid
         if "storage_location_id" in payload:
@@ -4138,7 +4138,7 @@ def printing_spool_detail(request, spool_id):
                 item.location = ""
         if "assigned_printer_id" in payload:
             printer_id = payload.get("assigned_printer_id")
-            item.assigned_printer = Printer.objects.filter(pk=printer_id).first() if printer_id else None
+            item.assigned_printer = Printer.objects.filter(owner=request.user).filter(pk=printer_id).first() if printer_id else None
             if printer_id and not item.assigned_printer:
                 return _error("Selected printer was not found.")
             if item.assigned_printer:
@@ -4168,7 +4168,7 @@ def printing_spool_detail(request, spool_id):
 @require_http_methods(["GET", "POST"])
 def printing_models(request):
     if request.method == "GET":
-        qs = Model3D.objects.select_related("project").prefetch_related(
+        qs = Model3D.objects.filter(owner=request.user).select_related("project").prefetch_related(
             "revisions__assets__file_asset__project"
         )
         return JsonResponse({"rows": [_serialise_printing_model(item) for item in qs]})
@@ -4186,7 +4186,7 @@ def printing_models(request):
         project = None
         project_id = str(payload.get("project_id") or "").strip()
         if project_id:
-            project = Project.objects.filter(pk=project_id).first()
+            project = Project.objects.filter(owner=request.user).filter(pk=project_id).first()
             if not project:
                 return _error("Selected project was not found.")
             project_denied = _require_permission(request, "core.change_project")
@@ -4261,7 +4261,7 @@ def printing_models(request):
                 link.save()
 
             _analyse_revision_link(revision, link)
-            item = Model3D.objects.select_related("project").prefetch_related(
+            item = Model3D.objects.filter(owner=request.user).select_related("project").prefetch_related(
                 "revisions__assets__file_asset__project"
             ).get(pk=item.pk)
             return JsonResponse({"item": _serialise_printing_model(item)}, status=201)
@@ -4284,7 +4284,7 @@ def printing_models(request):
         payload = _read_json(request)
         project = None
         if payload.get("project_id"):
-            project = Project.objects.filter(pk=payload["project_id"]).first()
+            project = Project.objects.filter(owner=request.user).filter(pk=payload["project_id"]).first()
             if not project:
                 return _error("Selected project was not found.")
         item = Model3D(
@@ -4306,7 +4306,7 @@ def printing_models(request):
 @login_required
 @require_http_methods(["PATCH", "DELETE"])
 def printing_model_detail(request, model_id):
-    item = Model3D.objects.select_related("project").prefetch_related(
+    item = Model3D.objects.filter(owner=request.user).select_related("project").prefetch_related(
         "revisions__assets__file_asset__project"
     ).filter(pk=model_id).first()
     if not item:
@@ -4331,7 +4331,7 @@ def printing_model_detail(request, model_id):
         payload = _read_json(request)
         if "project_id" in payload:
             project_id = payload.get("project_id")
-            item.project = Project.objects.filter(pk=project_id).first() if project_id else None
+            item.project = Project.objects.filter(owner=request.user).filter(pk=project_id).first() if project_id else None
             if project_id and not item.project:
                 return _error("Selected project was not found.")
         for field in ["name", "description", "source_url", "license"]:
@@ -4349,7 +4349,7 @@ def printing_model_detail(request, model_id):
 @login_required
 @require_http_methods(["POST"])
 def printing_model_revisions(request, model_id):
-    model = Model3D.objects.filter(pk=model_id).first()
+    model = Model3D.objects.filter(owner=request.user).filter(pk=model_id).first()
     if not model:
         return _error("3D model not found.", status=404)
     denied = _require_permission(request, "core.change_model3d")
@@ -4368,7 +4368,7 @@ def printing_model_revisions(request, model_id):
         )
         revision.full_clean()
         revision.save()
-        model = Model3D.objects.select_related("project").prefetch_related(
+        model = Model3D.objects.filter(owner=request.user).select_related("project").prefetch_related(
             "revisions__assets__file_asset__project"
         ).get(pk=model.pk)
         return JsonResponse({"model": _serialise_printing_model(model)}, status=201)
@@ -4381,7 +4381,7 @@ def printing_model_revisions(request, model_id):
 @login_required
 @require_http_methods(["POST"])
 def printing_model_revision_upload(request, model_id):
-    model = Model3D.objects.select_related("project").filter(pk=model_id).first()
+    model = Model3D.objects.filter(owner=request.user).select_related("project").filter(pk=model_id).first()
     if not model:
         return _error("3D model not found.", status=404)
 
@@ -4428,7 +4428,7 @@ def printing_model_revision_upload(request, model_id):
         .first()
     )
     predecessor = previous_link.file_asset if previous_link else None
-    if predecessor and FileAsset.objects.filter(supersedes=predecessor).exists():
+    if predecessor and FileAsset.objects.filter(owner=request.user).filter(supersedes=predecessor).exists():
         predecessor = None
 
     stored_asset = None
@@ -4474,7 +4474,7 @@ def printing_model_revision_upload(request, model_id):
             link.save()
 
         _analyse_revision_link(revision, link)
-        model = Model3D.objects.select_related("project").prefetch_related(
+        model = Model3D.objects.filter(owner=request.user).select_related("project").prefetch_related(
             "revisions__assets__file_asset__project"
         ).get(pk=model.pk)
         return JsonResponse({"model": _serialise_printing_model(model)}, status=201)
@@ -4497,7 +4497,7 @@ def printing_model_revision_upload(request, model_id):
 @login_required
 @require_http_methods(["PATCH", "DELETE"])
 def printing_model_revision_detail(request, model_id, revision_id):
-    model = Model3D.objects.filter(pk=model_id).first()
+    model = Model3D.objects.filter(owner=request.user).filter(pk=model_id).first()
     if not model:
         return _error("3D model not found.", status=404)
     revision = ModelRevision.objects.filter(pk=revision_id, model=model).first()
@@ -4539,7 +4539,7 @@ def printing_model_revision_detail(request, model_id, revision_id):
 @login_required
 @require_http_methods(["POST"])
 def printing_revision_assets(request, model_id, revision_id):
-    model = Model3D.objects.select_related("project").filter(pk=model_id).first()
+    model = Model3D.objects.filter(owner=request.user).select_related("project").filter(pk=model_id).first()
     if not model:
         return _error("3D model not found.", status=404)
     revision = ModelRevision.objects.filter(pk=revision_id, model=model).first()
@@ -4551,7 +4551,7 @@ def printing_revision_assets(request, model_id, revision_id):
 
     try:
         payload = _read_json(request)
-        asset = FileAsset.objects.select_related("project").filter(pk=payload.get("file_asset_id")).first()
+        asset = FileAsset.objects.filter(owner=request.user).select_related("project").filter(pk=payload.get("file_asset_id")).first()
         if not asset:
             return _error("Selected MakerVault file was not found.")
         if asset.category not in {"mesh", "slicer", "cad"}:
@@ -4578,7 +4578,7 @@ def printing_revision_assets(request, model_id, revision_id):
 
         if link.is_primary and link.role in {"model", "slicer"}:
             _analyse_revision_link(revision, link)
-        model = Model3D.objects.select_related("project").prefetch_related(
+        model = Model3D.objects.filter(owner=request.user).select_related("project").prefetch_related(
             "revisions__assets__file_asset__project"
         ).get(pk=model.pk)
         return JsonResponse({"model": _serialise_printing_model(model)}, status=201)
@@ -4591,7 +4591,7 @@ def printing_revision_assets(request, model_id, revision_id):
 @login_required
 @require_http_methods(["POST"])
 def printing_revision_analyse(request, model_id, revision_id):
-    model = Model3D.objects.filter(pk=model_id).first()
+    model = Model3D.objects.filter(owner=request.user).filter(pk=model_id).first()
     if not model:
         return _error("3D model not found.", status=404)
     revision = ModelRevision.objects.filter(pk=revision_id, model=model).first()
@@ -4624,7 +4624,7 @@ def printing_revision_analyse(request, model_id, revision_id):
 @login_required
 @require_http_methods(["DELETE"])
 def printing_revision_asset_detail(request, model_id, revision_id, link_id):
-    model = Model3D.objects.filter(pk=model_id).first()
+    model = Model3D.objects.filter(owner=request.user).filter(pk=model_id).first()
     if not model:
         return _error("3D model not found.", status=404)
     revision = ModelRevision.objects.filter(pk=revision_id, model=model).first()
@@ -4721,7 +4721,7 @@ def _build_print_material_usage(job, printer, payload):
 @require_http_methods(["GET", "POST"])
 def printing_jobs(request):
     if request.method == "GET":
-        qs = PrintJob.objects.select_related(
+        qs = PrintJob.objects.filter(owner=request.user).select_related(
             "printer", "project", "model_revision__model"
         ).prefetch_related(
             "material_usages__spool__filament__manufacturer",
@@ -4736,13 +4736,13 @@ def printing_jobs(request):
 
     try:
         payload = _read_json(request)
-        printer = Printer.objects.filter(pk=payload.get("printer_id")).first()
+        printer = Printer.objects.filter(owner=request.user).filter(pk=payload.get("printer_id")).first()
         if not printer:
             return _error("Choose a printer.")
 
         project = None
         if payload.get("project_id"):
-            project = Project.objects.filter(pk=payload["project_id"]).first()
+            project = Project.objects.filter(owner=request.user).filter(pk=payload["project_id"]).first()
             if not project:
                 return _error("Selected project was not found.")
 
@@ -4789,7 +4789,7 @@ def printing_jobs(request):
                     raise ValidationError({"material_usages": "Each material usage must be an object."})
                 _build_print_material_usage(job, printer, material_payload).save()
 
-        job = PrintJob.objects.select_related(
+        job = PrintJob.objects.filter(owner=request.user).select_related(
             "printer", "project", "model_revision__model"
         ).prefetch_related(
             "material_usages__spool__filament__manufacturer",
@@ -4804,7 +4804,7 @@ def printing_jobs(request):
 @login_required
 @require_http_methods(["PATCH", "DELETE"])
 def printing_job_detail(request, job_id):
-    job = PrintJob.objects.select_related(
+    job = PrintJob.objects.filter(owner=request.user).select_related(
         "printer", "project", "model_revision__model"
     ).prefetch_related(
         "material_usages__spool__filament__manufacturer",
