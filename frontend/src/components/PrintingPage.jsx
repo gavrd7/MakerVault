@@ -22,7 +22,6 @@ function newestFirst(rows) {
   return [...(rows || [])].sort((a, b) => activityTime(b) - activityTime(a));
 }
 
-
 function hasViewableModelAsset(model) {
   return (model?.revisions || []).some(revision =>
     (revision.assets || []).some(asset => {
@@ -126,7 +125,7 @@ export default function PrintingPage({ config, projects }) {
   return <div className="printingStack">
     <section className="panel printingHero">
       <div>
-        <span className="settingsEyebrow">v0.6.1 model intelligence</span>
+        <span className="settingsEyebrow">Model intelligence</span>
         <h2>3D Printing &amp; Model Library</h2>
         <p>Native MakerVault models, printers and spool inventory stay authoritative. External services and printer filament systems plug into this data rather than replacing it.</p>
       </div>
@@ -185,7 +184,13 @@ export default function PrintingPage({ config, projects }) {
             <div className="printingPrinterHeaderMain">
               <div className="printingCardHead">
                 <div><strong>{printer.name}</strong><small>{[printer.manufacturer, printer.model, printer.location].filter(Boolean).join(" · ")}</small></div>
-                <div className="printingBadges">{printer.is_active ? <Badge tone="good">Active</Badge> : <Badge>Inactive</Badge>}{printer.installed_multi_material_label && <Badge>{printer.installed_multi_material_label}</Badge>}{printer.multi_material_installed && <Badge>{printer.slots.length} slots</Badge>}{canChangePrinter && <button type="button" onClick={() => setManagePrinter(printer)}>Manage</button>}</div>
+                <div className="printingBadges">
+                  {printer.is_active ? <Badge tone="good">Active</Badge> : <Badge>Inactive</Badge>}
+                  {printer.simplyprint?.external_id && <Badge tone={printer.simplyprint?.online ? "good" : printer.simplyprint?.state === "offline" ? "danger" : "accent"}>SimplyPrint · {printer.simplyprint?.state || (printer.simplyprint?.online ? "online" : "linked")}</Badge>}
+                  {printer.installed_multi_material_label && <Badge>{printer.installed_multi_material_label}</Badge>}
+                  {printer.multi_material_installed && <Badge>{printer.slots.length} slots</Badge>}
+                  {canChangePrinter && <button type="button" onClick={() => setManagePrinter(printer)}>Manage</button>}
+                </div>
               </div>
               {((printer.multi_material_installed && printer.catalogue?.image_multi_material && printer.catalogue?.image_multi_material_source_provider) || printer.catalogue?.image_source_provider) && <small className="printingPrinterImageCredit">
                 Image: {(printer.multi_material_installed && printer.catalogue?.image_multi_material && printer.catalogue?.image_multi_material_source_provider) || printer.catalogue?.image_source_provider}
@@ -203,7 +208,11 @@ export default function PrintingPage({ config, projects }) {
                 {!slot.spool_id && canAddSpool && <button className="slotInventoryAction" type="button" onClick={() => setClaimSlot({ printer, slot })}>＋ Add to inventory</button>}
               </div>
             </div>)}
-            {!printer.multi_material_installed ? <div className="printingEmptyInline">No multi-material add-on installed.</div> : !printer.slots.some(slot => slot.is_loaded) && <div className="printingEmptyInline">No loaded filament slots have been discovered yet.</div>}
+            {!printer.slots.some(slot => slot.is_loaded) && (
+              !printer.multi_material_installed
+                ? <div className="printingEmptyInline">No loaded filament slots discovered. No native multi-material add-on is marked as installed.</div>
+                : <div className="printingEmptyInline">No loaded filament slots have been discovered yet.</div>
+            )}
           </div>
         </article>)}
         {!data?.printers?.length && <div className="projectEmpty"><strong>No printers yet.</strong><span>Add your first printer to begin the 3D printing workspace.</span></div>}
