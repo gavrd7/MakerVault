@@ -28,49 +28,12 @@ class BoardModelAdmin(admin.ModelAdmin):
     prepopulated_fields = {}
 
 
-@admin.register(InventoryItem)
-class InventoryItemAdmin(admin.ModelAdmin):
-    list_display = ("inventory_id", "display_name", "item_type", "quantity", "status", "project", "location")
-    list_filter = ("item_type", "status")
-    search_fields = ("inventory_id", "custom_name", "board__name", "component__name", "serial_number")
-
-
-@admin.register(BOMItem)
-class BOMItemAdmin(admin.ModelAdmin):
-    list_display = ("project", "display_name", "quantity", "unit", "unit_cost", "currency")
-    list_filter = ("project", "currency")
-    search_fields = ("project__name", "custom_name", "board__name", "component__name")
-
-
-@admin.register(BOMAllocation)
-class BOMAllocationAdmin(admin.ModelAdmin):
-    list_display = ("bom_item", "inventory_item", "quantity", "allocated_by", "created_at")
-    list_filter = ("bom_item__project", "created_at")
-    search_fields = ("bom_item__project__name", "bom_item__custom_name", "inventory_item__inventory_id", "inventory_item__custom_name")
-    readonly_fields = ("created_at", "updated_at")
-
-
-@admin.register(InventoryHistory)
-class InventoryHistoryAdmin(admin.ModelAdmin):
-    list_display = ("inventory_item", "event_type", "summary", "project", "changed_by", "created_at")
-    list_filter = ("event_type", "created_at")
-    search_fields = ("inventory_item__inventory_id", "summary", "project__name")
-    readonly_fields = ("inventory_item", "event_type", "summary", "changes", "project", "changed_by", "created_at", "updated_at")
-
-
-@admin.register(Project)
-class ProjectAdmin(admin.ModelAdmin):
-    list_display = ("name", "status", "updated_at")
-    list_filter = ("status",)
-    search_fields = ("name", "summary", "description")
-
-
+# The Django admin intentionally exposes shared/reference catalogues only.
+# Private user content is administered through ownership-safe MakerVault controls;
+# staff status is not a bypass for browsing another user's files or records.
 admin.site.register([
     Manufacturer, CatalogSource, BoardCompatibility, ComponentCategory, ComponentModel,
-    FileAsset, RepositoryLink, FilamentProduct, Spool, ExternalSpoolLink, ExternalPrinterLink,
-    PrinterManufacturer, PrinterCatalogModel, Printer, PrinterFilamentSlot,
-    Model3D, ModelRevision, ModelRevisionAsset,
-    ProductListing, PrintJob, PrintMaterialUsage,
+    FilamentProduct, PrinterManufacturer, PrinterCatalogModel, ProductListing,
 ])
 
 admin.site.site_header = "MakerVault administration"
