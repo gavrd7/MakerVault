@@ -3561,6 +3561,53 @@ def printing_spools(request):
         return _error("MakerVault could not allocate a unique spool ID; please retry.")
 
 
+def _link_discovered_provider_spool(slot, spool):
+    if slot.system != "simplyprint":
+        return
+    external_id = str((slot.metadata or {}).get("external_spool_id") or "").strip()
+    if not external_id:
+        return
+
+    existing_remote = ExternalSpoolLink.objects.filter(
+        provider="simplyprint",
+        external_id=external_id,
+    ).first()
+    if existing_remote and existing_remote.spool_id != spool.id:
+        raise ValidationError({
+            "existing_spool_id": (
+                f"SimplyPrint filament {external_id} is already linked to "
+                f"{existing_remote.spool.spool_id}."
+            )
+        })
+
+    existing_local = ExternalSpoolLink.objects.filter(
+        provider="simplyprint",
+        spool=spool,
+    ).exclude(external_id=external_id).first()
+    if existing_local:
+        raise ValidationError({
+            "existing_spool_id": (
+                f"{spool.spool_id} is already linked to SimplyPrint filament "
+                f"{existing_local.external_id}."
+            )
+        })
+
+    ExternalSpoolLink.objects.update_or_create(
+        provider="simplyprint",
+        external_id=external_id,
+        defaults={
+            "spool": spool,
+            "sync_direction": "import",
+            "last_synced_at": timezone.now(),
+            "sync_metadata": {
+                "linked_from_slot": str(slot.id),
+                "remote_uid": (slot.metadata or {}).get("remote_uid", ""),
+                "nfc_id": (slot.metadata or {}).get("nfc_id", ""),
+            },
+        },
+    )
+
+
 @login_required
 @require_http_methods(["POST"])
 def printing_slot_add_to_inventory(request, slot_id):
@@ -3616,6 +3663,7 @@ def printing_slot_add_to_inventory(request, slot_id):
                 spool.save(update_fields=[
                     "assigned_printer", "storage_location", "location", "updated_at"
                 ])
+                _link_discovered_provider_spool(slot, spool)
 
                 metadata = dict(slot.metadata or {})
                 metadata["link_source"] = "user_linked_existing"
@@ -3746,6 +3794,7 @@ def printing_slot_add_to_inventory(request, slot_id):
             )
             spool.full_clean()
             spool.save()
+            _link_discovered_provider_spool(slot, spool)
 
             metadata = dict(slot.metadata or {})
             metadata["link_source"] = "inventory_created_from_slot"
