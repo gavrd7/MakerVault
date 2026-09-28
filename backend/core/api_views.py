@@ -4138,7 +4138,7 @@ def printing_spool_detail(request, spool_id):
             item.rfid_uid = rfid_uid
         if "storage_location_id" in payload:
             item.storage_location = _resolve_printing_location(
-                payload.get("storage_location_id"), "storage_location_id"
+                payload.get("storage_location_id"), request.user, "storage_location_id"
             )
             if item.storage_location:
                 item.assigned_printer = None
