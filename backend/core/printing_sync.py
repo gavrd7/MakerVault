@@ -806,7 +806,7 @@ def _simplyprint_link_printer(row: dict, now):
             printer=printer,
             provider="simplyprint",
             external_id=external_id,
-            external_url=f"https://simplyprint.io/panel/printers/{external_id}",
+            external_url="",
         )
 
     printer_data = row.get("printer") or {}
