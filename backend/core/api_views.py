@@ -2447,11 +2447,14 @@ def _serialise_catalogue_maintenance(config):
         "enabled": config.enabled,
         "interval_hours": config.interval_hours,
         "check_board_data": config.check_board_data,
+        "check_printer_data": config.check_printer_data,
         "check_images": config.check_images,
         "last_run_at": config.last_run_at.isoformat() if config.last_run_at else "",
         "next_run_at": config.next_run_at.isoformat() if config.next_run_at else "",
         "last_triggered_by": config.last_triggered_by,
         "server_board_enrichment_enabled": bool(settings.ENRICH_BOARD_CATALOGUE),
+        "server_printer_catalogue_enabled": bool(settings.SYNC_ORCASLICER_PRINTER_CATALOGUE),
+        "server_printer_catalogue_ref": settings.ORCASLICER_PRINTER_CATALOGUE_REF,
         "server_image_seeding_enabled": bool(settings.SEED_CATALOGUE_IMAGES),
     }
 
@@ -2472,6 +2475,8 @@ def catalogue_maintenance_settings(request):
             config.enabled = bool(payload["enabled"])
         if "check_board_data" in payload:
             config.check_board_data = bool(payload["check_board_data"])
+        if "check_printer_data" in payload:
+            config.check_printer_data = bool(payload["check_printer_data"])
         if "check_images" in payload:
             config.check_images = bool(payload["check_images"])
         if "interval_hours" in payload:
