@@ -15,6 +15,20 @@ function formatDate(value) {
   catch { return value; }
 }
 
+function formatMoney(value, currency = "GBP") {
+  if (value == null || value === "") return "—";
+  try { return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(Number(value)); }
+  catch { return currency + " " + Number(value).toFixed(2); }
+}
+
+function formatDurationMinutes(value) {
+  const minutes = Number(value || 0);
+  if (!minutes) return "0 min";
+  const hours = Math.floor(minutes / 60);
+  const remainder = Math.round(minutes % 60);
+  return hours ? hours + "h " + remainder + "m" : remainder + " min";
+}
+
 function newestFirst(rows) {
   const activityTime = row => Math.max(
     new Date(row.updated_at || row.created_at || 0).getTime() || 0,
@@ -158,6 +172,27 @@ export default function PrintingPage({ config, projects }) {
     </div>
 
 
+    {data?.analytics && <section className="panel printingSection printingAnalyticsPanel">
+      <div className="panelHead">
+        <div><h3>Print analytics</h3><p>Recorded MakerVault print history and material costs.</p></div>
+        <Badge tone={data.analytics.success_rate != null && data.analytics.success_rate >= 90 ? "good" : "neutral"}>
+          {data.analytics.success_rate != null ? data.analytics.success_rate + "% success" : "No completed prints"}
+        </Badge>
+      </div>
+      <div className="printingAnalyticsMetrics">
+        <article><span>Successful</span><strong>{data.analytics.successful || 0}</strong><small>of {data.analytics.completed || 0} completed</small></article>
+        <article><span>Print time</span><strong>{formatDurationMinutes(data.analytics.actual_minutes)}</strong><small>actual recorded time</small></article>
+        <article><span>Filament used</span><strong>{grams(data.analytics.filament_used_g)}</strong><small>plus {grams(data.analytics.waste_g)} waste</small></article>
+        <article><span>Material cost</span><strong>{formatMoney(data.analytics.material_cost, data.analytics.currency || config?.currency)}</strong><small>{data.analytics.foreign_cost_rows_excluded ? data.analytics.foreign_cost_rows_excluded + " other-currency row(s) excluded" : "recorded/estimated spool cost"}</small></article>
+      </div>
+      {!!data.analytics.printers?.length && <div className="printingAnalyticsPrinters">
+        {data.analytics.printers.slice(0, 6).map(printer => <div key={printer.printer_id}>
+          <div><strong>{printer.printer}</strong><small>{printer.jobs} job{printer.jobs === 1 ? "" : "s"} · {formatDurationMinutes(printer.actual_minutes)}</small></div>
+          <Badge tone={printer.success_rate != null && printer.success_rate >= 90 ? "good" : "neutral"}>{printer.success_rate == null ? "No completed prints" : printer.success_rate + "% success"}</Badge>
+        </div>)}
+      </div>}
+    </section>}
+
     {!!data?.integrations?.length && <section className="printingIntegrationStatusBar" aria-label="Enabled integration status">
       {data.integrations.map(item => {
         const tone = item.status === "connected" ? "good" : item.status === "error" || item.status === "disconnected" ? "danger" : "neutral";
@@ -252,9 +287,16 @@ export default function PrintingPage({ config, projects }) {
     {!!data?.recent_prints?.length && <section className="panel printingSection">
       <div className="panelHead"><div><h3>Recent prints</h3><p>Latest native MakerVault print history.</p></div></div>
       <div className="printingList">
-        {data.recent_prints.map(job => <article className="printingListRow" key={job.id}>
-          <div><strong>{job.model || "Unlinked print"}{job.revision ? ` · ${job.revision}` : ""}</strong><small>{job.printer} · {formatDate(job.created_at)}</small></div>
-          <Badge tone={job.status === "success" ? "good" : job.status === "printing" ? "accent" : "neutral"}>{job.status_label}</Badge>
+        {data.recent_prints.map(job => <article className="printingListRow printingRecentPrintRow" key={job.id}>
+          <div>
+            <strong>{job.model || "Unlinked print"}{job.revision ? ` · ${job.revision}` : ""}</strong>
+            <small>{job.printer} · {formatDate(job.created_at)}{job.actual_minutes ? " · " + formatDurationMinutes(job.actual_minutes) : ""}</small>
+          </div>
+          <div className="printingRecentPrintStats">
+            {job.filament_used_g > 0 && <span>{grams(job.filament_used_g)} used{job.waste_g > 0 ? " · " + grams(job.waste_g) + " waste" : ""}</span>}
+            {job.material_cost != null && <strong>{formatMoney(job.material_cost, config?.currency || "GBP")}</strong>}
+          </div>
+          <Badge tone={job.status === "success" ? "good" : job.status === "failed" ? "danger" : job.status === "printing" ? "accent" : "neutral"}>{job.status_label}</Badge>
         </article>)}
       </div>
     </section>}
@@ -1856,6 +1898,15 @@ function ModelRevisionUploadModal({ model, onClose, onSaved }) {
 }
 
 
+function automaticUsageCost(row, spools, currency) {
+  if (row.material_cost !== "" && row.material_cost != null) return null;
+  const spool = spools.find(item => item.id === row.spool_id);
+  if (!spool?.cost_per_g || spool.currency !== currency) return null;
+  const gramsTotal = Number(row.used_g || 0) + Number(row.waste_g || 0);
+  if (!gramsTotal) return null;
+  return gramsTotal * Number(spool.cost_per_g);
+}
+
 function PrintJobModal({ printers, spools, models, projects, currency, onClose, onSaved }) {
   const revisionOptions = models.flatMap(model =>
     model.revisions.map(revision => ({
@@ -1966,7 +2017,17 @@ function PrintJobModal({ printers, spools, models, projects, currency, onClose, 
           </select></label>
           <label>Used (g)<input type="number" min="0" step="0.01" value={row.used_g} onChange={e => setUsage(index, "used_g", e.target.value)} /></label>
           <label>Waste (g)<input type="number" min="0" step="0.01" value={row.waste_g} onChange={e => setUsage(index, "waste_g", e.target.value)} /></label>
-          <label>Cost<input type="number" min="0" step="0.01" value={row.material_cost} onChange={e => setUsage(index, "material_cost", e.target.value)} /></label>
+          <label>Cost
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={row.material_cost}
+              placeholder={automaticUsageCost(row, spools, currency) != null ? formatMoney(automaticUsageCost(row, spools, currency), currency) + " auto" : "Optional"}
+              onChange={e => setUsage(index, "material_cost", e.target.value)}
+            />
+            {automaticUsageCost(row, spools, currency) != null && <small>Auto {formatMoney(automaticUsageCost(row, spools, currency), currency)} from spool purchase cost. Enter a value to override.</small>}
+          </label>
           {usages.length > 1 && <button type="button" className="assetDanger" onClick={() => removeUsage(index)}>Remove</button>}
         </div>)}
       </div>

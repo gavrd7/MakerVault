@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.6.5.1 — in development
+
+- Added automatic material-cost estimation for print-history usage rows when a physical spool has a purchase cost and starting filament weight. Manually entered costs remain authoritative.
+- Physical spool API records now expose purchase cost, currency and derived cost-per-gram for client-side estimates.
+- Added aggregate print analytics for completed success rate, recorded print time, filament consumption, waste and material cost.
+- Added per-printer job count, success/failure rate and recorded print-time summaries.
+- Expanded recent-print rows with duration, material usage, waste and recorded/estimated material cost.
+- Print-history entry shows the calculated spool-cost estimate before saving while allowing an explicit override.
+- Cost aggregation is currency-safe: the configured MakerVault currency is totalled separately and other-currency rows are reported as excluded.
+
+
 ## v0.6.4.1 — in development
 
 - Model intelligence analysis now refreshes the selected model in place instead of closing the viewer/manage workflow and returning to the Model Library.
