@@ -98,6 +98,7 @@ MakerVault supports either Docker-managed named volumes or host bind mounts.
 
 ```dotenv
 MEDIA_STORAGE=makervault_media
+KEY_STORAGE=makervault_keys
 POSTGRES_STORAGE=makervault_postgres
 REDIS_STORAGE=makervault_redis
 ```
@@ -106,11 +107,26 @@ REDIS_STORAGE=makervault_redis
 
 ```dotenv
 MEDIA_STORAGE=/mnt/Server/MakerVault/media
+KEY_STORAGE=/mnt/Server/MakerVault/keys
 POSTGRES_STORAGE=/mnt/Server/MakerVault/postgres
 REDIS_STORAGE=/mnt/Server/MakerVault/redis
 ```
 
 An absolute source path is treated as a bind mount; a simple name is treated as a Docker named volume.
+
+### Private-file encryption
+
+User-private uploads are encrypted at rest with authenticated AES-256-GCM encryption and stored under opaque random object names. The encryption key is kept separately from the media volume in `KEY_STORAGE` by the default Docker deployment.
+
+**Back up both the media storage and key storage.** Encrypted private files cannot be recovered from a media backup without the matching key. MakerVault refuses to silently generate a replacement key when encrypted blobs already exist.
+
+When upgrading a pre-v0.7 installation, existing private files remain readable during the transition and are migrated to encrypted storage automatically at startup. The migration can also be inspected manually with:
+
+```bash
+docker compose exec makervault python manage.py migrate_private_storage --dry-run
+```
+
+Shared catalogue/reference images are not user-private data and remain stored normally.
 
 ## Locale and permissions
 
@@ -615,6 +631,12 @@ The responsive interface includes:
 MakerVault supports local accounts through django-allauth, including MFA-capable account flows, plus optional OpenID Connect.
 
 Viewer and Editor groups are created automatically. Full administrators remain Django superusers.
+
+### Users, quotas and private-data administration
+
+Superusers can use **Settings → Users & storage** to review account status, aggregate storage usage and private-record counts, set the instance default storage quota, apply per-user limits or Unlimited storage, and disable/reactivate accounts.
+
+This administration view deliberately does not provide a cross-user file/project browser. Destructive **Purge private data** and **Delete account** operations require exact username confirmation, and self-disable/self-purge/self-delete are blocked.
 
 ### OpenID Connect
 
