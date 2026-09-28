@@ -2173,10 +2173,23 @@ PRINTING_INTEGRATION_DEFAULTS = {
 def _ensure_printing_integrations():
     rows = []
     for provider, defaults in PRINTING_INTEGRATION_DEFAULTS.items():
-        row, _ = PrintingIntegrationSetting.objects.get_or_create(
+        row, created = PrintingIntegrationSetting.objects.get_or_create(
             provider=provider,
             defaults=defaults,
         )
+        if provider == "simplyprint":
+            changed = []
+            if not row.endpoint_url:
+                row.endpoint_url = "https://api.simplyprint.io"
+                changed.append("endpoint_url")
+            if row.status == "planned":
+                row.status = "not_configured"
+                changed.append("status")
+            if row.sync_direction != "import":
+                row.sync_direction = "import"
+                changed.append("sync_direction")
+            if changed:
+                row.save(update_fields=[*changed, "updated_at"])
         rows.append(row)
     return rows
 
@@ -2802,6 +2815,17 @@ def _serialise_printer(printer):
         "nozzle_mm": _float(printer.nozzle_mm),
         "catalogue": _serialise_printer_catalog_model(catalogue) if catalogue else None,
         "slots": [_serialise_printer_slot(slot) for slot in printer.filament_slots.all()],
+        "external_links": [
+            {
+                "provider": link.provider,
+                "provider_label": link.get_provider_display(),
+                "external_id": link.external_id,
+                "external_url": link.external_url,
+                "last_synced_at": link.last_synced_at.isoformat() if link.last_synced_at else None,
+            }
+            for link in printer.external_links.all()
+        ],
+        "simplyprint": (printer.profile_data or {}).get("simplyprint") or {},
         "updated_at": printer.updated_at.isoformat(),
     }
 
@@ -2860,6 +2884,7 @@ def printing_overview(request):
         ).prefetch_related(
             "filament_slots__spool__filament__manufacturer",
             "filament_slots__spool__filament__filament_manufacturer",
+            "external_links",
         )
     )
     spools = list(
