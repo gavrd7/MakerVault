@@ -271,6 +271,8 @@ class InventoryItem(TimeStampedModel):
         ]
 
     def clean(self):
+        if self.project_id and self.owner_id and self.project.owner_id != self.owner_id:
+            raise ValidationError({"project": "Selected project belongs to a different user."})
         if self.item_type == "board" and not self.board:
             raise ValidationError({"board": "A board inventory item must reference a board model."})
         if self.item_type == "component" and not self.component:
@@ -417,6 +419,12 @@ class FileAsset(TimeStampedModel):
 
     class Meta:
         ordering = ["-created_at"]
+
+    def clean(self):
+        if self.project_id and self.owner_id and self.project.owner_id != self.owner_id:
+            raise ValidationError({"project": "Selected project belongs to a different user."})
+        if self.supersedes_id and self.owner_id and self.supersedes.owner_id != self.owner_id:
+            raise ValidationError({"supersedes": "A file revision cannot supersede another user's file."})
 
     def __str__(self):
         return self.name
@@ -679,6 +687,10 @@ class Spool(TimeStampedModel):
     def clean(self):
         super().clean()
         self.rfid_uid = str(self.rfid_uid or "").strip().upper()
+        if self.storage_location_id and self.owner_id and self.storage_location.owner_id != self.owner_id:
+            raise ValidationError({"storage_location": "Selected location belongs to a different user."})
+        if self.assigned_printer_id and self.owner_id and self.assigned_printer.owner_id != self.owner_id:
+            raise ValidationError({"assigned_printer": "Selected printer belongs to a different user."})
         if self.storage_location_id and self.assigned_printer_id:
             raise ValidationError("A spool can be stored at a location or assigned to a printer, not both.")
 
@@ -786,6 +798,10 @@ class Printer(TimeStampedModel):
     class Meta:
         ordering = ["name"]
 
+    def clean(self):
+        if self.printing_location_id and self.owner_id and self.printing_location.owner_id != self.owner_id:
+            raise ValidationError({"printing_location": "Selected location belongs to a different user."})
+
     def __str__(self):
         return self.name
 
@@ -826,6 +842,10 @@ class PrinterFilamentSlot(TimeStampedModel):
             ),
         ]
 
+    def clean(self):
+        if self.spool_id and self.spool.owner_id != self.printer.owner_id:
+            raise ValidationError({"spool": "Selected spool belongs to a different user."})
+
     def __str__(self):
         return f"{self.printer} · {self.get_system_display()} {self.unit_index}:{self.slot_index}"
 
@@ -842,6 +862,10 @@ class Model3D(TimeStampedModel):
 
     class Meta:
         ordering = ["name"]
+
+    def clean(self):
+        if self.project_id and self.owner_id and self.project.owner_id != self.owner_id:
+            raise ValidationError({"project": "Selected project belongs to a different user."})
 
     def __str__(self):
         return self.name
@@ -887,6 +911,8 @@ class ModelRevisionAsset(TimeStampedModel):
         ]
 
     def clean(self):
+        if self.file_asset_id and self.revision_id and self.file_asset.owner_id != self.revision.model.owner_id:
+            raise ValidationError({"file_asset": "Selected file belongs to a different user."})
         if self.file_asset_id and self.role == "model" and self.file_asset.category not in {"mesh", "slicer", "cad"}:
             raise ValidationError({"file_asset": "Printable model assets should use a mesh, slicer or CAD file category."})
 
@@ -939,6 +965,14 @@ class PrintJob(TimeStampedModel):
     class Meta:
         ordering = ["-created_at"]
 
+    def clean(self):
+        if self.printer_id and self.owner_id and self.printer.owner_id != self.owner_id:
+            raise ValidationError({"printer": "Selected printer belongs to a different user."})
+        if self.project_id and self.owner_id and self.project.owner_id != self.owner_id:
+            raise ValidationError({"project": "Selected project belongs to a different user."})
+        if self.model_revision_id and self.owner_id and self.model_revision.model.owner_id != self.owner_id:
+            raise ValidationError({"model_revision": "Selected model revision belongs to a different user."})
+
     def __str__(self):
         return f"Print {self.id} ({self.get_status_display()})"
 
@@ -970,6 +1004,10 @@ class PrintMaterialUsage(TimeStampedModel):
         ]
 
     def clean(self):
+        if self.spool_id and self.spool.owner_id != self.print_job.owner_id:
+            raise ValidationError({"spool": "Selected spool belongs to a different user."})
+        if self.printer_slot_id and self.printer_slot.printer.owner_id != self.print_job.owner_id:
+            raise ValidationError({"printer_slot": "Selected printer slot belongs to a different user."})
         if self.spool_id and self.filament_id and self.spool.filament_id != self.filament_id:
             raise ValidationError({"filament": "Selected filament does not match the selected spool."})
         if self.spool_id and not self.filament_id:
