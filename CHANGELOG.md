@@ -2,6 +2,12 @@
 
 ## v0.7.0.1 — in development
 
+- Added the first multi-user ownership foundation: projects, inventory, files, printing locations/integrations, physical spools, owned printers, 3D models and print jobs now carry an explicit owner.
+- Added a guarded legacy-data migration that preserves existing project creator attribution and assigns otherwise ambiguous pre-v0.7 private records only when MakerVault can identify a sole/explicit owner safely.
+- Added `MAKERVAULT_LEGACY_OWNER_USERNAME` as an upgrade escape hatch for existing installations with multiple accounts and ambiguous legacy private data.
+- New private records created through the main MakerVault APIs now record their authenticated owner, including model/file revision workflows and printing imports.
+- Added per-user storage profiles, an instance-wide 10 GiB default quota policy, category counters and the authenticated `/api/storage/` usage-summary endpoint as the basis for quota enforcement and the personal storage dashboard.
+
 - Expanded the built-in generic component catalogue from 180 to 387 entries, adding common starter-kit parts, passives, semiconductors, sensors, displays, communications modules, controls, power modules, connectors, logic ICs, motors and maker hardware.
 - Added catalogue regression coverage for representative maker-project staples and raised the minimum component-coverage guard.
 - Versioned starter-catalogue records consistently so existing installations receive the expanded catalogue idempotently on startup without replacing user-maintained component data.
