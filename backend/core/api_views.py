@@ -1945,12 +1945,19 @@ def project_file_detail(request, project_id, asset_id):
         return _error("Project file not found.", status=404)
 
     if request.method == "DELETE":
-        if asset.file:
+        stored_file = asset.file
+        try:
+            asset.delete()
+        except ProtectedError:
+            return _error(
+                "This file is attached to a 3D model revision. Detach it from the model before deleting it.",
+                status=409,
+            )
+        if stored_file:
             try:
-                asset.file.delete(save=False)
+                stored_file.delete(save=False)
             except OSError:
                 pass
-        asset.delete()
         project.save(update_fields=["updated_at"])
         return JsonResponse({"deleted": True})
 
