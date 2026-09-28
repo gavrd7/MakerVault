@@ -1668,3 +1668,43 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
 .storageFoot small{color:#758195;text-align:right}
 @media(max-width:900px){.storageBreakdown{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:620px){.storageHead{align-items:flex-start}.storagePercent{font-size:20px}.storageBreakdown{grid-template-columns:1fr 1fr}.storageFoot{display:grid;gap:4px}.storageFoot small{text-align:left}}
+
+
+/* v0.7.0 administrator users & storage */
+.adminStoragePolicy{margin-top:0}
+.adminUserGrid{display:grid;gap:16px;padding:18px 20px 20px}
+.adminUserCard{border:1px solid #29313c;background:#0d131a;border-radius:14px;padding:16px;display:grid;gap:14px}
+.adminUserHead{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}
+.adminUserHead h3{margin:3px 0 4px}
+.adminUserHead p{margin:0;color:#8995a7;font-size:13px}
+.adminUserBadges{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
+.adminStorageHeadline{display:flex;justify-content:space-between;align-items:flex-end;gap:16px}
+.adminStorageHeadline div{display:grid;gap:3px}
+.adminStorageHeadline div>strong{font-size:22px}
+.adminStorageHeadline div>span{color:#8995a7;font-size:13px}
+.adminStorageHeadline>strong{font-size:18px}
+.adminStorageBreakdown{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.adminStorageBreakdown span{display:grid;gap:5px;border:1px solid #29313c;background:#0a0f15;border-radius:10px;padding:10px;color:#8490a3;font-size:12px}
+.adminStorageBreakdown strong{color:#eef3fb;font-size:14px}
+.adminRecordCounts{display:flex;flex-wrap:wrap;gap:7px}
+.adminRecordCounts span{border:1px solid #29313c;border-radius:999px;padding:5px 8px;color:#8e9aac;font-size:11px}
+.adminQuotaControls{display:grid;grid-template-columns:minmax(180px,1fr) minmax(180px,1fr) auto;gap:12px;align-items:end}
+.adminQuotaControls label{margin:0}
+.adminAccountActions{display:flex;justify-content:space-between;gap:12px;align-items:center;border-top:1px solid #252d37;padding-top:14px}
+.adminDangerActions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.dangerButton{border-color:#6e3841!important;background:#2b171b!important;color:#ffc0c8!important}
+.dangerButton:hover:not(:disabled){background:#3a1c23!important}
+.adminSelfNote{color:#7f8b9c}
+.dangerConfirm{display:grid;gap:16px}
+.dangerConfirm label{display:grid;gap:7px}
+@media(max-width:900px){
+  .adminStorageBreakdown{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .adminQuotaControls{grid-template-columns:1fr 1fr}
+  .adminQuotaControls>button{grid-column:1/-1;justify-self:start}
+}
+@media(max-width:620px){
+  .adminUserHead,.adminAccountActions{display:grid}
+  .adminUserBadges,.adminDangerActions{justify-content:flex-start}
+  .adminStorageBreakdown,.adminQuotaControls{grid-template-columns:1fr}
+  .adminQuotaControls>button{grid-column:auto}
+}
