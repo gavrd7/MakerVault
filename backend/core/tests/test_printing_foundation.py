@@ -204,6 +204,45 @@ class PrintingFoundationTests(TestCase):
         created = FilamentProduct.objects.get(pk=payload["id"])
         self.assertEqual(created.transparency, "transparent")
 
+    def test_saved_filament_product_can_be_edited_without_replacing_spool_relation(self):
+        response = self.client.patch(
+            f"/api/printing/filaments/{self.filament.id}/",
+            data={
+                "manufacturer_name": "Corrected Maker",
+                "name": "PLA Pro",
+                "material": "PLA+",
+                "color_name": "Midnight Blue",
+                "color_hex": "#102a43",
+                "transparency": "opaque",
+                "finish": "Matte",
+                "pattern": "Solid",
+                "glow": True,
+                "diameter_mm": "1.75",
+                "density_g_cm3": "1.240",
+                "nominal_weight_g": "1000",
+                "empty_spool_weight_g": "220",
+                "nozzle_temp_min_c": 205,
+                "nozzle_temp_max_c": 225,
+                "bed_temp_min_c": 50,
+                "bed_temp_max_c": 65,
+                "drying_temp_c": 45,
+                "drying_time_hours": "6.0",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()["item"]
+        self.assertEqual(payload["manufacturer"], "Corrected Maker")
+        self.assertEqual(payload["name"], "PLA Pro")
+        self.assertEqual(payload["material"], "PLA+")
+        self.assertEqual(payload["color_name"], "Midnight Blue")
+        self.assertTrue(payload["glow"])
+
+        self.spool.refresh_from_db()
+        self.assertEqual(self.spool.filament_id, self.filament.id)
+        self.assertEqual(self.spool.filament.name, "PLA Pro")
+        self.assertEqual(self.spool.filament.filament_manufacturer.name, "Corrected Maker")
+
     def test_printing_overview_exposes_native_models_spools_and_slots(self):
         ExternalSpoolLink.objects.create(
             spool=self.spool,
@@ -929,6 +968,52 @@ class PrintingFoundationTests(TestCase):
         setting = PrintingIntegrationSetting.objects.get(provider="spoolman")
         self.assertEqual(setting.status, "connected")
         self.assertIsNotNone(setting.last_sync_at)
+
+    @patch("core.printing_sync.requests.get")
+    def test_spoolman_sync_rounds_remote_decimal_precision_to_makervault_fields(self, get_mock):
+        response = Mock(status_code=200)
+        response.json.return_value = [
+            {
+                "id": 314,
+                "remaining_weight": 612.5000000001234,
+                "initial_weight": 1000.0000000001234,
+                "price": 24.999999999,
+                "archived": False,
+                "filament": {
+                    "id": 271,
+                    "name": "Precision PETG",
+                    "material": "PETG",
+                    "color_hex": "123456",
+                    "diameter": 1.7500000001,
+                    "density": 1.2699999999,
+                    "weight": 1000.0000000001,
+                    "spool_weight": 220.0000000001,
+                    "vendor": {"id": 99, "name": "Precision Vendor"},
+                },
+            }
+        ]
+        get_mock.return_value = response
+        PrintingIntegrationSetting.objects.update_or_create(
+            provider="spoolman",
+            defaults={
+                "enabled": True,
+                "endpoint_url": "https://spoolman.example.test",
+                "sync_direction": "import",
+                "status": "connected",
+            },
+        )
+
+        synced = self.client.post("/api/settings/printing-integrations/spoolman/sync/")
+        self.assertEqual(synced.status_code, 200, synced.content)
+
+        imported = Spool.objects.get(external_links__provider="spoolman", external_links__external_id="314")
+        self.assertEqual(imported.remaining_weight_g, Decimal("612.50"))
+        self.assertEqual(imported.initial_weight_g, Decimal("1000.00"))
+        self.assertEqual(imported.purchase_cost, Decimal("25.00"))
+        self.assertEqual(imported.filament.diameter_mm, Decimal("1.75"))
+        self.assertEqual(imported.filament.density_g_cm3, Decimal("1.270"))
+        self.assertEqual(imported.filament.nominal_weight_g, Decimal("1000.00"))
+        self.assertEqual(imported.filament.empty_spool_weight_g, Decimal("220.00"))
 
     @patch("core.printing_sync.requests.get")
     def test_first_spoolman_sync_queues_possible_duplicate_for_review(self, get_mock):
