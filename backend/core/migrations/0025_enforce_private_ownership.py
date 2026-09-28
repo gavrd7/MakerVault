@@ -11,6 +11,14 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RemoveConstraint(
+            model_name="externalspoollink",
+            name="unique_external_spool_provider_id",
+        ),
+        migrations.RemoveConstraint(
+            model_name="externalprinterlink",
+            name="unique_external_printer_provider_id",
+        ),
         migrations.AlterField(
             model_name="project",
             name="owner",
