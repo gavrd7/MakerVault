@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { apiFetch } from "../api";
 import { Badge, LoadingBlock, Modal } from "./Common";
-import ModelViewerModal from "./ModelViewer";
+import ModelViewerModal, { isViewableModelFile } from "./ModelViewer";
+import { suggestNextVersion } from "./FileVersionModal";
 
 function grams(value) {
   if (value == null) return "—";
@@ -292,6 +293,8 @@ export default function PrintingPage({ config, projects }) {
     {manageModel && <ModelManageModal
       model={manageModel}
       files={data?.model_files || []}
+      printers={data?.printers || []}
+      canUpload={Boolean(config?.permissions?.add_file)}
       onClose={() => setManageModel(null)}
       onChanged={async () => { setManageModel(null); await load(); }}
     />}
@@ -365,6 +368,8 @@ function SpoolIdentityModal({ spool, onClose, onSaved }) {
   const [rfidUid, setRfidUid] = useState(spool.rfid_uid || "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [viewerAsset, setViewerAsset] = useState(null);
+  const [versionUploadOpen, setVersionUploadOpen] = useState(false);
 
   async function submit(event) {
     event.preventDefault();
@@ -458,7 +463,7 @@ function ModelLibraryPage({ models, files, printers, projects, canAddModel, canC
     </section>
 
     {addOpen && <ModelModal projects={projects} canUpload={canUpload} onClose={() => setAddOpen(false)} onSaved={async () => { setAddOpen(false); await onChanged(); }} />}
-    {manageModel && <ModelManageModal model={manageModel} files={files} onClose={() => setManageModel(null)} onChanged={async () => { setManageModel(null); await onChanged(); }} />}
+    {manageModel && <ModelManageModal model={manageModel} files={files} printers={printers} canUpload={canUpload} onClose={() => setManageModel(null)} onChanged={async () => { setManageModel(null); await onChanged(); }} />}
     {viewerModel && <ModelViewerModal
       model={viewerModel}
       printers={printers}
@@ -1644,7 +1649,7 @@ function ModelModal({ projects, canUpload, onClose, onSaved }) {
 }
 
 
-function ModelManageModal({ model, files, onClose, onChanged }) {
+function ModelManageModal({ model, files, printers, canUpload, onClose, onChanged }) {
   const [version, setVersion] = useState("");
   const [revisionNotes, setRevisionNotes] = useState("");
   const [revisionId, setRevisionId] = useState(model.revisions[0]?.id || "");
@@ -1716,14 +1721,21 @@ function ModelManageModal({ model, files, onClose, onChanged }) {
       {error && <div className="formError">{error}</div>}
 
       <section>
-        <h3>Revisions</h3>
+        <div className="printingManageSectionHead">
+          <h3>Revisions</h3>
+          {canUpload && <button className="primary" type="button" onClick={() => setVersionUploadOpen(true)}>＋ Upload new version</button>}
+        </div>
         <div className="printingRevisionList">
           {model.revisions.map(revision => <article key={revision.id}>
             <div className="printingRevisionHead"><strong>Revision {revision.version}</strong><small>{revision.notes || "No notes"}</small></div>
             <div className="printingRevisionAssets">
               {revision.assets.map(asset => <div key={asset.id}>
                 <div><strong>{asset.file.name}</strong><small>{asset.role_label}{asset.is_primary ? " · Primary" : ""} · {asset.file.filename}</small></div>
-                <button type="button" disabled={busy} onClick={() => detach(revision, asset)}>Detach</button>
+                <div className="printingRevisionAssetActions">
+                  {isViewableModelFile(asset.file) && <button type="button" onClick={() => setViewerAsset(asset)}>View</button>}
+                  <a className="assetButton" href={asset.file.url}>Download</a>
+                  <button type="button" disabled={busy} onClick={() => detach(revision, asset)}>Detach</button>
+                </div>
               </div>)}
               {!revision.assets.length && <span className="muted">No files attached.</span>}
             </div>
@@ -1749,6 +1761,71 @@ function ModelManageModal({ model, files, onClose, onChanged }) {
         <button className="primary" disabled={busy || !model.revisions.length || !compatibleFiles.length}>{busy ? "Saving…" : "Attach file"}</button>
       </form>
     </div>
+    {viewerAsset && <ModelViewerModal
+      model={model}
+      printers={printers || []}
+      canAnalyse={true}
+      initialAssetId={viewerAsset.id}
+      onClose={() => setViewerAsset(null)}
+      onChanged={onChanged}
+    />}
+    {versionUploadOpen && <ModelRevisionUploadModal
+      model={model}
+      onClose={() => setVersionUploadOpen(false)}
+      onSaved={onChanged}
+    />}
+  </Modal>;
+}
+
+
+function ModelRevisionUploadModal({ model, onClose, onSaved }) {
+  const [file, setFile] = useState(null);
+  const [version, setVersion] = useState(suggestNextVersion(model.revisions?.[0]?.version || ""));
+  const [notes, setNotes] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(event) {
+    event.preventDefault();
+    if (!file || !version.trim()) return;
+    setBusy(true);
+    setError("");
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      body.append("version", version.trim());
+      body.append("notes", notes);
+      await apiFetch("/api/printing/models/" + model.id + "/revisions/upload/", {
+        method: "POST",
+        body,
+      });
+      await onSaved?.();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <Modal
+    title={"Upload new version · " + model.name}
+    subtitle="Creates a new immutable model revision and keeps the previous STL/3MF attached to its existing revision."
+    onClose={onClose}
+    wide
+  >
+    <form className="formGrid" onSubmit={submit}>
+      {error && <div className="formError full">{error}</div>}
+      <label className="full">STL / 3MF file
+        <input type="file" required accept=".stl,.3mf,model/stl,application/vnd.ms-package.3dmanufacturing-3dmodel+xml" onChange={event => setFile(event.target.files?.[0] || null)} />
+        <small>{file ? file.name : "Choose the updated printable model or slicer project."}</small>
+      </label>
+      <label>Revision version<input required value={version} onChange={event => setVersion(event.target.value)} placeholder="e.g. 1.1, rev B" /></label>
+      <label className="full">Revision notes<textarea rows="3" value={notes} onChange={event => setNotes(event.target.value)} /></label>
+      <div className="formActions full">
+        <button type="button" onClick={onClose}>Cancel</button>
+        <button className="primary" disabled={!file || !version.trim() || busy}>{busy ? "Uploading…" : "Upload new version"}</button>
+      </div>
+    </form>
   </Modal>;
 }
 
