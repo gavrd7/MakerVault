@@ -249,14 +249,15 @@ def _create_filament_from_spoolman(snapshot: dict) -> FilamentProduct:
     return filament
 
 
-def _spoolman_location(name: str):
+def _spoolman_location(name: str, owner=None):
     value = str(name or "").strip()[:200]
     if not value:
         return None
-    location = PrintingLocation.objects.filter(name__iexact=value).first()
+    location = PrintingLocation.objects.filter(name__iexact=value, owner=owner).first()
     if location is not None:
         return location
     return PrintingLocation.objects.create(
+        owner=owner,
         name=value,
         kind="storage",
         notes="Location discovered from Spoolman. MakerVault remains authoritative for spool placement.",
@@ -432,8 +433,9 @@ def resolve_spoolman_review(
                 raise PrintingSyncError("Selected MakerVault filament was not found.")
         if filament is None:
             filament = _create_filament_from_spoolman(snapshot)
-        location = _spoolman_location(snapshot.get("location"))
+        location = _spoolman_location(snapshot.get("location"), setting.owner)
         spool = _create_spool_with_generated_id(
+            owner=setting.owner,
             filament=filament,
             initial_weight_g=snapshot.get("initial_weight_g"),
             remaining_weight_g=snapshot.get("remaining_weight_g"),
@@ -505,7 +507,7 @@ def sync_spoolman(setting: PrintingIntegrationSetting) -> dict:
             location = None
             if snapshot.get("location"):
                 before = PrintingLocation.objects.filter(name=snapshot["location"]).exists()
-                location = _spoolman_location(snapshot["location"])
+                location = _spoolman_location(snapshot["location"], setting.owner)
                 if location and not before:
                     locations_discovered += 1
 
@@ -556,6 +558,7 @@ def sync_spoolman(setting: PrintingIntegrationSetting) -> dict:
                 selected_filament = _create_filament_from_spoolman(snapshot)
 
             spool = _create_spool_with_generated_id(
+                owner=setting.owner,
                 filament=selected_filament,
                 initial_weight_g=snapshot.get("initial_weight_g"),
                 remaining_weight_g=snapshot.get("remaining_weight_g"),
@@ -774,7 +777,7 @@ def _simplyprint_remote_model(row: dict) -> str:
     ).strip()[:255]
 
 
-def _simplyprint_link_printer(row: dict, now):
+def _simplyprint_link_printer(row: dict, now, owner=None):
     external_id = str(row.get("id") or "").strip()
     if not external_id:
         return None, False, False
@@ -796,6 +799,7 @@ def _simplyprint_link_printer(row: dict, now):
             linked_existing = True
         else:
             printer = Printer.objects.create(
+                owner=owner,
                 name=remote_name,
                 model=_simplyprint_remote_model(row),
                 is_active=True,
@@ -1027,6 +1031,7 @@ def _sync_simplyprint_jobs(rows, printer_links) -> tuple[int, int]:
             updated += 1
         else:
             job = PrintJob.objects.create(
+                owner=printer.owner,
                 printer=printer,
                 status=_simplyprint_job_status(remote.get("status")),
                 actual_minutes=_simplyprint_actual_minutes(remote),
@@ -1080,7 +1085,7 @@ def sync_simplyprint(setting: PrintingIntegrationSetting) -> dict:
     exact_spool_links = 0
 
     for row in remote_printers:
-        printer, created, linked_existing = _simplyprint_link_printer(row, now)
+        printer, created, linked_existing = _simplyprint_link_printer(row, now, setting.owner)
         if not printer:
             continue
         external_id = str(row.get("id") or "").strip()
