@@ -1114,6 +1114,132 @@ class PrintingFoundationTests(TestCase):
         self.assertEqual(first_black.remaining_weight_g, Decimal("950"))
         self.assertEqual(second_black.remaining_weight_g, Decimal("900.00"))
 
+    @patch("core.printing_sync._fetch_cfs_boxs_info", new_callable=AsyncMock)
+    def test_cfs_repairs_legacy_links_by_live_colour_material_and_vendor(self, fetch_mock):
+        maker = PrinterManufacturer.objects.create(name="Creality Legacy Link")
+        model = PrinterCatalogModel.objects.create(
+            manufacturer=maker,
+            name="K2 Legacy Link",
+            multi_material_system="creality_cfs",
+        )
+        printer = Printer.objects.create(
+            name="Legacy K2",
+            printer_manufacturer=maker,
+            catalog_model=model,
+            model="K2 Legacy Link",
+            connection_host="192.0.2.44",
+            is_active=True,
+        )
+
+        creality = FilamentManufacturer.objects.create(name="Creality Legacy Link")
+        esun = FilamentManufacturer.objects.create(name="eSUN Legacy Link")
+        white_abs = FilamentProduct.objects.create(
+            filament_manufacturer=creality,
+            name="CR-ABS",
+            material="ABS",
+            color_name="White",
+            color_hex="#ffffff",
+            nominal_weight_g="1000",
+        )
+        grey_pla = FilamentProduct.objects.create(
+            filament_manufacturer=esun,
+            name="PLA Basic",
+            material="PLA",
+            color_name="Grey",
+            color_hex="#6f8798",
+            nominal_weight_g="1000",
+        )
+        white_spool = Spool.objects.create(
+            spool_id="SPL-LEGACY-WHITE",
+            filament=white_abs,
+            assigned_printer=printer,
+            initial_weight_g="1000",
+            remaining_weight_g="800",
+            status="open",
+        )
+        grey_spool = Spool.objects.create(
+            spool_id="SPL-LEGACY-GREY",
+            filament=grey_pla,
+            assigned_printer=printer,
+            initial_weight_g="1000",
+            remaining_weight_g="700",
+            status="open",
+        )
+
+        # These reproduce links made before MakerVault recorded link_source.
+        PrinterFilamentSlot.objects.create(
+            printer=printer,
+            system="creality_cfs",
+            unit_index=0,
+            slot_index=0,
+            spool=white_spool,
+            material="ABS",
+            color_hex="#ffffff",
+            is_loaded=True,
+            metadata={},
+        )
+        PrinterFilamentSlot.objects.create(
+            printer=printer,
+            system="creality_cfs",
+            unit_index=0,
+            slot_index=1,
+            spool=grey_spool,
+            material="PLA",
+            color_hex="#6f8798",
+            is_loaded=True,
+            metadata={},
+        )
+
+        fetch_mock.return_value = {
+            "materialBoxs": [{
+                "id": 1,
+                "state": 1,
+                "type": 0,
+                "materials": [
+                    {
+                        "id": 0,
+                        "vendor": "Creality Legacy Link",
+                        "type": "ABS",
+                        "name": "CR-ABS",
+                        "rfid": "00003",
+                        "color": "#000000",
+                        "percent": 92,
+                        "state": 2,
+                    },
+                    {
+                        "id": 1,
+                        "vendor": "eSUN Legacy Link",
+                        "type": "PLA",
+                        "name": "PLA Basic",
+                        "rfid": "01001",
+                        "color": "#6f8798",
+                        "percent": 37,
+                        "state": 2,
+                    },
+                ],
+            }],
+        }
+        PrintingIntegrationSetting.objects.update_or_create(
+            provider="creality_cfs",
+            defaults={"enabled": True, "sync_direction": "import", "status": "disconnected"},
+        )
+
+        response = self.client.post("/api/settings/printing-integrations/creality_cfs/sync/")
+        self.assertEqual(response.status_code, 200, response.content)
+
+        black_slot = PrinterFilamentSlot.objects.get(
+            printer=printer, system="creality_cfs", unit_index=0, slot_index=0
+        )
+        grey_slot = PrinterFilamentSlot.objects.get(
+            printer=printer, system="creality_cfs", unit_index=0, slot_index=1
+        )
+
+        self.assertIsNone(black_slot.spool_id)
+        self.assertEqual(black_slot.color_hex, "#000000")
+        self.assertEqual(grey_slot.spool_id, grey_spool.id)
+        self.assertEqual(grey_slot.metadata["link_source"], "legacy_compatible_link")
+        self.assertEqual(grey_spool.spool_id, "SPL-LEGACY-GREY")
+
     def test_physical_spool_rfid_is_unique_and_serialised(self):
         response = self.client.post(
             "/api/printing/spools/",
