@@ -53,6 +53,7 @@ export default function PrintingPage({ config, projects }) {
   const canChangePrinter = Boolean(config?.permissions?.change_printer);
   const canAddFilament = Boolean(config?.permissions?.add_filament);
   const canAddSpool = Boolean(config?.permissions?.add_spool);
+  const canChangeSpool = Boolean(config?.permissions?.change_spool);
   const canAddModel = Boolean(config?.permissions?.add_model3d);
   const canChangeModel = Boolean(config?.permissions?.change_model3d);
   const canAddPrintJob = Boolean(config?.permissions?.add_printjob);
@@ -68,6 +69,7 @@ export default function PrintingPage({ config, projects }) {
       printers={data?.printers || []}
       currency={config?.currency || "GBP"}
       canAddSpool={canAddSpool}
+      canChangeSpool={canChangeSpool}
       onBack={() => setWorkspaceView("overview")}
       onChanged={load}
     />;
@@ -232,9 +234,10 @@ export default function PrintingPage({ config, projects }) {
   </div>;
 }
 
-function SpoolInventoryPage({ spools, filaments, locations, printers, currency, canAddSpool, onBack, onChanged }) {
+function SpoolInventoryPage({ spools, filaments, locations, printers, currency, canAddSpool, canChangeSpool, onBack, onChanged }) {
   const [query, setQuery] = useState("");
   const [addOpen, setAddOpen] = useState(false);
+  const [manageSpool, setManageSpool] = useState(null);
   const term = query.trim().toLowerCase();
   const rows = newestFirst(spools).filter(spool => !term || [
     spool.spool_id, spool.rfid_uid, spool.filament, spool.manufacturer, spool.material, spool.color_name, spool.location,
@@ -271,6 +274,7 @@ function SpoolInventoryPage({ spools, filaments, locations, printers, currency, 
             {spool.loaded_slots?.length > 0 && <Badge tone="accent">Loaded</Badge>}
             <Badge>{spool.status_label || spool.status}</Badge>
             {(spool.external_links || []).map(link => <Badge key={link.id}>{link.provider_label}</Badge>)}
+            {canChangeSpool && <button type="button" onClick={() => setManageSpool(spool)}>RFID / identity</button>}
           </div>
         </article>)}
         {!rows.length && <div className="printingEmptyInline">{term ? "No spools match this search." : "No spool records yet."}</div>}
@@ -278,7 +282,47 @@ function SpoolInventoryPage({ spools, filaments, locations, printers, currency, 
     </section>
 
     {addOpen && <SpoolModal filaments={filaments} locations={locations} printers={printers} currency={currency} onClose={() => setAddOpen(false)} onSaved={async () => { setAddOpen(false); await onChanged(); }} />}
+    {manageSpool && <SpoolIdentityModal spool={manageSpool} onClose={() => setManageSpool(null)} onSaved={async () => { setManageSpool(null); await onChanged(); }} />}
   </div>;
+}
+
+
+function SpoolIdentityModal({ spool, onClose, onSaved }) {
+  const [rfidUid, setRfidUid] = useState(spool.rfid_uid || "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(event) {
+    event.preventDefault();
+    setBusy(true); setError("");
+    try {
+      await apiFetch("/api/printing/spools/" + spool.id + "/", {
+        method: "PATCH",
+        body: { rfid_uid: rfidUid.trim().toUpperCase() },
+      });
+      await onSaved();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <Modal
+    title={"Physical identity · " + spool.spool_id}
+    subtitle="RFID identifies this exact physical reel. Brand, material and colour describe the filament product and are not sufficient to identify a particular spool."
+    onClose={onClose}
+  >
+    <form className="formGrid" onSubmit={submit}>
+      {error && <div className="formError full">{error}</div>}
+      <div className="settingsCallout full">
+        <strong>{spool.filament}</strong>
+        <p>{[spool.manufacturer, spool.material, spool.color_name].filter(Boolean).join(" · ") || "Filament"}</p>
+      </div>
+      <label className="full">RFID tag ID<input autoFocus value={rfidUid} onChange={e => setRfidUid(e.target.value.toUpperCase())} placeholder="Optional physical tag ID" /><small>Each non-empty tag ID can belong to only one MakerVault spool.</small></label>
+      <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Saving…" : "Save RFID identity"}</button></div>
+    </form>
+  </Modal>;
 }
 
 
