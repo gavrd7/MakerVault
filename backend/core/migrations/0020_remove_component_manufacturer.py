@@ -23,6 +23,13 @@ def remove_component_only_manufacturers(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
+    # PostgreSQL can leave deferred FK trigger events pending after the
+    # manufacturer cleanup. The following RemoveField performs ALTER TABLE,
+    # which PostgreSQL refuses while those events are still pending.
+    #
+    # Keep the migration non-atomic so the cleanup transaction commits before
+    # the schema change. The cleanup itself remains atomic.
+    atomic = False
 
     dependencies = [
         ("core", "0019_external_printer_links_simplyprint_slots"),
@@ -32,6 +39,7 @@ class Migration(migrations.Migration):
         migrations.RunPython(
             remove_component_only_manufacturers,
             migrations.RunPython.noop,
+            atomic=True,
         ),
         migrations.RemoveField(
             model_name="componentmodel",
