@@ -54,7 +54,7 @@ This file tracks completed MakerVault milestones and the next candidate areas. T
 - Upgrade migrations consolidate legacy duplicate generic components while preserving references.
 - MakerVault application branding added to the main interface.
 
-## In development
+## Completed milestones
 
 ### v0.6.4 — Model/file intelligence & version workflow
 
@@ -65,13 +65,22 @@ This file tracks completed MakerVault milestones and the next candidate areas. T
 - Six-way axis-aligned orientation guidance comparing support-risk surface, bed contact and build height.
 - Slicer output remains authoritative; MakerVault's orientation guidance is deliberately a local geometry heuristic.
 
+## In development
+
+### v0.6.5 — Print cost & history analytics
+
+- Automatic material-cost estimation from physical-spool purchase price and initial filament weight.
+- Manual cost overrides remain supported and are stored historically on print material usage.
+- Aggregate success rate, recorded print time, material consumption, waste and cost metrics.
+- Per-printer job/success/time summaries and richer recent-print history rows.
+- Currency-safe aggregation that does not silently combine unrelated currencies.
+
 ## Next candidates
 
-After v0.6.4, candidate follow-on areas include:
+After v0.6.5, candidate follow-on areas include:
 
 - deeper slicer-aware analysis beyond the current geometry-only orientation heuristic;
 - additional multi-material adapters where a reliable documented/local interface is available;
-- print-cost estimation and richer print analytics;
 - richer previews and metadata for additional engineering file types;
 - further BOM/inventory workflow refinements;
 - broader optional integrations while preserving MakerVault as a standalone source of truth.
