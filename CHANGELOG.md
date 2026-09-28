@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.6.6.1 — in development
+
+- Raised local model-analysis format to version 3 for slicer-aware 3MF metadata.
+- Added bounded parsing of slicer metadata/config files embedded inside 3MF packages.
+- Detects common slicer applications including OrcaSlicer, Bambu Studio, PrusaSlicer, Slic3r and Cura when their identifying metadata is present.
+- Normalises commonly stored printer, print/process and filament profile names.
+- Surfaces common stored slicer settings including layer/first-layer height, nozzle diameter, infill density/pattern, wall/perimeter count, top/bottom layers, support state and brim configuration.
+- Added a dedicated Slicer metadata section to the Model Intelligence panel with source-file disclosure and explicit guidance that MakerVault is reading saved package metadata rather than running a slicer.
+- Slicer metadata parsing is size-bounded and uses safe XML parsing; model files remain local to MakerVault.
+- Added regression coverage using an OrcaSlicer-style 3MF project settings package.
+
+
 ## v0.6.5 — 2026-09-28
 
 - Added automatic material-cost estimation for print-history usage rows when a physical spool has a purchase cost and starting filament weight. Manually entered costs remain authoritative.
