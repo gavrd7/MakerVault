@@ -506,7 +506,7 @@ def sync_spoolman(setting: PrintingIntegrationSetting) -> dict:
 
             location = None
             if snapshot.get("location"):
-                before = PrintingLocation.objects.filter(name=snapshot["location"]).exists()
+                before = PrintingLocation.objects.filter(name=snapshot["location"], owner=setting.owner).exists()
                 location = _spoolman_location(snapshot["location"], setting.owner)
                 if location and not before:
                     locations_discovered += 1
