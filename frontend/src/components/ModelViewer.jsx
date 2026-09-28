@@ -507,6 +507,63 @@ export default function ModelViewerModal({ model, printers, canAnalyse, onClose,
               <span><b>Surface:</b> {analysis.surface_area_mm2 != null ? Number(analysis.surface_area_mm2).toLocaleString() + " mm²" : "—"}</span>
             </div>
 
+            {(analysis.mesh_quality || analysis.orientation) && <section className="modelPrintability">
+              <div className="modelPrintabilityHead">
+                <strong>Printability estimate</strong>
+                {analysis.mesh_quality?.checked && <Badge tone={analysis.mesh_quality.watertight ? "good" : "danger"}>
+                  {analysis.mesh_quality.status === "watertight" ? "Watertight" :
+                    analysis.mesh_quality.status === "non_manifold" ? "Non-manifold" :
+                    analysis.mesh_quality.status === "degenerate" ? "Degenerate geometry" : "Open mesh"}
+                </Badge>}
+                {analysis.mesh_quality && !analysis.mesh_quality.checked && <Badge>Topology unchecked</Badge>}
+              </div>
+
+              {analysis.mesh_quality && <div className="modelPrintabilityGrid">
+                <article>
+                  <span>Boundary edges</span>
+                  <strong>{analysis.mesh_quality.boundary_edges == null ? "—" : Number(analysis.mesh_quality.boundary_edges).toLocaleString()}</strong>
+                </article>
+                <article>
+                  <span>Non-manifold</span>
+                  <strong>{analysis.mesh_quality.non_manifold_edges == null ? "—" : Number(analysis.mesh_quality.non_manifold_edges).toLocaleString()}</strong>
+                </article>
+                <article>
+                  <span>Degenerate faces</span>
+                  <strong>{analysis.mesh_quality.degenerate_triangles == null ? "—" : Number(analysis.mesh_quality.degenerate_triangles).toLocaleString()}</strong>
+                </article>
+              </div>}
+
+              {analysis.orientation?.recommended && <div className="modelOrientationCard">
+                <div>
+                  <span>Suggested axis-aligned orientation</span>
+                  <strong>{analysis.orientation.recommended.label}</strong>
+                  <small>
+                    {analysis.orientation.recommended.support_risk_pct}% support-risk surface ·
+                    {" "}{Number(analysis.orientation.recommended.bed_contact_area_mm2 || 0).toLocaleString()} mm² bed contact ·
+                    {" "}{analysis.orientation.recommended.height_mm} mm high
+                  </small>
+                </div>
+                {!analysis.orientation.recommended_is_current && analysis.orientation.current && <div className="modelOrientationCompare">
+                  <span>Current</span>
+                  <strong>{analysis.orientation.current.support_risk_pct}%</strong>
+                  <small>support-risk surface</small>
+                </div>}
+              </div>}
+
+              {analysis.orientation?.candidates?.length > 0 && <details className="modelOrientationDetails">
+                <summary>Compare all 6 axis orientations</summary>
+                <div>
+                  {analysis.orientation.candidates.map(candidate => <div key={candidate.key}>
+                    <span>{candidate.label}</span>
+                    <strong>{candidate.support_risk_pct}%</strong>
+                    <small>{candidate.bed_contact_area_mm2} mm² contact · {candidate.height_mm} mm high</small>
+                  </div>)}
+                </div>
+              </details>}
+
+              {analysis.orientation?.note && <small className="modelPrintabilityNote">{analysis.orientation.note}</small>}
+            </section>}
+
             {!!printers?.length && <div className="modelFitList">
               <strong>Owned printer fit</strong>
               {printers.map(printer => {
@@ -524,7 +581,7 @@ export default function ModelViewerModal({ model, printers, canAnalyse, onClose,
             </div>}
           </> : <div className="modelIntelligenceEmpty">
             <strong>Analyse this revision</strong>
-            <p>MakerVault can calculate dimensions, geometry counts, surface area, approximate volume and build-volume fit without sending the model to an external service.</p>
+            <p>MakerVault can calculate dimensions, mesh health, support-risk orientation, geometry counts, surface area, approximate volume and build-volume fit without sending the model to an external service.</p>
           </div>}
         </aside>}
       </div>}
