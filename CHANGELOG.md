@@ -2,7 +2,7 @@
 
 ## v0.6.6.3 — in development
 
-- Raised local model-analysis format to version 3 for slicer-aware 3MF metadata.
+- Raised local model-analysis format to version 5 for slicer-aware 3MF metadata.
 - Added bounded parsing of slicer metadata/config files embedded inside 3MF packages.
 - Detects common slicer applications including OrcaSlicer, Bambu Studio, PrusaSlicer, Slic3r and Cura when their identifying metadata is present.
 - Normalises commonly stored printer, print/process and filament profile names.
