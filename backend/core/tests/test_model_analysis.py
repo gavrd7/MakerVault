@@ -152,7 +152,7 @@ class ModelGeometryAnalysisTests(TestCase):
         self.assertEqual(result["complexity"], "low")
         self.assertGreater(result["surface_area_mm2"], 0)
         self.assertGreater(result["volume_mm3"], 0)
-        self.assertEqual(result["analysis_version"], 2)
+        self.assertEqual(result["analysis_version"], 5)
         self.assertTrue(result["mesh_quality"]["watertight"])
         self.assertEqual(result["mesh_quality"]["boundary_edges"], 0)
         self.assertEqual(result["mesh_quality"]["non_manifold_edges"], 0)
