@@ -79,3 +79,15 @@ class UserOwnershipFoundationTests(TestCase):
         profile.quota_override_bytes = -1
         with self.assertRaises(ValidationError):
             profile.full_clean()
+
+    def test_personal_storage_endpoint_uses_instance_default_quota(self):
+        response = self.client.get("/api/storage/")
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["used_bytes"], 0)
+        self.assertEqual(payload["quota_bytes"], 10 * 1024 * 1024 * 1024)
+        self.assertFalse(payload["unlimited"])
+        self.assertEqual(
+            payload["categories"],
+            {"models": 0, "project_files": 0, "images": 0, "other_files": 0},
+        )
