@@ -564,6 +564,7 @@ class Spool(TimeStampedModel):
     STATUS = [("sealed", "Sealed"), ("open", "Open"), ("drying", "Drying"), ("empty", "Empty"), ("retired", "Retired")]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     spool_id = models.CharField(max_length=40, unique=True)
+    rfid_uid = models.CharField(max_length=255, blank=True, db_index=True)
     filament = models.ForeignKey(FilamentProduct, on_delete=models.PROTECT, related_name="spools")
     initial_weight_g = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     remaining_weight_g = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
@@ -586,10 +587,21 @@ class Spool(TimeStampedModel):
 
     class Meta:
         ordering = ["spool_id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["rfid_uid"],
+                condition=~models.Q(rfid_uid=""),
+                name="unique_nonblank_spool_rfid_uid",
+            ),
+        ]
 
     def clean(self):
         if self.storage_location_id and self.assigned_printer_id:
             raise ValidationError("A spool can be stored at a location or assigned to a printer, not both.")
+
+    def save(self, *args, **kwargs):
+        self.rfid_uid = str(self.rfid_uid or "").strip().upper()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.spool_id} — {self.filament}"
