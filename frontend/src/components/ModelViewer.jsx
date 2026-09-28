@@ -794,6 +794,8 @@ export default function ModelViewerModal({ model, printers, canAnalyse, onClose,
   const [error, setError] = useState("");
   const [analysing, setAnalysing] = useState(false);
   const [analysisOverride, setAnalysisOverride] = useState(null);
+  const [selectedPlate, setSelectedPlate] = useState("all");
+  const [viewerProject, setViewerProject] = useState(null);
   const shellRef = useRef(null);
   const viewerRef = useRef(null);
 
@@ -803,11 +805,21 @@ export default function ModelViewerModal({ model, printers, canAnalyse, onClose,
     !storedAnalysis.source_asset_id || storedAnalysis.source_asset_id === option?.asset?.file?.id
   );
   const analysis = analysisOverride || (analysisMatchesAsset ? storedAnalysis : null);
+  const projectPlates = analysis?.project_structure?.plates?.length
+    ? analysis.project_structure.plates.map((plate, index) => ({
+        id: String(plate.id || index + 1),
+        name: plate.name || "",
+        objectCount: plate.object_count ?? plate.objectCount ?? 0,
+        materialSlots: plate.material_slots || plate.materialSlots || [],
+      }))
+    : (viewerProject?.plates || []);
 
   useEffect(() => {
     setLoadState("loading");
     setError("");
     setAnalysisOverride(null);
+    setSelectedPlate("all");
+    setViewerProject(null);
   }, [option?.key]);
 
   async function analyse() {
@@ -857,6 +869,17 @@ export default function ModelViewerModal({ model, printers, canAnalyse, onClose,
                 Rev {item.revision.version} · {item.asset.file.filename || item.asset.file.name}{item.asset.is_primary ? " · Primary" : ""}
               </option>)}
             </select>
+            {projectPlates.length > 1 && <select
+              className="modelPlateSelect"
+              value={selectedPlate}
+              onChange={e => setSelectedPlate(e.target.value)}
+              aria-label="Build plate"
+            >
+              <option value="all">All plates</option>
+              {projectPlates.map((plate, index) => <option key={plate.id || index} value={String(plate.id || index + 1)}>
+                Plate {plate.id || index + 1}{plate.name ? " · " + plate.name : ""} · {plate.objectCount || 0} object{plate.objectCount === 1 ? "" : "s"}
+              </option>)}
+            </select>}
             <button type="button" onClick={resetView}>Reset view</button>
             <button type="button" className={wireframe ? "active" : ""} onClick={() => setWireframe(value => !value)}>Wireframe</button>
             <button type="button" className={showGrid ? "active" : ""} onClick={() => setShowGrid(value => !value)}>Grid</button>
@@ -870,8 +893,9 @@ export default function ModelViewerModal({ model, printers, canAnalyse, onClose,
               wireframe={wireframe}
               showGrid={showGrid}
               showAxes={showAxes}
+              selectedPlate={selectedPlate}
               viewerRef={viewerRef}
-              onLoaded={() => setLoadState("ready")}
+              onLoaded={project => { setLoadState("ready"); if (project?.plates?.length) setViewerProject(project); }}
               onError={message => { setLoadState("error"); setError(message); }}
             />
           </div>
@@ -923,13 +947,26 @@ export default function ModelViewerModal({ model, printers, canAnalyse, onClose,
               </div>
 
               {!!analysis.project_structure.plates?.length && <div className="modelProjectPlates">
-                {analysis.project_structure.plates.map((plate, index) => <article key={plate.id || index}>
-                  <div>
-                    <span>Plate {plate.id || index + 1}</span>
-                    <strong>{plate.name || (plate.object_count + " object" + (plate.object_count === 1 ? "" : "s"))}</strong>
-                  </div>
-                  {plate.bed_type && <small>{plate.bed_type}</small>}
-                </article>)}
+                {analysis.project_structure.plates.map((plate, index) => {
+                  const plateId = String(plate.id || index + 1);
+                  const materialSlots = plate.material_slots || [];
+                  return <button
+                    type="button"
+                    key={plateId}
+                    className={selectedPlate === plateId ? "active" : ""}
+                    onClick={() => setSelectedPlate(current => current === plateId ? "all" : plateId)}
+                    title={"Show Plate " + plateId + " in the 3D viewer"}
+                  >
+                    <div>
+                      <span>Plate {plateId}</span>
+                      <strong>{plate.name || (plate.object_count + " object" + (plate.object_count === 1 ? "" : "s"))}</strong>
+                    </div>
+                    <small>
+                      {plate.bed_type || ""}
+                      {materialSlots.length ? ((plate.bed_type ? " · " : "") + "slots " + materialSlots.join(", ")) : ""}
+                    </small>
+                  </button>;
+                })}
               </div>}
 
               {!!analysis.project_structure.materials?.length && <details className="modelProjectMaterials">
