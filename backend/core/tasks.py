@@ -94,9 +94,17 @@ def queue_catalogue_maintenance_now(triggered_by="manual"):
 
 
 @shared_task
-def printing_integration_sync_task(provider, triggered_by="schedule"):
+def printing_integration_sync_task(setting_id, triggered_by="schedule"):
     try:
-        setting, result = sync_printing_integration(provider, triggered_by=triggered_by)
+        setting = PrintingIntegrationSetting.objects.filter(pk=setting_id).first()
+        if not setting:
+            return {"status": "missing", "setting_id": str(setting_id)}
+        provider = setting.provider
+        setting, result = sync_printing_integration(
+            provider,
+            triggered_by=triggered_by,
+            setting_id=setting_id,
+        )
         return {
             "status": setting.status,
             "provider": provider,
@@ -126,9 +134,9 @@ def printing_integrations_tick():
                 continue
             item.next_sync_at = now + timedelta(minutes=item.sync_interval_minutes)
             item.save(update_fields=["next_sync_at", "updated_at"])
-            due.append(item.provider)
+            due.append((item.pk, item.provider))
 
-    for provider in due:
-        printing_integration_sync_task.delay(provider, triggered_by="schedule")
+    for setting_id, provider in due:
+        printing_integration_sync_task.delay(setting_id, triggered_by="schedule")
 
-    return {"status": "queued" if due else "not-due", "queued": due}
+    return {"status": "queued" if due else "not-due", "queued": [provider for _, provider in due]}
