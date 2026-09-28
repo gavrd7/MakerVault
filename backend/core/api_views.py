@@ -100,16 +100,20 @@ def _float(value):
     return float(value) if value is not None else None
 
 
-def _image_url(obj):
-    if getattr(obj, "image", None):
+def _image_url(obj, image_field="image", metadata_field=None):
+    image = getattr(obj, image_field, None)
+    if image:
         try:
-            return obj.image.url
+            return image.url
         except ValueError:
             pass
-    metadata = getattr(obj, "specifications", None)
-    if metadata is None:
-        metadata = getattr(obj, "image_metadata", {})
-    metadata = metadata or {}
+    if metadata_field:
+        metadata = getattr(obj, metadata_field, {}) or {}
+    else:
+        metadata = getattr(obj, "specifications", None)
+        if metadata is None:
+            metadata = getattr(obj, "image_metadata", {})
+        metadata = metadata or {}
     return metadata.get("external_image_url") or ""
 
 
@@ -2092,11 +2096,16 @@ def import_board_commit(request):
         return _validation_response(exc)
 
 
-def _attribution_row(kind, obj):
-    metadata = getattr(obj, "specifications", None)
-    if metadata is None:
-        metadata = getattr(obj, "image_metadata", {})
-    metadata = metadata or {}
+def _attribution_row(kind, obj, variant="base"):
+    if variant == "multi_material":
+        metadata = getattr(obj, "image_multi_material_metadata", {}) or {}
+        image = getattr(obj, "image_multi_material", None)
+    else:
+        metadata = getattr(obj, "specifications", None)
+        if metadata is None:
+            metadata = getattr(obj, "image_metadata", {})
+        metadata = metadata or {}
+        image = getattr(obj, "image", None)
     provider = metadata.get("image_source_provider") or ""
     page = metadata.get("image_source_page") or ""
     image_url = metadata.get("image_source_url") or metadata.get("external_image_url") or ""
@@ -2110,7 +2119,7 @@ def _attribution_row(kind, obj):
         "author": metadata.get("image_author") or "",
         "license": metadata.get("image_license") or "",
         "source_page": page or image_url,
-        "cached": bool(obj.image),
+        "cached": bool(image),
     }
 
 
@@ -2126,10 +2135,18 @@ def attributions(request):
         row = _attribution_row("Component", component)
         if row:
             rows.append(row)
-    for printer_model in PrinterCatalogModel.objects.select_related("manufacturer").exclude(image_metadata={}):
+    for printer_model in PrinterCatalogModel.objects.select_related("manufacturer"):
         row = _attribution_row("3D printer", printer_model)
         if row:
             rows.append(row)
+        combo_row = _attribution_row("3D printer + multi-material", printer_model, variant="multi_material")
+        if combo_row:
+            combo_row["name"] = (
+                f"{printer_model} + {printer_model.get_multi_material_system_display()}"
+                if printer_model.multi_material_system
+                else f"{printer_model} + multi-material"
+            )
+            rows.append(combo_row)
     rows.sort(key=lambda row: (row["provider"].lower(), row["name"].lower()))
     return JsonResponse({
         "rows": rows,
@@ -2572,6 +2589,16 @@ def _serialise_printer_catalog_model(item):
         "image_source_provider": (item.image_metadata or {}).get("image_source_provider") or "",
         "image_license": (item.image_metadata or {}).get("image_license") or "",
         "image_author": (item.image_metadata or {}).get("image_author") or "",
+        "image_multi_material": _image_url(
+            item,
+            "image_multi_material",
+            "image_multi_material_metadata",
+        ),
+        "image_multi_material_cached": bool(item.image_multi_material),
+        "image_multi_material_source_page": (item.image_multi_material_metadata or {}).get("image_source_page") or "",
+        "image_multi_material_source_provider": (item.image_multi_material_metadata or {}).get("image_source_provider") or "",
+        "image_multi_material_license": (item.image_multi_material_metadata or {}).get("image_license") or "",
+        "image_multi_material_author": (item.image_multi_material_metadata or {}).get("image_author") or "",
         "source_url": item.source_url,
     }
 
