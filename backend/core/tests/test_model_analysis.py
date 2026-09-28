@@ -117,7 +117,27 @@ def slicer_3mf():
     buffer = BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("3D/3dmodel.model", model_xml)
+        project_settings["filament_colour"] = ["#00AEEF", "#FFFFFF"]
+        project_settings["filament_type"] = ["PLA", "PLA"]
         archive.writestr("Metadata/project_settings.config", json.dumps(project_settings))
+        archive.writestr(
+            "Metadata/model_settings.config",
+            """<?xml version="1.0" encoding="UTF-8"?>
+<config>
+  <object id="1"><metadata key="name" value="Brake body"/><metadata key="extruder" value="1"/></object>
+  <object id="2"><metadata key="name" value="Brake legend"/><metadata key="extruder" value="2"/></object>
+  <plate>
+    <metadata key="plater_id" value="1"/>
+    <metadata key="plater_name" value="Body"/>
+    <model_instance><metadata key="object_id" value="1"/><metadata key="instance_id" value="0"/></model_instance>
+  </plate>
+  <plate>
+    <metadata key="plater_id" value="2"/>
+    <metadata key="plater_name" value="Legend"/>
+    <model_instance><metadata key="object_id" value="2"/><metadata key="instance_id" value="0"/></model_instance>
+  </plate>
+</config>""",
+        )
     return buffer.getvalue()
 
 
@@ -169,6 +189,20 @@ class ModelGeometryAnalysisTests(TestCase):
         self.assertEqual(slicer["settings"]["supports_enabled"], True)
         self.assertEqual(slicer["settings"]["brim_type"], "outer_only")
         self.assertIn("Metadata/project_settings.config", slicer["metadata_files"])
+
+    def test_3mf_extracts_multi_plate_project_structure(self):
+        result = analyse_3mf(slicer_3mf())
+        project = result["project_structure"]
+        self.assertTrue(project["detected"])
+        self.assertTrue(project["multi_plate"])
+        self.assertTrue(project["multicolour"])
+        self.assertEqual(project["plate_count"], 2)
+        self.assertEqual(project["object_count"], 2)
+        self.assertEqual(project["used_material_slots"], [1, 2])
+        self.assertEqual(project["plates"][0]["name"], "Body")
+        self.assertEqual(project["plates"][0]["object_count"], 1)
+        self.assertEqual(project["materials"][0]["colour"], "#00AEEF")
+        self.assertEqual(project["materials"][1]["profile"], "Generic PLA @K2")
 
     def test_3mf_analysis_uses_declared_units_and_objects(self):
         result = analyse_3mf(simple_3mf())
