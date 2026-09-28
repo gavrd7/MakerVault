@@ -140,6 +140,7 @@ class OrcaSlicerPrinterCatalogueTests(TestCase):
             name="K1C",
         )
         self.assertEqual(k1c.multi_material_system, "creality_cfs")
+        self.assertIsNone(k1c.enclosed)
         self.assertFalse(
             PrinterCatalogModel.objects.filter(name__icontains="CFS-C").exists()
         )
