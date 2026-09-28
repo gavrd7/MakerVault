@@ -56,3 +56,55 @@ def probe_spoolman(raw_url: str) -> dict:
         "endpoint_url": base,
         "info": payload,
     }
+
+
+def simplyprint_api_root(raw_url: str, company_id) -> str:
+    base = normalise_service_url(raw_url or "https://api.simplyprint.io")
+    company = str(company_id or "").strip()
+    if not company.isdigit() or int(company) <= 0:
+        raise PrintingIntegrationError("Enter the SimplyPrint account/company ID.")
+    return f"{base}/{company}"
+
+
+def _simplyprint_payload(response, context: str) -> dict:
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise PrintingIntegrationError(f"SimplyPrint returned invalid JSON while {context}.") from exc
+    if not isinstance(payload, dict):
+        raise PrintingIntegrationError(f"SimplyPrint returned an unexpected response while {context}.")
+    if response.status_code >= 400 or payload.get("status") is False:
+        message = str(payload.get("message") or "").strip()
+        detail = f": {message}" if message else ""
+        raise PrintingIntegrationError(
+            f"SimplyPrint returned HTTP {response.status_code}{detail} while {context}."
+        )
+    return payload
+
+
+def probe_simplyprint(raw_url: str, company_id, api_key: str) -> dict:
+    root = simplyprint_api_root(raw_url or "https://api.simplyprint.io", company_id)
+    key = str(api_key or "").strip()
+    if not key:
+        raise PrintingIntegrationError("Enter a SimplyPrint API key.")
+
+    try:
+        response = requests.get(
+            root + "/account/Test",
+            headers={
+                "Accept": "application/json",
+                "X-API-KEY": key,
+                "User-Agent": "MakerVault/0.6 (+SimplyPrint integration probe)",
+            },
+            timeout=(4, 15),
+            allow_redirects=False,
+        )
+    except requests.RequestException as exc:
+        raise PrintingIntegrationError("MakerVault could not reach the SimplyPrint API.") from exc
+
+    payload = _simplyprint_payload(response, "testing the API key")
+    return {
+        "endpoint_url": root.rsplit("/", 1)[0],
+        "company_id": str(company_id),
+        "message": payload.get("message") or "",
+    }
