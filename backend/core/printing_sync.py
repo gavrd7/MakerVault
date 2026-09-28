@@ -50,11 +50,15 @@ def next_spool_id() -> str:
     return f"SPL-{candidate:04d}"
 
 
-def _as_decimal(value):
+def _as_decimal(value, places=None):
     if value in (None, ""):
         return None
     try:
-        return Decimal(str(value))
+        result = Decimal(str(value))
+        if places is not None:
+            quantum = Decimal("1").scaleb(-int(places))
+            result = result.quantize(quantum)
+        return result
     except (InvalidOperation, TypeError, ValueError):
         return None
 
@@ -128,10 +132,10 @@ def _spoolman_snapshot(remote: dict) -> dict:
     if not isinstance(vendor_data, dict):
         vendor_data = {}
 
-    remaining = _as_decimal(remote.get("remaining_weight"))
-    initial = _as_decimal(remote.get("initial_weight"))
+    remaining = _as_decimal(remote.get("remaining_weight"), 2)
+    initial = _as_decimal(remote.get("initial_weight"), 2)
     if initial is None:
-        initial = _as_decimal(filament_data.get("weight"))
+        initial = _as_decimal(filament_data.get("weight"), 2)
 
     return {
         "external_id": str(remote.get("id") or "").strip(),
@@ -141,15 +145,15 @@ def _spoolman_snapshot(remote: dict) -> dict:
         "name": str(filament_data.get("name") or filament_data.get("material") or "Spoolman filament").strip()[:255],
         "material": str(filament_data.get("material") or "Unknown").strip()[:80],
         "color_hex": _normalise_hex(filament_data.get("color_hex")),
-        "diameter_mm": _as_decimal(filament_data.get("diameter")) or Decimal("1.75"),
-        "density_g_cm3": _as_decimal(filament_data.get("density")),
-        "nominal_weight_g": _as_decimal(filament_data.get("weight")),
-        "empty_spool_weight_g": _as_decimal(filament_data.get("spool_weight")),
+        "diameter_mm": _as_decimal(filament_data.get("diameter"), 2) or Decimal("1.75"),
+        "density_g_cm3": _as_decimal(filament_data.get("density"), 3),
+        "nominal_weight_g": _as_decimal(filament_data.get("weight"), 2),
+        "empty_spool_weight_g": _as_decimal(filament_data.get("spool_weight"), 2),
         "nozzle_temp_c": filament_data.get("settings_extruder_temp") or None,
         "bed_temp_c": filament_data.get("settings_bed_temp") or None,
         "initial_weight_g": initial,
         "remaining_weight_g": remaining,
-        "purchase_cost": _as_decimal(remote.get("price")),
+        "purchase_cost": _as_decimal(remote.get("price"), 2),
         "location": str(remote.get("location") or "").strip()[:200],
         "comment": str(remote.get("comment") or "").strip(),
         "archived": bool(remote.get("archived")),
