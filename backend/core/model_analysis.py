@@ -657,6 +657,23 @@ def _extract_3mf_project_structure(package, model_roots):
         except (KeyError, ET.ParseError, DefusedXmlException):
             pass
 
+    for plate in plates:
+        plate_slots = set()
+        for instance in plate.get("instances", []):
+            object_info = objects.get(str(instance.get("object_id") or ""))
+            if not object_info:
+                continue
+            candidates = [object_info.get("extruder")]
+            candidates.extend(part.get("extruder") for part in object_info.get("parts", []))
+            for candidate in candidates:
+                try:
+                    slot = int(candidate)
+                except (TypeError, ValueError):
+                    continue
+                if slot > 0:
+                    plate_slots.add(slot)
+        plate["material_slots"] = sorted(plate_slots)
+
     painted_facets = 0
     for root in model_roots:
         for element in root.iter():
