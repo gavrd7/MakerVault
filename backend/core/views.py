@@ -7,6 +7,7 @@ from django.db import connection
 from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
+\nfrom .models import FileAsset, InventoryItem, Project
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,23 @@ def app_shell(request):
 
 @login_required
 def media_file(request, path):
+    # Private media must be authorised by database ownership, not merely by
+    # possession of a MEDIA_URL path. Unknown files under private prefixes are
+    # intentionally treated as not found so stale/orphaned blobs cannot leak.
+    normalised = str(path or "").lstrip("/")
+    if normalised.startswith("files/"):
+        allowed = FileAsset.objects.filter(owner=request.user, file=normalised).exists()
+        if not allowed:
+            raise Http404
+    elif normalised.startswith("projects/covers/"):
+        allowed = Project.objects.filter(owner=request.user, cover_image=normalised).exists()
+        if not allowed:
+            raise Http404
+    elif normalised.startswith("inventory/"):
+        allowed = InventoryItem.objects.filter(owner=request.user, image=normalised).exists()
+        if not allowed:
+            raise Http404
+
     root = settings.MEDIA_ROOT.resolve()
     requested = (root / path).resolve()
     try:
