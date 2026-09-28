@@ -35,6 +35,7 @@ from .model_analysis import ModelAnalysisError, analyse_file_asset
 from .printing_integrations import PrintingIntegrationError, probe_simplyprint, probe_spoolman
 from .printing_sync import PrintingSyncError, next_spool_id, resolve_spoolman_review, sync_printing_integration
 from .tasks import queue_catalogue_maintenance_now
+from .storage_usage import storage_summary
 from .models import (
     BoardCompatibility,
     BoardModel,
@@ -710,6 +711,13 @@ def _next_inventory_id(item_type):
     while InventoryItem.objects.filter(inventory_id=f"{prefix}-{candidate:04d}").exists():
         candidate += 1
     return f"{prefix}-{candidate:04d}"
+
+
+@login_required
+@require_http_methods(["GET"])
+def user_storage(request):
+    """Return the authenticated user's logical storage usage and effective quota."""
+    return JsonResponse(storage_summary(request.user))
 
 
 @login_required
