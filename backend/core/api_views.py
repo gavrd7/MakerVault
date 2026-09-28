@@ -2528,6 +2528,7 @@ def printing_integration_test(request, provider):
             item, _ = sync_printing_integration(
                 provider,
                 triggered_by=f"test:user:{request.user.get_username()}",
+                owner=request.user,
             )
         else:
             item.last_checked_at = timezone.now()
@@ -2603,6 +2604,7 @@ def printing_integration_sync_now(request, provider):
         item, result = sync_printing_integration(
             provider,
             triggered_by=f"user:{request.user.get_username()}",
+            owner=request.user,
         )
         return JsonResponse({
             "item": _serialise_printing_integration(item),
@@ -3796,7 +3798,7 @@ def printing_spools(request):
 
         item = Spool(
             owner=request.user,
-            spool_id=next_spool_id(),
+            spool_id=next_spool_id(request.user),
             rfid_uid=rfid_uid,
             filament=filament,
             initial_weight_g=_parse_decimal(payload.get("initial_weight_g"), "initial_weight_g"),
@@ -4045,7 +4047,7 @@ def printing_slot_add_to_inventory(request, slot_id):
 
             spool = Spool(
                 owner=slot.printer.owner or request.user,
-                spool_id=next_spool_id(),
+                spool_id=next_spool_id(slot.printer.owner),
                 rfid_uid=rfid_uid,
                 filament=filament,
                 initial_weight_g=initial_weight,
