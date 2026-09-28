@@ -8,6 +8,7 @@ from core.catalogue_image_sources import (
     _espboards_slug_candidates,
     _openverse_license_name,
     _printer_image_queries,
+    _printer_multi_material_image_queries,
     search_openverse,
     search_wikimedia_commons,
 )
@@ -47,6 +48,11 @@ class DummyPrinterManufacturer:
 class DummyPrinterModel:
     name = "K2"
     manufacturer = DummyPrinterManufacturer()
+    multi_material_system = "creality_cfs"
+    MULTI_MATERIAL_SYSTEMS = [
+        ("", "None / unknown"),
+        ("creality_cfs", "Creality CFS"),
+    ]
 
 
 class CatalogueImageSourceTests(unittest.TestCase):
@@ -123,6 +129,11 @@ class CatalogueImageSourceTests(unittest.TestCase):
         queries = _printer_image_queries(DummyPrinterModel())
         self.assertEqual(queries[0], "Creality K2 3D printer")
         self.assertIn("Creality K2 printer", queries)
+
+    def test_printer_combo_image_queries_include_combo_and_system(self):
+        queries = _printer_multi_material_image_queries(DummyPrinterModel())
+        self.assertEqual(queries[0], "Creality K2 Combo 3D printer")
+        self.assertIn("Creality K2 Creality CFS 3D printer", queries)
 
     def test_openverse_license_mapping_is_restrictive(self):
         self.assertEqual(_openverse_license_name("by", "4.0"), "CC BY 4.0")
