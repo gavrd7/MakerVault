@@ -1,8 +1,11 @@
 # Changelog
 
-## Unreleased
+## v0.6.4.1 — in development
 
 - Model intelligence analysis now refreshes the selected model in place instead of closing the viewer/manage workflow and returning to the Model Library.
+- Added local mesh-topology health checks for boundary edges, non-manifold edges, degenerate triangles and watertightness.
+- Added six-way axis-aligned print-orientation analysis using a 45° downward-facing surface heuristic, bed-contact estimate and build height, with a recommended orientation and comparison table in the 3D viewer.
+- Large meshes skip topology edge counting above a bounded triangle threshold while retaining the rest of the geometry/orientation analysis.
 - Normalised View/Download/Detach and Files/Project action sizing and spacing so download links visually match surrounding buttons.
 - Extended the STL/3MF viewer into model management, the global Files library and project file lists.
 - Added lazy rendered STL/3MF thumbnail previews in Files and Projects, replacing generic extension badges for viewable 3D assets.

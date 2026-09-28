@@ -54,11 +54,22 @@ This file tracks completed MakerVault milestones and the next candidate areas. T
 - Upgrade migrations consolidate legacy duplicate generic components while preserving references.
 - MakerVault application branding added to the main interface.
 
+## In development
+
+### v0.6.4 — Model/file intelligence & version workflow
+
+- Immutable FileAsset version lineage with latest-version library/project views and downloadable history.
+- STL/3MF thumbnails and direct View actions in Files, Projects and model management.
+- Direct model-revision upload that preserves earlier STL/3MF revisions and automatically re-runs local analysis.
+- Mesh-health analysis for watertightness, open/boundary edges, non-manifold edges and degenerate triangles.
+- Six-way axis-aligned orientation guidance comparing support-risk surface, bed contact and build height.
+- Slicer output remains authoritative; MakerVault's orientation guidance is deliberately a local geometry heuristic.
+
 ## Next candidates
 
-No next version number is assigned yet. Candidate follow-on areas include:
+After v0.6.4, candidate follow-on areas include:
 
-- deeper model intelligence such as orientation, printability and slicer-aware analysis;
+- deeper slicer-aware analysis beyond the current geometry-only orientation heuristic;
 - additional multi-material adapters where a reliable documented/local interface is available;
 - print-cost estimation and richer print analytics;
 - richer previews and metadata for additional engineering file types;
