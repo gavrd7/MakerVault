@@ -9,7 +9,7 @@ import ProjectsPage from "./components/ProjectsPage";
 import FilesPage from "./components/FilesPage";
 import AboutPage from "./components/AboutPage";
 import SettingsPage from "./components/SettingsPage";
-import { EmptyModule } from "./components/Common";
+import PrintingPage from "./components/PrintingPage";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -60,7 +60,7 @@ export default function App() {
     if (section === "Board Catalogue") return <BoardsPage boards={boards} setBoards={setBoards} components={components} projects={projects} config={config} onOpenImport={() => setImportOpen(true)} refreshDashboard={refreshDashboard} onInventoryCreated={async item => { setInventory(rows => [...rows.filter(row => row.id !== item.id), item].sort((a,b) => a.inventory_id.localeCompare(b.inventory_id))); await refreshDashboard(); }} />;
     if (section === "Components") return <ComponentsPage components={components} setComponents={setComponents} boards={boards} projects={projects} config={config} refreshDashboard={refreshDashboard} onInventoryCreated={async item => { setInventory(rows => [...rows.filter(row => row.id !== item.id), item].sort((a,b) => a.inventory_id.localeCompare(b.inventory_id))); await refreshDashboard(); }} />;
     if (section === "Projects") return <ProjectsPage projects={projects} setProjects={setProjects} config={config} refreshDashboard={refreshDashboard} refreshInventory={refreshInventory} boards={boards} components={components} inventory={inventory} openProjectId={projectTarget} onOpenConsumed={() => setProjectTarget("")} />;
-    if (section === "3D Printing") return <EmptyModule title="3D printing data is ready">Printer, filament, spool, 3D model/revision and print-job schemas are already present. SpoolmanDB and 3D model workflows are planned for the next importer milestone.</EmptyModule>;
+    if (section === "3D Printing") return <PrintingPage config={config} projects={projects} />;
     if (section === "Files") return <FilesPage projects={projects} config={config} onOpenProject={projectId => { setProjectTarget(projectId); setSection("Projects"); }} />;
     if (section === "Settings") return <SettingsPage config={config} />;
     return <AboutPage config={config} />;
@@ -68,7 +68,7 @@ export default function App() {
 
   return <div className="shell">
     <aside>
-      <div className="brand"><span className="brandmark">M</span><div><strong>MakerVault</strong><small>v0.5.0 · AGPL</small></div></div>
+      <div className="brand"><span className="brandmark">M</span><div><strong>MakerVault</strong><small>{config?.version ? "v" + config.version : "version loading…"} · AGPL</small></div></div>
       <nav>{NAV.filter(n => n !== "Settings" || config?.is_staff).map(n => <button key={n} className={section === n ? "active" : ""} onClick={() => setSection(n)}>{n}</button>)}</nav>
       <div className="asideBottom"><a href="/admin/">Administration</a><a href="/accounts/2fa/">Account &amp; Security</a><a href="/accounts/logout/">Sign out</a></div>
     </aside>

@@ -12,6 +12,20 @@ ESPBoards publishes its own pinout diagrams and board illustrations under CC BY-
 
 No runtime-downloaded catalogue image is relicensed under AGPL merely because MakerVault caches or displays it.
 
+## SpoolmanDB filament catalogue
+
+MakerVault can query the public SpoolmanDB filament catalogue at runtime to help users create native filament-product records. SpoolmanDB is an independent project and its catalogue/software repository is distributed under the MIT License. Imported MakerVault records retain their SpoolmanDB source identifier, source URL and licence metadata.
+
+MakerVault does not require SpoolmanDB to operate. Once imported, filament records are stored in MakerVault and remain available if the external catalogue is unavailable or disabled.
+
+## OrcaSlicer printer catalogue
+
+MakerVault can use the public OrcaSlicer printer profile manifests as an optional runtime source for 3D-printer manufacturer/model catalogue breadth. OrcaSlicer is an independent project distributed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+
+MakerVault reads OrcaSlicer's vendor and machine-model manifest names and stores source provenance on imported catalogue records. It does not copy OrcaSlicer process, filament or G-code presets into MakerVault. Existing populated MakerVault hardware specifications remain authoritative and are not overwritten by catalogue refreshes.
+
+The upstream project is available from the OrcaSlicer/OrcaSlicer repository on GitHub. MakerVault remains usable when this source is unavailable or disabled.
+
 ## User-provided media
 
 Images and files uploaded by users remain subject to the rights and licences applicable to those files. Users are responsible for ensuring they have permission to upload, store and redistribute such material.

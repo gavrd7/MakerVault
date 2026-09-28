@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { apiFetch } from "../api";
-import { LoadingBlock } from "./Common";
+import { Badge, LoadingBlock, Modal } from "./Common";
 
 function formatWhen(value) {
   if (!value) return "Not yet";
@@ -12,17 +12,25 @@ function formatWhen(value) {
 export default function SettingsPage({ config }) {
   const [settings, setSettings] = useState(null);
   const [form, setForm] = useState(null);
+  const [integrations, setIntegrations] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [integrationBusy, setIntegrationBusy] = useState("");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [reviewState, setReviewState] = useState(null);
+  const [reviewBusy, setReviewBusy] = useState("");
 
   async function load() {
     setError("");
     try {
-      const result = await apiFetch("/api/settings/catalogue-maintenance/");
-      setSettings(result.settings);
-      setForm(result.settings);
+      const [maintenance, printing] = await Promise.all([
+        apiFetch("/api/settings/catalogue-maintenance/"),
+        apiFetch("/api/settings/printing-integrations/"),
+      ]);
+      setSettings(maintenance.settings);
+      setForm(maintenance.settings);
+      setIntegrations(printing.rows || []);
     } catch (err) {
       setError(err.message);
     }
@@ -47,6 +55,7 @@ export default function SettingsPage({ config }) {
           enabled: form.enabled,
           interval_hours: Number(form.interval_hours),
           check_board_data: form.check_board_data,
+          check_printer_data: form.check_printer_data,
           check_images: form.check_images,
         },
       });
@@ -57,6 +66,139 @@ export default function SettingsPage({ config }) {
       setError(err.message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  function updateIntegrationLocal(provider, key, value) {
+    setIntegrations(rows => rows.map(row => row.provider === provider ? { ...row, [key]: value } : row));
+  }
+
+  async function saveIntegration(provider, patch = null) {
+    const row = integrations.find(item => item.provider === provider);
+    if (!row) return;
+    const merged = { ...row, ...(patch || {}) };
+    setIntegrationBusy(provider); setError(""); setNotice("");
+    try {
+      const result = await apiFetch("/api/settings/printing-integrations/" + provider + "/", {
+        method: "PATCH",
+        body: {
+          enabled: merged.enabled,
+          endpoint_url: merged.endpoint_url,
+          sync_direction: merged.sync_direction,
+          auto_sync: merged.auto_sync,
+          sync_interval_minutes: Number(merged.sync_interval_minutes || 15),
+        },
+      });
+      setIntegrations(rows => rows.map(item => item.provider === provider ? result.item : item));
+      setNotice(result.item.name + " settings saved.");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIntegrationBusy("");
+    }
+  }
+
+  async function testIntegration(provider) {
+    setIntegrationBusy(provider); setError(""); setNotice("");
+    try {
+      const result = await apiFetch("/api/settings/printing-integrations/" + provider + "/test/", { method: "POST" });
+      setIntegrations(rows => rows.map(item => item.provider === provider ? result.item : item));
+      setNotice(result.item.name + ": " + result.item.status_label + ".");
+    } catch (err) {
+      if (err.status === 502) {
+        try {
+          const refreshed = await apiFetch("/api/settings/printing-integrations/");
+          setIntegrations(refreshed.rows || []);
+        } catch {}
+      }
+      setError(err.message);
+    } finally {
+      setIntegrationBusy("");
+    }
+  }
+
+  async function syncIntegration(provider) {
+    setIntegrationBusy(provider); setError(""); setNotice("");
+    try {
+      const result = await apiFetch("/api/settings/printing-integrations/" + provider + "/sync/", { method: "POST" });
+      setIntegrations(rows => rows.map(item => item.provider === provider ? result.item : item));
+      const details = result.result || {};
+      if (provider === "spoolman") {
+        setNotice(
+          `Spoolman sync complete: ${details.remote_spools || 0} remote read, ${details.created || 0} added, ${details.updated || 0} linked records refreshed, ${details.pending_review || 0} awaiting review, ${details.locations_discovered || 0} new locations, ${details.exported || 0} exported.`
+        );
+      } else if (provider === "creality_cfs") {
+        setNotice(
+          `Creality CFS sync complete: ${details.loaded_slots || 0} loaded slot${details.loaded_slots === 1 ? "" : "s"} discovered.`
+        );
+      } else {
+        setNotice(result.item.name + " sync complete.");
+      }
+    } catch (err) {
+      try {
+        const refreshed = await apiFetch("/api/settings/printing-integrations/");
+        setIntegrations(refreshed.rows || []);
+      } catch {}
+      setError(err.message);
+    } finally {
+      setIntegrationBusy("");
+    }
+  }
+
+  async function resetIgnoredImports(provider) {
+    setIntegrationBusy(provider); setError(""); setNotice("");
+    try {
+      const result = await apiFetch("/api/settings/printing-integrations/" + provider + "/", {
+        method: "PATCH",
+        body: { reset_ignored_imports: true },
+      });
+      setIntegrations(rows => rows.map(item => item.provider === provider ? result.item : item));
+      setNotice(result.item.name + " ignored imports will be reconsidered on the next sync.");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIntegrationBusy("");
+    }
+  }
+
+  async function openIntegrationReviews(provider) {
+    setError(""); setNotice("");
+    try {
+      const [reviews, spools, filaments] = await Promise.all([
+        apiFetch("/api/settings/printing-integrations/" + provider + "/reviews/"),
+        apiFetch("/api/printing/spools/"),
+        apiFetch("/api/printing/filaments/"),
+      ]);
+      setReviewState({
+        provider,
+        rows: reviews.rows || [],
+        spools: spools.rows || [],
+        filaments: filaments.rows || [],
+      });
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function resolveIntegrationReview(externalId, body) {
+    if (!reviewState) return;
+    setReviewBusy(externalId); setError(""); setNotice("");
+    try {
+      const provider = reviewState.provider;
+      const result = await apiFetch(
+        "/api/settings/printing-integrations/" + provider + "/reviews/" + encodeURIComponent(externalId) + "/",
+        { method: "POST", body }
+      );
+      setIntegrations(rows => rows.map(item => item.provider === provider ? result.item : item));
+      const refreshed = await apiFetch("/api/settings/printing-integrations/" + provider + "/reviews/");
+      setReviewState(current => current ? { ...current, rows: refreshed.rows || [] } : current);
+      const action = result.result?.action || "resolved";
+      const code = result.result?.spool_code ? " · " + result.result.spool_code : "";
+      setNotice("Import review " + action + code + ".");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setReviewBusy("");
     }
   }
 
@@ -78,9 +220,9 @@ export default function SettingsPage({ config }) {
   return <div className="settingsStack">
     <section className="panel settingsHero">
       <div>
-        <span className="settingsEyebrow">Automatic maintenance</span>
-        <h2>Catalogue maintenance</h2>
-        <p>Periodically check for missing/new board specifications and catalogue images without rerunning work on every container restart.</p>
+        <span className="settingsEyebrow">Administration</span>
+        <h2>MakerVault settings</h2>
+        <p>Manage scheduled catalogue maintenance and optional external integrations from one place.</p>
       </div>
       <div className="settingsStatus">
         <span className={settings.enabled ? "status-pill status-on" : "status-pill"}>{settings.enabled ? "Enabled" : "Disabled"}</span>
@@ -92,7 +234,7 @@ export default function SettingsPage({ config }) {
 
     <section className="panel settingsPanel">
       <div className="panelHead">
-        <div><h3>Schedule</h3><p>The default interval is 24 hours. The next-run timestamp is stored in PostgreSQL.</p></div>
+        <div><h3>Catalogue maintenance schedule</h3><p>The default interval is 24 hours. The next-run timestamp is stored in PostgreSQL.</p></div>
       </div>
       <form className="settingsForm" onSubmit={save}>
         <label className="settingsToggle">
@@ -112,6 +254,10 @@ export default function SettingsPage({ config }) {
             <input type="checkbox" checked={form.check_board_data} onChange={e => set("check_board_data", e.target.checked)} />
           </label>
           <label className="settingsToggle">
+            <div><strong>3D printer catalogue</strong><small>Refresh supported printer models from OrcaSlicer without overwriting MakerVault's populated hardware specifications. Current catalogue: {settings.printer_catalogue_models || 0} models across {settings.printer_catalogue_manufacturers || 0} manufacturers · upstream ref {settings.server_printer_catalogue_ref || "main"}.</small></div>
+            <input type="checkbox" checked={form.check_printer_data} onChange={e => set("check_printer_data", e.target.checked)} />
+          </label>
+          <label className="settingsToggle">
             <div><strong>Catalogue images</strong><small>Retry missing catalogue images on the saved maintenance cadence.</small></div>
             <input type="checkbox" checked={form.check_images} onChange={e => set("check_images", e.target.checked)} />
           </label>
@@ -122,9 +268,9 @@ export default function SettingsPage({ config }) {
           <div><span>Next scheduled run</span><strong>{settings.enabled ? formatWhen(settings.next_run_at) : "Disabled"}</strong><small>{config.timezone}</small></div>
         </div>
 
-        {(!settings.server_board_enrichment_enabled || !settings.server_image_seeding_enabled) && <div className="settingsCallout">
+        {(!settings.server_board_enrichment_enabled || !settings.server_printer_catalogue_enabled || !settings.server_image_seeding_enabled) && <div className="settingsCallout">
           <strong>Server-level restriction</strong>
-          <p>{!settings.server_board_enrichment_enabled ? "Technical enrichment is disabled by ENRICH_BOARD_CATALOGUE. " : ""}{!settings.server_image_seeding_enabled ? "Image seeding is disabled by SEED_CATALOGUE_IMAGES." : ""} GUI scheduling cannot override a server-level disable.</p>
+          <p>{!settings.server_board_enrichment_enabled ? "Technical enrichment is disabled by ENRICH_BOARD_CATALOGUE. " : ""}{!settings.server_printer_catalogue_enabled ? "OrcaSlicer printer catalogue sync is disabled by SYNC_ORCASLICER_PRINTER_CATALOGUE. " : ""}{!settings.server_image_seeding_enabled ? "Image seeding is disabled by SEED_CATALOGUE_IMAGES." : ""} GUI scheduling cannot override a server-level disable.</p>
         </div>}
 
         <div className="settingsActions">
@@ -134,10 +280,150 @@ export default function SettingsPage({ config }) {
       </form>
     </section>
 
+    <section className="panel settingsPanel">
+      <div className="panelHead">
+        <div><h3>3D printing integrations</h3><p>Enable the services you use. Connected services can be synchronised manually or on their own schedule.</p></div>
+      </div>
+      <div className="printingIntegrationGrid settingsIntegrationGrid">
+        {integrations.map(item => {
+          const statusTone = item.status === "connected" ? "good" : item.status === "error" || item.status === "disconnected" ? "danger" : item.status === "planned" ? "accent" : "neutral";
+          const supported = item.can_sync;
+          const isBusy = integrationBusy === item.provider;
+          return <article key={item.provider}>
+            <div className="settingsIntegrationHead"><strong>{item.name}</strong><Badge tone={statusTone}>{item.status_label}</Badge></div>
+
+            {item.provider === "spoolman" && <>
+              <span>Synchronise MakerVault spool inventory with your self-hosted Spoolman server.</span>
+              <label className="settingsToggle compact"><div><strong>Enable integration</strong><small>Only enabled integrations appear on the 3D Printing status bar.</small></div><input type="checkbox" checked={item.enabled} onChange={e => saveIntegration(item.provider, { enabled: e.target.checked })} /></label>
+              <label><span>Server URL</span><input value={item.endpoint_url || ""} onChange={e => updateIntegrationLocal(item.provider, "endpoint_url", e.target.value)} placeholder="http://spoolman.local:7912" /></label>
+              <label><span>Sync direction</span><select value={item.sync_direction} onChange={e => updateIntegrationLocal(item.provider, "sync_direction", e.target.value)}><option value="import">External → MakerVault</option><option value="export">MakerVault → external</option><option value="bidirectional">Bidirectional</option></select></label>
+              <small>{item.linked_spools || 0} Spoolman link{item.linked_spools === 1 ? "" : "s"} mapped in MakerVault.</small>
+              <div className="settingsCallout integrationAuthorityCallout">
+                <strong>MakerVault is authoritative</strong>
+                <p>Existing MakerVault filament identity, placement, notes and status are not silently replaced by Spoolman. Missing Spoolman location names are added to the location catalogue; only genuinely new imports inherit their remote location.</p>
+              </div>
+              {item.pending_review_count > 0 && <button className="integrationReviewButton" type="button" onClick={() => openIntegrationReviews(item.provider)}>Review {item.pending_review_count} possible duplicate{item.pending_review_count === 1 ? "" : "s"}</button>}
+              {item.ignored_import_count > 0 && <button type="button" onClick={() => resetIgnoredImports(item.provider)} disabled={isBusy}>Reconsider {item.ignored_import_count} ignored import{item.ignored_import_count === 1 ? "" : "s"}</button>}
+            </>}
+
+            {item.provider === "creality_cfs" && <>
+              <span>Read CFS boxes and loaded filament slots directly from compatible Creality printers on your local network.</span>
+              <label className="settingsToggle compact"><div><strong>Enable integration</strong><small>The CFS adapter is read-only.</small></div><input type="checkbox" checked={item.enabled} onChange={e => saveIntegration(item.provider, { enabled: e.target.checked, sync_direction: "import" })} /></label>
+              <small>{item.compatible_printers || 0} compatible printer{item.compatible_printers === 1 ? "" : "s"} · {item.installed_printers || 0} with CFS installed · {item.configured_printers || 0} installed printer{item.configured_printers === 1 ? "" : "s"} with local host/IP.</small>
+            </>}
+
+            {!supported && item.provider === "simplyprint" && <><span>Optional SimplyPrint filament inventory integration.</span><small>Adapter placeholder — not selectable yet.</small></>}
+            {!supported && item.provider === "bambu_ams" && <><span>Bambu Lab AMS / AMS Lite integration.</span><small>Adapter placeholder — not selectable yet.</small></>}
+            {!supported && item.provider === "elegoo" && <><span>Elegoo multi-material integration.</span><small>Adapter placeholder — not selectable yet.</small></>}
+            {!supported && item.provider === "qidi" && <><span>QIDI multi-material integration.</span><small>Adapter placeholder — not selectable yet.</small></>}
+            {!supported && item.provider === "snapmaker" && <><span>Snapmaker multi-material/toolchanger integration.</span><small>Adapter placeholder — not selectable yet.</small></>}
+
+            {supported && item.enabled && <div className="integrationSchedule">
+              <label className="settingsToggle compact"><div><strong>Scheduled sync</strong><small>Run this integration automatically in the background.</small></div><input type="checkbox" checked={item.auto_sync} onChange={e => updateIntegrationLocal(item.provider, "auto_sync", e.target.checked)} /></label>
+              <label><span>Sync interval</span><div className="intervalInput"><input type="number" min="1" max="1440" step="1" value={item.sync_interval_minutes || 15} onChange={e => updateIntegrationLocal(item.provider, "sync_interval_minutes", e.target.value)} /><span>minutes</span></div></label>
+              <div className="integrationTimes">
+                <small>Last sync: {formatWhen(item.last_sync_at)}</small>
+                <small>Next sync: {item.auto_sync ? formatWhen(item.next_sync_at) : "Manual only"}</small>
+              </div>
+            </div>}
+
+            {item.last_error && <small className="integrationError">{item.last_error}</small>}
+
+            {supported && <div className="settingsActions compact">
+              {item.provider === "spoolman" && <button onClick={() => testIntegration(item.provider)} disabled={isBusy || !item.enabled}>{isBusy ? "Working…" : "Test connection"}</button>}
+              <button onClick={() => syncIntegration(item.provider)} disabled={isBusy || !item.enabled}>{isBusy ? "Synchronising…" : "Sync now"}</button>
+              <button className="primary" onClick={() => saveIntegration(item.provider)} disabled={isBusy}>{isBusy ? "Saving…" : "Save"}</button>
+            </div>}
+
+            <small>Connection checked: {formatWhen(item.last_checked_at)}</small>
+          </article>;
+        })}
+      </div>
+    </section>
+
     <section className="panel settingsInfo">
       <h3>How scheduled checks behave</h3>
-      <p>The scheduler does not blindly redownload the whole catalogue every day. It re-checks supported online board sources and retries records still missing images on the saved cadence. Existing local images are skipped, confidence/licence rules remain enforced, and populated/user-edited specification values are not overwritten.</p>
+      <p>The scheduler re-checks supported online board sources, refreshes OrcaSlicer's printer-model manifests when enabled, and retries records still missing images on the saved cadence. OrcaSlicer expands catalogue breadth but does not overwrite populated MakerVault hardware specifications; existing local images are skipped and confidence/licence rules remain enforced.</p>
       <p>Restarting or rebuilding the MakerVault container does not reset the interval. The schedule is stored in the database and resumes from the saved next-run time.</p>
     </section>
+    {reviewState && <IntegrationReviewModal
+      state={reviewState}
+      busyId={reviewBusy}
+      onClose={() => setReviewState(null)}
+      onResolve={resolveIntegrationReview}
+    />}
   </div>;
+}
+
+
+function IntegrationReviewModal({ state, busyId, onClose, onResolve }) {
+  return <Modal
+    title="Review integration imports"
+    subtitle="MakerVault pauses ambiguous imports instead of creating or overwriting inventory automatically."
+    onClose={onClose}
+    wide
+  >
+    <div className="integrationReviewList">
+      {!state.rows.length && <div className="printingEmptyInline">There are no imports waiting for review.</div>}
+      {state.rows.map(review => <IntegrationReviewRow
+        key={review.external_id}
+        review={review}
+        spools={state.spools}
+        filaments={state.filaments}
+        busy={busyId === review.external_id}
+        onResolve={body => onResolve(review.external_id, body)}
+      />)}
+    </div>
+  </Modal>;
+}
+
+
+function IntegrationReviewRow({ review, spools, filaments, busy, onResolve }) {
+  const suggestedFilament = review.filament_candidates?.[0]?.id || "";
+  const [filamentChoice, setFilamentChoice] = useState(suggestedFilament || "__detected__");
+  const [spoolChoice, setSpoolChoice] = useState(review.spool_candidates?.[0]?.id || "");
+  const remote = review.remote || {};
+
+  return <article className="integrationReviewCard">
+    <div className="integrationReviewHead">
+      <div>
+        <span className="settingsEyebrow">Spoolman #{review.external_id}</span>
+        <h3>{[remote.vendor, remote.name].filter(Boolean).join(" · ") || remote.material || "Unknown spool"}</h3>
+        <p>{[remote.material, remote.color_hex, remote.remaining_weight_g != null ? remote.remaining_weight_g + " g remaining" : "", remote.location].filter(Boolean).join(" · ")}</p>
+      </div>
+      <Badge tone="accent">{review.reason === "ambiguous_filament" ? "Filament needs review" : "Possible duplicate"}</Badge>
+    </div>
+
+    {!!review.spool_candidates?.length && <div className="integrationCandidateList">
+      <strong>Likely MakerVault spool matches</strong>
+      {review.spool_candidates.map(candidate => <div className="integrationCandidateRow" key={candidate.id}>
+        <div><strong>{candidate.spool_id} · {candidate.filament}</strong><small>Match score {candidate.score}{candidate.location ? " · " + candidate.location : ""}</small></div>
+        <button type="button" disabled={busy} onClick={() => onResolve({ action: "link", spool_id: candidate.id })}>Link this spool</button>
+      </div>)}
+    </div>}
+
+    <div className="integrationReviewChoices">
+      <label>Link a different MakerVault spool<select value={spoolChoice} onChange={e => setSpoolChoice(e.target.value)}>
+        <option value="">Choose spool…</option>
+        {spools.filter(spool => !(spool.external_links || []).some(link => link.provider === "spoolman")).map(spool => <option key={spool.id} value={spool.id}>{spool.spool_id} · {spool.filament}</option>)}
+      </select></label>
+      <button type="button" disabled={busy || !spoolChoice} onClick={() => onResolve({ action: "link", spool_id: spoolChoice })}>Link selected spool</button>
+    </div>
+
+    <div className="integrationReviewChoices">
+      <label>Import as a new spool using<select value={filamentChoice} onChange={e => setFilamentChoice(e.target.value)}>
+        <option value="__detected__">Create filament from detected Spoolman data</option>
+        {filaments.map(filament => <option key={filament.id} value={filament.id}>{filament.display_name} · {filament.material}</option>)}
+      </select></label>
+      <button className="primary" type="button" disabled={busy} onClick={() => onResolve({
+        action: "create",
+        filament_id: filamentChoice === "__detected__" ? "" : filamentChoice,
+      })}>Import as new spool</button>
+    </div>
+
+    <div className="integrationReviewFooter">
+      <small>Ignoring keeps this Spoolman record out of future automatic import attempts. You can reconsider ignored imports from the Spoolman settings card.</small>
+      <button type="button" disabled={busy} onClick={() => onResolve({ action: "ignore" })}>{busy ? "Working…" : "Ignore remote spool"}</button>
+    </div>
+  </article>;
 }

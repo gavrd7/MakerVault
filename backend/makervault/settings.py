@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
 
+from .version import VERSION
+
 from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -39,7 +41,7 @@ USE_TZ = True
 
 MAKERVAULT_CURRENCY = os.getenv("MAKERVAULT_CURRENCY", "GBP")
 MAKERVAULT_MEASUREMENT_SYSTEM = os.getenv("MAKERVAULT_MEASUREMENT_SYSTEM", "metric")
-MAKERVAULT_VERSION = "0.5.0"
+MAKERVAULT_VERSION = VERSION
 MAKERVAULT_LICENSE = "AGPL-3.0-or-later"
 MAKERVAULT_SOURCE_URL = os.getenv("MAKERVAULT_SOURCE_URL", "https://github.com/gavrd7/MakerVault")
 ALLOW_LOCAL_REGISTRATION = env_bool("ALLOW_LOCAL_REGISTRATION", False)
@@ -56,6 +58,10 @@ ENRICH_BOARD_CATALOGUE = env_bool("ENRICH_BOARD_CATALOGUE", True)
 BOARD_ENRICHMENT_MAX_PER_RUN = int(os.getenv("BOARD_ENRICHMENT_MAX_PER_RUN", "500"))
 BOARD_ENRICHMENT_RETRY_DAYS = int(os.getenv("BOARD_ENRICHMENT_RETRY_DAYS", "14"))
 
+# Optional OrcaSlicer-backed printer model catalogue. Existing MakerVault specs remain authoritative.
+SYNC_ORCASLICER_PRINTER_CATALOGUE = env_bool("SYNC_ORCASLICER_PRINTER_CATALOGUE", True)
+ORCASLICER_PRINTER_CATALOGUE_REF = os.getenv("ORCASLICER_PRINTER_CATALOGUE_REF", "main").strip() or "main"
+
 # Automatic starter-catalogue image seeding. Work is queued to Celery so startup is not blocked.
 SEED_CATALOGUE_IMAGES = env_bool("SEED_CATALOGUE_IMAGES", True)
 CATALOGUE_IMAGE_MAX_PER_RUN = int(os.getenv("CATALOGUE_IMAGE_MAX_PER_RUN", "60"))
@@ -63,6 +69,12 @@ CATALOGUE_IMAGE_RETRY_DAYS = int(os.getenv("CATALOGUE_IMAGE_RETRY_DAYS", "7"))
 CATALOGUE_IMAGE_PREFER_ESPBOARDS = env_bool("CATALOGUE_IMAGE_PREFER_ESPBOARDS", False)
 CATALOGUE_IMAGE_WIKIMEDIA = env_bool("CATALOGUE_IMAGE_WIKIMEDIA", True)
 CATALOGUE_IMAGE_OPENVERSE = env_bool("CATALOGUE_IMAGE_OPENVERSE", True)
+
+# Optional public filament catalogue. MakerVault remains fully usable when disabled.
+FILAMENT_CATALOGUE_SPOOLMANDB_URL = os.getenv(
+    "FILAMENT_CATALOGUE_SPOOLMANDB_URL",
+    "https://donkie.github.io/SpoolmanDB/filaments.json",
+).strip()
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -228,6 +240,10 @@ CELERY_ENABLE_UTC = True
 CELERY_BEAT_SCHEDULE = {
     "catalogue-maintenance-tick": {
         "task": "core.tasks.catalogue_maintenance_tick",
+        "schedule": 60.0,
+    },
+    "printing-integrations-tick": {
+        "task": "core.tasks.printing_integrations_tick",
         "schedule": 60.0,
     },
 }

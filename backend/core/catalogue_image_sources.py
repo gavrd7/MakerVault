@@ -12,14 +12,20 @@ from django.core.cache import cache
 from django.utils import timezone
 from django.utils.text import slugify
 
-from .catalogue_images import CatalogueImageError, apply_catalogue_image, fetch_public_image
+from .catalogue_images import (
+    CatalogueImageError,
+    apply_catalogue_image,
+    catalogue_image_metadata,
+    fetch_public_image,
+    set_catalogue_image_metadata,
+)
 from .importers import ImporterError, fetch_import_html
 
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 OPENVERSE_API = "https://api.openverse.org/v1/images/"
-IMAGE_SEED_VERSION = "0.3.6"
-USER_AGENT = "MakerVault/0.3.6 (+self-hosted catalogue image seeder)"
+IMAGE_SEED_VERSION = "0.6.0.2"
+USER_AGENT = f"MakerVault/{getattr(settings, 'MAKERVAULT_VERSION', 'dev')} (+self-hosted catalogue image seeder)"
 def _commons_license_allowed(license_name: str) -> bool:
     """Allow only licences suitable for normal open redistribution."""
     value = " ".join((license_name or "").strip().upper().split())
@@ -128,6 +134,40 @@ def _commons_query_for_component(component) -> str:
 def _commons_query_for_board(board) -> str:
     maker = board.manufacturer.name if board.manufacturer else ""
     return f"{maker} {board.name} microcontroller board".strip()
+
+
+def _printer_image_queries(printer_model) -> list[str]:
+    maker = printer_model.manufacturer.name if printer_model.manufacturer else ""
+    name = re.sub(r"\s+", " ", printer_model.name or "").strip()
+    queries = [
+        f"{maker} {name} 3D printer".strip(),
+        f"{maker} {name} printer".strip(),
+    ]
+    out = []
+    for query in queries:
+        if query and query not in out:
+            out.append(query)
+    return out
+
+
+def _printer_multi_material_image_queries(printer_model) -> list[str]:
+    maker = printer_model.manufacturer.name if printer_model.manufacturer else ""
+    name = re.sub(r"\s+", " ", printer_model.name or "").strip()
+    system_label = dict(printer_model.MULTI_MATERIAL_SYSTEMS).get(
+        printer_model.multi_material_system,
+        printer_model.multi_material_system,
+    )
+    queries = [
+        f"{maker} {name} Combo 3D printer".strip(),
+        f"{maker} {name} {system_label} 3D printer".strip(),
+        f"{maker} {name} with {system_label}".strip(),
+    ]
+    out = []
+    for query in queries:
+        query = re.sub(r"\s+", " ", query).strip()
+        if query and query not in out:
+            out.append(query)
+    return out
 
 
 def search_wikimedia_commons(query: str, *, minimum_score: float = 0.18) -> ImageCandidate | None:
@@ -354,8 +394,8 @@ def find_espboards_image(board) -> ImageCandidate | None:
     return None
 
 
-def resolve_catalogue_image(obj) -> ImageCandidate | None:
-    from .models import BoardModel, ComponentModel
+def resolve_catalogue_image(obj, variant: str = "base") -> ImageCandidate | None:
+    from .models import BoardModel, ComponentModel, PrinterCatalogModel
 
     if isinstance(obj, BoardModel):
         if settings.CATALOGUE_IMAGE_PREFER_ESPBOARDS:
@@ -369,15 +409,24 @@ def resolve_catalogue_image(obj) -> ImageCandidate | None:
         candidate = _search_open_media(queries[:3], minimum_score=0.16)
         if candidate:
             return candidate
-        # The final query is usually a generic representative type. Be slightly
-        # more permissive for that fallback while still requiring token overlap.
         if len(queries) > 3:
             return _search_open_media(queries[3:], minimum_score=0.12)
+
+    if isinstance(obj, PrinterCatalogModel):
+        if variant == "multi_material":
+            if not obj.multi_material_system:
+                return None
+            return _search_open_media(
+                _printer_multi_material_image_queries(obj),
+                minimum_score=0.50,
+            )
+        return _search_open_media(_printer_image_queries(obj), minimum_score=0.45)
     return None
 
 
-def cache_candidate(obj, candidate: ImageCandidate):
-    stem = getattr(obj, "slug", "") or getattr(obj, "name", "") or str(obj.pk)
+def cache_candidate(obj, candidate: ImageCandidate, variant: str = "base"):
+    suffix = "-combo" if variant == "multi_material" else ""
+    stem = (getattr(obj, "slug", "") or getattr(obj, "name", "") or str(obj.pk)) + suffix
     content, filename, final_image_url = fetch_public_image(candidate.image_url, stem)
     apply_catalogue_image(
         obj,
@@ -385,9 +434,10 @@ def cache_candidate(obj, candidate: ImageCandidate):
         filename,
         source_url=final_image_url,
         source_type=f"auto-{candidate.provider.lower().replace(' ', '-').replace('.', '')}",
+        variant=variant,
     )
-    specs = dict(obj.specifications or {})
-    specs.update({
+    metadata, _ = catalogue_image_metadata(obj, variant=variant)
+    metadata.update({
         "image_source_provider": candidate.provider,
         "image_source_page": candidate.source_page_url,
         "image_source_query": candidate.query,
@@ -395,9 +445,10 @@ def cache_candidate(obj, candidate: ImageCandidate):
         "image_author": candidate.author,
         "auto_image_seeded": True,
         "auto_image_seeded_at": timezone.now().isoformat(),
+        "image_variant": variant,
     })
-    obj.specifications = specs
-    obj.save(update_fields=["specifications", "updated_at"])
+    field = set_catalogue_image_metadata(obj, metadata, variant=variant)
+    obj.save(update_fields=[field, "updated_at"] if field else ["updated_at"])
 
 
 def _recent_attempt(specs: dict, retry_days: int) -> bool:
@@ -418,7 +469,7 @@ def _recent_attempt(specs: dict, retry_days: int) -> bool:
 
 
 def run_catalogue_image_seed(*, limit: int | None = None, force_retry: bool = False) -> dict:
-    from .models import BoardModel, ComponentModel
+    from .models import BoardModel, ComponentModel, PrinterCatalogModel
 
     limit = settings.CATALOGUE_IMAGE_MAX_PER_RUN if limit is None else max(int(limit), 0)
     retry_days = max(int(settings.CATALOGUE_IMAGE_RETRY_DAYS), 1)
@@ -431,38 +482,61 @@ def run_catalogue_image_seed(*, limit: int | None = None, force_retry: bool = Fa
         querysets = [
             BoardModel.objects.select_related("manufacturer").order_by("manufacturer__name", "name"),
             ComponentModel.objects.select_related("manufacturer", "category").order_by("category__name", "name"),
+            PrinterCatalogModel.objects.select_related("manufacturer").order_by("manufacturer__name", "name"),
         ]
         for queryset in querysets:
             for obj in queryset.iterator():
-                if limit and processed >= limit:
-                    return {"status": "limit-reached", "processed": processed, "cached": cached, "failed": failed, "skipped": skipped}
-                if obj.image:
-                    skipped += 1
-                    continue
-                specs = dict(obj.specifications or {})
-                if specs.get("auto_image_opt_out"):
-                    skipped += 1
-                    continue
-                if not force_retry and _recent_attempt(specs, retry_days):
-                    skipped += 1
-                    continue
+                variants = ["base"]
+                if isinstance(obj, PrinterCatalogModel) and obj.multi_material_system:
+                    variants.append("multi_material")
 
-                processed += 1
-                specs["auto_image_last_attempt"] = timezone.now().isoformat()
-                specs["auto_image_attempt_version"] = IMAGE_SEED_VERSION
-                obj.specifications = specs
-                obj.save(update_fields=["specifications", "updated_at"])
+                for variant in variants:
+                    if limit and processed >= limit:
+                        return {
+                            "status": "limit-reached",
+                            "processed": processed,
+                            "cached": cached,
+                            "failed": failed,
+                            "skipped": skipped,
+                        }
 
-                try:
-                    candidate = resolve_catalogue_image(obj)
-                    if not candidate:
-                        failed += 1
+                    image_field = "image_multi_material" if variant == "multi_material" else "image"
+                    if getattr(obj, image_field, None):
+                        skipped += 1
                         continue
-                    cache_candidate(obj, candidate)
-                    cached += 1
-                except (CatalogueImageError, requests.RequestException, ValueError):
-                    failed += 1
 
-        return {"status": "complete", "processed": processed, "cached": cached, "failed": failed, "skipped": skipped}
+                    metadata, _ = catalogue_image_metadata(obj, variant=variant)
+                    if metadata.get("auto_image_opt_out"):
+                        skipped += 1
+                        continue
+                    if not force_retry and _recent_attempt(metadata, retry_days):
+                        skipped += 1
+                        continue
+
+                    processed += 1
+                    metadata["auto_image_last_attempt"] = timezone.now().isoformat()
+                    metadata["auto_image_attempt_version"] = IMAGE_SEED_VERSION
+                    metadata["image_variant"] = variant
+                    field = set_catalogue_image_metadata(obj, metadata, variant=variant)
+                    obj.save(update_fields=[field, "updated_at"] if field else ["updated_at"])
+
+                    try:
+                        candidate = resolve_catalogue_image(obj, variant=variant)
+                        if not candidate:
+                            failed += 1
+                            continue
+                        cache_candidate(obj, candidate, variant=variant)
+                        cached += 1
+                    except (CatalogueImageError, requests.RequestException, ValueError):
+                        failed += 1
+
+        return {
+            "status": "complete",
+            "processed": processed,
+            "cached": cached,
+            "failed": failed,
+            "skipped": skipped,
+        }
     finally:
         cache.delete(lock_key)
+

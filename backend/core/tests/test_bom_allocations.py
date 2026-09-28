@@ -4,7 +4,7 @@ import threading
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.management import call_command
-from django.db import close_old_connections, models
+from django.db import close_old_connections, connections, models
 from django.test import Client, TestCase, TransactionTestCase
 
 from core.models import BOMAllocation, BOMItem, InventoryHistory, InventoryItem, Project
@@ -411,7 +411,7 @@ class BomAllocationConcurrencyTests(TransactionTestCase):
             except Exception as exc:
                 errors.append(exc)
             finally:
-                close_old_connections()
+                connections.close_all()
 
         def allocate_stock():
             close_old_connections()
@@ -431,7 +431,7 @@ class BomAllocationConcurrencyTests(TransactionTestCase):
             except Exception as exc:
                 errors.append(exc)
             finally:
-                close_old_connections()
+                connections.close_all()
 
         first = threading.Thread(target=patch_quantity)
         second = threading.Thread(target=allocate_stock)

@@ -2,13 +2,15 @@ from django.contrib import admin
 from .models import (
     Manufacturer, CatalogSource, CatalogueMaintenanceSettings, BoardModel, BoardCompatibility, ComponentCategory,
     ComponentModel, Project, InventoryItem, InventoryHistory, BOMItem, BOMAllocation, FileAsset, RepositoryLink,
-    FilamentProduct, Spool, Printer, Model3D, ModelRevision, ProductListing, PrintJob,
+    FilamentProduct, Spool, ExternalSpoolLink, PrinterManufacturer, PrinterCatalogModel,
+    Printer, PrinterFilamentSlot,
+    Model3D, ModelRevision, ModelRevisionAsset, ProductListing, PrintJob, PrintMaterialUsage,
 )
 
 
 @admin.register(CatalogueMaintenanceSettings)
 class CatalogueMaintenanceSettingsAdmin(admin.ModelAdmin):
-    list_display = ("enabled", "interval_hours", "check_board_data", "check_images", "last_run_at", "next_run_at")
+    list_display = ("enabled", "interval_hours", "check_board_data", "check_printer_data", "check_images", "last_run_at", "next_run_at")
     readonly_fields = ("last_run_at", "next_run_at", "last_triggered_by", "created_at", "updated_at")
 
     def has_add_permission(self, request):
@@ -65,8 +67,10 @@ class ProjectAdmin(admin.ModelAdmin):
 
 admin.site.register([
     Manufacturer, CatalogSource, BoardCompatibility, ComponentCategory, ComponentModel,
-    FileAsset, RepositoryLink, FilamentProduct, Spool, Printer, Model3D,
-    ModelRevision, ProductListing, PrintJob,
+    FileAsset, RepositoryLink, FilamentProduct, Spool, ExternalSpoolLink,
+    PrinterManufacturer, PrinterCatalogModel, Printer, PrinterFilamentSlot,
+    Model3D, ModelRevision, ModelRevisionAsset,
+    ProductListing, PrintJob, PrintMaterialUsage,
 ])
 
 admin.site.site_header = "MakerVault administration"

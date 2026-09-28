@@ -52,6 +52,14 @@ gosu makervault python manage.py seed_roles
 echo "Ensuring starter catalogue..."
 gosu makervault python manage.py seed_catalogue
 
+echo "Ensuring 3D printer catalogue..."
+gosu makervault python manage.py seed_printing_catalogue
+
+if [ "${SYNC_ORCASLICER_PRINTER_CATALOGUE:-true}" = "true" ] || [ "${SYNC_ORCASLICER_PRINTER_CATALOGUE:-true}" = "1" ]; then
+  echo "Expanding sparse 3D printer catalogue from OrcaSlicer..."
+  gosu makervault python manage.py sync_orcaslicer_printer_catalogue --best-effort --if-sparse 100
+fi
+
 echo "Catalogue maintenance is handled by the persistent scheduler."
 
 echo "Collecting static files..."

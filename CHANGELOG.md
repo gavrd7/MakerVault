@@ -1,5 +1,88 @@
 # Changelog
 
+## v0.6.0.5 — in development
+
+- Fixed Spoolman sync failures caused by high-precision floating-point weights/costs by quantizing imported numeric values to MakerVault field precision before validation.
+- Added regression coverage for long-decimal Spoolman remaining weight, initial weight, purchase cost, filament diameter, density and spool weights.
+- Added a dedicated **Filament Library** view for saved MakerVault filament products.
+- Saved filament products now have an **Edit** action covering manufacturer, product/material identity, colour/appearance, finish/pattern/glow, diameter/density/weights, print temperatures and drying settings.
+- Editing a filament product preserves the same database identity, so all existing physical spools continue to reference the corrected product.
+- Original catalogue/source provenance is retained when a saved filament product is edited.
+
+## v0.6.0.4 — development revision
+
+- Added confirmed **Delete** actions to the full Spool Inventory and Model Library.
+- Spool deletion removes the physical inventory record and provider links while retaining the filament product; nullable printer-slot/history references are preserved without the deleted spool.
+- Model deletion removes the model/revision/link records while retaining shared MakerVault FileAsset records and print-history entries.
+- Added explicit delete permissions to the frontend configuration so destructive controls only appear for authorised users.
+- Hardened Spoolman sync error handling so unexpected failures no longer leave a stale **Connected** status.
+- Spoolman HTTP failures now include the API's returned validation/error message when available, making per-spool sync failures diagnosable from the Settings UI.
+- Added regression coverage for deletion semantics, Spoolman unexpected exceptions and Spoolman API validation-error reporting.
+
+## v0.6.0.3 — development revision
+
+- Added an optional OrcaSlicer-backed 3D-printer catalogue synchroniser using Orca's vendor `machine_model_list` manifests.
+- Expanded catalogue maintenance with a dedicated **3D printer catalogue** toggle, scheduled refresh and server-level enable/disable setting.
+- Fresh/sparse MakerVault installations perform a best-effort OrcaSlicer catalogue expansion during startup; populated catalogues rely on the normal persistent maintenance schedule.
+- OrcaSlicer catalogue imports are idempotent, preserve source/ref/vendor-version provenance and never delete local printer models or overwrite populated MakerVault hardware specifications.
+- Normalised Orca manufacturer naming (including Bambu Lab/QIDI/ELEGOO aliases) and collapse Creality `_CFS-C` slicer variants into the base printer model plus optional CFS compatibility.
+- Bambu Lab model imports are marked as AMS-family compatible while the actual installed AMS/AMS Lite hardware remains an owned-printer setting.
+- Added printer-catalogue model/manufacturer coverage counts to Settings so catalogue growth is visible after a sync.
+- Printer catalogue enclosure state now supports unknown, preventing name-only upstream records from being incorrectly labelled as open-frame printers.
+- Added OrcaSlicer AGPL-3.0 catalogue-source attribution to MakerVault's third-party notices.
+
+## v0.6.0.2 — development revision
+
+- Separated printer-model multi-material compatibility from the hardware actually installed on each owned printer.
+- Added per-printer add-on controls such as Creality CFS / Bambu AMS installed, with safe removal that retires stale live slot assignments.
+- CFS synchronisation now only targets active printers where the compatible CFS add-on is explicitly installed.
+- Existing printers with previously discovered non-generic multi-material slots are migrated as having the add-on installed so current setups keep working.
+- Added separate printer catalogue images for bare printers and printer + multi-material/Combo configurations.
+- Printer cards automatically prefer the Combo/add-on image when the owned printer has the add-on installed, with fallback to the bare-printer image.
+- Catalogue image maintenance now searches and caches bare and Combo/add-on printer images independently with separate open-media attribution metadata.
+
+## v0.6.0.1 — development revision
+
+- Introduced four-part development build versions so iterative v0.6.0 work can be identified precisely without advancing the v0.6.1 feature milestone.
+- The running version is now sourced centrally by the backend and displayed dynamically in the MakerVault sidebar/About page.
+- Repaired pre-v0.6.0.1 CFS slot links: live colour/material/vendor conflicts always detach an incorrect physical spool, while compatible legacy links are retained and marked for future syncs.
+- Added printer-catalogue image fields and extended MakerVault's open-licensed Wikimedia/Openverse image seeder and attribution register to 3D-printer models.
+- Added compact printer-model thumbnails beside owned printer entries with a neutral fallback when no confidently matched open image is available.
+
+## v0.6.0 — milestone baseline
+
+- Replaced the 3D Printing placeholder with the first native printing/model workspace.
+- Added provider-neutral external spool links so MakerVault spools can map to optional services such as Spoolman or SimplyPrint without making those services required.
+- Added provider-neutral printer filament slots for Creality CFS, Bambu AMS and future multi-material adapters.
+- Reworked print material tracking into multi-spool material usage rows, preserving legacy print consumption data while supporting CFS/AMS-style multi-material jobs.
+- Added ModelRevisionAsset links so STL/3MF/CAD assets reuse existing FileAsset records instead of duplicating storage.
+- Migrated legacy direct ModelRevision file fields into FileAsset links without duplicating stored bytes, leaving FileAsset as the single revision-file system.
+- Added native create APIs/UI for printers, filament products, physical spools and 3D models.
+- Added dedicated 3D-printer and filament manufacturer catalogues so printing data no longer reuses board/component manufacturers.
+- Added an owned-printer catalogue with active/inactive state, reusable locations, local host/IP metadata and manufacturer-filtered printer model selection.
+- Added starter printer specification profiles that can populate build volume, nozzle size, enclosure and multi-material capabilities when adding an owned printer.
+- Added reusable printing/storage locations and structured spool placement at either a storage location or an owned printer.
+- Added direct STL/3MF upload from Add Model on desktop or mobile; MakerVault creates the model, initial revision and FileAsset link in one workflow.
+- Fixed Add Spool to load the current native filament catalogue directly instead of relying on potentially stale page data.
+- Moved optional Spoolman, Creality CFS, SimplyPrint and future multi-material adapter status cards into the main Settings area.
+- Added configurable Spoolman endpoint/sync direction and connection testing, plus CFS readiness status based on registered compatible printers.
+- Physical spool IDs are now allocated automatically as `SPL-####` and are no longer entered manually.
+- Added real Spoolman inventory synchronisation with native spool/link creation, remote weight/location updates and safe linked-record export for bidirectional mode.
+- Added a read-only local Creality CFS adapter using the K-series WebSocket `boxsInfo` feed to discover loaded slots, filament metadata and RFID-derived remaining percentage.
+- Added optional unique RFID/tag identity to physical spool records so otherwise identical reels can remain distinct. Creality CFS material/profile codes are deliberately not treated as physical tag serials: CFS now respects exact colour when suggesting filament products and requires explicit user confirmation to link/create the physical spool for a loaded slot.
+- Added per-integration `Sync now`, optional scheduled background sync, configurable sync interval, last/next sync timestamps and persisted sync results.
+- Replaced the hard-coded 3D Printing integration roadmap cards with a compact status strip that only shows integrations the user has enabled, including connected/disconnected/error state.
+- Added dedicated filament manufacturer/material selectors and manufacturer-product suggestions backed by the open SpoolmanDB catalogue, with custom values retained as a fallback.
+- Added native filament appearance fields for opaque, translucent and transparent materials.
+- Added a visual filament colour palette, custom colour/hex selector and transparency preview for manual filament creation.
+- Added an optional SpoolmanDB browser with search, source-record preview and import into native MakerVault filament products.
+- Preserved SpoolmanDB multi-colour, transparency, finish, pattern, glow, temperature, weight and source-provenance metadata during import.
+- Added model revision creation and existing MakerVault file attachment/detachment workflows.
+- Protected model-linked files from deletion until they are detached from the revision.
+- Added PostgreSQL regression coverage for printing overview, native CRUD, external spool identity, revision file reuse and project/file integrity.
+- Spoolman and Creality CFS have live adapters; SimplyPrint and the remaining future multi-material integrations stay optional/planned while MakerVault remains standalone-first.
+
+
 ## v0.5.0
 
 - Added first-class project bill-of-materials management for catalogue boards, catalogue components and custom materials.

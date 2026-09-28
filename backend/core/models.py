@@ -21,6 +21,7 @@ class CatalogueMaintenanceSettings(TimeStampedModel):
     enabled = models.BooleanField(default=True)
     interval_hours = models.PositiveIntegerField(default=24)
     check_board_data = models.BooleanField(default=True)
+    check_printer_data = models.BooleanField(default=True)
     check_images = models.BooleanField(default=True)
     last_run_at = models.DateTimeField(blank=True, null=True)
     next_run_at = models.DateTimeField(blank=True, null=True)
@@ -371,14 +372,180 @@ class RepositoryLink(TimeStampedModel):
         return self.name
 
 
+class FilamentManufacturer(TimeStampedModel):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=200, unique=True)
+    website = models.URLField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class PrinterManufacturer(TimeStampedModel):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=200, unique=True)
+    website = models.URLField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class PrintingLocation(TimeStampedModel):
+    KINDS = [
+        ("room", "Room / area"),
+        ("shelf", "Shelf"),
+        ("drybox", "Dry box"),
+        ("storage", "Storage"),
+        ("workshop", "Workshop"),
+        ("other", "Other"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=200, unique=True)
+    kind = models.CharField(max_length=20, choices=KINDS, default="storage")
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class PrintingIntegrationSetting(TimeStampedModel):
+    PROVIDERS = [
+        ("spoolman", "Spoolman"),
+        ("simplyprint", "SimplyPrint"),
+        ("creality_cfs", "Creality CFS"),
+        ("bambu_ams", "Bambu Lab AMS"),
+        ("elegoo", "Elegoo multi-material"),
+        ("qidi", "QIDI multi-material"),
+        ("snapmaker", "Snapmaker multi-material"),
+    ]
+    SYNC_DIRECTIONS = [
+        ("import", "External → MakerVault"),
+        ("export", "MakerVault → external"),
+        ("bidirectional", "Bidirectional"),
+    ]
+    STATUSES = [
+        ("disabled", "Disabled"),
+        ("not_configured", "Not configured"),
+        ("ready", "Ready"),
+        ("connected", "Connected"),
+        ("disconnected", "Disconnected"),
+        ("error", "Error"),
+        ("planned", "Planned"),
+    ]
+
+    provider = models.CharField(max_length=30, choices=PROVIDERS, unique=True)
+    enabled = models.BooleanField(default=False)
+    endpoint_url = models.CharField(max_length=500, blank=True)
+    sync_direction = models.CharField(max_length=20, choices=SYNC_DIRECTIONS, default="import")
+    status = models.CharField(max_length=24, choices=STATUSES, default="not_configured")
+    last_checked_at = models.DateTimeField(blank=True, null=True)
+    auto_sync = models.BooleanField(default=False)
+    sync_interval_minutes = models.PositiveIntegerField(default=15)
+    last_sync_at = models.DateTimeField(blank=True, null=True)
+    next_sync_at = models.DateTimeField(blank=True, null=True)
+    last_sync_triggered_by = models.CharField(max_length=120, blank=True)
+    last_sync_result = models.JSONField(default=dict, blank=True)
+    last_error = models.TextField(blank=True)
+    config = models.JSONField(default=dict, blank=True)
+
+    def clean(self):
+        super().clean()
+        if self.sync_interval_minutes < 1 or self.sync_interval_minutes > 1440:
+            raise ValidationError({"sync_interval_minutes": "Sync interval must be between 1 and 1440 minutes."})
+
+    class Meta:
+        ordering = ["provider"]
+
+    def __str__(self):
+        return self.get_provider_display()
+
+
+class PrinterCatalogModel(TimeStampedModel):
+    MULTI_MATERIAL_SYSTEMS = [
+        ("", "None / unknown"),
+        ("creality_cfs", "Creality CFS"),
+        ("bambu_ams", "Bambu Lab AMS"),
+        ("elegoo", "Elegoo multi-material"),
+        ("qidi", "QIDI multi-material"),
+        ("snapmaker", "Snapmaker multi-material"),
+        ("other", "Other"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    manufacturer = models.ForeignKey(
+        PrinterManufacturer, on_delete=models.CASCADE, related_name="models"
+    )
+    name = models.CharField(max_length=255)
+    build_volume_x_mm = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
+    build_volume_y_mm = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
+    build_volume_z_mm = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
+    nozzle_mm = models.DecimalField(max_digits=5, decimal_places=2, default=0.4)
+    filament_diameter_mm = models.DecimalField(max_digits=5, decimal_places=2, default=1.75)
+    max_nozzle_temp_c = models.SmallIntegerField(blank=True, null=True)
+    max_bed_temp_c = models.SmallIntegerField(blank=True, null=True)
+    enclosed = models.BooleanField(blank=True, null=True, default=None)
+    multi_material_system = models.CharField(
+        max_length=30, choices=MULTI_MATERIAL_SYSTEMS, blank=True
+    )
+    max_multi_material_units = models.PositiveSmallIntegerField(blank=True, null=True)
+    features = models.JSONField(default=dict, blank=True)
+    image = models.ImageField(upload_to="printers/catalog/", blank=True, null=True)
+    image_metadata = models.JSONField(default=dict, blank=True)
+    image_multi_material = models.ImageField(
+        upload_to="printers/catalog/multi-material/", blank=True, null=True
+    )
+    image_multi_material_metadata = models.JSONField(default=dict, blank=True)
+    source_url = models.URLField(blank=True)
+
+    class Meta:
+        ordering = ["manufacturer__name", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["manufacturer", "name"],
+                name="unique_printer_catalogue_model",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.manufacturer} {self.name}"
+
+
 class FilamentProduct(TimeStampedModel):
+    TRANSPARENCY = [
+        ("opaque", "Opaque"),
+        ("translucent", "Translucent"),
+        ("transparent", "Transparent"),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     manufacturer = models.ForeignKey(Manufacturer, on_delete=models.SET_NULL, null=True, blank=True, related_name="filaments")
+    filament_manufacturer = models.ForeignKey(
+        FilamentManufacturer, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="filaments"
+    )
     source = models.ForeignKey(CatalogSource, on_delete=models.SET_NULL, null=True, blank=True, related_name="filaments")
     name = models.CharField(max_length=255)
     material = models.CharField(max_length=80)
     color_name = models.CharField(max_length=120, blank=True)
     color_hex = models.CharField(max_length=9, blank=True)
+    color_hexes = models.JSONField(default=list, blank=True)
+    transparency = models.CharField(max_length=16, choices=TRANSPARENCY, default="opaque")
+    multi_color_direction = models.CharField(max_length=24, blank=True)
+    finish = models.CharField(max_length=40, blank=True)
+    pattern = models.CharField(max_length=40, blank=True)
+    glow = models.BooleanField(default=False)
     diameter_mm = models.DecimalField(max_digits=5, decimal_places=2, default=1.75)
     density_g_cm3 = models.DecimalField(max_digits=6, decimal_places=3, blank=True, null=True)
     nominal_weight_g = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
@@ -393,22 +560,32 @@ class FilamentProduct(TimeStampedModel):
     profile_data = models.JSONField(default=dict, blank=True)
 
     class Meta:
-        ordering = ["manufacturer__name", "name", "color_name"]
+        ordering = ["filament_manufacturer__name", "name", "color_name"]
 
     def __str__(self):
-        return " ".join(filter(None, [str(self.manufacturer) if self.manufacturer else "", self.name, self.color_name])).strip()
+        maker = self.filament_manufacturer or self.manufacturer
+        return " ".join(filter(None, [str(maker) if maker else "", self.name, self.color_name])).strip()
 
 
 class Spool(TimeStampedModel):
     STATUS = [("sealed", "Sealed"), ("open", "Open"), ("drying", "Drying"), ("empty", "Empty"), ("retired", "Retired")]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     spool_id = models.CharField(max_length=40, unique=True)
+    rfid_uid = models.CharField(max_length=255, blank=True, default="", db_index=True)
     filament = models.ForeignKey(FilamentProduct, on_delete=models.PROTECT, related_name="spools")
     initial_weight_g = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     remaining_weight_g = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     purchase_cost = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     currency = models.CharField(max_length=3, default="GBP")
     location = models.CharField(max_length=255, blank=True)
+    storage_location = models.ForeignKey(
+        PrintingLocation, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="spools"
+    )
+    assigned_printer = models.ForeignKey(
+        "Printer", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="assigned_spools"
+    )
     status = models.CharField(max_length=20, choices=STATUS, default="sealed")
     opened_on = models.DateField(blank=True, null=True)
     last_dried_at = models.DateTimeField(blank=True, null=True)
@@ -417,18 +594,82 @@ class Spool(TimeStampedModel):
 
     class Meta:
         ordering = ["spool_id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["rfid_uid"],
+                condition=~models.Q(rfid_uid=""),
+                name="unique_nonblank_spool_rfid_uid",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        self.rfid_uid = str(self.rfid_uid or "").strip().upper()
+        if self.storage_location_id and self.assigned_printer_id:
+            raise ValidationError("A spool can be stored at a location or assigned to a printer, not both.")
+
+    def save(self, *args, **kwargs):
+        self.rfid_uid = str(self.rfid_uid or "").strip().upper()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.spool_id} — {self.filament}"
+
+
+class ExternalSpoolLink(TimeStampedModel):
+    PROVIDERS = [
+        ("spoolman", "Spoolman"),
+        ("simplyprint", "SimplyPrint"),
+        ("other", "Other"),
+    ]
+    SYNC_DIRECTIONS = [
+        ("import", "External → MakerVault"),
+        ("export", "MakerVault → external"),
+        ("bidirectional", "Bidirectional"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    spool = models.ForeignKey(Spool, on_delete=models.CASCADE, related_name="external_links")
+    provider = models.CharField(max_length=30, choices=PROVIDERS)
+    external_id = models.CharField(max_length=255)
+    external_url = models.URLField(blank=True)
+    sync_direction = models.CharField(max_length=20, choices=SYNC_DIRECTIONS, default="import")
+    last_synced_at = models.DateTimeField(blank=True, null=True)
+    sync_metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["provider", "external_id"]
+        constraints = [
+            models.UniqueConstraint(fields=["provider", "external_id"], name="unique_external_spool_provider_id"),
+            models.UniqueConstraint(fields=["spool", "provider"], name="unique_spool_provider_link"),
+        ]
+
+    def __str__(self):
+        return f"{self.get_provider_display()} {self.external_id} → {self.spool.spool_id}"
 
 
 class Printer(TimeStampedModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
     manufacturer = models.ForeignKey(Manufacturer, on_delete=models.SET_NULL, null=True, blank=True, related_name="printers")
+    printer_manufacturer = models.ForeignKey(
+        PrinterManufacturer, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="printers"
+    )
+    catalog_model = models.ForeignKey(
+        PrinterCatalogModel, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="owned_printers"
+    )
     model = models.CharField(max_length=255)
     serial_number = models.CharField(max_length=255, blank=True)
     location = models.CharField(max_length=255, blank=True)
+    printing_location = models.ForeignKey(
+        PrintingLocation, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="printers"
+    )
+    is_active = models.BooleanField(default=True)
+    multi_material_installed = models.BooleanField(default=False)
+    connection_host = models.CharField(max_length=255, blank=True)
     build_volume_x_mm = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
     build_volume_y_mm = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
     build_volume_z_mm = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
@@ -441,6 +682,45 @@ class Printer(TimeStampedModel):
 
     def __str__(self):
         return self.name
+
+
+class PrinterFilamentSlot(TimeStampedModel):
+    SYSTEMS = [
+        ("creality_cfs", "Creality CFS"),
+        ("bambu_ams", "Bambu Lab AMS"),
+        ("elegoo", "Elegoo multi-material"),
+        ("qidi", "QIDI multi-material"),
+        ("snapmaker", "Snapmaker multi-material"),
+        ("generic", "Generic / other"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    printer = models.ForeignKey(Printer, on_delete=models.CASCADE, related_name="filament_slots")
+    system = models.CharField(max_length=30, choices=SYSTEMS, default="generic")
+    unit_index = models.PositiveSmallIntegerField(default=0)
+    slot_index = models.PositiveSmallIntegerField(default=0)
+    spool = models.ForeignKey(Spool, on_delete=models.SET_NULL, null=True, blank=True, related_name="printer_slots")
+    external_ref = models.CharField(max_length=255, blank=True)
+    rfid_uid = models.CharField(max_length=255, blank=True, db_index=True)
+    material = models.CharField(max_length=80, blank=True)
+    color_name = models.CharField(max_length=120, blank=True)
+    color_hex = models.CharField(max_length=9, blank=True)
+    remaining_weight_g = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    is_loaded = models.BooleanField(default=True)
+    last_seen_at = models.DateTimeField(blank=True, null=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["printer__name", "system", "unit_index", "slot_index"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["printer", "system", "unit_index", "slot_index"],
+                name="unique_printer_filament_slot",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.printer} · {self.get_system_display()} {self.unit_index}:{self.slot_index}"
 
 
 class Model3D(TimeStampedModel):
@@ -464,9 +744,6 @@ class ModelRevision(TimeStampedModel):
     model = models.ForeignKey(Model3D, on_delete=models.CASCADE, related_name="revisions")
     version = models.CharField(max_length=80)
     notes = models.TextField(blank=True)
-    stl_file = models.FileField(upload_to="models/stl/", validators=[validate_maker_file], blank=True, null=True)
-    three_mf_file = models.FileField(upload_to="models/3mf/", validators=[validate_maker_file], blank=True, null=True)
-    cad_file = models.FileField(upload_to="models/cad/", validators=[validate_maker_file], blank=True, null=True)
     source_url = models.URLField(blank=True)
     geometry_metadata = models.JSONField(default=dict, blank=True)
     slicer_metadata = models.JSONField(default=dict, blank=True)
@@ -477,6 +754,36 @@ class ModelRevision(TimeStampedModel):
 
     def __str__(self):
         return f"{self.model} {self.version}"
+
+
+class ModelRevisionAsset(TimeStampedModel):
+    ROLES = [
+        ("model", "Printable model"),
+        ("slicer", "Slicer project"),
+        ("cad", "CAD / source"),
+        ("reference", "Reference"),
+        ("other", "Other"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    revision = models.ForeignKey(ModelRevision, on_delete=models.CASCADE, related_name="assets")
+    file_asset = models.ForeignKey(FileAsset, on_delete=models.PROTECT, related_name="model_revisions")
+    role = models.CharField(max_length=20, choices=ROLES, default="model")
+    is_primary = models.BooleanField(default=False)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["role", "-is_primary", "created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["revision", "file_asset"], name="unique_revision_file_asset"),
+        ]
+
+    def clean(self):
+        if self.file_asset_id and self.role == "model" and self.file_asset.category not in {"mesh", "slicer", "cad"}:
+            raise ValidationError({"file_asset": "Printable model assets should use a mesh, slicer or CAD file category."})
+
+    def __str__(self):
+        return f"{self.revision} · {self.file_asset.name}"
 
 
 class ProductListing(TimeStampedModel):
@@ -509,12 +816,8 @@ class PrintJob(TimeStampedModel):
     model_revision = models.ForeignKey(ModelRevision, on_delete=models.SET_NULL, null=True, blank=True, related_name="prints")
     project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True, related_name="print_jobs")
     printer = models.ForeignKey(Printer, on_delete=models.PROTECT, related_name="print_jobs")
-    spool = models.ForeignKey(Spool, on_delete=models.SET_NULL, null=True, blank=True, related_name="print_jobs")
     status = models.CharField(max_length=20, choices=STATUS, default="planned")
     quantity = models.PositiveIntegerField(default=1)
-    filament_used_g = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
-    waste_g = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
-    material_cost = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     currency = models.CharField(max_length=3, default="GBP")
     estimated_minutes = models.PositiveIntegerField(blank=True, null=True)
     actual_minutes = models.PositiveIntegerField(blank=True, null=True)
@@ -529,3 +832,40 @@ class PrintJob(TimeStampedModel):
 
     def __str__(self):
         return f"Print {self.id} ({self.get_status_display()})"
+
+
+class PrintMaterialUsage(TimeStampedModel):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    print_job = models.ForeignKey(PrintJob, on_delete=models.CASCADE, related_name="material_usages")
+    spool = models.ForeignKey(Spool, on_delete=models.SET_NULL, null=True, blank=True, related_name="print_material_usages")
+    filament = models.ForeignKey(FilamentProduct, on_delete=models.SET_NULL, null=True, blank=True, related_name="print_material_usages")
+    printer_slot = models.ForeignKey(
+        PrinterFilamentSlot,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="print_material_usages",
+    )
+    used_g = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    waste_g = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    material_cost = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    currency = models.CharField(max_length=3, default="GBP")
+    notes = models.TextField(blank=True)
+    source_metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["created_at"]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(used_g__gte=0), name="print_material_used_nonnegative"),
+            models.CheckConstraint(condition=models.Q(waste_g__gte=0), name="print_material_waste_nonnegative"),
+        ]
+
+    def clean(self):
+        if self.spool_id and self.filament_id and self.spool.filament_id != self.filament_id:
+            raise ValidationError({"filament": "Selected filament does not match the selected spool."})
+        if self.spool_id and not self.filament_id:
+            self.filament = self.spool.filament
+
+    def __str__(self):
+        material = self.spool.spool_id if self.spool else str(self.filament or "Material")
+        return f"{self.print_job} · {material}"
