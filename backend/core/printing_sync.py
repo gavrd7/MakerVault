@@ -42,7 +42,7 @@ class PrintingSyncConnectionError(PrintingSyncError):
     pass
 
 
-def next_spool_id() -> str:
+def next_spool_id(owner=None) -> str:
     highest = 0
     qs = Spool.objects.all()
     if owner is not None:
