@@ -22,7 +22,7 @@ class CatalogueSeedTests(unittest.TestCase):
 
     def test_component_identity_keys_are_unique(self):
         keys = [
-            (item["manufacturer"], item["name"], item.get("part_number", ""))
+            (item["name"], item.get("part_number", ""))
             for item in COMPONENT_DEFINITIONS
         ]
         self.assertEqual(len(keys), len(set(keys)))
