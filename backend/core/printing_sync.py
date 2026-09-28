@@ -66,6 +66,10 @@ def _normalise_hex(value: str | None) -> str:
     return ""
 
 
+def _normalise_rfid_uid(value) -> str:
+    return str(value or "").strip().upper()
+
+
 def _spoolman_api_root(endpoint_url: str) -> str:
     base = normalise_service_url(endpoint_url)
     return base if base.endswith("/api/v1") else base + "/api/v1"
@@ -678,44 +682,22 @@ async def _fetch_cfs_boxs_info(host: str) -> dict:
 
 
 def _match_cfs_spool(printer: Printer, material: dict):
-    remote_material = str(material.get("type") or "").strip().casefold()
-    remote_vendor = str(material.get("vendor") or "").strip().casefold()
-    remote_name = str(material.get("name") or "").strip().casefold()
-    remote_color = _normalise_hex(material.get("color")).casefold()
+    """Identify a physical spool only from the RFID tag reported by the CFS."""
+    try:
+        state = int(material.get("state") or 0)
+    except (TypeError, ValueError):
+        state = 0
+    if state != 2:
+        return None
 
-    best = []
-    best_score = 0
-    candidates = printer.assigned_spools.select_related(
+    remote_rfid = _normalise_rfid_uid(material.get("rfid"))
+    if not remote_rfid:
+        return None
+
+    return Spool.objects.select_related(
         "filament__filament_manufacturer",
         "filament__manufacturer",
-    ).exclude(status__in=["empty", "retired"])
-
-    for spool in candidates:
-        filament = spool.filament
-        maker = filament.filament_manufacturer or filament.manufacturer
-        score = 0
-        if remote_material and filament.material.casefold() == remote_material:
-            score += 4
-        else:
-            continue
-        if remote_vendor and maker and maker.name.casefold() == remote_vendor:
-            score += 3
-        if remote_name and (
-            remote_name in filament.name.casefold()
-            or filament.name.casefold() in remote_name
-        ):
-            score += 2
-        if remote_color and filament.color_hex and filament.color_hex.casefold() == remote_color:
-            score += 2
-        if score > best_score:
-            best_score = score
-            best = [spool]
-        elif score == best_score:
-            best.append(spool)
-
-    if best_score >= 7 and len(best) == 1:
-        return best[0]
-    return None
+    ).filter(rfid_uid=remote_rfid).first()
 
 
 def _sync_cfs_printer(printer: Printer, boxs_info: dict) -> dict:
@@ -754,6 +736,7 @@ def _sync_cfs_printer(printer: Printer, boxs_info: dict) -> dict:
 
             unit_index = max(box_id - 1, 0)
             seen.add((unit_index, slot_index))
+            rfid_uid = _normalise_rfid_uid(raw.get("rfid")) if state == 2 else ""
             local_spool = _match_cfs_spool(printer, raw)
             percent = _as_decimal(raw.get("percent"))
             remaining_weight = None
@@ -775,7 +758,7 @@ def _sync_cfs_printer(printer: Printer, boxs_info: dict) -> dict:
                 defaults={
                     "spool": local_spool,
                     "external_ref": f"cfs:{box_id}:{slot_index}",
-                    "rfid_uid": "",
+                    "rfid_uid": rfid_uid,
                     "material": str(raw.get("type") or "").strip()[:80],
                     "color_name": str(raw.get("name") or "").strip()[:120],
                     "color_hex": _normalise_hex(raw.get("color")),
@@ -785,8 +768,8 @@ def _sync_cfs_printer(printer: Printer, boxs_info: dict) -> dict:
                     "metadata": {
                         "vendor": raw.get("vendor") or "",
                         "product_name": raw.get("name") or "",
-                        "material_code": str(raw.get("rfid") or ""),
-                        "rfid_detected": state == 2,
+                        "rfid_uid": rfid_uid,
+                        "rfid_detected": bool(rfid_uid),
                         "remaining_percent": float(percent) if state == 2 and percent is not None else None,
                         "selected": bool(raw.get("selected")),
                         "min_temp_c": raw.get("minTemp"),
