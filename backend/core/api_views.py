@@ -2386,7 +2386,8 @@ def printing_integration_detail(request, provider):
         return _error("Administrator access is required.", status=403)
     if provider not in dict(PrintingIntegrationSetting.PROVIDERS):
         return _error("Unknown printing integration.", status=404)
-    item, _ = PrintingIntegrationSetting.objects.filter(owner=request.user).get_or_create(
+    item, _ = PrintingIntegrationSetting.objects.get_or_create(
+        owner=request.user,
         provider=provider,
         defaults=PRINTING_INTEGRATION_DEFAULTS.get(provider, {}),
     )
@@ -2491,7 +2492,8 @@ def printing_integration_test(request, provider):
         return _error("Administrator access is required.", status=403)
     if provider not in dict(PrintingIntegrationSetting.PROVIDERS):
         return _error("Unknown printing integration.", status=404)
-    item, _ = PrintingIntegrationSetting.objects.filter(owner=request.user).get_or_create(
+    item, _ = PrintingIntegrationSetting.objects.get_or_create(
+        owner=request.user,
         provider=provider,
         defaults=PRINTING_INTEGRATION_DEFAULTS.get(provider, {}),
     )
