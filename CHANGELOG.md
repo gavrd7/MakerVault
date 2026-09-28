@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Extended the STL/3MF viewer into model management, the global Files library and project file lists.
+- Added lazy rendered STL/3MF thumbnail previews in Files and Projects, replacing generic extension badges for viewable 3D assets.
+- Model revision rows now provide direct **View** and **Download** actions.
+- Added direct **Upload new version** from model management; each upload creates a new immutable ModelRevision/FileAsset pair, preserves the previous revision and runs local geometry analysis automatically.
+- Added immutable version lineage for general FileAsset records with **Upload new version** actions in Files and Projects; the newest version is shown normally while previous files remain available from version history.
+- Hardened project-file deletion so a protected model-linked file cannot lose its stored bytes before the database protection check completes.
+
+
 ## v0.6.3 — 2026-09-28
 
 - Added an explicit responsive viewport and mobile browser metadata so MakerVault scales correctly on phones and tablets.
