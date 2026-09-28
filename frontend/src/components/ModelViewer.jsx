@@ -159,9 +159,17 @@ function ThreeScene({ option, wireframe, showGrid, showAxes, onLoaded, onError, 
       const size = box.getSize(new THREE.Vector3());
       const center = box.getCenter(new THREE.Vector3());
       const maxDim = Math.max(size.x, size.y, size.z, 1);
-      const fov = THREE.MathUtils.degToRad(camera.fov);
-      const distance = (maxDim / (2 * Math.tan(fov / 2))) * 1.55;
+
+      // Frame against both viewport dimensions. Using only the vertical FOV
+      // can crop or visually offset wide/multi-object 3MF projects.
+      const verticalFov = THREE.MathUtils.degToRad(camera.fov);
+      const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * Math.max(camera.aspect, 0.01));
+      const verticalDistance = size.z / (2 * Math.tan(verticalFov / 2));
+      const horizontalSpan = Math.hypot(size.x, size.y);
+      const horizontalDistance = horizontalSpan / (2 * Math.tan(horizontalFov / 2));
+      const distance = Math.max(verticalDistance, horizontalDistance, maxDim * 0.72, 1) * 1.35;
       const direction = new THREE.Vector3(1.15, -1.35, 0.9).normalize();
+
       camera.position.copy(center).add(direction.multiplyScalar(distance));
       camera.near = Math.max(distance / 1000, 0.01);
       camera.far = Math.max(distance * 100, 1000);
@@ -170,7 +178,9 @@ function ThreeScene({ option, wireframe, showGrid, showAxes, onLoaded, onError, 
       controls.update();
 
       const gridSize = Math.max(Math.ceil(maxDim * 2 / 10) * 10, 50);
+      grid.position.set(center.x, center.y, Math.min(box.min.z, 0));
       grid.scale.setScalar(gridSize / 200);
+      axes.position.set(center.x, center.y, Math.min(box.min.z, 0));
       axes.scale.setScalar(Math.max(maxDim / 40, 0.5));
     }
 
