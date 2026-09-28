@@ -58,6 +58,10 @@ ENRICH_BOARD_CATALOGUE = env_bool("ENRICH_BOARD_CATALOGUE", True)
 BOARD_ENRICHMENT_MAX_PER_RUN = int(os.getenv("BOARD_ENRICHMENT_MAX_PER_RUN", "500"))
 BOARD_ENRICHMENT_RETRY_DAYS = int(os.getenv("BOARD_ENRICHMENT_RETRY_DAYS", "14"))
 
+# Optional OrcaSlicer-backed printer model catalogue. Existing MakerVault specs remain authoritative.
+SYNC_ORCASLICER_PRINTER_CATALOGUE = env_bool("SYNC_ORCASLICER_PRINTER_CATALOGUE", True)
+ORCASLICER_PRINTER_CATALOGUE_REF = os.getenv("ORCASLICER_PRINTER_CATALOGUE_REF", "main").strip() or "main"
+
 # Automatic starter-catalogue image seeding. Work is queued to Celery so startup is not blocked.
 SEED_CATALOGUE_IMAGES = env_bool("SEED_CATALOGUE_IMAGES", True)
 CATALOGUE_IMAGE_MAX_PER_RUN = int(os.getenv("CATALOGUE_IMAGE_MAX_PER_RUN", "60"))
