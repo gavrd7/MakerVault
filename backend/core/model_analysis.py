@@ -86,7 +86,7 @@ def _complexity(triangles):
     return "high"
 
 
-def _result(*, fmt, source_units, size_bytes, vertices, triangle_count, surface_area, signed_volume, object_count=1, warnings=None, encoding=""):
+def _result(*, fmt, source_units, size_bytes, vertices, triangle_count, surface_area, signed_volume, object_count=1, warnings=None, encoding="", vertex_count=None):
     mins, maxs, dimensions = _bounds(vertices)
     volume = abs(signed_volume)
     return {
@@ -96,7 +96,7 @@ def _result(*, fmt, source_units, size_bytes, vertices, triangle_count, surface_
         "units": "mm",
         "source_units": source_units,
         "size_bytes": int(size_bytes),
-        "vertex_count": len(vertices),
+        "vertex_count": int(vertex_count if vertex_count is not None else len(vertices)),
         "triangle_count": int(triangle_count),
         "object_count": int(object_count),
         "complexity": _complexity(int(triangle_count)),
@@ -112,7 +112,9 @@ def _result(*, fmt, source_units, size_bytes, vertices, triangle_count, surface_
         "surface_area_mm2": _round(surface_area, 2),
         "volume_mm3": _round(volume, 2) if volume > 1e-9 else None,
         "volume_cm3": _round(volume / 1000.0, 3) if volume > 1e-9 else None,
-        "warnings": list(warnings or []),
+        "warnings": list(warnings or []) + [
+            "Volume is an approximate mesh calculation and is most meaningful for closed, consistently oriented geometry."
+        ],
     }
 
 
@@ -149,6 +151,7 @@ def _analyse_binary_stl(data):
         surface_area=area_total,
         signed_volume=volume_total,
         encoding="binary",
+        vertex_count=len(set(vertices)),
         warnings=[
             "STL does not store physical units; MakerVault assumes millimetres.",
         ],
@@ -181,6 +184,7 @@ def _analyse_ascii_stl(data):
         surface_area=area_total,
         signed_volume=volume_total,
         encoding="ascii",
+        vertex_count=len(set(vertices)),
         warnings=[
             "STL does not store physical units; MakerVault assumes millimetres.",
         ],
