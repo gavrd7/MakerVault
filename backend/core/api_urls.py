@@ -3,6 +3,7 @@ from . import api_views
 
 urlpatterns = [
     path("dashboard/", api_views.dashboard, name="api-dashboard"),
+    path("storage/", api_views.user_storage, name="api-user-storage"),
     path("inventory/", api_views.inventory, name="api-inventory"),
     path("printing/", api_views.printing_overview, name="api-printing-overview"),
     path("printing/filaments/", api_views.printing_filaments, name="api-printing-filaments"),
