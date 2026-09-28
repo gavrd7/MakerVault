@@ -14,6 +14,21 @@ ALLOWED_EXTENSIONS = {
 
 
 def validate_maker_file(value):
-    suffix = Path(value.name).suffix.lower()
+    name = str(getattr(value, "name", "") or "")
+    storage = getattr(value, "storage", None)
+
+    # Saved private files deliberately have opaque .blob object names. They have
+    # already passed the user-upload extension validation before encryption; do
+    # not reinterpret the internal storage suffix as a user-supplied file type.
+    if (
+        name.startswith("private/")
+        and name.endswith(".blob")
+        and storage is not None
+        and storage.__class__.__module__ == "core.private_storage"
+        and storage.__class__.__name__ == "PrivateEncryptedStorage"
+    ):
+        return
+
+    suffix = Path(name).suffix.lower()
     if suffix and suffix not in ALLOWED_EXTENSIONS:
         raise ValidationError(f"File type '{suffix}' is not currently allowed.")
