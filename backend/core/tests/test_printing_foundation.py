@@ -1127,6 +1127,22 @@ class PrintingFoundationTests(TestCase):
         self.assertEqual(response.status_code, 201, response.content)
         self.assertEqual(response.json()["item"]["rfid_uid"], "ABC-123")
 
+        second_physical_spool = self.client.post(
+            "/api/printing/spools/",
+            data={
+                "filament_id": str(self.filament.id),
+                "rfid_uid": "DEF-456",
+                "status": "open",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(second_physical_spool.status_code, 201, second_physical_spool.content)
+        self.assertEqual(second_physical_spool.json()["item"]["rfid_uid"], "DEF-456")
+        self.assertNotEqual(
+            second_physical_spool.json()["item"]["id"],
+            response.json()["item"]["id"],
+        )
+
         duplicate = self.client.post(
             "/api/printing/spools/",
             data={
