@@ -155,7 +155,9 @@ class Command(BaseCommand):
                 if not component.description and definition.get("description"):
                     component.description = definition["description"]
                     changed = True
-                merged_specs = {**specs, **(component.specifications or {})}\n                merged_specs["starter_catalogue"] = True\n                merged_specs["catalogue_version"] = STARTER_CATALOGUE_VERSION
+                merged_specs = {**specs, **(component.specifications or {})}
+                merged_specs["starter_catalogue"] = True
+                merged_specs["catalogue_version"] = STARTER_CATALOGUE_VERSION
                 if merged_specs != component.specifications:
                     component.specifications = merged_specs
                     changed = True
