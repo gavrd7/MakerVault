@@ -53,7 +53,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="spool",
             name="rfid_uid",
-            field=models.CharField(blank=True, db_index=True, max_length=255),
+            field=models.CharField(blank=True, db_index=True, default="", max_length=255),
         ),
         migrations.RunPython(
             seed_unambiguous_legacy_spool_rfids,
