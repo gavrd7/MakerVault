@@ -14,7 +14,9 @@ from defusedxml.common import DefusedXmlException
 
 MAX_ANALYSIS_BYTES = 250 * 1024 * 1024
 MAX_3MF_XML_BYTES = 64 * 1024 * 1024
-ANALYSIS_VERSION = 1
+ANALYSIS_VERSION = 2
+MAX_TOPOLOGY_TRIANGLES = 500_000
+OVERHANG_ANGLE_DEGREES = 45.0
 
 _UNIT_TO_MM = {
     "micron": 0.001,
@@ -67,6 +69,164 @@ def _triangle_metrics(a, b, c):
     return area, signed_volume
 
 
+def _length(vector):
+    return math.sqrt(_dot(vector, vector))
+
+
+def _normal_and_area(a, b, c):
+    cross = _cross(_sub(b, a), _sub(c, a))
+    magnitude = _length(cross)
+    return cross, magnitude * 0.5
+
+
+def _vertex_key(point):
+    # STL commonly repeats nominally identical vertices. Rounding keeps the
+    # topology check useful without treating sub-micron float noise as a crack.
+    return tuple(round(float(value), 6) for value in point)
+
+
+def _mesh_quality(triangles):
+    if not triangles:
+        return {
+            "status": "empty",
+            "watertight": False,
+            "checked": True,
+            "boundary_edges": 0,
+            "non_manifold_edges": 0,
+            "degenerate_triangles": 0,
+        }
+    if len(triangles) > MAX_TOPOLOGY_TRIANGLES:
+        return {
+            "status": "unchecked",
+            "watertight": None,
+            "checked": False,
+            "boundary_edges": None,
+            "non_manifold_edges": None,
+            "degenerate_triangles": None,
+            "reason": (
+                f"Topology checking is skipped above "
+                f"{MAX_TOPOLOGY_TRIANGLES:,} triangles to bound analysis memory use."
+            ),
+        }
+
+    edges = {}
+    degenerate = 0
+    for a, b, c in triangles:
+        _cross_value, area = _normal_and_area(a, b, c)
+        if area <= 1e-10:
+            degenerate += 1
+            continue
+        keys = (_vertex_key(a), _vertex_key(b), _vertex_key(c))
+        for start, end in ((keys[0], keys[1]), (keys[1], keys[2]), (keys[2], keys[0])):
+            edge = tuple(sorted((start, end)))
+            edges[edge] = edges.get(edge, 0) + 1
+
+    boundary_edges = sum(1 for count in edges.values() if count == 1)
+    non_manifold_edges = sum(1 for count in edges.values() if count > 2)
+    watertight = boundary_edges == 0 and non_manifold_edges == 0 and degenerate == 0
+    if non_manifold_edges:
+        status = "non_manifold"
+    elif boundary_edges:
+        status = "open"
+    elif degenerate:
+        status = "degenerate"
+    else:
+        status = "watertight"
+    return {
+        "status": status,
+        "watertight": watertight,
+        "checked": True,
+        "boundary_edges": int(boundary_edges),
+        "non_manifold_edges": int(non_manifold_edges),
+        "degenerate_triangles": int(degenerate),
+    }
+
+
+_ORIENTATIONS = (
+    ("z+", "Current · Z up", (0.0, 0.0, 1.0), 2, (0, 1)),
+    ("z-", "Upside down · Z down", (0.0, 0.0, -1.0), 2, (0, 1)),
+    ("x+", "X side · X up", (1.0, 0.0, 0.0), 0, (1, 2)),
+    ("x-", "Opposite X side · X down", (-1.0, 0.0, 0.0), 0, (1, 2)),
+    ("y+", "Y side · Y up", (0.0, 1.0, 0.0), 1, (0, 2)),
+    ("y-", "Opposite Y side · Y down", (0.0, -1.0, 0.0), 1, (0, 2)),
+)
+
+
+def _orientation_analysis(triangles, mins, maxs, dimensions, surface_area, signed_volume):
+    if not triangles or surface_area <= 1e-9:
+        return None
+
+    support_threshold = -math.sin(math.radians(OVERHANG_ANGLE_DEGREES))
+    winding_sign = -1.0 if signed_volume < 0 else 1.0
+    max_dimension = max(dimensions) or 1.0
+    tolerance = max(0.02, max_dimension * 1e-5)
+    candidates = []
+
+    for key, label, up, height_axis, bed_axes in _ORIENTATIONS:
+        support_area = 0.0
+        contact_area = 0.0
+        if up[height_axis] > 0:
+            bed_plane = mins[height_axis]
+        else:
+            bed_plane = -maxs[height_axis]
+
+        for a, b, c in triangles:
+            normal_raw, area = _normal_and_area(a, b, c)
+            if area <= 1e-10:
+                continue
+            normal_length = _length(normal_raw)
+            normal = tuple(winding_sign * value / normal_length for value in normal_raw)
+            facing = _dot(normal, up)
+            if facing < support_threshold:
+                support_area += area
+
+            projections = (_dot(a, up), _dot(b, up), _dot(c, up))
+            if max(abs(value - bed_plane) for value in projections) <= tolerance:
+                # Projected contact area is more meaningful than sloped surface area.
+                contact_area += area * abs(facing)
+
+        support_pct = (support_area / surface_area) * 100.0
+        bed_width = dimensions[bed_axes[0]]
+        bed_depth = dimensions[bed_axes[1]]
+        height = dimensions[height_axis]
+        candidates.append({
+            "key": key,
+            "label": label,
+            "height_mm": _round(height),
+            "bed_width_mm": _round(bed_width),
+            "bed_depth_mm": _round(bed_depth),
+            "bed_contact_area_mm2": _round(contact_area, 2),
+            "support_risk_area_mm2": _round(support_area, 2),
+            "support_risk_pct": _round(support_pct, 2),
+        })
+
+    # This is deliberately an axis-aligned heuristic rather than a slicer.
+    # First minimise strongly downward-facing area, then prefer more bed contact
+    # and finally a shorter build height.
+    ranked = sorted(
+        candidates,
+        key=lambda item: (
+            item["support_risk_pct"],
+            -item["bed_contact_area_mm2"],
+            item["height_mm"],
+        ),
+    )
+    recommended = dict(ranked[0])
+    current = next(item for item in candidates if item["key"] == "z+")
+    return {
+        "method": "axis-aligned-45deg-overhang-estimate",
+        "overhang_angle_degrees": OVERHANG_ANGLE_DEGREES,
+        "recommended": recommended,
+        "current": dict(current),
+        "recommended_is_current": recommended["key"] == "z+",
+        "candidates": candidates,
+        "note": (
+            "Orientation is an axis-aligned geometry estimate. A slicer remains "
+            "authoritative for supports, adhesion and final print orientation."
+        ),
+    }
+
+
 def _bounds(points):
     if not points:
         raise ModelAnalysisError("The model does not contain any readable vertices.")
@@ -88,9 +248,36 @@ def _complexity(triangles):
     return "high"
 
 
-def _result(*, fmt, source_units, size_bytes, vertices, triangle_count, surface_area, signed_volume, object_count=1, warnings=None, encoding="", vertex_count=None):
+def _result(*, fmt, source_units, size_bytes, vertices, triangles, triangle_count, surface_area, signed_volume, object_count=1, warnings=None, encoding="", vertex_count=None):
     mins, maxs, dimensions = _bounds(vertices)
     volume = abs(signed_volume)
+    mesh_quality = _mesh_quality(triangles)
+    orientation = _orientation_analysis(
+        triangles,
+        mins,
+        maxs,
+        dimensions,
+        surface_area,
+        signed_volume,
+    )
+    analysis_warnings = list(warnings or [])
+    if mesh_quality.get("checked"):
+        if mesh_quality.get("boundary_edges"):
+            analysis_warnings.append(
+                f"Mesh topology contains {mesh_quality['boundary_edges']:,} boundary edge(s); "
+                "support and volume estimates may be less reliable."
+            )
+        if mesh_quality.get("non_manifold_edges"):
+            analysis_warnings.append(
+                f"Mesh topology contains {mesh_quality['non_manifold_edges']:,} non-manifold edge(s)."
+            )
+        if mesh_quality.get("degenerate_triangles"):
+            analysis_warnings.append(
+                f"Mesh contains {mesh_quality['degenerate_triangles']:,} degenerate triangle(s)."
+            )
+    elif mesh_quality.get("reason"):
+        analysis_warnings.append(mesh_quality["reason"])
+
     return {
         "analysis_version": ANALYSIS_VERSION,
         "format": fmt,
@@ -114,7 +301,9 @@ def _result(*, fmt, source_units, size_bytes, vertices, triangle_count, surface_
         "surface_area_mm2": _round(surface_area, 2),
         "volume_mm3": _round(volume, 2) if volume > 1e-9 else None,
         "volume_cm3": _round(volume / 1000.0, 3) if volume > 1e-9 else None,
-        "warnings": list(warnings or []) + [
+        "mesh_quality": mesh_quality,
+        "orientation": orientation,
+        "warnings": analysis_warnings + [
             "Volume is an approximate mesh calculation and is most meaningful for closed, consistently oriented geometry."
         ],
     }
@@ -129,6 +318,7 @@ def _analyse_binary_stl(data):
         raise ModelAnalysisError("The binary STL triangle table is truncated.")
 
     vertices = []
+    triangles = []
     area_total = 0.0
     volume_total = 0.0
     offset = 84
@@ -139,6 +329,7 @@ def _analyse_binary_stl(data):
         b = (record[6], record[7], record[8])
         c = (record[9], record[10], record[11])
         vertices.extend((a, b, c))
+        triangles.append((a, b, c))
         area, volume = _triangle_metrics(a, b, c)
         area_total += area
         volume_total += volume
@@ -149,6 +340,7 @@ def _analyse_binary_stl(data):
         source_units="unitless-assumed-mm",
         size_bytes=len(data),
         vertices=vertices,
+        triangles=triangles,
         triangle_count=triangle_count,
         surface_area=area_total,
         signed_volume=volume_total,
@@ -166,6 +358,7 @@ def _analyse_ascii_stl(data):
         raise ModelAnalysisError("MakerVault could not read complete ASCII STL triangles.")
 
     vertices = []
+    triangles = []
     area_total = 0.0
     volume_total = 0.0
     for match in matches:
@@ -173,6 +366,7 @@ def _analyse_ascii_stl(data):
 
     for index in range(0, len(vertices), 3):
         a, b, c = vertices[index:index + 3]
+        triangles.append((a, b, c))
         area, volume = _triangle_metrics(a, b, c)
         area_total += area
         volume_total += volume
@@ -182,6 +376,7 @@ def _analyse_ascii_stl(data):
         source_units="unitless-assumed-mm",
         size_bytes=len(data),
         vertices=vertices,
+        triangles=triangles,
         triangle_count=len(vertices) // 3,
         surface_area=area_total,
         signed_volume=volume_total,
@@ -224,6 +419,7 @@ def analyse_3mf(data):
         )
 
     all_vertices = []
+    all_triangles = []
     triangle_count = 0
     object_count = 0
     area_total = 0.0
@@ -287,6 +483,7 @@ def analyse_3mf(data):
                     a, b, c = (local_vertices[index] for index in indices)
                 except (KeyError, IndexError, TypeError, ValueError):
                     continue
+                all_triangles.append((a, b, c))
                 area, volume = _triangle_metrics(a, b, c)
                 area_total += area
                 volume_total += volume
@@ -307,6 +504,7 @@ def analyse_3mf(data):
         source_units=", ".join(sorted(source_units)) or "millimeter",
         size_bytes=len(data),
         vertices=all_vertices,
+        triangles=all_triangles,
         triangle_count=triangle_count,
         surface_area=area_total,
         signed_volume=volume_total,
