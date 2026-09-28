@@ -32,7 +32,7 @@ class Command(BaseCommand):
                     "filament_diameter_mm": definition.get("filament_diameter_mm", 1.75),
                     "max_nozzle_temp_c": definition.get("max_nozzle_temp_c"),
                     "max_bed_temp_c": definition.get("max_bed_temp_c"),
-                    "enclosed": bool(definition.get("enclosed")),
+                    "enclosed": definition.get("enclosed"),
                     "multi_material_system": definition.get("multi_material_system", ""),
                     "max_multi_material_units": definition.get("max_multi_material_units"),
                     "features": definition.get("features", {}),
