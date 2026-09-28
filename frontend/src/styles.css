@@ -1444,3 +1444,5 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
   .printingRevisionAssetActions{width:100%;justify-content:flex-start}
   .printingRevisionAssetActions>*{flex:1}
 }
+
+.modelViewerLayoutSolo{grid-template-columns:minmax(0,1fr)}
