@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import re
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
@@ -24,6 +25,9 @@ from .models import (
     Spool,
 )
 from .printing_integrations import normalise_service_url
+
+
+logger = logging.getLogger(__name__)
 
 
 class PrintingSyncError(RuntimeError):
@@ -71,6 +75,25 @@ def _spoolman_api_root(endpoint_url: str) -> str:
     return base if base.endswith("/api/v1") else base + "/api/v1"
 
 
+def _spoolman_response_error(response) -> str:
+    """Extract Spoolman's useful API error text without exposing HTML bodies."""
+    detail = ""
+    try:
+        payload = response.json()
+        if isinstance(payload, dict):
+            detail = str(
+                payload.get("message")
+                or payload.get("detail")
+                or payload.get("error")
+                or ""
+            ).strip()
+    except ValueError:
+        pass
+    if detail:
+        return f"HTTP {response.status_code}: {detail}"
+    return f"HTTP {response.status_code}"
+
+
 def _spoolman_get_spools(endpoint_url: str) -> tuple[str, list[dict]]:
     root = _spoolman_api_root(endpoint_url)
     try:
@@ -83,7 +106,7 @@ def _spoolman_get_spools(endpoint_url: str) -> tuple[str, list[dict]]:
     except requests.RequestException as exc:
         raise PrintingSyncConnectionError("MakerVault could not reach the Spoolman server.") from exc
     if response.status_code != 200:
-        raise PrintingSyncError(f"Spoolman returned HTTP {response.status_code} while reading spools.")
+        raise PrintingSyncError(f"Spoolman returned {_spoolman_response_error(response)} while reading spools.")
     try:
         payload = response.json()
     except ValueError as exc:
@@ -593,7 +616,8 @@ def sync_spoolman(setting: PrintingIntegrationSetting) -> dict:
                 ) from exc
             if response.status_code not in {200, 201}:
                 raise PrintingSyncError(
-                    f"Spoolman returned HTTP {response.status_code} while updating spool {link.external_id}."
+                    f"Spoolman returned {_spoolman_response_error(response)} "
+                    f"while updating spool {link.external_id}."
                 )
             link.last_synced_at = now
             link.save(update_fields=["last_synced_at", "updated_at"])
@@ -955,3 +979,20 @@ def sync_printing_integration(provider: str, triggered_by: str = "manual") -> tu
             setting.next_sync_at = now + timedelta(minutes=setting.sync_interval_minutes)
         setting.save()
         raise
+    except Exception as exc:
+        logger.exception("Unexpected %s integration sync failure", provider)
+        message = f"{provider.replace('_', ' ').title()} sync failed: {exc}"
+        setting.status = "error"
+        setting.last_error = message
+        setting.last_checked_at = now
+        setting.last_sync_at = now
+        setting.last_sync_triggered_by = str(triggered_by or "manual")[:120]
+        setting.last_sync_result = {
+            "provider": provider,
+            "error": message,
+            "exception_type": type(exc).__name__,
+        }
+        if setting.auto_sync:
+            setting.next_sync_at = now + timedelta(minutes=setting.sync_interval_minutes)
+        setting.save()
+        raise PrintingSyncError(message) from exc
