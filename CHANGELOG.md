@@ -9,6 +9,7 @@
 - Normalised Orca manufacturer naming (including Bambu Lab/QIDI/ELEGOO aliases) and collapse Creality `_CFS-C` slicer variants into the base printer model plus optional CFS compatibility.
 - Bambu Lab model imports are marked as AMS-family compatible while the actual installed AMS/AMS Lite hardware remains an owned-printer setting.
 - Added printer-catalogue model/manufacturer coverage counts to Settings so catalogue growth is visible after a sync.
+- Printer catalogue enclosure state now supports unknown, preventing name-only upstream records from being incorrectly labelled as open-frame printers.
 - Added OrcaSlicer AGPL-3.0 catalogue-source attribution to MakerVault's third-party notices.
 
 ## v0.6.0.2 — development revision
