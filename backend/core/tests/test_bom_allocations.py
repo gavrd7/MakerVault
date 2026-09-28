@@ -337,7 +337,8 @@ class BomAllocationApiTests(TestCase):
         self.assertTrue(editor.has_perm("core.delete_inventoryitem"))
         self.assertFalse(editor.has_perm("core.delete_project"))
 
-        disposable = InventoryItem.objects.create(owner=self.user, 
+        disposable = InventoryItem.objects.create(
+            owner=editor,
             inventory_id="OTH-EDITOR-MISTAKE",
             item_type="other",
             custom_name="Editor mistake",
@@ -356,14 +357,19 @@ class BomAllocationApiTests(TestCase):
             email="viewer@example.com",
             password="viewer-password",
         )
+        viewer_project = Project.objects.create(
+            owner=viewer,
+            created_by=viewer,
+            name="Viewer-owned project",
+        )
         self.client.force_login(viewer)
         response = self.client.post(
-            f"/api/projects/{self.project.id}/bom/",
+            f"/api/projects/{viewer_project.id}/bom/",
             data={"custom_name": "Denied", "quantity": 1, "unit": "item"},
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 403)
-        self.assertEqual(BOMItem.objects.filter(project=self.project).count(), 0)
+        self.assertEqual(BOMItem.objects.filter(project=viewer_project).count(), 0)
 
 
 
