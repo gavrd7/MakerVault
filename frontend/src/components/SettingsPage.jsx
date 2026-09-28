@@ -304,7 +304,7 @@ export default function SettingsPage({ config }) {
             {item.provider === "creality_cfs" && <>
               <span>Read CFS boxes and loaded filament slots directly from compatible Creality printers on your local network.</span>
               <label className="settingsToggle compact"><div><strong>Enable integration</strong><small>The CFS adapter is read-only.</small></div><input type="checkbox" checked={item.enabled} onChange={e => saveIntegration(item.provider, { enabled: e.target.checked, sync_direction: "import" })} /></label>
-              <small>{item.compatible_printers || 0} compatible printer{item.compatible_printers === 1 ? "" : "s"} · {item.configured_printers || 0} with local host/IP.</small>
+              <small>{item.compatible_printers || 0} compatible printer{item.compatible_printers === 1 ? "" : "s"} · {item.installed_printers || 0} with CFS installed · {item.configured_printers || 0} installed printer{item.configured_printers === 1 ? "" : "s"} with local host/IP.</small>
             </>}
 
             {!supported && item.provider === "simplyprint" && <><span>Optional SimplyPrint filament inventory integration.</span><small>Adapter placeholder — not selectable yet.</small></>}
