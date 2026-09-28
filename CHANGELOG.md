@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.6.3.2 — in development
+## v0.6.3 — 2026-09-28
 
 - Added an explicit responsive viewport and mobile browser metadata so MakerVault scales correctly on phones and tablets.
 - Reworked the application shell below 900px into a sticky, horizontally scrollable touch navigation bar while preserving Administration, Account & Security and Sign out actions on small screens.
@@ -20,7 +20,7 @@
 - Reworked 3D-printing integration cards to use responsive, practical-width columns with wrapping actions instead of compressing four cards into one row.
 - Replaced the temporary sidebar “M” mark and text title with the committed MakerVault brand logo, while retaining a compact responsive treatment and version label.
 
-## v0.6.2.1 — in development
+## v0.6.2 — 2026-09-28
 
 - Added a live SimplyPrint REST API adapter using account/company ID plus API-key authentication.
 - SimplyPrint API keys are retained server-side in integration configuration and are never returned by the Settings API; the frontend only receives an `api_key_configured` flag.
@@ -34,6 +34,17 @@
 - Added manual connection testing, manual Sync now and persistent scheduled sync controls to the SimplyPrint Settings card.
 - Legacy SimplyPrint placeholder settings are upgraded from **Planned** to **Not configured** automatically.
 - Added regression coverage for credential masking, API-key probe headers, existing-printer linking, no-automatic-spool creation, print-history import and explicit SimplyPrint spool mapping.
+
+## v0.6.1 — 2026-09-28
+
+- Added local STL and 3MF geometry analysis stored on model revisions without requiring a schema migration.
+- New model uploads are analysed automatically, while existing revision files can be analysed or re-analysed on demand.
+- Geometry intelligence records physical dimensions, triangle/vertex counts, mesh complexity, surface area, approximate volume, units and analysis warnings.
+- Added an interactive Three.js STL/3MF viewer with orbit, zoom, pan, reset, wireframe, grid, axes and fullscreen controls.
+- Model Library rows show compact geometry summaries and analysis state.
+- Added owned-printer build-volume fit checks, including direct fit, XY-rotation fit, oversize and unknown-volume states.
+- Model analysis stays local to MakerVault; model files are not sent to an external analysis service.
+- Added regression coverage for binary STL, 3MF packages, automatic upload analysis and manual revision re-analysis.
 
 ## v0.6.0.5 — stable v0.6.0 baseline
 
