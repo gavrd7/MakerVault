@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 import re
 import struct
@@ -481,8 +482,12 @@ def _parse_metadata_text(raw):
 def _metadata_lookup(flat, *aliases):
     normalised_aliases = {_normalise_meta_key(alias) for alias in aliases}
     for key, value in flat.items():
-        key_parts = str(key).split(".")
-        candidates = {_normalise_meta_key(key), _normalise_meta_key(key_parts[-1])}
+        key_text = str(key)
+        candidates = {
+            _normalise_meta_key(key_text),
+            _normalise_meta_key(key_text.split(".")[-1]),
+            _normalise_meta_key(key_text.split(":")[-1]),
+        }
         if candidates & normalised_aliases and value not in (None, "", []):
             return value
     return None
