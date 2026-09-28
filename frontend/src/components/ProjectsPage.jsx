@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../api";
 import { Badge, BoardImage, ImageViewer, LoadingBlock, Modal } from "./Common";
 import ProjectBomSection from "./ProjectBomSection";
+import FileVersionModal from "./FileVersionModal";
+import { FileModelViewerModal, ModelThumbnail, isViewableModelFile } from "./ModelViewer";
 
 const STATUS = {
   idea: "Idea",
@@ -162,6 +164,8 @@ function ProjectDetail({ project, loading, canEdit, config, boards, components, 
   const [coverOpen, setCoverOpen] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [fileOpen, setFileOpen] = useState(false);
+  const [fileVersioning, setFileVersioning] = useState(null);
+  const [modelViewerFile, setModelViewerFile] = useState(null);
   const [repositoryOpen, setRepositoryOpen] = useState(false);
   const [viewer, setViewer] = useState(null);
 
@@ -238,14 +242,18 @@ function ProjectDetail({ project, loading, canEdit, config, boards, components, 
             <div className="projectAssetGroupHead"><strong>{group.label}</strong><span>{group.files.length}</span></div>
             <div className="projectAssetList">
               {group.files.map(file => <div className="projectAssetRow" key={file.id}>
-                <div className="projectFileBadge">{(file.filename?.split(".").pop() || "FILE").slice(0,5).toUpperCase()}</div>
+                {isViewableModelFile(file)
+                  ? <button className="modelThumbnailButton" type="button" onClick={() => setModelViewerFile(file)} title={"View " + file.filename}><ModelThumbnail file={file} /></button>
+                  : <div className="projectFileBadge">{(file.filename?.split(".").pop() || "FILE").slice(0,5).toUpperCase()}</div>}
                 <div className="projectAssetMain">
                   <strong>{file.name}</strong>
                   <small>{file.filename}{file.version ? ` · v${file.version}` : ""} · {formatBytes(file.size_bytes)}</small>
                   {file.description && <p>{file.description}</p>}
                 </div>
                 <div className="projectAssetActions">
+                  {isViewableModelFile(file) && <button type="button" onClick={() => setModelViewerFile(file)}>View</button>}
                   <a href={file.url} className="assetButton">Download</a>
+                  {canEdit && <button type="button" onClick={() => setFileVersioning(file)}>Upload new version</button>}
                   {canEdit && <button className="assetDanger" onClick={() => removeFile(file)}>Remove</button>}
                 </div>
               </div>)}
@@ -288,6 +296,12 @@ function ProjectDetail({ project, loading, canEdit, config, boards, components, 
     {coverOpen && <ProjectCoverModal project={project} onClose={() => setCoverOpen(false)} onSaved={async updated => { setCoverOpen(false); onUpdated(updated); await onRefresh(updated); }} />}
     {galleryOpen && <ProjectGalleryModal project={project} onClose={() => setGalleryOpen(false)} onSaved={async () => { setGalleryOpen(false); await onRefresh(project); }} />}
     {fileOpen && <ProjectFileModal project={project} categories={project.file_categories || Object.entries(FILE_CATEGORIES).map(([value,label]) => ({ value, label }))} onClose={() => setFileOpen(false)} onSaved={async () => { setFileOpen(false); await onRefresh(project); }} />}
+    {fileVersioning && <FileVersionModal
+      file={fileVersioning}
+      onClose={() => setFileVersioning(null)}
+      onSaved={async () => { setFileVersioning(null); await onRefresh(project); }}
+    />}
+    {modelViewerFile && <FileModelViewerModal file={modelViewerFile} onClose={() => setModelViewerFile(null)} />}
     {repositoryOpen && <ProjectRepositoryModal project={project} onClose={() => setRepositoryOpen(false)} onSaved={async () => { setRepositoryOpen(false); await onRefresh(project); }} />}
     {viewer && <ImageViewer src={viewer.src} alt={viewer.title} title={viewer.title} onClose={() => setViewer(null)} />}
   </aside>;
