@@ -86,6 +86,20 @@ function stat(value, suffix = "") {
 }
 
 
+function slicerDisplay(value) {
+  if (Array.isArray(value)) return value.filter(Boolean).join(", ") || "—";
+  if (value == null || value === "") return "—";
+  return String(value);
+}
+
+
+function humaniseSlicerKey(value) {
+  return String(value || "")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, letter => letter.toUpperCase());
+}
+
+
 function ThreeScene({ option, wireframe, showGrid, showAxes, onLoaded, onError, viewerRef }) {
   const mountRef = useRef(null);
   const sceneRef = useRef(null);
@@ -564,6 +578,45 @@ export default function ModelViewerModal({ model, printers, canAnalyse, onClose,
               {analysis.orientation?.note && <small className="modelPrintabilityNote">{analysis.orientation.note}</small>}
             </section>}
 
+            {analysis.slicer_metadata?.detected && <section className="modelSlicerMetadata">
+              <div className="modelSlicerMetadataHead">
+                <div>
+                  <strong>Slicer metadata</strong>
+                  <small>Read from settings stored inside this 3MF package.</small>
+                </div>
+                <Badge tone="accent">{analysis.slicer_metadata.application || "3MF slicer data"}</Badge>
+              </div>
+
+              <div className="modelSlicerProfiles">
+                {analysis.slicer_metadata.profiles?.printer && <article>
+                  <span>Printer profile</span>
+                  <strong>{slicerDisplay(analysis.slicer_metadata.profiles.printer)}</strong>
+                </article>}
+                {analysis.slicer_metadata.profiles?.print && <article>
+                  <span>Print profile</span>
+                  <strong>{slicerDisplay(analysis.slicer_metadata.profiles.print)}</strong>
+                </article>}
+                {analysis.slicer_metadata.profiles?.filament && <article>
+                  <span>Filament profile</span>
+                  <strong>{slicerDisplay(analysis.slicer_metadata.profiles.filament)}</strong>
+                </article>}
+              </div>
+
+              {!!Object.keys(analysis.slicer_metadata.settings || {}).length && <div className="modelSlicerSettings">
+                {Object.entries(analysis.slicer_metadata.settings).map(([key, value]) => <article key={key}>
+                  <span>{humaniseSlicerKey(key)}</span>
+                  <strong>{key.endsWith("_mm") && typeof value === "number" ? value + " mm" : key === "supports_enabled" ? (value ? "Enabled" : "Disabled") : slicerDisplay(value)}</strong>
+                </article>)}
+              </div>}
+
+              {!!analysis.slicer_metadata.metadata_files?.length && <details className="modelSlicerSources">
+                <summary>{analysis.slicer_metadata.metadata_files.length} slicer metadata file{analysis.slicer_metadata.metadata_files.length === 1 ? "" : "s"} detected</summary>
+                <div>{analysis.slicer_metadata.metadata_files.map(name => <code key={name}>{name}</code>)}</div>
+              </details>}
+
+              {analysis.slicer_metadata.note && <small className="modelSlicerNote">{analysis.slicer_metadata.note}</small>}
+            </section>}
+
             {!!printers?.length && <div className="modelFitList">
               <strong>Owned printer fit</strong>
               {printers.map(printer => {
@@ -581,7 +634,7 @@ export default function ModelViewerModal({ model, printers, canAnalyse, onClose,
             </div>}
           </> : <div className="modelIntelligenceEmpty">
             <strong>Analyse this revision</strong>
-            <p>MakerVault can calculate dimensions, mesh health, support-risk orientation, geometry counts, surface area, approximate volume and build-volume fit without sending the model to an external service.</p>
+            <p>MakerVault can calculate dimensions, mesh health, support-risk orientation, geometry counts, surface area, approximate volume and build-volume fit locally. Compatible 3MF files can also expose the slicer profiles and settings saved inside the package.</p>
           </div>}
         </aside>}
       </div>}
