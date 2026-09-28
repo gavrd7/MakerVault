@@ -874,11 +874,12 @@ def sync_creality_cfs(setting: PrintingIntegrationSetting) -> dict:
     printers = list(
         Printer.objects.filter(
             is_active=True,
+            multi_material_installed=True,
             catalog_model__multi_material_system="creality_cfs",
         ).exclude(connection_host="")
     )
     if not printers:
-        raise PrintingSyncError("No active CFS-capable printer with a local host/IP is configured.")
+        raise PrintingSyncError("No active printer with CFS installed and a local host/IP is configured.")
 
     results = []
     failures = []
