@@ -5,7 +5,7 @@ import json
 import logging
 import re
 from datetime import timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from urllib.parse import urlparse
 
 import requests
@@ -61,7 +61,7 @@ def _as_decimal(value, places=None):
         result = Decimal(str(value))
         if places is not None:
             quantum = Decimal("1").scaleb(-int(places))
-            result = result.quantize(quantum)
+            result = result.quantize(quantum, rounding=ROUND_HALF_UP)
         return result
     except (InvalidOperation, TypeError, ValueError):
         return None
