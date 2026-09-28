@@ -1,6 +1,6 @@
 # MakerVault roadmap
 
-_Last updated: 28 September 2026_
+_Last updated: 29 September 2026_
 
 This file tracks completed MakerVault milestones and the next candidate areas. The `main` branch is the deployable source of truth.
 
@@ -85,7 +85,7 @@ This file tracks completed MakerVault milestones and the next candidate areas. T
 
 ### v0.7.0 — Multi-user isolation & secure storage
 
-**In progress:** explicit ownership, guarded legacy-data attribution, backend API/media isolation, owner-scoped identifiers, per-user printing integrations, storage profiles, instance quota defaults, storage accounting/API, server-side quota enforcement and the personal storage dashboard are implemented. Administrator user/quota controls and encrypted blob storage remain to follow.
+**Implementation complete; validation in progress:** explicit ownership, guarded legacy-data attribution, backend API/media isolation, owner-scoped identifiers, per-user printing integrations, storage profiles, quota enforcement/personal dashboard, administrator user/quota controls and encrypted-at-rest private blob storage are implemented. The remaining v0.7.0 work is full CI, upgrade validation against an existing MakerVault installation and final security/UI review before merge.
 
 - Enforce backend ownership boundaries for private user data while retaining shared reference catalogues.
 - Migrate existing private records safely to an existing administrator/owner account.
