@@ -1,103 +1,68 @@
 # MakerVault roadmap
 
-_Last updated: 27 September 2026_
+_Last updated: 28 September 2026_
 
-This file records the current milestone sequence agreed during active development so version scope does not drift between chats or branches.
+This file tracks completed MakerVault milestones and the next candidate areas. The `main` branch is the deployable source of truth.
 
-## v0.4.0 — Project workspace
+## Completed milestones
 
-Completed and merged.
+### v0.4.x — Projects, scheduling and files
 
-- First-class Projects page and project detail workspace.
-- Status, dates, summary, description, build notes, tags and reference URL.
-- Cover images and gallery images.
-- Assigned physical inventory and inventory-cost rollups.
-- Shared image viewer for project/catalogue imagery.
+- **v0.4.0:** first-class project workspaces, project metadata, cover/gallery images, assigned inventory and cost rollups.
+- **v0.4.1:** persistent catalogue-maintenance scheduling with administrator controls and manual Run now.
+- **v0.4.2:** project files and repository links using the shared FileAsset model.
+- **v0.4.3:** standalone Files library with optional project assignment and direct file management.
 
-## v0.4.1 — Scheduled catalogue maintenance
+### v0.5.0 — BOM and inventory allocation
 
-Completed and merged to `main` on 27 September 2026.
+- First-class project bills of materials.
+- Quantity-aware allocation from physical inventory without mutating stock totals.
+- Partial/multi-stock allocation, allocation history and free/allocated quantity reporting.
+- Transactional integrity protections against over-allocation and incompatible stock changes.
 
-- Persistent automatic catalogue-maintenance schedule.
-- Default interval: 24 hours; configurable from 1 to 720 hours.
-- Separate board-data and catalogue-image checks.
-- Admin Settings controls, last/next run visibility and Run now.
-- Celery Beat scheduling inside the existing application container.
-- Schedule state stored in PostgreSQL across restarts/rebuilds.
+### v0.6.0 — 3D Printing & Model Library
 
-## v0.4.2 — Project files and repositories
+- Native owned-printer, filament-product, physical-spool, printing-location, model/revision and print-history records.
+- Direct STL/3MF model upload using the shared MakerVault file system.
+- Provider-neutral external spool links and multi-material printer slots.
+- Spoolman inventory synchronisation and local Creality CFS discovery.
+- SpoolmanDB-backed filament catalogue and OrcaSlicer-backed printer catalogue expansion.
+- Manual and scheduled printing-integration synchronisation while MakerVault remains standalone-first.
 
-Completed and merged on 27 September 2026.
+### v0.6.1 — Model intelligence & 3D viewer
 
-The Projects workspace becomes the hub for the digital assets that belong to a build.
+- Local STL and 3MF geometry analysis.
+- Dimensions, triangle/vertex counts, mesh complexity, surface area and approximate volume.
+- Interactive Three.js viewer with orbit, zoom, pan, wireframe, grid, axes and fullscreen.
+- Owned-printer build-volume fit checks.
+- Model files remain local to MakerVault during analysis.
 
-Planned scope:
+### v0.6.2 — SimplyPrint integration
 
-- Upload and attach project files through the existing `FileAsset` model.
-- Group project assets by type rather than presenting one undifferentiated file list.
-- Supported groups include source code, firmware, CAD, STL/mesh, 3MF/slicer projects, PCB, wiring/schematics, documents, binaries, archives and other files.
-- Show the same asset from the relevant project section and the global categorized Files browser without duplicating storage.
-- Preserve file name, version, description and project association.
-- Add/remove/download controls subject to MakerVault permissions.
-- Surface repository links alongside project files using the existing `RepositoryLink` model.
-- Keep project photos/gallery separate from general project files even though both use `FileAsset`.
+- Read-only SimplyPrint API integration using account/company ID and API key.
+- Printer-state and loaded-filament context mapped to MakerVault's provider-neutral records.
+- Recent print-history import.
+- Explicit physical-spool linking rather than automatic spool creation.
+- Manual connection testing, Sync now and scheduled synchronisation.
 
-## v0.4.3 — Standalone file library
+### v0.6.3 — Responsive UI & generic component cleanup
 
-Completed and merged on 27 September 2026.
+- Responsive desktop/tablet/mobile application shell and touch-friendly workflows.
+- Dedicated Settings tabs for Library updates and 3D Printing.
+- Improved responsive layout for printing integration settings.
+- Generic electronics components are manufacturer-neutral throughout the schema, API and UI.
+- Upgrade migrations consolidate legacy duplicate generic components while preserving references.
+- MakerVault application branding added to the main interface.
 
-- Upload supported MakerVault file types directly from the Files page without requiring a project.
-- Keep standalone and project-linked files in the same FileAsset library.
-- Allow optional project assignment at upload time.
-- Allow an existing file to move between standalone and project-linked use without re-uploading or duplicating storage.
-- Preserve the existing file-extension allow-list and authenticated download behaviour.
-- Add standalone filtering and direct file management/removal.
-- No database migration required.
+## Next candidates
 
-## v0.5.0 — BOM and inventory allocation
+No next version number is assigned yet. Candidate follow-on areas include:
 
-Completed and merged to `main` on 27 September 2026.
+- deeper model intelligence such as orientation, printability and slicer-aware analysis;
+- additional multi-material adapters where a reliable documented/local interface is available;
+- print-cost estimation and richer print analytics;
+- richer previews and metadata for additional engineering file types;
+- further BOM/inventory workflow refinements;
+- broader optional integrations while preserving MakerVault as a standalone source of truth.
 
-- First-class bill of materials inside each project.
-- BOM lines can reference board catalogue records, component catalogue records or custom materials.
-- Track required quantity, unit, optional unit cost and estimated BOM cost.
-- Allocate physical inventory with explicit quantities instead of mutating the stock total.
-- Support partial allocations and allocation from multiple stock records.
-- Track required, allocated and remaining quantities per BOM line.
-- Show total, allocated and free quantities in Inventory.
-- Preserve allocation/release events in inventory lifecycle history.
-- Prevent concurrent over-allocation with transactional row locking.
-- Protect allocated stock from incompatible project/status/quantity changes and deletion.
-- Migrate any legacy direct BOM inventory links to allocation records.
-
-## v0.6.0 — 3D Printing & Model Library
-
-Next major milestone.
-
-MakerVault expands its existing project/file/inventory foundation into a first-class 3D-printing workspace while reusing the same stored files rather than creating a parallel asset system.
-
-Planned scope:
-
-- First-class 3D model records with name, description, tags, source/reference URL and optional project association.
-- Model revisions so design iterations can be tracked without losing earlier files or notes.
-- Attach existing MakerVault STL, 3MF, OBJ and supported CAD assets to models without duplicating storage.
-- Add richer model/file previews, beginning with interactive STL/3MF viewing where practical.
-- First-class printer records for the machines available to MakerVault.
-- Filament/spool inventory with material, colour, diameter, supplier, purchase data and remaining quantity.
-- Optional Spoolman integration using its REST API, with configurable one-way or bidirectional spool inventory synchronisation and explicit conflict/source-of-truth handling.
-- Optional SimplyPrint filament integration where API access is available, with import/export compatibility retained for installations without API access.
-- Creality CFS discovery for supported printers: query local printer/CFS state to show which filament is currently loaded in each slot, including material, colour, remaining amount and RFID identity when exposed by the printer.
-- Allow discovered CFS slots/RFID identities to be matched to MakerVault spool records and, where configured, to corresponding Spoolman/SimplyPrint records.
-- Treat Creality CFS integration as capability-detected and read-only first; do not depend on undocumented write/control behaviour or RFID programming for the core workflow.
-- Design printer filament discovery around a generic multi-material-system adapter interface so additional ecosystems can be added without changing MakerVault's native spool model.
-- Reserve future adapters for Bambu Lab AMS/AMS Lite/AMS 2 Pro and comparable multi-material systems from manufacturers such as Elegoo, QIDI, Snapmaker and others where a reliable local or documented interface is available.
-- Prefer documented/local APIs where available; community/reverse-engineered protocols may be supported behind clearly marked experimental adapters and must fail safely when firmware/protocols change.
-- Print history linking a model revision, printer and consumed spool(s), including quantity, duration, outcome and notes.
-- Surface model/print information naturally inside Projects and the global Files library rather than creating isolated silos.
-- Preserve MakerVault permissions, authenticated file delivery and existing file-extension/security rules.
-
-Initial scope deliberately excludes live printer control, slicer automation, RFID tag writing/programming and broad OctoPrint/Moonraker-style telemetry control. External filament integrations should degrade gracefully when unavailable, and MakerVault must remain usable as a standalone source of truth.
-
-## After v0.6.0
-
-Candidate follow-on areas include deeper inventory/BOM refinements, richer previews for additional engineering file types, print-cost estimation, and optional printer/slicer integrations. No later version number is assigned yet.
+Version scope should be assigned only when the next milestone is selected.

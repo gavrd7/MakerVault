@@ -4,8 +4,9 @@ MakerVault is designed to live in a Git repository. The recommended workflow is 
 
 - `main` contains the deployable version.
 - Use a short-lived feature branch for substantial work, e.g. `feature/espboards-importer`.
-- Merge completed work back to `main`.
-- Tag notable releases (`v0.1.1`, `v0.2.0`, etc.).
+- Open a pull request for review/CI and merge completed work back to `main`.
+- Delete merged feature branches so the branch list reflects active work.
+- Tag notable stable releases (for example `v0.6.3`).
 - Never commit `.env`, uploaded media, database data, Redis data, secrets, or local build output.
 
 ## Initial repository setup
@@ -25,15 +26,17 @@ git remote add origin <YOUR-REPOSITORY-URL>
 git push -u origin main
 ```
 
-GitHub, GitLab, Forgejo and Gitea all work; MakerVault has no dependency on a particular Git host.
+GitHub, GitLab, Forgejo and Gitea all work; MakerVault has no runtime dependency on a particular Git host.
 
 ## Updating a deployment
 
-For a normal source update:
+For a normal source update, explicitly return the deployment checkout to `main`:
 
 ```bash
-git pull --ff-only
-docker compose up -d --build --no-deps makervault
+git fetch --prune origin
+git switch main
+git pull --ff-only origin main
+docker compose up -d --build
 ```
 
 or use:
@@ -42,9 +45,9 @@ or use:
 make update
 ```
 
-This rebuilds/recreates only the MakerVault application container. PostgreSQL and Redis are not rebuilt or recreated and their persistent storage remains untouched.
+PostgreSQL, Redis and media live in persistent storage and are not removed by an application rebuild.
 
-Docker's layer cache also means dependency-install layers are reused unless `requirements.txt`, `frontend/package.json`, the Dockerfile, or another earlier build layer changes.
+Docker's layer cache means dependency-install layers are reused unless `requirements.txt`, `frontend/package.json`, the Dockerfile, or another earlier build layer changes.
 
 ## Smaller changes
 
@@ -54,22 +57,33 @@ For backend or frontend source-only changes, use:
 docker compose up -d --build --no-deps makervault
 ```
 
-The build still runs, because the production image intentionally contains its application code and compiled frontend rather than bind-mounting mutable source. With cached Python and Node dependency layers this is normally much faster than a clean rebuild.
+The build still runs because the production image intentionally contains its application code and compiled frontend rather than bind-mounting mutable source. With cached Python and Node dependency layers this is normally much faster than a clean rebuild.
 
-We may add a dedicated hot-reload development override later if live editing on the server becomes useful. Production should remain image-based so deployments are reproducible.
+Production should remain image-based so deployments are reproducible.
 
 ## Feature branches
 
 Example:
 
 ```bash
-git switch -c feature/spoolmandb-import
-git add .
-git commit -m "Add SpoolmanDB catalogue importer"
 git switch main
-git merge --ff-only feature/spoolmandb-import
-git tag v0.2.0
-git push origin main --tags
+git pull --ff-only origin main
+git switch -c feature/example-change
+
+# Work, test and commit.
+git add .
+git commit -m "Add example change"
+git push -u origin feature/example-change
+```
+
+After CI/review and the pull request has been merged:
+
+```bash
+git switch main
+git pull --ff-only origin main
+git branch -d feature/example-change
+git push origin --delete feature/example-change
+git fetch --prune origin
 ```
 
 For non-fast-forward work, use a normal reviewed merge or rebase rather than forcing `main`.
