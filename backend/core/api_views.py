@@ -2820,6 +2820,22 @@ def _serialise_external_spool_link(link):
     }
 
 
+def _spool_cost_per_g(spool):
+    if spool.purchase_cost is None or not spool.initial_weight_g:
+        return None
+    if spool.initial_weight_g <= 0:
+        return None
+    return spool.purchase_cost / spool.initial_weight_g
+
+
+def _estimated_spool_material_cost(spool, used_g, waste_g):
+    unit_cost = _spool_cost_per_g(spool) if spool else None
+    if unit_cost is None:
+        return None
+    total_g = (used_g or Decimal("0")) + (waste_g or Decimal("0"))
+    return (unit_cost * total_g).quantize(Decimal("0.01"))
+
+
 def _serialise_spool(spool):
     filament = spool.filament
     maker = filament.filament_manufacturer or filament.manufacturer
@@ -2854,6 +2870,9 @@ def _serialise_spool(spool):
         "diameter_mm": _float(filament.diameter_mm),
         "initial_weight_g": _float(spool.initial_weight_g),
         "remaining_weight_g": _float(spool.remaining_weight_g),
+        "purchase_cost": _float(spool.purchase_cost),
+        "currency": spool.currency,
+        "cost_per_g": _float(_spool_cost_per_g(spool)),
         "status": spool.status,
         "status_label": spool.get_status_display(),
         "location": placement,
@@ -2964,6 +2983,77 @@ def _serialise_print_material_usage(usage):
         "material_cost": _float(usage.material_cost),
         "currency": usage.currency,
         "notes": usage.notes,
+    }
+
+
+def _printing_analytics():
+    status_rows = {
+        row["status"]: row["count"]
+        for row in PrintJob.objects.values("status").annotate(count=Count("id"))
+    }
+    successful = int(status_rows.get("success", 0))
+    failed = int(status_rows.get("failed", 0))
+    completed = successful + failed
+    total_jobs = sum(int(value) for value in status_rows.values())
+
+    job_totals = PrintJob.objects.aggregate(
+        actual_minutes=Sum("actual_minutes"),
+        estimated_minutes=Sum("estimated_minutes"),
+    )
+    usage_totals = PrintMaterialUsage.objects.aggregate(
+        used_g=Sum("used_g"),
+        waste_g=Sum("waste_g"),
+    )
+    default_currency = settings.MAKERVAULT_CURRENCY
+    material_cost = (
+        PrintMaterialUsage.objects.filter(currency=default_currency)
+        .aggregate(total=Sum("material_cost"))
+        .get("total")
+    )
+    foreign_cost_rows = PrintMaterialUsage.objects.exclude(
+        currency=default_currency
+    ).exclude(material_cost=None).count()
+
+    printer_rows = []
+    for row in (
+        PrintJob.objects.values("printer_id", "printer__name")
+        .annotate(
+            jobs=Count("id"),
+            successes=Count("id", filter=Q(status="success")),
+            failures=Count("id", filter=Q(status="failed")),
+            actual_minutes=Sum("actual_minutes"),
+        )
+        .order_by("-jobs", "printer__name")
+    ):
+        printer_completed = int(row["successes"] or 0) + int(row["failures"] or 0)
+        printer_rows.append({
+            "printer_id": str(row["printer_id"]),
+            "printer": row["printer__name"],
+            "jobs": int(row["jobs"] or 0),
+            "successes": int(row["successes"] or 0),
+            "failures": int(row["failures"] or 0),
+            "success_rate": (
+                round((int(row["successes"] or 0) / printer_completed) * 100, 1)
+                if printer_completed
+                else None
+            ),
+            "actual_minutes": int(row["actual_minutes"] or 0),
+        })
+
+    return {
+        "jobs": total_jobs,
+        "successful": successful,
+        "failed": failed,
+        "completed": completed,
+        "success_rate": round((successful / completed) * 100, 1) if completed else None,
+        "actual_minutes": int(job_totals["actual_minutes"] or 0),
+        "estimated_minutes": int(job_totals["estimated_minutes"] or 0),
+        "filament_used_g": _float(usage_totals["used_g"] or Decimal("0")),
+        "waste_g": _float(usage_totals["waste_g"] or Decimal("0")),
+        "material_cost": _float(material_cost),
+        "currency": default_currency,
+        "foreign_cost_rows_excluded": foreign_cost_rows,
+        "printers": printer_rows,
     }
 
 
@@ -3094,6 +3184,7 @@ def printing_overview(request):
         ],
         "models": [_serialise_printing_model(model) for model in models_3d],
         "recent_prints": [_serialise_print_job(job) for job in recent_prints],
+        "analytics": _printing_analytics(),
         "integrations": [
             _serialise_printing_integration_status(item)
             for item in PrintingIntegrationSetting.objects.filter(enabled=True).order_by("provider")
@@ -4573,16 +4664,31 @@ def _build_print_material_usage(job, printer, payload):
     if not spool and not filament:
         raise ValidationError({"material_usages": "Choose a spool, filament, or mapped printer slot for each material usage."})
 
+    used_g = _parse_decimal(payload.get("used_g", 0), "used_g", allow_none=False)
+    waste_g = _parse_decimal(payload.get("waste_g", 0), "waste_g", allow_none=False)
+    explicit_cost = _parse_decimal(payload.get("material_cost"), "material_cost")
+    currency = str(payload.get("currency") or (spool.currency if spool else settings.MAKERVAULT_CURRENCY)).upper()[:3]
+    estimated_cost = _estimated_spool_material_cost(spool, used_g, waste_g)
+    if explicit_cost is None and spool and spool.currency == currency:
+        explicit_cost = estimated_cost
+
     usage = PrintMaterialUsage(
         print_job=job,
         spool=spool,
         filament=filament,
         printer_slot=slot,
-        used_g=_parse_decimal(payload.get("used_g", 0), "used_g", allow_none=False),
-        waste_g=_parse_decimal(payload.get("waste_g", 0), "waste_g", allow_none=False),
-        material_cost=_parse_decimal(payload.get("material_cost"), "material_cost"),
-        currency=str(payload.get("currency") or settings.MAKERVAULT_CURRENCY).upper()[:3],
+        used_g=used_g,
+        waste_g=waste_g,
+        material_cost=explicit_cost,
+        currency=currency,
         notes=str(payload.get("notes") or "").strip(),
+        source_metadata={
+            "material_cost_source": (
+                "spool_purchase_cost" if explicit_cost is not None and payload.get("material_cost") in (None, "") and estimated_cost is not None
+                else "manual" if explicit_cost is not None
+                else ""
+            )
+        },
     )
     usage.full_clean()
     return usage
