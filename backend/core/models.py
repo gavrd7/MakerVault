@@ -4,6 +4,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.text import slugify
 from .validators import validate_maker_file
+from .private_storage import private_storage
 
 
 class TimeStampedModel(models.Model):
@@ -221,7 +222,7 @@ class Project(TimeStampedModel):
     notes = models.TextField(blank=True)
     tags = models.JSONField(default=list, blank=True)
     reference_url = models.URLField(blank=True)
-    cover_image = models.ImageField(upload_to="projects/covers/", blank=True, null=True)
+    cover_image = models.ImageField(upload_to="projects/covers/", storage=private_storage, blank=True, null=True)
     started_on = models.DateField(blank=True, null=True)
     completed_on = models.DateField(blank=True, null=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="makervault_projects")
@@ -262,7 +263,7 @@ class InventoryItem(TimeStampedModel):
     supplier = models.CharField(max_length=255, blank=True)
     purchase_url = models.URLField(blank=True)
     purchased_on = models.DateField(blank=True, null=True)
-    image = models.ImageField(upload_to="inventory/", blank=True, null=True)
+    image = models.ImageField(upload_to="inventory/", storage=private_storage, blank=True, null=True)
     notes = models.TextField(blank=True)
 
     class Meta:
@@ -404,7 +405,7 @@ class FileAsset(TimeStampedModel):
     name = models.CharField(max_length=255)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="makervault_file_assets")
     category = models.CharField(max_length=20, choices=CATEGORIES, default="other")
-    file = models.FileField(upload_to="files/%Y/%m/", validators=[validate_maker_file])
+    file = models.FileField(upload_to="files/%Y/%m/", storage=private_storage, validators=[validate_maker_file])
     project = models.ForeignKey(Project, on_delete=models.CASCADE, null=True, blank=True, related_name="files")
     board = models.ForeignKey(BoardModel, on_delete=models.SET_NULL, null=True, blank=True, related_name="files")
     component = models.ForeignKey(ComponentModel, on_delete=models.SET_NULL, null=True, blank=True, related_name="files")
