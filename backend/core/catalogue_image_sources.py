@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from urllib.parse import quote
+from urllib.parse import quote, urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -24,7 +24,7 @@ from .importers import ImporterError, fetch_import_html
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 OPENVERSE_API = "https://api.openverse.org/v1/images/"
-IMAGE_SEED_VERSION = "0.7.1-printer-images-1"
+IMAGE_SEED_VERSION = "0.7.1-board-component-sources-1"
 USER_AGENT = f"MakerVault/{getattr(settings, 'MAKERVAULT_VERSION', 'dev')} (+self-hosted catalogue image seeder)"
 def _commons_license_allowed(license_name: str) -> bool:
     """Allow only licences suitable for normal open redistribution."""
@@ -319,22 +319,42 @@ def _board_image_queries(board) -> list[str]:
 def _component_image_queries(component) -> list[str]:
     specs = component.specifications or {}
     part = (component.part_number or "").strip()
-    item_type = str(specs.get("type") or "").strip()
+    item_type = str(specs.get("type") or "").strip().lower()
+    name = re.sub(r"\s+", " ", component.name or "").strip()
+    name_lower = name.lower()
     queries = []
-    if part:
-        if item_type not in {"resistor", "capacitor", "diode", "transistor", "mosfet", "regulator"}:
-            queries.append(f"{part} module")
-        queries.append(part)
-    queries.append(component.name)
+
+    # Preserve shape/form-factor words early: these are often more important
+    # than the electrical value for visually generic components.
+    if "slide potentiometer" in name_lower or "slider potentiometer" in name_lower:
+        queries.extend([name, f"{name} linear slider", "slide potentiometer electronics"])
+    elif "trimmer" in name_lower:
+        queries.extend([name, "trimmer potentiometer electronics"])
+    elif "rotary encoder" in name_lower:
+        queries.extend([name, "rotary encoder module"])
+    elif "reed switch" in name_lower:
+        queries.extend([name, "magnetic reed switch electronics"])
+    elif "tactile" in name_lower and "button" in name_lower:
+        queries.extend([name, "tactile push button electronics"])
+    elif "relay module" in name_lower:
+        queries.extend([name, f"{part} relay module".strip()])
+    else:
+        if part:
+            if item_type not in {"resistor", "capacitor", "diode", "transistor", "mosfet", "regulator"}:
+                queries.append(f"{part} module")
+            queries.append(part)
+        queries.append(name)
+
     fallback = GENERIC_COMPONENT_QUERY_BY_TYPE.get(item_type)
     if fallback:
         queries.append(fallback)
+
     out = []
     for query in queries:
         query = re.sub(r"\s+", " ", query).strip()
         if query and query not in out:
             out.append(query)
-    return out[:4]
+    return out[:5]
 
 
 def _search_open_media_with_diagnostics(
@@ -418,6 +438,70 @@ def find_espboards_image(board) -> ImageCandidate | None:
             author="espboards.dev",
             query=board.name,
         )
+    return None
+
+
+def _candidate_source_pages(obj) -> list[str]:
+    specs = getattr(obj, "specifications", None) or {}
+    urls = []
+    for key in (
+        "reference_url",
+        "technical_source_url",
+        "product_url",
+        "datasheet_url",
+        "pinout_url",
+    ):
+        value = str(specs.get(key) or "").strip()
+        if value.startswith("https://") and not value.lower().endswith(".pdf"):
+            urls.append(value)
+    source = getattr(obj, "source", None)
+    source_url = str(getattr(source, "url", "") or "").strip()
+    if source_url.startswith("https://") and not source_url.lower().endswith(".pdf"):
+        urls.append(source_url)
+    out = []
+    for url in urls:
+        if url not in out:
+            out.append(url)
+    return out[:4]
+
+
+def find_source_page_image(obj) -> dict | None:
+    """Find a remote product image from an already-known catalogue source page.
+
+    These images are referenced remotely rather than cached because MakerVault
+    does not assume redistribution rights merely because a source page exposes
+    an OpenGraph image.
+    """
+    for page_url in _candidate_source_pages(obj):
+        try:
+            final_url, html = fetch_import_html(page_url)
+        except ImporterError:
+            continue
+        soup = BeautifulSoup(html, "html.parser")
+        image_url = ""
+        for attrs in (
+            {"property": "og:image"},
+            {"name": "twitter:image"},
+            {"property": "twitter:image"},
+        ):
+            tag = soup.find("meta", attrs=attrs)
+            if tag and str(tag.get("content") or "").strip():
+                image_url = str(tag.get("content") or "").strip()
+                break
+        if not image_url:
+            continue
+        image_url = urljoin(final_url, image_url)
+        parsed = urlparse(image_url)
+        if parsed.scheme != "https" or not parsed.netloc:
+            continue
+        return {
+            "external_image_url": image_url,
+            "image_source_page": final_url,
+            "image_source_provider": urlparse(final_url).netloc.removeprefix("www."),
+            "image_source_type": "source-page-remote",
+            "image_license": "",
+            "image_author": "",
+        }
     return None
 
 
@@ -521,6 +605,7 @@ def run_catalogue_image_seed(
             "skipped": 0,
             "by_kind": {},
             "by_provider": {},
+            "remote": 0,
             "failures": [],
         }
 
@@ -554,9 +639,9 @@ def run_catalogue_image_seed(
             reverse=True,
         )
 
-    processed = cached = failed = skipped = 0
+    processed = cached = failed = skipped = remote = 0
     by_kind = {
-        key: {"processed": 0, "cached": 0, "failed": 0, "skipped": 0}
+        key: {"processed": 0, "cached": 0, "remote": 0, "failed": 0, "skipped": 0}
         for key in order
     }
     by_provider = {}
@@ -580,6 +665,7 @@ def run_catalogue_image_seed(
                             "skipped": skipped,
                             "by_kind": by_kind,
                             "by_provider": by_provider,
+                            "remote": remote,
                             "failures": failures,
                             "order": order,
                         }
@@ -627,6 +713,20 @@ def run_catalogue_image_seed(
                             }
 
                         if not candidate:
+                            source_fallback = None
+                            if not isinstance(obj, PrinterCatalogModel) and variant == "base":
+                                source_fallback = find_source_page_image(obj)
+                            if source_fallback:
+                                metadata.update(source_fallback)
+                                metadata["auto_image_last_result"] = "remote-source-fallback"
+                                field = set_catalogue_image_metadata(obj, metadata, variant=variant)
+                                obj.save(update_fields=[field, "updated_at"] if field else ["updated_at"])
+                                remote += 1
+                                by_kind[kind]["remote"] += 1
+                                provider_key = source_fallback["image_source_provider"] or "source page"
+                                by_provider[provider_key] = by_provider.get(provider_key, 0) + 1
+                                continue
+
                             failed += 1
                             by_kind[kind]["failed"] += 1
                             metadata["auto_image_last_result"] = "no-confident-match"
@@ -671,6 +771,7 @@ def run_catalogue_image_seed(
             "skipped": skipped,
             "by_kind": by_kind,
             "by_provider": by_provider,
+            "remote": remote,
             "failures": failures,
             "order": order,
         }
