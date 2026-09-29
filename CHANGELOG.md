@@ -12,6 +12,7 @@
 - Reworked catalogue image maintenance to prioritise the catalogue with the highest missing-image ratio, with explicit `--kind printers|boards|components` targeting for focused passes.
 - Improved printer image discovery by trying exact manufacturer/model terms before generic printer wording while retaining open-license and confidence requirements.
 - Added per-catalogue/provider image-seeding diagnostics and sample failure reporting, plus detailed Orca vendor-manifest failure output.
+- Added a rights-conscious official-manufacturer remote-image fallback for curated printer catalogue entries, starting with Creality K2/K2 Combo. Official images are referenced from the manufacturer/store rather than copied into MakerVault media storage.
 - Removed the unused broad django-allauth `socialaccount` dependency extra after pip-audit flagged OAuthLib CVE-2026-49265; MakerVault now declares only the OIDC client dependencies it actually uses (`requests` and `PyJWT[crypto]`), preserving OpenID Connect login without the vulnerable package.
 
 ## v0.7.0.1 — 2026-09-29
