@@ -9,6 +9,9 @@
 - Added a live catalogue-completeness audit for boards, components, printer models and filament products, including image/specification coverage percentages and representative missing-data samples.
 - Added the catalogue coverage dashboard to Settings → Library updates as the baseline for the focused enrichment pass.
 - Extended OrcaSlicer catalogue synchronisation to derive missing printer build volumes from concrete machine profiles and inheritance chains while preserving existing curated specifications.
+- Reworked catalogue image maintenance to prioritise the catalogue with the highest missing-image ratio, with explicit `--kind printers|boards|components` targeting for focused passes.
+- Improved printer image discovery by trying exact manufacturer/model terms before generic printer wording while retaining open-license and confidence requirements.
+- Added per-catalogue/provider image-seeding diagnostics and sample failure reporting, plus detailed Orca vendor-manifest failure output.
 
 ## v0.7.0.1 — 2026-09-29
 
