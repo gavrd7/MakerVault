@@ -9,6 +9,7 @@ from core.orcaslicer_catalogue import (
     _canonical_vendor,
     _merge_model,
     _normalise_model_name,
+    _volume_from_machine_values,
     sync_orcaslicer_printer_catalogue,
 )
 
@@ -48,6 +49,15 @@ class OrcaSlicerPrinterCatalogueTests(TestCase):
             _normalise_model_name("Bambu Lab", "Bambu Lab A1 mini"),
             ("A1 mini", ""),
         )
+
+    def test_machine_printable_area_maps_to_build_volume(self):
+        volume = _volume_from_machine_values({
+            "printable_area": ["0x0", "256x0", "256x256", "0x256"],
+            "printable_height": "256",
+        })
+        self.assertEqual(volume["build_volume_x_mm"], 256)
+        self.assertEqual(volume["build_volume_y_mm"], 256)
+        self.assertEqual(volume["build_volume_z_mm"], 256)
 
     def test_orca_provenance_does_not_overwrite_curated_makervault_specs(self):
         maker = PrinterManufacturer.objects.create(name="Creality")
@@ -153,4 +163,65 @@ class OrcaSlicerPrinterCatalogueTests(TestCase):
         self.assertEqual(
             a1mini.features["orcaslicer"]["vendor_file"],
             "BBL.json",
+        )
+
+
+    @override_settings(ORCASLICER_PRINTER_CATALOGUE_REF="main")
+    @patch("core.orcaslicer_catalogue.requests.get")
+    def test_sync_enriches_missing_build_volume_from_machine_profile_inheritance(self, get):
+        listing = [{
+            "type": "file",
+            "name": "BBL.json",
+            "download_url": "https://raw.githubusercontent.com/OrcaSlicer/OrcaSlicer/main/resources/profiles/BBL.json",
+        }]
+        manifest = json.dumps({
+            "name": "Bambulab",
+            "machine_model_list": [
+                {"name": "Bambu Lab A1", "sub_path": "machine/Bambu Lab A1.json"},
+            ],
+            "machine_list": [
+                {"name": "Bambu Lab A1 0.4 nozzle", "sub_path": "machine/Bambu Lab A1 0.4 nozzle.json"},
+            ],
+        })
+        machine = {
+            "type": "machine",
+            "name": "Bambu Lab A1 0.4 nozzle",
+            "inherits": "fdm_bbl_3dp_001_common",
+            "printable_height": "256",
+        }
+        common = {
+            "type": "machine",
+            "name": "fdm_bbl_3dp_001_common",
+            "printable_area": ["0x0", "256x0", "256x256", "0x256"],
+            "printer_structure": "i3",
+        }
+
+        def response_for(url, *args, **kwargs):
+            if url == ORCA_DIRECTORY_URL:
+                return FakeResponse(payload=listing)
+            if url.endswith("/BBL.json"):
+                return FakeResponse(text=manifest)
+            if url.endswith("/BBL/machine/Bambu%20Lab%20A1%200.4%20nozzle.json"):
+                return FakeResponse(payload=machine)
+            if url.endswith("/BBL/machine/fdm_bbl_3dp_001_common.json"):
+                return FakeResponse(payload=common)
+            raise AssertionError(f"Unexpected URL: {url}")
+
+        get.side_effect = response_for
+
+        result = sync_orcaslicer_printer_catalogue(max_workers=2)
+        self.assertEqual(result["status"], "complete")
+        self.assertEqual(result["hardware_profiles_enriched"], 1)
+
+        model = PrinterCatalogModel.objects.get(
+            manufacturer__name="Bambu Lab",
+            name="A1",
+        )
+        self.assertEqual(str(model.build_volume_x_mm), "256.00")
+        self.assertEqual(str(model.build_volume_y_mm), "256.00")
+        self.assertEqual(str(model.build_volume_z_mm), "256.00")
+        self.assertEqual(model.features["printer_structure"], "i3")
+        self.assertEqual(
+            model.features["orcaslicer"]["hardware_profile"],
+            "machine/Bambu Lab A1 0.4 nozzle.json",
         )
