@@ -156,6 +156,30 @@ class CatalogueImageSourceTests(unittest.TestCase):
         self.assertEqual(found["image_source_provider"], "vendor.example")
         self.assertEqual(found["image_source_type"], "source-page-remote")
 
+    @patch("core.catalogue_image_sources.fetch_import_html")
+    def test_source_pages_try_manufacturer_before_generic(self, fetch_html):
+        class Source:
+            url = "https://example.net/widget"
+            source_type = "generic"
+            name = "Generic source"
+
+        component = DummyComponent()
+        component.source = Source()
+        component.specifications = {
+            "type": "environment",
+            "reference_url": "https://www.adafruit.com/product/1234",
+            "reference_provider": "Adafruit",
+        }
+
+        fetch_html.return_value = (
+            "https://www.adafruit.com/product/1234",
+            '<html><head><meta property="og:image" content="https://cdn.example/official.jpg"></head></html>',
+        )
+        found = find_source_page_image(component)
+        self.assertEqual(found["image_source_tier"], "manufacturer")
+        self.assertEqual(found["image_source_priority"], 10)
+        self.assertEqual(fetch_html.call_args.args[0], "https://www.adafruit.com/product/1234")
+
     def test_printer_image_query_disambiguates_short_model_names(self):
         queries = _printer_image_queries(DummyPrinterModel())
         self.assertEqual(queries[0], "Creality K2")
@@ -258,6 +282,60 @@ class CatalogueImagePriorityTests(TestCase):
         cache_candidate.assert_called_once()
         cached_obj = cache_candidate.call_args.args[0]
         self.assertEqual(cached_obj.pk, self.printer.pk)
+        cache_add.assert_called_once()
+        cache_delete.assert_called_once()
+
+    @override_settings(
+        CATALOGUE_IMAGE_MAX_PER_RUN=1,
+        CATALOGUE_IMAGE_RETRY_DAYS=1,
+        CATALOGUE_IMAGE_WIKIMEDIA=True,
+        CATALOGUE_IMAGE_OPENVERSE=True,
+    )
+    @patch("core.catalogue_image_sources.cache.delete")
+    @patch("core.catalogue_image_sources.cache.add", return_value=True)
+    @patch("core.catalogue_image_sources.resolve_catalogue_image")
+    @patch("core.catalogue_image_sources.find_source_page_image")
+    def test_manufacturer_remote_image_precedes_open_media(
+        self,
+        source_image,
+        open_media,
+        cache_add,
+        cache_delete,
+    ):
+        self.component.specifications = {
+            **self.component.specifications,
+            "reference_url": "https://www.adafruit.com/product/999",
+        }
+        self.component.save(update_fields=["specifications", "updated_at"])
+        source_image.return_value = {
+            "external_image_url": "https://cdn.example/official.jpg",
+            "image_source_page": "https://www.adafruit.com/product/999",
+            "image_source_provider": "Adafruit",
+            "image_source_type": "source-page-remote",
+            "image_source_tier": "manufacturer",
+            "image_source_priority": 10,
+            "image_license": "",
+            "image_author": "",
+        }
+
+        result = run_catalogue_image_seed(
+            limit=1,
+            force_retry=True,
+            kinds=["components"],
+        )
+
+        self.assertEqual(result["remote"], 1)
+        self.assertEqual(result["by_kind"]["components"]["remote"], 1)
+        open_media.assert_not_called()
+        self.component.refresh_from_db()
+        self.assertEqual(
+            self.component.specifications["external_image_url"],
+            "https://cdn.example/official.jpg",
+        )
+        self.assertEqual(
+            self.component.specifications["source_trace"][-1]["tier"],
+            "manufacturer",
+        )
         cache_add.assert_called_once()
         cache_delete.assert_called_once()
 
