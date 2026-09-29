@@ -170,13 +170,15 @@ This file tracks completed MakerVault milestones and the planned path toward a s
 - Add **OctoPrint** support as a first-class local printer adapter.
 - Expand the existing Creality local connection beyond CFS slot data to expose printer/job status where the available interface allows.
 - Keep SimplyPrint as an optional source for status/history rather than a prerequisite for monitoring.
-- Add manufacturer/local adapters where sufficiently documented and technically practical.
+- Add manufacturer/local adapters where sufficiently documented and technically practical, including **Anycubic**, **FlashForge**, **Prusa**, **Sovol** and **Voron**-class Klipper/Moonraker installations.
 
 #### Multi-material/manufacturer framework
 
 - Formalise the existing provider-neutral multi-material slot model into a documented adapter contract.
 - Retain and expand Creality CFS support.
-- Add framework-level support for **Bambu Lab AMS**, **Elegoo multi-material systems**, **QIDI multi-material systems** and **Snapmaker multi-material systems** where interfaces are sufficiently documented.
+- Add framework-level support for **Bambu Lab AMS**, **Elegoo multi-material systems**, **QIDI multi-material systems**, **Snapmaker multi-material systems**, **Anycubic**, **FlashForge**, **Prusa**, **Sovol** and **Voron** ecosystems where interfaces are sufficiently documented.
+- Treat **Voron** primarily through its common Klipper/Moonraker stack while retaining room for Voron-specific metadata, toolchanger or multi-material integrations where those are exposed separately.
+- Treat **Prusa**, **Anycubic**, **FlashForge** and **Sovol** as manufacturer adapter families that can provide live printer state, job telemetry and multi-material context where supported, rather than limiting them to filament-slot integrations only.
 - Implement documented capabilities even when development hardware is unavailable.
 - Mark adapters that have not been exercised against real hardware as **experimental / community validation required** rather than claiming full support.
 - Add fixtures/mock responses and contract tests so unowned hardware adapters can still be exercised in CI.
