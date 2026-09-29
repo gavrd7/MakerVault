@@ -5,6 +5,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 
 from core.storage_usage import StorageQuotaExceeded, ensure_storage_capacity, storage_summary
 from core.models import (
+    BoardModel,
     FileAsset,
     InventoryItem,
     Model3D,
@@ -379,3 +380,73 @@ class AdministratorUserManagementTests(TestCase):
         self.assertEqual(deleted.status_code, 200, deleted.content)
         self.assertFalse(get_user_model().objects.filter(pk=self.member.pk).exists())
         self.assertFalse(Project.objects.filter(owner_id=self.member.pk).exists())
+
+
+class UniversalSearchOwnershipTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.owner = User.objects.create_user(
+            username="search-owner",
+            email="search-owner@example.com",
+            password="test-password",
+        )
+        self.other = User.objects.create_user(
+            username="search-other",
+            email="search-other@example.com",
+            password="test-password",
+        )
+        self.owner_project = Project.objects.create(
+            owner=self.owner,
+            created_by=self.owner,
+            name="Secret Robot Arm",
+            summary="Private stepper controller build",
+            status="active",
+        )
+        self.other_project = Project.objects.create(
+            owner=self.other,
+            created_by=self.other,
+            name="Secret Satellite",
+            summary="Other user's private project",
+            status="active",
+        )
+        self.owner_inventory = InventoryItem.objects.create(
+            owner=self.owner,
+            inventory_id="OTH-SEARCH-001",
+            item_type="other",
+            custom_name="Robot Arm Bearing",
+            quantity=1,
+            status="available",
+        )
+        self.shared_board = BoardModel.objects.create(
+            name="Searchable ESP32 Test Board",
+            family="ESP32",
+            mcu="ESP32-S3",
+        )
+        self.client.force_login(self.owner)
+
+    def test_global_search_returns_owned_private_rows_and_shared_catalogue(self):
+        response = self.client.get("/api/search/", {"q": "Secret"})
+        self.assertEqual(response.status_code, 200, response.content)
+        titles = [row["title"] for row in response.json()["rows"]]
+        self.assertIn("Secret Robot Arm", titles)
+        self.assertNotIn("Secret Satellite", titles)
+
+        board_response = self.client.get("/api/search/", {"q": "Searchable ESP32"})
+        board_titles = [row["title"] for row in board_response.json()["rows"]]
+        self.assertIn("Searchable ESP32 Test Board", board_titles)
+
+    def test_search_type_filter_and_sort_are_supported(self):
+        response = self.client.get(
+            "/api/search/",
+            {"q": "Robot", "types": "inventory,projects", "sort": "name"},
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        rows = response.json()["rows"]
+        self.assertEqual({row["type"] for row in rows}, {"inventory", "projects"})
+        self.assertEqual([row["title"] for row in rows], sorted(row["title"] for row in rows))
+
+    def test_blank_advanced_search_is_still_owner_scoped(self):
+        response = self.client.get("/api/search/", {"types": "projects", "sort": "newest"})
+        self.assertEqual(response.status_code, 200, response.content)
+        titles = [row["title"] for row in response.json()["rows"]]
+        self.assertEqual(titles, ["Secret Robot Arm"])
