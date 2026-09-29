@@ -76,7 +76,7 @@ export default function SearchPage({ initialQuery = "", projects = [], onOpenRes
     </section>
 
     <section className="searchWorkspace">
-      <aside className="panel searchFilters">
+      <div className="panel searchFilters">
         <div className="searchFilterSection">
           <strong>Record types</strong>
           <div className="searchTypeFilters">
@@ -102,7 +102,7 @@ export default function SearchPage({ initialQuery = "", projects = [], onOpenRes
             <option value="oldest">Oldest updated</option>
           </select></label>
         </div>
-      </aside>
+      </div>
 
       <section className="panel searchResultsPanel">
         <div className="panelHead">
