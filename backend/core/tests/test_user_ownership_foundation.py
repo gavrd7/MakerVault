@@ -451,6 +451,22 @@ class UniversalSearchOwnershipTests(TestCase):
         titles = [row["title"] for row in response.json()["rows"]]
         self.assertEqual(titles, ["Secret Robot Arm"])
 
+    def test_search_date_range_filters_results(self):
+        today = self.owner_project.updated_at.date().isoformat()
+        response = self.client.get(
+            "/api/search/",
+            {"types": "projects", "updated_after": today, "updated_before": today},
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual([row["title"] for row in response.json()["rows"]], ["Secret Robot Arm"])
+
+        response = self.client.get(
+            "/api/search/",
+            {"types": "projects", "updated_after": "2099-01-01"},
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["rows"], [])
+
 
 class CatalogueCoverageAuditTests(TestCase):
     def setUp(self):
