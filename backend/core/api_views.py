@@ -3017,7 +3017,28 @@ def _serialise_printing_location(location):
     }
 
 
+def _printer_official_image(item, *, multi_material=False):
+    features = item.features or {}
+    prefix = "official_image_multi_material" if multi_material else "official_image"
+    url = str(features.get(f"{prefix}_url") or "").strip()
+    if not url.startswith("https://"):
+        return {"url": "", "source_page": "", "source_provider": ""}
+    return {
+        "url": url,
+        "source_page": str(features.get(f"{prefix}_source_page") or item.source_url or "").strip(),
+        "source_provider": str(features.get(f"{prefix}_source_provider") or f"{item.manufacturer.name} official").strip(),
+    }
+
+
 def _serialise_printer_catalog_model(item):
+    official = _printer_official_image(item)
+    official_multi = _printer_official_image(item, multi_material=True)
+    cached_image = _image_url(item)
+    cached_multi = _image_url(
+        item,
+        "image_multi_material",
+        "image_multi_material_metadata",
+    )
     return {
         "id": str(item.id),
         "manufacturer_id": str(item.manufacturer_id),
@@ -3038,20 +3059,18 @@ def _serialise_printer_catalog_model(item):
         "multi_material_label": item.get_multi_material_system_display() if item.multi_material_system else "",
         "max_multi_material_units": item.max_multi_material_units,
         "features": item.features or {},
-        "image": _image_url(item),
+        "image": cached_image or official["url"],
         "image_cached": bool(item.image),
-        "image_source_page": (item.image_metadata or {}).get("image_source_page") or "",
-        "image_source_provider": (item.image_metadata or {}).get("image_source_provider") or "",
+        "image_remote_official": bool(not cached_image and official["url"]),
+        "image_source_page": (item.image_metadata or {}).get("image_source_page") or official["source_page"],
+        "image_source_provider": (item.image_metadata or {}).get("image_source_provider") or official["source_provider"],
         "image_license": (item.image_metadata or {}).get("image_license") or "",
         "image_author": (item.image_metadata or {}).get("image_author") or "",
-        "image_multi_material": _image_url(
-            item,
-            "image_multi_material",
-            "image_multi_material_metadata",
-        ),
+        "image_multi_material": cached_multi or official_multi["url"],
         "image_multi_material_cached": bool(item.image_multi_material),
-        "image_multi_material_source_page": (item.image_multi_material_metadata or {}).get("image_source_page") or "",
-        "image_multi_material_source_provider": (item.image_multi_material_metadata or {}).get("image_source_provider") or "",
+        "image_multi_material_remote_official": bool(not cached_multi and official_multi["url"]),
+        "image_multi_material_source_page": (item.image_multi_material_metadata or {}).get("image_source_page") or official_multi["source_page"],
+        "image_multi_material_source_provider": (item.image_multi_material_metadata or {}).get("image_source_provider") or official_multi["source_provider"],
         "image_multi_material_license": (item.image_multi_material_metadata or {}).get("image_license") or "",
         "image_multi_material_author": (item.image_multi_material_metadata or {}).get("image_author") or "",
         "source_url": item.source_url,
