@@ -158,8 +158,10 @@ def _tracked_board_values(board) -> dict:
         "i2c_count": specs.get("i2c_count"),
         "pwm_channels": specs.get("pwm_channels"),
         "native_usb": specs.get("native_usb"),
-        "usb_capability": "USB OTG" if specs.get("usb_otg") is True else (
-            "USB Serial/JTAG" if specs.get("usb_serial_jtag") is True else None
+        "usb_capability": specs.get("usb_capability") or (
+            "USB OTG" if specs.get("usb_otg") is True else (
+                "USB Serial/JTAG" if specs.get("usb_serial_jtag") is True else None
+            )
         ),
         "wifi_standard": specs.get("wifi_standard"),
         "bluetooth_generation": specs.get("bluetooth_generation"),
