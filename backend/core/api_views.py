@@ -25,6 +25,7 @@ from .catalogue_images import (
 )
 from .importers import ImporterError, preview_board_url
 from .catalogue_enrichment import enrich_board
+from .catalogue_coverage import catalogue_coverage_summary
 from .filament_catalogue import (
     FilamentCatalogueError,
     get_spoolmandb_item,
@@ -2854,6 +2855,14 @@ def _serialise_catalogue_maintenance(config):
         "printer_catalogue_manufacturers": PrinterManufacturer.objects.count(),
         "server_image_seeding_enabled": bool(settings.SEED_CATALOGUE_IMAGES),
     }
+
+
+@login_required
+@require_http_methods(["GET"])
+def catalogue_coverage(request):
+    if not request.user.is_staff:
+        return _error("Administrator access is required.", status=403)
+    return JsonResponse(catalogue_coverage_summary())
 
 
 @login_required
