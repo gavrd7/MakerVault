@@ -450,3 +450,50 @@ class UniversalSearchOwnershipTests(TestCase):
         self.assertEqual(response.status_code, 200, response.content)
         titles = [row["title"] for row in response.json()["rows"]]
         self.assertEqual(titles, ["Secret Robot Arm"])
+
+
+class CatalogueCoverageAuditTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.admin = User.objects.create_user(
+            username="catalogue-admin",
+            email="catalogue-admin@example.com",
+            password="test-password",
+            is_staff=True,
+        )
+        self.member = User.objects.create_user(
+            username="catalogue-member",
+            email="catalogue-member@example.com",
+            password="test-password",
+        )
+        self.board = BoardModel.objects.create(
+            name="Coverage Test Board",
+            family="Test",
+            mcu="TestMCU",
+            architecture="RISC-V",
+            gpio_count=10,
+            usb_connector="USB-C",
+            dimensions_mm={"length": 30, "width": 20},
+            specifications={
+                "technical_field_status": {
+                    "mcu": "value",
+                    "architecture": "value",
+                }
+            },
+        )
+
+    def test_staff_can_read_catalogue_coverage_without_mutating_board(self):
+        before = dict(self.board.specifications)
+        self.client.force_login(self.admin)
+        response = self.client.get("/api/settings/catalogue-coverage/")
+        self.assertEqual(response.status_code, 200, response.content)
+        catalogues = {item["key"]: item for item in response.json()["catalogues"]}
+        self.assertIn("boards", catalogues)
+        self.assertEqual(catalogues["boards"]["total"], 1)
+        self.board.refresh_from_db()
+        self.assertEqual(self.board.specifications, before)
+
+    def test_non_staff_cannot_read_catalogue_coverage(self):
+        self.client.force_login(self.member)
+        response = self.client.get("/api/settings/catalogue-coverage/")
+        self.assertEqual(response.status_code, 403)
