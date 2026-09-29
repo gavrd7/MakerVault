@@ -18,10 +18,13 @@ def ping_worker():
 
 
 @shared_task(bind=True, acks_late=True)
-def seed_catalogue_images_task(self, limit=None, force_retry=False):
-    result = run_catalogue_image_seed(limit=limit, force_retry=force_retry)
+def seed_catalogue_images_task(self, limit=None, force_retry=False, kinds=None):
+    result = run_catalogue_image_seed(limit=limit, force_retry=force_retry, kinds=kinds)
     if result.get("status") == "limit-reached":
-        self.apply_async(kwargs={"limit": limit, "force_retry": False}, countdown=5)
+        self.apply_async(
+            kwargs={"limit": limit, "force_retry": False, "kinds": kinds},
+            countdown=5,
+        )
     return result
 
 
