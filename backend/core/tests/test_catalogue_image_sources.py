@@ -11,6 +11,7 @@ from core.catalogue_image_sources import (
     _openverse_license_name,
     _printer_image_queries,
     _printer_multi_material_image_queries,
+    find_source_page_image,
     run_catalogue_image_seed,
     search_openverse,
     search_wikimedia_commons,
@@ -128,6 +129,32 @@ class CatalogueImageSourceTests(unittest.TestCase):
         queries = _component_image_queries(DummyComponent())
         self.assertEqual(queries[0], "BME280 module")
         self.assertIn("BME280", queries)
+
+    def test_component_query_preserves_slide_potentiometer_form_factor(self):
+        component = DummyComponent()
+        component.name = "10k slide potentiometer"
+        component.part_number = ""
+        component.specifications = {"type": "potentiometer", "value": "10 kΩ"}
+        queries = _component_image_queries(component)
+        self.assertEqual(queries[0], "10k slide potentiometer")
+        self.assertIn("10k slide potentiometer linear slider", queries)
+        self.assertIn("slide potentiometer electronics", queries)
+
+    @patch("core.catalogue_image_sources.fetch_import_html")
+    def test_source_page_remote_image_uses_opengraph_without_caching(self, fetch_html):
+        class Source:
+            url = "https://vendor.example/products/widget"
+
+        component = DummyComponent()
+        component.source = Source()
+        fetch_html.return_value = (
+            "https://vendor.example/products/widget",
+            '<html><head><meta property="og:image" content="/media/widget.jpg"></head></html>',
+        )
+        found = find_source_page_image(component)
+        self.assertEqual(found["external_image_url"], "https://vendor.example/media/widget.jpg")
+        self.assertEqual(found["image_source_provider"], "vendor.example")
+        self.assertEqual(found["image_source_type"], "source-page-remote")
 
     def test_printer_image_query_disambiguates_short_model_names(self):
         queries = _printer_image_queries(DummyPrinterModel())
