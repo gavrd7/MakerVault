@@ -461,7 +461,7 @@ def _candidate_source_pages(obj) -> list[dict]:
         if value.startswith("https://") and not value.lower().endswith(".pdf") and value not in seen:
             candidates.append({
                 "url": value,
-                "source_type": "manufacturer" if key in {"reference_url", "technical_source_url", "product_url"} else "",
+                "source_type": "",
                 "provider": str(specs.get("reference_provider") or "").strip(),
             })
             seen.add(value)
