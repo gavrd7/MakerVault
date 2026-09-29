@@ -54,8 +54,6 @@ SOURCE_TIERS = {
 SPECIALIST_HOSTS = {
     "espboards.dev",
     "www.espboards.dev",
-    "github.com",
-    "raw.githubusercontent.com",
 }
 
 KNOWN_MANUFACTURER_HOST_SUFFIXES = {
