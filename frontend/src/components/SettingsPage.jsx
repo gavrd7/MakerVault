@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { apiFetch } from "../api";
 import { Badge, LoadingBlock, Modal } from "./Common";
 import AdminUsersPanel from "./AdminUsersPanel";
+import CatalogueCoveragePanel from "./CatalogueCoveragePanel";
 
 function formatWhen(value) {
   if (!value) return "Not yet";
@@ -307,6 +308,7 @@ export default function SettingsPage({ config }) {
     {notice && <div className="notice">{notice}<button onClick={() => setNotice("")}>×</button></div>}
 
     {activeTab === "library" && <>
+    <CatalogueCoveragePanel />
     <section className="panel settingsPanel">
       <div className="panelHead">
         <div><h3>Catalogue maintenance schedule</h3><p>The default interval is 24 hours. The next-run timestamp is stored in PostgreSQL.</p></div>
