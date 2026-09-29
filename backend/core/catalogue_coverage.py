@@ -119,9 +119,19 @@ def _printer_coverage() -> dict:
     rows = list(PrinterCatalogModel.objects.select_related("manufacturer").all())
     total = len(rows)
     samples = []
+
+    def has_base_image(row):
+        return bool(row.image or (row.features or {}).get("official_image_url"))
+
+    def has_multi_material_image(row):
+        return bool(
+            row.image_multi_material
+            or (row.features or {}).get("official_image_multi_material_url")
+        )
+
     for row in rows:
         missing = []
-        if not row.image:
+        if not has_base_image(row):
             missing.append("image")
         if any(value is None for value in (row.build_volume_x_mm, row.build_volume_y_mm, row.build_volume_z_mm)):
             missing.append("build_volume")
@@ -129,7 +139,7 @@ def _printer_coverage() -> dict:
             missing.append("features")
         if not row.source_url:
             missing.append("source")
-        if row.multi_material_system and not row.image_multi_material:
+        if row.multi_material_system and not has_multi_material_image(row):
             missing.append("multi_material_image")
         if missing and len(samples) < 12:
             samples.append({"id": str(row.id), "name": str(row), "missing": missing})
@@ -139,7 +149,7 @@ def _printer_coverage() -> dict:
         "label": "Printer catalogue",
         "total": total,
         "metrics": [
-            _metric("images", "Images", sum(bool(row.image) for row in rows), total),
+            _metric("images", "Images", sum(has_base_image(row) for row in rows), total),
             _metric(
                 "build_volume",
                 "Build volumes",
