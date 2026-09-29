@@ -60,6 +60,38 @@ class CatalogueProfileTests(unittest.TestCase):
         self.assertEqual(nano["dimensions_mm"], {"length": 43.18, "width": 17.77})
         self.assertEqual(nano["specifications"]["pin_count"], 30)
 
+    def test_adafruit_and_arduino_profiles_fill_common_catalogue_gaps(self):
+        feather = apply_board_profile({
+            "manufacturer": "Adafruit",
+            "name": "Feather RP2040",
+            "mcu": "RP2040",
+            "specifications": {},
+        })
+        self.assertEqual(feather["flash_mb"], 8)
+        self.assertEqual(feather["gpio_count"], 21)
+        self.assertEqual(feather["dimensions_mm"], {"length": 50.8, "width": 22.8})
+        self.assertIn("psram", feather["specifications"]["not_applicable_specs"])
+
+        qtpy = apply_board_profile({
+            "manufacturer": "Adafruit",
+            "name": "QT Py ESP32-C3",
+            "mcu": "ESP32-C3",
+            "specifications": {},
+        })
+        self.assertEqual(qtpy["flash_mb"], 4)
+        self.assertEqual(qtpy["gpio_count"], 13)
+        self.assertFalse(qtpy["specifications"]["native_usb"])
+
+        leonardo = apply_board_profile({
+            "manufacturer": "Arduino",
+            "name": "Leonardo",
+            "mcu": "ATmega32U4",
+            "specifications": {},
+        })
+        self.assertEqual(leonardo["specifications"]["pin_count"], 20)
+        self.assertEqual(leonardo["specifications"]["usb_capability"], "Native USB HID / CDC")
+        self.assertIn("psram", leonardo["specifications"]["not_applicable_specs"])
+
     def test_component_profile_fills_missing_part_metadata(self):
         item = apply_component_profile({
             "name": "BME280 sensor",
