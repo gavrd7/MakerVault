@@ -11,6 +11,7 @@ from django.utils.text import slugify
 
 from .importers import ImporterError, fetch_import_html, parse_espboards_html
 from .catalogue_profiles import apply_board_profile
+from .catalogue_source_policy import append_source_trace, classify_source_url
 
 
 ENRICHMENT_VERSION = "0.3.8"
@@ -76,7 +77,7 @@ def _is_esp_family(board) -> bool:
     return "ESP32" in text or "ESP8266" in text
 
 
-def _merge_board_data(board, data) -> bool:
+def _merge_board_data(board, data, *, provider="", tier="generic", source_url="") -> bool:
     changed = False
     field_map = {
         "family": "family",
@@ -112,10 +113,27 @@ def _merge_board_data(board, data) -> bool:
             continue
         if merged_specs.get(key) in (None, "", {}, []):
             merged_specs[key] = value
-    if data.get("source_url"):
-        merged_specs["technical_source_url"] = data["source_url"]
-        merged_specs["technical_source_provider"] = "ESPBoards.dev"
-        merged_specs["technical_enriched_at"] = timezone.now().isoformat()
+    effective_url = str(source_url or data.get("source_url") or "").strip()
+    if effective_url and provider:
+        merged_specs = append_source_trace(
+            merged_specs,
+            provider=provider,
+            url=effective_url,
+            tier=tier,
+            result="filled-missing-fields" if changed or merged_specs != current_specs else "checked-no-change",
+        )
+        if tier in {"manufacturer", "specialist"}:
+            existing_priority = int(merged_specs.get("technical_source_priority", 999))
+            incoming_priority = classify_source_url(
+                effective_url,
+                source_type="manufacturer" if tier == "manufacturer" else "espboards" if tier == "specialist" else "",
+            ).priority
+            if incoming_priority <= existing_priority:
+                merged_specs["technical_source_url"] = effective_url
+                merged_specs["technical_source_provider"] = provider
+                merged_specs["technical_source_tier"] = tier
+                merged_specs["technical_source_priority"] = incoming_priority
+                merged_specs["technical_enriched_at"] = timezone.now().isoformat()
     if merged_specs != current_specs:
         board.specifications = merged_specs
         changed = True
@@ -242,7 +260,27 @@ def enrich_board_from_profile(board) -> bool:
         "specifications": dict(board.specifications or {}),
     }
     profiled = apply_board_profile(definition)
-    changed = _merge_board_data(board, profiled)
+    specs = profiled.get("specifications") or {}
+    reference_url = str(specs.get("reference_url") or "").strip()
+    reference_provider = str(specs.get("reference_provider") or "MakerVault curated profile").strip()
+    changed = _merge_board_data(
+        board,
+        profiled,
+        provider="MakerVault curated profile",
+        tier="curated",
+        source_url=reference_url,
+    )
+    if reference_url:
+        merged_specs = append_source_trace(
+            dict(board.specifications or {}),
+            provider=reference_provider,
+            url=reference_url,
+            tier=classify_source_url(reference_url).key,
+            result="authoritative-reference",
+        )
+        if merged_specs != board.specifications:
+            board.specifications = merged_specs
+            changed = True
     if changed:
         board.save()
     return changed
@@ -302,7 +340,13 @@ def enrich_board_from_espboards(board) -> bool:
                 "last_checked_at": timezone.now(),
             },
         )
-        changed = _merge_board_data(board, data)
+        changed = _merge_board_data(
+            board,
+            data,
+            provider="ESPBoards.dev",
+            tier="specialist",
+            source_url=data.get("source_url", ""),
+        )
         if board.source_id is None or (
             board.source and board.source.source_type == "manual"
             and board.source.name == "MakerVault starter catalogue"
