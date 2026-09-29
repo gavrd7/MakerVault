@@ -1,0 +1,92 @@
+site_name: MakerVault Guide
+site_description: Your workshop, organised. A practical guide to installing and using MakerVault.
+site_url: https://gavrd7.github.io/MakerVault/
+repo_url: https://github.com/gavrd7/MakerVault
+repo_name: MakerVault
+edit_uri: edit/main/docs/guide/
+docs_dir: docs/guide
+site_dir: site
+use_directory_urls: true
+theme:
+  name: material
+  language: en
+  logo: assets/makervault-logo.jpg
+  font: false
+  palette:
+    - scheme: default
+      primary: custom
+      accent: teal
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      primary: custom
+      accent: teal
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.footer
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+    - toc.follow
+plugins:
+  - search
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+extra_css:
+  - assets/guide.css
+extra:
+  generator: false
+copyright: MakerVault · Guide for v0.7.0.1 · Pre-v1 documentation
+nav:
+  - Welcome: index.md
+  - Getting started:
+      - Before you begin: getting-started/before-you-begin.md
+      - Install MakerVault: getting-started/install.md
+      - Configure your .env file: getting-started/environment.md
+      - Choose your storage: getting-started/storage.md
+      - First sign-in: getting-started/first-sign-in.md
+      - Your first project: getting-started/first-project.md
+  - Using MakerVault:
+      - Find your way around: using/navigation.md
+      - Boards and components: using/catalogue.md
+      - Physical inventory: using/inventory.md
+      - Projects and bills of materials: using/projects.md
+      - Files, images and versions: using/files.md
+      - Printers, filament and spools: using/printing.md
+      - Models and the 3D viewer: using/models.md
+      - Print history and costs: using/print-history.md
+  - Optional integrations:
+      - Spoolman: integrations/spoolman.md
+      - Creality CFS: integrations/creality.md
+      - SimplyPrint: integrations/simplyprint.md
+  - Running your installation:
+      - Accounts and storage: administration/accounts.md
+      - Catalogue updates: administration/catalogue-updates.md
+      - Back up and restore: administration/backup.md
+      - Update MakerVault: administration/updates.md
+  - Advanced features:
+      - Bind mounts and permissions: advanced/storage.md
+      - HTTPS and reverse proxies: advanced/reverse-proxy.md
+      - OpenID Connect: advanced/oidc.md
+      - Email and account recovery: advanced/email.md
+      - Upgrading from before v0.7: advanced/legacy-upgrade.md
+  - Reference:
+      - Troubleshooting: reference/troubleshooting.md
+      - Configuration: reference/configuration.md
+      - Glossary: reference/glossary.md
+      - About this guide: reference/about.md
