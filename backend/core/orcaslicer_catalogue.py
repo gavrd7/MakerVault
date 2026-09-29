@@ -158,7 +158,7 @@ def _fetch_vendor_manifest(entry, ref):
         headers={
             "User-Agent": _user_agent(),
             "Accept": "application/json",
-            "Range": "bytes=0-1048575",
+            "Range": "bytes=0-4194303",
         },
     )
     try:
