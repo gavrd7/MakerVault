@@ -50,6 +50,17 @@ class Command(BaseCommand):
                 changed = False
                 for field, value in defaults.items():
                     current = getattr(item, field)
+                    if field == "features" and isinstance(value, dict):
+                        merged = dict(current or {})
+                        feature_changed = False
+                        for key, feature_value in value.items():
+                            if key not in merged or merged.get(key) in (None, "", {}, []):
+                                merged[key] = feature_value
+                                feature_changed = True
+                        if feature_changed:
+                            item.features = merged
+                            changed = True
+                        continue
                     if current in (None, "", {}, []) and value not in (None, "", {}, []):
                         setattr(item, field, value)
                         changed = True
