@@ -24,7 +24,7 @@ from .importers import ImporterError, fetch_import_html
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 OPENVERSE_API = "https://api.openverse.org/v1/images/"
-IMAGE_SEED_VERSION = "0.6.0.2"
+IMAGE_SEED_VERSION = "0.7.1-printer-images-1"
 USER_AGENT = f"MakerVault/{getattr(settings, 'MAKERVAULT_VERSION', 'dev')} (+self-hosted catalogue image seeder)"
 def _commons_license_allowed(license_name: str) -> bool:
     """Allow only licences suitable for normal open redistribution."""
@@ -137,17 +137,29 @@ def _commons_query_for_board(board) -> str:
 
 
 def _printer_image_queries(printer_model) -> list[str]:
-    maker = printer_model.manufacturer.name if printer_model.manufacturer else ""
+    maker = re.sub(r"\s+", " ", printer_model.manufacturer.name if printer_model.manufacturer else "").strip()
     name = re.sub(r"\s+", " ", printer_model.name or "").strip()
+    # Exact manufacturer + model terms are intentionally first. Generic words
+    # such as "3D printer" dilute the token score for short model names (K2,
+    # M5, A1, etc.) and previously caused good open-media results to miss the
+    # confidence threshold.
     queries = [
+        f"{maker} {name}".strip(),
         f"{maker} {name} 3D printer".strip(),
         f"{maker} {name} printer".strip(),
     ]
+    # Orca/manual imports occasionally retain bracketed variant suffixes. A
+    # stripped fallback helps find the underlying product without accepting a
+    # different manufacturer.
+    stripped = re.sub(r"\s*[\[(][^\])]*[\])]\s*$", "", name).strip()
+    if stripped and stripped != name:
+        queries.append(f"{maker} {stripped}".strip())
     out = []
     for query in queries:
+        query = re.sub(r"\s+", " ", query).strip()
         if query and query not in out:
             out.append(query)
-    return out
+    return out[:4]
 
 
 def _printer_multi_material_image_queries(printer_model) -> list[str]:
@@ -325,17 +337,32 @@ def _component_image_queries(component) -> list[str]:
     return out[:4]
 
 
-def _search_open_media(queries: list[str], *, minimum_score: float = 0.16) -> ImageCandidate | None:
+def _search_open_media_with_diagnostics(
+    queries: list[str],
+    *,
+    minimum_score: float = 0.16,
+) -> tuple[ImageCandidate | None, dict]:
+    attempts = []
     for query in queries:
         if settings.CATALOGUE_IMAGE_WIKIMEDIA:
             candidate = search_wikimedia_commons(query, minimum_score=minimum_score)
+            attempts.append({"provider": "Wikimedia Commons", "query": query, "matched": bool(candidate)})
             if candidate:
-                return candidate
+                return candidate, {"attempts": attempts, "provider": candidate.provider, "query": candidate.query}
         if getattr(settings, "CATALOGUE_IMAGE_OPENVERSE", True):
             candidate = search_openverse(query, minimum_score=minimum_score)
+            attempts.append({"provider": "Openverse", "query": query, "matched": bool(candidate)})
             if candidate:
-                return candidate
-    return None
+                return candidate, {"attempts": attempts, "provider": candidate.provider, "query": candidate.query}
+    return None, {"attempts": attempts, "provider": "", "query": ""}
+
+
+def _search_open_media(queries: list[str], *, minimum_score: float = 0.16) -> ImageCandidate | None:
+    candidate, _ = _search_open_media_with_diagnostics(
+        queries,
+        minimum_score=minimum_score,
+    )
+    return candidate
 
 
 def _espboards_slug_candidates(board) -> list[str]:
@@ -468,23 +495,76 @@ def _recent_attempt(specs: dict, retry_days: int) -> bool:
     return attempted >= timezone.now() - timedelta(days=retry_days)
 
 
-def run_catalogue_image_seed(*, limit: int | None = None, force_retry: bool = False) -> dict:
+def run_catalogue_image_seed(
+    *,
+    limit: int | None = None,
+    force_retry: bool = False,
+    kinds: list[str] | tuple[str, ...] | None = None,
+) -> dict:
     from .models import BoardModel, ComponentModel, PrinterCatalogModel
 
     limit = settings.CATALOGUE_IMAGE_MAX_PER_RUN if limit is None else max(int(limit), 0)
     retry_days = max(int(settings.CATALOGUE_IMAGE_RETRY_DAYS), 1)
+    allowed_kinds = {"printers", "boards", "components"}
+    requested = [str(item).strip().lower() for item in (kinds or []) if str(item).strip()]
+    invalid = [item for item in requested if item not in allowed_kinds]
+    if invalid:
+        raise ValueError(f"Unknown catalogue image kind(s): {', '.join(sorted(set(invalid)))}")
+
     lock_key = f"makervault:catalogue-image-seed:{IMAGE_SEED_VERSION}"
     if not cache.add(lock_key, "running", timeout=60 * 60):
-        return {"status": "already-running", "processed": 0, "cached": 0, "failed": 0, "skipped": 0}
+        return {
+            "status": "already-running",
+            "processed": 0,
+            "cached": 0,
+            "failed": 0,
+            "skipped": 0,
+            "by_kind": {},
+            "by_provider": {},
+            "failures": [],
+        }
+
+    def missing_ratio(queryset, image_field="image"):
+        total = queryset.count()
+        if not total:
+            return 0.0
+        missing = queryset.filter(**{f"{image_field}__isnull": True}).count()
+        # ImageField blank values can be stored as an empty string rather than
+        # SQL NULL, so include them in the live priority calculation.
+        missing += queryset.filter(**{image_field: ""}).count()
+        return missing / total
+
+    boards = BoardModel.objects.select_related("manufacturer").order_by("manufacturer__name", "name")
+    components = ComponentModel.objects.select_related("category").order_by("category__name", "name")
+    printers = PrinterCatalogModel.objects.select_related("manufacturer").order_by("manufacturer__name", "name")
+
+    sources = {
+        "boards": boards,
+        "components": components,
+        "printers": printers,
+    }
+    if requested:
+        order = requested
+    else:
+        # Work on the least-complete catalogue first so a per-run cap cannot
+        # indefinitely starve the largest gap.
+        order = sorted(
+            sources,
+            key=lambda key: missing_ratio(sources[key]),
+            reverse=True,
+        )
 
     processed = cached = failed = skipped = 0
+    by_kind = {
+        key: {"processed": 0, "cached": 0, "failed": 0, "skipped": 0}
+        for key in order
+    }
+    by_provider = {}
+    failures = []
+
     try:
-        querysets = [
-            BoardModel.objects.select_related("manufacturer").order_by("manufacturer__name", "name"),
-            ComponentModel.objects.select_related("category").order_by("category__name", "name"),
-            PrinterCatalogModel.objects.select_related("manufacturer").order_by("manufacturer__name", "name"),
-        ]
-        for queryset in querysets:
+        for kind in order:
+            queryset = sources[kind]
             for obj in queryset.iterator():
                 variants = ["base"]
                 if isinstance(obj, PrinterCatalogModel) and obj.multi_material_system:
@@ -498,37 +578,90 @@ def run_catalogue_image_seed(*, limit: int | None = None, force_retry: bool = Fa
                             "cached": cached,
                             "failed": failed,
                             "skipped": skipped,
+                            "by_kind": by_kind,
+                            "by_provider": by_provider,
+                            "failures": failures,
+                            "order": order,
                         }
 
                     image_field = "image_multi_material" if variant == "multi_material" else "image"
                     if getattr(obj, image_field, None):
                         skipped += 1
+                        by_kind[kind]["skipped"] += 1
                         continue
 
                     metadata, _ = catalogue_image_metadata(obj, variant=variant)
                     if metadata.get("auto_image_opt_out"):
                         skipped += 1
+                        by_kind[kind]["skipped"] += 1
                         continue
                     if not force_retry and _recent_attempt(metadata, retry_days):
                         skipped += 1
+                        by_kind[kind]["skipped"] += 1
                         continue
 
                     processed += 1
+                    by_kind[kind]["processed"] += 1
                     metadata["auto_image_last_attempt"] = timezone.now().isoformat()
                     metadata["auto_image_attempt_version"] = IMAGE_SEED_VERSION
                     metadata["image_variant"] = variant
-                    field = set_catalogue_image_metadata(obj, metadata, variant=variant)
-                    obj.save(update_fields=[field, "updated_at"] if field else ["updated_at"])
 
                     try:
-                        candidate = resolve_catalogue_image(obj, variant=variant)
+                        if isinstance(obj, PrinterCatalogModel):
+                            queries = (
+                                _printer_multi_material_image_queries(obj)
+                                if variant == "multi_material"
+                                else _printer_image_queries(obj)
+                            )
+                            threshold = 0.50 if variant == "multi_material" else 0.45
+                            candidate, diagnostic = _search_open_media_with_diagnostics(
+                                queries,
+                                minimum_score=threshold,
+                            )
+                            metadata["auto_image_search_attempts"] = diagnostic.get("attempts", [])[-12:]
+                        else:
+                            candidate = resolve_catalogue_image(obj, variant=variant)
+                            diagnostic = {
+                                "provider": candidate.provider if candidate else "",
+                                "query": candidate.query if candidate else "",
+                            }
+
                         if not candidate:
                             failed += 1
+                            by_kind[kind]["failed"] += 1
+                            metadata["auto_image_last_result"] = "no-confident-match"
+                            field = set_catalogue_image_metadata(obj, metadata, variant=variant)
+                            obj.save(update_fields=[field, "updated_at"] if field else ["updated_at"])
+                            if len(failures) < 30:
+                                failures.append({
+                                    "kind": kind,
+                                    "id": str(obj.pk),
+                                    "name": str(obj),
+                                    "variant": variant,
+                                    "reason": "no-confident-match",
+                                })
                             continue
+
                         cache_candidate(obj, candidate, variant=variant)
                         cached += 1
-                    except (CatalogueImageError, requests.RequestException, ValueError):
+                        by_kind[kind]["cached"] += 1
+                        provider_key = candidate.provider or "unknown"
+                        by_provider[provider_key] = by_provider.get(provider_key, 0) + 1
+                    except (CatalogueImageError, requests.RequestException, ValueError) as exc:
                         failed += 1
+                        by_kind[kind]["failed"] += 1
+                        metadata["auto_image_last_result"] = "error"
+                        metadata["auto_image_last_error"] = str(exc)[:300]
+                        field = set_catalogue_image_metadata(obj, metadata, variant=variant)
+                        obj.save(update_fields=[field, "updated_at"] if field else ["updated_at"])
+                        if len(failures) < 30:
+                            failures.append({
+                                "kind": kind,
+                                "id": str(obj.pk),
+                                "name": str(obj),
+                                "variant": variant,
+                                "reason": str(exc)[:200],
+                            })
 
         return {
             "status": "complete",
@@ -536,7 +669,10 @@ def run_catalogue_image_seed(*, limit: int | None = None, force_retry: bool = Fa
             "cached": cached,
             "failed": failed,
             "skipped": skipped,
+            "by_kind": by_kind,
+            "by_provider": by_provider,
+            "failures": failures,
+            "order": order,
         }
     finally:
         cache.delete(lock_key)
-
