@@ -53,7 +53,7 @@ function newestGeometryAnalysis(model) {
   return null;
 }
 
-export default function PrintingPage({ config, projects }) {
+export default function PrintingPage({ config, projects, searchTarget = null }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [modal, setModal] = useState("");
@@ -75,6 +75,14 @@ export default function PrintingPage({ config, projects }) {
   }
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    if (!searchTarget?.type) return;
+    if (searchTarget.type === "models") setWorkspaceView("models");
+    else if (searchTarget.type === "spools") setWorkspaceView("spools");
+    else if (searchTarget.type === "filaments") setWorkspaceView("filaments");
+    else if (searchTarget.type === "printers") setWorkspaceView("overview");
+  }, [searchTarget?.token]);
 
   async function saved() {
     setModal("");
