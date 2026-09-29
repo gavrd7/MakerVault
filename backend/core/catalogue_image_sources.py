@@ -619,8 +619,8 @@ def run_catalogue_image_seed(
         missing += queryset.filter(**{image_field: ""}).count()
         return missing / total
 
-    boards = BoardModel.objects.select_related("manufacturer").order_by("manufacturer__name", "name")
-    components = ComponentModel.objects.select_related("category").order_by("category__name", "name")
+    boards = BoardModel.objects.select_related("manufacturer", "source").order_by("manufacturer__name", "name")
+    components = ComponentModel.objects.select_related("category", "source").order_by("category__name", "name")
     printers = PrinterCatalogModel.objects.select_related("manufacturer").order_by("manufacturer__name", "name")
 
     sources = {
