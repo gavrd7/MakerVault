@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
 import { themeQuartz } from "ag-grid-community";
 import { apiFetch } from "../api";
@@ -16,7 +16,7 @@ function prettyValue(value) {
   return String(value ?? "");
 }
 
-export default function ComponentsPage({ components, setComponents, boards, projects, config, refreshDashboard, onInventoryCreated }) {
+export default function ComponentsPage({ components, setComponents, boards, projects, config, refreshDashboard, onInventoryCreated, openComponentId = "", openToken = null }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
   const [showAdd, setShowAdd] = useState(false);
@@ -52,6 +52,12 @@ export default function ComponentsPage({ components, setComponents, boards, proj
       setLoadingDetail(false);
     }
   }
+
+  useEffect(() => {
+    if (!openComponentId) return;
+    const component = components.find(row => row.id === openComponentId);
+    if (component) chooseComponent(component);
+  }, [openComponentId, openToken]);
 
   function replaceComponent(updated) {
     setComponents(rows => rows.map(row => row.id === updated.id ? updated : row));
