@@ -8,6 +8,7 @@
 - Added regression coverage ensuring private search results remain owner-scoped while shared catalogue records remain searchable.
 - Added a live catalogue-completeness audit for boards, components, printer models and filament products, including image/specification coverage percentages and representative missing-data samples.
 - Added the catalogue coverage dashboard to Settings → Library updates as the baseline for the focused enrichment pass.
+- Extended OrcaSlicer catalogue synchronisation to derive missing printer build volumes from concrete machine profiles and inheritance chains while preserving existing curated specifications.
 
 ## v0.7.0.1 — 2026-09-29
 
