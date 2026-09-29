@@ -142,6 +142,8 @@ def universal_search(request):
         project_id=str(request.GET.get("project") or "").strip() or None,
         status=str(request.GET.get("status") or "").strip() or None,
         manufacturer=str(request.GET.get("manufacturer") or "").strip() or None,
+        updated_after=str(request.GET.get("updated_after") or "").strip() or None,
+        updated_before=str(request.GET.get("updated_before") or "").strip() or None,
     ))
 
 
