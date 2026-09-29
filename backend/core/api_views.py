@@ -39,6 +39,7 @@ from .tasks import queue_catalogue_maintenance_now
 from .storage_usage import StorageQuotaExceeded, ensure_storage_capacity, storage_settings, storage_summary
 from .user_admin import admin_user_summary, purge_user_private_data
 from .private_storage import private_storage_key_status
+from .search_service import run_search
 from .models import (
     BoardCompatibility,
     BoardModel,
@@ -115,6 +116,32 @@ def _require_permission(request, codename):
 
 def _float(value):
     return float(value) if value is not None else None
+
+
+@login_required
+@require_http_methods(["GET"])
+def universal_search(request):
+    query = str(request.GET.get("q") or "").strip()
+    raw_types = str(request.GET.get("types") or "").strip()
+    selected_types = [item.strip() for item in raw_types.split(",") if item.strip()] if raw_types else None
+    sort = str(request.GET.get("sort") or "relevance").strip().lower()
+    if sort not in {"relevance", "name", "newest", "oldest"}:
+        sort = "relevance"
+    try:
+        limit = min(max(int(request.GET.get("limit") or 25), 1), 100)
+    except (TypeError, ValueError):
+        limit = 25
+
+    return JsonResponse(run_search(
+        request.user,
+        query=query,
+        selected_types=selected_types,
+        sort=sort,
+        limit_per_type=limit,
+        project_id=str(request.GET.get("project") or "").strip() or None,
+        status=str(request.GET.get("status") or "").strip() or None,
+        manufacturer=str(request.GET.get("manufacturer") or "").strip() or None,
+    ))
 
 
 def _image_url(obj, image_field="image", metadata_field=None):
