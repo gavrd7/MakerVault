@@ -193,9 +193,17 @@ class CatalogueImagePriorityTests(TestCase):
         CATALOGUE_IMAGE_WIKIMEDIA=True,
         CATALOGUE_IMAGE_OPENVERSE=True,
     )
+    @patch("core.catalogue_image_sources.cache.delete")
+    @patch("core.catalogue_image_sources.cache.add", return_value=True)
     @patch("core.catalogue_image_sources.cache_candidate")
     @patch("core.catalogue_image_sources._search_open_media_with_diagnostics")
-    def test_targeted_printer_pass_does_not_spend_limit_on_other_catalogues(self, search, cache_candidate):
+    def test_targeted_printer_pass_does_not_spend_limit_on_other_catalogues(
+        self,
+        search,
+        cache_candidate,
+        cache_add,
+        cache_delete,
+    ):
         from core.catalogue_image_sources import ImageCandidate
 
         candidate = ImageCandidate(
@@ -223,6 +231,8 @@ class CatalogueImagePriorityTests(TestCase):
         cache_candidate.assert_called_once()
         cached_obj = cache_candidate.call_args.args[0]
         self.assertEqual(cached_obj.pk, self.printer.pk)
+        cache_add.assert_called_once()
+        cache_delete.assert_called_once()
 
     @override_settings(
         CATALOGUE_IMAGE_MAX_PER_RUN=0,
