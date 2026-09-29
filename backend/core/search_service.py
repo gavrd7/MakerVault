@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Callable, Iterable
 
 from django.db.models import Q, QuerySet
@@ -312,6 +312,8 @@ def run_search(
     project_id: str | None = None,
     status: str | None = None,
     manufacturer: str | None = None,
+    updated_after: str | None = None,
+    updated_before: str | None = None,
 ) -> dict:
     query = str(query or "").strip()[:200]
     terms = _terms(query)
@@ -320,6 +322,34 @@ def run_search(
         types = list(SEARCH_TYPES)
 
     limit_per_type = min(max(int(limit_per_type or 25), 1), 100)
+
+    def parse_bound(raw):
+        if not raw:
+            return None
+        try:
+            return date.fromisoformat(str(raw)[:10])
+        except (TypeError, ValueError):
+            return None
+
+    after_date = parse_bound(updated_after)
+    before_date = parse_bound(updated_before)
+
+    def in_date_range(row):
+        if not (after_date or before_date):
+            return True
+        raw = row.get("updated_at")
+        if not raw:
+            return False
+        try:
+            row_date = datetime.fromisoformat(str(raw).replace("Z", "+00:00")).date()
+        except (TypeError, ValueError):
+            return False
+        if after_date and row_date < after_date:
+            return False
+        if before_date and row_date > before_date:
+            return False
+        return True
+
     items = []
 
     for type_name in types:
@@ -337,6 +367,7 @@ def run_search(
         else:
             generated = builder(user, terms, **kwargs)
         rows = [result.as_dict(query) for result in generated]
+        rows = [row for row in rows if in_date_range(row)]
 
         if sort == "name":
             rows.sort(key=lambda row: (row["title"].casefold(), row["type_label"]))
