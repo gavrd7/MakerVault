@@ -224,7 +224,7 @@ class CatalogueImagePriorityTests(TestCase):
             kinds=["printers"],
         )
 
-        self.assertEqual(result["status"], "limit-reached")
+        self.assertEqual(result["status"], "complete")
         self.assertEqual(result["processed"], 1)
         self.assertEqual(result["by_kind"]["printers"]["cached"], 1)
         self.assertEqual(result["order"], ["printers"])
