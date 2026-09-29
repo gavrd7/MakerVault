@@ -170,15 +170,18 @@ This file tracks completed MakerVault milestones and the planned path toward a s
 - Add **OctoPrint** support as a first-class local printer adapter.
 - Expand the existing Creality local connection beyond CFS slot data to expose printer/job status where the available interface allows.
 - Keep SimplyPrint as an optional source for status/history rather than a prerequisite for monitoring.
-- Add manufacturer/local adapters where sufficiently documented and technically practical, including **Anycubic**, **FlashForge**, **Prusa**, **Sovol** and **Voron**-class Klipper/Moonraker installations.
+- Add manufacturer/local adapter families for **Bambu Lab**, **Anycubic**, **FlashForge**, **Prusa**, **Elegoo**, **QIDI**, **Sovol**, **Snapmaker** and **Voron**, using local APIs/protocols where available and cloud APIs only where they add value.
+- Treat **Voron** primarily through its common Klipper/Moonraker stack, while allowing Voron-specific metadata and community hardware integrations to layer on top rather than creating duplicate printer records.
 
 #### Multi-material/manufacturer framework
 
 - Formalise the existing provider-neutral multi-material slot model into a documented adapter contract.
-- Retain and expand Creality CFS support.
-- Add framework-level support for **Bambu Lab AMS**, **Elegoo multi-material systems**, **QIDI multi-material systems**, **Snapmaker multi-material systems**, **Anycubic**, **FlashForge**, **Prusa**, **Sovol** and **Voron** ecosystems where interfaces are sufficiently documented.
-- Treat **Voron** primarily through its common Klipper/Moonraker stack while retaining room for Voron-specific metadata, toolchanger or multi-material integrations where those are exposed separately.
-- Treat **Prusa**, **Anycubic**, **FlashForge** and **Sovol** as manufacturer adapter families that can provide live printer state, job telemetry and multi-material context where supported, rather than limiting them to filament-slot integrations only.
+- Retain and expand **Creality CFS** support.
+- Add explicit adapter targets for **Bambu Lab AMS / AMS Lite**, **Anycubic ACE / ACE Pro**, **Prusa MMU3 and successor systems**, **FlashForge multi-material/filament systems**, **Elegoo multi-material systems**, **QIDI multi-material systems**, **Sovol multi-material/toolchanger systems where exposed**, **Snapmaker multi-material systems**, and **Voron community multi-material/toolchanger ecosystems**.
+- Model each manufacturer integration as capabilities rather than assumptions: printer telemetry, job state, temperatures, camera, loaded-material slots, RFID/tag data, remaining material, multi-colour/tool assignment, and optional printer controls are exposed only when that adapter actually supports them.
+- Allow a printer to combine a manufacturer adapter with Moonraker/Klipper, OctoPrint or SimplyPrint without duplicating the physical printer in MakerVault.
+- Treat **Prusa**, **Anycubic**, **FlashForge**, **Sovol** and similar manufacturers as full printer-integration families that may provide live status and job telemetry as well as multi-material context.
+- Keep undocumented or reverse-engineered capabilities isolated behind experimental adapters so they can be disabled independently if upstream firmware changes.
 - Implement documented capabilities even when development hardware is unavailable.
 - Mark adapters that have not been exercised against real hardware as **experimental / community validation required** rather than claiming full support.
 - Add fixtures/mock responses and contract tests so unowned hardware adapters can still be exercised in CI.
