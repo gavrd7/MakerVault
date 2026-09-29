@@ -10,10 +10,12 @@ import FilesPage from "./components/FilesPage";
 import AboutPage from "./components/AboutPage";
 import SettingsPage from "./components/SettingsPage";
 import PrintingPage from "./components/PrintingPage";
+import GlobalSearch from "./components/GlobalSearch";
+import SearchPage from "./components/SearchPage";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
-const NAV = ["Dashboard", "Inventory", "Board Catalogue", "Projects", "Components", "3D Printing", "Files", "Settings", "About"];
+const NAV = ["Dashboard", "Search", "Inventory", "Board Catalogue", "Projects", "Components", "3D Printing", "Files", "Settings", "About"];
 
 export default function App() {
   const [section, setSection] = useState("Dashboard");
@@ -27,6 +29,7 @@ export default function App() {
   const [importOpen, setImportOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [projectTarget, setProjectTarget] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const refreshDashboard = useCallback(async () => {
     const result = await apiFetch("/api/dashboard/");
@@ -54,8 +57,24 @@ export default function App() {
     }).catch(err => setError(err.message || "MakerVault could not load its initial data."));
   }, []);
 
+  function openSearchResult(result) {
+    if (!result) return;
+    if (result.type === "projects") {
+      setProjectTarget(result.id);
+      setSection("Projects");
+      return;
+    }
+    setSection(result.section || "Search");
+  }
+
+  function openAdvancedSearch(query = "") {
+    setSearchQuery(query);
+    setSection("Search");
+  }
+
   function page() {
     if (section === "Dashboard") return <Dashboard dashboard={dashboard} inventory={inventory} onNavigate={setSection} />;
+    if (section === "Search") return <SearchPage initialQuery={searchQuery} projects={projects} onOpenResult={openSearchResult} />;
     if (section === "Inventory") return <InventoryPage inventory={inventory} setInventory={setInventory} boards={boards} components={components} projects={projects} config={config} refreshDashboard={refreshDashboard} />;
     if (section === "Board Catalogue") return <BoardsPage boards={boards} setBoards={setBoards} components={components} projects={projects} config={config} onOpenImport={() => setImportOpen(true)} refreshDashboard={refreshDashboard} onInventoryCreated={async item => { setInventory(rows => [...rows.filter(row => row.id !== item.id), item].sort((a,b) => a.inventory_id.localeCompare(b.inventory_id))); await refreshDashboard(); }} />;
     if (section === "Components") return <ComponentsPage components={components} setComponents={setComponents} boards={boards} projects={projects} config={config} refreshDashboard={refreshDashboard} onInventoryCreated={async item => { setInventory(rows => [...rows.filter(row => row.id !== item.id), item].sort((a,b) => a.inventory_id.localeCompare(b.inventory_id))); await refreshDashboard(); }} />;
@@ -69,6 +88,7 @@ export default function App() {
   return <div className="shell">
     <aside>
       <div className="brand"><img className="brandLogo" src="/static/core/makervault-logo.jpg" alt="MakerVault" /><small className="brandVersion">{config?.version ? "v" + config.version : "version loading…"} · AGPL</small></div>
+      <GlobalSearch onOpenResult={openSearchResult} onOpenAdvanced={openAdvancedSearch} />
       <nav>{NAV.filter(n => n !== "Settings" || config?.is_staff).map(n => <button key={n} className={section === n ? "active" : ""} onClick={() => setSection(n)}>{n}</button>)}</nav>
       <div className="asideBottom"><a href="/admin/">Administration</a><a href="/accounts/2fa/">Account &amp; Security</a><a href="/accounts/logout/">Sign out</a></div>
     </aside>
