@@ -16,6 +16,8 @@ export default function SearchPage({ initialQuery = "", projects = [], onOpenRes
   const [sort, setSort] = useState("relevance");
   const [projectId, setProjectId] = useState("");
   const [manufacturer, setManufacturer] = useState("");
+  const [updatedAfter, setUpdatedAfter] = useState("");
+  const [updatedBefore, setUpdatedBefore] = useState("");
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -35,6 +37,8 @@ export default function SearchPage({ initialQuery = "", projects = [], onOpenRes
         params.set("limit", "50");
         if (projectId) params.set("project", projectId);
         if (manufacturer.trim()) params.set("manufacturer", manufacturer.trim());
+        if (updatedAfter) params.set("updated_after", updatedAfter);
+        if (updatedBefore) params.set("updated_before", updatedBefore);
         const result = await apiFetch("/api/search/?" + params.toString());
         if (!cancelled) setData(result);
       } catch (err) {
@@ -47,7 +51,7 @@ export default function SearchPage({ initialQuery = "", projects = [], onOpenRes
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [query, types, sort, projectId, manufacturer]);
+  }, [query, types, sort, projectId, manufacturer, updatedAfter, updatedBefore]);
 
   const typeOptions = data?.types || DEFAULT_TYPES.map(value => ({ value, label: value }));
   const counts = useMemo(() => {
@@ -57,9 +61,13 @@ export default function SearchPage({ initialQuery = "", projects = [], onOpenRes
   }, [data]);
 
   function toggleType(value) {
-    setTypes(current => current.includes(value)
-      ? current.filter(item => item !== value)
-      : [...current, value]);
+    setTypes(current => {
+      if (current.includes(value)) {
+        if (current.length === 1) return current;
+        return current.filter(item => item !== value);
+      }
+      return [...current, value];
+    });
   }
 
   return <div className="searchPage">
@@ -95,6 +103,8 @@ export default function SearchPage({ initialQuery = "", projects = [], onOpenRes
             {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
           </select></label>
           <label><span>Manufacturer</span><input value={manufacturer} onChange={event => setManufacturer(event.target.value)} placeholder="e.g. Espressif" /></label>
+          <label><span>Updated from</span><input type="date" value={updatedAfter} onChange={event => setUpdatedAfter(event.target.value)} /></label>
+          <label><span>Updated to</span><input type="date" value={updatedBefore} onChange={event => setUpdatedBefore(event.target.value)} /></label>
           <label><span>Sort</span><select value={sort} onChange={event => setSort(event.target.value)}>
             <option value="relevance">Relevance</option>
             <option value="name">Name A–Z</option>
