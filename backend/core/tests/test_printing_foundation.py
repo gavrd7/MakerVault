@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, Mock, patch
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
@@ -756,6 +757,24 @@ class PrintingFoundationTests(TestCase):
             row["catalogue"]["image_multi_material_source_provider"],
             "Creality official store",
         )
+
+    def test_seed_printing_catalogue_merges_new_feature_metadata(self):
+        maker = PrinterManufacturer.objects.create(name="Creality")
+        model = PrinterCatalogModel.objects.create(
+            manufacturer=maker,
+            name="K2",
+            features={"existing_custom_flag": True},
+        )
+
+        call_command("seed_printing_catalogue")
+        model.refresh_from_db()
+
+        self.assertTrue(model.features["existing_custom_flag"])
+        self.assertEqual(
+            model.features["official_image_source_provider"],
+            "Creality official",
+        )
+        self.assertIn("official_image_multi_material_url", model.features)
 
     def test_optional_multi_material_addon_can_be_enabled_and_removed(self):
         maker = PrinterManufacturer.objects.create(name="Optional CFS Maker")
