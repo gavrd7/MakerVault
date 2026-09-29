@@ -38,7 +38,7 @@ Use a terminal on the server, either directly or through SSH. Run the command bl
 
 Start with access from your trusted home network. Do not forward port 8765 through your router as part of the beginner installation. For HTTPS and a domain, use the [advanced proxy chapter](../advanced/reverse-proxy.md).
 
-Keep Docker-managed named volumes for the simplest first setup. If you already organise server data in specific folders, read [bind mounts](../advanced/storage.md) before the first start. Changing a storage path later does not move the existing data.
+Keep Docker-managed named volumes for the simplest first setup. If you already organise server data in specific folders, read [Choose your storage](storage.md) before the first start. Changing a storage path later does not move the existing data.
 
 ## Repository access
 

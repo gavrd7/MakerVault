@@ -57,6 +57,8 @@ nav:
   - Getting started:
       - Before you begin: getting-started/before-you-begin.md
       - Install MakerVault: getting-started/install.md
+      - Configure your .env file: getting-started/environment.md
+      - Choose your storage: getting-started/storage.md
       - First sign-in: getting-started/first-sign-in.md
       - Your first project: getting-started/first-project.md
   - Using MakerVault:

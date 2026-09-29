@@ -38,6 +38,10 @@ The `main` branch is the project's deployable branch. This guide was checked at 
 
 ## 3. Create your configuration
 
+Before editing, read [Configure your .env file](environment.md) for an explanation of the entries, secret generation and what must change. Read [Choose your storage](storage.md) to decide between Docker-managed volumes and host folders. The steps below are the short route for a new installation using named volumes.
+
+**Existing installation?** Keep your current `.env`; do not copy the example over it or regenerate its secrets. Use the [update guide](../administration/updates.md).
+
 ```bash
 cp .env.example .env
 chmod 600 .env

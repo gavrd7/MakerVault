@@ -1,5 +1,7 @@
 # Configuration reference
 
+For a step-by-step explanation, start with [Configure your .env file](../getting-started/environment.md) and [Choose your storage](../getting-started/storage.md).
+
 The repository's `.env.example` is the full deployment reference. This table covers the settings most operators need. Edit existing entries in `.env` and apply with `sudo docker compose up -d`; a simple restart retains the old container environment.
 
 | Setting | Purpose / normal guidance |

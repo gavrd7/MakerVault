@@ -2,6 +2,8 @@
 
 **Advanced · Configure before first start where possible**
 
+New to volumes and host folders? Start with [Choose your storage](../getting-started/storage.md) for the comparison and beginner examples. This chapter covers further operational details.
+
 A named volume is managed by Docker. A bind mount stores data in a specific folder on the host. Both persist beyond the container's lifetime.
 
 ## Configure host folders
