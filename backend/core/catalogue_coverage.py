@@ -1,0 +1,199 @@
+from __future__ import annotations
+
+from .catalogue_enrichment import TRACKED_BOARD_FIELDS, update_board_enrichment_state
+from .models import BoardModel, ComponentModel, FilamentProduct, PrinterCatalogModel
+
+
+def _pct(value: int, total: int) -> float:
+    if not total:
+        return 100.0
+    return round((value / total) * 100.0, 1)
+
+
+def _metric(key: str, label: str, complete: int, total: int) -> dict:
+    return {
+        "key": key,
+        "label": label,
+        "complete": int(complete),
+        "missing": max(int(total) - int(complete), 0),
+        "total": int(total),
+        "percent": _pct(int(complete), int(total)),
+    }
+
+
+def _board_coverage() -> dict:
+    rows = list(BoardModel.objects.select_related("manufacturer").all())
+    total = len(rows)
+    with_image = sum(bool(row.image) for row in rows)
+    core_complete = 0
+    resolved_technical = 0
+    technical_slots = total * len(TRACKED_BOARD_FIELDS)
+    missing_samples = []
+
+    for board in rows:
+        # Recompute the status model in memory/persist it if an old record predates
+        # the current enrichment-status schema.
+        specs = board.specifications or {}
+        if specs.get("technical_field_status") is None:
+            try:
+                update_board_enrichment_state(board)
+                specs = board.specifications or {}
+            except Exception:
+                specs = board.specifications or {}
+
+        core_values = [
+            board.name,
+            board.family,
+            board.mcu,
+            board.architecture,
+            board.gpio_count,
+            board.usb_connector,
+            board.dimensions_mm,
+        ]
+        if all(value not in (None, "", {}, []) for value in core_values):
+            core_complete += 1
+
+        states = specs.get("technical_field_status") or {}
+        resolved_technical += sum(
+            1 for key in TRACKED_BOARD_FIELDS
+            if states.get(key) in {"value", "not_applicable"}
+        )
+
+        unresolved = [key for key in TRACKED_BOARD_FIELDS if states.get(key) not in {"value", "not_applicable"}]
+        if (not board.image or unresolved) and len(missing_samples) < 12:
+            missing_samples.append({
+                "id": str(board.id),
+                "name": str(board),
+                "missing_image": not bool(board.image),
+                "unresolved_fields": unresolved[:8],
+            })
+
+    return {
+        "key": "boards",
+        "label": "Board catalogue",
+        "total": total,
+        "metrics": [
+            _metric("images", "Images", with_image, total),
+            _metric("core", "Core specifications", core_complete, total),
+            _metric("technical", "Technical fields resolved", resolved_technical, technical_slots),
+        ],
+        "missing_samples": missing_samples,
+    }
+
+
+def _component_coverage() -> dict:
+    rows = list(ComponentModel.objects.select_related("category").all())
+    total = len(rows)
+    samples = []
+    for row in rows:
+        missing = []
+        if not row.image:
+            missing.append("image")
+        if not row.category_id:
+            missing.append("category")
+        if not str(row.description or "").strip():
+            missing.append("description")
+        if not (row.specifications or {}):
+            missing.append("specifications")
+        if missing and len(samples) < 12:
+            samples.append({"id": str(row.id), "name": row.name, "missing": missing})
+
+    return {
+        "key": "components",
+        "label": "Components",
+        "total": total,
+        "metrics": [
+            _metric("images", "Images", sum(bool(row.image) for row in rows), total),
+            _metric("category", "Category", sum(bool(row.category_id) for row in rows), total),
+            _metric("description", "Descriptions", sum(bool(str(row.description or "").strip()) for row in rows), total),
+            _metric("specifications", "Specifications", sum(bool(row.specifications or {}) for row in rows), total),
+        ],
+        "missing_samples": samples,
+    }
+
+
+def _printer_coverage() -> dict:
+    rows = list(PrinterCatalogModel.objects.select_related("manufacturer").all())
+    total = len(rows)
+    samples = []
+    for row in rows:
+        missing = []
+        if not row.image:
+            missing.append("image")
+        if any(value is None for value in (row.build_volume_x_mm, row.build_volume_y_mm, row.build_volume_z_mm)):
+            missing.append("build_volume")
+        if not (row.features or {}):
+            missing.append("features")
+        if not row.source_url:
+            missing.append("source")
+        if row.multi_material_system and not row.image_multi_material:
+            missing.append("multi_material_image")
+        if missing and len(samples) < 12:
+            samples.append({"id": str(row.id), "name": str(row), "missing": missing})
+
+    return {
+        "key": "printers",
+        "label": "Printer catalogue",
+        "total": total,
+        "metrics": [
+            _metric("images", "Images", sum(bool(row.image) for row in rows), total),
+            _metric(
+                "build_volume",
+                "Build volumes",
+                sum(all(value is not None for value in (row.build_volume_x_mm, row.build_volume_y_mm, row.build_volume_z_mm)) for row in rows),
+                total,
+            ),
+            _metric("features", "Feature metadata", sum(bool(row.features or {}) for row in rows), total),
+            _metric("source", "Source links", sum(bool(row.source_url) for row in rows), total),
+        ],
+        "missing_samples": samples,
+    }
+
+
+def _filament_coverage() -> dict:
+    rows = list(FilamentProduct.objects.select_related("filament_manufacturer", "manufacturer").all())
+    total = len(rows)
+    samples = []
+    for row in rows:
+        missing = []
+        if not row.image:
+            missing.append("image")
+        if not (row.filament_manufacturer_id or row.manufacturer_id):
+            missing.append("manufacturer")
+        if not row.color_name and not row.color_hex and not row.color_hexes:
+            missing.append("colour")
+        if any(value is None for value in (row.nozzle_temp_min_c, row.nozzle_temp_max_c, row.bed_temp_min_c, row.bed_temp_max_c)):
+            missing.append("temperatures")
+        if missing and len(samples) < 12:
+            samples.append({"id": str(row.id), "name": str(row), "missing": missing})
+
+    return {
+        "key": "filaments",
+        "label": "Filament catalogue",
+        "total": total,
+        "metrics": [
+            _metric("images", "Images", sum(bool(row.image) for row in rows), total),
+            _metric("manufacturer", "Manufacturer", sum(bool(row.filament_manufacturer_id or row.manufacturer_id) for row in rows), total),
+            _metric("colour", "Colour data", sum(bool(row.color_name or row.color_hex or row.color_hexes) for row in rows), total),
+            _metric(
+                "temperatures",
+                "Print temperatures",
+                sum(all(value is not None for value in (row.nozzle_temp_min_c, row.nozzle_temp_max_c, row.bed_temp_min_c, row.bed_temp_max_c)) for row in rows),
+                total,
+            ),
+        ],
+        "missing_samples": samples,
+    }
+
+
+def catalogue_coverage_summary() -> dict:
+    catalogues = [
+        _board_coverage(),
+        _component_coverage(),
+        _printer_coverage(),
+        _filament_coverage(),
+    ]
+    return {
+        "catalogues": catalogues,
+        "records": sum(item["total"] for item in catalogues),
+    }
