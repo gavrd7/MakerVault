@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import Mock, patch
 
+from django.test import TestCase, override_settings
+
 from core.catalogue_image_sources import (
     _board_image_queries,
     _commons_license_allowed,
@@ -9,9 +11,11 @@ from core.catalogue_image_sources import (
     _openverse_license_name,
     _printer_image_queries,
     _printer_multi_material_image_queries,
+    run_catalogue_image_seed,
     search_openverse,
     search_wikimedia_commons,
 )
+from core.models import BoardModel, ComponentCategory, ComponentModel, PrinterCatalogModel, PrinterManufacturer
 
 
 class DummyManufacturer:
@@ -127,7 +131,8 @@ class CatalogueImageSourceTests(unittest.TestCase):
 
     def test_printer_image_query_disambiguates_short_model_names(self):
         queries = _printer_image_queries(DummyPrinterModel())
-        self.assertEqual(queries[0], "Creality K2 3D printer")
+        self.assertEqual(queries[0], "Creality K2")
+        self.assertIn("Creality K2 3D printer", queries)
         self.assertIn("Creality K2 printer", queries)
 
     def test_printer_combo_image_queries_include_combo_and_system(self):
@@ -164,6 +169,70 @@ class CatalogueImageSourceTests(unittest.TestCase):
         self.assertEqual(candidate.license_name, "CC BY-SA 4.0")
         self.assertEqual(candidate.author, "Example Creator")
         self.assertTrue(candidate.provider.startswith("Openverse /"))
+
+
+
+class CatalogueImagePriorityTests(TestCase):
+    def setUp(self):
+        self.printer_maker = PrinterManufacturer.objects.create(name="Image Test Printers")
+        self.printer = PrinterCatalogModel.objects.create(
+            manufacturer=self.printer_maker,
+            name="Exact Model 42",
+        )
+        self.board = BoardModel.objects.create(name="Image Test Board")
+        category = ComponentCategory.objects.create(name="Image Test Components", slug="image-test-components")
+        self.component = ComponentModel.objects.create(
+            category=category,
+            name="Image Test Component",
+            specifications={"type": "sensor"},
+        )
+
+    @override_settings(
+        CATALOGUE_IMAGE_MAX_PER_RUN=1,
+        CATALOGUE_IMAGE_RETRY_DAYS=1,
+        CATALOGUE_IMAGE_WIKIMEDIA=True,
+        CATALOGUE_IMAGE_OPENVERSE=True,
+    )
+    @patch("core.catalogue_image_sources.cache_candidate")
+    @patch("core.catalogue_image_sources._search_open_media_with_diagnostics")
+    def test_targeted_printer_pass_does_not_spend_limit_on_other_catalogues(self, search, cache_candidate):
+        from core.catalogue_image_sources import ImageCandidate
+
+        candidate = ImageCandidate(
+            image_url="https://upload.wikimedia.org/example.jpg",
+            source_page_url="https://commons.wikimedia.org/example",
+            provider="Wikimedia Commons",
+            license_name="CC BY-SA 4.0",
+            query="Image Test Printers Exact Model 42",
+        )
+        search.return_value = (
+            candidate,
+            {"attempts": [{"provider": "Wikimedia Commons", "query": candidate.query, "matched": True}]},
+        )
+
+        result = run_catalogue_image_seed(
+            limit=1,
+            force_retry=True,
+            kinds=["printers"],
+        )
+
+        self.assertEqual(result["status"], "limit-reached")
+        self.assertEqual(result["processed"], 1)
+        self.assertEqual(result["by_kind"]["printers"]["cached"], 1)
+        self.assertEqual(result["order"], ["printers"])
+        cache_candidate.assert_called_once()
+        cached_obj = cache_candidate.call_args.args[0]
+        self.assertEqual(cached_obj.pk, self.printer.pk)
+
+    @override_settings(
+        CATALOGUE_IMAGE_MAX_PER_RUN=0,
+        CATALOGUE_IMAGE_RETRY_DAYS=1,
+        CATALOGUE_IMAGE_WIKIMEDIA=True,
+        CATALOGUE_IMAGE_OPENVERSE=True,
+    )
+    def test_unknown_target_kind_is_rejected(self):
+        with self.assertRaises(ValueError):
+            run_catalogue_image_seed(kinds=["not-a-catalogue"])
 
 
 if __name__ == "__main__":
