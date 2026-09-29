@@ -24,7 +24,7 @@ class ProjectAssetApiTests(TestCase):
             password="test-password",
         )
         self.client.force_login(self.user)
-        self.project = Project.objects.create(name="Desk speaker", created_by=self.user)
+        self.project = Project.objects.create(owner=self.user, name="Desk speaker", created_by=self.user)
 
     def test_project_file_upload_is_classified_hashed_and_returned_in_detail(self):
         payload = b"void setup() {}\nvoid loop() {}\n"

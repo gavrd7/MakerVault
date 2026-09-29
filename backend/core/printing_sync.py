@@ -42,14 +42,17 @@ class PrintingSyncConnectionError(PrintingSyncError):
     pass
 
 
-def next_spool_id() -> str:
+def next_spool_id(owner=None) -> str:
     highest = 0
-    for value in Spool.objects.filter(spool_id__startswith="SPL-").values_list("spool_id", flat=True):
+    qs = Spool.objects.all()
+    if owner is not None:
+        qs = qs.filter(owner=owner)
+    for value in qs.filter(spool_id__startswith="SPL-").values_list("spool_id", flat=True):
         match = re.fullmatch(r"SPL-(\d+)", value or "")
         if match:
             highest = max(highest, int(match.group(1)))
     candidate = highest + 1
-    while Spool.objects.filter(spool_id=f"SPL-{candidate:04d}").exists():
+    while qs.filter(spool_id=f"SPL-{candidate:04d}").exists():
         candidate += 1
     return f"SPL-{candidate:04d}"
 
@@ -249,23 +252,24 @@ def _create_filament_from_spoolman(snapshot: dict) -> FilamentProduct:
     return filament
 
 
-def _spoolman_location(name: str):
+def _spoolman_location(name: str, owner=None):
     value = str(name or "").strip()[:200]
     if not value:
         return None
-    location = PrintingLocation.objects.filter(name__iexact=value).first()
+    location = PrintingLocation.objects.filter(name__iexact=value, owner=owner).first()
     if location is not None:
         return location
     return PrintingLocation.objects.create(
+        owner=owner,
         name=value,
         kind="storage",
         notes="Location discovered from Spoolman. MakerVault remains authoritative for spool placement.",
     )
 
 
-def _rank_spoolman_spools(snapshot: dict) -> list[dict]:
+def _rank_spoolman_spools(snapshot: dict, owner) -> list[dict]:
     rows = []
-    qs = Spool.objects.select_related(
+    qs = Spool.objects.filter(owner=owner).select_related(
         "filament__filament_manufacturer",
         "filament__manufacturer",
         "storage_location",
@@ -343,11 +347,11 @@ def _spoolman_review_payload(remote: dict, snapshot: dict, filament_matches, spo
     }
 
 
-def _create_spool_with_generated_id(**kwargs) -> Spool:
+def _create_spool_with_generated_id(*, owner, **kwargs) -> Spool:
     for _ in range(5):
         try:
             with transaction.atomic():
-                item = Spool(spool_id=next_spool_id(), **kwargs)
+                item = Spool(owner=owner, spool_id=next_spool_id(owner), **kwargs)
                 item.full_clean()
                 item.save()
                 return item
@@ -408,7 +412,7 @@ def resolve_spoolman_review(
         ignored.add(external_id)
         result = {"action": "ignored", "external_id": external_id}
     elif action == "link":
-        spool = Spool.objects.select_related("filament").filter(pk=spool_id).first()
+        spool = Spool.objects.select_related("filament").filter(pk=spool_id, owner=setting.owner).first()
         if not spool:
             raise PrintingSyncError("Choose a MakerVault spool to link.")
         if ExternalSpoolLink.objects.filter(spool=spool, provider="spoolman").exists():
@@ -432,8 +436,9 @@ def resolve_spoolman_review(
                 raise PrintingSyncError("Selected MakerVault filament was not found.")
         if filament is None:
             filament = _create_filament_from_spoolman(snapshot)
-        location = _spoolman_location(snapshot.get("location"))
+        location = _spoolman_location(snapshot.get("location"), setting.owner)
         spool = _create_spool_with_generated_id(
+            owner=setting.owner,
             filament=filament,
             initial_weight_g=snapshot.get("initial_weight_g"),
             remaining_weight_g=snapshot.get("remaining_weight_g"),
@@ -504,12 +509,13 @@ def sync_spoolman(setting: PrintingIntegrationSetting) -> dict:
 
             location = None
             if snapshot.get("location"):
-                before = PrintingLocation.objects.filter(name=snapshot["location"]).exists()
-                location = _spoolman_location(snapshot["location"])
+                before = PrintingLocation.objects.filter(name=snapshot["location"], owner=setting.owner).exists()
+                location = _spoolman_location(snapshot["location"], setting.owner)
                 if location and not before:
                     locations_discovered += 1
 
             link = ExternalSpoolLink.objects.select_related("spool").filter(
+                spool__owner=setting.owner,
                 provider="spoolman",
                 external_id=external_id,
             ).first()
@@ -532,7 +538,7 @@ def sync_spoolman(setting: PrintingIntegrationSetting) -> dict:
                 continue
 
             filament_matches = _rank_spoolman_filaments(snapshot)
-            spool_matches = _rank_spoolman_spools(snapshot)
+            spool_matches = _rank_spoolman_spools(snapshot, setting.owner)
 
             filament_ambiguous = False
             selected_filament = None
@@ -556,6 +562,7 @@ def sync_spoolman(setting: PrintingIntegrationSetting) -> dict:
                 selected_filament = _create_filament_from_spoolman(snapshot)
 
             spool = _create_spool_with_generated_id(
+                owner=setting.owner,
                 filament=selected_filament,
                 initial_weight_g=snapshot.get("initial_weight_g"),
                 remaining_weight_g=snapshot.get("remaining_weight_g"),
@@ -590,10 +597,10 @@ def sync_spoolman(setting: PrintingIntegrationSetting) -> dict:
             ExternalSpoolLink.objects.select_related(
                 "spool__storage_location",
                 "spool__assigned_printer",
-            ).filter(provider="spoolman")
+            ).filter(provider="spoolman", spool__owner=setting.owner)
         )
         linked_ids = {link.spool_id for link in links}
-        skipped_unlinked = Spool.objects.exclude(pk__in=linked_ids).count()
+        skipped_unlinked = Spool.objects.filter(owner=setting.owner).exclude(pk__in=linked_ids).count()
         for link in links:
             spool = link.spool
             location = ""
@@ -774,12 +781,13 @@ def _simplyprint_remote_model(row: dict) -> str:
     ).strip()[:255]
 
 
-def _simplyprint_link_printer(row: dict, now):
+def _simplyprint_link_printer(row: dict, now, owner=None):
     external_id = str(row.get("id") or "").strip()
     if not external_id:
         return None, False, False
 
     link = ExternalPrinterLink.objects.select_related("printer").filter(
+        printer__owner=owner,
         provider="simplyprint",
         external_id=external_id,
     ).first()
@@ -790,12 +798,13 @@ def _simplyprint_link_printer(row: dict, now):
         printer = link.printer
     else:
         remote_name = _simplyprint_remote_name(row)
-        candidates = list(Printer.objects.filter(name__iexact=remote_name)[:2])
+        candidates = list(Printer.objects.filter(owner=owner, name__iexact=remote_name)[:2])
         if len(candidates) == 1 and not candidates[0].external_links.filter(provider="simplyprint").exists():
             printer = candidates[0]
             linked_existing = True
         else:
             printer = Printer.objects.create(
+                owner=owner,
                 name=remote_name,
                 model=_simplyprint_remote_model(row),
                 is_active=True,
@@ -891,6 +900,7 @@ def _sync_simplyprint_slots(printer, row, inventory, now) -> dict:
         linked_spool = None
         if external_spool_id:
             external_link = ExternalSpoolLink.objects.select_related("spool").filter(
+                spool__owner=printer.owner,
                 provider="simplyprint",
                 external_id=external_spool_id,
             ).first()
@@ -1003,6 +1013,7 @@ def _sync_simplyprint_jobs(rows, printer_links) -> tuple[int, int]:
             continue
 
         existing = PrintJob.objects.filter(
+            owner=printer.owner,
             settings__external_provider="simplyprint",
             settings__external_id=external_id,
         ).first()
@@ -1027,6 +1038,7 @@ def _sync_simplyprint_jobs(rows, printer_links) -> tuple[int, int]:
             updated += 1
         else:
             job = PrintJob.objects.create(
+                owner=printer.owner,
                 printer=printer,
                 status=_simplyprint_job_status(remote.get("status")),
                 actual_minutes=_simplyprint_actual_minutes(remote),
@@ -1080,7 +1092,7 @@ def sync_simplyprint(setting: PrintingIntegrationSetting) -> dict:
     exact_spool_links = 0
 
     for row in remote_printers:
-        printer, created, linked_existing = _simplyprint_link_printer(row, now)
+        printer, created, linked_existing = _simplyprint_link_printer(row, now, setting.owner)
         if not printer:
             continue
         external_id = str(row.get("id") or "").strip()
@@ -1376,6 +1388,7 @@ def _sync_cfs_printer(printer: Printer, boxs_info: dict) -> dict:
 def sync_creality_cfs(setting: PrintingIntegrationSetting) -> dict:
     printers = list(
         Printer.objects.filter(
+            owner=setting.owner,
             is_active=True,
             multi_material_installed=True,
             catalog_model__multi_material_system="creality_cfs",
@@ -1408,8 +1421,17 @@ def sync_creality_cfs(setting: PrintingIntegrationSetting) -> dict:
     }
 
 
-def sync_printing_integration(provider: str, triggered_by: str = "manual") -> tuple[PrintingIntegrationSetting, dict]:
-    setting = PrintingIntegrationSetting.objects.filter(provider=provider).first()
+def sync_printing_integration(provider: str, triggered_by: str = "manual", *, owner=None, setting_id=None) -> tuple[PrintingIntegrationSetting, dict]:
+    if setting_id is None and owner is None:
+        raise PrintingSyncError("An integration owner is required.")
+    settings_qs = PrintingIntegrationSetting.objects.all()
+    if setting_id is not None:
+        settings_qs = settings_qs.filter(pk=setting_id)
+    else:
+        settings_qs = settings_qs.filter(provider=provider)
+        if owner is not None:
+            settings_qs = settings_qs.filter(owner=owner)
+    setting = settings_qs.first()
     if not setting:
         raise PrintingSyncError("Integration is not configured.")
     if not setting.enabled:

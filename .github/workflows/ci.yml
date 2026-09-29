@@ -2,15 +2,35 @@ name: MakerVault CI
 
 on:
   pull_request:
+    types: [opened, reopened, ready_for_review, synchronize]
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: Where should this CI run execute?
+        required: true
+        default: self-hosted
+        type: choice
+        options:
+          - self-hosted
+          - github-hosted
 
 permissions:
   contents: read
 
+concurrency:
+  group: makervault-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
-    runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    runs-on: ${{ github.event_name == 'workflow_dispatch' && inputs.runner == 'github-hosted' && 'ubuntu-latest' || 'makervault-ci' }}
+    timeout-minutes: 30
+    container: python:3.13-bookworm
+    env:
+      MAKERVAULT_STORAGE_KEY: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
     services:
       postgres:
         image: postgres:18.6
@@ -18,8 +38,6 @@ jobs:
           POSTGRES_DB: makervault
           POSTGRES_USER: makervault
           POSTGRES_PASSWORD: ci-only-password
-        ports:
-          - 5432:5432
         options: >-
           --health-cmd "pg_isready -U makervault -d makervault"
           --health-interval 10s
@@ -27,14 +45,10 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-          cache: pip
       - name: Install backend dependencies
         run: |
-          pip install -r requirements.txt
-          pip install pip-audit bandit
+          python -m pip install -r requirements.txt
+          python -m pip install pip-audit bandit
       - name: Audit Python dependencies
         run: pip-audit -r requirements.txt
       - name: Static security scan
@@ -45,11 +59,15 @@ jobs:
         env:
           DJANGO_SECRET_KEY: ci-only-secret-key-for-makervault-tests-0123456789
           POSTGRES_PASSWORD: ci-only-password
+          DATABASE_HOST: postgres
+          DATABASE_PORT: "5432"
         run: python backend/manage.py makemigrations --check --dry-run
       - name: Django deployment security checks
         env:
           DJANGO_SECRET_KEY: ci-only-secret-key-for-makervault-tests-0123456789
           POSTGRES_PASSWORD: ci-only-password
+          DATABASE_HOST: postgres
+          DATABASE_PORT: "5432"
           DJANGO_ALLOWED_HOSTS: example.com
           DJANGO_SECURE_COOKIES: "true"
           DJANGO_SECURE_SSL_REDIRECT: "true"
@@ -60,17 +78,17 @@ jobs:
           PYTHONPATH: backend
           DJANGO_SECRET_KEY: ci-only-secret-key-for-makervault-tests-0123456789
           POSTGRES_PASSWORD: ci-only-password
-          DATABASE_HOST: 127.0.0.1
+          DATABASE_HOST: postgres
           DATABASE_PORT: "5432"
         run: python backend/manage.py test core.tests -v 2
 
   frontend:
-    runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    runs-on: ${{ github.event_name == 'workflow_dispatch' && inputs.runner == 'github-hosted' && 'ubuntu-latest' || 'makervault-ci' }}
+    timeout-minutes: 20
+    container: node:22-bookworm
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm install --no-audit --no-fund
@@ -82,9 +100,17 @@ jobs:
         run: npm run build
 
   docker:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'workflow_dispatch' && inputs.runner == 'github-hosted' && 'ubuntu-latest' || 'makervault-ci' }}
+    timeout-minutes: 30
     needs: [backend, frontend]
     steps:
+      - name: Restore self-hosted workspace ownership
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.runner == 'self-hosted' }}
+        run: |
+          docker run --rm \
+            -v "${GITHUB_WORKSPACE}:/workspace" \
+            python:3.13-bookworm \
+            chown -R 1001:1001 /workspace
       - uses: actions/checkout@v4
       - name: Build MakerVault image
         run: docker build --pull -t makervault-ci .

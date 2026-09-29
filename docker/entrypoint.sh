@@ -6,6 +6,7 @@ PGID="${PGID:-1000}"
 UMASK_VALUE="${UMASK:-0022}"
 FIX_PERMISSIONS_VALUE="${FIX_PERMISSIONS:-true}"
 TZ_VALUE="${TZ:-Europe/London}"
+STORAGE_KEY_FILE="${MAKERVAULT_STORAGE_KEY_FILE:-/app/keys/private_storage.key}"
 
 if ! [[ "$PUID" =~ ^[0-9]+$ && "$PGID" =~ ^[0-9]+$ ]]; then
   echo "ERROR: PUID and PGID must be numeric." >&2
@@ -28,11 +29,39 @@ fi
 groupmod -o -g "$PGID" makervault
 usermod -o -u "$PUID" -g "$PGID" makervault
 
-mkdir -p /app/media /app/staticfiles /app/run /home/makervault
+mkdir -p /app/media /app/keys /app/staticfiles /app/run /home/makervault
 if [ "$FIX_PERMISSIONS_VALUE" = "true" ] || [ "$FIX_PERMISSIONS_VALUE" = "1" ]; then
-  chown -R "$PUID:$PGID" /app/media /app/staticfiles /app/run /home/makervault
+  chown -R "$PUID:$PGID" /app/media /app/keys /app/staticfiles /app/run /home/makervault
 else
-  chown "$PUID:$PGID" /app/media /app/staticfiles /app/run 2>/dev/null || true
+  chown "$PUID:$PGID" /app/media /app/keys /app/staticfiles /app/run 2>/dev/null || true
+fi
+
+# Keep the private-file encryption key outside the media volume. The default
+# Docker deployment generates it once in the dedicated key volume.
+if [ -z "${MAKERVAULT_STORAGE_KEY:-}" ]; then
+  mkdir -p "$(dirname "$STORAGE_KEY_FILE")"
+  if [ ! -s "$STORAGE_KEY_FILE" ]; then
+    # Never silently replace a lost key when encrypted blobs already exist.
+    # A newly generated key would make those blobs permanently unreadable.
+    if [ -d /app/media/private ] && find /app/media/private -type f -name '*.blob' -print -quit | grep -q .; then
+      echo "ERROR: Encrypted MakerVault private files exist but the storage key is missing." >&2
+      echo "Restore KEY_STORAGE / MAKERVAULT_STORAGE_KEY_FILE from backup. A new key cannot decrypt existing data." >&2
+      exit 1
+    fi
+    echo "Generating MakerVault private-storage encryption key..."
+    python - "$STORAGE_KEY_FILE" <<'PY'
+import base64
+import os
+import sys
+
+path = sys.argv[1]
+value = base64.urlsafe_b64encode(os.urandom(32)).decode("ascii")
+with open(path, "w", encoding="ascii") as handle:
+    handle.write(value + "\n")
+PY
+  fi
+  chown "$PUID:$PGID" "$STORAGE_KEY_FILE" 2>/dev/null || true
+  chmod 600 "$STORAGE_KEY_FILE" 2>/dev/null || true
 fi
 
 if [ "${DJANGO_DEBUG:-false}" != "true" ]; then
@@ -48,6 +77,11 @@ cd /app/backend
 echo "Applying database migrations..."
 gosu makervault python manage.py migrate --noinput
 gosu makervault python manage.py seed_roles
+
+echo "Encrypting any legacy user-private media..."
+if ! gosu makervault python manage.py migrate_private_storage; then
+  echo "WARNING: Some legacy private media could not be encrypted. MakerVault will continue and retry on the next start." >&2
+fi
 
 echo "Ensuring starter catalogue..."
 gosu makervault python manage.py seed_catalogue

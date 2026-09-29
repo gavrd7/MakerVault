@@ -4,6 +4,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.text import slugify
 from .validators import validate_maker_file
+from .private_storage import private_storage
 
 
 class TimeStampedModel(models.Model):
@@ -12,6 +13,56 @@ class TimeStampedModel(models.Model):
 
     class Meta:
         abstract = True
+
+
+class UserStorageProfile(TimeStampedModel):
+    """Per-user storage policy and accounting state."""
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="makervault_storage_profile",
+    )
+    quota_override_bytes = models.BigIntegerField(blank=True, null=True)
+    quota_unlimited = models.BooleanField(default=False)
+    storage_used_bytes = models.BigIntegerField(default=0)
+    models_bytes = models.BigIntegerField(default=0)
+    project_files_bytes = models.BigIntegerField(default=0)
+    images_bytes = models.BigIntegerField(default=0)
+    other_files_bytes = models.BigIntegerField(default=0)
+
+    class Meta:
+        ordering = ["user__username"]
+
+    def clean(self):
+        if self.quota_override_bytes is not None and self.quota_override_bytes < 0:
+            raise ValidationError({"quota_override_bytes": "Storage quota cannot be negative."})
+
+    def __str__(self):
+        return f"{self.user} storage"
+
+
+class StorageSettings(TimeStampedModel):
+    """Instance-wide defaults for private user storage."""
+
+    singleton_key = models.PositiveSmallIntegerField(default=1, unique=True, editable=False)
+    default_quota_bytes = models.BigIntegerField(default=10 * 1024 * 1024 * 1024)
+    default_quota_unlimited = models.BooleanField(default=False)
+
+    class Meta:
+        verbose_name = "Storage settings"
+        verbose_name_plural = "Storage settings"
+
+    def clean(self):
+        if self.default_quota_bytes is not None and self.default_quota_bytes < 0:
+            raise ValidationError({"default_quota_bytes": "Default storage quota cannot be negative."})
+
+    def save(self, *args, **kwargs):
+        self.singleton_key = 1
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return "MakerVault storage settings"
 
 
 class CatalogueMaintenanceSettings(TimeStampedModel):
@@ -78,7 +129,7 @@ class BoardModel(TimeStampedModel):
     manufacturer = models.ForeignKey(Manufacturer, on_delete=models.SET_NULL, null=True, blank=True, related_name="boards")
     source = models.ForeignKey(CatalogSource, on_delete=models.SET_NULL, null=True, blank=True, related_name="boards")
     name = models.CharField(max_length=255)
-    slug = models.SlugField(max_length=280, unique=True, blank=True)
+    slug = models.SlugField(max_length=280, blank=True)
     family = models.CharField(max_length=120, blank=True)
     variant = models.CharField(max_length=120, blank=True)
     description = models.TextField(blank=True)
@@ -164,20 +215,24 @@ class Project(TimeStampedModel):
     STATUS = [("idea", "Idea"), ("planning", "Planning"), ("active", "Active"), ("paused", "Paused"), ("complete", "Complete"), ("archived", "Archived")]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
-    slug = models.SlugField(max_length=280, unique=True, blank=True)
+    slug = models.SlugField(max_length=280, blank=True)
     status = models.CharField(max_length=20, choices=STATUS, default="idea")
     summary = models.CharField(max_length=500, blank=True)
     description = models.TextField(blank=True)
     notes = models.TextField(blank=True)
     tags = models.JSONField(default=list, blank=True)
     reference_url = models.URLField(blank=True)
-    cover_image = models.ImageField(upload_to="projects/covers/", blank=True, null=True)
+    cover_image = models.ImageField(upload_to="projects/covers/", storage=private_storage, blank=True, null=True)
     started_on = models.DateField(blank=True, null=True)
     completed_on = models.DateField(blank=True, null=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="makervault_projects")
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="owned_makervault_projects")
 
     class Meta:
         ordering = ["-updated_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["owner", "slug"], name="uniq_project_slug_per_owner"),
+        ]
 
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -192,7 +247,8 @@ class InventoryItem(TimeStampedModel):
     ITEM_TYPES = [("board", "Board"), ("component", "Component"), ("tool", "Tool / asset"), ("printed_part", "Printed part"), ("other", "Other")]
     STATUS = [("available", "Available"), ("in_use", "In use"), ("reserved", "Reserved"), ("repair", "Needs repair"), ("retired", "Retired")]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    inventory_id = models.CharField(max_length=40, unique=True)
+    inventory_id = models.CharField(max_length=40)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="makervault_inventory_items")
     item_type = models.CharField(max_length=20, choices=ITEM_TYPES)
     board = models.ForeignKey(BoardModel, on_delete=models.PROTECT, null=True, blank=True, related_name="inventory_items")
     component = models.ForeignKey(ComponentModel, on_delete=models.PROTECT, null=True, blank=True, related_name="inventory_items")
@@ -207,13 +263,18 @@ class InventoryItem(TimeStampedModel):
     supplier = models.CharField(max_length=255, blank=True)
     purchase_url = models.URLField(blank=True)
     purchased_on = models.DateField(blank=True, null=True)
-    image = models.ImageField(upload_to="inventory/", blank=True, null=True)
+    image = models.ImageField(upload_to="inventory/", storage=private_storage, blank=True, null=True)
     notes = models.TextField(blank=True)
 
     class Meta:
         ordering = ["inventory_id"]
+        constraints = [
+            models.UniqueConstraint(fields=["owner", "inventory_id"], name="uniq_inventory_id_per_owner"),
+        ]
 
     def clean(self):
+        if self.project_id and self.owner_id and self.project.owner_id != self.owner_id:
+            raise ValidationError({"project": "Selected project belongs to a different user."})
         if self.item_type == "board" and not self.board:
             raise ValidationError({"board": "A board inventory item must reference a board model."})
         if self.item_type == "component" and not self.component:
@@ -323,6 +384,8 @@ class BOMAllocation(TimeStampedModel):
         if self.quantity is not None and self.quantity <= 0:
             raise ValidationError({"quantity": "Allocation quantity must be greater than zero."})
         if self.bom_item_id and self.inventory_item_id:
+            if self.inventory_item.owner_id != self.bom_item.project.owner_id:
+                raise ValidationError({"inventory_item": "This inventory item belongs to a different user."})
             if self.bom_item.board_id and self.inventory_item.board_id != self.bom_item.board_id:
                 raise ValidationError({"inventory_item": "This inventory item does not match the BOM board."})
             if self.bom_item.component_id and self.inventory_item.component_id != self.bom_item.component_id:
@@ -340,8 +403,9 @@ class FileAsset(TimeStampedModel):
     CATEGORIES = [("image", "Image"), ("wiring", "Wiring / schematic"), ("firmware", "Firmware"), ("source", "Source code"), ("binary", "Executable / binary"), ("document", "Document"), ("cad", "CAD"), ("mesh", "STL / mesh"), ("slicer", "3MF / slicer project"), ("pcb", "PCB"), ("archive", "Archive"), ("other", "Other")]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="makervault_file_assets")
     category = models.CharField(max_length=20, choices=CATEGORIES, default="other")
-    file = models.FileField(upload_to="files/%Y/%m/", validators=[validate_maker_file])
+    file = models.FileField(upload_to="files/%Y/%m/", storage=private_storage, validators=[validate_maker_file])
     project = models.ForeignKey(Project, on_delete=models.CASCADE, null=True, blank=True, related_name="files")
     board = models.ForeignKey(BoardModel, on_delete=models.SET_NULL, null=True, blank=True, related_name="files")
     component = models.ForeignKey(ComponentModel, on_delete=models.SET_NULL, null=True, blank=True, related_name="files")
@@ -359,6 +423,12 @@ class FileAsset(TimeStampedModel):
 
     class Meta:
         ordering = ["-created_at"]
+
+    def clean(self):
+        if self.project_id and self.owner_id and self.project.owner_id != self.owner_id:
+            raise ValidationError({"project": "Selected project belongs to a different user."})
+        if self.supersedes_id and self.owner_id and self.supersedes.owner_id != self.owner_id:
+            raise ValidationError({"supersedes": "A file revision cannot supersede another user's file."})
 
     def __str__(self):
         return self.name
@@ -415,12 +485,16 @@ class PrintingLocation(TimeStampedModel):
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=200, unique=True)
+    name = models.CharField(max_length=200)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="makervault_printing_locations")
     kind = models.CharField(max_length=20, choices=KINDS, default="storage")
     notes = models.TextField(blank=True)
 
     class Meta:
         ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(fields=["owner", "name"], name="uniq_print_location_per_owner"),
+        ]
 
     def __str__(self):
         return self.name
@@ -451,7 +525,8 @@ class PrintingIntegrationSetting(TimeStampedModel):
         ("planned", "Planned"),
     ]
 
-    provider = models.CharField(max_length=30, choices=PROVIDERS, unique=True)
+    provider = models.CharField(max_length=30, choices=PROVIDERS)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="makervault_printing_integrations")
     enabled = models.BooleanField(default=False)
     endpoint_url = models.CharField(max_length=500, blank=True)
     sync_direction = models.CharField(max_length=20, choices=SYNC_DIRECTIONS, default="import")
@@ -473,6 +548,9 @@ class PrintingIntegrationSetting(TimeStampedModel):
 
     class Meta:
         ordering = ["provider"]
+        constraints = [
+            models.UniqueConstraint(fields=["owner", "provider"], name="uniq_print_integration_per_owner"),
+        ]
 
     def __str__(self):
         return self.get_provider_display()
@@ -576,7 +654,8 @@ class FilamentProduct(TimeStampedModel):
 class Spool(TimeStampedModel):
     STATUS = [("sealed", "Sealed"), ("open", "Open"), ("drying", "Drying"), ("empty", "Empty"), ("retired", "Retired")]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    spool_id = models.CharField(max_length=40, unique=True)
+    spool_id = models.CharField(max_length=40)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="makervault_spools")
     rfid_uid = models.CharField(max_length=255, blank=True, default="", db_index=True)
     filament = models.ForeignKey(FilamentProduct, on_delete=models.PROTECT, related_name="spools")
     initial_weight_g = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
@@ -601,6 +680,7 @@ class Spool(TimeStampedModel):
     class Meta:
         ordering = ["spool_id"]
         constraints = [
+            models.UniqueConstraint(fields=["owner", "spool_id"], name="uniq_spool_id_per_owner"),
             models.UniqueConstraint(
                 fields=["rfid_uid"],
                 condition=~models.Q(rfid_uid=""),
@@ -611,6 +691,10 @@ class Spool(TimeStampedModel):
     def clean(self):
         super().clean()
         self.rfid_uid = str(self.rfid_uid or "").strip().upper()
+        if self.storage_location_id and self.owner_id and self.storage_location.owner_id != self.owner_id:
+            raise ValidationError({"storage_location": "Selected location belongs to a different user."})
+        if self.assigned_printer_id and self.owner_id and self.assigned_printer.owner_id != self.owner_id:
+            raise ValidationError({"assigned_printer": "Selected printer belongs to a different user."})
         if self.storage_location_id and self.assigned_printer_id:
             raise ValidationError("A spool can be stored at a location or assigned to a printer, not both.")
 
@@ -646,7 +730,6 @@ class ExternalSpoolLink(TimeStampedModel):
     class Meta:
         ordering = ["provider", "external_id"]
         constraints = [
-            models.UniqueConstraint(fields=["provider", "external_id"], name="unique_external_spool_provider_id"),
             models.UniqueConstraint(fields=["spool", "provider"], name="unique_spool_provider_link"),
         ]
 
@@ -672,10 +755,6 @@ class ExternalPrinterLink(TimeStampedModel):
         ordering = ["provider", "external_id"]
         constraints = [
             models.UniqueConstraint(
-                fields=["provider", "external_id"],
-                name="unique_external_printer_provider_id",
-            ),
-            models.UniqueConstraint(
                 fields=["printer", "provider"],
                 name="unique_printer_provider_link",
             ),
@@ -688,6 +767,7 @@ class ExternalPrinterLink(TimeStampedModel):
 class Printer(TimeStampedModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="makervault_printers")
     manufacturer = models.ForeignKey(Manufacturer, on_delete=models.SET_NULL, null=True, blank=True, related_name="printers")
     printer_manufacturer = models.ForeignKey(
         PrinterManufacturer, on_delete=models.SET_NULL, null=True, blank=True,
@@ -716,6 +796,10 @@ class Printer(TimeStampedModel):
 
     class Meta:
         ordering = ["name"]
+
+    def clean(self):
+        if self.printing_location_id and self.owner_id and self.printing_location.owner_id != self.owner_id:
+            raise ValidationError({"printing_location": "Selected location belongs to a different user."})
 
     def __str__(self):
         return self.name
@@ -757,12 +841,17 @@ class PrinterFilamentSlot(TimeStampedModel):
             ),
         ]
 
+    def clean(self):
+        if self.spool_id and self.spool.owner_id != self.printer.owner_id:
+            raise ValidationError({"spool": "Selected spool belongs to a different user."})
+
     def __str__(self):
         return f"{self.printer} · {self.get_system_display()} {self.unit_index}:{self.slot_index}"
 
 
 class Model3D(TimeStampedModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="makervault_models_3d")
     project = models.ForeignKey(Project, on_delete=models.CASCADE, null=True, blank=True, related_name="models_3d")
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
@@ -772,6 +861,10 @@ class Model3D(TimeStampedModel):
 
     class Meta:
         ordering = ["name"]
+
+    def clean(self):
+        if self.project_id and self.owner_id and self.project.owner_id != self.owner_id:
+            raise ValidationError({"project": "Selected project belongs to a different user."})
 
     def __str__(self):
         return self.name
@@ -817,6 +910,8 @@ class ModelRevisionAsset(TimeStampedModel):
         ]
 
     def clean(self):
+        if self.file_asset_id and self.revision_id and self.file_asset.owner_id != self.revision.model.owner_id:
+            raise ValidationError({"file_asset": "Selected file belongs to a different user."})
         if self.file_asset_id and self.role == "model" and self.file_asset.category not in {"mesh", "slicer", "cad"}:
             raise ValidationError({"file_asset": "Printable model assets should use a mesh, slicer or CAD file category."})
 
@@ -851,6 +946,7 @@ class ProductListing(TimeStampedModel):
 class PrintJob(TimeStampedModel):
     STATUS = [("planned", "Planned"), ("printing", "Printing"), ("success", "Success"), ("failed", "Failed"), ("cancelled", "Cancelled")]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="makervault_print_jobs")
     model_revision = models.ForeignKey(ModelRevision, on_delete=models.SET_NULL, null=True, blank=True, related_name="prints")
     project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True, related_name="print_jobs")
     printer = models.ForeignKey(Printer, on_delete=models.PROTECT, related_name="print_jobs")
@@ -867,6 +963,14 @@ class PrintJob(TimeStampedModel):
 
     class Meta:
         ordering = ["-created_at"]
+
+    def clean(self):
+        if self.printer_id and self.owner_id and self.printer.owner_id != self.owner_id:
+            raise ValidationError({"printer": "Selected printer belongs to a different user."})
+        if self.project_id and self.owner_id and self.project.owner_id != self.owner_id:
+            raise ValidationError({"project": "Selected project belongs to a different user."})
+        if self.model_revision_id and self.owner_id and self.model_revision.model.owner_id != self.owner_id:
+            raise ValidationError({"model_revision": "Selected model revision belongs to a different user."})
 
     def __str__(self):
         return f"Print {self.id} ({self.get_status_display()})"
@@ -899,6 +1003,10 @@ class PrintMaterialUsage(TimeStampedModel):
         ]
 
     def clean(self):
+        if self.spool_id and self.spool.owner_id != self.print_job.owner_id:
+            raise ValidationError({"spool": "Selected spool belongs to a different user."})
+        if self.printer_slot_id and self.printer_slot.printer.owner_id != self.print_job.owner_id:
+            raise ValidationError({"printer_slot": "Selected printer slot belongs to a different user."})
         if self.spool_id and self.filament_id and self.spool.filament_id != self.filament_id:
             raise ValidationError({"filament": "Selected filament does not match the selected spool."})
         if self.spool_id and not self.filament_id:

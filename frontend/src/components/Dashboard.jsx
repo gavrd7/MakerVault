@@ -1,4 +1,5 @@
 import React from "react";
+import StorageSummary from "./StorageSummary";
 
 export default function Dashboard({ dashboard, inventory, onNavigate }) {
   const cards = dashboard ? [
@@ -23,6 +24,7 @@ export default function Dashboard({ dashboard, inventory, onNavigate }) {
         <span>{label}</span><strong>{value}</strong><small>{sub}</small>
       </button>)}
     </section>
+    <StorageSummary />
     <section className="panel">
       <div className="panelHead"><div><h3>Inventory snapshot</h3><p>Most recently loaded records</p></div><button onClick={() => onNavigate("Inventory")}>Open inventory →</button></div>
       <MiniTable rows={inventory.slice(0, 8)} />

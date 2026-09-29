@@ -161,7 +161,7 @@ class SimplyPrintIntegrationTests(TestCase):
     @patch("core.printing_sync.requests.request")
     def test_sync_links_existing_printer_without_cloning_remote_filament_inventory(self, request_mock):
         self.configure()
-        local = Printer.objects.create(
+        local = Printer.objects.create(owner=self.user, 
             name="Workshop K2",
             model="K2",
             serial_number="LOCAL-SERIAL",
@@ -222,7 +222,7 @@ class SimplyPrintIntegrationTests(TestCase):
     @patch("core.printing_sync.requests.request")
     def test_explicit_slot_link_creates_exact_simplyprint_spool_mapping(self, request_mock):
         self.configure()
-        printer = Printer.objects.create(name="Workshop K2", model="K2")
+        printer = Printer.objects.create(owner=self.user, name="Workshop K2", model="K2")
         request_mock.side_effect = self.simplyprint_api_response
         synced = self.client.post("/api/settings/printing-integrations/simplyprint/sync/")
         self.assertEqual(synced.status_code, 200, synced.content)
@@ -236,7 +236,7 @@ class SimplyPrintIntegrationTests(TestCase):
             color_hex="#800080",
             diameter_mm="1.75",
         )
-        spool = Spool.objects.create(
+        spool = Spool.objects.create(owner=self.user, 
             spool_id="SPL-SP-0001",
             filament=filament,
             initial_weight_g="1000",

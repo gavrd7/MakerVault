@@ -214,6 +214,14 @@ DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "MakerVault <makervault@loc
 
 STATIC_URL = "/static/"
 STATIC_ROOT = Path("/app/staticfiles")
+
+# User-private blob encryption. Docker deployments default to a dedicated key
+# volume separate from MEDIA_ROOT; non-Docker deployments can use either the
+# file path or a base64/hex MAKERVAULT_STORAGE_KEY environment value.
+MAKERVAULT_STORAGE_KEY = os.getenv("MAKERVAULT_STORAGE_KEY", "").strip()
+_storage_key_file = os.getenv("MAKERVAULT_STORAGE_KEY_FILE", "/app/keys/private_storage.key").strip()
+MAKERVAULT_STORAGE_KEY_FILE = Path(_storage_key_file) if _storage_key_file else None
+
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},

@@ -1,5 +1,38 @@
 # Changelog
 
+## v0.7.0.1 — in development
+
+- Added the first multi-user ownership foundation: projects, inventory, files, printing locations/integrations, physical spools, owned printers, 3D models and print jobs now carry an explicit owner.
+- Added a guarded legacy-data migration that preserves existing project creator attribution and assigns otherwise ambiguous pre-v0.7 private records only when MakerVault can identify a sole/explicit owner safely.
+- Added `MAKERVAULT_LEGACY_OWNER_USERNAME` as an upgrade escape hatch for existing installations with multiple accounts and ambiguous legacy private data.
+- New private records created through the main MakerVault APIs now record their authenticated owner, including model/file revision workflows and printing imports.
+- Added per-user storage profiles, an instance-wide 10 GiB default quota policy, category counters and the authenticated `/api/storage/` usage-summary endpoint as the basis for quota enforcement and the personal storage dashboard.
+- Enforced authenticated-owner isolation across private API querysets: lists, detail routes, edits and deletes no longer expose another user's private records, including to staff/superusers through ordinary MakerVault APIs.
+- Added cross-owner relationship validation for projects, inventory, files/revisions, printers/locations, spools, model assets, print jobs and material usage.
+- Changed project slugs, inventory IDs, printing-location names, integration providers and spool IDs from instance-global uniqueness to owner-scoped uniqueness.
+- Isolated printing integrations, scheduled sync jobs and external provider links per user so identical remote IDs can safely exist in different accounts.
+- Protected private MEDIA_URL delivery with database ownership checks and removed private user records from the Django admin browser.
+- Added two-user regression coverage for list isolation, guessed-UUID 404 behaviour, cross-owner linking and owner-scoped identifiers.
+- Enforced effective per-user storage quotas before private uploads can grow persistent storage, including general files, immutable file versions, project files/images and STL/3MF model revisions.
+- Project cover replacements are charged only for positive net growth, while immutable revisions continue to count in full.
+- Added a personal dashboard storage card showing used/quota capacity, remaining space, Models/3MF, project files, images and other-file breakdowns, plus 80%/90%/full warning states.
+- Added superuser-only **Users & storage** administration with account status, aggregate private-record/storage counts, instance default quotas, per-user overrides and Unlimited policies without exposing another user's private filenames or project contents.
+- Added guarded account disable/reactivate, private-data purge and account deletion controls; self-lockout actions are blocked and destructive operations require exact username confirmation.
+- Added AES-256-GCM authenticated encryption for user-private FileAsset data, project covers and inventory images, using opaque random object names and a key source separated from the media volume.
+- Added automatic generation/persistence of the private-storage key in a dedicated Docker key volume, with startup refusal if encrypted blobs exist but the key is missing to prevent accidental key replacement and data loss.
+- Added a safe legacy-media migration path: pre-v0.7 plaintext private files remain readable during upgrade and are rewritten to encrypted opaque blobs on startup; failed source objects are retained for retry.
+- Authenticated private-media delivery and Model Intelligence now read through the encrypted storage layer, while shared catalogue/reference media remains instance-wide and unencrypted.
+- Added encryption regression coverage for opaque naming, authenticated round trips, tamper detection, ownership-checked media delivery and legacy plaintext migration.
+
+- Expanded the built-in generic component catalogue from 180 to 387 entries, adding common starter-kit parts, passives, semiconductors, sensors, displays, communications modules, controls, power modules, connectors, logic ICs, motors and maker hardware.
+- Added catalogue regression coverage for representative maker-project staples and raised the minimum component-coverage guard.
+- Versioned starter-catalogue records consistently so existing installations receive the expanded catalogue idempotently on startup without replacing user-maintained component data.
+
+- Started the v0.7.0 multi-user isolation and secure-storage milestone.
+- Defined shared catalogue data versus private user-owned workspace data as an explicit application boundary.
+- Planned per-user storage quotas, personal storage usage reporting, administrator user management and encrypted-at-rest user uploads.
+
+
 ## v0.6.6 — 2026-09-28
 
 - Raised local model-analysis format to version 5 for slicer-aware 3MF metadata.
