@@ -717,6 +717,46 @@ class PrintingFoundationTests(TestCase):
         self.assertFalse(payload["multi_material_installed"])
         self.assertEqual(payload["installed_multi_material_system"], "")
 
+    def test_printer_catalogue_uses_official_remote_image_fallbacks(self):
+        maker = PrinterManufacturer.objects.create(name="Creality")
+        model = PrinterCatalogModel.objects.create(
+            manufacturer=maker,
+            name="K2",
+            multi_material_system="creality_cfs",
+            features={
+                "official_image_url": "https://cdn.example.test/k2.png",
+                "official_image_source_page": "https://example.test/k2",
+                "official_image_source_provider": "Creality official",
+                "official_image_multi_material_url": "https://cdn.example.test/k2-combo.png",
+                "official_image_multi_material_source_page": "https://example.test/k2-combo",
+                "official_image_multi_material_source_provider": "Creality official store",
+            },
+        )
+        printer = Printer.objects.create(
+            owner=self.user,
+            name="K2",
+            printer_manufacturer=maker,
+            catalog_model=model,
+            model="K2",
+            multi_material_installed=True,
+        )
+
+        response = self.client.get("/api/printing/")
+        self.assertEqual(response.status_code, 200, response.content)
+        row = next(item for item in response.json()["printers"] if item["id"] == str(printer.id))
+        self.assertEqual(row["catalogue"]["image"], "https://cdn.example.test/k2.png")
+        self.assertFalse(row["catalogue"]["image_cached"])
+        self.assertTrue(row["catalogue"]["image_remote_official"])
+        self.assertEqual(
+            row["catalogue"]["image_multi_material"],
+            "https://cdn.example.test/k2-combo.png",
+        )
+        self.assertTrue(row["catalogue"]["image_multi_material_remote_official"])
+        self.assertEqual(
+            row["catalogue"]["image_multi_material_source_provider"],
+            "Creality official store",
+        )
+
     def test_optional_multi_material_addon_can_be_enabled_and_removed(self):
         maker = PrinterManufacturer.objects.create(name="Optional CFS Maker")
         model = PrinterCatalogModel.objects.create(
