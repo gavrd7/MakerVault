@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .catalogue_enrichment import TRACKED_BOARD_FIELDS, update_board_enrichment_state
+from .catalogue_enrichment import TRACKED_BOARD_FIELDS, _tracked_board_values
 from .models import BoardModel, ComponentModel, FilamentProduct, PrinterCatalogModel
 
 
@@ -31,15 +31,7 @@ def _board_coverage() -> dict:
     missing_samples = []
 
     for board in rows:
-        # Recompute the status model in memory/persist it if an old record predates
-        # the current enrichment-status schema.
         specs = board.specifications or {}
-        if specs.get("technical_field_status") is None:
-            try:
-                update_board_enrichment_state(board)
-                specs = board.specifications or {}
-            except Exception:
-                specs = board.specifications or {}
 
         core_values = [
             board.name,
@@ -54,6 +46,17 @@ def _board_coverage() -> dict:
             core_complete += 1
 
         states = specs.get("technical_field_status") or {}
+        if not states:
+            values = _tracked_board_values(board)
+            not_applicable = set(specs.get("not_applicable_specs") or [])
+            states = {
+                key: (
+                    "not_applicable" if key in not_applicable
+                    else "value" if values.get(key) not in (None, "", {}, [])
+                    else "unknown"
+                )
+                for key in TRACKED_BOARD_FIELDS
+            }
         resolved_technical += sum(
             1 for key in TRACKED_BOARD_FIELDS
             if states.get(key) in {"value", "not_applicable"}
