@@ -1708,3 +1708,66 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
   .adminStorageBreakdown,.adminQuotaControls{grid-template-columns:1fr}
   .adminQuotaControls>button{grid-column:auto}
 }
+
+
+/* v0.7.1 universal search */
+.globalSearch{position:relative;z-index:40}
+.globalSearchInputWrap{display:flex;align-items:center;gap:8px;border:1px solid #303b49;background:#0c1219;border-radius:10px;padding:0 10px}
+.globalSearchInputWrap:focus-within{border-color:#8069ee;box-shadow:0 0 0 3px rgba(124,92,255,.14)}
+.globalSearchInputWrap>span:first-child{color:#8f82f6;font-size:18px}
+.globalSearchInputWrap input{border:0!important;box-shadow:none!important;background:transparent;padding:10px 0;min-width:0}
+.globalSearchBusy{margin-left:auto;color:#7f8a9c;font-size:11px}
+.globalSearchPopover{position:absolute;left:0;right:0;top:calc(100% + 8px);max-height:min(64vh,560px);overflow:auto;border:1px solid #374354;background:#0d131a;border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,.45);padding:7px}
+.globalSearchResult{display:grid;width:100%;gap:3px;text-align:left;border:0;background:transparent;padding:10px 11px;border-radius:8px}
+.globalSearchResult:hover{background:#18212c}
+.globalSearchType{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#8f82f6}
+.globalSearchResult strong{font-size:13px;overflow-wrap:anywhere}
+.globalSearchResult small{color:#8995a7;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.globalSearchMessage{padding:14px 11px;color:#8995a7;font-size:12px}
+.globalSearchAdvanced{width:100%;margin-top:5px;border:0;border-top:1px solid #29313c;border-radius:0;background:transparent;text-align:left;color:#bcb3ff;padding:11px}
+.globalSearchAdvanced:hover{background:#171f2a}
+.searchPage{display:grid;gap:16px}
+.searchHero{padding:24px;display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,520px);gap:24px;align-items:center}
+.searchHero h2{margin:6px 0 8px;font-size:28px}
+.searchHero p{margin:0;color:#95a0b1;line-height:1.5}
+.searchHeroInput{display:flex;align-items:center;gap:10px;border:1px solid #3a4657;background:#0b1118;border-radius:12px;padding:0 13px}
+.searchHeroInput:focus-within{border-color:#8069ee;box-shadow:0 0 0 3px rgba(124,92,255,.14)}
+.searchHeroInput span{color:#8f82f6;font-size:22px}
+.searchHeroInput input{border:0!important;background:transparent;box-shadow:none!important;padding:14px 0;font-size:16px}
+.searchWorkspace{display:grid;grid-template-columns:minmax(230px,280px) minmax(0,1fr);gap:16px;align-items:start}
+.searchFilters{padding:16px;display:grid;gap:18px;position:sticky;top:20px}
+.searchFilterSection{display:grid;gap:11px}
+.searchFilterSection>strong{font-size:13px}
+.searchFilterSection>label{display:grid;gap:6px;color:#aeb8c7;font-size:12px}
+.searchTypeFilters{display:grid;gap:6px}
+.searchTypeFilters label{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:9px;align-items:center;padding:7px 8px;border-radius:8px;color:#aeb8c7;font-size:12px}
+.searchTypeFilters label:hover{background:#151d27}
+.searchTypeFilters input{width:auto}
+.searchTypeFilters small{color:#6f7c8e}
+.searchResultsPanel{min-width:0}
+.searchResults{display:grid}
+.searchResultCard{border:0;border-bottom:1px solid #252e39;border-radius:0;background:transparent;padding:15px 18px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;text-align:left;align-items:center}
+.searchResultCard:last-child{border-bottom:0}
+.searchResultCard:hover{background:#131b24}
+.searchResultMain{display:grid;gap:6px;min-width:0}
+.searchResultMain>strong{font-size:15px}
+.searchResultMain p{margin:0;color:#8f9bad;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.searchResultTitle{display:flex;gap:6px;flex-wrap:wrap}
+.searchResultMeta{display:grid;gap:4px;text-align:right;color:#8e9aac;font-size:11px}
+.searchOpenArrow{font-size:18px;color:#9f91ff}
+.searchEmpty{padding:48px 20px;text-align:center;display:grid;gap:8px;color:#8490a2}
+.searchEmpty strong{color:#d7deea}
+@media(max-width:900px){
+  .globalSearch{order:-1}
+  aside>.globalSearch{width:100%}
+  .globalSearchPopover{position:fixed;left:16px;right:16px;top:68px;max-height:65vh}
+  .searchHero{grid-template-columns:1fr}
+  .searchWorkspace{grid-template-columns:1fr}
+  .searchFilters{position:static;grid-template-columns:1fr 1fr}
+}
+@media(max-width:620px){
+  .searchFilters{grid-template-columns:1fr}
+  .searchResultCard{grid-template-columns:1fr;gap:8px}
+  .searchResultMeta{text-align:left;grid-template-columns:auto auto 1fr;align-items:center}
+  .searchOpenArrow{justify-self:end}
+}
