@@ -4,6 +4,8 @@ MakerVault is a self-hosted makerspace inventory, project and 3D-printing manage
 
 **Current development build: v0.7.0.1**
 
+**New to MakerVault?** Read the [user guide](docs/guide/index.md) for beginner installation, everyday workflows, backups and advanced setup. [Guide maintenance and GitHub Pages publishing](docs/GUIDE_MAINTENANCE.md) are documented separately.
+
 MakerVault is designed as a single local source of truth for a maker workspace. Catalogue records describe what a part or printer *is*; physical inventory records what you actually own; projects connect inventory, files, BOMs, models and repositories; and the 3D-printing workspace adds printers, filament, spools, models, print history, analytics and optional external integrations.
 
 All features described below are part of the current MakerVault application. Historical milestone/version notes live in [CHANGELOG.md](CHANGELOG.md) and [docs/ROADMAP.md](docs/ROADMAP.md).
@@ -719,3 +721,4 @@ MakerVault software is licensed under **GNU AGPL v3.0 or later (AGPL-3.0-or-late
 Third-party catalogue images and other media are not relicensed under AGPL. Their original licence/provenance is retained and exposed in **About → Media attribution**.
 
 See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for third-party source and licence information.
+
