@@ -12,6 +12,11 @@ from django.core.cache import cache
 from django.utils import timezone
 from django.utils.text import slugify
 
+from .catalogue_source_policy import (
+    append_source_trace,
+    classify_source_url,
+    ordered_source_candidates,
+)
 from .catalogue_images import (
     CatalogueImageError,
     apply_catalogue_image,
@@ -441,9 +446,10 @@ def find_espboards_image(board) -> ImageCandidate | None:
     return None
 
 
-def _candidate_source_pages(obj) -> list[str]:
+def _candidate_source_pages(obj) -> list[dict]:
     specs = getattr(obj, "specifications", None) or {}
-    urls = []
+    candidates = []
+    seen = set()
     for key in (
         "reference_url",
         "technical_source_url",
@@ -452,17 +458,24 @@ def _candidate_source_pages(obj) -> list[str]:
         "pinout_url",
     ):
         value = str(specs.get(key) or "").strip()
-        if value.startswith("https://") and not value.lower().endswith(".pdf"):
-            urls.append(value)
+        if value.startswith("https://") and not value.lower().endswith(".pdf") and value not in seen:
+            candidates.append({
+                "url": value,
+                "source_type": "manufacturer" if key in {"reference_url", "technical_source_url", "product_url"} else "",
+                "provider": str(specs.get("reference_provider") or "").strip(),
+            })
+            seen.add(value)
+
     source = getattr(obj, "source", None)
     source_url = str(getattr(source, "url", "") or "").strip()
-    if source_url.startswith("https://") and not source_url.lower().endswith(".pdf"):
-        urls.append(source_url)
-    out = []
-    for url in urls:
-        if url not in out:
-            out.append(url)
-    return out[:4]
+    if source_url.startswith("https://") and not source_url.lower().endswith(".pdf") and source_url not in seen:
+        candidates.append({
+            "url": source_url,
+            "source_type": str(getattr(source, "source_type", "") or ""),
+            "provider": str(getattr(source, "name", "") or ""),
+        })
+
+    return ordered_source_candidates(candidates)[:6]
 
 
 def find_source_page_image(obj) -> dict | None:
@@ -472,7 +485,8 @@ def find_source_page_image(obj) -> dict | None:
     does not assume redistribution rights merely because a source page exposes
     an OpenGraph image.
     """
-    for page_url in _candidate_source_pages(obj):
+    for source in _candidate_source_pages(obj):
+        page_url = source["url"]
         try:
             final_url, html = fetch_import_html(page_url)
         except ImporterError:
@@ -494,11 +508,14 @@ def find_source_page_image(obj) -> dict | None:
         parsed = urlparse(image_url)
         if parsed.scheme != "https" or not parsed.netloc:
             continue
+        tier = classify_source_url(final_url, source_type=source.get("source_type", ""))
         return {
             "external_image_url": image_url,
             "image_source_page": final_url,
-            "image_source_provider": urlparse(final_url).netloc.removeprefix("www."),
+            "image_source_provider": source.get("provider") or urlparse(final_url).netloc.removeprefix("www."),
             "image_source_type": "source-page-remote",
+            "image_source_tier": tier.key,
+            "image_source_priority": tier.priority,
             "image_license": "",
             "image_author": "",
         }
@@ -671,12 +688,14 @@ def run_catalogue_image_seed(
                         }
 
                     image_field = "image_multi_material" if variant == "multi_material" else "image"
-                    if getattr(obj, image_field, None):
+                    metadata, _ = catalogue_image_metadata(obj, variant=variant)
+                    if getattr(obj, image_field, None) or (
+                        variant == "base" and str(metadata.get("external_image_url") or "").startswith("https://")
+                    ):
                         skipped += 1
                         by_kind[kind]["skipped"] += 1
                         continue
 
-                    metadata, _ = catalogue_image_metadata(obj, variant=variant)
                     if metadata.get("auto_image_opt_out"):
                         skipped += 1
                         by_kind[kind]["skipped"] += 1
@@ -706,6 +725,27 @@ def run_catalogue_image_seed(
                             )
                             metadata["auto_image_search_attempts"] = diagnostic.get("attempts", [])[-12:]
                         else:
+                            source_fallback = find_source_page_image(obj) if variant == "base" else None
+                            # Manufacturer, specialist and maintained ecosystem
+                            # source pages outrank generic open-media discovery.
+                            if source_fallback and int(source_fallback.get("image_source_priority", 999)) < 50:
+                                metadata.update(source_fallback)
+                                metadata = append_source_trace(
+                                    metadata,
+                                    provider=source_fallback.get("image_source_provider", ""),
+                                    url=source_fallback.get("image_source_page", ""),
+                                    tier=source_fallback.get("image_source_tier", "generic"),
+                                    result="selected-remote-image",
+                                )
+                                metadata["auto_image_last_result"] = "remote-source-selected"
+                                field = set_catalogue_image_metadata(obj, metadata, variant=variant)
+                                obj.save(update_fields=[field, "updated_at"] if field else ["updated_at"])
+                                remote += 1
+                                by_kind[kind]["remote"] += 1
+                                provider_key = source_fallback["image_source_provider"] or "source page"
+                                by_provider[provider_key] = by_provider.get(provider_key, 0) + 1
+                                continue
+
                             candidate = resolve_catalogue_image(obj, variant=variant)
                             diagnostic = {
                                 "provider": candidate.provider if candidate else "",
@@ -713,11 +753,19 @@ def run_catalogue_image_seed(
                             }
 
                         if not candidate:
-                            source_fallback = None
                             if not isinstance(obj, PrinterCatalogModel) and variant == "base":
-                                source_fallback = find_source_page_image(obj)
+                                source_fallback = source_fallback if "source_fallback" in locals() else find_source_page_image(obj)
+                            else:
+                                source_fallback = None
                             if source_fallback:
                                 metadata.update(source_fallback)
+                                metadata = append_source_trace(
+                                    metadata,
+                                    provider=source_fallback.get("image_source_provider", ""),
+                                    url=source_fallback.get("image_source_page", ""),
+                                    tier=source_fallback.get("image_source_tier", "generic"),
+                                    result="selected-remote-image",
+                                )
                                 metadata["auto_image_last_result"] = "remote-source-fallback"
                                 field = set_catalogue_image_metadata(obj, metadata, variant=variant)
                                 obj.save(update_fields=[field, "updated_at"] if field else ["updated_at"])
@@ -743,6 +791,16 @@ def run_catalogue_image_seed(
                             continue
 
                         cache_candidate(obj, candidate, variant=variant)
+                        metadata, _ = catalogue_image_metadata(obj, variant=variant)
+                        metadata = append_source_trace(
+                            metadata,
+                            provider=candidate.provider,
+                            url=candidate.source_page_url,
+                            tier="open_media",
+                            result="selected-cached-image",
+                        )
+                        field = set_catalogue_image_metadata(obj, metadata, variant=variant)
+                        obj.save(update_fields=[field, "updated_at"] if field else ["updated_at"])
                         cached += 1
                         by_kind[kind]["cached"] += 1
                         provider_key = candidate.provider or "unknown"
