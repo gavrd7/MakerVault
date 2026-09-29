@@ -711,6 +711,7 @@ def run_catalogue_image_seed(
                     metadata["auto_image_attempt_version"] = IMAGE_SEED_VERSION
                     metadata["image_variant"] = variant
 
+                    source_fallback = None
                     try:
                         if isinstance(obj, PrinterCatalogModel):
                             queries = (
@@ -754,7 +755,7 @@ def run_catalogue_image_seed(
 
                         if not candidate:
                             if not isinstance(obj, PrinterCatalogModel) and variant == "base":
-                                source_fallback = source_fallback if "source_fallback" in locals() else find_source_page_image(obj)
+                                source_fallback = source_fallback or find_source_page_image(obj)
                             else:
                                 source_fallback = None
                             if source_fallback:
