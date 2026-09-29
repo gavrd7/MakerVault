@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
 import { themeQuartz } from "ag-grid-community";
 import { apiFetch } from "../api";
-import { Badge, BoardImage, ImageManagerModal, LoadingBlock, Modal } from "./Common";
+import { Badge, BoardImage, ImageManagerModal, ImageViewer, LoadingBlock, Modal } from "./Common";
 import { AddInventoryModal } from "./InventoryPage";
 
 function prettyKey(key) {
@@ -116,6 +116,7 @@ export default function ComponentsPage({ components, setComponents, boards, proj
 
 function ComponentDetail({ component, loading, canEdit, canAddInventory, boards, components, projects, config, onInventoryCreated, onClose, onChanged }) {
   const [imageOpen, setImageOpen] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const specs = Object.entries(component.specifications || {})
     .filter(([key]) => !["starter_catalogue", "catalogue_version", "external_image_url", "image_source_url", "image_source_type", "image_cached_at", "image_source_provider", "image_source_page", "image_source_query", "image_license", "image_author", "auto_image_seeded", "auto_image_seeded_at", "auto_image_last_attempt", "auto_image_attempt_version", "auto_image_opt_out"].includes(key));
@@ -123,7 +124,15 @@ function ComponentDetail({ component, loading, canEdit, canAddInventory, boards,
   return <aside className="detailPane">
     <div className="detailHead"><h3>Component details</h3><button className="iconButton" onClick={onClose}>×</button></div>
     {loading ? <LoadingBlock label="Loading component details…" /> : <>
-      <BoardImage src={component.image} alt={component.name} size="large" placeholder="PART" />
+      <button
+        type="button"
+        className="componentHeroImage imageViewerTrigger"
+        onClick={() => component.image && setViewerOpen(true)}
+        disabled={!component.image}
+        title={component.image ? "Open image viewer" : undefined}
+      >
+        <BoardImage src={component.image} alt={component.name} size="large" placeholder="PART" />
+      </button>
       <div className="detailTitleRow"><div><h2>{component.name}</h2><p className="muted detailMaker">{component.category}</p></div><div className="detailActions">{canAddInventory && <button className="primary" onClick={() => setInventoryOpen(true)}>＋ Add to inventory</button>}{canEdit && <button onClick={() => setImageOpen(true)}>Image</button>}</div></div>
       <p className="muted">{component.description || "Reusable makerspace component definition."}</p>
       <div className="badgeRow">
@@ -149,6 +158,7 @@ function ComponentDetail({ component, loading, canEdit, canAddInventory, boards,
       onClose={() => setImageOpen(false)}
       onUpdated={updated => { onChanged(updated); setImageOpen(false); }}
     />}
+    {viewerOpen && <ImageViewer src={component.image} alt={component.name} title={component.name} onClose={() => setViewerOpen(false)} />}
     {inventoryOpen && <AddInventoryModal
       boards={boards}
       components={components}
