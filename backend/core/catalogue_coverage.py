@@ -24,7 +24,11 @@ def _metric(key: str, label: str, complete: int, total: int) -> dict:
 def _board_coverage() -> dict:
     rows = list(BoardModel.objects.select_related("manufacturer").all())
     total = len(rows)
-    with_image = sum(bool(row.image) for row in rows)
+    def has_image(row):
+        specs = row.specifications or {}
+        return bool(row.image or specs.get("external_image_url"))
+
+    with_image = sum(has_image(row) for row in rows)
     core_complete = 0
     resolved_technical = 0
     technical_slots = total * len(TRACKED_BOARD_FIELDS)
@@ -63,11 +67,11 @@ def _board_coverage() -> dict:
         )
 
         unresolved = [key for key in TRACKED_BOARD_FIELDS if states.get(key) not in {"value", "not_applicable"}]
-        if (not board.image or unresolved) and len(missing_samples) < 12:
+        if (not has_image(board) or unresolved) and len(missing_samples) < 12:
             missing_samples.append({
                 "id": str(board.id),
                 "name": str(board),
-                "missing_image": not bool(board.image),
+                "missing_image": not has_image(board),
                 "unresolved_fields": unresolved[:8],
             })
 
@@ -87,10 +91,15 @@ def _board_coverage() -> dict:
 def _component_coverage() -> dict:
     rows = list(ComponentModel.objects.select_related("category").all())
     total = len(rows)
+
+    def has_image(row):
+        specs = row.specifications or {}
+        return bool(row.image or specs.get("external_image_url"))
+
     samples = []
     for row in rows:
         missing = []
-        if not row.image:
+        if not has_image(row):
             missing.append("image")
         if not row.category_id:
             missing.append("category")
@@ -106,7 +115,7 @@ def _component_coverage() -> dict:
         "label": "Components",
         "total": total,
         "metrics": [
-            _metric("images", "Images", sum(bool(row.image) for row in rows), total),
+            _metric("images", "Images", sum(has_image(row) for row in rows), total),
             _metric("category", "Category", sum(bool(row.category_id) for row in rows), total),
             _metric("description", "Descriptions", sum(bool(str(row.description or "").strip()) for row in rows), total),
             _metric("specifications", "Specifications", sum(bool(row.specifications or {}) for row in rows), total),
