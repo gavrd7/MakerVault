@@ -1,6 +1,15 @@
 # Changelog
 
-## v0.7.0.1 — in development
+## v0.7.1 — in development
+
+- Started the Universal Search & Catalogue Completion milestone.
+- Added an ownership-safe universal search backend spanning projects, inventory, boards, components, files, 3D models, printers, physical spools and filament products.
+- Added persistent shell search with debounced grouped quick results and a dedicated advanced Search page with record-type, project, manufacturer and sorting controls.
+- Added regression coverage ensuring private search results remain owner-scoped while shared catalogue records remain searchable.
+- Added a live catalogue-completeness audit for boards, components, printer models and filament products, including image/specification coverage percentages and representative missing-data samples.
+- Added the catalogue coverage dashboard to Settings → Library updates as the baseline for the focused enrichment pass.
+
+## v0.7.0.1 — 2026-09-29
 
 - Added the first multi-user ownership foundation: projects, inventory, files, printing locations/integrations, physical spools, owned printers, 3D models and print jobs now carry an explicit owner.
 - Added a guarded legacy-data migration that preserves existing project creator attribution and assigns otherwise ambiguous pre-v0.7 private records only when MakerVault can identify a sole/explicit owner safely.
