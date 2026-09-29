@@ -37,7 +37,7 @@ function inferFileCategory(filename) {
   return "other";
 }
 
-export default function FilesPage({ projects, onOpenProject, config }) {
+export default function FilesPage({ projects, onOpenProject, config, initialSearch = "", searchToken = null }) {
   const [rows, setRows] = useState([]);
   const [categories, setCategories] = useState([]);
   const [search, setSearch] = useState("");
@@ -49,6 +49,10 @@ export default function FilesPage({ projects, onOpenProject, config }) {
   const [editing, setEditing] = useState(null);
   const [versioning, setVersioning] = useState(null);
   const [viewerFile, setViewerFile] = useState(null);
+
+  useEffect(() => {
+    if (initialSearch) setSearch(initialSearch);
+  }, [initialSearch, searchToken]);
 
   async function load() {
     setLoading(true);
