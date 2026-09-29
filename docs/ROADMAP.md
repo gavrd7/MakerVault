@@ -99,6 +99,8 @@ This file tracks completed MakerVault milestones and the planned path toward a s
 
 ### v0.7.1 — Universal search & catalogue completion
 
+**In development:** the ownership-safe universal search API, shell quick-search UI, advanced Search page and live catalogue coverage audit are now implemented on the milestone branch. The remaining work is catalogue enrichment/source expansion, search refinement and validation.
+
 **Goal:** make MakerVault's growing data set easy to find and substantially improve the completeness of shared reference catalogues.
 
 #### Universal search
