@@ -40,13 +40,14 @@ class Command(BaseCommand):
             self.style.SUCCESS(
                 "Catalogue image seeding: "
                 f"status={result['status']} processed={result['processed']} "
-                f"cached={result['cached']} failed={result['failed']} skipped={result['skipped']}"
+                f"cached={result['cached']} remote={result.get('remote', 0)} "
+                f"failed={result['failed']} skipped={result['skipped']}"
             )
         )
         for kind, stats in (result.get("by_kind") or {}).items():
             self.stdout.write(
                 f"  {kind}: processed={stats['processed']} cached={stats['cached']} "
-                f"failed={stats['failed']} skipped={stats['skipped']}"
+                f"remote={stats.get('remote', 0)} failed={stats['failed']} skipped={stats['skipped']}"
             )
         if result.get("by_provider"):
             self.stdout.write(
