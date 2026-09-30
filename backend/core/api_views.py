@@ -1402,6 +1402,20 @@ def dashboard(request):
 
 @login_required
 @require_http_methods(["GET", "POST"])
+def _inventory_unit_count(value):
+    try:
+        parsed = Decimal(str(value if value not in (None, "") else 1))
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise ValidationError({"quantity": "Enter a whole number of items."}) from exc
+    if parsed != parsed.to_integral_value() or parsed < 1:
+        raise ValidationError({"quantity": "Inventory quantity must be a whole number of at least 1."})
+    if parsed > 500:
+        raise ValidationError({"quantity": "Add no more than 500 inventory items at once."})
+    return int(parsed)
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
 def inventory(request):
     if request.method == "GET":
         qs = InventoryItem.objects.filter(owner=request.user).select_related(
@@ -1417,6 +1431,18 @@ def inventory(request):
         item_type = str(payload.get("item_type") or "board")
         if item_type not in dict(InventoryItem.ITEM_TYPES):
             return _error("Unknown inventory item type.")
+
+        unit_count = _inventory_unit_count(payload.get("quantity", 1))
+        requested_inventory_id = str(payload.get("inventory_id") or "").strip()
+        requested_serial = str(payload.get("serial_number") or "").strip()
+        if unit_count > 1 and requested_inventory_id:
+            raise ValidationError({
+                "inventory_id": "Leave Inventory ID blank when adding multiple items so each unit can receive its own ID."
+            })
+        if unit_count > 1 and requested_serial:
+            raise ValidationError({
+                "serial_number": "Add items one at a time when assigning a serial or unique ID."
+            })
 
         board = None
         component = None
@@ -1435,29 +1461,40 @@ def inventory(request):
             if not project:
                 return _error("Selected project was not found.")
 
+        created_items = []
         with transaction.atomic():
-            item = InventoryItem(
-                owner=request.user,
-                inventory_id=(str(payload.get("inventory_id") or "").strip() or _next_inventory_id(request.user, item_type)),
-                item_type=item_type,
-                board=board,
-                component=component,
-                custom_name=str(payload.get("custom_name") or "").strip(),
-                quantity=_parse_decimal(payload.get("quantity", 1), "quantity", allow_none=False),
-                status=str(payload.get("status") or "available"),
-                project=project,
-                location=str(payload.get("location") or "").strip(),
-                serial_number=str(payload.get("serial_number") or "").strip(),
-                purchase_price=_parse_decimal(payload.get("purchase_price"), "purchase_price"),
-                currency=str(payload.get("currency") or settings.MAKERVAULT_CURRENCY).upper()[:3],
-                supplier=str(payload.get("supplier") or "").strip(),
-                purchase_url=str(payload.get("purchase_url") or "").strip(),
-                notes=str(payload.get("notes") or "").strip(),
-            )
-            item.full_clean()
-            item.save()
-            _record_inventory_history(item, request.user, created=True)
-        return JsonResponse({"item": _serialise_inventory(item)}, status=201)
+            for index in range(unit_count):
+                item = InventoryItem(
+                    owner=request.user,
+                    inventory_id=(requested_inventory_id if unit_count == 1 else _next_inventory_id(request.user, item_type)),
+                    item_type=item_type,
+                    board=board,
+                    component=component,
+                    custom_name=str(payload.get("custom_name") or "").strip(),
+                    quantity=Decimal("1"),
+                    status=str(payload.get("status") or "available"),
+                    project=project,
+                    location=str(payload.get("location") or "").strip(),
+                    serial_number=(requested_serial if unit_count == 1 else ""),
+                    purchase_price=_parse_decimal(payload.get("purchase_price"), "purchase_price"),
+                    currency=str(payload.get("currency") or settings.MAKERVAULT_CURRENCY).upper()[:3],
+                    supplier=str(payload.get("supplier") or "").strip(),
+                    purchase_url=str(payload.get("purchase_url") or "").strip(),
+                    notes=str(payload.get("notes") or "").strip(),
+                )
+                if not item.inventory_id:
+                    item.inventory_id = _next_inventory_id(request.user, item_type)
+                item.full_clean()
+                item.save()
+                _record_inventory_history(item, request.user, created=True)
+                created_items.append(item)
+
+        serialised = [_serialise_inventory(item) for item in created_items]
+        return JsonResponse({
+            "item": serialised[0],
+            "items": serialised,
+            "created_count": len(serialised),
+        }, status=201)
     except ValidationError as exc:
         return _validation_response(exc)
     except (ValueError, IntegrityError) as exc:
@@ -1534,12 +1571,12 @@ def inventory_detail(request, item_id):
                     setattr(item, field, str(payload[field] or "").strip())
     
             if "quantity" in payload:
-                item.quantity = _parse_decimal(payload["quantity"], "quantity", allow_none=False)
-                allocated = item.bom_allocations.aggregate(total=Sum("quantity"))["total"] or Decimal("0")
-                if item.quantity < allocated:
+                requested_quantity = _inventory_unit_count(payload["quantity"])
+                if requested_quantity != 1:
                     raise ValidationError({
-                        "quantity": f"Quantity cannot be lower than the {allocated} already allocated to BOMs."
+                        "quantity": "Each inventory record represents one physical item. Add another inventory record instead of increasing quantity."
                     })
+                item.quantity = Decimal("1")
             if "purchase_price" in payload:
                 item.purchase_price = _parse_decimal(payload["purchase_price"], "purchase_price")
             if "currency" in payload:
