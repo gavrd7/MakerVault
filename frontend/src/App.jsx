@@ -85,10 +85,38 @@ export default function App() {
     setSection("Search");
   }
 
+  function openTagTarget(tag) {
+    if (!tag?.target?.id) return;
+    const token = Date.now();
+    if (tag.target_type === "project") {
+      setProjectTarget(tag.target.id);
+      setSection("Projects");
+      return;
+    }
+    if (tag.target_type === "inventory") {
+      setSearchTarget({ type: "inventory", id: tag.target.id, section: "Inventory", token });
+      setSection("Inventory");
+      return;
+    }
+    if (tag.target_type === "spool") {
+      setSearchTarget({ type: "spools", id: tag.target.id, section: "3D Printing", token });
+      setSection("3D Printing");
+      return;
+    }
+    if (tag.target_type === "printer") {
+      setSearchTarget({ type: "printers", id: tag.target.id, section: "3D Printing", token });
+      setSection("3D Printing");
+      return;
+    }
+    if (tag.target_type === "location") {
+      setSection("3D Printing");
+    }
+  }
+
   function page() {
     if (section === "Dashboard") return <Dashboard dashboard={dashboard} inventory={inventory} onNavigate={setSection} />;
     if (section === "Search") return <SearchPage initialQuery={searchQuery} projects={projects} onOpenResult={openSearchResult} />;
-    if (section === "Maker Tags") return <MakerTagsPage config={config} resolveToken={tagResolveToken} onResolveConsumed={() => { setTagResolveToken(""); const params = new URLSearchParams(window.location.search); params.delete("tag"); const query = params.toString(); window.history.replaceState({}, "", window.location.pathname + (query ? "?" + query : "") + window.location.hash); }} onChanged={refreshDashboard} />;
+    if (section === "Maker Tags") return <MakerTagsPage config={config} resolveToken={tagResolveToken} onResolveConsumed={() => { setTagResolveToken(""); const params = new URLSearchParams(window.location.search); params.delete("tag"); const query = params.toString(); window.history.replaceState({}, "", window.location.pathname + (query ? "?" + query : "") + window.location.hash); }} onChanged={refreshDashboard} onOpenTarget={openTagTarget} />;
     if (section === "Inventory") return <InventoryPage inventory={inventory} setInventory={setInventory} boards={boards} components={components} projects={projects} config={config} refreshDashboard={refreshDashboard} openItemId={searchTarget?.type === "inventory" ? searchTarget.id : ""} openToken={searchTarget?.token} />;
     if (section === "Board Catalogue") return <BoardsPage boards={boards} setBoards={setBoards} components={components} projects={projects} config={config} onOpenImport={() => setImportOpen(true)} refreshDashboard={refreshDashboard} openBoardId={searchTarget?.type === "boards" ? searchTarget.id : ""} openToken={searchTarget?.token} onInventoryCreated={async item => { setInventory(rows => [...rows.filter(row => row.id !== item.id), item].sort((a,b) => a.inventory_id.localeCompare(b.inventory_id))); await refreshDashboard(); }} />;
     if (section === "Components") return <ComponentsPage components={components} setComponents={setComponents} boards={boards} projects={projects} config={config} refreshDashboard={refreshDashboard} openComponentId={searchTarget?.type === "components" ? searchTarget.id : ""} openToken={searchTarget?.token} onInventoryCreated={async item => { setInventory(rows => [...rows.filter(row => row.id !== item.id), item].sort((a,b) => a.inventory_id.localeCompare(b.inventory_id))); await refreshDashboard(); }} />;
