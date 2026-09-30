@@ -1,0 +1,385 @@
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { apiFetch } from "../api";
+import { Badge, LoadingBlock, Modal } from "./Common";
+
+function uid(prefix) {
+  const value = typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : Date.now().toString(36) + "-" + Math.random().toString(36).slice(2);
+  return prefix + "-" + value;
+}
+
+function referenceRows(type, boards, components, inventory) {
+  if (type === "board") return (boards || []).map(row => ({
+    id: row.id,
+    label: row.display_name || row.name,
+    subtitle: [row.family, row.mcu].filter(Boolean).join(" · "),
+  }));
+  if (type === "component") return (components || []).map(row => ({
+    id: row.id,
+    label: row.name,
+    subtitle: row.category || "",
+  }));
+  if (type === "inventory") return (inventory || []).map(row => ({
+    id: row.id,
+    label: row.name || row.display_name || row.inventory_id,
+    subtitle: [row.inventory_id, row.status_label].filter(Boolean).join(" · "),
+  }));
+  return [];
+}
+
+export default function ProjectWiringSection({ project, boards, components, inventory, config }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [active, setActive] = useState(null);
+
+  const canAdd = Boolean(config?.permissions?.add_wiring_diagram);
+  const canChange = Boolean(config?.permissions?.change_wiring_diagram);
+  const canDelete = Boolean(config?.permissions?.delete_wiring_diagram);
+
+  async function load() {
+    setLoading(true); setError("");
+    try {
+      const result = await apiFetch("/api/projects/" + project.id + "/wiring/");
+      setRows(result.rows || []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, [project.id]);
+
+  async function openDiagram(diagram) {
+    setError("");
+    try {
+      const result = await apiFetch("/api/projects/" + project.id + "/wiring/" + diagram.id + "/");
+      setActive(result.item);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function removeDiagram(diagram) {
+    if (!window.confirm('Delete wiring diagram "' + diagram.name + '"?')) return;
+    try {
+      await apiFetch("/api/projects/" + project.id + "/wiring/" + diagram.id + "/", { method: "DELETE" });
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  return <section className="projectSection projectWiringSection">
+    <div className="projectSectionHead">
+      <div><h3>Interactive wiring</h3><p>Structured pin-to-pin wiring diagrams for this project.</p></div>
+      <div className="projectSectionActions">
+        <span>{rows.length}</span>
+        {canAdd && <button type="button" onClick={() => setCreateOpen(true)}>＋ Diagram</button>}
+      </div>
+    </div>
+
+    {error && <div className="inlineError">{error}</div>}
+    {loading ? <LoadingBlock label="Loading wiring diagrams…" /> : <div className="wiringDiagramList">
+      {rows.map(diagram => <article className="wiringDiagramCard" key={diagram.id}>
+        <div>
+          <strong>{diagram.name}</strong>
+          <small>{diagram.node_count} node{diagram.node_count === 1 ? "" : "s"} · {diagram.connection_count} connection{diagram.connection_count === 1 ? "" : "s"} · rev {diagram.revision}</small>
+          {diagram.description && <p>{diagram.description}</p>}
+        </div>
+        <div>
+          <button type="button" onClick={() => openDiagram(diagram)}>Open editor</button>
+          {canDelete && <button type="button" className="assetDanger" onClick={() => removeDiagram(diagram)}>Delete</button>}
+        </div>
+      </article>)}
+      {!rows.length && <div className="projectAssetEmpty">No interactive wiring diagrams yet. Uploaded schematics remain available in Files &amp; assets.</div>}
+    </div>}
+
+    {createOpen && <CreateDiagramModal
+      project={project}
+      onClose={() => setCreateOpen(false)}
+      onCreated={async item => { setCreateOpen(false); setActive(item); await load(); }}
+    />}
+
+    {active && <WiringEditor
+      project={project}
+      diagram={active}
+      boards={boards}
+      components={components}
+      inventory={inventory}
+      canChange={canChange}
+      onClose={async () => { setActive(null); await load(); }}
+      onSaved={item => setActive(item)}
+    />}
+  </section>;
+}
+
+function CreateDiagramModal({ project, onClose, onCreated }) {
+  const [name, setName] = useState("Main wiring");
+  const [description, setDescription] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(event) {
+    event.preventDefault();
+    setBusy(true); setError("");
+    try {
+      const result = await apiFetch("/api/projects/" + project.id + "/wiring/", {
+        method: "POST",
+        body: { name, description, nodes: [], connections: [], canvas: { show_grid: true, zoom: 1 } },
+      });
+      onCreated(result.item);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <Modal title="New wiring diagram" subtitle="Create an editable structured wiring workspace for this project." onClose={onClose}>
+    <form className="formGrid" onSubmit={submit}>
+      {error && <div className="formError full">{error}</div>}
+      <label className="full">Name<input required value={name} onChange={e => setName(e.target.value)} /></label>
+      <label className="full">Description<textarea rows="3" value={description} onChange={e => setDescription(e.target.value)} placeholder="Power, control wiring, sensor bus…" /></label>
+      <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy || !name.trim()}>{busy ? "Creating…" : "Create diagram"}</button></div>
+    </form>
+  </Modal>;
+}
+
+function WiringEditor({ project, diagram, boards, components, inventory, canChange, onClose, onSaved }) {
+  const [draft, setDraft] = useState(() => ({ ...diagram, nodes: diagram.nodes || [], connections: diagram.connections || [], canvas: diagram.canvas || {} }));
+  const [dirty, setDirty] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [nodeType, setNodeType] = useState("board");
+  const [referenceId, setReferenceId] = useState("");
+  const [customLabel, setCustomLabel] = useState("");
+  const [connection, setConnection] = useState({ from_node: "", from_pin: "", to_node: "", to_pin: "", label: "", color: "#7c5cff" });
+  const [drag, setDrag] = useState(null);
+  const canvasRef = useRef(null);
+
+  const refs = useMemo(() => referenceRows(nodeType, boards, components, inventory), [nodeType, boards, components, inventory]);
+  useEffect(() => {
+    if (nodeType === "custom") return;
+    if (!referenceId || !refs.some(row => row.id === referenceId)) setReferenceId(refs[0]?.id || "");
+  }, [nodeType, refs.length]);
+
+  function mutate(updater) {
+    setDraft(current => updater(current));
+    setDirty(true);
+  }
+
+  function addNode(event) {
+    event.preventDefault();
+    if (!canChange) return;
+    const ref = refs.find(row => row.id === referenceId);
+    const label = nodeType === "custom" ? customLabel.trim() : (customLabel.trim() || ref?.label || "");
+    if (!label) return;
+    const index = draft.nodes.length;
+    const node = {
+      id: uid("node"),
+      type: nodeType,
+      reference_id: nodeType === "custom" ? "" : referenceId,
+      label,
+      x: 28 + (index % 3) * 220,
+      y: 28 + Math.floor(index / 3) * 130,
+      notes: "",
+      reference: ref ? { label: ref.label, subtitle: ref.subtitle, pin_hints: [] } : undefined,
+    };
+    mutate(current => ({ ...current, nodes: [...current.nodes, node] }));
+    setCustomLabel("");
+  }
+
+  function removeNode(nodeId) {
+    mutate(current => ({
+      ...current,
+      nodes: current.nodes.filter(node => node.id !== nodeId),
+      connections: current.connections.filter(edge => edge.from_node !== nodeId && edge.to_node !== nodeId),
+    }));
+  }
+
+  function addConnection(event) {
+    event.preventDefault();
+    if (!canChange || !connection.from_node || !connection.to_node || !connection.from_pin.trim() || !connection.to_pin.trim()) return;
+    mutate(current => ({
+      ...current,
+      connections: [...current.connections, {
+        id: uid("wire"),
+        from_node: connection.from_node,
+        from_pin: connection.from_pin.trim(),
+        to_node: connection.to_node,
+        to_pin: connection.to_pin.trim(),
+        label: connection.label.trim(),
+        color: connection.color,
+        notes: "",
+      }],
+    }));
+    setConnection(current => ({ ...current, from_pin: "", to_pin: "", label: "" }));
+  }
+
+  function startDrag(event, node) {
+    if (!canChange || !canvasRef.current) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    setDrag({
+      id: node.id,
+      dx: event.clientX - rect.left + canvasRef.current.scrollLeft - node.x,
+      dy: event.clientY - rect.top + canvasRef.current.scrollTop - node.y,
+    });
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }
+
+  function moveDrag(event) {
+    if (!drag || !canvasRef.current) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = Math.max(0, Math.min(1600, event.clientX - rect.left + canvasRef.current.scrollLeft - drag.dx));
+    const y = Math.max(0, Math.min(1000, event.clientY - rect.top + canvasRef.current.scrollTop - drag.dy));
+    mutate(current => ({
+      ...current,
+      nodes: current.nodes.map(node => node.id === drag.id ? { ...node, x: Math.round(x), y: Math.round(y) } : node),
+    }));
+  }
+
+  async function save() {
+    setBusy(true); setError("");
+    try {
+      const result = await apiFetch("/api/projects/" + project.id + "/wiring/" + diagram.id + "/", {
+        method: "PATCH",
+        body: {
+          name: draft.name,
+          description: draft.description,
+          nodes: draft.nodes.map(({ reference, ...node }) => node),
+          connections: draft.connections,
+          canvas: draft.canvas,
+        },
+      });
+      setDraft(result.item);
+      setDirty(false);
+      onSaved(result.item);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function close() {
+    if (dirty && !window.confirm("Close without saving wiring changes?")) return;
+    onClose();
+  }
+
+  const nodeById = Object.fromEntries(draft.nodes.map(node => [node.id, node]));
+  const canvasWidth = Math.max(960, ...draft.nodes.map(node => Number(node.x || 0) + 220));
+  const canvasHeight = Math.max(560, ...draft.nodes.map(node => Number(node.y || 0) + 140));
+
+  return <div className="wiringEditorBackdrop">
+    <section className="wiringEditor">
+      <header className="wiringEditorHeader">
+        <div>
+          <span className="settingsEyebrow">Interactive wiring · {project.name}</span>
+          <input className="wiringTitleInput" value={draft.name} disabled={!canChange} onChange={e => { setDraft(current => ({ ...current, name: e.target.value })); setDirty(true); }} />
+          <small>Revision {draft.revision} · {draft.nodes.length} nodes · {draft.connections.length} connections</small>
+        </div>
+        <div className="wiringHeaderActions">
+          {dirty && <Badge tone="accent">Unsaved</Badge>}
+          {canChange && <button className="primary" disabled={busy || !dirty} onClick={save}>{busy ? "Saving…" : "Save"}</button>}
+          <button onClick={close}>Close</button>
+        </div>
+      </header>
+
+      {error && <div className="wiringEditorError formError">{error}</div>}
+
+      <div className="wiringEditorBody">
+        <aside className="wiringToolbox">
+          <section>
+            <h3>Add node</h3>
+            <form onSubmit={addNode}>
+              <label>Type<select value={nodeType} disabled={!canChange} onChange={e => { setNodeType(e.target.value); setReferenceId(""); }}>
+                <option value="board">Board catalogue</option>
+                <option value="component">Component catalogue</option>
+                <option value="inventory">Inventory item</option>
+                <option value="custom">Custom node</option>
+              </select></label>
+              {nodeType !== "custom" && <label>Record<select value={referenceId} disabled={!canChange} onChange={e => setReferenceId(e.target.value)}>
+                {!refs.length && <option value="">No records available</option>}
+                {refs.map(row => <option key={row.id} value={row.id}>{row.label}{row.subtitle ? " · " + row.subtitle : ""}</option>)}
+              </select></label>}
+              <label>{nodeType === "custom" ? "Label" : "Label override"}<input value={customLabel} disabled={!canChange} onChange={e => setCustomLabel(e.target.value)} placeholder={nodeType === "custom" ? "Power supply, terminal block…" : "Optional"} /></label>
+              <button className="primary" disabled={!canChange || (nodeType !== "custom" && !referenceId) || (nodeType === "custom" && !customLabel.trim())}>＋ Add node</button>
+            </form>
+          </section>
+
+          <section>
+            <h3>Add connection</h3>
+            <form onSubmit={addConnection}>
+              <label>From<select value={connection.from_node} disabled={!canChange} onChange={e => setConnection(current => ({ ...current, from_node: e.target.value }))}><option value="">Choose node…</option>{draft.nodes.map(node => <option key={node.id} value={node.id}>{node.label}</option>)}</select></label>
+              <PinInput label="From pin" node={nodeById[connection.from_node]} value={connection.from_pin} disabled={!canChange} onChange={value => setConnection(current => ({ ...current, from_pin: value }))} listId="wiring-from-pins" />
+              <label>To<select value={connection.to_node} disabled={!canChange} onChange={e => setConnection(current => ({ ...current, to_node: e.target.value }))}><option value="">Choose node…</option>{draft.nodes.map(node => <option key={node.id} value={node.id}>{node.label}</option>)}</select></label>
+              <PinInput label="To pin" node={nodeById[connection.to_node]} value={connection.to_pin} disabled={!canChange} onChange={value => setConnection(current => ({ ...current, to_pin: value }))} listId="wiring-to-pins" />
+              <label>Label<input value={connection.label} disabled={!canChange} onChange={e => setConnection(current => ({ ...current, label: e.target.value }))} placeholder="I²C SDA, 5V power…" /></label>
+              <label>Wire colour<input type="color" value={connection.color} disabled={!canChange} onChange={e => setConnection(current => ({ ...current, color: e.target.value }))} /></label>
+              <button className="primary" disabled={!canChange || !connection.from_node || !connection.to_node || !connection.from_pin.trim() || !connection.to_pin.trim()}>＋ Connect</button>
+            </form>
+          </section>
+        </aside>
+
+        <main className="wiringWorkspace">
+          {(draft.warnings || []).length > 0 && <div className="wiringWarnings">
+            {(draft.warnings || []).map((warning, index) => <div key={warning.code + index}><strong>Check</strong><span>{warning.message}</span></div>)}
+          </div>}
+          <div
+            className={"wiringCanvasScroll" + (draft.canvas?.show_grid === false ? " noGrid" : "")}
+            ref={canvasRef}
+            onPointerMove={moveDrag}
+            onPointerUp={() => setDrag(null)}
+            onPointerCancel={() => setDrag(null)}
+          >
+            <div className="wiringCanvas" style={{ width: canvasWidth, height: canvasHeight }}>
+              <svg className="wiringLines" width={canvasWidth} height={canvasHeight} aria-hidden="true">
+                {draft.connections.map(edge => {
+                  const from = nodeById[edge.from_node];
+                  const to = nodeById[edge.to_node];
+                  if (!from || !to) return null;
+                  return <g key={edge.id}>
+                    <line x1={Number(from.x) + 90} y1={Number(from.y) + 42} x2={Number(to.x) + 90} y2={Number(to.y) + 42} stroke={edge.color || "#7c5cff"} strokeWidth="3" />
+                  </g>;
+                })}
+              </svg>
+              {draft.nodes.map(node => <div
+                className={"wiringNode wiringNode-" + node.type}
+                key={node.id}
+                style={{ left: node.x, top: node.y }}
+                onPointerDown={event => startDrag(event, node)}
+              >
+                <div className="wiringNodeHead"><span>{node.type}</span>{canChange && <button type="button" title="Remove node" onPointerDown={e => e.stopPropagation()} onClick={() => removeNode(node.id)}>×</button>}</div>
+                <strong>{node.label}</strong>
+                <small>{node.reference?.subtitle || (node.type === "custom" ? "Custom wiring node" : "Catalogue / inventory reference")}</small>
+              </div>)}
+              {!draft.nodes.length && <div className="wiringCanvasEmpty">Add boards, components, inventory or custom nodes from the toolbox.</div>}
+            </div>
+          </div>
+
+          <section className="wiringConnectionList">
+            <div className="projectSectionHead"><h3>Connections</h3><span>{draft.connections.length}</span></div>
+            {draft.connections.map(edge => <div className="wiringConnectionRow" key={edge.id}>
+              <span className="wiringColourDot" style={{ background: edge.color || "#7c5cff" }} />
+              <div>
+                <strong>{nodeById[edge.from_node]?.label || edge.from_node} · {edge.from_pin} → {nodeById[edge.to_node]?.label || edge.to_node} · {edge.to_pin}</strong>
+                <small>{edge.label || "Unlabelled connection"}</small>
+              </div>
+              {canChange && <button type="button" onClick={() => mutate(current => ({ ...current, connections: current.connections.filter(item => item.id !== edge.id) }))}>Remove</button>}
+            </div>)}
+            {!draft.connections.length && <p className="muted">No pin-to-pin connections yet.</p>}
+          </section>
+        </main>
+      </div>
+    </section>
+  </div>;
+}
+
+function PinInput({ label, node, value, onChange, disabled, listId }) {
+  const hints = node?.reference?.pin_hints || [];
+  return <label>{label}<input list={hints.length ? listId : undefined} value={value} disabled={disabled} onChange={e => onChange(e.target.value)} placeholder="GPIO4, GND, SDA…" />{hints.length > 0 && <datalist id={listId}>{hints.map(pin => <option key={pin} value={pin} />)}</datalist>}</label>;
+}
