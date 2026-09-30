@@ -30,7 +30,7 @@ from .importers import ImporterError, fetch_catalogue_source_html, fetch_import_
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 OPENVERSE_API = "https://api.openverse.org/v1/images/"
-IMAGE_SEED_VERSION = "0.7.2-sbc-diagnostics-4"
+IMAGE_SEED_VERSION = "0.7.2-authoritative-images-6"
 USER_AGENT = f"MakerVault/{getattr(settings, 'MAKERVAULT_VERSION', 'dev')} (+self-hosted catalogue image seeder)"
 def _commons_license_allowed(license_name: str) -> bool:
     """Allow only licences suitable for normal open redistribution."""
@@ -526,42 +526,61 @@ def _curated_sbc_source_page(obj) -> str:
 
 
 def _candidate_source_pages(obj) -> list[dict]:
+    """Return authoritative/source pages shared by boards, components and printers."""
     specs = getattr(obj, "specifications", None) or {}
+    features = getattr(obj, "features", None) or {}
     candidates = []
     seen = set()
-    for curated_url in _curated_sbc_source_pages(obj):
+
+    def add(url, *, source_type="", provider=""):
+        value = str(url or "").strip()
+        if not value.startswith("https://") or value.lower().endswith(".pdf") or value in seen:
+            return
         candidates.append({
-            "url": curated_url,
-            "source_type": "manufacturer",
-            "provider": "Official manufacturer",
+            "url": value,
+            "source_type": source_type,
+            "provider": provider,
         })
-        seen.add(curated_url)
-    for key in (
-        "reference_url",
-        "technical_source_url",
-        "product_url",
-        "datasheet_url",
-        "pinout_url",
-    ):
-        value = str(specs.get(key) or "").strip()
-        if value.startswith("https://") and not value.lower().endswith(".pdf") and value not in seen:
-            candidates.append({
-                "url": value,
-                "source_type": "",
-                "provider": str(specs.get("reference_provider") or "").strip(),
-            })
-            seen.add(value)
+        seen.add(value)
+
+    for curated_url in _curated_sbc_source_pages(obj):
+        add(curated_url, source_type="manufacturer", provider="Official manufacturer")
+
+    manufacturer = getattr(obj, "manufacturer", None)
+    manufacturer_name = str(getattr(manufacturer, "name", "") or "").strip()
+    provider = f"{manufacturer_name} official".strip() if manufacturer_name else ""
+
+    # Catalogue records use different metadata containers, but source-page
+    # discovery should be consistent regardless of object type.
+    for container in (specs, features):
+        for key in (
+            "official_image_source_page",
+            "reference_url",
+            "technical_source_url",
+            "product_url",
+            "datasheet_url",
+            "pinout_url",
+        ):
+            add(
+                container.get(key),
+                source_type="manufacturer" if key == "official_image_source_page" else "",
+                provider=str(container.get("reference_provider") or provider).strip(),
+            )
+
+    add(
+        getattr(obj, "source_url", ""),
+        source_type="manufacturer" if manufacturer_name else "",
+        provider=provider,
+    )
 
     source = getattr(obj, "source", None)
-    source_url = str(getattr(source, "url", "") or "").strip()
-    if source_url.startswith("https://") and not source_url.lower().endswith(".pdf") and source_url not in seen:
-        candidates.append({
-            "url": source_url,
-            "source_type": str(getattr(source, "source_type", "") or ""),
-            "provider": str(getattr(source, "name", "") or ""),
-        })
+    add(
+        getattr(source, "url", ""),
+        source_type=str(getattr(source, "source_type", "") or ""),
+        provider=str(getattr(source, "name", "") or ""),
+    )
 
-    return ordered_source_candidates(candidates)[:6]
+    return ordered_source_candidates(candidates)[:8]
 
 
 def _structured_product_image(soup: BeautifulSoup, base_url: str) -> str:
@@ -1087,18 +1106,18 @@ def run_catalogue_image_seed(
 
                     external_image_url = str(metadata.get("external_image_url") or "").strip()
                     has_external_image = external_image_url.startswith("https://")
-                    retry_remote_board = (
+                    retry_remote_catalogue = (
                         has_external_image
-                        and isinstance(obj, BoardModel)
                         and (
                             force_retry
                             or (
-                                _is_computer_board(obj)
+                                isinstance(obj, BoardModel)
+                                and _is_computer_board(obj)
                                 and metadata.get("auto_image_attempt_version") != IMAGE_SEED_VERSION
                             )
                         )
                     )
-                    if has_external_image and not retry_remote_board:
+                    if has_external_image and not retry_remote_catalogue:
                         skipped += 1
                         by_kind[kind]["skipped"] += 1
                         continue
@@ -1157,6 +1176,32 @@ def run_catalogue_image_seed(
                     source_fallback = None
                     try:
                         if isinstance(obj, PrinterCatalogModel):
+                            source_page_diagnostics = []
+                            if variant == "base":
+                                source_fallback = find_source_page_image(
+                                    obj,
+                                    diagnostics=source_page_diagnostics,
+                                )
+                                if source_page_diagnostics:
+                                    metadata["auto_image_source_page_attempts"] = source_page_diagnostics[-8:]
+                                if source_fallback and source_fallback.get("image_source_tier") == "manufacturer":
+                                    metadata.update(source_fallback)
+                                    metadata = append_source_trace(
+                                        metadata,
+                                        provider=source_fallback.get("image_source_provider", ""),
+                                        url=source_fallback.get("image_source_page", ""),
+                                        tier="manufacturer",
+                                        result="selected-authoritative-source-image",
+                                    )
+                                    metadata["auto_image_last_result"] = "remote-authoritative-source"
+                                    field = set_catalogue_image_metadata(obj, metadata, variant=variant)
+                                    obj.save(update_fields=[field, "updated_at"] if field else ["updated_at"])
+                                    remote += 1
+                                    by_kind[kind]["remote"] += 1
+                                    provider_key = source_fallback["image_source_provider"] or "Official manufacturer"
+                                    by_provider[provider_key] = by_provider.get(provider_key, 0) + 1
+                                    continue
+
                             source_fallback = find_orcaslicer_printer_cover(obj, variant=variant)
                             if source_fallback:
                                 metadata.update(source_fallback)
