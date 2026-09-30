@@ -61,27 +61,32 @@ export default function BoardsPage({ boards, setBoards, components, projects, co
   const [query, setQuery] = useState("");
   const [manufacturer, setManufacturer] = useState("");
   const [family, setFamily] = useState("");
+  const [boardType, setBoardType] = useState("");
   const [selected, setSelected] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
 
   const manufacturers = useMemo(() => [...new Set(boards.map(b => b.manufacturer).filter(Boolean))].sort(), [boards]);
   const families = useMemo(() => [...new Set(boards.map(b => b.family).filter(Boolean))].sort(), [boards]);
+  const boardTypes = useMemo(() => [...new Set(boards.map(b => b.specifications?.board_type).filter(Boolean))].sort(), [boards]);
+  const boardTypeLabel = value => ({ microcontroller: "Microcontroller", sbc: "Single-board computer", compute_module: "Compute module / SoM" }[value] || value);
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return boards.filter(board =>
       (!manufacturer || board.manufacturer === manufacturer)
       && (!family || board.family === family)
+      && (!boardType || board.specifications?.board_type === boardType)
       && (!q || [board.name, board.manufacturer, board.family, board.mcu, board.variant].join(" ").toLowerCase().includes(q))
     );
-  }, [boards, query, manufacturer, family]);
+  }, [boards, query, manufacturer, family, boardType]);
 
   const columns = useMemo(() => [
     { headerName: "", field: "image", width: 72, sortable: false, filter: false, cellRenderer: p => <BoardImage src={p.value} alt={p.data?.name || ""} size="tiny" /> },
     { field: "manufacturer", minWidth: 150 },
     { field: "name", headerName: "Board", minWidth: 230, flex: 1 },
+    { headerName: "Type", minWidth: 155, valueGetter: p => boardTypeLabel(p.data?.specifications?.board_type || "microcontroller") },
     { field: "family", minWidth: 125 },
-    { field: "mcu", headerName: "MCU", minWidth: 135 },
+    { field: "mcu", headerName: "Processor / MCU", minWidth: 155 },
     { field: "flash_mb", headerName: "Flash", width: 105, valueFormatter: p => formatMemoryMb(p.value) },
     { headerName: "Wireless", minWidth: 190, valueGetter: p => [p.data.wifi && "Wi-Fi", p.data.bluetooth && "BT", p.data.zigbee && "Zigbee", p.data.thread && "Thread"].filter(Boolean).join(" · ") },
     { field: "source", minWidth: 145 },
@@ -111,6 +116,7 @@ export default function BoardsPage({ boards, setBoards, components, projects, co
         <div className="toolbarActions">
           <input className="searchInput" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search boards…" />
           <select value={manufacturer} onChange={e => setManufacturer(e.target.value)}><option value="">All manufacturers</option>{manufacturers.map(x => <option key={x}>{x}</option>)}</select>
+          <select value={boardType} onChange={e => setBoardType(e.target.value)}><option value="">All board types</option>{boardTypes.map(x => <option key={x} value={x}>{boardTypeLabel(x)}</option>)}</select>
           <select value={family} onChange={e => setFamily(e.target.value)}><option value="">All families</option>{families.map(x => <option key={x}>{x}</option>)}</select>
           {config?.permissions?.add_board && <>
             <button onClick={() => setShowAdd(true)}>＋ Manual</button>
@@ -167,6 +173,7 @@ function BoardDetail({ board, loading, canEdit, canAddInventory, boards, compone
     .filter(([on]) => on).map(([, label]) => label);
 
   const specs = board.specifications || {};
+  const boardTypeLabel = ({ microcontroller: "Microcontroller", sbc: "Single-board computer", compute_module: "Compute module / SoM" }[specs.board_type] || specs.board_type || "Microcontroller");
   const fieldStatus = specs.technical_field_status || {};
   const coreRows = [
     { key: "mcu", label: "MCU", value: board.mcu || "" },
@@ -229,12 +236,25 @@ function BoardDetail({ board, loading, canEdit, canAddInventory, boards, compone
       </div>
       <p className="muted boardSubtitle">{board.description || `${board.family || "Development board"}${board.mcu ? ` · ${board.mcu}` : ""}`}</p>
       {enrichMessage && <div className="detailNotice">{enrichMessage}</div>}
-      <div className="badgeRow boardBadgeRow">{radios.map(x => <Badge key={x} tone="accent">{x}</Badge>)}{board.usb_connector && <Badge>{board.usb_connector}</Badge>}</div>
+      <div className="badgeRow boardBadgeRow"><Badge tone="accent">{boardTypeLabel}</Badge>{radios.map(x => <Badge key={x} tone="accent">{x}</Badge>)}{board.usb_connector && <Badge>{board.usb_connector}</Badge>}</div>
 
       <section className="boardDetailSection">
         <h4>Core specifications</h4>
         <BoardSpecGrid rows={coreRows} status={fieldStatus} />
       </section>
+
+      {(specs.board_type === "sbc" || specs.board_type === "compute_module") && <section className="boardDetailSection">
+        <h4>Computer / module details</h4>
+        <dl className="detailSpecs">
+          {[
+            ["CPU", specs.cpu], ["RAM options", specs.ram_options], ["Storage", specs.storage],
+            ["Ethernet", specs.ethernet], ["GPIO / expansion header", specs.gpio_header],
+            ["AI / NPU", specs.ai_performance || (specs.npu_tops ? `${specs.npu_tops} TOPS` : "")],
+            ["Operating systems", specs.os_support], ["Form factor", specs.form_factor],
+            ["Carrier required", specs.carrier_required === true ? "Yes" : specs.carrier_required === false ? "No" : ""],
+          ].filter(([, value]) => value !== "" && value != null).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{Array.isArray(value) ? value.join(", ") : String(value)}</dd></div>)}
+        </dl>
+      </section>}
 
       <section className="boardDetailSection">
         <h4>Technical details</h4>
