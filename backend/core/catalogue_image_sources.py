@@ -30,7 +30,7 @@ from .importers import ImporterError, fetch_import_html
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 OPENVERSE_API = "https://api.openverse.org/v1/images/"
-IMAGE_SEED_VERSION = "0.7.2-sbc-official-images-3"
+IMAGE_SEED_VERSION = "0.7.2-sbc-diagnostics-4"
 USER_AGENT = f"MakerVault/{getattr(settings, 'MAKERVAULT_VERSION', 'dev')} (+self-hosted catalogue image seeder)"
 def _commons_license_allowed(license_name: str) -> bool:
     """Allow only licences suitable for normal open redistribution."""
@@ -889,6 +889,17 @@ def run_catalogue_image_seed(
         return missing / total
 
     boards = BoardModel.objects.select_related("manufacturer", "source").order_by("manufacturer__name", "name")
+    requested_board_types = {str(item).strip().lower() for item in (board_types or []) if str(item).strip()}
+    valid_board_types = {"microcontroller", "sbc", "compute_module"}
+    invalid_board_types = requested_board_types - valid_board_types
+    if invalid_board_types:
+        raise ValueError(f"Unknown board type(s): {', '.join(sorted(invalid_board_types))}")
+    if requested_board_types:
+        board_ids = [
+            board.pk for board in boards
+            if str((board.specifications or {}).get("board_type") or "microcontroller").lower() in requested_board_types
+        ]
+        boards = BoardModel.objects.select_related("manufacturer", "source").filter(pk__in=board_ids).order_by("manufacturer__name", "name")
     components = ComponentModel.objects.select_related("category", "source").order_by("category__name", "name")
     printers = PrinterCatalogModel.objects.select_related("manufacturer").order_by("manufacturer__name", "name")
 
