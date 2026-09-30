@@ -14,6 +14,7 @@
 - Added rule-based electrical sanity checks for interactive wiring: ground/power conflicts, catalogue-backed voltage range checks, UART/I²C/SPI direction mistakes, output-to-output warnings, per-connection validation state and visual error/warning highlighting. Unknown catalogue data remains explicitly unvalidated rather than guessed.
 - Refined the wiring editor from live testing: catalogue pins are visible on nodes, used pins are highlighted, wire labels show endpoint pins on the canvas, connections can be edited in place, the lower connection list scrolls correctly, and obvious typed power labels such as GND/5V are checked even when a catalogue pinout is incomplete.
 - Added catalogue-aware pin selectors to both ends of a wiring connection. Known board/component/inventory pins can be chosen from a dropdown with role/voltage context while free-text pin entry remains available for incomplete catalogues and custom terminals.
+- Fixed catalogue pin selectors for newly-added nodes by carrying board/component pin data into the editor before the first save. Added a standalone Wiring Lab page for experimental diagrams, with later transfer into an owned project while preserving structured wiring data.
 
 ## v0.7.1 — 2026-09-30
 
