@@ -5,6 +5,39 @@ from django.db import migrations, models
 import django.db.models.deletion
 
 
+def migrate_existing_spool_rfids(apps, schema_editor):
+    Spool = apps.get_model("core", "Spool")
+    MakerTag = apps.get_model("core", "MakerTag")
+    MakerTagEvent = apps.get_model("core", "MakerTagEvent")
+    for spool in Spool.objects.exclude(rfid_uid="").iterator():
+        code = str(spool.rfid_uid or "").strip().upper()
+        if not code:
+            continue
+        tag, created = MakerTag.objects.get_or_create(
+            kind="rfid",
+            code=code,
+            defaults={
+                "owner_id": spool.owner_id,
+                "label": f"{spool.spool_id} RFID",
+                "target_type": "spool",
+                "target_id": spool.id,
+                "metadata": {"migrated_from": "spool.rfid_uid"},
+            },
+        )
+        if created:
+            MakerTagEvent.objects.create(
+                tag_id=tag.id,
+                event_type="created",
+                summary="Imported existing spool RFID identity into Maker Tags.",
+                details={"spool_id": str(spool.id), "spool_code": spool.spool_id},
+            )
+
+
+def reverse_migrate_existing_spool_rfids(apps, schema_editor):
+    MakerTag = apps.get_model("core", "MakerTag")
+    MakerTag.objects.filter(metadata__migrated_from="spool.rfid_uid").delete()
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -59,4 +92,5 @@ class Migration(migrations.Migration):
             model_name="makertag",
             index=models.Index(fields=["owner", "target_type", "target_id"], name="maker_tag_target_idx"),
         ),
+        migrations.RunPython(migrate_existing_spool_rfids, reverse_migrate_existing_spool_rfids),
     ]
