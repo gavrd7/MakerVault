@@ -771,25 +771,44 @@ def _page_image_candidates(soup: BeautifulSoup, base_url: str) -> list[tuple[str
         if tag:
             add(tag.get("content"), "meta")
 
-    # Documentation/wiki sites often omit Product JSON-LD and OpenGraph
-    # metadata but still mark the primary board photograph semantically.
-    for tag in soup.find_all("img", limit=80):
+    # Documentation/wiki and commerce sites often lazy-load their primary
+    # product photography. Support common WordPress/WooCommerce and docs
+    # attributes without downloading or copying the remote image.
+    for tag in soup.find_all("img", limit=120):
         text = " ".join([
             str(tag.get("alt") or ""),
             str(tag.get("title") or ""),
             str(tag.get("class") or ""),
         ]).lower()
-        if any(word in text for word in ("logo", "icon", "avatar", "banner", "flag")):
+        if any(word in text for word in ("logo", "icon", "avatar", "banner", "flag", "spinner")):
             continue
         value = (
-            tag.get("data-src")
+            tag.get("data-large_image")
+            or tag.get("data-zoom-image")
+            or tag.get("data-lazy-src")
+            or tag.get("data-src")
             or tag.get("data-original")
             or tag.get("src")
             or ""
         )
-        if not value and tag.get("srcset"):
-            value = str(tag.get("srcset")).split(",", 1)[0].strip().split(" ", 1)[0]
+        for srcset_key in ("data-srcset", "srcset"):
+            if not value and tag.get(srcset_key):
+                # Prefer the largest candidate from a responsive image set.
+                entries = [entry.strip() for entry in str(tag.get(srcset_key)).split(",") if entry.strip()]
+                if entries:
+                    value = entries[-1].split(" ", 1)[0]
         add(value, "page-image")
+
+    # Some product galleries expose the full-size photograph only on the
+    # surrounding anchor while the <img> itself is a tiny placeholder.
+    for tag in soup.find_all("a", limit=120):
+        classes = " ".join(str(part) for part in (tag.get("class") or [])).lower()
+        rel = " ".join(str(part) for part in (tag.get("rel") or [])).lower()
+        if not any(word in classes + " " + rel for word in ("woocommerce", "gallery", "zoom", "product")):
+            continue
+        href = str(tag.get("href") or "").strip()
+        if re.search(r"\.(?:jpe?g|png|webp)(?:\?.*)?$", href, re.I):
+            add(href, "gallery-image")
     return candidates
 
 
