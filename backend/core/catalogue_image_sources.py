@@ -579,6 +579,35 @@ def _structured_product_image(soup: BeautifulSoup, base_url: str) -> str:
     return ""
 
 
+def find_curated_printer_image(printer_model, variant: str = "base") -> dict | None:
+    """Return a version-controlled official printer image reference when present."""
+    features = dict(getattr(printer_model, "features", None) or {})
+    prefix = "official_image_multi_material" if variant == "multi_material" else "official_image"
+    image_url = str(features.get(f"{prefix}_url") or "").strip()
+    if not image_url.startswith("https://"):
+        return None
+    source_page = str(
+        features.get(f"{prefix}_source_page")
+        or getattr(printer_model, "source_url", "")
+        or ""
+    ).strip()
+    provider = str(
+        features.get(f"{prefix}_source_provider")
+        or f"{getattr(getattr(printer_model, 'manufacturer', None), 'name', '')} official"
+    ).strip()
+    return {
+        "external_image_url": image_url,
+        "image_source_page": source_page,
+        "image_source_provider": provider or "Official manufacturer",
+        "image_source_type": "curated-official-remote",
+        "image_source_discovery": "curated-profile",
+        "image_source_tier": "manufacturer",
+        "image_source_priority": 10,
+        "image_license": "",
+        "image_author": "",
+    }
+
+
 def find_orcaslicer_printer_cover(printer_model, variant: str = "base") -> dict | None:
     """Return an exact OrcaSlicer printer cover as a remote image reference.
 
@@ -870,9 +899,7 @@ def run_catalogue_image_seed(
 
                     image_field = "image_multi_material" if variant == "multi_material" else "image"
                     metadata, _ = catalogue_image_metadata(obj, variant=variant)
-                    if getattr(obj, image_field, None) or (
-                        variant == "base" and str(metadata.get("external_image_url") or "").startswith("https://")
-                    ):
+                    if getattr(obj, image_field, None) or str(metadata.get("external_image_url") or "").startswith("https://"):
                         skipped += 1
                         by_kind[kind]["skipped"] += 1
                         continue
@@ -881,6 +908,42 @@ def run_catalogue_image_seed(
                         skipped += 1
                         by_kind[kind]["skipped"] += 1
                         continue
+
+                    # Curated manufacturer imagery is deterministic and should
+                    # be recorded before any search work. Multi-material images
+                    # are deliberately restricted to this authoritative path:
+                    # a generic AMS/CFS/MMU search is too likely to associate a
+                    # valid accessory image with the wrong printer/variant.
+                    if isinstance(obj, PrinterCatalogModel):
+                        curated_remote = find_curated_printer_image(obj, variant=variant)
+                        if curated_remote:
+                            metadata.update(curated_remote)
+                            metadata = append_source_trace(
+                                metadata,
+                                provider=curated_remote.get("image_source_provider", ""),
+                                url=curated_remote.get("image_source_page", ""),
+                                tier="manufacturer",
+                                result="selected-curated-official-image",
+                            )
+                            metadata["auto_image_last_result"] = "remote-curated-official"
+                            metadata["image_variant"] = variant
+                            field = set_catalogue_image_metadata(obj, metadata, variant=variant)
+                            obj.save(update_fields=[field, "updated_at"] if field else ["updated_at"])
+                            remote += 1
+                            by_kind[kind]["remote"] += 1
+                            provider_key = curated_remote["image_source_provider"] or "Official manufacturer"
+                            by_provider[provider_key] = by_provider.get(provider_key, 0) + 1
+                            continue
+                        if variant == "multi_material":
+                            metadata["auto_image_last_result"] = "deferred-no-authoritative-multi-material-image"
+                            metadata["auto_image_attempt_version"] = IMAGE_SEED_VERSION
+                            metadata["image_variant"] = variant
+                            field = set_catalogue_image_metadata(obj, metadata, variant=variant)
+                            obj.save(update_fields=[field, "updated_at"] if field else ["updated_at"])
+                            skipped += 1
+                            by_kind[kind]["skipped"] += 1
+                            continue
+
                     if not force_retry and _recent_attempt(metadata, retry_days):
                         skipped += 1
                         by_kind[kind]["skipped"] += 1
