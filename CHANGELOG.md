@@ -2,6 +2,7 @@
 
 ## v0.7.1 — in development
 
+- Printer image enrichment now checks the exact OrcaSlicer machine-model cover asset before fuzzy open-media search, using stored upstream vendor/model provenance and referencing the upstream image remotely rather than copying it.
 - Started the Universal Search & Catalogue Completion milestone.
 - Added an ownership-safe universal search backend spanning projects, inventory, boards, components, files, 3D models, printers, physical spools and filament products.
 - Added persistent shell search with debounced grouped quick results and a dedicated advanced Search page with record-type, project, manufacturer and sorting controls.
