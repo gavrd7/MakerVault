@@ -82,7 +82,7 @@ export default function App() {
     if (section === "Components") return <ComponentsPage components={components} setComponents={setComponents} boards={boards} projects={projects} config={config} refreshDashboard={refreshDashboard} openComponentId={searchTarget?.type === "components" ? searchTarget.id : ""} openToken={searchTarget?.token} onInventoryCreated={async item => { setInventory(rows => [...rows.filter(row => row.id !== item.id), item].sort((a,b) => a.inventory_id.localeCompare(b.inventory_id))); await refreshDashboard(); }} />;
     if (section === "Projects") return <ProjectsPage projects={projects} setProjects={setProjects} config={config} refreshDashboard={refreshDashboard} refreshInventory={refreshInventory} boards={boards} components={components} inventory={inventory} openProjectId={projectTarget} onOpenConsumed={() => setProjectTarget("")} />;
     if (section === "3D Printing") return <PrintingPage config={config} projects={projects} searchTarget={searchTarget} />;
-    if (section === "Files") return <FilesPage projects={projects} config={config} initialSearch={searchTarget?.type === "files" ? searchTarget.title : ""} searchToken={searchTarget?.token} onOpenProject={projectId => { setProjectTarget(projectId); setSection("Projects"); }} />;
+    if (section === "Files") return <FilesPage projects={projects} config={config} searchTarget={searchTarget?.type === "files" ? searchTarget : null} onOpenProject={projectId => { setProjectTarget(projectId); setSection("Projects"); }} />;
     if (section === "Settings") return <SettingsPage config={config} />;
     return <AboutPage config={config} />;
   }
