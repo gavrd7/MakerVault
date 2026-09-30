@@ -1400,8 +1400,6 @@ def dashboard(request):
     return JsonResponse(data)
 
 
-@login_required
-@require_http_methods(["GET", "POST"])
 def _inventory_unit_count(value):
     try:
         parsed = Decimal(str(value if value not in (None, "") else 1))
