@@ -321,8 +321,9 @@ function WiringEditor({ project, diagram, boards, components, inventory, canChan
   const nodeById = Object.fromEntries(draft.nodes.map(node => [node.id, node]));
   const diagnosticByConnection = draft.diagnostic_summary?.connections || {};
   const diagnosticCounts = draft.diagnostic_summary?.counts || {};
-  const canvasWidth = Math.max(960, ...draft.nodes.map(node => Number(node.x || 0) + 220));
-  const canvasHeight = Math.max(560, ...draft.nodes.map(node => Number(node.y || 0) + 140));
+  const nodeHeight = node => 84 + Math.ceil(Math.min(node.reference?.pins?.length || 0, 18) / 3) * 22;
+  const canvasWidth = Math.max(960, ...draft.nodes.map(node => Number(node.x || 0) + 240));
+  const canvasHeight = Math.max(560, ...draft.nodes.map(node => Number(node.y || 0) + nodeHeight(node) + 50));
 
   function exportJson() {
     const payload = {
@@ -354,10 +355,10 @@ function WiringEditor({ project, diagram, boards, components, inventory, canChan
       const from = nodeById[edge.from_node];
       const to = nodeById[edge.to_node];
       if (!from || !to) return "";
-      const x1 = Number(from.x) + 90 + pad;
-      const y1 = Number(from.y) + 42 + pad;
-      const x2 = Number(to.x) + 90 + pad;
-      const y2 = Number(to.y) + 42 + pad;
+      const x1 = Number(from.x) + 100 + pad;
+      const y1 = Number(from.y) + Math.min(42, nodeHeight(from) / 2) + pad;
+      const x2 = Number(to.x) + 100 + pad;
+      const y2 = Number(to.y) + Math.min(42, nodeHeight(to) / 2) + pad;
       const colour = /^#[0-9a-f]{6}$/i.test(edge.color || "") ? edge.color : "#7c5cff";
       const midX = (x1 + x2) / 2;
       const midY = (y1 + y2) / 2;
@@ -368,7 +369,7 @@ function WiringEditor({ project, diagram, boards, components, inventory, canChan
     const nodes = draft.nodes.map(node => {
       const x = Number(node.x) + pad;
       const y = Number(node.y) + pad;
-      return `<g><rect x="${x}" y="${y}" width="180" height="84" rx="12" fill="#f7f8fb" stroke="#667085"/><text x="${x + 12}" y="${y + 25}" fill="#667085" font-size="10" font-weight="700">${xmlEscape(node.type.toUpperCase())}</text><text x="${x + 12}" y="${y + 49}" fill="#111827" font-size="14" font-weight="700">${xmlEscape(node.label)}</text></g>`;
+      return `<g><rect x="${x}" y="${y}" width="200" height="${nodeHeight(node)}" rx="12" fill="#f7f8fb" stroke="#667085"/><text x="${x + 12}" y="${y + 25}" fill="#667085" font-size="10" font-weight="700">${xmlEscape(node.type.toUpperCase())}</text><text x="${x + 12}" y="${y + 49}" fill="#111827" font-size="14" font-weight="700">${xmlEscape(node.label)}</text></g>`;
     }).join("");
 
     const svg = `<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="100%" height="100%" fill="#ffffff"/><text x="${pad}" y="22" fill="#111827" font-family="system-ui,sans-serif" font-size="16" font-weight="700">${xmlEscape(project.name)} — ${xmlEscape(draft.name)}</text><g font-family="system-ui,sans-serif">${lines}${nodes}</g></svg>`;
@@ -465,10 +466,10 @@ function WiringEditor({ project, diagram, boards, components, inventory, canChan
                   const to = nodeById[edge.to_node];
                   if (!from || !to) return null;
                   const severity = diagnosticByConnection[edge.id] || "unknown";
-                  const x1 = Number(from.x) + 90;
-                  const y1 = Number(from.y) + 42;
-                  const x2 = Number(to.x) + 90;
-                  const y2 = Number(to.y) + 42;
+                  const x1 = Number(from.x) + 100;
+                  const y1 = Number(from.y) + Math.min(42, nodeHeight(from) / 2);
+                  const x2 = Number(to.x) + 100;
+                  const y2 = Number(to.y) + Math.min(42, nodeHeight(to) / 2);
                   const midX = (x1 + x2) / 2;
                   const midY = (y1 + y2) / 2;
                   return <g key={edge.id} className={"wiringLine wiringLine-" + severity}>
