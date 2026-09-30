@@ -678,7 +678,6 @@ class CatalogueImagePriorityTests(TestCase):
         self.board.specifications = {"board_type": "microcontroller"}
         self.board.save(update_fields=["specifications", "updated_at"])
         BoardModel.objects.create(
-            manufacturer=self.manufacturer,
             name="Test SBC",
             family="Test",
             specifications={"board_type": "sbc"},
