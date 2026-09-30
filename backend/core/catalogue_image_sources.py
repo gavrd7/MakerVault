@@ -30,7 +30,7 @@ from .importers import ImporterError, fetch_import_html
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 OPENVERSE_API = "https://api.openverse.org/v1/images/"
-IMAGE_SEED_VERSION = "0.7.1-structured-source-images-2"
+IMAGE_SEED_VERSION = "0.7.1-orcaslicer-cover-images-3"
 USER_AGENT = f"MakerVault/{getattr(settings, 'MAKERVAULT_VERSION', 'dev')} (+self-hosted catalogue image seeder)"
 def _commons_license_allowed(license_name: str) -> bool:
     """Allow only licences suitable for normal open redistribution."""
@@ -579,6 +579,77 @@ def _structured_product_image(soup: BeautifulSoup, base_url: str) -> str:
     return ""
 
 
+def find_orcaslicer_printer_cover(printer_model, variant: str = "base") -> dict | None:
+    """Return an exact OrcaSlicer printer cover as a remote image reference.
+
+    OrcaSlicer machine-model profiles may ship a 240x240 cover named after the
+    exact machine-model-list entry. Because MakerVault stores the upstream
+    vendor file, ref and original model name, this is a deterministic mapping
+    rather than a fuzzy image search. The asset is referenced remotely instead
+    of copied into MakerVault storage.
+    """
+    if variant != "base":
+        return None
+
+    features = dict(getattr(printer_model, "features", None) or {})
+    provenance = features.get("orcaslicer") or {}
+    if not isinstance(provenance, dict):
+        return None
+
+    vendor_file = str(provenance.get("vendor_file") or "").strip()
+    raw_name = str(provenance.get("upstream_name") or "").strip()
+    ref = str(provenance.get("ref") or "").strip()
+    if not vendor_file or not raw_name or not ref:
+        return None
+
+    vendor_folder = vendor_file[:-5] if vendor_file.lower().endswith(".json") else vendor_file
+    filename = f"{raw_name}_cover.png"
+    raw_url = (
+        "https://raw.githubusercontent.com/OrcaSlicer/OrcaSlicer/"
+        f"{quote(ref, safe='')}/resources/profiles/"
+        f"{quote(vendor_folder, safe='')}/{quote(filename, safe='')}"
+    )
+    source_page = (
+        "https://github.com/OrcaSlicer/OrcaSlicer/blob/"
+        f"{quote(ref, safe='')}/resources/profiles/"
+        f"{quote(vendor_folder, safe='')}/{quote(filename, safe='')}"
+    )
+
+    # Probe only the exact, fixed-host asset. Streaming lets us validate the
+    # status/content type without downloading and redistributing the image.
+    try:
+        response = requests.get(
+            raw_url,
+            timeout=(5, 15),
+            stream=True,
+            allow_redirects=True,
+            headers={
+                "User-Agent": USER_AGENT,
+                "Accept": "image/webp,image/png,image/jpeg;q=0.9,*/*;q=0.2",
+            },
+        )
+        status_code = response.status_code
+        content_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+        response.close()
+    except requests.RequestException:
+        return None
+
+    if status_code != 200 or content_type not in {"image/jpeg", "image/png", "image/webp"}:
+        return None
+
+    return {
+        "external_image_url": raw_url,
+        "image_source_page": source_page,
+        "image_source_provider": "OrcaSlicer",
+        "image_source_type": "orcaslicer-cover-remote",
+        "image_source_discovery": "exact-profile-cover",
+        "image_source_tier": "specialist",
+        "image_source_priority": 30,
+        "image_license": "",
+        "image_author": "",
+    }
+
+
 def find_source_page_image(obj) -> dict | None:
     """Find a remote product image from an already-known catalogue source page.
 
@@ -824,6 +895,25 @@ def run_catalogue_image_seed(
                     source_fallback = None
                     try:
                         if isinstance(obj, PrinterCatalogModel):
+                            source_fallback = find_orcaslicer_printer_cover(obj, variant=variant)
+                            if source_fallback:
+                                metadata.update(source_fallback)
+                                metadata = append_source_trace(
+                                    metadata,
+                                    provider=source_fallback.get("image_source_provider", ""),
+                                    url=source_fallback.get("image_source_page", ""),
+                                    tier=source_fallback.get("image_source_tier", "specialist"),
+                                    result="selected-exact-profile-cover",
+                                )
+                                metadata["auto_image_last_result"] = "remote-orcaslicer-cover"
+                                field = set_catalogue_image_metadata(obj, metadata, variant=variant)
+                                obj.save(update_fields=[field, "updated_at"] if field else ["updated_at"])
+                                remote += 1
+                                by_kind[kind]["remote"] += 1
+                                provider_key = source_fallback["image_source_provider"] or "OrcaSlicer"
+                                by_provider[provider_key] = by_provider.get(provider_key, 0) + 1
+                                continue
+
                             queries = (
                                 _printer_multi_material_image_queries(obj)
                                 if variant == "multi_material"
