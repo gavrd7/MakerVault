@@ -350,7 +350,8 @@ function EditInventoryModal({ item, projects, onClose, onSaved }) {
     event.preventDefault();
     setBusy(true); setError("");
     try {
-      const { quantity: _quantity, ...payload } = form;\n      const result = await apiFetch(`/api/inventory/${item.id}/`, { method: "PATCH", body: payload });
+      const { quantity: _quantity, ...payload } = form;
+      const result = await apiFetch(`/api/inventory/${item.id}/`, { method: "PATCH", body: payload });
       onSaved(result.item);
     } catch (err) {
       setError(err.message);
