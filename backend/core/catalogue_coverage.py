@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .catalogue_enrichment import TRACKED_BOARD_FIELDS, _tracked_board_values
+from .catalogue_source_policy import classify_source_url
 from .models import BoardModel, ComponentModel, FilamentProduct, PrinterCatalogModel
 
 
@@ -22,8 +23,22 @@ def _metric(key: str, label: str, complete: int, total: int) -> dict:
 
 
 def _board_coverage() -> dict:
-    rows = list(BoardModel.objects.select_related("manufacturer").all())
+    rows = list(BoardModel.objects.select_related("manufacturer", "source").all())
     total = len(rows)
+
+    def authoritative_source(row):
+        specs = row.specifications or {}
+        url = str(
+            specs.get("technical_source_url")
+            or specs.get("reference_url")
+            or getattr(row.source, "url", "")
+            or ""
+        ).strip()
+        if not url:
+            return False
+        source_type = str(getattr(row.source, "source_type", "") or "")
+        return classify_source_url(url, source_type=source_type).priority <= 30
+
     def has_image(row):
         specs = row.specifications or {}
         return bool(row.image or specs.get("external_image_url"))
@@ -83,14 +98,23 @@ def _board_coverage() -> dict:
             _metric("images", "Images", with_image, total),
             _metric("core", "Core specifications", core_complete, total),
             _metric("technical", "Technical fields resolved", resolved_technical, technical_slots),
+            _metric("sources", "Authoritative sources", sum(authoritative_source(row) for row in rows), total),
         ],
         "missing_samples": missing_samples,
     }
 
 
 def _component_coverage() -> dict:
-    rows = list(ComponentModel.objects.select_related("category").all())
+    rows = list(ComponentModel.objects.select_related("category", "source").all())
     total = len(rows)
+
+    def authoritative_source(row):
+        specs = row.specifications or {}
+        url = str(specs.get("reference_url") or getattr(row.source, "url", "") or "").strip()
+        if not url:
+            return False
+        source_type = str(getattr(row.source, "source_type", "") or "")
+        return classify_source_url(url, source_type=source_type).priority <= 30
 
     def has_image(row):
         specs = row.specifications or {}
@@ -119,6 +143,7 @@ def _component_coverage() -> dict:
             _metric("category", "Category", sum(bool(row.category_id) for row in rows), total),
             _metric("description", "Descriptions", sum(bool(str(row.description or "").strip()) for row in rows), total),
             _metric("specifications", "Specifications", sum(bool(row.specifications or {}) for row in rows), total),
+            _metric("sources", "Authoritative sources", sum(authoritative_source(row) for row in rows), total),
         ],
         "missing_samples": samples,
     }
