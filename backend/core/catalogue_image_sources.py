@@ -921,11 +921,19 @@ def run_catalogue_image_seed(
                         continue
 
                     external_image_url = str(metadata.get("external_image_url") or "").strip()
-                    external_is_current = (
-                        external_image_url.startswith("https://")
-                        and metadata.get("auto_image_attempt_version") == IMAGE_SEED_VERSION
+                    has_external_image = external_image_url.startswith("https://")
+                    retry_remote_board = (
+                        has_external_image
+                        and isinstance(obj, BoardModel)
+                        and (
+                            force_retry
+                            or (
+                                _is_computer_board(obj)
+                                and metadata.get("auto_image_attempt_version") != IMAGE_SEED_VERSION
+                            )
+                        )
                     )
-                    if external_is_current and not force_retry:
+                    if has_external_image and not retry_remote_board:
                         skipped += 1
                         by_kind[kind]["skipped"] += 1
                         continue
