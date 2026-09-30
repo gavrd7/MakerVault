@@ -41,6 +41,11 @@ from .storage_usage import StorageQuotaExceeded, ensure_storage_capacity, storag
 from .user_admin import admin_user_summary, purge_user_private_data
 from .private_storage import private_storage_key_status
 from .search_service import run_search
+from .maker_tags import (
+    resolve_tag_target,
+    serialise_tag,
+    tag_target_options,
+)
 from .models import (
     BoardCompatibility,
     BoardModel,
@@ -55,6 +60,8 @@ from .models import (
     FileAsset,
     InventoryItem,
     InventoryHistory,
+    MakerTag,
+    MakerTagEvent,
     Manufacturer,
     Model3D,
     ModelRevision,
@@ -117,6 +124,244 @@ def _require_permission(request, codename):
 
 def _float(value):
     return float(value) if value is not None else None
+
+
+def _record_tag_event(tag, user, event_type, summary, details=None):
+    MakerTagEvent.objects.create(
+        tag=tag,
+        changed_by=user,
+        event_type=event_type,
+        summary=summary,
+        details=details or {},
+    )
+
+
+def _sync_rfid_tag_to_spool(tag, *, previous=None):
+    """Keep the legacy spool RFID field as a compatibility mirror for RFID Maker Tags."""
+    if previous and previous.get("kind") == "rfid" and previous.get("target_type") == "spool":
+        old_spool = Spool.objects.filter(
+            owner=tag.owner,
+            pk=previous.get("target_id"),
+        ).first()
+        if old_spool and old_spool.rfid_uid == previous.get("code") and (
+            tag.kind != "rfid"
+            or tag.target_type != "spool"
+            or str(tag.target_id) != str(previous.get("target_id"))
+            or tag.code != previous.get("code")
+        ):
+            old_spool.rfid_uid = ""
+            old_spool.save(update_fields=["rfid_uid", "updated_at"])
+
+    if tag.kind != "rfid" or tag.target_type != "spool":
+        return
+
+    spool = Spool.objects.filter(owner=tag.owner, pk=tag.target_id).first()
+    if not spool:
+        return
+    existing = str(spool.rfid_uid or "").strip().upper()
+    if existing and existing != tag.code:
+        raise ValidationError({
+            "code": "This spool already has a different RFID UID. Use its existing RFID identity or clear it first."
+        })
+    if existing != tag.code:
+        spool.rfid_uid = tag.code
+        spool.save(update_fields=["rfid_uid", "updated_at"])
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def maker_tags(request):
+    if request.method == "GET":
+        qs = MakerTag.objects.filter(owner=request.user)
+        kind = str(request.GET.get("kind") or "").strip().lower()
+        status = str(request.GET.get("status") or "").strip().lower()
+        target_type = str(request.GET.get("target_type") or "").strip().lower()
+        if kind:
+            qs = qs.filter(kind=kind)
+        if status:
+            qs = qs.filter(status=status)
+        if target_type:
+            qs = qs.filter(target_type=target_type)
+        return JsonResponse({
+            "rows": [serialise_tag(tag) for tag in qs[:5000]],
+            "targets": tag_target_options(request.user),
+            "kinds": [{"value": value, "label": label} for value, label in MakerTag.KINDS],
+            "target_types": [{"value": value, "label": label} for value, label in MakerTag.TARGET_TYPES],
+        })
+
+    denied = _require_permission(request, "core.add_makertag")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        kind = str(payload.get("kind") or "qr").strip().lower()
+        if kind not in dict(MakerTag.KINDS):
+            raise ValidationError({"kind": "Choose a supported tag type."})
+        target_type = str(payload.get("target_type") or "").strip().lower()
+        target = resolve_tag_target(request.user, target_type, payload.get("target_id"))
+
+        tag = MakerTag(
+            owner=request.user,
+            kind=kind,
+            code=str(payload.get("code") or "").strip(),
+            label=str(payload.get("label") or "").strip(),
+            target_type=target_type,
+            target_id=target.pk,
+            notes=str(payload.get("notes") or "").strip(),
+            metadata=payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {},
+        )
+        if kind == "qr" and not tag.code:
+            tag.code = f"MV-{tag.public_token.hex[:16].upper()}"
+        if kind == "rfid" and target_type == "spool":
+            existing = str(target.rfid_uid or "").strip().upper()
+            submitted = MakerTag.normalise_code(kind, tag.code)
+            if existing and submitted and existing != submitted:
+                raise ValidationError({
+                    "code": "This spool already has a different RFID UID. Use the existing RFID value."
+                })
+            if existing and not submitted:
+                tag.code = existing
+
+        with transaction.atomic():
+            tag.full_clean()
+            tag.save()
+            _sync_rfid_tag_to_spool(tag)
+            _record_tag_event(
+                tag,
+                request.user,
+                "created",
+                f"Created {tag.get_kind_display()} identity and assigned it to {tag.target_type}.",
+                {"target_type": tag.target_type, "target_id": str(tag.target_id)},
+            )
+        return JsonResponse({"item": serialise_tag(tag, include_events=True)}, status=201)
+    except ValidationError as exc:
+        return _validation_response(exc)
+    except (ValueError, IntegrityError) as exc:
+        return _error(str(exc))
+
+
+@login_required
+@require_http_methods(["GET", "PATCH"])
+def maker_tag_detail(request, tag_id):
+    tag = MakerTag.objects.filter(owner=request.user, pk=tag_id).first()
+    if not tag:
+        return _error("Maker Tag not found.", status=404)
+    if request.method == "GET":
+        return JsonResponse({"item": serialise_tag(tag, include_events=True)})
+
+    denied = _require_permission(request, "core.change_makertag")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        previous = {
+            "kind": tag.kind,
+            "code": tag.code,
+            "target_type": tag.target_type,
+            "target_id": str(tag.target_id),
+            "status": tag.status,
+        }
+
+        if "kind" in payload:
+            kind = str(payload.get("kind") or "").strip().lower()
+            if kind not in dict(MakerTag.KINDS):
+                raise ValidationError({"kind": "Choose a supported tag type."})
+            tag.kind = kind
+        if "code" in payload:
+            tag.code = str(payload.get("code") or "").strip()
+        if "label" in payload:
+            tag.label = str(payload.get("label") or "").strip()
+        if "notes" in payload:
+            tag.notes = str(payload.get("notes") or "").strip()
+        if "metadata" in payload and isinstance(payload.get("metadata"), dict):
+            tag.metadata = payload["metadata"]
+
+        target_type = str(payload.get("target_type") or tag.target_type).strip().lower()
+        target_id = payload.get("target_id") or tag.target_id
+        target = resolve_tag_target(request.user, target_type, target_id)
+        tag.target_type = target_type
+        tag.target_id = target.pk
+
+        if tag.kind == "qr" and not str(tag.code or "").strip():
+            tag.code = f"MV-{tag.public_token.hex[:16].upper()}"
+
+        requested_status = str(payload.get("status") or tag.status).strip().lower()
+        if requested_status not in dict(MakerTag.STATUSES):
+            raise ValidationError({"status": "Choose Active or Retired."})
+        if requested_status == "retired" and tag.status != "retired":
+            tag.retired_at = timezone.now()
+        elif requested_status == "active" and tag.status == "retired":
+            tag.retired_at = None
+        tag.status = requested_status
+
+        if tag.kind == "rfid" and tag.target_type == "spool":
+            existing = str(target.rfid_uid or "").strip().upper()
+            submitted = MakerTag.normalise_code(tag.kind, tag.code)
+            if existing and existing not in {submitted, previous.get("code", "")}:
+                raise ValidationError({
+                    "code": "The target spool already has a different RFID UID."
+                })
+
+        with transaction.atomic():
+            tag.full_clean()
+            tag.save()
+            _sync_rfid_tag_to_spool(tag, previous=previous)
+
+            reassigned = (
+                previous["target_type"] != tag.target_type
+                or previous["target_id"] != str(tag.target_id)
+            )
+            if previous["status"] != tag.status:
+                event_type = "retired" if tag.status == "retired" else "reactivated"
+                summary = f"{tag.get_status_display()} Maker Tag."
+            elif reassigned:
+                event_type = "reassigned"
+                summary = f"Reassigned Maker Tag to {tag.target_type}."
+            else:
+                event_type = "updated"
+                summary = "Updated Maker Tag details."
+            _record_tag_event(tag, request.user, event_type, summary, {
+                "previous": previous,
+                "target_type": tag.target_type,
+                "target_id": str(tag.target_id),
+            })
+
+        return JsonResponse({"item": serialise_tag(tag, include_events=True)})
+    except ValidationError as exc:
+        return _validation_response(exc)
+    except (ValueError, IntegrityError) as exc:
+        return _error(str(exc))
+
+
+@login_required
+@require_http_methods(["GET"])
+def maker_tag_resolve_token(request, public_token):
+    tag = MakerTag.objects.filter(
+        owner=request.user,
+        public_token=public_token,
+        status="active",
+    ).first()
+    if not tag:
+        return _error("Active Maker Tag not found.", status=404)
+    return JsonResponse({"item": serialise_tag(tag, include_events=True)})
+
+
+@login_required
+@require_http_methods(["GET"])
+def maker_tag_resolve_code(request):
+    kind = str(request.GET.get("kind") or "").strip().lower()
+    code = MakerTag.normalise_code(kind, request.GET.get("code"))
+    if kind not in dict(MakerTag.KINDS) or not code:
+        return _error("Provide a supported tag type and identity code.")
+    tag = MakerTag.objects.filter(
+        owner=request.user,
+        kind=kind,
+        code=code,
+        status="active",
+    ).first()
+    if not tag:
+        return _error("Active Maker Tag not found.", status=404)
+    return JsonResponse({"item": serialise_tag(tag, include_events=True)})
 
 
 @login_required
