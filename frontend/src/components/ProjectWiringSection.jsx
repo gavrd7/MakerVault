@@ -297,6 +297,8 @@ function WiringEditor({ project, diagram, boards, components, inventory, canChan
   }
 
   const nodeById = Object.fromEntries(draft.nodes.map(node => [node.id, node]));
+  const diagnosticByConnection = draft.diagnostic_summary?.connections || {};
+  const diagnosticCounts = draft.diagnostic_summary?.counts || {};
   const canvasWidth = Math.max(960, ...draft.nodes.map(node => Number(node.x || 0) + 220));
   const canvasHeight = Math.max(560, ...draft.nodes.map(node => Number(node.y || 0) + 140));
 
@@ -409,9 +411,21 @@ function WiringEditor({ project, diagram, boards, components, inventory, canChan
         </aside>
 
         <div className="wiringWorkspace">
-          {(draft.warnings || []).length > 0 && <div className="wiringWarnings">
-            {(draft.warnings || []).map((warning, index) => <div key={warning.code + index}><strong>Check</strong><span>{warning.message}</span></div>)}
-          </div>}
+          <section className="wiringDiagnostics">
+            <div className="wiringDiagnosticsHead">
+              <div><strong>Circuit checks</strong><small>Rule-based sanity checks use catalogue pin metadata where available.</small></div>
+              <div className="wiringDiagnosticCounts">
+                <span className="diagError">{diagnosticCounts.error || 0} errors</span>
+                <span className="diagWarning">{diagnosticCounts.warning || 0} warnings</span>
+                <span className="diagValid">{diagnosticCounts.valid || 0} validated</span>
+              </div>
+            </div>
+            {(draft.diagnostics || []).filter(item => item.severity !== "valid").map((item, index) => <div className={"wiringDiagnostic wiringDiagnostic-" + item.severity} key={item.code + "-" + item.connection_id + "-" + index}>
+              <strong>{item.severity === "error" ? "Error" : item.severity === "warning" ? "Warning" : "Check"}</strong>
+              <span>{item.message}</span>
+            </div>)}
+            {draft.connections.length > 0 && !(draft.diagnostics || []).some(item => item.severity !== "valid") && <div className="wiringDiagnostic wiringDiagnostic-valid"><strong>OK</strong><span>No high-confidence electrical conflicts detected in the connections MakerVault can classify.</span></div>}
+          </section>
           <div
             className={"wiringCanvasScroll" + (draft.canvas?.show_grid === false ? " noGrid" : "")}
             ref={canvasRef}
@@ -425,8 +439,9 @@ function WiringEditor({ project, diagram, boards, components, inventory, canChan
                   const from = nodeById[edge.from_node];
                   const to = nodeById[edge.to_node];
                   if (!from || !to) return null;
-                  return <g key={edge.id}>
-                    <line x1={Number(from.x) + 90} y1={Number(from.y) + 42} x2={Number(to.x) + 90} y2={Number(to.y) + 42} stroke={edge.color || "#7c5cff"} strokeWidth="3" />
+                  const severity = diagnosticByConnection[edge.id] || "unknown";
+                  return <g key={edge.id} className={"wiringLine wiringLine-" + severity}>
+                    <line x1={Number(from.x) + 90} y1={Number(from.y) + 42} x2={Number(to.x) + 90} y2={Number(to.y) + 42} stroke={severity === "unknown" ? (edge.color || "#7c5cff") : undefined} strokeWidth="3" />
                   </g>;
                 })}
               </svg>
@@ -446,14 +461,17 @@ function WiringEditor({ project, diagram, boards, components, inventory, canChan
 
           <section className="wiringConnectionList">
             <div className="projectSectionHead"><h3>Connections</h3><span>{draft.connections.length}</span></div>
-            {draft.connections.map(edge => <div className="wiringConnectionRow" key={edge.id}>
-              <span className="wiringColourDot" style={{ background: edge.color || "#7c5cff" }} />
+            {draft.connections.map(edge => {
+              const severity = diagnosticByConnection[edge.id] || "unknown";
+              return <div className={"wiringConnectionRow wiringConnection-" + severity} key={edge.id}>
+              <span className="wiringColourDot" style={severity === "unknown" ? { background: edge.color || "#7c5cff" } : undefined} />
               <div>
                 <strong>{nodeById[edge.from_node]?.label || edge.from_node} · {edge.from_pin} → {nodeById[edge.to_node]?.label || edge.to_node} · {edge.to_pin}</strong>
                 <small>{edge.label || "Unlabelled connection"}</small>
               </div>
-              {canChange && <button type="button" onClick={() => mutate(current => ({ ...current, connections: current.connections.filter(item => item.id !== edge.id) }))}>Remove</button>}
-            </div>)}
+              <div className="wiringConnectionActions"><span className={"wiringConnectionStatus " + severity}>{severity}</span>{canChange && <button type="button" onClick={() => mutate(current => ({ ...current, connections: current.connections.filter(item => item.id !== edge.id) }))}>Remove</button>}</div>
+            </div>;
+            })}
             {!draft.connections.length && <p className="muted">No pin-to-pin connections yet.</p>}
           </section>
         </div>
