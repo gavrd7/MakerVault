@@ -497,7 +497,8 @@ def serialise_wiring_diagram(diagram: WiringDiagram, *, detailed=False):
 
     payload = {
         "id": str(diagram.id),
-        "project_id": str(diagram.project_id),
+        "project_id": str(diagram.project_id) if diagram.project_id else "",
+        "project_name": diagram.project.name if diagram.project_id else "",
         "name": diagram.name,
         "description": diagram.description,
         "node_count": len(diagram.nodes or []),
