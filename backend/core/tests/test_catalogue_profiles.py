@@ -108,6 +108,26 @@ class CatalogueProfileTests(unittest.TestCase):
         self.assertTrue(result["specifications"]["native_usb"])
         self.assertIn("multiple flash/PSRAM variants", result["specifications"]["variant_note"])
 
+    def test_common_component_profiles_add_authoritative_metadata(self):
+        cases = {
+            "MCP23017": "Microchip",
+            "DS18B20": "Analog Devices",
+            "NE555": "Texas Instruments",
+            "BNO055": "Bosch Sensortec",
+            "PCA9685": "NXP",
+        }
+        for part, provider in cases.items():
+            with self.subTest(part=part):
+                result = apply_component_profile({
+                    "name": part,
+                    "part_number": part,
+                    "description": "",
+                    "specifications": {},
+                })
+                self.assertTrue(result["description"])
+                self.assertEqual(result["specifications"]["reference_provider"], provider)
+                self.assertTrue(result["specifications"]["reference_url"].startswith("https://"))
+
     def test_component_profile_adds_official_reference_and_description(self):
         result = apply_component_profile({
             "name": "BME280 temperature/humidity/pressure sensor",
