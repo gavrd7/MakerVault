@@ -2009,3 +2009,39 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
   .wiringHeaderActions{justify-content:flex-start}
   .wiringToolbox{grid-template-columns:1fr}
 }
+
+.wiringDiagnostics{border:1px solid #29313c;border-radius:12px;background:#0d131a;overflow:hidden}
+.wiringDiagnosticsHead{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 13px;border-bottom:1px solid #29313c}
+.wiringDiagnosticsHead>div:first-child{display:grid;gap:3px}
+.wiringDiagnosticsHead small{color:#7f8a9c;font-size:11px}
+.wiringDiagnosticCounts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.wiringDiagnosticCounts span,.wiringConnectionStatus{border:1px solid #3a4554;border-radius:999px;padding:3px 7px;font-size:10px;text-transform:uppercase;letter-spacing:.04em}
+.diagError,.wiringConnectionStatus.error{color:#ff9c9c;border-color:#7d3b42!important;background:#291519}
+.diagWarning,.wiringConnectionStatus.warning{color:#e7d39b;border-color:#6d5c2f!important;background:#292311}
+.diagValid,.wiringConnectionStatus.valid{color:#9bd8b6;border-color:#35684a!important;background:#10251a}
+.wiringConnectionStatus.advisory{color:#a9c8e8;border-color:#3b607b;background:#112331}
+.wiringConnectionStatus.unknown{color:#9aa6b6}
+.wiringDiagnostic{display:grid;grid-template-columns:70px minmax(0,1fr);gap:9px;padding:9px 12px;border-top:1px solid #202833;font-size:12px}
+.wiringDiagnostic:first-of-type{border-top:0}
+.wiringDiagnostic-error{color:#ffb2b2;background:#241216}
+.wiringDiagnostic-warning{color:#e7d39b;background:#211d10}
+.wiringDiagnostic-advisory{color:#b6d2ea;background:#101e29}
+.wiringDiagnostic-valid{color:#a7daba;background:#102019}
+.wiringLine-error line{stroke:#ef6262}
+.wiringLine-warning line{stroke:#d7ae52;stroke-dasharray:8 5}
+.wiringLine-advisory line{stroke:#69a8d2;stroke-dasharray:4 4}
+.wiringLine-valid line{stroke:#58b77c}
+.wiringConnection-error{border-left:3px solid #ef6262}
+.wiringConnection-warning{border-left:3px solid #d7ae52}
+.wiringConnection-advisory{border-left:3px solid #69a8d2}
+.wiringConnection-valid{border-left:3px solid #58b77c}
+.wiringConnection-error .wiringColourDot{background:#ef6262}
+.wiringConnection-warning .wiringColourDot{background:#d7ae52}
+.wiringConnection-advisory .wiringColourDot{background:#69a8d2}
+.wiringConnection-valid .wiringColourDot{background:#58b77c}
+.wiringConnectionActions{display:flex;align-items:center;gap:7px}
+@media(max-width:700px){
+  .wiringDiagnosticsHead{display:grid}
+  .wiringDiagnosticCounts{justify-content:flex-start}
+  .wiringDiagnostic{grid-template-columns:1fr}
+}
