@@ -211,23 +211,27 @@ class CatalogueImageSourceTests(unittest.TestCase):
         )
 
     def test_curated_sbc_source_mapping_is_exact(self):
-        self.board.manufacturer.name = "NVIDIA"
-        self.board.manufacturer.save(update_fields=["name"])
-        self.board.name = "Jetson Orin Nano Super Developer Kit"
-        self.board.specifications = {"board_type": "sbc"}
-        self.board.save(update_fields=["name", "specifications", "updated_at"])
+        manufacturer = Mock(name="manufacturer")
+        manufacturer.name = "NVIDIA"
+        board = Mock(
+            name="Jetson Orin Nano Super Developer Kit",
+            manufacturer=manufacturer,
+            specifications={"board_type": "sbc"},
+        )
         self.assertEqual(
-            _curated_sbc_source_page(self.board),
+            _curated_sbc_source_page(board),
             "https://docs.nvidia.com/jetson/orin-nano-devkit/user-guide/latest/",
         )
 
     def test_curated_sbc_source_mapping_ignores_microcontrollers(self):
-        self.board.manufacturer.name = "NVIDIA"
-        self.board.manufacturer.save(update_fields=["name"])
-        self.board.name = "Jetson Orin Nano Super Developer Kit"
-        self.board.specifications = {"board_type": "microcontroller"}
-        self.board.save(update_fields=["name", "specifications", "updated_at"])
-        self.assertEqual(_curated_sbc_source_page(self.board), "")
+        manufacturer = Mock(name="manufacturer")
+        manufacturer.name = "NVIDIA"
+        board = Mock(
+            name="Jetson Orin Nano Super Developer Kit",
+            manufacturer=manufacturer,
+            specifications={"board_type": "microcontroller"},
+        )
+        self.assertEqual(_curated_sbc_source_page(board), "")
 
     def test_page_image_candidates_prefer_structured_product_image(self):
         html = """
