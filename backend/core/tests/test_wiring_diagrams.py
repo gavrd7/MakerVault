@@ -146,6 +146,84 @@ class WiringDiagramApiTests(TestCase):
         self.assertIn("GPIO4", board_node["reference"]["pin_hints"])
         self.assertTrue(any(warning["code"] == "no-common-ground" for warning in item["warnings"]))
 
+    def test_ground_to_power_is_reported_as_error(self):
+        self.board.pinout = {
+            "pins": [
+                {"name": "GND", "role": "ground"},
+                {"name": "3V3", "role": "power_output", "voltage": 3.3},
+            ]
+        }
+        self.board.save(update_fields=["pinout", "updated_at"])
+        sensor = BoardModel.objects.create(
+            name="Sensor board",
+            pinout={"pins": [{"name": "VCC", "role": "power_input", "min_voltage": 3.0, "max_voltage": 3.6}]},
+        )
+        diagram = WiringDiagram.objects.create(owner=self.owner, project=self.project, name="Bad power")
+        response = self.client.patch(
+            f"/api/projects/{self.project.id}/wiring/{diagram.id}/",
+            data={
+                "nodes": [
+                    {"id": "controller", "type": "board", "reference_id": str(self.board.id), "label": "", "x": 0, "y": 0},
+                    {"id": "sensor", "type": "board", "reference_id": str(sensor.id), "label": "", "x": 240, "y": 0},
+                ],
+                "connections": [
+                    {"id": "bad-wire", "from_node": "controller", "from_pin": "GND", "to_node": "sensor", "to_pin": "VCC"}
+                ],
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        item = response.json()["item"]
+        self.assertTrue(any(row["code"] == "ground-power-conflict" and row["severity"] == "error" for row in item["diagnostics"]))
+        self.assertEqual(item["diagnostic_summary"]["connections"]["bad-wire"], "error")
+
+    def test_power_voltage_range_is_checked(self):
+        source = BoardModel.objects.create(
+            name="5V source",
+            pinout={"pins": [{"name": "5V", "role": "power_output", "voltage": 5.0}]},
+        )
+        target = BoardModel.objects.create(
+            name="3V3 target",
+            pinout={"pins": [{"name": "VCC", "role": "power_input", "min_voltage": 3.0, "max_voltage": 3.6}]},
+        )
+        diagram = WiringDiagram.objects.create(owner=self.owner, project=self.project, name="Voltage")
+        response = self.client.patch(
+            f"/api/projects/{self.project.id}/wiring/{diagram.id}/",
+            data={
+                "nodes": [
+                    {"id": "source", "type": "board", "reference_id": str(source.id), "label": "", "x": 0, "y": 0},
+                    {"id": "target", "type": "board", "reference_id": str(target.id), "label": "", "x": 240, "y": 0},
+                ],
+                "connections": [{"id": "power", "from_node": "source", "from_pin": "5V", "to_node": "target", "to_pin": "VCC"}],
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertTrue(any(row["code"] == "overvoltage" and row["severity"] == "error" for row in response.json()["item"]["diagnostics"]))
+
+    def test_uart_direction_mismatch_is_warning_and_tx_rx_is_valid(self):
+        left = BoardModel.objects.create(name="UART left", pinout={"pins": [{"name": "TX", "role": "uart_tx"}, {"name": "RX", "role": "uart_rx"}]})
+        right = BoardModel.objects.create(name="UART right", pinout={"pins": [{"name": "TX", "role": "uart_tx"}, {"name": "RX", "role": "uart_rx"}]})
+        diagram = WiringDiagram.objects.create(owner=self.owner, project=self.project, name="UART")
+        response = self.client.patch(
+            f"/api/projects/{self.project.id}/wiring/{diagram.id}/",
+            data={
+                "nodes": [
+                    {"id": "left", "type": "board", "reference_id": str(left.id), "label": "", "x": 0, "y": 0},
+                    {"id": "right", "type": "board", "reference_id": str(right.id), "label": "", "x": 240, "y": 0},
+                ],
+                "connections": [
+                    {"id": "wrong", "from_node": "left", "from_pin": "TX", "to_node": "right", "to_pin": "TX"},
+                    {"id": "right-wire", "from_node": "left", "from_pin": "RX", "to_node": "right", "to_pin": "TX"},
+                ],
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        item = response.json()["item"]
+        self.assertEqual(item["diagnostic_summary"]["connections"]["wrong"], "warning")
+        self.assertEqual(item["diagnostic_summary"]["connections"]["right-wire"], "valid")
+
     def test_private_inventory_cannot_be_referenced_in_another_users_wiring(self):
         diagram = WiringDiagram.objects.create(
             owner=self.owner,
