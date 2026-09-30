@@ -92,6 +92,22 @@ class CatalogueProfileTests(unittest.TestCase):
         self.assertEqual(leonardo["specifications"]["usb_capability"], "Native USB HID / CDC")
         self.assertIn("psram", leonardo["specifications"]["not_applicable_specs"])
 
+    def test_feather_esp32_s3_profile_keeps_memory_variant_agnostic(self):
+        result = apply_board_profile({
+            "manufacturer": "Adafruit",
+            "name": "Feather ESP32-S3",
+            "mcu": "ESP32-S3",
+            "flash_mb": None,
+            "psram_mb": None,
+            "specifications": {},
+        })
+        self.assertEqual(result["usb_connector"], "USB-C")
+        self.assertEqual(result["dimensions_mm"], {"length": 50.8, "width": 22.86})
+        self.assertIsNone(result.get("flash_mb"))
+        self.assertIsNone(result.get("psram_mb"))
+        self.assertTrue(result["specifications"]["native_usb"])
+        self.assertIn("multiple flash/PSRAM variants", result["specifications"]["variant_note"])
+
     def test_component_profile_adds_official_reference_and_description(self):
         result = apply_component_profile({
             "name": "BME280 temperature/humidity/pressure sensor",
