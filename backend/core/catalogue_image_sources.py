@@ -910,7 +910,22 @@ def run_catalogue_image_seed(
 
                     image_field = "image_multi_material" if variant == "multi_material" else "image"
                     metadata, _ = catalogue_image_metadata(obj, variant=variant)
-                    if getattr(obj, image_field, None) or str(metadata.get("external_image_url") or "").startswith("https://"):
+                    # A real locally-cached image is authoritative and does not
+                    # need network revalidation. Remote references are different:
+                    # they may expire, hotlink-block, or belong to an older discovery
+                    # generation. Honour --force-retry for them, and automatically
+                    # reconsider them after IMAGE_SEED_VERSION changes.
+                    if getattr(obj, image_field, None):
+                        skipped += 1
+                        by_kind[kind]["skipped"] += 1
+                        continue
+
+                    external_image_url = str(metadata.get("external_image_url") or "").strip()
+                    external_is_current = (
+                        external_image_url.startswith("https://")
+                        and metadata.get("auto_image_attempt_version") == IMAGE_SEED_VERSION
+                    )
+                    if external_is_current and not force_retry:
                         skipped += 1
                         by_kind[kind]["skipped"] += 1
                         continue
