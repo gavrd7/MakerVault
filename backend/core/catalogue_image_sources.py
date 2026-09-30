@@ -30,7 +30,7 @@ from .importers import ImporterError, fetch_import_html
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 OPENVERSE_API = "https://api.openverse.org/v1/images/"
-IMAGE_SEED_VERSION = "0.7.1-orcaslicer-cover-images-3"
+IMAGE_SEED_VERSION = "0.7.2-sbc-images-1"
 USER_AGENT = f"MakerVault/{getattr(settings, 'MAKERVAULT_VERSION', 'dev')} (+self-hosted catalogue image seeder)"
 def _commons_license_allowed(license_name: str) -> bool:
     """Allow only licences suitable for normal open redistribution."""
@@ -139,7 +139,13 @@ def _commons_query_for_component(component) -> str:
 
 def _commons_query_for_board(board) -> str:
     maker = board.manufacturer.name if board.manufacturer else ""
-    return f"{maker} {board.name} microcontroller board".strip()
+    board_type = str((board.specifications or {}).get("board_type") or "microcontroller")
+    suffix = {
+        "sbc": "single board computer",
+        "compute_module": "compute module",
+        "microcontroller": "microcontroller board",
+    }.get(board_type, "development board")
+    return f"{maker} {board.name} {suffix}".strip()
 
 
 def _printer_image_queries(printer_model) -> list[str]:
