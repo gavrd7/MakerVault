@@ -81,7 +81,7 @@ export default function BoardsPage({ boards, setBoards, components, projects, co
   }, [boards, query, manufacturer, family, boardType]);
 
   const columns = useMemo(() => [
-    { headerName: "", field: "image", width: 72, sortable: false, filter: false, cellRenderer: p => <BoardImage src={p.value} alt={p.data?.name || ""} size="tiny" /> },
+    { headerName: "", field: "image", width: 72, sortable: false, filter: false, cellRenderer: p => <BoardImage src={p.value} alt={p.data?.name || ""} size="tiny" placeholder={({ sbc: "SBC", compute_module: "SoM" }[p.data?.board_type || p.data?.specifications?.board_type] || "MCU")} /> },
     { field: "manufacturer", minWidth: 150 },
     { field: "name", headerName: "Board", minWidth: 230, flex: 1 },
     { headerName: "Type", minWidth: 155, valueGetter: p => boardTypeLabel(p.data?.board_type || p.data?.specifications?.board_type || "microcontroller") },
@@ -226,7 +226,7 @@ function BoardDetail({ board, loading, canEdit, canAddInventory, boards, compone
       <div className="detailHead boardDetailHead"><h3>Board details</h3><button className="iconButton" onClick={onClose} aria-label="Close board details">×</button></div>
       <div className="boardDetailScroll">
       {loading ? <LoadingBlock label="Loading board details…" /> : <>
-      <button type="button" className="boardHeroImage imageViewerTrigger" onClick={() => board.image && setViewerOpen(true)} disabled={!board.image} title={board.image ? "Open image viewer" : undefined}><BoardImage src={board.image} alt={board.display_name} size="large" /></button>
+      <button type="button" className="boardHeroImage imageViewerTrigger" onClick={() => board.image && setViewerOpen(true)} disabled={!board.image} title={board.image ? "Open image viewer" : undefined}><BoardImage src={board.image} alt={board.display_name} size="large"  placeholder={({ sbc: "SBC", compute_module: "SoM" }[specs.board_type] || "MCU")} /></button>
       <div className="detailTitleRow boardTitleRow">
         <h2>{board.display_name}</h2>
         <div className="detailActions">
