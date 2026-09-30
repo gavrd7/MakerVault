@@ -12,6 +12,18 @@ from bs4 import BeautifulSoup
 
 MAX_IMPORT_BYTES = 4 * 1024 * 1024
 ESPBOARDS_HOSTS = {"espboards.dev", "www.espboards.dev"}
+CATALOGUE_SOURCE_HOST_SUFFIXES = {
+    "espboards.dev",
+    "orangepi.org",
+    "hardkernel.com",
+    "radxa.com",
+    "banana-pi.org",
+    "beagleboard.org",
+    "lattepanda.com",
+    "nvidia.com",
+    "khadas.com",
+    "raspberrypi.com",
+}
 
 
 class ImporterError(ValueError):
@@ -71,15 +83,37 @@ def validate_import_url(raw_url: str) -> SafeImportURL:
     return SafeImportURL(url=value, host=host)
 
 
-def fetch_import_html(raw_url: str) -> tuple[str, str]:
-    current = validate_import_url(raw_url).url
+
+def validate_catalogue_source_url(raw_url: str) -> SafeImportURL:
+    """Validate an allow-listed catalogue source without widening user URL imports."""
+    value = (raw_url or "").strip()
+    if not value:
+        raise ImporterError("Enter a catalogue source URL.")
+
+    parsed = urlparse(value)
+    if parsed.scheme != "https":
+        raise ImporterError("MakerVault catalogue sources require an HTTPS URL.")
+    host = (parsed.hostname or "").lower().rstrip(".")
+    if not any(host == suffix or host.endswith("." + suffix) for suffix in CATALOGUE_SOURCE_HOST_SUFFIXES):
+        raise ImporterError("The catalogue source host is not allow-listed.")
+    if parsed.port not in (None, 443):
+        raise ImporterError("Non-standard ports are not permitted for catalogue sources.")
+    if parsed.username or parsed.password:
+        raise ImporterError("Credentials in catalogue source URLs are not permitted.")
+    if not _host_is_public(host):
+        raise ImporterError("The catalogue source URL resolved to a private or reserved address.")
+    return SafeImportURL(url=value, host=host)
+
+
+def _fetch_safe_html(raw_url: str, validator, *, user_agent: str) -> tuple[str, str]:
+    current = validator(raw_url).url
     headers = {
-        "User-Agent": "MakerVault/0.2 (+self-hosted catalogue importer)",
+        "User-Agent": user_agent,
         "Accept": "text/html,application/xhtml+xml",
     }
 
     for _ in range(5):
-        safe = validate_import_url(current)
+        safe = validator(current)
         try:
             response = requests.get(
                 safe.url,
@@ -128,6 +162,23 @@ def fetch_import_html(raw_url: str) -> tuple[str, str]:
         return current, b"".join(chunks).decode(encoding, errors="replace")
 
     raise ImporterError("The source redirected too many times.")
+
+
+def fetch_catalogue_source_html(raw_url: str) -> tuple[str, str]:
+    return _fetch_safe_html(
+        raw_url,
+        validate_catalogue_source_url,
+        user_agent="MakerVault/0.7 (+self-hosted catalogue enrichment)",
+    )
+
+def fetch_import_html(raw_url: str) -> tuple[str, str]:
+    # Deliberately retain the narrow ESPBoards-only validation for user-driven
+    # URL imports. Catalogue enrichment uses fetch_catalogue_source_html().
+    return _fetch_safe_html(
+        raw_url,
+        validate_import_url,
+        user_agent="MakerVault/0.2 (+self-hosted catalogue importer)",
+    )
 
 
 def _first_number(text: str, patterns: list[str]) -> float | None:
