@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.7.2 — in development
+
+- Started the Maker Tags & interactive wiring milestone.
+- Added the Maker Tags foundation with owner-scoped QR, NFC and RFID identities that can target inventory items, spools, printers, projects and storage/printing locations.
+- Existing physical spool RFID identities migrate into Maker Tags while the spool RFID field remains a compatibility mirror for current integrations.
+- Added tag assignment/reassignment, retirement/reactivation and per-tag history without exposing another user's physical identities.
+- Added authenticated QR scan links, direct NFC/RFID identity resolution, duplicate identity protection and printable QR label rendering.
+- Added a responsive Maker Tags workspace with target selection, filtering, tag detail/history and dashboard status.
+
 ## v0.7.1 — 2026-09-30
 
 - Multi-material printer image maintenance now avoids fuzzy AMS/CFS/MMU searches: only curated manufacturer-backed combo imagery is accepted automatically, while unresolved variants are deferred without consuming the image-search attempt limit.
