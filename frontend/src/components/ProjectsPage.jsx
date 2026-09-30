@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../api";
 import { Badge, BoardImage, ImageViewer, LoadingBlock, Modal } from "./Common";
 import ProjectBomSection from "./ProjectBomSection";
+import ProjectWiringSection from "./ProjectWiringSection";
 import FileVersionModal from "./FileVersionModal";
 import { FileModelViewerModal, ModelThumbnail, isViewableModelFile } from "./ModelViewer";
 
@@ -224,6 +225,14 @@ function ProjectDetail({ project, loading, canEdit, config, boards, components, 
         config={config}
         onRefresh={onRefresh}
         refreshInventory={refreshInventory}
+      />
+
+      <ProjectWiringSection
+        project={project}
+        boards={boards}
+        components={components}
+        inventory={inventory}
+        config={config}
       />
 
       <section className="projectSection">
