@@ -1871,3 +1871,67 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
     aspect-ratio:4 / 3;
   }
 }
+
+
+/* v0.7.2 Maker Tags */
+.tagStack{display:grid;gap:16px;max-width:1280px}
+.tagHero{padding:24px;display:flex;justify-content:space-between;gap:24px;align-items:flex-start}
+.tagHero h2{margin:7px 0 8px;font-size:30px}
+.tagHero p{margin:0;max-width:760px;color:#99a5b6;line-height:1.55}
+.tagResolvePanel{padding:18px 20px;display:grid;grid-template-columns:minmax(190px,.7fr) minmax(0,1.3fr);gap:18px;align-items:center}
+.tagResolvePanel>div{display:grid;gap:4px}
+.tagResolvePanel small{color:#7f8a9c}
+.tagResolvePanel form{display:grid;grid-template-columns:150px minmax(180px,1fr) auto;gap:9px}
+.tagLibrary{overflow:hidden}
+.tagToolbar{display:grid;grid-template-columns:minmax(170px,.7fr) minmax(220px,1.3fr) 170px 150px;gap:10px;align-items:center;padding:16px 18px;border-bottom:1px solid #29313c}
+.tagToolbar>div{display:grid;gap:3px}
+.tagToolbar small{color:#7f8a9c}
+.tagList{display:grid}
+.tagRow{display:grid;grid-template-columns:72px minmax(0,1fr) auto;gap:16px;align-items:center;padding:15px 18px;border-bottom:1px solid #232c37}
+.tagRow:last-child{border-bottom:0}
+.tagRow-retired{opacity:.67}
+.tagIdentityMark{width:58px;height:58px;border:1px solid #3b4758;border-radius:14px;background:#111a24;color:#bcb3ff;display:grid;place-items:center;font-size:12px;font-weight:850;letter-spacing:.08em}
+.tagRowMain{min-width:0;display:grid;gap:5px}
+.tagRowTitle{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.tagRowMain code{color:#aeb9c8;font-size:12px;overflow-wrap:anywhere}
+.tagRowMain small{color:#7f8a9c;overflow-wrap:anywhere}
+.tagRowActions{display:flex;gap:8px}
+.tagDetailGrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(240px,.9fr);gap:18px;align-items:stretch}
+.tagDetailIdentity,.tagQrCard{border:1px solid #29313c;border-radius:14px;background:#0d131a;padding:18px}
+.tagDetailIdentity{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+.tagDetailIdentity h3{margin:5px 0 0;font-size:22px;overflow-wrap:anywhere}
+.tagDetailIdentity p{margin:4px 0 0;color:#7f8a9c}
+.tagDetailIdentity small{margin-top:6px;color:#8f9bac;white-space:pre-wrap}
+.tagQrCard{display:grid;justify-items:center;gap:12px;text-align:center}
+.tagQrCard svg{background:white;border-radius:10px;max-width:100%;height:auto}
+.tagQrCard code{max-width:100%;font-size:11px;color:#9ca8b8;overflow-wrap:anywhere}
+.tagQrActions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.tagTapIcon{width:150px;height:150px;border:2px solid #594fa1;border-radius:50%;display:grid;place-items:center;font-size:24px;font-weight:850;color:#c9c1ff;background:radial-gradient(circle,#211d3c,#111820)}
+.tagDetailMeta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:16px 0}
+.tagDetailMeta>div{border:1px solid #29313c;border-radius:11px;padding:11px 12px;background:#0d131a;display:grid;gap:4px}
+.tagDetailMeta span{font-size:11px;color:#7f8a9c;text-transform:uppercase;letter-spacing:.05em}
+.tagDetailMeta strong{font-size:13px;overflow-wrap:anywhere}
+.tagHistory{border-top:1px solid #29313c;padding-top:14px;margin-top:14px}
+.tagHistory .projectSectionHead{padding:0 0 10px}
+.tagHistoryRow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;padding:10px 0;border-top:1px solid #222a35}
+.tagHistoryRow div{display:grid;gap:3px}
+.tagHistoryRow small,.tagHistoryRow>span{color:#7f8a9c;font-size:11px}
+@media(max-width:900px){
+  .tagHero{display:grid}
+  .tagResolvePanel{grid-template-columns:1fr}
+  .tagToolbar{grid-template-columns:1fr 1fr}
+  .tagToolbar>div,.tagToolbar>input{grid-column:1/-1}
+}
+@media(max-width:620px){
+  .tagHero{padding:20px}
+  .tagHero h2{font-size:26px}
+  .tagResolvePanel form{grid-template-columns:1fr}
+  .tagToolbar{grid-template-columns:1fr}
+  .tagToolbar>*{grid-column:auto!important}
+  .tagRow{grid-template-columns:54px minmax(0,1fr)}
+  .tagIdentityMark{width:48px;height:48px;border-radius:12px;font-size:10px}
+  .tagRowActions{grid-column:1/-1;justify-content:flex-end}
+  .tagDetailGrid{grid-template-columns:1fr}
+  .tagDetailMeta{grid-template-columns:1fr}
+  .tagHistoryRow{grid-template-columns:1fr}
+}
