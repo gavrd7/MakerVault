@@ -172,6 +172,118 @@ def _sync_rfid_tag_to_spool(tag, *, previous=None):
 
 @login_required
 @require_http_methods(["GET", "POST"])
+def wiring_lab_diagrams(request):
+    """Standalone wiring workspaces for experimentation before project assignment."""
+    if request.method == "GET":
+        rows = WiringDiagram.objects.filter(owner=request.user, project__isnull=True)
+        return JsonResponse({"rows": [serialise_wiring_diagram(item) for item in rows]})
+
+    denied = _require_permission(request, "core.add_wiringdiagram")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        name = str(payload.get("name") or "").strip()
+        if not name:
+            raise ValidationError({"name": "Diagram name is required."})
+        nodes, connections, canvas = normalise_wiring(
+            request.user,
+            payload.get("nodes") or [],
+            payload.get("connections") or [],
+            payload.get("canvas") or {},
+        )
+        diagram = WiringDiagram(
+            owner=request.user,
+            project=None,
+            name=name,
+            description=str(payload.get("description") or "").strip(),
+            nodes=nodes,
+            connections=connections,
+            canvas=canvas,
+        )
+        diagram.full_clean()
+        diagram.save()
+        return JsonResponse({"item": serialise_wiring_diagram(diagram, detailed=True)}, status=201)
+    except ValidationError as exc:
+        return _validation_response(exc)
+    except IntegrityError:
+        return _error("A standalone wiring diagram with that name already exists.")
+
+
+@login_required
+@require_http_methods(["GET", "PATCH", "DELETE"])
+def wiring_lab_diagram_detail(request, diagram_id):
+    diagram = WiringDiagram.objects.filter(owner=request.user, project__isnull=True, pk=diagram_id).first()
+    if not diagram:
+        return _error("Standalone wiring diagram not found.", status=404)
+
+    if request.method == "GET":
+        return JsonResponse({"item": serialise_wiring_diagram(diagram, detailed=True)})
+    if request.method == "DELETE":
+        denied = _require_permission(request, "core.delete_wiringdiagram")
+        if denied:
+            return denied
+        diagram.delete()
+        return JsonResponse({"deleted": True})
+
+    denied = _require_permission(request, "core.change_wiringdiagram")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        if "name" in payload:
+            name = str(payload.get("name") or "").strip()
+            if not name:
+                raise ValidationError({"name": "Diagram name is required."})
+            diagram.name = name
+        if "description" in payload:
+            diagram.description = str(payload.get("description") or "").strip()
+        if any(key in payload for key in ("nodes", "connections", "canvas")):
+            nodes, connections, canvas = normalise_wiring(
+                request.user,
+                payload.get("nodes", diagram.nodes),
+                payload.get("connections", diagram.connections),
+                payload.get("canvas", diagram.canvas),
+            )
+            diagram.nodes = nodes
+            diagram.connections = connections
+            diagram.canvas = canvas
+            diagram.revision += 1
+        diagram.full_clean()
+        diagram.save()
+        return JsonResponse({"item": serialise_wiring_diagram(diagram, detailed=True)})
+    except ValidationError as exc:
+        return _validation_response(exc)
+    except IntegrityError:
+        return _error("A standalone wiring diagram with that name already exists.")
+
+
+@login_required
+@require_http_methods(["POST"])
+def wiring_lab_assign_project(request, diagram_id):
+    denied = _require_permission(request, "core.change_wiringdiagram")
+    if denied:
+        return denied
+    diagram = WiringDiagram.objects.filter(owner=request.user, project__isnull=True, pk=diagram_id).first()
+    if not diagram:
+        return _error("Standalone wiring diagram not found.", status=404)
+    try:
+        payload = _read_json(request)
+        project = Project.objects.filter(owner=request.user, pk=payload.get("project_id")).first()
+        if not project:
+            raise ValidationError({"project_id": "Choose one of your projects."})
+        if WiringDiagram.objects.filter(project=project, name=diagram.name).exclude(pk=diagram.pk).exists():
+            raise ValidationError({"project_id": "That project already has a wiring diagram with this name."})
+        diagram.project = project
+        diagram.full_clean()
+        diagram.save(update_fields=["project", "updated_at"])
+        return JsonResponse({"item": serialise_wiring_diagram(diagram, detailed=True)})
+    except ValidationError as exc:
+        return _validation_response(exc)
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
 def project_wiring_diagrams(request, project_id):
     project = Project.objects.filter(owner=request.user, pk=project_id).first()
     if not project:
