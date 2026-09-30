@@ -202,7 +202,7 @@ function CreateDiagramModal({ project, onClose, onCreated }) {
   </Modal>;
 }
 
-function WiringEditor({ project, diagram, boards, components, inventory, canChange, onClose, onSaved }) {
+export function WiringEditor({ project = null, diagram, boards, components, inventory, canChange, onClose, onSaved, endpointBase = "", workspaceName = "" }) {
   const [draft, setDraft] = useState(() => ({ ...diagram, nodes: diagram.nodes || [], connections: diagram.connections || [], canvas: diagram.canvas || {} }));
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -320,7 +320,8 @@ function WiringEditor({ project, diagram, boards, components, inventory, canChan
   async function save() {
     setBusy(true); setError("");
     try {
-      const result = await apiFetch("/api/projects/" + project.id + "/wiring/" + diagram.id + "/", {
+      const detailUrl = endpointBase || ("/api/projects/" + project.id + "/wiring/" + diagram.id + "/");
+      const result = await apiFetch(detailUrl, {
         method: "PATCH",
         body: {
           name: draft.name,
@@ -356,7 +357,7 @@ function WiringEditor({ project, diagram, boards, components, inventory, canChan
     const payload = {
       format: "makervault-wiring",
       version: 1,
-      project: { id: project.id, name: project.name },
+      project: project ? { id: project.id, name: project.name } : null,
       diagram: {
         id: draft.id,
         name: draft.name,
@@ -368,7 +369,7 @@ function WiringEditor({ project, diagram, boards, components, inventory, canChan
       },
     };
     downloadWiringFile(
-      safeFilename(project.name + "-" + draft.name) + ".wiring.json",
+      safeFilename((project?.name || workspaceName || "Wiring-Lab") + "-" + draft.name) + ".wiring.json",
       JSON.stringify(payload, null, 2) + "\n",
       "application/json",
     );
@@ -399,9 +400,9 @@ function WiringEditor({ project, diagram, boards, components, inventory, canChan
       return `<g><rect x="${x}" y="${y}" width="200" height="${nodeHeight(node)}" rx="12" fill="#f7f8fb" stroke="#667085"/><text x="${x + 12}" y="${y + 25}" fill="#667085" font-size="10" font-weight="700">${xmlEscape(node.type.toUpperCase())}</text><text x="${x + 12}" y="${y + 49}" fill="#111827" font-size="14" font-weight="700">${xmlEscape(node.label)}</text></g>`;
     }).join("");
 
-    const svg = `<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="100%" height="100%" fill="#ffffff"/><text x="${pad}" y="22" fill="#111827" font-family="system-ui,sans-serif" font-size="16" font-weight="700">${xmlEscape(project.name)} — ${xmlEscape(draft.name)}</text><g font-family="system-ui,sans-serif">${lines}${nodes}</g></svg>`;
+    const svg = `<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="100%" height="100%" fill="#ffffff"/><text x="${pad}" y="22" fill="#111827" font-family="system-ui,sans-serif" font-size="16" font-weight="700">${xmlEscape(project?.name || workspaceName || "Wiring Lab")} — ${xmlEscape(draft.name)}</text><g font-family="system-ui,sans-serif">${lines}${nodes}</g></svg>`;
     downloadWiringFile(
-      safeFilename(project.name + "-" + draft.name) + ".svg",
+      safeFilename((project?.name || workspaceName || "Wiring-Lab") + "-" + draft.name) + ".svg",
       svg,
       "image/svg+xml",
     );
@@ -411,7 +412,7 @@ function WiringEditor({ project, diagram, boards, components, inventory, canChan
     <section className="wiringEditor">
       <div className="wiringEditorHeader">
         <div>
-          <span className="settingsEyebrow">Interactive wiring · {project.name}</span>
+          <span className="settingsEyebrow">Interactive wiring · {project?.name || workspaceName || "Wiring Lab"}</span>
           <input className="wiringTitleInput" value={draft.name} disabled={!canChange} onChange={e => { setDraft(current => ({ ...current, name: e.target.value })); setDirty(true); }} />
           <small>Revision {draft.revision} · {draft.nodes.length} nodes · {draft.connections.length} connections</small>
         </div>
