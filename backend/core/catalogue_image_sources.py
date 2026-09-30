@@ -812,7 +812,7 @@ def _page_image_candidates(soup: BeautifulSoup, base_url: str) -> list[tuple[str
     return candidates
 
 
-def find_source_page_image(obj) -> dict | None:
+def find_source_page_image(obj, diagnostics: list[dict] | None = None) -> dict | None:
     """Find a remote product image from an already-known catalogue source page.
 
     These images are referenced remotely rather than cached because MakerVault
@@ -821,16 +821,40 @@ def find_source_page_image(obj) -> dict | None:
     """
     for source in _candidate_source_pages(obj):
         page_url = source["url"]
+        tier = classify_source_url(page_url, source_type=source.get("source_type", ""))
         try:
             final_url, html = fetch_import_html(page_url)
-        except ImporterError:
+        except ImporterError as exc:
+            if diagnostics is not None:
+                diagnostics.append({
+                    "url": page_url,
+                    "tier": tier.key,
+                    "result": "fetch-error",
+                    "error": str(exc)[:220],
+                })
             continue
         soup = BeautifulSoup(html, "html.parser")
         image_candidates = _page_image_candidates(soup, final_url)
         if not image_candidates:
+            if diagnostics is not None:
+                diagnostics.append({
+                    "url": final_url,
+                    "tier": tier.key,
+                    "result": "no-image-candidate",
+                    "error": "",
+                })
             continue
         image_url, discovery_method = image_candidates[0]
         tier = classify_source_url(final_url, source_type=source.get("source_type", ""))
+        if diagnostics is not None:
+            diagnostics.append({
+                "url": final_url,
+                "tier": tier.key,
+                "result": "image-candidate",
+                "error": "",
+                "image_url": image_url[:1000],
+                "method": discovery_method,
+            })
         return {
             "external_image_url": image_url,
             "image_source_page": final_url,
@@ -1137,7 +1161,13 @@ def run_catalogue_image_seed(
                             )
                             metadata["auto_image_search_attempts"] = diagnostic.get("attempts", [])[-12:]
                         else:
-                            source_fallback = find_source_page_image(obj) if variant == "base" else None
+                            source_page_diagnostics = []
+                            source_fallback = find_source_page_image(
+                                obj,
+                                diagnostics=source_page_diagnostics,
+                            ) if variant == "base" else None
+                            if source_page_diagnostics:
+                                metadata["auto_image_source_page_attempts"] = source_page_diagnostics[-8:]
                             # SBCs and compute modules should prefer an exact official
                             # product/documentation page image over fuzzy open-media
                             # search.  Remote-reference it rather than copying it, since
@@ -1188,7 +1218,13 @@ def run_catalogue_image_seed(
 
                         if not candidate:
                             if not isinstance(obj, PrinterCatalogModel) and variant == "base":
-                                source_fallback = source_fallback or find_source_page_image(obj)
+                                if source_fallback is None and not source_page_diagnostics:
+                                    source_fallback = find_source_page_image(
+                                        obj,
+                                        diagnostics=source_page_diagnostics,
+                                    )
+                                    if source_page_diagnostics:
+                                        metadata["auto_image_source_page_attempts"] = source_page_diagnostics[-8:]
                             else:
                                 source_fallback = None
                             if source_fallback:
@@ -1215,12 +1251,21 @@ def run_catalogue_image_seed(
                             field = set_catalogue_image_metadata(obj, metadata, variant=variant)
                             obj.save(update_fields=[field, "updated_at"] if field else ["updated_at"])
                             if len(failures) < 30:
+                                reason = "no-confident-match"
+                                if _is_computer_board(obj) and source_page_diagnostics:
+                                    first = source_page_diagnostics[0]
+                                    source_result = first.get("result") or "unknown"
+                                    source_error = first.get("error") or ""
+                                    source_host = urlparse(first.get("url") or "").netloc
+                                    reason = f"official-source {source_host}: {source_result}"
+                                    if source_error:
+                                        reason += f" ({source_error})"
                                 failures.append({
                                     "kind": kind,
                                     "id": str(obj.pk),
                                     "name": str(obj),
                                     "variant": variant,
-                                    "reason": "no-confident-match",
+                                    "reason": reason[:200],
                                 })
                             continue
 
