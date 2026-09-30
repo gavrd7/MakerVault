@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
 import { themeQuartz } from "ag-grid-community";
 import { apiFetch } from "../api";
@@ -21,7 +21,7 @@ function formatDateTime(value) {
   }
 }
 
-export default function InventoryPage({ inventory, setInventory, boards, components, projects, config, refreshDashboard }) {
+export default function InventoryPage({ inventory, setInventory, boards, components, projects, config, refreshDashboard, openItemId = "", openToken = null }) {
   const [search, setSearch] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [selected, setSelected] = useState(null);
@@ -83,6 +83,12 @@ export default function InventoryPage({ inventory, setInventory, boards, compone
       setLoadingDetail(false);
     }
   }
+
+  useEffect(() => {
+    if (!openItemId) return;
+    const item = inventory.find(row => row.id === openItemId);
+    if (item) loadDetail(item);
+  }, [openItemId, openToken]);
 
   async function updateCell(event) {
     if (!editable || event.newValue === event.oldValue) return;

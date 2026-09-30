@@ -1,6 +1,9 @@
 import unittest
 from unittest.mock import Mock, patch
 
+from django.test import TestCase, override_settings
+
+from core.catalogue_coverage import _printer_coverage
 from core.catalogue_image_sources import (
     _board_image_queries,
     _commons_license_allowed,
@@ -9,9 +12,15 @@ from core.catalogue_image_sources import (
     _openverse_license_name,
     _printer_image_queries,
     _printer_multi_material_image_queries,
+    _structured_product_image,
+    find_curated_printer_image,
+    find_orcaslicer_printer_cover,
+    find_source_page_image,
+    run_catalogue_image_seed,
     search_openverse,
     search_wikimedia_commons,
 )
+from core.models import BoardModel, ComponentCategory, ComponentModel, PrinterCatalogModel, PrinterManufacturer
 
 
 class DummyManufacturer:
@@ -125,15 +134,183 @@ class CatalogueImageSourceTests(unittest.TestCase):
         self.assertEqual(queries[0], "BME280 module")
         self.assertIn("BME280", queries)
 
+    def test_component_query_preserves_slide_potentiometer_form_factor(self):
+        component = DummyComponent()
+        component.name = "10k slide potentiometer"
+        component.part_number = ""
+        component.specifications = {"type": "potentiometer", "value": "10 kΩ"}
+        queries = _component_image_queries(component)
+        self.assertEqual(queries[0], "10k slide potentiometer")
+        self.assertIn("10k slide potentiometer linear slider", queries)
+        self.assertIn("slide potentiometer electronics", queries)
+
+    def test_structured_product_image_supports_schema_org_product(self):
+        html = """
+        <html><head>
+        <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@type": "Product",
+          "name": "Example Sensor",
+          "image": ["/media/example-sensor.jpg"]
+        }
+        </script>
+        </head></html>
+        """
+        soup = __import__("bs4").BeautifulSoup(html, "html.parser")
+        self.assertEqual(
+            _structured_product_image(soup, "https://vendor.example/products/example"),
+            "https://vendor.example/media/example-sensor.jpg",
+        )
+
+    def test_structured_product_image_supports_graph_and_image_src(self):
+        graph_html = """
+        <script type="application/ld+json">
+        {"@graph":[{"@type":"Product","image":{"url":"https://cdn.example/product.webp"}}]}
+        </script>
+        """
+        soup = __import__("bs4").BeautifulSoup(graph_html, "html.parser")
+        self.assertEqual(
+            _structured_product_image(soup, "https://vendor.example/product"),
+            "https://cdn.example/product.webp",
+        )
+
+        fallback_html = '<html><head><link rel="image_src" href="/img/fallback.png"></head></html>'
+        fallback_soup = __import__("bs4").BeautifulSoup(fallback_html, "html.parser")
+        self.assertEqual(
+            _structured_product_image(fallback_soup, "https://vendor.example/product"),
+            "https://vendor.example/img/fallback.png",
+        )
+
+    def test_structured_product_image_resolves_linked_image_object(self):
+        html = """
+        <script type="application/ld+json">
+        {
+          "@graph": [
+            {"@type":"Product","name":"Linked Widget","image":{"@id":"https://vendor.example/product#primaryimage"}},
+            {"@type":"ImageObject","@id":"https://vendor.example/product#primaryimage","contentUrl":"/media/linked-widget.jpg"}
+          ]
+        }
+        </script>
+        """
+        soup = __import__("bs4").BeautifulSoup(html, "html.parser")
+        self.assertEqual(
+            _structured_product_image(soup, "https://vendor.example/product"),
+            "https://vendor.example/media/linked-widget.jpg",
+        )
+
+    @patch("core.catalogue_image_sources.fetch_import_html")
+    def test_source_page_remote_image_supports_secure_opengraph_variant(self, fetch_html):
+        class Source:
+            url = "https://vendor.example/products/widget"
+            source_type = "manufacturer"
+            name = "Vendor"
+
+        component = DummyComponent()
+        component.source = Source()
+        component.specifications = {}
+        fetch_html.return_value = (
+            "https://vendor.example/products/widget",
+            '<html><head><meta property="og:image:secure_url" content="/images/widget-secure.jpg"></head></html>',
+        )
+        found = find_source_page_image(component)
+        self.assertEqual(found["external_image_url"], "https://vendor.example/images/widget-secure.jpg")
+        self.assertEqual(found["image_source_discovery"], "meta")
+
+    @patch("core.catalogue_image_sources.fetch_import_html")
+    def test_source_page_remote_image_uses_opengraph_without_caching(self, fetch_html):
+        class Source:
+            url = "https://vendor.example/products/widget"
+
+        component = DummyComponent()
+        component.source = Source()
+        fetch_html.return_value = (
+            "https://vendor.example/products/widget",
+            '<html><head><meta property="og:image" content="/media/widget.jpg"></head></html>',
+        )
+        found = find_source_page_image(component)
+        self.assertEqual(found["external_image_url"], "https://vendor.example/media/widget.jpg")
+        self.assertEqual(found["image_source_provider"], "vendor.example")
+        self.assertEqual(found["image_source_type"], "source-page-remote")
+
+    @patch("core.catalogue_image_sources.fetch_import_html")
+    def test_source_page_remote_image_uses_structured_metadata_when_meta_missing(self, fetch_html):
+        class Source:
+            url = "https://vendor.example/products/widget"
+            source_type = "manufacturer"
+            name = "Vendor"
+
+        component = DummyComponent()
+        component.source = Source()
+        component.specifications = {}
+        fetch_html.return_value = (
+            "https://vendor.example/products/widget",
+            '<script type="application/ld+json">{"@type":"Product","image":"/images/widget.jpg"}</script>',
+        )
+        found = find_source_page_image(component)
+        self.assertEqual(found["external_image_url"], "https://vendor.example/images/widget.jpg")
+        self.assertEqual(found["image_source_discovery"], "structured")
+
+    @patch("core.catalogue_image_sources.fetch_import_html")
+    def test_source_pages_try_manufacturer_before_generic(self, fetch_html):
+        class Source:
+            url = "https://example.net/widget"
+            source_type = "generic"
+            name = "Generic source"
+
+        component = DummyComponent()
+        component.source = Source()
+        component.specifications = {
+            "type": "environment",
+            "reference_url": "https://www.adafruit.com/product/1234",
+            "reference_provider": "Adafruit",
+        }
+
+        fetch_html.return_value = (
+            "https://www.adafruit.com/product/1234",
+            '<html><head><meta property="og:image" content="https://cdn.example/official.jpg"></head></html>',
+        )
+        found = find_source_page_image(component)
+        self.assertEqual(found["image_source_tier"], "manufacturer")
+        self.assertEqual(found["image_source_priority"], 10)
+        self.assertEqual(fetch_html.call_args.args[0], "https://www.adafruit.com/product/1234")
+
     def test_printer_image_query_disambiguates_short_model_names(self):
         queries = _printer_image_queries(DummyPrinterModel())
-        self.assertEqual(queries[0], "Creality K2 3D printer")
+        self.assertEqual(queries[0], "Creality K2")
+        self.assertIn("Creality K2 3D printer", queries)
         self.assertIn("Creality K2 printer", queries)
 
     def test_printer_combo_image_queries_include_combo_and_system(self):
         queries = _printer_multi_material_image_queries(DummyPrinterModel())
         self.assertEqual(queries[0], "Creality K2 Combo 3D printer")
         self.assertIn("Creality K2 Creality CFS 3D printer", queries)
+
+    @patch("core.catalogue_image_sources.requests.get")
+    def test_orcaslicer_cover_uses_exact_profile_asset_without_caching(self, get):
+        response = Mock()
+        response.status_code = 200
+        response.headers = {"Content-Type": "image/png"}
+        get.return_value = response
+
+        printer = DummyPrinterModel()
+        printer.features = {
+            "orcaslicer": {
+                "ref": "main",
+                "vendor_file": "Creality.json",
+                "upstream_name": "Creality K2",
+            }
+        }
+
+        found = find_orcaslicer_printer_cover(printer)
+        self.assertEqual(
+            found["external_image_url"],
+            "https://raw.githubusercontent.com/OrcaSlicer/OrcaSlicer/main/resources/profiles/Creality/Creality%20K2_cover.png",
+        )
+        self.assertEqual(found["image_source_provider"], "OrcaSlicer")
+        self.assertEqual(found["image_source_discovery"], "exact-profile-cover")
+        self.assertEqual(found["image_source_tier"], "specialist")
+        response.close.assert_called_once()
 
     def test_openverse_license_mapping_is_restrictive(self):
         self.assertEqual(_openverse_license_name("by", "4.0"), "CC BY 4.0")
@@ -164,6 +341,303 @@ class CatalogueImageSourceTests(unittest.TestCase):
         self.assertEqual(candidate.license_name, "CC BY-SA 4.0")
         self.assertEqual(candidate.author, "Example Creator")
         self.assertTrue(candidate.provider.startswith("Openverse /"))
+
+
+
+class PrinterCoverageTests(TestCase):
+    def test_remote_printer_image_counts_as_complete(self):
+        maker = PrinterManufacturer.objects.create(name="Coverage Test Printers")
+        printer = PrinterCatalogModel.objects.create(
+            manufacturer=maker,
+            name="Remote Image 42",
+            image_metadata={
+                "external_image_url": "https://raw.githubusercontent.com/example/printer.png",
+                "image_source_provider": "OrcaSlicer",
+            },
+        )
+
+        coverage = _printer_coverage()
+        images = next(metric for metric in coverage["metrics"] if metric["key"] == "images")
+        sample = next(
+            (item for item in coverage["missing_samples"] if item["id"] == str(printer.id)),
+            None,
+        )
+
+        self.assertEqual(images["complete"], 1)
+        self.assertIsNotNone(sample)
+        self.assertNotIn("image", sample["missing"])
+
+
+class CatalogueImagePriorityTests(TestCase):
+    def setUp(self):
+        self.printer_maker = PrinterManufacturer.objects.create(name="Image Test Printers")
+        self.printer = PrinterCatalogModel.objects.create(
+            manufacturer=self.printer_maker,
+            name="Exact Model 42",
+        )
+        self.board = BoardModel.objects.create(name="Image Test Board")
+        category = ComponentCategory.objects.create(name="Image Test Components", slug="image-test-components")
+        self.component = ComponentModel.objects.create(
+            category=category,
+            name="Image Test Component",
+            specifications={"type": "sensor"},
+        )
+
+    @override_settings(
+        CATALOGUE_IMAGE_MAX_PER_RUN=1,
+        CATALOGUE_IMAGE_RETRY_DAYS=1,
+        CATALOGUE_IMAGE_WIKIMEDIA=True,
+        CATALOGUE_IMAGE_OPENVERSE=True,
+    )
+    @patch("core.catalogue_image_sources.cache.delete")
+    @patch("core.catalogue_image_sources.cache.add", return_value=True)
+    @patch("core.catalogue_image_sources.cache_candidate")
+    @patch("core.catalogue_image_sources._search_open_media_with_diagnostics")
+    def test_targeted_printer_pass_does_not_spend_limit_on_other_catalogues(
+        self,
+        search,
+        cache_candidate,
+        cache_add,
+        cache_delete,
+    ):
+        from core.catalogue_image_sources import ImageCandidate
+
+        candidate = ImageCandidate(
+            image_url="https://upload.wikimedia.org/example.jpg",
+            source_page_url="https://commons.wikimedia.org/example",
+            provider="Wikimedia Commons",
+            license_name="CC BY-SA 4.0",
+            query="Image Test Printers Exact Model 42",
+        )
+        search.return_value = (
+            candidate,
+            {"attempts": [{"provider": "Wikimedia Commons", "query": candidate.query, "matched": True}]},
+        )
+
+        result = run_catalogue_image_seed(
+            limit=1,
+            force_retry=True,
+            kinds=["printers"],
+        )
+
+        self.assertEqual(result["status"], "complete")
+        self.assertEqual(result["processed"], 1)
+        self.assertEqual(result["by_kind"]["printers"]["cached"], 1)
+        self.assertEqual(result["order"], ["printers"])
+        cache_candidate.assert_called_once()
+        cached_obj = cache_candidate.call_args.args[0]
+        self.assertEqual(cached_obj.pk, self.printer.pk)
+        cache_add.assert_called_once()
+        cache_delete.assert_called_once()
+
+    @override_settings(
+        CATALOGUE_IMAGE_MAX_PER_RUN=1,
+        CATALOGUE_IMAGE_RETRY_DAYS=1,
+        CATALOGUE_IMAGE_WIKIMEDIA=True,
+        CATALOGUE_IMAGE_OPENVERSE=True,
+    )
+    @patch("core.catalogue_image_sources.cache.delete")
+    @patch("core.catalogue_image_sources.cache.add", return_value=True)
+    @patch("core.catalogue_image_sources._search_open_media_with_diagnostics")
+    @patch("core.catalogue_image_sources.find_orcaslicer_printer_cover")
+    def test_exact_orcaslicer_cover_precedes_fuzzy_open_media(
+        self,
+        cover,
+        search,
+        cache_add,
+        cache_delete,
+    ):
+        self.printer.features = {
+            "orcaslicer": {
+                "ref": "main",
+                "vendor_file": "Image Test Printers.json",
+                "upstream_name": "Image Test Printers Exact Model 42",
+            }
+        }
+        self.printer.save(update_fields=["features", "updated_at"])
+        cover.return_value = {
+            "external_image_url": "https://raw.githubusercontent.com/example/cover.png",
+            "image_source_page": "https://github.com/example/cover.png",
+            "image_source_provider": "OrcaSlicer",
+            "image_source_type": "orcaslicer-cover-remote",
+            "image_source_discovery": "exact-profile-cover",
+            "image_source_tier": "specialist",
+            "image_source_priority": 30,
+            "image_license": "",
+            "image_author": "",
+        }
+
+        result = run_catalogue_image_seed(
+            limit=1,
+            force_retry=True,
+            kinds=["printers"],
+        )
+
+        self.assertEqual(result["remote"], 1)
+        self.assertEqual(result["by_kind"]["printers"]["remote"], 1)
+        self.assertEqual(result["by_provider"]["OrcaSlicer"], 1)
+        search.assert_not_called()
+        self.printer.refresh_from_db()
+        self.assertEqual(
+            self.printer.image_metadata["external_image_url"],
+            "https://raw.githubusercontent.com/example/cover.png",
+        )
+        self.assertEqual(
+            self.printer.image_metadata["source_trace"][-1]["tier"],
+            "specialist",
+        )
+        cache_add.assert_called_once()
+        cache_delete.assert_called_once()
+
+    @override_settings(
+        CATALOGUE_IMAGE_MAX_PER_RUN=1,
+        CATALOGUE_IMAGE_RETRY_DAYS=1,
+        CATALOGUE_IMAGE_WIKIMEDIA=True,
+        CATALOGUE_IMAGE_OPENVERSE=True,
+    )
+    @patch("core.catalogue_image_sources.cache.delete")
+    @patch("core.catalogue_image_sources.cache.add", return_value=True)
+    @patch("core.catalogue_image_sources._search_open_media_with_diagnostics")
+    def test_multi_material_without_authoritative_image_is_deferred(
+        self,
+        search,
+        cache_add,
+        cache_delete,
+    ):
+        self.printer.multi_material_system = "bambu_ams"
+        self.printer.image_metadata = {
+            "external_image_url": "https://raw.githubusercontent.com/example/base.png",
+        }
+        self.printer.save(update_fields=["multi_material_system", "image_metadata", "updated_at"])
+
+        result = run_catalogue_image_seed(
+            limit=1,
+            force_retry=True,
+            kinds=["printers"],
+        )
+
+        self.assertEqual(result["processed"], 0)
+        self.assertEqual(result["failed"], 0)
+        self.assertEqual(result["by_kind"]["printers"]["skipped"], 2)
+        search.assert_not_called()
+        self.printer.refresh_from_db()
+        self.assertEqual(
+            self.printer.image_multi_material_metadata["auto_image_last_result"],
+            "deferred-no-authoritative-multi-material-image",
+        )
+        cache_add.assert_called_once()
+        cache_delete.assert_called_once()
+
+    @override_settings(
+        CATALOGUE_IMAGE_MAX_PER_RUN=1,
+        CATALOGUE_IMAGE_RETRY_DAYS=1,
+        CATALOGUE_IMAGE_WIKIMEDIA=True,
+        CATALOGUE_IMAGE_OPENVERSE=True,
+    )
+    @patch("core.catalogue_image_sources.cache.delete")
+    @patch("core.catalogue_image_sources.cache.add", return_value=True)
+    @patch("core.catalogue_image_sources._search_open_media_with_diagnostics")
+    def test_curated_multi_material_image_is_recorded_without_fuzzy_search(
+        self,
+        search,
+        cache_add,
+        cache_delete,
+    ):
+        self.printer.multi_material_system = "creality_cfs"
+        self.printer.image_metadata = {
+            "external_image_url": "https://raw.githubusercontent.com/example/base.png",
+        }
+        self.printer.features = {
+            "official_image_multi_material_url": "https://cdn.example/printer-combo.png",
+            "official_image_multi_material_source_page": "https://vendor.example/printer-combo",
+            "official_image_multi_material_source_provider": "Vendor official",
+        }
+        self.printer.save(update_fields=[
+            "multi_material_system", "image_metadata", "features", "updated_at"
+        ])
+
+        result = run_catalogue_image_seed(
+            limit=1,
+            force_retry=True,
+            kinds=["printers"],
+        )
+
+        self.assertEqual(result["processed"], 0)
+        self.assertEqual(result["remote"], 1)
+        self.assertEqual(result["failed"], 0)
+        self.assertEqual(result["by_provider"]["Vendor official"], 1)
+        search.assert_not_called()
+        self.printer.refresh_from_db()
+        self.assertEqual(
+            self.printer.image_multi_material_metadata["external_image_url"],
+            "https://cdn.example/printer-combo.png",
+        )
+        cache_add.assert_called_once()
+        cache_delete.assert_called_once()
+
+    @override_settings(
+        CATALOGUE_IMAGE_MAX_PER_RUN=1,
+        CATALOGUE_IMAGE_RETRY_DAYS=1,
+        CATALOGUE_IMAGE_WIKIMEDIA=True,
+        CATALOGUE_IMAGE_OPENVERSE=True,
+    )
+    @patch("core.catalogue_image_sources.cache.delete")
+    @patch("core.catalogue_image_sources.cache.add", return_value=True)
+    @patch("core.catalogue_image_sources.resolve_catalogue_image")
+    @patch("core.catalogue_image_sources.find_source_page_image")
+    def test_manufacturer_remote_image_precedes_open_media(
+        self,
+        source_image,
+        open_media,
+        cache_add,
+        cache_delete,
+    ):
+        self.component.specifications = {
+            **self.component.specifications,
+            "reference_url": "https://www.adafruit.com/product/999",
+        }
+        self.component.save(update_fields=["specifications", "updated_at"])
+        source_image.return_value = {
+            "external_image_url": "https://cdn.example/official.jpg",
+            "image_source_page": "https://www.adafruit.com/product/999",
+            "image_source_provider": "Adafruit",
+            "image_source_type": "source-page-remote",
+            "image_source_tier": "manufacturer",
+            "image_source_priority": 10,
+            "image_license": "",
+            "image_author": "",
+        }
+
+        result = run_catalogue_image_seed(
+            limit=1,
+            force_retry=True,
+            kinds=["components"],
+        )
+
+        self.assertEqual(result["remote"], 1)
+        self.assertEqual(result["by_kind"]["components"]["remote"], 1)
+        open_media.assert_not_called()
+        self.component.refresh_from_db()
+        self.assertEqual(
+            self.component.specifications["external_image_url"],
+            "https://cdn.example/official.jpg",
+        )
+        self.assertEqual(
+            self.component.specifications["source_trace"][-1]["tier"],
+            "manufacturer",
+        )
+        cache_add.assert_called_once()
+        cache_delete.assert_called_once()
+
+    @override_settings(
+        CATALOGUE_IMAGE_MAX_PER_RUN=0,
+        CATALOGUE_IMAGE_RETRY_DAYS=1,
+        CATALOGUE_IMAGE_WIKIMEDIA=True,
+        CATALOGUE_IMAGE_OPENVERSE=True,
+    )
+    def test_unknown_target_kind_is_rejected(self):
+        with self.assertRaises(ValueError):
+            run_catalogue_image_seed(kinds=["not-a-catalogue"])
 
 
 if __name__ == "__main__":

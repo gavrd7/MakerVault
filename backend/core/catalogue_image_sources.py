@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from urllib.parse import quote
+from urllib.parse import quote, urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -12,6 +13,11 @@ from django.core.cache import cache
 from django.utils import timezone
 from django.utils.text import slugify
 
+from .catalogue_source_policy import (
+    append_source_trace,
+    classify_source_url,
+    ordered_source_candidates,
+)
 from .catalogue_images import (
     CatalogueImageError,
     apply_catalogue_image,
@@ -24,7 +30,7 @@ from .importers import ImporterError, fetch_import_html
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 OPENVERSE_API = "https://api.openverse.org/v1/images/"
-IMAGE_SEED_VERSION = "0.6.0.2"
+IMAGE_SEED_VERSION = "0.7.1-orcaslicer-cover-images-3"
 USER_AGENT = f"MakerVault/{getattr(settings, 'MAKERVAULT_VERSION', 'dev')} (+self-hosted catalogue image seeder)"
 def _commons_license_allowed(license_name: str) -> bool:
     """Allow only licences suitable for normal open redistribution."""
@@ -137,17 +143,29 @@ def _commons_query_for_board(board) -> str:
 
 
 def _printer_image_queries(printer_model) -> list[str]:
-    maker = printer_model.manufacturer.name if printer_model.manufacturer else ""
+    maker = re.sub(r"\s+", " ", printer_model.manufacturer.name if printer_model.manufacturer else "").strip()
     name = re.sub(r"\s+", " ", printer_model.name or "").strip()
+    # Exact manufacturer + model terms are intentionally first. Generic words
+    # such as "3D printer" dilute the token score for short model names (K2,
+    # M5, A1, etc.) and previously caused good open-media results to miss the
+    # confidence threshold.
     queries = [
+        f"{maker} {name}".strip(),
         f"{maker} {name} 3D printer".strip(),
         f"{maker} {name} printer".strip(),
     ]
+    # Orca/manual imports occasionally retain bracketed variant suffixes. A
+    # stripped fallback helps find the underlying product without accepting a
+    # different manufacturer.
+    stripped = re.sub(r"\s*[\[(][^\])]*[\])]\s*$", "", name).strip()
+    if stripped and stripped != name:
+        queries.append(f"{maker} {stripped}".strip())
     out = []
     for query in queries:
+        query = re.sub(r"\s+", " ", query).strip()
         if query and query not in out:
             out.append(query)
-    return out
+    return out[:4]
 
 
 def _printer_multi_material_image_queries(printer_model) -> list[str]:
@@ -307,35 +325,70 @@ def _board_image_queries(board) -> list[str]:
 def _component_image_queries(component) -> list[str]:
     specs = component.specifications or {}
     part = (component.part_number or "").strip()
-    item_type = str(specs.get("type") or "").strip()
+    item_type = str(specs.get("type") or "").strip().lower()
+    name = re.sub(r"\s+", " ", component.name or "").strip()
+    name_lower = name.lower()
     queries = []
-    if part:
-        if item_type not in {"resistor", "capacitor", "diode", "transistor", "mosfet", "regulator"}:
-            queries.append(f"{part} module")
-        queries.append(part)
-    queries.append(component.name)
+
+    # Preserve shape/form-factor words early: these are often more important
+    # than the electrical value for visually generic components.
+    if "slide potentiometer" in name_lower or "slider potentiometer" in name_lower:
+        queries.extend([name, f"{name} linear slider", "slide potentiometer electronics"])
+    elif "trimmer" in name_lower:
+        queries.extend([name, "trimmer potentiometer electronics"])
+    elif "rotary encoder" in name_lower:
+        queries.extend([name, "rotary encoder module"])
+    elif "reed switch" in name_lower:
+        queries.extend([name, "magnetic reed switch electronics"])
+    elif "tactile" in name_lower and "button" in name_lower:
+        queries.extend([name, "tactile push button electronics"])
+    elif "relay module" in name_lower:
+        queries.extend([name, f"{part} relay module".strip()])
+    else:
+        if part:
+            if item_type not in {"resistor", "capacitor", "diode", "transistor", "mosfet", "regulator"}:
+                queries.append(f"{part} module")
+            queries.append(part)
+        queries.append(name)
+
     fallback = GENERIC_COMPONENT_QUERY_BY_TYPE.get(item_type)
     if fallback:
         queries.append(fallback)
+
     out = []
     for query in queries:
         query = re.sub(r"\s+", " ", query).strip()
         if query and query not in out:
             out.append(query)
-    return out[:4]
+    return out[:5]
 
 
-def _search_open_media(queries: list[str], *, minimum_score: float = 0.16) -> ImageCandidate | None:
+def _search_open_media_with_diagnostics(
+    queries: list[str],
+    *,
+    minimum_score: float = 0.16,
+) -> tuple[ImageCandidate | None, dict]:
+    attempts = []
     for query in queries:
         if settings.CATALOGUE_IMAGE_WIKIMEDIA:
             candidate = search_wikimedia_commons(query, minimum_score=minimum_score)
+            attempts.append({"provider": "Wikimedia Commons", "query": query, "matched": bool(candidate)})
             if candidate:
-                return candidate
+                return candidate, {"attempts": attempts, "provider": candidate.provider, "query": candidate.query}
         if getattr(settings, "CATALOGUE_IMAGE_OPENVERSE", True):
             candidate = search_openverse(query, minimum_score=minimum_score)
+            attempts.append({"provider": "Openverse", "query": query, "matched": bool(candidate)})
             if candidate:
-                return candidate
-    return None
+                return candidate, {"attempts": attempts, "provider": candidate.provider, "query": candidate.query}
+    return None, {"attempts": attempts, "provider": "", "query": ""}
+
+
+def _search_open_media(queries: list[str], *, minimum_score: float = 0.16) -> ImageCandidate | None:
+    candidate, _ = _search_open_media_with_diagnostics(
+        queries,
+        minimum_score=minimum_score,
+    )
+    return candidate
 
 
 def _espboards_slug_candidates(board) -> list[str]:
@@ -391,6 +444,291 @@ def find_espboards_image(board) -> ImageCandidate | None:
             author="espboards.dev",
             query=board.name,
         )
+    return None
+
+
+def _candidate_source_pages(obj) -> list[dict]:
+    specs = getattr(obj, "specifications", None) or {}
+    candidates = []
+    seen = set()
+    for key in (
+        "reference_url",
+        "technical_source_url",
+        "product_url",
+        "datasheet_url",
+        "pinout_url",
+    ):
+        value = str(specs.get(key) or "").strip()
+        if value.startswith("https://") and not value.lower().endswith(".pdf") and value not in seen:
+            candidates.append({
+                "url": value,
+                "source_type": "",
+                "provider": str(specs.get("reference_provider") or "").strip(),
+            })
+            seen.add(value)
+
+    source = getattr(obj, "source", None)
+    source_url = str(getattr(source, "url", "") or "").strip()
+    if source_url.startswith("https://") and not source_url.lower().endswith(".pdf") and source_url not in seen:
+        candidates.append({
+            "url": source_url,
+            "source_type": str(getattr(source, "source_type", "") or ""),
+            "provider": str(getattr(source, "name", "") or ""),
+        })
+
+    return ordered_source_candidates(candidates)[:6]
+
+
+def _structured_product_image(soup: BeautifulSoup, base_url: str) -> str:
+    """Extract a product image from structured page metadata.
+
+    Source-page images remain remote references; this helper only discovers
+    already-published HTTPS image URLs and does not cache them.
+    """
+
+    def resolved_https(value) -> str:
+        value = str(value or "").strip()
+        if not value:
+            return ""
+        resolved = urljoin(base_url, value)
+        parsed = urlparse(resolved)
+        return resolved if parsed.scheme == "https" and parsed.netloc else ""
+
+    documents = []
+    for tag in soup.find_all("script", attrs={"type": "application/ld+json"}):
+        raw = tag.string or tag.get_text("", strip=True)
+        if not raw:
+            continue
+        try:
+            payload = json.loads(raw)
+        except (TypeError, ValueError):
+            continue
+
+        queue = payload if isinstance(payload, list) else [payload]
+        while queue:
+            item = queue.pop(0)
+            if isinstance(item, list):
+                queue.extend(item)
+                continue
+            if not isinstance(item, dict):
+                continue
+            documents.append(item)
+            graph = item.get("@graph")
+            if isinstance(graph, list):
+                queue.extend(graph)
+
+    graph_by_id = {
+        str(item.get("@id")).strip(): item
+        for item in documents
+        if str(item.get("@id") or "").strip()
+    }
+
+    def image_candidate(candidate) -> str:
+        if isinstance(candidate, dict):
+            direct = candidate.get("url") or candidate.get("contentUrl") or candidate.get("thumbnailUrl")
+            if direct:
+                return resolved_https(direct)
+            ref = str(candidate.get("@id") or "").strip()
+            linked = graph_by_id.get(ref)
+            if linked:
+                return resolved_https(
+                    linked.get("url") or linked.get("contentUrl") or linked.get("thumbnailUrl")
+                )
+            return ""
+        return resolved_https(candidate)
+
+    for item in documents:
+        item_type = item.get("@type")
+        types = set(item_type if isinstance(item_type, list) else [item_type])
+        if not ({"Product", "IndividualProduct"} & types):
+            continue
+
+        image = item.get("image")
+        candidates = image if isinstance(image, list) else [image]
+        for candidate in candidates:
+            resolved = image_candidate(candidate)
+            if resolved:
+                return resolved
+
+        # Some commerce templates expose these fields directly on Product.
+        for key in ("primaryImageOfPage", "thumbnailUrl"):
+            resolved = image_candidate(item.get(key))
+            if resolved:
+                return resolved
+
+    for attrs in (
+        {"rel": "image_src"},
+        {"itemprop": "image"},
+    ):
+        tag = soup.find(["link", "meta", "img"], attrs=attrs)
+        if not tag:
+            continue
+        value = str(
+            tag.get("href")
+            or tag.get("content")
+            or tag.get("src")
+            or tag.get("data-src")
+            or tag.get("data-original")
+            or ""
+        ).strip()
+        if not value and tag.get("srcset"):
+            value = str(tag.get("srcset")).split(",", 1)[0].strip().split(" ", 1)[0]
+        resolved = resolved_https(value)
+        if resolved:
+            return resolved
+    return ""
+
+
+def find_curated_printer_image(printer_model, variant: str = "base") -> dict | None:
+    """Return a version-controlled official printer image reference when present."""
+    features = dict(getattr(printer_model, "features", None) or {})
+    prefix = "official_image_multi_material" if variant == "multi_material" else "official_image"
+    image_url = str(features.get(f"{prefix}_url") or "").strip()
+    if not image_url.startswith("https://"):
+        return None
+    source_page = str(
+        features.get(f"{prefix}_source_page")
+        or getattr(printer_model, "source_url", "")
+        or ""
+    ).strip()
+    provider = str(
+        features.get(f"{prefix}_source_provider")
+        or f"{getattr(getattr(printer_model, 'manufacturer', None), 'name', '')} official"
+    ).strip()
+    return {
+        "external_image_url": image_url,
+        "image_source_page": source_page,
+        "image_source_provider": provider or "Official manufacturer",
+        "image_source_type": "curated-official-remote",
+        "image_source_discovery": "curated-profile",
+        "image_source_tier": "manufacturer",
+        "image_source_priority": 10,
+        "image_license": "",
+        "image_author": "",
+    }
+
+
+def find_orcaslicer_printer_cover(printer_model, variant: str = "base") -> dict | None:
+    """Return an exact OrcaSlicer printer cover as a remote image reference.
+
+    OrcaSlicer machine-model profiles may ship a 240x240 cover named after the
+    exact machine-model-list entry. Because MakerVault stores the upstream
+    vendor file, ref and original model name, this is a deterministic mapping
+    rather than a fuzzy image search. The asset is referenced remotely instead
+    of copied into MakerVault storage.
+    """
+    if variant != "base":
+        return None
+
+    features = dict(getattr(printer_model, "features", None) or {})
+    provenance = features.get("orcaslicer") or {}
+    if not isinstance(provenance, dict):
+        return None
+
+    vendor_file = str(provenance.get("vendor_file") or "").strip()
+    raw_name = str(provenance.get("upstream_name") or "").strip()
+    ref = str(provenance.get("ref") or "").strip()
+    if not vendor_file or not raw_name or not ref:
+        return None
+
+    vendor_folder = vendor_file[:-5] if vendor_file.lower().endswith(".json") else vendor_file
+    filename = f"{raw_name}_cover.png"
+    raw_url = (
+        "https://raw.githubusercontent.com/OrcaSlicer/OrcaSlicer/"
+        f"{quote(ref, safe='')}/resources/profiles/"
+        f"{quote(vendor_folder, safe='')}/{quote(filename, safe='')}"
+    )
+    source_page = (
+        "https://github.com/OrcaSlicer/OrcaSlicer/blob/"
+        f"{quote(ref, safe='')}/resources/profiles/"
+        f"{quote(vendor_folder, safe='')}/{quote(filename, safe='')}"
+    )
+
+    # Probe only the exact, fixed-host asset. Streaming lets us validate the
+    # status/content type without downloading and redistributing the image.
+    try:
+        response = requests.get(
+            raw_url,
+            timeout=(5, 15),
+            stream=True,
+            allow_redirects=True,
+            headers={
+                "User-Agent": USER_AGENT,
+                "Accept": "image/webp,image/png,image/jpeg;q=0.9,*/*;q=0.2",
+            },
+        )
+        status_code = response.status_code
+        content_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+        response.close()
+    except requests.RequestException:
+        return None
+
+    if status_code != 200 or content_type not in {"image/jpeg", "image/png", "image/webp"}:
+        return None
+
+    return {
+        "external_image_url": raw_url,
+        "image_source_page": source_page,
+        "image_source_provider": "OrcaSlicer",
+        "image_source_type": "orcaslicer-cover-remote",
+        "image_source_discovery": "exact-profile-cover",
+        "image_source_tier": "specialist",
+        "image_source_priority": 30,
+        "image_license": "",
+        "image_author": "",
+    }
+
+
+def find_source_page_image(obj) -> dict | None:
+    """Find a remote product image from an already-known catalogue source page.
+
+    These images are referenced remotely rather than cached because MakerVault
+    does not assume redistribution rights merely because a source page exposes
+    an OpenGraph image.
+    """
+    for source in _candidate_source_pages(obj):
+        page_url = source["url"]
+        try:
+            final_url, html = fetch_import_html(page_url)
+        except ImporterError:
+            continue
+        soup = BeautifulSoup(html, "html.parser")
+        image_url = ""
+        discovery_method = ""
+        for attrs in (
+            {"property": "og:image"},
+            {"property": "og:image:secure_url"},
+            {"name": "twitter:image"},
+            {"name": "twitter:image:src"},
+            {"property": "twitter:image"},
+        ):
+            tag = soup.find("meta", attrs=attrs)
+            if tag and str(tag.get("content") or "").strip():
+                image_url = str(tag.get("content") or "").strip()
+                discovery_method = "meta"
+                break
+        if not image_url:
+            image_url = _structured_product_image(soup, final_url)
+            if image_url:
+                discovery_method = "structured"
+        if not image_url:
+            continue
+        image_url = urljoin(final_url, image_url)
+        parsed = urlparse(image_url)
+        if parsed.scheme != "https" or not parsed.netloc:
+            continue
+        tier = classify_source_url(final_url, source_type=source.get("source_type", ""))
+        return {
+            "external_image_url": image_url,
+            "image_source_page": final_url,
+            "image_source_provider": source.get("provider") or urlparse(final_url).netloc.removeprefix("www."),
+            "image_source_type": "source-page-remote",
+            "image_source_discovery": discovery_method,
+            "image_source_tier": tier.key,
+            "image_source_priority": tier.priority,
+            "image_license": "",
+            "image_author": "",
+        }
     return None
 
 
@@ -468,23 +806,77 @@ def _recent_attempt(specs: dict, retry_days: int) -> bool:
     return attempted >= timezone.now() - timedelta(days=retry_days)
 
 
-def run_catalogue_image_seed(*, limit: int | None = None, force_retry: bool = False) -> dict:
+def run_catalogue_image_seed(
+    *,
+    limit: int | None = None,
+    force_retry: bool = False,
+    kinds: list[str] | tuple[str, ...] | None = None,
+) -> dict:
     from .models import BoardModel, ComponentModel, PrinterCatalogModel
 
     limit = settings.CATALOGUE_IMAGE_MAX_PER_RUN if limit is None else max(int(limit), 0)
     retry_days = max(int(settings.CATALOGUE_IMAGE_RETRY_DAYS), 1)
+    allowed_kinds = {"printers", "boards", "components"}
+    requested = [str(item).strip().lower() for item in (kinds or []) if str(item).strip()]
+    invalid = [item for item in requested if item not in allowed_kinds]
+    if invalid:
+        raise ValueError(f"Unknown catalogue image kind(s): {', '.join(sorted(set(invalid)))}")
+
     lock_key = f"makervault:catalogue-image-seed:{IMAGE_SEED_VERSION}"
     if not cache.add(lock_key, "running", timeout=60 * 60):
-        return {"status": "already-running", "processed": 0, "cached": 0, "failed": 0, "skipped": 0}
+        return {
+            "status": "already-running",
+            "processed": 0,
+            "cached": 0,
+            "failed": 0,
+            "skipped": 0,
+            "by_kind": {},
+            "by_provider": {},
+            "remote": 0,
+            "failures": [],
+        }
 
-    processed = cached = failed = skipped = 0
+    def missing_ratio(queryset, image_field="image"):
+        total = queryset.count()
+        if not total:
+            return 0.0
+        missing = queryset.filter(**{f"{image_field}__isnull": True}).count()
+        # ImageField blank values can be stored as an empty string rather than
+        # SQL NULL, so include them in the live priority calculation.
+        missing += queryset.filter(**{image_field: ""}).count()
+        return missing / total
+
+    boards = BoardModel.objects.select_related("manufacturer", "source").order_by("manufacturer__name", "name")
+    components = ComponentModel.objects.select_related("category", "source").order_by("category__name", "name")
+    printers = PrinterCatalogModel.objects.select_related("manufacturer").order_by("manufacturer__name", "name")
+
+    sources = {
+        "boards": boards,
+        "components": components,
+        "printers": printers,
+    }
+    if requested:
+        order = requested
+    else:
+        # Work on the least-complete catalogue first so a per-run cap cannot
+        # indefinitely starve the largest gap.
+        order = sorted(
+            sources,
+            key=lambda key: missing_ratio(sources[key]),
+            reverse=True,
+        )
+
+    processed = cached = failed = skipped = remote = 0
+    by_kind = {
+        key: {"processed": 0, "cached": 0, "remote": 0, "failed": 0, "skipped": 0}
+        for key in order
+    }
+    by_provider = {}
+    failures = []
+
     try:
-        querysets = [
-            BoardModel.objects.select_related("manufacturer").order_by("manufacturer__name", "name"),
-            ComponentModel.objects.select_related("category").order_by("category__name", "name"),
-            PrinterCatalogModel.objects.select_related("manufacturer").order_by("manufacturer__name", "name"),
-        ]
-        for queryset in querysets:
+        for kind in order:
+            queryset = sources[kind]
             for obj in queryset.iterator():
                 variants = ["base"]
                 if isinstance(obj, PrinterCatalogModel) and obj.multi_material_system:
@@ -498,37 +890,200 @@ def run_catalogue_image_seed(*, limit: int | None = None, force_retry: bool = Fa
                             "cached": cached,
                             "failed": failed,
                             "skipped": skipped,
+                            "by_kind": by_kind,
+                            "by_provider": by_provider,
+                            "remote": remote,
+                            "failures": failures,
+                            "order": order,
                         }
 
                     image_field = "image_multi_material" if variant == "multi_material" else "image"
-                    if getattr(obj, image_field, None):
+                    metadata, _ = catalogue_image_metadata(obj, variant=variant)
+                    if getattr(obj, image_field, None) or str(metadata.get("external_image_url") or "").startswith("https://"):
                         skipped += 1
+                        by_kind[kind]["skipped"] += 1
                         continue
 
-                    metadata, _ = catalogue_image_metadata(obj, variant=variant)
                     if metadata.get("auto_image_opt_out"):
                         skipped += 1
+                        by_kind[kind]["skipped"] += 1
                         continue
+
+                    # Curated manufacturer imagery is deterministic and should
+                    # be recorded before any search work. Multi-material images
+                    # are deliberately restricted to this authoritative path:
+                    # a generic AMS/CFS/MMU search is too likely to associate a
+                    # valid accessory image with the wrong printer/variant.
+                    if isinstance(obj, PrinterCatalogModel):
+                        curated_remote = find_curated_printer_image(obj, variant=variant)
+                        if curated_remote:
+                            metadata.update(curated_remote)
+                            metadata = append_source_trace(
+                                metadata,
+                                provider=curated_remote.get("image_source_provider", ""),
+                                url=curated_remote.get("image_source_page", ""),
+                                tier="manufacturer",
+                                result="selected-curated-official-image",
+                            )
+                            metadata["auto_image_last_result"] = "remote-curated-official"
+                            metadata["image_variant"] = variant
+                            field = set_catalogue_image_metadata(obj, metadata, variant=variant)
+                            obj.save(update_fields=[field, "updated_at"] if field else ["updated_at"])
+                            remote += 1
+                            by_kind[kind]["remote"] += 1
+                            provider_key = curated_remote["image_source_provider"] or "Official manufacturer"
+                            by_provider[provider_key] = by_provider.get(provider_key, 0) + 1
+                            continue
+                        if variant == "multi_material":
+                            metadata["auto_image_last_result"] = "deferred-no-authoritative-multi-material-image"
+                            metadata["auto_image_attempt_version"] = IMAGE_SEED_VERSION
+                            metadata["image_variant"] = variant
+                            field = set_catalogue_image_metadata(obj, metadata, variant=variant)
+                            obj.save(update_fields=[field, "updated_at"] if field else ["updated_at"])
+                            skipped += 1
+                            by_kind[kind]["skipped"] += 1
+                            continue
+
                     if not force_retry and _recent_attempt(metadata, retry_days):
                         skipped += 1
+                        by_kind[kind]["skipped"] += 1
                         continue
 
                     processed += 1
+                    by_kind[kind]["processed"] += 1
                     metadata["auto_image_last_attempt"] = timezone.now().isoformat()
                     metadata["auto_image_attempt_version"] = IMAGE_SEED_VERSION
                     metadata["image_variant"] = variant
-                    field = set_catalogue_image_metadata(obj, metadata, variant=variant)
-                    obj.save(update_fields=[field, "updated_at"] if field else ["updated_at"])
 
+                    source_fallback = None
                     try:
-                        candidate = resolve_catalogue_image(obj, variant=variant)
+                        if isinstance(obj, PrinterCatalogModel):
+                            source_fallback = find_orcaslicer_printer_cover(obj, variant=variant)
+                            if source_fallback:
+                                metadata.update(source_fallback)
+                                metadata = append_source_trace(
+                                    metadata,
+                                    provider=source_fallback.get("image_source_provider", ""),
+                                    url=source_fallback.get("image_source_page", ""),
+                                    tier=source_fallback.get("image_source_tier", "specialist"),
+                                    result="selected-exact-profile-cover",
+                                )
+                                metadata["auto_image_last_result"] = "remote-orcaslicer-cover"
+                                field = set_catalogue_image_metadata(obj, metadata, variant=variant)
+                                obj.save(update_fields=[field, "updated_at"] if field else ["updated_at"])
+                                remote += 1
+                                by_kind[kind]["remote"] += 1
+                                provider_key = source_fallback["image_source_provider"] or "OrcaSlicer"
+                                by_provider[provider_key] = by_provider.get(provider_key, 0) + 1
+                                continue
+
+                            queries = (
+                                _printer_multi_material_image_queries(obj)
+                                if variant == "multi_material"
+                                else _printer_image_queries(obj)
+                            )
+                            threshold = 0.50 if variant == "multi_material" else 0.45
+                            candidate, diagnostic = _search_open_media_with_diagnostics(
+                                queries,
+                                minimum_score=threshold,
+                            )
+                            metadata["auto_image_search_attempts"] = diagnostic.get("attempts", [])[-12:]
+                        else:
+                            source_fallback = find_source_page_image(obj) if variant == "base" else None
+                            # Manufacturer, specialist and maintained ecosystem
+                            # source pages outrank generic open-media discovery.
+                            if source_fallback and int(source_fallback.get("image_source_priority", 999)) < 50:
+                                metadata.update(source_fallback)
+                                metadata = append_source_trace(
+                                    metadata,
+                                    provider=source_fallback.get("image_source_provider", ""),
+                                    url=source_fallback.get("image_source_page", ""),
+                                    tier=source_fallback.get("image_source_tier", "generic"),
+                                    result="selected-remote-image",
+                                )
+                                metadata["auto_image_last_result"] = "remote-source-selected"
+                                field = set_catalogue_image_metadata(obj, metadata, variant=variant)
+                                obj.save(update_fields=[field, "updated_at"] if field else ["updated_at"])
+                                remote += 1
+                                by_kind[kind]["remote"] += 1
+                                provider_key = source_fallback["image_source_provider"] or "source page"
+                                by_provider[provider_key] = by_provider.get(provider_key, 0) + 1
+                                continue
+
+                            candidate = resolve_catalogue_image(obj, variant=variant)
+                            diagnostic = {
+                                "provider": candidate.provider if candidate else "",
+                                "query": candidate.query if candidate else "",
+                            }
+
                         if not candidate:
+                            if not isinstance(obj, PrinterCatalogModel) and variant == "base":
+                                source_fallback = source_fallback or find_source_page_image(obj)
+                            else:
+                                source_fallback = None
+                            if source_fallback:
+                                metadata.update(source_fallback)
+                                metadata = append_source_trace(
+                                    metadata,
+                                    provider=source_fallback.get("image_source_provider", ""),
+                                    url=source_fallback.get("image_source_page", ""),
+                                    tier=source_fallback.get("image_source_tier", "generic"),
+                                    result="selected-remote-image",
+                                )
+                                metadata["auto_image_last_result"] = "remote-source-fallback"
+                                field = set_catalogue_image_metadata(obj, metadata, variant=variant)
+                                obj.save(update_fields=[field, "updated_at"] if field else ["updated_at"])
+                                remote += 1
+                                by_kind[kind]["remote"] += 1
+                                provider_key = source_fallback["image_source_provider"] or "source page"
+                                by_provider[provider_key] = by_provider.get(provider_key, 0) + 1
+                                continue
+
                             failed += 1
+                            by_kind[kind]["failed"] += 1
+                            metadata["auto_image_last_result"] = "no-confident-match"
+                            field = set_catalogue_image_metadata(obj, metadata, variant=variant)
+                            obj.save(update_fields=[field, "updated_at"] if field else ["updated_at"])
+                            if len(failures) < 30:
+                                failures.append({
+                                    "kind": kind,
+                                    "id": str(obj.pk),
+                                    "name": str(obj),
+                                    "variant": variant,
+                                    "reason": "no-confident-match",
+                                })
                             continue
+
                         cache_candidate(obj, candidate, variant=variant)
+                        metadata, _ = catalogue_image_metadata(obj, variant=variant)
+                        metadata = append_source_trace(
+                            metadata,
+                            provider=candidate.provider,
+                            url=candidate.source_page_url,
+                            tier="open_media",
+                            result="selected-cached-image",
+                        )
+                        field = set_catalogue_image_metadata(obj, metadata, variant=variant)
+                        obj.save(update_fields=[field, "updated_at"] if field else ["updated_at"])
                         cached += 1
-                    except (CatalogueImageError, requests.RequestException, ValueError):
+                        by_kind[kind]["cached"] += 1
+                        provider_key = candidate.provider or "unknown"
+                        by_provider[provider_key] = by_provider.get(provider_key, 0) + 1
+                    except (CatalogueImageError, requests.RequestException, ValueError) as exc:
                         failed += 1
+                        by_kind[kind]["failed"] += 1
+                        metadata["auto_image_last_result"] = "error"
+                        metadata["auto_image_last_error"] = str(exc)[:300]
+                        field = set_catalogue_image_metadata(obj, metadata, variant=variant)
+                        obj.save(update_fields=[field, "updated_at"] if field else ["updated_at"])
+                        if len(failures) < 30:
+                            failures.append({
+                                "kind": kind,
+                                "id": str(obj.pk),
+                                "name": str(obj),
+                                "variant": variant,
+                                "reason": str(exc)[:200],
+                            })
 
         return {
             "status": "complete",
@@ -536,7 +1091,11 @@ def run_catalogue_image_seed(*, limit: int | None = None, force_retry: bool = Fa
             "cached": cached,
             "failed": failed,
             "skipped": skipped,
+            "by_kind": by_kind,
+            "by_provider": by_provider,
+            "remote": remote,
+            "failures": failures,
+            "order": order,
         }
     finally:
         cache.delete(lock_key)
-

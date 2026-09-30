@@ -1,6 +1,6 @@
 # MakerVault roadmap
 
-_Last updated: 29 September 2026_
+_Last updated: 30 September 2026_
 
 This file tracks completed MakerVault milestones and the planned path toward a stable v1 release. The `main` branch is the deployable source of truth.
 
@@ -95,30 +95,20 @@ This file tracks completed MakerVault milestones and the planned path toward a s
 - Added a dedicated self-hosted GitHub Actions runner with an optional GitHub-hosted execution path.
 - Production upgrade, ownership audit, encrypted-file migration and mobile administrator UI were validated successfully before release.
 
-## Planned milestones
-
 ### v0.7.1 — Universal search & catalogue completion
 
-**Goal:** make MakerVault's growing data set easy to find and substantially improve the completeness of shared reference catalogues.
+- Added ownership-safe universal search across projects, inventory, boards, components, files, 3D models, printers, spools and filament products.
+- Added persistent shell quick search plus a dedicated advanced Search page with type, project, manufacturer, date and sort controls.
+- Added direct result navigation into Files and 3D Printing libraries with exact-record focus and responsive/mobile search refinements.
+- Added live catalogue coverage reporting for boards, components, printers and filaments, including representative unresolved records.
+- Expanded curated board/component technical profiles and explicit source-authority/provenance handling.
+- Extended OrcaSlicer printer ingestion to derive build volumes from machine profiles and inheritance chains.
+- Improved catalogue image enrichment with structured product metadata, conservative open-media matching and exact OrcaSlicer printer cover references.
+- Added conservative multi-material image handling that accepts curated manufacturer-backed combo imagery without fuzzy variant matching.
+- Preserved licensing/source attribution and remote-reference behaviour for imagery that cannot safely be redistributed.
+- Validated the milestone against live catalogue data and completed backend, frontend, dependency/security and Docker image CI checks before release.
 
-#### Universal search
-
-- Add a persistent search entry point to the main application shell/top or side navigation.
-- Provide grouped quick results across boards, components, inventory, projects, files, models, printers, spools and other relevant user-visible records.
-- Add a dedicated advanced **Search** page.
-- Support type/category filters, project filters, manufacturer/material/status filters, date ranges and other domain-specific facets where appropriate.
-- Add relevance/name/date sorting and clear result provenance.
-- Preserve multi-user ownership boundaries in all global search results.
-- Add keyboard-friendly navigation and a responsive mobile search experience.
-
-#### Catalogue completion
-
-- Add catalogue coverage reporting for missing images, core specifications and unresolved technical fields.
-- Run a focused completion pass across board, component, printer and filament catalogues.
-- Expand reputable enrichment sources beyond the current ESP-focused technical path where safe and maintainable.
-- Continue to distinguish **known**, **unknown** and **not applicable** technical fields.
-- Improve image-source coverage and local image caching while preserving licensing/source metadata.
-- Keep scheduled maintenance and retry behaviour for records that remain incomplete.
+## Planned milestones
 
 ---
 
@@ -168,13 +158,18 @@ This file tracks completed MakerVault milestones and the planned path toward a s
 - Add **OctoPrint** support as a first-class local printer adapter.
 - Expand the existing Creality local connection beyond CFS slot data to expose printer/job status where the available interface allows.
 - Keep SimplyPrint as an optional source for status/history rather than a prerequisite for monitoring.
-- Add manufacturer/local adapters where sufficiently documented and technically practical.
+- Add manufacturer/local adapter families for **Bambu Lab**, **Anycubic**, **FlashForge**, **Prusa**, **Elegoo**, **QIDI**, **Sovol**, **Snapmaker** and **Voron**, using local APIs/protocols where available and cloud APIs only where they add value.
+- Treat **Voron** primarily through its common Klipper/Moonraker stack, while allowing Voron-specific metadata and community hardware integrations to layer on top rather than creating duplicate printer records.
 
 #### Multi-material/manufacturer framework
 
 - Formalise the existing provider-neutral multi-material slot model into a documented adapter contract.
-- Retain and expand Creality CFS support.
-- Add framework-level support for **Bambu Lab AMS**, **Elegoo multi-material systems**, **QIDI multi-material systems** and **Snapmaker multi-material systems** where interfaces are sufficiently documented.
+- Retain and expand **Creality CFS** support.
+- Add explicit adapter targets for **Bambu Lab AMS / AMS Lite**, **Anycubic ACE / ACE Pro**, **Prusa MMU3 and successor systems**, **FlashForge multi-material/filament systems**, **Elegoo multi-material systems**, **QIDI multi-material systems**, **Sovol multi-material/toolchanger systems where exposed**, **Snapmaker multi-material systems**, and **Voron community multi-material/toolchanger ecosystems**.
+- Model each manufacturer integration as capabilities rather than assumptions: printer telemetry, job state, temperatures, camera, loaded-material slots, RFID/tag data, remaining material, multi-colour/tool assignment, and optional printer controls are exposed only when that adapter actually supports them.
+- Allow a printer to combine a manufacturer adapter with Moonraker/Klipper, OctoPrint or SimplyPrint without duplicating the physical printer in MakerVault.
+- Treat **Prusa**, **Anycubic**, **FlashForge**, **Sovol** and similar manufacturers as full printer-integration families that may provide live status and job telemetry as well as multi-material context.
+- Keep undocumented or reverse-engineered capabilities isolated behind experimental adapters so they can be disabled independently if upstream firmware changes.
 - Implement documented capabilities even when development hardware is unavailable.
 - Mark adapters that have not been exercised against real hardware as **experimental / community validation required** rather than claiming full support.
 - Add fixtures/mock responses and contract tests so unowned hardware adapters can still be exercised in CI.

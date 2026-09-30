@@ -25,6 +25,7 @@ from .catalogue_images import (
 )
 from .importers import ImporterError, preview_board_url
 from .catalogue_enrichment import enrich_board
+from .catalogue_coverage import catalogue_coverage_summary
 from .filament_catalogue import (
     FilamentCatalogueError,
     get_spoolmandb_item,
@@ -39,6 +40,7 @@ from .tasks import queue_catalogue_maintenance_now
 from .storage_usage import StorageQuotaExceeded, ensure_storage_capacity, storage_settings, storage_summary
 from .user_admin import admin_user_summary, purge_user_private_data
 from .private_storage import private_storage_key_status
+from .search_service import run_search
 from .models import (
     BoardCompatibility,
     BoardModel,
@@ -115,6 +117,34 @@ def _require_permission(request, codename):
 
 def _float(value):
     return float(value) if value is not None else None
+
+
+@login_required
+@require_http_methods(["GET"])
+def universal_search(request):
+    query = str(request.GET.get("q") or "").strip()
+    raw_types = str(request.GET.get("types") or "").strip()
+    selected_types = [item.strip() for item in raw_types.split(",") if item.strip()] if raw_types else None
+    sort = str(request.GET.get("sort") or "relevance").strip().lower()
+    if sort not in {"relevance", "name", "newest", "oldest"}:
+        sort = "relevance"
+    try:
+        limit = min(max(int(request.GET.get("limit") or 25), 1), 100)
+    except (TypeError, ValueError):
+        limit = 25
+
+    return JsonResponse(run_search(
+        request.user,
+        query=query,
+        selected_types=selected_types,
+        sort=sort,
+        limit_per_type=limit,
+        project_id=str(request.GET.get("project") or "").strip() or None,
+        status=str(request.GET.get("status") or "").strip() or None,
+        manufacturer=str(request.GET.get("manufacturer") or "").strip() or None,
+        updated_after=str(request.GET.get("updated_after") or "").strip() or None,
+        updated_before=str(request.GET.get("updated_before") or "").strip() or None,
+    ))
 
 
 def _image_url(obj, image_field="image", metadata_field=None):
@@ -2830,6 +2860,14 @@ def _serialise_catalogue_maintenance(config):
 
 
 @login_required
+@require_http_methods(["GET"])
+def catalogue_coverage(request):
+    if not request.user.is_staff:
+        return _error("Administrator access is required.", status=403)
+    return JsonResponse(catalogue_coverage_summary())
+
+
+@login_required
 @require_http_methods(["GET", "PATCH"])
 def catalogue_maintenance_settings(request):
     if not request.user.is_staff:
@@ -2979,7 +3017,28 @@ def _serialise_printing_location(location):
     }
 
 
+def _printer_official_image(item, *, multi_material=False):
+    features = item.features or {}
+    prefix = "official_image_multi_material" if multi_material else "official_image"
+    url = str(features.get(f"{prefix}_url") or "").strip()
+    if not url.startswith("https://"):
+        return {"url": "", "source_page": "", "source_provider": ""}
+    return {
+        "url": url,
+        "source_page": str(features.get(f"{prefix}_source_page") or item.source_url or "").strip(),
+        "source_provider": str(features.get(f"{prefix}_source_provider") or f"{item.manufacturer.name} official").strip(),
+    }
+
+
 def _serialise_printer_catalog_model(item):
+    official = _printer_official_image(item)
+    official_multi = _printer_official_image(item, multi_material=True)
+    cached_image = _image_url(item)
+    cached_multi = _image_url(
+        item,
+        "image_multi_material",
+        "image_multi_material_metadata",
+    )
     return {
         "id": str(item.id),
         "manufacturer_id": str(item.manufacturer_id),
@@ -3000,20 +3059,18 @@ def _serialise_printer_catalog_model(item):
         "multi_material_label": item.get_multi_material_system_display() if item.multi_material_system else "",
         "max_multi_material_units": item.max_multi_material_units,
         "features": item.features or {},
-        "image": _image_url(item),
+        "image": cached_image or official["url"],
         "image_cached": bool(item.image),
-        "image_source_page": (item.image_metadata or {}).get("image_source_page") or "",
-        "image_source_provider": (item.image_metadata or {}).get("image_source_provider") or "",
+        "image_remote_official": bool(not cached_image and official["url"]),
+        "image_source_page": (item.image_metadata or {}).get("image_source_page") or official["source_page"],
+        "image_source_provider": (item.image_metadata or {}).get("image_source_provider") or official["source_provider"],
         "image_license": (item.image_metadata or {}).get("image_license") or "",
         "image_author": (item.image_metadata or {}).get("image_author") or "",
-        "image_multi_material": _image_url(
-            item,
-            "image_multi_material",
-            "image_multi_material_metadata",
-        ),
+        "image_multi_material": cached_multi or official_multi["url"],
         "image_multi_material_cached": bool(item.image_multi_material),
-        "image_multi_material_source_page": (item.image_multi_material_metadata or {}).get("image_source_page") or "",
-        "image_multi_material_source_provider": (item.image_multi_material_metadata or {}).get("image_source_provider") or "",
+        "image_multi_material_remote_official": bool(not cached_multi and official_multi["url"]),
+        "image_multi_material_source_page": (item.image_multi_material_metadata or {}).get("image_source_page") or official_multi["source_page"],
+        "image_multi_material_source_provider": (item.image_multi_material_metadata or {}).get("image_source_provider") or official_multi["source_provider"],
         "image_multi_material_license": (item.image_multi_material_metadata or {}).get("image_license") or "",
         "image_multi_material_author": (item.image_multi_material_metadata or {}).get("image_author") or "",
         "source_url": item.source_url,

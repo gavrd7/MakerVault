@@ -53,7 +53,7 @@ function newestGeometryAnalysis(model) {
   return null;
 }
 
-export default function PrintingPage({ config, projects }) {
+export default function PrintingPage({ config, projects, searchTarget = null }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [modal, setModal] = useState("");
@@ -75,6 +75,25 @@ export default function PrintingPage({ config, projects }) {
   }
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    if (!searchTarget?.type) return;
+    if (searchTarget.type === "models") setWorkspaceView("models");
+    else if (searchTarget.type === "spools") setWorkspaceView("spools");
+    else if (searchTarget.type === "filaments") setWorkspaceView("filaments");
+    else if (searchTarget.type === "printers") setWorkspaceView("overview");
+  }, [searchTarget?.token]);
+
+  useEffect(() => {
+    if (!data || searchTarget?.type !== "printers" || !searchTarget.id) return;
+    const timer = window.setTimeout(() => {
+      document.getElementById("printer-search-target-" + searchTarget.id)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [data, searchTarget?.token, searchTarget?.id]);
 
   async function saved() {
     setModal("");
@@ -107,6 +126,7 @@ export default function PrintingPage({ config, projects }) {
       canChangeFilament={canChangeFilament}
       onBack={() => setWorkspaceView("overview")}
       onChanged={load}
+      searchTarget={searchTarget}
     />;
   }
 
@@ -122,6 +142,7 @@ export default function PrintingPage({ config, projects }) {
       canDeleteSpool={canDeleteSpool}
       onBack={() => setWorkspaceView("overview")}
       onChanged={load}
+      searchTarget={searchTarget}
     />;
   }
 
@@ -137,6 +158,7 @@ export default function PrintingPage({ config, projects }) {
       canUpload={Boolean(config?.permissions?.add_file)}
       onBack={() => setWorkspaceView("overview")}
       onChanged={load}
+      searchTarget={searchTarget}
     />;
   }
 
@@ -209,7 +231,7 @@ export default function PrintingPage({ config, projects }) {
     <section className="panel printingSection">
       <div className="panelHead"><div><h3>Printers &amp; loaded filament</h3><p>Filament slots are provider-neutral so CFS, AMS and later systems can use the same model.</p></div></div>
       <div className="printingCards">
-        {(data?.printers || []).map(printer => <article className="printingCard printingPrinterCard" key={printer.id}>
+        {(data?.printers || []).map(printer => <article className={"printingCard printingPrinterCard" + (searchTarget?.type === "printers" && searchTarget.id === printer.id ? " searchTargetRow" : "")} id={"printer-search-target-" + printer.id} key={printer.id}>
           <div className="printingPrinterHeader">
             <div className="printingPrinterImage">
               {(printer.multi_material_installed && printer.catalogue?.image_multi_material) || printer.catalogue?.image
@@ -351,8 +373,20 @@ export default function PrintingPage({ config, projects }) {
   </div>;
 }
 
-function SpoolInventoryPage({ spools, filaments, locations, printers, currency, canAddSpool, canChangeSpool, canDeleteSpool, onBack, onChanged }) {
+function SpoolInventoryPage({ spools, filaments, locations, printers, currency, canAddSpool, canChangeSpool, canDeleteSpool, onBack, onChanged, searchTarget = null }) {
   const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    if (searchTarget?.type !== "spools" || !searchTarget.id) return;
+    setQuery("");
+    const timer = window.setTimeout(() => {
+      document.getElementById("spool-search-target-" + searchTarget.id)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [spools.length, searchTarget?.token, searchTarget?.id]);
   const [addOpen, setAddOpen] = useState(false);
   const [manageSpool, setManageSpool] = useState(null);
   const [deleteSpool, setDeleteSpool] = useState(null);
@@ -381,7 +415,7 @@ function SpoolInventoryPage({ spools, filaments, locations, printers, currency, 
         <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search ID, filament, material, location or integration…" />
       </div>
       <div className="printingList">
-        {rows.map(spool => <article className="printingListRow printingLibraryRow" key={spool.id}>
+        {rows.map(spool => <article className={"printingListRow printingLibraryRow" + (searchTarget?.id === spool.id ? " searchTargetRow" : "")} id={"spool-search-target-" + spool.id} key={spool.id}>
           <span className={"printingSwatch filamentPreview-" + (spool.transparency || "opaque")} style={filamentSwatchStyle(spool)} />
           <div>
             <strong>{spool.spool_id} · {spool.filament}</strong>
@@ -453,8 +487,20 @@ function SpoolIdentityModal({ spool, onClose, onSaved }) {
 }
 
 
-function ModelLibraryPage({ models, files, printers, projects, canAddModel, canChangeModel, canDeleteModel, canUpload, onBack, onChanged }) {
+function ModelLibraryPage({ models, files, printers, projects, canAddModel, canChangeModel, canDeleteModel, canUpload, onBack, onChanged, searchTarget = null }) {
   const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    if (searchTarget?.type !== "models" || !searchTarget.id) return;
+    setQuery("");
+    const timer = window.setTimeout(() => {
+      document.getElementById("model-search-target-" + searchTarget.id)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [models.length, searchTarget?.token, searchTarget?.id]);
   const [addOpen, setAddOpen] = useState(false);
   const [manageModel, setManageModel] = useState(null);
   const [viewerModel, setViewerModel] = useState(null);
@@ -494,7 +540,7 @@ function ModelLibraryPage({ models, files, printers, projects, canAddModel, canC
         {rows.map(model => {
           const analysis = newestGeometryAnalysis(model);
           const dims = analysis?.dimensions_mm;
-          return <article className="printingListRow printingModelRow printingLibraryRow" key={model.id}>
+          return <article className={"printingListRow printingModelRow printingLibraryRow" + (searchTarget?.id === model.id ? " searchTargetRow" : "")} id={"model-search-target-" + model.id} key={model.id}>
             <div>
               <strong>{model.name}</strong>
               <small>{model.project || "Standalone model"} · {model.revision_count} revision{model.revision_count === 1 ? "" : "s"} · updated {formatDate(model.updated_at)}</small>
@@ -833,8 +879,20 @@ function PrinterModal({ manufacturers, models, locations, onClose, onSaved }) {
 }
 
 
-function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFilament, onBack, onChanged }) {
+function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFilament, onBack, onChanged, searchTarget = null }) {
   const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    if (searchTarget?.type !== "filaments" || !searchTarget.id) return;
+    setQuery("");
+    const timer = window.setTimeout(() => {
+      document.getElementById("filament-search-target-" + searchTarget.id)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [filaments.length, searchTarget?.token, searchTarget?.id]);
   const [editFilament, setEditFilament] = useState(null);
   const term = query.trim().toLowerCase();
   const rows = newestFirst(filaments).filter(item => !term || [
@@ -860,7 +918,7 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
         <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search manufacturer, product, material, colour or source…" />
       </div>
       <div className="printingList">
-        {rows.map(item => <article className="printingListRow printingLibraryRow" key={item.id}>
+        {rows.map(item => <article className={"printingListRow printingLibraryRow" + (searchTarget?.id === item.id ? " searchTargetRow" : "")} id={"filament-search-target-" + item.id} key={item.id}>
           <span className={"printingSwatch filamentPreview-" + (item.transparency || "opaque")} style={filamentSwatchStyle(item)} />
           <div>
             <strong>{item.display_name || item.name}</strong>

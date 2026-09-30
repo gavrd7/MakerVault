@@ -47,6 +47,7 @@ class Command(BaseCommand):
                 "OrcaSlicer printer catalogue sync: "
                 f"{result['models_seen']} models across {result['vendors_seen']} vendors; "
                 f"{result['models_created']} added, {result['models_enriched']} enriched, "
+                f"{result.get('hardware_profiles_enriched', 0)} hardware profiles resolved, "
                 f"{result['manufacturers_created']} manufacturers added"
                 + (
                     f", {len(result['failed_vendors'])} vendor manifests unavailable."
@@ -55,3 +56,9 @@ class Command(BaseCommand):
                 )
             )
         )
+        if result.get("failed_vendors"):
+            self.stdout.write(self.style.WARNING("Unavailable Orca vendor manifests:"))
+            for item in result["failed_vendors"]:
+                self.stdout.write(
+                    f"  - {item.get('file') or 'unknown'}: {item.get('error') or 'unknown error'}"
+                )

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
 import { themeQuartz } from "ag-grid-community";
 import { apiFetch } from "../api";
@@ -57,7 +57,7 @@ function BoardSpecGrid({ rows, status = {} }) {
   </dl>;
 }
 
-export default function BoardsPage({ boards, setBoards, components, projects, config, onOpenImport, refreshDashboard, onInventoryCreated }) {
+export default function BoardsPage({ boards, setBoards, components, projects, config, onOpenImport, refreshDashboard, onInventoryCreated, openBoardId = "", openToken = null }) {
   const [query, setQuery] = useState("");
   const [manufacturer, setManufacturer] = useState("");
   const [family, setFamily] = useState("");
@@ -97,6 +97,12 @@ export default function BoardsPage({ boards, setBoards, components, projects, co
       setLoadingDetail(false);
     }
   }
+
+  useEffect(() => {
+    if (!openBoardId) return;
+    const board = boards.find(row => row.id === openBoardId);
+    if (board) chooseBoard(board);
+  }, [openBoardId, openToken]);
 
   return <div className={`catalogueLayout boardsCatalogueLayout ${selected ? "hasDetail" : ""}`}>
     <section className="panel pagePanel cataloguePanel">

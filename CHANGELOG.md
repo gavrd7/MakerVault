@@ -1,6 +1,36 @@
 # Changelog
 
-## v0.7.0.1 — in development
+## v0.7.1 — 2026-09-30
+
+- Multi-material printer image maintenance now avoids fuzzy AMS/CFS/MMU searches: only curated manufacturer-backed combo imagery is accepted automatically, while unresolved variants are deferred without consuming the image-search attempt limit.
+- Fixed printer catalogue coverage reporting so remotely referenced specialist/manufacturer images count as complete just like board/component remote imagery.
+- Printer image enrichment now checks the exact OrcaSlicer machine-model cover asset before fuzzy open-media search, using stored upstream vendor/model provenance and referencing the upstream image remotely rather than copying it.
+- Started the Universal Search & Catalogue Completion milestone.
+- Added an ownership-safe universal search backend spanning projects, inventory, boards, components, files, 3D models, printers, physical spools and filament products.
+- Added persistent shell search with debounced grouped quick results and a dedicated advanced Search page with record-type, project, manufacturer and sorting controls.
+- Added regression coverage ensuring private search results remain owner-scoped while shared catalogue records remain searchable.
+- Added a live catalogue-completeness audit for boards, components, printer models and filament products, including image/specification coverage percentages and representative missing-data samples.
+- Added the catalogue coverage dashboard to Settings → Library updates as the baseline for the focused enrichment pass.
+- Extended OrcaSlicer catalogue synchronisation to derive missing printer build volumes from concrete machine profiles and inheritance chains while preserving existing curated specifications.
+- Reworked catalogue image maintenance to prioritise the catalogue with the highest missing-image ratio, with explicit `--kind printers|boards|components` targeting for focused passes.
+- Improved printer image discovery by trying exact manufacturer/model terms before generic printer wording while retaining open-license and confidence requirements.
+- Added per-catalogue/provider image-seeding diagnostics and sample failure reporting, plus detailed Orca vendor-manifest failure output.
+- Added a rights-conscious official-manufacturer remote-image fallback for curated printer catalogue entries, starting with Creality K2/K2 Combo. Official images are referenced from the manufacturer/store rather than copied into MakerVault media storage.
+- Fixed board/component detail imagery to preserve full aspect ratio in a larger contain-first frame; component images now open in the zoom/fullscreen viewer too.
+- Broadened board/component image enrichment with form-factor-aware component queries and remote OpenGraph image fallbacks from already-known catalogue source pages; source-page images remain remote rather than being copied without redistribution rights.
+- Added an explicit hierarchical catalogue source policy: manual values → official manufacturer sources → MakerVault curated profiles → specialist catalogues → maintained community sources → open media → generic fallbacks. Lower-authority sources only fill unresolved gaps and source decisions retain a bounded provenance trace.
+- Expanded official component references and curated metadata for BME280, VL53L0X, INA219 and ADS1115; known part functions now seed a short description when a component description is otherwise empty.
+- Extended the authoritative-source pass to BMP280, SHT31, SHT40, ADXL345, VL53L1X, INA226, W5500, MCP2515, MAX98357A, DS3231 and TMC2209, with manufacturer-backed references where available.
+- Added an authoritative-source coverage metric for board/component catalogues and a variant-safe Adafruit Feather ESP32-S3 profile that enriches shared physical/USB facts without guessing flash/PSRAM variant data.
+- Continued the component authority pass with manufacturer-backed profiles for BME680, BME688, BMP388, BNO055, MCP23017, PCA9685, DS18B20, NE555, LM358 and LM393.
+- Added deterministic generic-component descriptions generated from existing structured type/value/interface metadata, deliberately without inventing manufacturer provenance for generic parts.
+- Broadened authoritative source-page image discovery to schema.org/JSON-LD Product imagery and image_src metadata before falling back to open-media search, improving manufacturer-page compatibility without lowering match confidence.
+- Structured product-image discovery now follows JSON-LD Product → ImageObject `@id` references and recognises secure OpenGraph/Twitter variants plus lazy-loaded itemprop images; the image-seed generation was bumped so unresolved rows receive one fresh conservative retry.
+- Universal Search now carries exact record IDs into Files and the 3D Printing libraries, clears stale local filters, scrolls to the matching file/model/printer/spool/filament record and highlights the target; narrow-screen search spacing and safe-area popover sizing were also tightened.
+- Expanded curated board technical profiles for Adafruit Feather RP2040, Adafruit QT Py ESP32-C3, Arduino Leonardo and Mega 2560, and now tracks explicit USB-capability metadata in completeness reporting.
+- Removed the unused broad django-allauth `socialaccount` dependency extra after pip-audit flagged OAuthLib CVE-2026-49265; MakerVault now declares only the OIDC client dependencies it actually uses (`requests` and `PyJWT[crypto]`), preserving OpenID Connect login without the vulnerable package.
+
+## v0.7.0.1 — 2026-09-29
 
 - Added the first multi-user ownership foundation: projects, inventory, files, printing locations/integrations, physical spools, owned printers, 3D models and print jobs now carry an explicit owner.
 - Added a guarded legacy-data migration that preserves existing project creator attribution and assigns otherwise ambiguous pre-v0.7 private records only when MakerVault can identify a sole/explicit owner safely.
