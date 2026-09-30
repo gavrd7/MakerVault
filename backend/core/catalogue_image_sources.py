@@ -30,7 +30,7 @@ from .importers import ImporterError, fetch_import_html
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 OPENVERSE_API = "https://api.openverse.org/v1/images/"
-IMAGE_SEED_VERSION = "0.7.2-sbc-images-1"
+IMAGE_SEED_VERSION = "0.7.2-sbc-official-images-2"
 USER_AGENT = f"MakerVault/{getattr(settings, 'MAKERVAULT_VERSION', 'dev')} (+self-hosted catalogue image seeder)"
 def _commons_license_allowed(license_name: str) -> bool:
     """Allow only licences suitable for normal open redistribution."""
@@ -685,6 +685,11 @@ def find_orcaslicer_printer_cover(printer_model, variant: str = "base") -> dict 
     }
 
 
+def _is_computer_board(obj) -> bool:
+    from .models import BoardModel
+    return isinstance(obj, BoardModel) and str((obj.specifications or {}).get("board_type") or "") in {"sbc", "compute_module"}
+
+
 def find_source_page_image(obj) -> dict | None:
     """Find a remote product image from an already-known catalogue source page.
 
@@ -996,6 +1001,28 @@ def run_catalogue_image_seed(
                             metadata["auto_image_search_attempts"] = diagnostic.get("attempts", [])[-12:]
                         else:
                             source_fallback = find_source_page_image(obj) if variant == "base" else None
+                            # SBCs and compute modules should prefer an exact official
+                            # product/documentation page image over fuzzy open-media
+                            # search.  Remote-reference it rather than copying it, since
+                            # publication does not imply redistribution rights.
+                            if source_fallback and _is_computer_board(obj) and source_fallback.get("image_source_tier") == "manufacturer":
+                                metadata.update(source_fallback)
+                                metadata = append_source_trace(
+                                    metadata,
+                                    provider=source_fallback.get("image_source_provider", ""),
+                                    url=source_fallback.get("image_source_page", ""),
+                                    tier="manufacturer",
+                                    result="selected-official-sbc-image",
+                                )
+                                metadata["auto_image_last_result"] = "remote-official-sbc"
+                                field = set_catalogue_image_metadata(obj, metadata, variant=variant)
+                                obj.save(update_fields=[field, "updated_at"] if field else ["updated_at"])
+                                remote += 1
+                                by_kind[kind]["remote"] += 1
+                                provider_key = source_fallback["image_source_provider"] or "Official manufacturer"
+                                by_provider[provider_key] = by_provider.get(provider_key, 0) + 1
+                                continue
+
                             # Manufacturer, specialist and maintained ecosystem
                             # source pages outrank generic open-media discovery.
                             if source_fallback and int(source_fallback.get("image_source_priority", 999)) < 50:
