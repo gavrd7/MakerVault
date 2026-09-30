@@ -3,6 +3,7 @@ from unittest.mock import Mock, patch
 
 from django.test import TestCase, override_settings
 
+from core.catalogue_coverage import _printer_coverage
 from core.catalogue_image_sources import (
     _board_image_queries,
     _commons_license_allowed,
@@ -340,6 +341,30 @@ class CatalogueImageSourceTests(unittest.TestCase):
         self.assertEqual(candidate.author, "Example Creator")
         self.assertTrue(candidate.provider.startswith("Openverse /"))
 
+
+
+class PrinterCoverageTests(TestCase):
+    def test_remote_printer_image_counts_as_complete(self):
+        maker = PrinterManufacturer.objects.create(name="Coverage Test Printers")
+        printer = PrinterCatalogModel.objects.create(
+            manufacturer=maker,
+            name="Remote Image 42",
+            image_metadata={
+                "external_image_url": "https://raw.githubusercontent.com/example/printer.png",
+                "image_source_provider": "OrcaSlicer",
+            },
+        )
+
+        coverage = _printer_coverage()
+        images = next(metric for metric in coverage["metrics"] if metric["key"] == "images")
+        sample = next(
+            (item for item in coverage["missing_samples"] if item["id"] == str(printer.id)),
+            None,
+        )
+
+        self.assertEqual(images["complete"], 1)
+        self.assertIsNotNone(sample)
+        self.assertNotIn("image", sample["missing"])
 
 
 class CatalogueImagePriorityTests(TestCase):
