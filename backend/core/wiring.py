@@ -170,7 +170,7 @@ def _infer_role(name):
     upper = re.sub(r"[^A-Z0-9.+-]", "", str(name or "").upper())
     if upper in GROUND_NAMES or upper.endswith("GND"):
         return "ground", "name"
-    if upper in POWER_NAMES or _voltage_from_name(upper) is not None:
+    if upper in POWER_NAMES or _voltage_from_name(upper) is not None or re.fullmatch(r"(VCC|VDD|VIN|VBUS)[0-9.]*", upper):
         return "power", "name"
     if upper in {"SDA", "I2CSDA"} or upper.endswith("SDA"):
         return "i2c_sda", "name"
@@ -370,6 +370,10 @@ def _voltage_range(pin):
 
 
 def _connection_diagnostics(edge, labels, profiles):
+    # Always fall back to conservative label inference when the catalogue does not
+    # contain this exact pin. Users may legitimately type a pin that is missing
+    # from an incomplete catalogue entry; obvious names such as GND/VCC/5V are
+    # still high-confidence enough to sanity-check.
     a = profiles.get(edge["from_node"], {}).get(edge["from_pin"].casefold()) or _pin_metadata_from_entry(edge["from_pin"])
     b = profiles.get(edge["to_node"], {}).get(edge["to_pin"].casefold()) or _pin_metadata_from_entry(edge["to_pin"])
     a_text = _endpoint_text(labels.get(edge["from_node"], edge["from_node"]), edge["from_pin"])
