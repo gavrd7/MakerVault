@@ -30,7 +30,7 @@ from .importers import ImporterError, fetch_import_html
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 OPENVERSE_API = "https://api.openverse.org/v1/images/"
-IMAGE_SEED_VERSION = "0.7.2-sbc-official-images-2"
+IMAGE_SEED_VERSION = "0.7.2-sbc-official-images-3"
 USER_AGENT = f"MakerVault/{getattr(settings, 'MAKERVAULT_VERSION', 'dev')} (+self-hosted catalogue image seeder)"
 def _commons_license_allowed(license_name: str) -> bool:
     """Allow only licences suitable for normal open redistribution."""
@@ -690,6 +690,57 @@ def _is_computer_board(obj) -> bool:
     return isinstance(obj, BoardModel) and str((obj.specifications or {}).get("board_type") or "") in {"sbc", "compute_module"}
 
 
+def _page_image_candidates(soup: BeautifulSoup, base_url: str) -> list[tuple[str, str]]:
+    """Return likely product images in priority order from a known source page."""
+    candidates: list[tuple[str, str]] = []
+    seen: set[str] = set()
+
+    def add(value, method):
+        raw = str(value or "").strip()
+        if not raw:
+            return
+        resolved = urljoin(base_url, raw)
+        parsed = urlparse(resolved)
+        if parsed.scheme != "https" or not parsed.netloc or resolved in seen:
+            return
+        seen.add(resolved)
+        candidates.append((resolved, method))
+
+    # Product-aware structured metadata is stronger than generic social cards.
+    add(_structured_product_image(soup, base_url), "structured")
+    for attrs in (
+        {"property": "og:image:secure_url"},
+        {"property": "og:image"},
+        {"name": "twitter:image"},
+        {"name": "twitter:image:src"},
+        {"property": "twitter:image"},
+    ):
+        tag = soup.find("meta", attrs=attrs)
+        if tag:
+            add(tag.get("content"), "meta")
+
+    # Documentation/wiki sites often omit Product JSON-LD and OpenGraph
+    # metadata but still mark the primary board photograph semantically.
+    for tag in soup.find_all("img", limit=80):
+        text = " ".join([
+            str(tag.get("alt") or ""),
+            str(tag.get("title") or ""),
+            str(tag.get("class") or ""),
+        ]).lower()
+        if any(word in text for word in ("logo", "icon", "avatar", "banner", "flag")):
+            continue
+        value = (
+            tag.get("data-src")
+            or tag.get("data-original")
+            or tag.get("src")
+            or ""
+        )
+        if not value and tag.get("srcset"):
+            value = str(tag.get("srcset")).split(",", 1)[0].strip().split(" ", 1)[0]
+        add(value, "page-image")
+    return candidates
+
+
 def find_source_page_image(obj) -> dict | None:
     """Find a remote product image from an already-known catalogue source page.
 
@@ -704,30 +755,10 @@ def find_source_page_image(obj) -> dict | None:
         except ImporterError:
             continue
         soup = BeautifulSoup(html, "html.parser")
-        image_url = ""
-        discovery_method = ""
-        for attrs in (
-            {"property": "og:image"},
-            {"property": "og:image:secure_url"},
-            {"name": "twitter:image"},
-            {"name": "twitter:image:src"},
-            {"property": "twitter:image"},
-        ):
-            tag = soup.find("meta", attrs=attrs)
-            if tag and str(tag.get("content") or "").strip():
-                image_url = str(tag.get("content") or "").strip()
-                discovery_method = "meta"
-                break
-        if not image_url:
-            image_url = _structured_product_image(soup, final_url)
-            if image_url:
-                discovery_method = "structured"
-        if not image_url:
+        image_candidates = _page_image_candidates(soup, final_url)
+        if not image_candidates:
             continue
-        image_url = urljoin(final_url, image_url)
-        parsed = urlparse(image_url)
-        if parsed.scheme != "https" or not parsed.netloc:
-            continue
+        image_url, discovery_method = image_candidates[0]
         tier = classify_source_url(final_url, source_type=source.get("source_type", ""))
         return {
             "external_image_url": image_url,
