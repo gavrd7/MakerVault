@@ -82,6 +82,7 @@ function TagCaptureControls({ kind, value, onCapture, autoFocus = false, compact
       ref={inputRef}
       value={value}
       onChange={e => onCapture(e.target.value)}
+      onKeyDown={e => { if (!compact && e.key === "Enter") e.preventDefault(); }}
       placeholder={kind === "qr" ? "QR identity code…" : "Scan with USB/OTG reader or enter UID…"}
       autoComplete="off"
       autoCapitalize="characters"
@@ -393,6 +394,24 @@ function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged, onOpenTarget
     }
   }
 
+  async function writeNfcLink() {
+    const capability = nfcCapability();
+    if (!capability.supported) {
+      setNotice(capability.reason);
+      return;
+    }
+    setBusy(true); setNotice("Hold a writable NFC tag near the phone…");
+    try {
+      const writer = new window.NDEFReader();
+      await writer.write({ records: [{ recordType: "url", data: scanUrl }] });
+      setNotice("MakerVault scan link written to the NFC tag. Phones can now tap it to open this record.");
+    } catch (err) {
+      setNotice(err?.message || "The NFC tag could not be written.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function printLabel() {
     const svg = qrWrap.current?.querySelector("svg")?.outerHTML || "";
     const popup = window.open("", "_blank", "width=520,height=620");
@@ -428,6 +447,12 @@ function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged, onOpenTarget
         <div className="tagTapIcon">{tag.kind === "nfc" ? "NFC" : "RFID"}</div>
         <code>{tag.code}</code>
         <button onClick={() => copy(tag.code, "Tag identity")}>Copy identity</button>
+        {tag.kind === "nfc" && <>
+          <code>{scanUrl}</code>
+          <button onClick={() => copy(scanUrl, "MakerVault scan link")}>Copy MakerVault scan link</button>
+          {"NDEFReader" in window && <button disabled={busy} onClick={writeNfcLink}>{busy ? "Waiting for tag…" : "Write MakerVault link to NFC"}</button>}
+          <small>Writing the MakerVault URL as NDEF lets compatible phones—including iPhone—tap the tag and open MakerVault without browser access to the tag UID.</small>
+        </>}
       </div>}
     </div>
 
