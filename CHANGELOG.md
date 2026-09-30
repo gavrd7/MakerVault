@@ -2,6 +2,7 @@
 
 ## v0.7.1 — in development
 
+- Multi-material printer image maintenance now avoids fuzzy AMS/CFS/MMU searches: only curated manufacturer-backed combo imagery is accepted automatically, while unresolved variants are deferred without consuming the image-search attempt limit.
 - Fixed printer catalogue coverage reporting so remotely referenced specialist/manufacturer images count as complete just like board/component remote imagery.
 - Printer image enrichment now checks the exact OrcaSlicer machine-model cover asset before fuzzy open-media search, using stored upstream vendor/model provenance and referencing the upstream image remotely rather than copying it.
 - Started the Universal Search & Catalogue Completion milestone.
