@@ -1,4 +1,5 @@
 import unittest
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from django.test import TestCase, override_settings
@@ -211,28 +212,24 @@ class CatalogueImageSourceTests(unittest.TestCase):
         )
 
     def test_curated_sbc_source_mapping_is_exact(self):
-        manufacturer = Mock(name="manufacturer")
-        manufacturer.name = "NVIDIA"
-        board = Mock(
-            spec=["Jetson Orin Nano Super Developer Kit"],
+        manufacturer = SimpleNamespace(name="NVIDIA")
+        board = SimpleNamespace(
+            name="Jetson Orin Nano Super Developer Kit",
             manufacturer=manufacturer,
             specifications={"board_type": "sbc"},
         )
-        board.name = board.spec[0]
         self.assertEqual(
             _curated_sbc_source_page(board),
             "https://docs.nvidia.com/jetson/orin-nano-devkit/user-guide/latest/",
         )
 
     def test_curated_sbc_source_mapping_ignores_microcontrollers(self):
-        manufacturer = Mock(name="manufacturer")
-        manufacturer.name = "NVIDIA"
-        board = Mock(
-            spec=["Jetson Orin Nano Super Developer Kit"],
+        manufacturer = SimpleNamespace(name="NVIDIA")
+        board = SimpleNamespace(
+            name="Jetson Orin Nano Super Developer Kit",
             manufacturer=manufacturer,
             specifications={"board_type": "microcontroller"},
         )
-        board.name = board.spec[0]
         self.assertEqual(_curated_sbc_source_page(board), "")
 
     def test_page_image_candidates_prefer_structured_product_image(self):
