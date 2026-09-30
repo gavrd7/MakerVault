@@ -551,6 +551,10 @@ def _serialise_board(board, detailed=False):
         "source_url": board.source.url if board.source else "",
         "compatibility": compatibility,
         "updated_at": board.updated_at.isoformat(),
+        # Pinout is compact structured catalogue data used by the wiring editor.
+        # Include it in catalogue rows so a newly-added node can offer pin choices
+        # immediately, before the diagram's first save/reload.
+        "pinout": board.pinout,
     }
     if detailed:
         data.update({
