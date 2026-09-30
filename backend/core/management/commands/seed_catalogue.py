@@ -13,7 +13,7 @@ from core.models import (
 )
 
 
-STARTER_CATALOGUE_VERSION = "0.7.0.1"
+STARTER_CATALOGUE_VERSION = "0.7.2"
 
 
 def merge_missing_fields(instance, definition, fields):
