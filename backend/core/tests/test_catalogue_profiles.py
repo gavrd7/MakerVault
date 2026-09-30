@@ -92,6 +92,25 @@ class CatalogueProfileTests(unittest.TestCase):
         self.assertEqual(leonardo["specifications"]["usb_capability"], "Native USB HID / CDC")
         self.assertIn("psram", leonardo["specifications"]["not_applicable_specs"])
 
+    def test_component_profile_adds_official_reference_and_description(self):
+        result = apply_component_profile({
+            "name": "BME280 temperature/humidity/pressure sensor",
+            "part_number": "BME280",
+            "description": "",
+            "specifications": {},
+        })
+        self.assertEqual(
+            result["description"],
+            "Temperature, humidity and pressure sensor.",
+        )
+        self.assertEqual(
+            result["specifications"]["reference_provider"],
+            "Bosch Sensortec",
+        )
+        self.assertTrue(
+            result["specifications"]["reference_url"].startswith("https://www.bosch-sensortec.com/")
+        )
+
     def test_component_profile_fills_missing_part_metadata(self):
         item = apply_component_profile({
             "name": "BME280 sensor",
