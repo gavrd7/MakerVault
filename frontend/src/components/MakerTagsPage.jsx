@@ -14,6 +14,86 @@ function kindTone(kind) {
   return "neutral";
 }
 
+function nfcCapability() {
+  if (typeof window === "undefined") return { supported: false, reason: "" };
+  if (!window.isSecureContext) return { supported: false, reason: "Phone NFC capture requires HTTPS (or localhost)." };
+  if (!("NDEFReader" in window)) return { supported: false, reason: "Direct browser NFC capture is not available in this browser. Use the phone's normal NFC handling for MakerVault URL tags, a USB/OTG reader, or enter the UID manually." };
+  return { supported: true, reason: "" };
+}
+
+function ndefRecordText(record) {
+  try {
+    if (!record?.data) return "";
+    const decoder = new TextDecoder(record.encoding || "utf-8");
+    return decoder.decode(record.data).replace(/^\u0002en/i, "").trim();
+  } catch {
+    return "";
+  }
+}
+
+function TagCaptureControls({ kind, value, onCapture, autoFocus = false, compact = false }) {
+  const inputRef = useRef(null);
+  const [nfcBusy, setNfcBusy] = useState(false);
+  const [notice, setNotice] = useState("");
+  const capability = nfcCapability();
+
+  useEffect(() => {
+    if (!autoFocus) return;
+    const timer = window.setTimeout(() => inputRef.current?.focus(), 80);
+    return () => window.clearTimeout(timer);
+  }, [autoFocus, kind]);
+
+  async function scanNfc() {
+    if (!capability.supported) {
+      setNotice(capability.reason);
+      return;
+    }
+    setNfcBusy(true); setNotice("Hold an NFC tag near the phone…");
+    try {
+      const reader = new window.NDEFReader();
+      await reader.scan();
+      const result = await new Promise((resolve, reject) => {
+        const timeout = window.setTimeout(() => reject(new Error("No NFC tag was detected. Try again.")), 30000);
+        reader.addEventListener("readingerror", () => {
+          window.clearTimeout(timeout);
+          reject(new Error("The NFC tag was detected but could not be read."));
+        }, { once: true });
+        reader.addEventListener("reading", event => {
+          window.clearTimeout(timeout);
+          const serial = String(event.serialNumber || "").trim();
+          const records = Array.from(event.message?.records || []);
+          const text = records.map(ndefRecordText).find(Boolean) || "";
+          resolve(serial || text);
+        }, { once: true });
+      });
+      if (!result) throw new Error("The tag did not expose a UID or readable NDEF identity.");
+      onCapture(result);
+      setNotice("NFC tag captured.");
+    } catch (err) {
+      setNotice(err?.message || "NFC capture failed.");
+    } finally {
+      setNfcBusy(false);
+    }
+  }
+
+  return <div className={"tagCaptureControls" + (compact ? " compact" : "")}>
+    {(kind === "nfc") && <button type="button" onClick={scanNfc} disabled={nfcBusy}>{nfcBusy ? "Waiting for NFC…" : "Scan with phone NFC"}</button>}
+    <input
+      ref={inputRef}
+      value={value}
+      onChange={e => onCapture(e.target.value)}
+      placeholder={kind === "qr" ? "QR identity code…" : "Scan with USB/OTG reader or enter UID…"}
+      autoComplete="off"
+      autoCapitalize="characters"
+      spellCheck={false}
+    />
+    {(kind === "nfc" || kind === "rfid") && <small>
+      USB/OTG keyboard readers can scan directly into this field. {kind === "nfc" && (capability.supported ? "This browser also supports direct NFC capture." : capability.reason)}
+    </small>}
+    {notice && <small className="tagCaptureNotice">{notice}</small>}
+  </div>;
+}
+
 export default function MakerTagsPage({ config, resolveToken = "", onResolveConsumed = () => {}, onChanged = () => {}, onOpenTarget = () => {} }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
@@ -123,7 +203,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
           <option value="nfc">NFC</option>
           <option value="qr">QR identity code</option>
         </select>
-        <input value={resolveCode} onChange={e => setResolveCode(e.target.value)} placeholder="Scan or enter tag identity…" />
+        <TagCaptureControls kind={resolveKind} value={resolveCode} onCapture={setResolveCode} autoFocus compact />
         <button className="primary" disabled={!resolveCode.trim() || resolveBusy}>{resolveBusy ? "Resolving…" : "Resolve"}</button>
       </form>
     </section>
@@ -245,12 +325,11 @@ function MakerTagForm({ title, data, tag = null, onClose, onSaved }) {
       <label>Tag type<select value={form.kind} onChange={e => set("kind", e.target.value)}>
         {(data?.kinds || []).map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
       </select></label>
-      <label>Identity code<input
-        value={form.code}
-        onChange={e => set("code", e.target.value)}
-        placeholder={form.kind === "qr" ? "Leave blank to generate" : "UID / tag code"}
-        required={form.kind !== "qr"}
-      /></label>
+      <label>Identity code
+        {form.kind === "qr"
+          ? <input value={form.code} onChange={e => set("code", e.target.value)} placeholder="Leave blank to generate" />
+          : <TagCaptureControls kind={form.kind} value={form.code} onCapture={value => set("code", value)} autoFocus={!tag} />}
+      </label>
       <label className="full">Label<input value={form.label} onChange={e => set("label", e.target.value)} placeholder="e.g. Loft server ESP32, Black ABS spool" /></label>
 
       <label>Target type<select value={form.target_type} onChange={e => set("target_type", e.target.value)}>
@@ -263,6 +342,13 @@ function MakerTagForm({ title, data, tag = null, onClose, onSaved }) {
 
       {tag && <label>Status<select value={form.status} onChange={e => set("status", e.target.value)}><option value="active">Active</option><option value="retired">Retired</option></select></label>}
       <label className={tag ? "" : "full"}>Notes<textarea rows="4" value={form.notes} onChange={e => set("notes", e.target.value)} placeholder="Optional physical label/location notes…" /></label>
+
+      {(form.kind === "nfc" || form.kind === "rfid") && <div className="settingsCallout full">
+        <strong>{form.kind === "nfc" ? "NFC capture options" : "RFID capture options"}</strong>
+        <p>{form.kind === "nfc"
+          ? "On supported Android browsers over HTTPS, Scan with phone NFC can capture a readable tag identity. iPhone/iPad browsers do not currently expose Web NFC; use an NDEF tag containing the MakerVault scan URL, a USB/OTG keyboard reader, or enter the UID manually."
+          : "Most USB and OTG RFID readers behave like keyboards. Put the cursor in Identity code and scan; MakerVault receives the reader output without a driver-specific integration."}</p>
+      </div>}
 
       {form.kind === "rfid" && form.target_type === "spool" && <div className="settingsCallout full">
         <strong>Spool RFID compatibility</strong>
