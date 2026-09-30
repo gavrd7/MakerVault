@@ -1133,8 +1133,10 @@ class WiringDiagram(TimeStampedModel):
     )
     project = models.ForeignKey(
         Project,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
         related_name="wiring_diagrams",
+        null=True,
+        blank=True,
     )
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
@@ -1150,6 +1152,11 @@ class WiringDiagram(TimeStampedModel):
                 fields=["project", "name"],
                 name="uniq_wiring_diagram_name_per_project",
             ),
+            models.UniqueConstraint(
+                fields=["owner", "name"],
+                condition=models.Q(project__isnull=True),
+                name="uniq_standalone_wiring_name_per_owner",
+            ),
         ]
 
     def clean(self):
@@ -1164,4 +1171,4 @@ class WiringDiagram(TimeStampedModel):
             raise ValidationError({"canvas": "Wiring canvas settings must be stored as an object."})
 
     def __str__(self):
-        return f"{self.project} — {self.name}"
+        return f"{self.project} — {self.name}" if self.project_id else f"Wiring Lab — {self.name}"
