@@ -663,6 +663,39 @@ class CatalogueImagePriorityTests(TestCase):
         cache_add.assert_called_once()
         cache_delete.assert_called_once()
 
+    @override_settings(CATALOGUE_IMAGE_MAX_PER_RUN=0)
+    @patch("core.catalogue_image_sources.cache.delete")
+    @patch("core.catalogue_image_sources.cache.add", return_value=True)
+    @patch("core.catalogue_image_sources.resolve_catalogue_image", return_value=None)
+    @patch("core.catalogue_image_sources.find_source_page_image", return_value=None)
+    def test_board_type_filter_targets_only_sbc_records(
+        self,
+        source_image,
+        resolve_image,
+        cache_add,
+        cache_delete,
+    ):
+        self.board.specifications = {"board_type": "microcontroller"}
+        self.board.save(update_fields=["specifications", "updated_at"])
+        BoardModel.objects.create(
+            manufacturer=self.manufacturer,
+            name="Test SBC",
+            family="Test",
+            specifications={"board_type": "sbc"},
+        )
+
+        result = run_catalogue_image_seed(
+            limit=0,
+            force_retry=True,
+            kinds=["boards"],
+            board_types=["sbc"],
+        )
+
+        self.assertEqual(result["processed"], 1)
+        self.assertEqual(result["by_kind"]["boards"]["processed"], 1)
+        resolve_image.assert_called_once()
+        self.assertEqual(resolve_image.call_args.args[0].name, "Test SBC")
+
     @override_settings(
         CATALOGUE_IMAGE_MAX_PER_RUN=1,
         CATALOGUE_IMAGE_RETRY_DAYS=1,
