@@ -12,7 +12,7 @@ The seeder fills missing metadata on MakerVault-managed starter records but does
 python manage.py seed_catalogue
 ~~~
 
-The starter data now includes broad board coverage and more than 130 common components across passives, semiconductors, lighting, displays, sensors, communications, audio, controls, power, switching, prototyping, connectors, storage, timing, motors/drivers, cameras, logic/level shifting, mechanical/thermal and test equipment.
+The starter data now includes broad board coverage and nearly 400 common component definitions across passives, semiconductors, lighting, displays, sensors, communications, audio, controls, power, switching, prototyping, connectors, storage, timing, motors/drivers, cameras, logic/level shifting, mechanical/thermal and test equipment.
 
 ## Structured component attributes
 
@@ -29,6 +29,22 @@ Component-specific facts live in the existing specifications JSON field. Common 
 ~~~
 
 This keeps the schema flexible enough for resistors, sensors, connectors, motors and modules without creating dozens of mostly-empty database columns.
+
+## Source authority hierarchy
+
+Catalogue enrichment is intentionally hierarchical. Adding more providers must not allow a weaker source to overwrite a stronger one.
+
+1. **User / manual values** — priority 0. Explicit values are never overwritten automatically.
+2. **Official manufacturer sources** — priority 10. Product pages, manufacturer documentation, datasheets and official APIs.
+3. **MakerVault curated profiles** — priority 20. Version-controlled facts backed by authoritative references.
+4. **Specialist structured catalogues** — priority 30. Domain-specific sources such as ESPBoards, OrcaSlicer and SpoolmanDB.
+5. **Community / ecosystem sources** — priority 40. Maintained project documentation and repositories.
+6. **Open media sources** — priority 50. Wikimedia Commons and Openverse for appropriately licensed imagery.
+7. **Generic fallbacks** — priority 60. Used only for unresolved gaps.
+
+Lower-priority providers only fill fields that remain empty after higher-priority sources have run. Catalogue metadata retains a bounded `source_trace` so maintenance and diagnostics can show which source was checked or selected.
+
+For imagery, manufacturer/specialist source-page images may be referenced remotely when redistribution rights are not established. Openly licensed Commons/Openverse images may instead be cached into MakerVault media with attribution metadata.
 
 ## Image policy
 
