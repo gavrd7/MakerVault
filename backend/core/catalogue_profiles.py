@@ -757,17 +757,49 @@ BOARD_PROFILES = {
 
 
 COMPONENT_PART_PROFILES = {
-    "BME280": {"i2c_addresses": ["0x76", "0x77"], "function": "Temperature, humidity and pressure sensor"},
+    "BME280": {
+        "i2c_addresses": ["0x76", "0x77"],
+        "function": "Temperature, humidity and pressure sensor",
+        "interface": "I2C/SPI",
+        "supply_voltage": "1.71–3.6 V",
+        "package": "8-pin LGA, 2.5 × 2.5 × 0.93 mm",
+        "reference_provider": "Bosch Sensortec",
+        "reference_url": "https://www.bosch-sensortec.com/products/environmental-sensors/humidity-sensors-bme280/",
+    },
     "BMP280": {"i2c_addresses": ["0x76", "0x77"], "function": "Temperature and barometric pressure sensor"},
     "SHT31": {"i2c_addresses": ["0x44", "0x45"], "function": "Digital temperature and humidity sensor"},
     "SHT40": {"i2c_addresses": ["0x44"], "function": "Digital temperature and humidity sensor"},
     "MPU6050": {"i2c_addresses": ["0x68", "0x69"], "function": "6-axis accelerometer and gyroscope"},
     "ADXL345": {"i2c_addresses": ["0x53", "0x1D"], "function": "3-axis digital accelerometer"},
-    "VL53L0X": {"i2c_addresses": ["0x29"], "function": "Time-of-flight distance sensor"},
+    "VL53L0X": {
+        "i2c_addresses": ["0x29"],
+        "function": "Time-of-flight distance sensor",
+        "interface": "I2C",
+        "typical_range": "up to 2 m",
+        "reference_provider": "STMicroelectronics",
+        "reference_url": "https://www.st.com/en/imaging-and-photonics-solutions/vl53l0x.html",
+    },
     "VL53L1X": {"i2c_addresses": ["0x29"], "function": "Long-range time-of-flight distance sensor"},
-    "INA219": {"function": "High-side current, voltage and power monitor", "interface": "I2C"},
+    "INA219": {
+        "function": "High-side current, voltage and power monitor",
+        "interface": "I2C/SMBus",
+        "resolution": "12-bit",
+        "bus_voltage": "0–26 V",
+        "supply_voltage": "3–5.5 V",
+        "reference_provider": "Texas Instruments",
+        "reference_url": "https://www.ti.com/product/INA219",
+    },
     "INA226": {"function": "Current, voltage and power monitor", "interface": "I2C"},
-    "ADS1115": {"function": "4-channel 16-bit ADC", "resolution": "16-bit", "channels": 4},
+    "ADS1115": {
+        "function": "4-channel 16-bit delta-sigma ADC",
+        "resolution": "16-bit",
+        "channels": 4,
+        "interface": "I2C",
+        "sample_rate": "up to 860 SPS",
+        "supply_voltage": "2–5.5 V",
+        "reference_provider": "Texas Instruments",
+        "reference_url": "https://www.ti.com/product/ADS1115",
+    },
     "W5500": {"function": "10/100 Ethernet controller with hardware TCP/IP", "interface": "SPI"},
     "MCP2515": {"function": "Standalone CAN controller", "interface": "SPI"},
     "MFRC522": {"function": "13.56 MHz RFID reader/writer", "frequency": "13.56 MHz"},
@@ -835,5 +867,8 @@ def apply_component_profile(definition: dict) -> dict:
     enriched = deepcopy(definition)
     part = str(enriched.get("part_number") or "").strip()
     if part and part in COMPONENT_PART_PROFILES:
-        enriched = _merge_missing(enriched, {"specifications": COMPONENT_PART_PROFILES[part]})
+        profile = COMPONENT_PART_PROFILES[part]
+        enriched = _merge_missing(enriched, {"specifications": profile})
+        if not str(enriched.get("description") or "").strip() and profile.get("function"):
+            enriched["description"] = str(profile["function"]).strip().rstrip(".") + "."
     return enriched
