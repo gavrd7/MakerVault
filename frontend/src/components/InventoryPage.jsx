@@ -42,7 +42,7 @@ export default function InventoryPage({ inventory, setInventory, boards, compone
     { field: "type", headerName: "Type", minWidth: 115, editable: false },
     {
       field: "quantity", headerName: "Qty", width: 95, editable, type: "numericColumn",
-      valueParser: p => Number(p.newValue)
+      valueParser: p => Math.max(0, Math.trunc(Number(p.newValue) || 0))
     },
     {
       field: "allocated_quantity", headerName: "BOM alloc.", width: 110, editable: false, type: "numericColumn",
@@ -363,7 +363,7 @@ function EditInventoryModal({ item, projects, onClose, onSaved }) {
     <form className="formGrid" onSubmit={submit}>
       {error && <div className="formError full">{error}</div>}
       <label className="full">Custom name<input value={form.custom_name} onChange={e => set("custom_name", e.target.value)} placeholder={item.name} /></label>
-      <label>Quantity<input type="number" min={item.allocated_quantity || 0} step="0.001" value={form.quantity} onChange={e => set("quantity", e.target.value)} /></label>
+      <label>Quantity<input type="number" min={item.allocated_quantity || 0} step="1" value={form.quantity} onChange={e => set("quantity", e.target.value)} /></label>
       <label>Status<select value={form.status} onChange={e => set("status", e.target.value)}>{Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
       <label>Project<select value={form.project_id} onChange={e => set("project_id", e.target.value)}><option value="">None</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
       <label>Location<input value={form.location} onChange={e => set("location", e.target.value)} /></label>
@@ -425,7 +425,7 @@ export function AddInventoryModal({
       {form.item_type === "board" && <label className="full">Board<select required disabled={lockCatalogueItem && Boolean(initialBoard)} value={form.board_id} onChange={e => set("board_id", e.target.value)}><option value="">Choose a board…</option>{boards.map(b => <option key={b.id} value={b.id}>{b.display_name}</option>)}</select></label>}
       {form.item_type === "component" && <label className="full">Component<select required disabled={lockCatalogueItem && Boolean(initialComponent)} value={form.component_id} onChange={e => set("component_id", e.target.value)}><option value="">Choose a component…</option>{components.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>}
       {!["board", "component"].includes(form.item_type) && <label className="full">Name<input required value={form.custom_name} onChange={e => set("custom_name", e.target.value)} /></label>}
-      <label>Quantity<input type="number" min="0" step="0.001" value={form.quantity} onChange={e => set("quantity", e.target.value)} /></label>
+      <label>Quantity<input type="number" min="0" step="1" value={form.quantity} onChange={e => set("quantity", e.target.value)} /></label>
       <label>Status<select value={form.status} onChange={e => set("status", e.target.value)}>{Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
       <label>Project<select value={form.project_id} onChange={e => set("project_id", e.target.value)}><option value="">None</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
       <label>Location<input value={form.location} onChange={e => set("location", e.target.value)} placeholder="Drawer, shelf, box…" /></label>
