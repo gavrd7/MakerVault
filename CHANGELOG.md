@@ -10,6 +10,7 @@
 - Added a responsive Maker Tags workspace with target selection, filtering, tag detail/history and dashboard status.
 - Added the first interactive project wiring workspace with structured board/component/inventory/custom nodes, draggable canvas positioning and pin-to-pin connections.
 - Wiring diagrams are owner-scoped to projects, preserve editable structured data, expose catalogue pin hints where available, reject duplicate/self connections and surface cautious shared-pin/common-ground checks.
+- Added portable JSON export and SVG wiring snapshots, plus direct navigation from scanned Maker Tags to their tagged MakerVault records.
 
 ## v0.7.1 — 2026-09-30
 
