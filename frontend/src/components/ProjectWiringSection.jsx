@@ -214,7 +214,7 @@ function WiringEditor({ project, diagram, boards, components, inventory, canChan
       x: 28 + (index % 3) * 220,
       y: 28 + Math.floor(index / 3) * 130,
       notes: "",
-      reference: ref ? { label: ref.label, subtitle: ref.subtitle, pin_hints: [] } : undefined,
+      reference: ref ? { label: ref.label, subtitle: ref.subtitle, pin_hints: [], pins: [] } : undefined,
     };
     mutate(current => ({ ...current, nodes: [...current.nodes, node] }));
     setCustomLabel("");
@@ -530,6 +530,32 @@ function WiringEditor({ project, diagram, boards, components, inventory, canChan
 }
 
 function PinInput({ label, node, value, onChange, disabled, listId }) {
-  const hints = node?.reference?.pin_hints || [];
-  return <label>{label}<input list={hints.length ? listId : undefined} value={value} disabled={disabled} onChange={e => onChange(e.target.value)} placeholder="GPIO4, GND, SDA…" />{hints.length > 0 && <datalist id={listId}>{hints.map(pin => <option key={pin} value={pin} />)}</datalist>}</label>;
+  const pins = node?.reference?.pins || [];
+  const hints = pins.length ? pins.map(pin => pin.name) : (node?.reference?.pin_hints || []);
+  const isCataloguePin = hints.some(pin => pin.toLowerCase() === String(value || "").toLowerCase());
+
+  return <label className="wiringPinInput">
+    {label}
+    {hints.length > 0 && <select
+      value={isCataloguePin ? value : ""}
+      disabled={disabled}
+      onChange={e => {
+        if (e.target.value) onChange(e.target.value);
+      }}
+    >
+      <option value="">Choose catalogue pin…</option>
+      {pins.length > 0
+        ? pins.map(pin => <option key={pin.name} value={pin.name}>{pin.name}{pin.role && pin.role !== "unknown" ? " · " + pin.role.replaceAll("_", " ") : ""}{pin.voltage != null ? " · " + pin.voltage + "V" : ""}</option>)
+        : hints.map(pin => <option key={pin} value={pin}>{pin}</option>)}
+    </select>}
+    <input
+      list={hints.length ? listId : undefined}
+      value={value}
+      disabled={disabled}
+      onChange={e => onChange(e.target.value)}
+      placeholder={hints.length ? "Or enter another pin / terminal…" : "GPIO4, GND, SDA…"}
+    />
+    {hints.length > 0 && <datalist id={listId}>{hints.map(pin => <option key={pin} value={pin} />)}</datalist>}
+    {hints.length > 0 && <small>{isCataloguePin ? "Catalogue pin selected — electrical metadata will be used for checks." : "You can select a known catalogue pin above or enter a pin/terminal manually."}</small>}
+  </label>;
 }
