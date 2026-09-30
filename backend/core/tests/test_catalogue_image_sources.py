@@ -367,7 +367,6 @@ class CatalogueImageSourceTests(unittest.TestCase):
             found["external_image_url"],
             "https://raw.githubusercontent.com/OrcaSlicer/OrcaSlicer/main/resources/profiles/Creality/Creality%20K2_cover.png",
         )
-        board.name = board.spec[0]
         self.assertEqual(found["image_source_provider"], "OrcaSlicer")
         self.assertEqual(found["image_source_discovery"], "exact-profile-cover")
         self.assertEqual(found["image_source_tier"], "specialist")
@@ -543,7 +542,6 @@ class CatalogueImagePriorityTests(TestCase):
             self.printer.image_metadata["external_image_url"],
             "https://raw.githubusercontent.com/example/cover.png",
         )
-        board.name = board.spec[0]
         self.assertEqual(
             self.printer.image_metadata["source_trace"][-1]["tier"],
             "specialist",
@@ -684,7 +682,6 @@ class CatalogueImagePriorityTests(TestCase):
             self.component.specifications["external_image_url"],
             "https://cdn.example/official.jpg",
         )
-        board.name = board.spec[0]
         self.assertEqual(
             self.component.specifications["source_trace"][-1]["tier"],
             "manufacturer",
