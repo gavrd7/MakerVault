@@ -30,7 +30,7 @@ from .importers import ImporterError, fetch_import_html
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 OPENVERSE_API = "https://api.openverse.org/v1/images/"
-IMAGE_SEED_VERSION = "0.7.1-structured-source-images-1"
+IMAGE_SEED_VERSION = "0.7.1-structured-source-images-2"
 USER_AGENT = f"MakerVault/{getattr(settings, 'MAKERVAULT_VERSION', 'dev')} (+self-hosted catalogue image seeder)"
 def _commons_license_allowed(license_name: str) -> bool:
     """Allow only licences suitable for normal open redistribution."""
@@ -485,6 +485,16 @@ def _structured_product_image(soup: BeautifulSoup, base_url: str) -> str:
     Source-page images remain remote references; this helper only discovers
     already-published HTTPS image URLs and does not cache them.
     """
+
+    def resolved_https(value) -> str:
+        value = str(value or "").strip()
+        if not value:
+            return ""
+        resolved = urljoin(base_url, value)
+        parsed = urlparse(resolved)
+        return resolved if parsed.scheme == "https" and parsed.netloc else ""
+
+    documents = []
     for tag in soup.find_all("script", attrs={"type": "application/ld+json"}):
         raw = tag.string or tag.get_text("", strip=True)
         if not raw:
@@ -502,27 +512,49 @@ def _structured_product_image(soup: BeautifulSoup, base_url: str) -> str:
                 continue
             if not isinstance(item, dict):
                 continue
+            documents.append(item)
             graph = item.get("@graph")
             if isinstance(graph, list):
                 queue.extend(graph)
 
-            item_type = item.get("@type")
-            types = set(item_type if isinstance(item_type, list) else [item_type])
-            if not ({"Product", "IndividualProduct"} & types):
-                continue
+    graph_by_id = {
+        str(item.get("@id")).strip(): item
+        for item in documents
+        if str(item.get("@id") or "").strip()
+    }
 
-            image = item.get("image")
-            candidates = image if isinstance(image, list) else [image]
-            for candidate in candidates:
-                if isinstance(candidate, dict):
-                    candidate = candidate.get("url") or candidate.get("contentUrl")
-                value = str(candidate or "").strip()
-                if not value:
-                    continue
-                resolved = urljoin(base_url, value)
-                parsed = urlparse(resolved)
-                if parsed.scheme == "https" and parsed.netloc:
-                    return resolved
+    def image_candidate(candidate) -> str:
+        if isinstance(candidate, dict):
+            direct = candidate.get("url") or candidate.get("contentUrl") or candidate.get("thumbnailUrl")
+            if direct:
+                return resolved_https(direct)
+            ref = str(candidate.get("@id") or "").strip()
+            linked = graph_by_id.get(ref)
+            if linked:
+                return resolved_https(
+                    linked.get("url") or linked.get("contentUrl") or linked.get("thumbnailUrl")
+                )
+            return ""
+        return resolved_https(candidate)
+
+    for item in documents:
+        item_type = item.get("@type")
+        types = set(item_type if isinstance(item_type, list) else [item_type])
+        if not ({"Product", "IndividualProduct"} & types):
+            continue
+
+        image = item.get("image")
+        candidates = image if isinstance(image, list) else [image]
+        for candidate in candidates:
+            resolved = image_candidate(candidate)
+            if resolved:
+                return resolved
+
+        # Some commerce templates expose these fields directly on Product.
+        for key in ("primaryImageOfPage", "thumbnailUrl"):
+            resolved = image_candidate(item.get(key))
+            if resolved:
+                return resolved
 
     for attrs in (
         {"rel": "image_src"},
@@ -531,12 +563,18 @@ def _structured_product_image(soup: BeautifulSoup, base_url: str) -> str:
         tag = soup.find(["link", "meta", "img"], attrs=attrs)
         if not tag:
             continue
-        value = str(tag.get("href") or tag.get("content") or tag.get("src") or "").strip()
-        if not value:
-            continue
-        resolved = urljoin(base_url, value)
-        parsed = urlparse(resolved)
-        if parsed.scheme == "https" and parsed.netloc:
+        value = str(
+            tag.get("href")
+            or tag.get("content")
+            or tag.get("src")
+            or tag.get("data-src")
+            or tag.get("data-original")
+            or ""
+        ).strip()
+        if not value and tag.get("srcset"):
+            value = str(tag.get("srcset")).split(",", 1)[0].strip().split(" ", 1)[0]
+        resolved = resolved_https(value)
+        if resolved:
             return resolved
     return ""
 
@@ -559,7 +597,9 @@ def find_source_page_image(obj) -> dict | None:
         discovery_method = ""
         for attrs in (
             {"property": "og:image"},
+            {"property": "og:image:secure_url"},
             {"name": "twitter:image"},
+            {"name": "twitter:image:src"},
             {"property": "twitter:image"},
         ):
             tag = soup.find("meta", attrs=attrs)
