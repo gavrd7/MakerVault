@@ -8,6 +8,8 @@
 - Added tag assignment/reassignment, retirement/reactivation and per-tag history without exposing another user's physical identities.
 - Added authenticated QR scan links, direct NFC/RFID identity resolution, duplicate identity protection and printable QR label rendering.
 - Added a responsive Maker Tags workspace with target selection, filtering, tag detail/history and dashboard status.
+- Added the first interactive project wiring workspace with structured board/component/inventory/custom nodes, draggable canvas positioning and pin-to-pin connections.
+- Wiring diagrams are owner-scoped to projects, preserve editable structured data, expose catalogue pin hints where available, reject duplicate/self connections and surface cautious shared-pin/common-ground checks.
 
 ## v0.7.1 — 2026-09-30
 
