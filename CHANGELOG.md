@@ -2,6 +2,7 @@
 
 ## v0.7.1 — in development
 
+- Fixed printer catalogue coverage reporting so remotely referenced specialist/manufacturer images count as complete just like board/component remote imagery.
 - Printer image enrichment now checks the exact OrcaSlicer machine-model cover asset before fuzzy open-media search, using stored upstream vendor/model provenance and referencing the upstream image remotely rather than copying it.
 - Started the Universal Search & Catalogue Completion milestone.
 - Added an ownership-safe universal search backend spanning projects, inventory, boards, components, files, 3D models, printers, physical spools and filament products.
