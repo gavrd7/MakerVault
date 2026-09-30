@@ -7,6 +7,7 @@ from django.test import TestCase, override_settings
 from core.catalogue_coverage import _printer_coverage
 from core.catalogue_image_sources import (
     _board_image_queries,
+    _candidate_source_pages,
     _is_computer_board,
     _page_image_candidates,
     _curated_sbc_source_page,
@@ -211,6 +212,21 @@ class CatalogueImageSourceTests(unittest.TestCase):
             _structured_product_image(soup, "https://vendor.example/product"),
             "https://vendor.example/media/linked-widget.jpg",
         )
+
+    def test_printer_source_page_participates_in_shared_authoritative_resolution(self):
+        printer = SimpleNamespace(
+            name="P1S",
+            manufacturer=SimpleNamespace(name="Bambu Lab"),
+            features={},
+            source_url="https://bambulab.com/en/p1",
+            source=None,
+        )
+
+        pages = _candidate_source_pages(printer)
+
+        self.assertEqual(pages[0]["url"], "https://bambulab.com/en/p1")
+        self.assertEqual(pages[0]["source_type"], "manufacturer")
+        self.assertEqual(pages[0]["provider"], "Bambu Lab official")
 
     def test_curated_sbc_source_mapping_is_exact(self):
         manufacturer = SimpleNamespace(name="NVIDIA")
