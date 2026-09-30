@@ -68,14 +68,14 @@ export default function BoardsPage({ boards, setBoards, components, projects, co
 
   const manufacturers = useMemo(() => [...new Set(boards.map(b => b.manufacturer).filter(Boolean))].sort(), [boards]);
   const families = useMemo(() => [...new Set(boards.map(b => b.family).filter(Boolean))].sort(), [boards]);
-  const boardTypes = useMemo(() => [...new Set(boards.map(b => b.specifications?.board_type).filter(Boolean))].sort(), [boards]);
+  const boardTypes = useMemo(() => [...new Set(boards.map(b => b.board_type || b.specifications?.board_type).filter(Boolean))].sort(), [boards]);
   const boardTypeLabel = value => ({ microcontroller: "Microcontroller", sbc: "Single-board computer", compute_module: "Compute module / SoM" }[value] || value);
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return boards.filter(board =>
       (!manufacturer || board.manufacturer === manufacturer)
       && (!family || board.family === family)
-      && (!boardType || board.specifications?.board_type === boardType)
+      && (!boardType || (board.board_type || board.specifications?.board_type) === boardType)
       && (!q || [board.name, board.manufacturer, board.family, board.mcu, board.variant].join(" ").toLowerCase().includes(q))
     );
   }, [boards, query, manufacturer, family, boardType]);
@@ -84,7 +84,7 @@ export default function BoardsPage({ boards, setBoards, components, projects, co
     { headerName: "", field: "image", width: 72, sortable: false, filter: false, cellRenderer: p => <BoardImage src={p.value} alt={p.data?.name || ""} size="tiny" /> },
     { field: "manufacturer", minWidth: 150 },
     { field: "name", headerName: "Board", minWidth: 230, flex: 1 },
-    { headerName: "Type", minWidth: 155, valueGetter: p => boardTypeLabel(p.data?.specifications?.board_type || "microcontroller") },
+    { headerName: "Type", minWidth: 155, valueGetter: p => boardTypeLabel(p.data?.board_type || p.data?.specifications?.board_type || "microcontroller") },
     { field: "family", minWidth: 125 },
     { field: "mcu", headerName: "Processor / MCU", minWidth: 155 },
     { field: "flash_mb", headerName: "Flash", width: 105, valueFormatter: p => formatMemoryMb(p.value) },
