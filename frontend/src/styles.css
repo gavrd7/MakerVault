@@ -1766,10 +1766,29 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
   .searchFilters{position:static;grid-template-columns:1fr 1fr}
 }
 @media(max-width:620px){
+  .searchHero{padding:18px}
+  .searchHero h2{font-size:24px}
   .searchFilters{grid-template-columns:1fr}
   .searchResultCard{grid-template-columns:1fr;gap:8px}
-  .searchResultMeta{text-align:left;grid-template-columns:auto auto 1fr;align-items:center}
+  .searchResultMeta{text-align:left;grid-template-columns:minmax(0,auto) auto 1fr;align-items:center}
   .searchOpenArrow{justify-self:end}
+}
+.searchTargetRow{
+  scroll-margin-block:96px;
+  box-shadow:0 0 0 2px rgba(128,105,238,.72),0 10px 28px rgba(0,0,0,.22)!important;
+  background:#17172a!important;
+  animation:searchTargetPulse .7s ease-out;
+}
+@keyframes searchTargetPulse{
+  from{box-shadow:0 0 0 5px rgba(128,105,238,.35),0 10px 28px rgba(0,0,0,.22)}
+  to{box-shadow:0 0 0 2px rgba(128,105,238,.72),0 10px 28px rgba(0,0,0,.22)}
+}
+@media(prefers-reduced-motion:reduce){.searchTargetRow{animation:none}}
+@media(max-width:900px){
+  .globalSearchPopover{
+    top:calc(env(safe-area-inset-top,0px) + 64px);
+    max-height:calc(100dvh - env(safe-area-inset-top,0px) - 84px);
+  }
 }
 
 
