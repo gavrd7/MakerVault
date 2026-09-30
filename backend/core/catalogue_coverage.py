@@ -155,11 +155,18 @@ def _printer_coverage() -> dict:
     samples = []
 
     def has_base_image(row):
-        return bool(row.image or (row.features or {}).get("official_image_url"))
+        metadata = row.image_metadata or {}
+        return bool(
+            row.image
+            or metadata.get("external_image_url")
+            or (row.features or {}).get("official_image_url")
+        )
 
     def has_multi_material_image(row):
+        metadata = row.image_multi_material_metadata or {}
         return bool(
             row.image_multi_material
+            or metadata.get("external_image_url")
             or (row.features or {}).get("official_image_multi_material_url")
         )
 
