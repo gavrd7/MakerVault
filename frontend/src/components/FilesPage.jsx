@@ -37,7 +37,7 @@ function inferFileCategory(filename) {
   return "other";
 }
 
-export default function FilesPage({ projects, onOpenProject, config, initialSearch = "", searchToken = null }) {
+export default function FilesPage({ projects, onOpenProject, config, searchTarget = null }) {
   const [rows, setRows] = useState([]);
   const [categories, setCategories] = useState([]);
   const [search, setSearch] = useState("");
@@ -51,8 +51,24 @@ export default function FilesPage({ projects, onOpenProject, config, initialSear
   const [viewerFile, setViewerFile] = useState(null);
 
   useEffect(() => {
-    if (initialSearch) setSearch(initialSearch);
-  }, [initialSearch, searchToken]);
+    if (searchTarget?.type !== "files" || !searchTarget.id) return;
+    // Clear local filters so an exact universal-search target cannot be hidden
+    // by stale Files workspace state from an earlier visit.
+    setSearch("");
+    setCategory("");
+    setProjectId("");
+  }, [searchTarget?.token, searchTarget?.id]);
+
+  useEffect(() => {
+    if (loading || searchTarget?.type !== "files" || !searchTarget.id) return;
+    const timer = window.setTimeout(() => {
+      document.getElementById("file-search-target-" + searchTarget.id)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loading, rows.length, searchTarget?.token, searchTarget?.id]);
 
   async function load() {
     setLoading(true);
@@ -133,7 +149,7 @@ export default function FilesPage({ projects, onOpenProject, config, initialSear
         {groups.map(group => <section className="filesCategory" key={group.value}>
           <div className="filesCategoryHead"><div><h3>{group.label}</h3><p>{group.rows.length} {group.rows.length === 1 ? "asset" : "assets"}</p></div><Badge>{group.value}</Badge></div>
           <div className="filesRows">
-            {group.rows.map(file => <article className="filesRow" key={file.id}>
+            {group.rows.map(file => <article className={"filesRow" + (searchTarget?.id === file.id ? " searchTargetRow" : "")} id={"file-search-target-" + file.id} key={file.id}>
               {isViewableModelFile(file)
                 ? <button className="modelThumbnailButton" type="button" onClick={() => setViewerFile(file)} title={"View " + file.filename}><ModelThumbnail file={file} /></button>
                 : <div className="projectFileBadge">{(file.filename?.split(".").pop() || "FILE").slice(0,5).toUpperCase()}</div>}
