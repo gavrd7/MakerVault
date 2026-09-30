@@ -12,6 +12,7 @@ from core.catalogue_image_sources import (
     _printer_image_queries,
     _printer_multi_material_image_queries,
     _structured_product_image,
+    find_orcaslicer_printer_cover,
     find_source_page_image,
     run_catalogue_image_seed,
     search_openverse,
@@ -283,6 +284,32 @@ class CatalogueImageSourceTests(unittest.TestCase):
         self.assertEqual(queries[0], "Creality K2 Combo 3D printer")
         self.assertIn("Creality K2 Creality CFS 3D printer", queries)
 
+    @patch("core.catalogue_image_sources.requests.get")
+    def test_orcaslicer_cover_uses_exact_profile_asset_without_caching(self, get):
+        response = Mock()
+        response.status_code = 200
+        response.headers = {"Content-Type": "image/png"}
+        get.return_value = response
+
+        printer = DummyPrinterModel()
+        printer.features = {
+            "orcaslicer": {
+                "ref": "main",
+                "vendor_file": "Creality.json",
+                "upstream_name": "Creality K2",
+            }
+        }
+
+        found = find_orcaslicer_printer_cover(printer)
+        self.assertEqual(
+            found["external_image_url"],
+            "https://raw.githubusercontent.com/OrcaSlicer/OrcaSlicer/main/resources/profiles/Creality/Creality%20K2_cover.png",
+        )
+        self.assertEqual(found["image_source_provider"], "OrcaSlicer")
+        self.assertEqual(found["image_source_discovery"], "exact-profile-cover")
+        self.assertEqual(found["image_source_tier"], "specialist")
+        response.close.assert_called_once()
+
     def test_openverse_license_mapping_is_restrictive(self):
         self.assertEqual(_openverse_license_name("by", "4.0"), "CC BY 4.0")
         self.assertEqual(_openverse_license_name("by-sa", "4.0"), "CC BY-SA 4.0")
@@ -374,6 +401,65 @@ class CatalogueImagePriorityTests(TestCase):
         cache_candidate.assert_called_once()
         cached_obj = cache_candidate.call_args.args[0]
         self.assertEqual(cached_obj.pk, self.printer.pk)
+        cache_add.assert_called_once()
+        cache_delete.assert_called_once()
+
+    @override_settings(
+        CATALOGUE_IMAGE_MAX_PER_RUN=1,
+        CATALOGUE_IMAGE_RETRY_DAYS=1,
+        CATALOGUE_IMAGE_WIKIMEDIA=True,
+        CATALOGUE_IMAGE_OPENVERSE=True,
+    )
+    @patch("core.catalogue_image_sources.cache.delete")
+    @patch("core.catalogue_image_sources.cache.add", return_value=True)
+    @patch("core.catalogue_image_sources._search_open_media_with_diagnostics")
+    @patch("core.catalogue_image_sources.find_orcaslicer_printer_cover")
+    def test_exact_orcaslicer_cover_precedes_fuzzy_open_media(
+        self,
+        cover,
+        search,
+        cache_add,
+        cache_delete,
+    ):
+        self.printer.features = {
+            "orcaslicer": {
+                "ref": "main",
+                "vendor_file": "Image Test Printers.json",
+                "upstream_name": "Image Test Printers Exact Model 42",
+            }
+        }
+        self.printer.save(update_fields=["features", "updated_at"])
+        cover.return_value = {
+            "external_image_url": "https://raw.githubusercontent.com/example/cover.png",
+            "image_source_page": "https://github.com/example/cover.png",
+            "image_source_provider": "OrcaSlicer",
+            "image_source_type": "orcaslicer-cover-remote",
+            "image_source_discovery": "exact-profile-cover",
+            "image_source_tier": "specialist",
+            "image_source_priority": 30,
+            "image_license": "",
+            "image_author": "",
+        }
+
+        result = run_catalogue_image_seed(
+            limit=1,
+            force_retry=True,
+            kinds=["printers"],
+        )
+
+        self.assertEqual(result["remote"], 1)
+        self.assertEqual(result["by_kind"]["printers"]["remote"], 1)
+        self.assertEqual(result["by_provider"]["OrcaSlicer"], 1)
+        search.assert_not_called()
+        self.printer.refresh_from_db()
+        self.assertEqual(
+            self.printer.image_metadata["external_image_url"],
+            "https://raw.githubusercontent.com/example/cover.png",
+        )
+        self.assertEqual(
+            self.printer.image_metadata["source_trace"][-1]["tier"],
+            "specialist",
+        )
         cache_add.assert_called_once()
         cache_delete.assert_called_once()
 
