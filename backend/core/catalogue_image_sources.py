@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -29,7 +30,7 @@ from .importers import ImporterError, fetch_import_html
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 OPENVERSE_API = "https://api.openverse.org/v1/images/"
-IMAGE_SEED_VERSION = "0.7.1-board-component-sources-1"
+IMAGE_SEED_VERSION = "0.7.1-structured-source-images-1"
 USER_AGENT = f"MakerVault/{getattr(settings, 'MAKERVAULT_VERSION', 'dev')} (+self-hosted catalogue image seeder)"
 def _commons_license_allowed(license_name: str) -> bool:
     """Allow only licences suitable for normal open redistribution."""
@@ -478,6 +479,68 @@ def _candidate_source_pages(obj) -> list[dict]:
     return ordered_source_candidates(candidates)[:6]
 
 
+def _structured_product_image(soup: BeautifulSoup, base_url: str) -> str:
+    """Extract a product image from structured page metadata.
+
+    Source-page images remain remote references; this helper only discovers
+    already-published HTTPS image URLs and does not cache them.
+    """
+    for tag in soup.find_all("script", attrs={"type": "application/ld+json"}):
+        raw = tag.string or tag.get_text("", strip=True)
+        if not raw:
+            continue
+        try:
+            payload = json.loads(raw)
+        except (TypeError, ValueError):
+            continue
+
+        queue = payload if isinstance(payload, list) else [payload]
+        while queue:
+            item = queue.pop(0)
+            if isinstance(item, list):
+                queue.extend(item)
+                continue
+            if not isinstance(item, dict):
+                continue
+            graph = item.get("@graph")
+            if isinstance(graph, list):
+                queue.extend(graph)
+
+            item_type = item.get("@type")
+            types = set(item_type if isinstance(item_type, list) else [item_type])
+            if not ({"Product", "IndividualProduct"} & types):
+                continue
+
+            image = item.get("image")
+            candidates = image if isinstance(image, list) else [image]
+            for candidate in candidates:
+                if isinstance(candidate, dict):
+                    candidate = candidate.get("url") or candidate.get("contentUrl")
+                value = str(candidate or "").strip()
+                if not value:
+                    continue
+                resolved = urljoin(base_url, value)
+                parsed = urlparse(resolved)
+                if parsed.scheme == "https" and parsed.netloc:
+                    return resolved
+
+    for attrs in (
+        {"rel": "image_src"},
+        {"itemprop": "image"},
+    ):
+        tag = soup.find(["link", "meta", "img"], attrs=attrs)
+        if not tag:
+            continue
+        value = str(tag.get("href") or tag.get("content") or tag.get("src") or "").strip()
+        if not value:
+            continue
+        resolved = urljoin(base_url, value)
+        parsed = urlparse(resolved)
+        if parsed.scheme == "https" and parsed.netloc:
+            return resolved
+    return ""
+
+
 def find_source_page_image(obj) -> dict | None:
     """Find a remote product image from an already-known catalogue source page.
 
@@ -493,6 +556,7 @@ def find_source_page_image(obj) -> dict | None:
             continue
         soup = BeautifulSoup(html, "html.parser")
         image_url = ""
+        discovery_method = ""
         for attrs in (
             {"property": "og:image"},
             {"name": "twitter:image"},
@@ -501,7 +565,12 @@ def find_source_page_image(obj) -> dict | None:
             tag = soup.find("meta", attrs=attrs)
             if tag and str(tag.get("content") or "").strip():
                 image_url = str(tag.get("content") or "").strip()
+                discovery_method = "meta"
                 break
+        if not image_url:
+            image_url = _structured_product_image(soup, final_url)
+            if image_url:
+                discovery_method = "structured"
         if not image_url:
             continue
         image_url = urljoin(final_url, image_url)
@@ -514,6 +583,7 @@ def find_source_page_image(obj) -> dict | None:
             "image_source_page": final_url,
             "image_source_provider": source.get("provider") or urlparse(final_url).netloc.removeprefix("www."),
             "image_source_type": "source-page-remote",
+            "image_source_discovery": discovery_method,
             "image_source_tier": tier.key,
             "image_source_priority": tier.priority,
             "image_license": "",
