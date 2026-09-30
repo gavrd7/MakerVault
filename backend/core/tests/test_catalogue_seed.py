@@ -14,6 +14,22 @@ class CatalogueSeedTests(unittest.TestCase):
         self.assertTrue(expected.issubset(manufacturers))
         self.assertGreaterEqual(len(BOARD_DEFINITIONS), 65)
 
+    def test_catalogue_covers_sbc_and_compute_module_ecosystems(self):
+        manufacturers = {item["manufacturer"] for item in BOARD_DEFINITIONS}
+        expected = {"Orange Pi", "Hardkernel", "Radxa", "Banana Pi", "BeagleBoard.org", "LattePanda", "NVIDIA", "Khadas"}
+        self.assertTrue(expected.issubset(manufacturers))
+        board_types = {item.get("specifications", {}).get("board_type") for item in BOARD_DEFINITIONS}
+        self.assertTrue({"microcontroller", "sbc", "compute_module"}.issubset(board_types))
+        self.assertTrue(any(item["name"] == "Raspberry Pi 5" and item["specifications"]["board_type"] == "sbc" for item in BOARD_DEFINITIONS))
+        self.assertTrue(any(item["name"] == "Jetson Orin NX 16GB" and item["specifications"]["board_type"] == "compute_module" for item in BOARD_DEFINITIONS))
+
+    def test_expansion_boards_are_components_with_host_metadata(self):
+        expansions = [item for item in COMPONENT_DEFINITIONS if item["category"] == "Expansion Boards"]
+        self.assertGreaterEqual(len(expansions), 15)
+        self.assertTrue(all(item["specifications"].get("host_family") for item in expansions))
+        types = {item["specifications"].get("type") for item in expansions}
+        self.assertTrue({"hat", "shield", "featherwing"}.issubset(types))
+
     def test_component_catalogue_is_substantial(self):
         self.assertGreaterEqual(len(COMPONENT_DEFINITIONS), 350)
         categories = {item["category"] for item in COMPONENT_DEFINITIONS}
