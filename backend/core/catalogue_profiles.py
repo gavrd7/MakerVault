@@ -883,7 +883,14 @@ COMPONENT_PART_PROFILES = {
         "reference_provider": "Analog Devices",
         "reference_url": "https://www.analog.com/en/products/ds3231.html",
     },
-    "PCA9685": {"function": "16-channel 12-bit PWM controller", "channels": 16, "resolution": "12-bit"},
+    "PCA9685": {
+        "function": "16-channel 12-bit PWM controller",
+        "channels": 16,
+        "resolution": "12-bit",
+        "interface": "I2C",
+        "reference_provider": "NXP",
+        "reference_url": "https://www.nxp.com/products/power-management/lighting-driver-and-controller-ics/led-drivers/16-channel-12-bit-pwm-fm-plus-ic-bus-led-driver%3APCA9685",
+    },
     "TMC2209": {
         "function": "Silent stepper motor driver",
         "interface": "Step/Dir/UART",
@@ -899,6 +906,63 @@ COMPONENT_PART_PROFILES = {
     "HC-SR04": {"function": "Ultrasonic ranging module", "typical_range": "2–400 cm"},
     "HC-SR501": {"function": "PIR motion detector module"},
     "LD2410B": {"function": "24 GHz mmWave presence sensor", "frequency": "24 GHz"},
+    "BME680": {
+        "function": "Temperature, humidity, pressure and gas sensor",
+        "interface": "I2C/SPI",
+        "reference_provider": "Bosch Sensortec",
+        "reference_url": "https://www.bosch-sensortec.com/en/products/environmental-sensors/gas-sensors/bme680",
+    },
+    "BME688": {
+        "function": "Temperature, humidity, pressure and AI-capable gas sensor",
+        "interface": "I2C/SPI",
+        "reference_provider": "Bosch Sensortec",
+        "reference_url": "https://www.bosch-sensortec.com/products/environmental-sensors/gas-sensors/bme688/",
+    },
+    "BMP388": {
+        "function": "Precision absolute barometric pressure sensor",
+        "interface": "I2C/SPI",
+        "reference_provider": "Bosch Sensortec",
+        "reference_url": "https://www.bosch-sensortec.com/products/environmental-sensors/pressure-sensors/bmp388/",
+    },
+    "BNO055": {
+        "function": "9-axis absolute-orientation sensor with integrated sensor fusion",
+        "interface": "I2C/UART",
+        "reference_provider": "Bosch Sensortec",
+        "reference_url": "https://www.bosch-sensortec.com/products/smart-sensors/bno055/",
+    },
+    "MCP23017": {
+        "function": "16-bit general-purpose I/O expander",
+        "interface": "I2C",
+        "channels": 16,
+        "supply_voltage": "1.8–5.5 V",
+        "reference_provider": "Microchip",
+        "reference_url": "https://www.microchip.com/en-us/product/mcp23017",
+    },
+    "DS18B20": {
+        "function": "Programmable-resolution digital temperature sensor",
+        "interface": "1-Wire",
+        "temperature_range": "-55–125 °C",
+        "resolution": "9–12 bit",
+        "reference_provider": "Analog Devices",
+        "reference_url": "https://www.analog.com/en/products/ds18b20.html",
+    },
+    "NE555": {
+        "function": "Single precision timer",
+        "reference_provider": "Texas Instruments",
+        "reference_url": "https://www.ti.com/product/NE555",
+    },
+    "LM358": {
+        "function": "Dual operational amplifier",
+        "channels": 2,
+        "reference_provider": "Texas Instruments",
+        "reference_url": "https://www.ti.com/product/LM358",
+    },
+    "LM393": {
+        "function": "Dual differential comparator",
+        "channels": 2,
+        "reference_provider": "Texas Instruments",
+        "reference_url": "https://www.ti.com/product/LM393",
+    },
 }
 
 
