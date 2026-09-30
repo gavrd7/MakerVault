@@ -276,7 +276,7 @@ function WiringEditor({ project, diagram, boards, components, inventory, canChan
 
   return <div className="wiringEditorBackdrop">
     <section className="wiringEditor">
-      <header className="wiringEditorHeader">
+      <div className="wiringEditorHeader">
         <div>
           <span className="settingsEyebrow">Interactive wiring · {project.name}</span>
           <input className="wiringTitleInput" value={draft.name} disabled={!canChange} onChange={e => { setDraft(current => ({ ...current, name: e.target.value })); setDirty(true); }} />
@@ -287,7 +287,7 @@ function WiringEditor({ project, diagram, boards, components, inventory, canChan
           {canChange && <button className="primary" disabled={busy || !dirty} onClick={save}>{busy ? "Saving…" : "Save"}</button>}
           <button onClick={close}>Close</button>
         </div>
-      </header>
+      </div>
 
       {error && <div className="wiringEditorError formError">{error}</div>}
 
@@ -325,7 +325,7 @@ function WiringEditor({ project, diagram, boards, components, inventory, canChan
           </section>
         </aside>
 
-        <main className="wiringWorkspace">
+        <div className="wiringWorkspace">
           {(draft.warnings || []).length > 0 && <div className="wiringWarnings">
             {(draft.warnings || []).map((warning, index) => <div key={warning.code + index}><strong>Check</strong><span>{warning.message}</span></div>)}
           </div>}
@@ -373,7 +373,7 @@ function WiringEditor({ project, diagram, boards, components, inventory, canChan
             </div>)}
             {!draft.connections.length && <p className="muted">No pin-to-pin connections yet.</p>}
           </section>
-        </main>
+        </div>
       </div>
     </section>
   </div>;
