@@ -128,6 +128,39 @@ class CatalogueProfileTests(unittest.TestCase):
                 self.assertEqual(result["specifications"]["reference_provider"], provider)
                 self.assertTrue(result["specifications"]["reference_url"].startswith("https://"))
 
+    def test_generic_component_description_uses_structured_specs_without_fake_source(self):
+        result = apply_component_profile({
+            "category": "Controls",
+            "name": "100k potentiometer",
+            "part_number": "",
+            "description": "",
+            "specifications": {
+                "type": "potentiometer",
+                "value": "100 kΩ",
+                "interface": "analog",
+            },
+        })
+        self.assertEqual(
+            result["description"],
+            "Variable resistor control with 100 kΩ, analog interface.",
+        )
+        self.assertNotIn("reference_url", result["specifications"])
+        self.assertNotIn("reference_provider", result["specifications"])
+
+    def test_named_component_prefers_profile_function_over_generic_description(self):
+        result = apply_component_profile({
+            "category": "Sensors",
+            "name": "BME280 temperature/humidity/pressure sensor",
+            "part_number": "BME280",
+            "description": "",
+            "specifications": {"type": "environment", "interface": "I2C/SPI"},
+        })
+        self.assertEqual(
+            result["description"],
+            "Temperature, humidity and pressure sensor.",
+        )
+        self.assertEqual(result["specifications"]["reference_provider"], "Bosch Sensortec")
+
     def test_component_profile_adds_official_reference_and_description(self):
         result = apply_component_profile({
             "name": "BME280 temperature/humidity/pressure sensor",
