@@ -81,6 +81,15 @@ KNOWN_MANUFACTURER_HOST_SUFFIXES = {
     "lattepanda.com",
     "nvidia.com",
     "khadas.com",
+    "creality.com",
+    "bambulab.com",
+    "prusa3d.com",
+    "anycubic.com",
+    "flashforge.com",
+    "elegoo.com",
+    "qidi3d.com",
+    "sovol3d.com",
+    "snapmaker.com",
 }
 
 
