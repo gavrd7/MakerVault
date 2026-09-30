@@ -114,6 +114,8 @@ This file tracks completed MakerVault milestones and the planned path toward a s
 
 ### v0.7.2 — Maker Tags & interactive wiring
 
+**In development:** Maker Tags identity, assignment/history APIs and the first responsive management/scan UI are implemented on the milestone branch. Interactive wiring is the next workstream in this milestone.
+
 **Goal:** connect physical objects to MakerVault and add a maker-friendly structured wiring workspace.
 
 #### Maker Tags — QR / NFC
