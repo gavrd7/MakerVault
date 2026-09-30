@@ -7,6 +7,7 @@ from core.catalogue_coverage import _printer_coverage
 from core.catalogue_image_sources import (
     _board_image_queries,
     _is_computer_board,
+    _page_image_candidates,
     _commons_license_allowed,
     _component_image_queries,
     _espboards_slug_candidates,
@@ -207,6 +208,30 @@ class CatalogueImageSourceTests(unittest.TestCase):
             _structured_product_image(soup, "https://vendor.example/product"),
             "https://vendor.example/media/linked-widget.jpg",
         )
+
+    def test_page_image_candidates_prefer_structured_product_image(self):
+        html = """
+        <html><head>
+          <meta property="og:image" content="/social-card.jpg">
+          <script type="application/ld+json">
+            {"@type":"Product","name":"Board","image":"/product-board.jpg"}
+          </script>
+        </head></html>
+        """
+        soup = __import__("bs4").BeautifulSoup(html, "html.parser")
+        candidates = _page_image_candidates(soup, "https://vendor.example/board")
+        self.assertEqual(candidates[0], ("https://vendor.example/product-board.jpg", "structured"))
+
+    def test_page_image_candidates_support_documentation_page_images(self):
+        html = """
+        <html><body>
+          <img src="/logo.png" alt="Vendor logo">
+          <img data-src="/images/board-front.webp" alt="Example Board front view">
+        </body></html>
+        """
+        soup = __import__("bs4").BeautifulSoup(html, "html.parser")
+        candidates = _page_image_candidates(soup, "https://docs.vendor.example/boards/example")
+        self.assertEqual(candidates[0], ("https://docs.vendor.example/images/board-front.webp", "page-image"))
 
     @patch("core.catalogue_image_sources.fetch_import_html")
     def test_source_page_remote_image_supports_secure_opengraph_variant(self, fetch_html):
