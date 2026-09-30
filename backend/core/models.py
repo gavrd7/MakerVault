@@ -1120,3 +1120,48 @@ class MakerTagEvent(TimeStampedModel):
 
     def __str__(self):
         return f"{self.tag} — {self.get_event_type_display()}"
+
+
+class WiringDiagram(TimeStampedModel):
+    """Owner-scoped structured wiring workspace attached to a project."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="makervault_wiring_diagrams",
+    )
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name="wiring_diagrams",
+    )
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    nodes = models.JSONField(default=list, blank=True)
+    connections = models.JSONField(default=list, blank=True)
+    canvas = models.JSONField(default=dict, blank=True)
+    revision = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        ordering = ["name", "-updated_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["project", "name"],
+                name="uniq_wiring_diagram_name_per_project",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.project_id and self.owner_id and self.project.owner_id != self.owner_id:
+            raise ValidationError({"project": "Selected project belongs to a different user."})
+        if not isinstance(self.nodes, list):
+            raise ValidationError({"nodes": "Wiring nodes must be stored as a list."})
+        if not isinstance(self.connections, list):
+            raise ValidationError({"connections": "Wiring connections must be stored as a list."})
+        if not isinstance(self.canvas, dict):
+            raise ValidationError({"canvas": "Wiring canvas settings must be stored as an object."})
+
+    def __str__(self):
+        return f"{self.project} — {self.name}"
