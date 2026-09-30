@@ -12,6 +12,7 @@
 - Wiring diagrams are owner-scoped to projects, preserve editable structured data, expose catalogue pin hints where available, reject duplicate/self connections and surface cautious shared-pin/common-ground checks.
 - Added portable JSON export and SVG wiring snapshots, plus direct navigation from scanned Maker Tags to their tagged MakerVault records.
 - Added rule-based electrical sanity checks for interactive wiring: ground/power conflicts, catalogue-backed voltage range checks, UART/I²C/SPI direction mistakes, output-to-output warnings, per-connection validation state and visual error/warning highlighting. Unknown catalogue data remains explicitly unvalidated rather than guessed.
+- Refined the wiring editor from live testing: catalogue pins are visible on nodes, used pins are highlighted, wire labels show endpoint pins on the canvas, connections can be edited in place, the lower connection list scrolls correctly, and obvious typed power labels such as GND/5V are checked even when a catalogue pinout is incomplete.
 
 ## v0.7.1 — 2026-09-30
 
