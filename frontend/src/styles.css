@@ -2057,3 +2057,6 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
 .wiringLineSubLabel{fill:#94a1b2;font-size:8px}
 .wiringConnectionFormActions{display:flex;gap:7px}
 .wiringConnectionFormActions button{flex:1}
+
+.wiringPinInput select{min-width:0}
+.wiringPinInput small{color:#718096;font-size:10px;line-height:1.35}
