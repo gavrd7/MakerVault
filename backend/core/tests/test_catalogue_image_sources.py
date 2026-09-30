@@ -223,6 +223,24 @@ class CatalogueImageSourceTests(unittest.TestCase):
             "https://docs.nvidia.com/jetson/orin-nano-devkit/user-guide/latest/",
         )
 
+    def test_curated_sbc_source_mappings_cover_major_vendor_families(self):
+        cases = [
+            ("Banana Pi", "BPI-M5", "https://www.banana-pi.org/en/banana-pi-sbcs/55.html"),
+            ("BeagleBoard.org", "BeagleY-AI", "https://docs.beagleboard.org/latest/boards/beagley/ai/01-introduction.html"),
+            ("Hardkernel", "ODROID-C5", "https://www.hardkernel.com/shop/odroid-c5/"),
+            ("LattePanda", "LattePanda Mu", "https://www.lattepanda.com/lattepanda-mu"),
+            ("Khadas", "VIM4", "https://www.khadas.com/vim4"),
+            ("Radxa", "ROCK 5B", "https://docs.radxa.com/en/rock5/rock5b/getting-started/introduction"),
+        ]
+        for manufacturer_name, board_name, expected in cases:
+            with self.subTest(board=board_name):
+                board = SimpleNamespace(
+                    name=board_name,
+                    manufacturer=SimpleNamespace(name=manufacturer_name),
+                    specifications={"board_type": "sbc"},
+                )
+                self.assertEqual(_curated_sbc_source_page(board), expected)
+
     def test_curated_sbc_source_mapping_ignores_microcontrollers(self):
         manufacturer = SimpleNamespace(name="NVIDIA")
         board = SimpleNamespace(
