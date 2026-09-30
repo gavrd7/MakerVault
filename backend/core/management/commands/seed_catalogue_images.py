@@ -12,6 +12,12 @@ class Command(BaseCommand):
         parser.add_argument("--limit", type=int, default=None, help="Maximum records to attempt in this run.")
         parser.add_argument("--force-retry", action="store_true", help="Retry records attempted recently.")
         parser.add_argument(
+            "--board-type",
+            action="append",
+            choices=["microcontroller", "sbc", "compute_module"],
+            help="When seeding boards, limit the pass to a board type. Repeat to include more than one.",
+        )
+        parser.add_argument(
             "--kind",
             action="append",
             choices=["printers", "boards", "components"],
@@ -35,6 +41,7 @@ class Command(BaseCommand):
             limit=options["limit"],
             force_retry=options["force_retry"],
             kinds=options.get("kind") or None,
+            board_types=options.get("board_type") or None,
         )
         self.stdout.write(
             self.style.SUCCESS(
