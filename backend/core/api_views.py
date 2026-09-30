@@ -667,6 +667,9 @@ def _serialise_board(board, detailed=False):
         # Include it in catalogue rows so a newly-added node can offer pin choices
         # immediately, before the diagram's first save/reload.
         "pinout": board.pinout,
+        # Board type is needed by the catalogue list/filter and wiring picker.
+        # Avoid shipping the full specifications object for every catalogue row.
+        "board_type": (board.specifications or {}).get("board_type", "microcontroller"),
     }
     if detailed:
         data.update({
