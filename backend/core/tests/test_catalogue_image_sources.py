@@ -263,6 +263,26 @@ class CatalogueImageSourceTests(unittest.TestCase):
         candidates = _page_image_candidates(soup, "https://vendor.example/board")
         self.assertEqual(candidates[0], ("https://vendor.example/product-board.jpg", "structured"))
 
+    @patch("core.catalogue_image_sources.fetch_import_html")
+    @patch("core.catalogue_image_sources._candidate_source_pages")
+    def test_source_page_diagnostics_record_missing_image_candidate(self, pages, fetch):
+        pages.return_value = [{
+            "url": "https://docs.example.test/board",
+            "source_type": "manufacturer",
+            "provider": "Example",
+        }]
+        fetch.return_value = (
+            "https://docs.example.test/board",
+            "<html><body><h1>Board documentation</h1></body></html>",
+        )
+        diagnostics = []
+
+        result = find_source_page_image(SimpleNamespace(), diagnostics=diagnostics)
+
+        self.assertIsNone(result)
+        self.assertEqual(diagnostics[0]["result"], "no-image-candidate")
+        self.assertEqual(diagnostics[0]["tier"], "manufacturer")
+
     def test_page_image_candidates_support_lazy_product_images(self):
         html = """
         <html><body>
