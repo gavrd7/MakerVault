@@ -6,6 +6,7 @@ from django.test import TestCase, override_settings
 from core.catalogue_coverage import _printer_coverage
 from core.catalogue_image_sources import (
     _board_image_queries,
+    _is_computer_board,
     _commons_license_allowed,
     _component_image_queries,
     _espboards_slug_candidates,
@@ -127,6 +128,14 @@ class CatalogueImageSourceTests(unittest.TestCase):
         self.assertFalse(_commons_license_allowed("CC BY-ND 4.0"))
         self.assertFalse(_commons_license_allowed("CC BY-NC-SA 4.0"))
 
+
+    def test_computer_board_detection_uses_catalogue_classification(self):
+        board = BoardModel(name="ROCK 5B", specifications={"board_type": "sbc"})
+        module = BoardModel(name="CM5", specifications={"board_type": "compute_module"})
+        mcu = BoardModel(name="Pico", specifications={"board_type": "microcontroller"})
+        self.assertTrue(_is_computer_board(board))
+        self.assertTrue(_is_computer_board(module))
+        self.assertFalse(_is_computer_board(mcu))
 
     def test_query_generation_prefers_exact_names(self):
         self.assertEqual(_board_image_queries(DummyGenericBoard())[0], "ESP32 C3 Super Mini")
