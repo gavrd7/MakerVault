@@ -73,6 +73,14 @@ KNOWN_MANUFACTURER_HOST_SUFFIXES = {
     "nxp.com",
     "bosch-sensortec.com",
     "sensirion.com",
+    "orangepi.org",
+    "hardkernel.com",
+    "radxa.com",
+    "banana-pi.org",
+    "beagleboard.org",
+    "lattepanda.com",
+    "nvidia.com",
+    "khadas.com",
 }
 
 
