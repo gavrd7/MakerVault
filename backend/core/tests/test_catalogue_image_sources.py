@@ -263,6 +263,29 @@ class CatalogueImageSourceTests(unittest.TestCase):
         candidates = _page_image_candidates(soup, "https://vendor.example/board")
         self.assertEqual(candidates[0], ("https://vendor.example/product-board.jpg", "structured"))
 
+    @patch("core.catalogue_image_sources.fetch_catalogue_source_html")
+    @patch("core.catalogue_image_sources._candidate_source_pages")
+    def test_source_page_image_uses_catalogue_source_fetcher(self, pages, fetch):
+        pages.return_value = [{
+            "url": "https://docs.beagleboard.org/latest/boards/beagleplay/index.html",
+            "source_type": "manufacturer",
+            "provider": "BeagleBoard.org",
+        }]
+        fetch.return_value = (
+            "https://docs.beagleboard.org/latest/boards/beagleplay/index.html",
+            '<html><head><meta property="og:image" content="/img/beagleplay.jpg"></head></html>',
+        )
+
+        result = find_source_page_image(SimpleNamespace())
+
+        self.assertEqual(
+            result["external_image_url"],
+            "https://docs.beagleboard.org/img/beagleplay.jpg",
+        )
+        fetch.assert_called_once_with(
+            "https://docs.beagleboard.org/latest/boards/beagleplay/index.html"
+        )
+
     @patch("core.catalogue_image_sources.fetch_import_html")
     @patch("core.catalogue_image_sources._candidate_source_pages")
     def test_source_page_diagnostics_record_missing_image_candidate(self, pages, fetch):
