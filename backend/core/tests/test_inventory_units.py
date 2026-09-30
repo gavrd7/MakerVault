@@ -43,6 +43,26 @@ class InventoryUnitCreationTests(TestCase):
             4,
         )
 
+
+    def test_in_use_inventory_is_not_reported_as_free(self):
+        InventoryItem.objects.create(
+            owner=self.user,
+            inventory_id="MCU-0002",
+            item_type="board",
+            board=self.board,
+            quantity=1,
+            status="in_use",
+        )
+
+        response = self.client.get("/api/inventory/")
+
+        self.assertEqual(response.status_code, 200)
+        row = next(item for item in response.json()["rows"] if item["inventory_id"] == "MCU-0002")
+        self.assertEqual(row["quantity"], 1)
+        self.assertEqual(row["allocated_quantity"], 0)
+        self.assertEqual(row["available_quantity"], 0)
+        self.assertEqual(row["status"], "in_use")
+
     def test_custom_inventory_id_requires_single_unit(self):
         response = self.post_inventory({
             "item_type": "board",
