@@ -286,7 +286,7 @@ class CatalogueImageSourceTests(unittest.TestCase):
             "https://docs.beagleboard.org/latest/boards/beagleplay/index.html"
         )
 
-    @patch("core.catalogue_image_sources.fetch_import_html")
+    @patch("core.catalogue_image_sources.fetch_catalogue_source_html")
     @patch("core.catalogue_image_sources._candidate_source_pages")
     def test_source_page_diagnostics_record_missing_image_candidate(self, pages, fetch):
         pages.return_value = [{
@@ -348,7 +348,7 @@ class CatalogueImageSourceTests(unittest.TestCase):
         candidates = _page_image_candidates(soup, "https://docs.vendor.example/boards/example")
         self.assertEqual(candidates[0], ("https://docs.vendor.example/images/board-front.webp", "page-image"))
 
-    @patch("core.catalogue_image_sources.fetch_import_html")
+    @patch("core.catalogue_image_sources.fetch_catalogue_source_html")
     def test_source_page_remote_image_supports_secure_opengraph_variant(self, fetch_html):
         class Source:
             url = "https://vendor.example/products/widget"
@@ -366,7 +366,7 @@ class CatalogueImageSourceTests(unittest.TestCase):
         self.assertEqual(found["external_image_url"], "https://vendor.example/images/widget-secure.jpg")
         self.assertEqual(found["image_source_discovery"], "meta")
 
-    @patch("core.catalogue_image_sources.fetch_import_html")
+    @patch("core.catalogue_image_sources.fetch_catalogue_source_html")
     def test_source_page_remote_image_uses_opengraph_without_caching(self, fetch_html):
         class Source:
             url = "https://vendor.example/products/widget"
@@ -382,7 +382,7 @@ class CatalogueImageSourceTests(unittest.TestCase):
         self.assertEqual(found["image_source_provider"], "vendor.example")
         self.assertEqual(found["image_source_type"], "source-page-remote")
 
-    @patch("core.catalogue_image_sources.fetch_import_html")
+    @patch("core.catalogue_image_sources.fetch_catalogue_source_html")
     def test_source_page_remote_image_uses_structured_metadata_when_meta_missing(self, fetch_html):
         class Source:
             url = "https://vendor.example/products/widget"
@@ -400,7 +400,7 @@ class CatalogueImageSourceTests(unittest.TestCase):
         self.assertEqual(found["external_image_url"], "https://vendor.example/images/widget.jpg")
         self.assertEqual(found["image_source_discovery"], "structured")
 
-    @patch("core.catalogue_image_sources.fetch_import_html")
+    @patch("core.catalogue_image_sources.fetch_catalogue_source_html")
     def test_source_pages_try_manufacturer_before_generic(self, fetch_html):
         class Source:
             url = "https://example.net/widget"
