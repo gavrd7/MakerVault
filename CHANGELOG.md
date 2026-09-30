@@ -20,6 +20,7 @@
 - Extended the authoritative-source pass to BMP280, SHT31, SHT40, ADXL345, VL53L1X, INA226, W5500, MCP2515, MAX98357A, DS3231 and TMC2209, with manufacturer-backed references where available.
 - Added an authoritative-source coverage metric for board/component catalogues and a variant-safe Adafruit Feather ESP32-S3 profile that enriches shared physical/USB facts without guessing flash/PSRAM variant data.
 - Continued the component authority pass with manufacturer-backed profiles for BME680, BME688, BMP388, BNO055, MCP23017, PCA9685, DS18B20, NE555, LM358 and LM393.
+- Added deterministic generic-component descriptions generated from existing structured type/value/interface metadata, deliberately without inventing manufacturer provenance for generic parts.
 - Expanded curated board technical profiles for Adafruit Feather RP2040, Adafruit QT Py ESP32-C3, Arduino Leonardo and Mega 2560, and now tracks explicit USB-capability metadata in completeness reporting.
 - Removed the unused broad django-allauth `socialaccount` dependency extra after pip-audit flagged OAuthLib CVE-2026-49265; MakerVault now declares only the OIDC client dependencies it actually uses (`requests` and `PyJWT[crypto]`), preserving OpenID Connect login without the vulnerable package.
 
