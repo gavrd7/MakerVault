@@ -11,6 +11,7 @@ from core.catalogue_image_sources import (
     _openverse_license_name,
     _printer_image_queries,
     _printer_multi_material_image_queries,
+    _structured_product_image,
     find_source_page_image,
     run_catalogue_image_seed,
     search_openverse,
@@ -140,6 +141,44 @@ class CatalogueImageSourceTests(unittest.TestCase):
         self.assertIn("10k slide potentiometer linear slider", queries)
         self.assertIn("slide potentiometer electronics", queries)
 
+    def test_structured_product_image_supports_schema_org_product(self):
+        html = """
+        <html><head>
+        <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@type": "Product",
+          "name": "Example Sensor",
+          "image": ["/media/example-sensor.jpg"]
+        }
+        </script>
+        </head></html>
+        """
+        soup = __import__("bs4").BeautifulSoup(html, "html.parser")
+        self.assertEqual(
+            _structured_product_image(soup, "https://vendor.example/products/example"),
+            "https://vendor.example/media/example-sensor.jpg",
+        )
+
+    def test_structured_product_image_supports_graph_and_image_src(self):
+        graph_html = """
+        <script type="application/ld+json">
+        {"@graph":[{"@type":"Product","image":{"url":"https://cdn.example/product.webp"}}]}
+        </script>
+        """
+        soup = __import__("bs4").BeautifulSoup(graph_html, "html.parser")
+        self.assertEqual(
+            _structured_product_image(soup, "https://vendor.example/product"),
+            "https://cdn.example/product.webp",
+        )
+
+        fallback_html = '<html><head><link rel="image_src" href="/img/fallback.png"></head></html>'
+        fallback_soup = __import__("bs4").BeautifulSoup(fallback_html, "html.parser")
+        self.assertEqual(
+            _structured_product_image(fallback_soup, "https://vendor.example/product"),
+            "https://vendor.example/img/fallback.png",
+        )
+
     @patch("core.catalogue_image_sources.fetch_import_html")
     def test_source_page_remote_image_uses_opengraph_without_caching(self, fetch_html):
         class Source:
@@ -155,6 +194,24 @@ class CatalogueImageSourceTests(unittest.TestCase):
         self.assertEqual(found["external_image_url"], "https://vendor.example/media/widget.jpg")
         self.assertEqual(found["image_source_provider"], "vendor.example")
         self.assertEqual(found["image_source_type"], "source-page-remote")
+
+    @patch("core.catalogue_image_sources.fetch_import_html")
+    def test_source_page_remote_image_uses_structured_metadata_when_meta_missing(self, fetch_html):
+        class Source:
+            url = "https://vendor.example/products/widget"
+            source_type = "manufacturer"
+            name = "Vendor"
+
+        component = DummyComponent()
+        component.source = Source()
+        component.specifications = {}
+        fetch_html.return_value = (
+            "https://vendor.example/products/widget",
+            '<script type="application/ld+json">{"@type":"Product","image":"/images/widget.jpg"}</script>',
+        )
+        found = find_source_page_image(component)
+        self.assertEqual(found["external_image_url"], "https://vendor.example/images/widget.jpg")
+        self.assertEqual(found["image_source_discovery"], "structured")
 
     @patch("core.catalogue_image_sources.fetch_import_html")
     def test_source_pages_try_manufacturer_before_generic(self, fetch_html):
