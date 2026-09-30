@@ -14,7 +14,7 @@ function kindTone(kind) {
   return "neutral";
 }
 
-export default function MakerTagsPage({ config, resolveToken = "", onResolveConsumed = () => {}, onChanged = () => {} }) {
+export default function MakerTagsPage({ config, resolveToken = "", onResolveConsumed = () => {}, onChanged = () => {}, onOpenTarget = () => {} }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
@@ -193,6 +193,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
       onClose={() => setDetail(null)}
       onEdit={() => { setEditTag(detail); setDetail(null); }}
       onChanged={changed}
+      onOpenTarget={() => onOpenTarget(detail)}
     />}
   </div>;
 }
@@ -276,7 +277,7 @@ function MakerTagForm({ title, data, tag = null, onClose, onSaved }) {
   </Modal>;
 }
 
-function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged }) {
+function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged, onOpenTarget }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const qrWrap = useRef(null);
@@ -359,11 +360,12 @@ function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged }) {
       {!tag.events?.length && <p className="muted">No tag history recorded yet.</p>}
     </section>
 
-    {canEdit && <div className="formActions">
-      <button onClick={onEdit}>Edit / reassign</button>
-      {tag.status === "active"
+    <div className="formActions">
+      {tag.target && <button className="primary" onClick={onOpenTarget}>Open target</button>}
+      {canEdit && <button onClick={onEdit}>Edit / reassign</button>}
+      {canEdit && (tag.status === "active"
         ? <button className="dangerButton" disabled={busy} onClick={() => setStatus("retired")}>Retire tag</button>
-        : <button className="primary" disabled={busy} onClick={() => setStatus("active")}>Reactivate tag</button>}
-    </div>}
+        : <button className="primary" disabled={busy} onClick={() => setStatus("active")}>Reactivate tag</button>)}
+    </div>
   </Modal>;
 }
