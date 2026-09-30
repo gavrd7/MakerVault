@@ -966,6 +966,124 @@ COMPONENT_PART_PROFILES = {
 }
 
 
+GENERIC_COMPONENT_TYPE_DESCRIPTIONS = {
+    "resistor": "General-purpose resistor",
+    "capacitor": "General-purpose capacitor",
+    "diode": "Semiconductor diode",
+    "transistor": "Discrete transistor",
+    "mosfet": "MOSFET transistor",
+    "optocoupler": "Optically isolated signal coupler",
+    "regulator": "Voltage regulator",
+    "led": "Light-emitting diode",
+    "rgb-led": "RGB light-emitting diode",
+    "addressable-led": "Individually addressable LED",
+    "led-ring": "Addressable LED ring",
+    "led-matrix": "LED matrix display",
+    "led-strip": "Addressable LED strip",
+    "oled": "OLED display module",
+    "tft": "TFT display module",
+    "round-tft": "Round TFT display module",
+    "character-lcd": "Character LCD module",
+    "e-paper": "E-paper display module",
+    "environment": "Environmental sensor module",
+    "temperature": "Temperature sensor",
+    "light": "Light sensor",
+    "imu": "Inertial measurement sensor",
+    "accelerometer": "Accelerometer sensor",
+    "distance": "Distance sensor",
+    "motion": "Motion sensor",
+    "presence": "Presence sensor",
+    "magnetic": "Magnetic sensor",
+    "current": "Current-sensing module",
+    "adc": "Analog-to-digital converter module",
+    "bluetooth": "Bluetooth communication module",
+    "2.4ghz-radio": "2.4 GHz radio module",
+    "lora": "LoRa radio module",
+    "ethernet": "Ethernet communication module",
+    "can": "CAN bus controller module",
+    "can-transceiver": "CAN bus transceiver module",
+    "rs485": "RS-485 transceiver module",
+    "rfid": "RFID reader module",
+    "nfc": "NFC/RFID interface module",
+    "usb-serial": "USB-to-serial interface module",
+    "microphone": "Microphone module",
+    "amplifier": "Audio amplifier module",
+    "audio-player": "Embedded audio playback module",
+    "buzzer": "Electronic buzzer",
+    "speaker": "Compact loudspeaker",
+    "rotary-encoder": "Rotary encoder input control",
+    "button": "Momentary push-button control",
+    "switch": "Mechanical switch",
+    "microswitch": "Mechanical microswitch",
+    "limit-switch": "Mechanical limit switch",
+    "dip-switch": "DIP switch bank",
+    "potentiometer": "Variable resistor control",
+    "trimmer": "Trimmer potentiometer",
+    "joystick": "Analog joystick input module",
+    "keypad": "Matrix keypad",
+    "touch": "Capacitive touch input module",
+    "buck": "DC-DC step-down converter module",
+    "boost": "DC-DC step-up converter module",
+    "battery-charger": "Battery charging module",
+    "bms": "Battery protection / management module",
+    "usb-pd": "USB Power Delivery trigger module",
+    "power-connector": "Power connector",
+    "relay": "Electromechanical relay module",
+    "solid-state-relay": "Solid-state relay",
+    "mosfet-switch": "MOSFET switching module",
+    "level-shifter": "Logic-level shifting module",
+    "shift-register": "Digital shift register",
+    "gpio-expander": "GPIO expansion device",
+    "breadboard": "Solderless prototyping breadboard",
+    "perfboard": "Solderable prototyping board",
+    "header": "Pin header connector",
+    "jumper-wire": "Dupont-style jumper wire set",
+    "connector": "Electrical connector",
+    "terminal-block": "Screw terminal connector",
+    "flash-storage": "Removable flash-storage interface module",
+    "eeprom": "Non-volatile EEPROM memory module",
+    "fram": "Non-volatile FRAM memory module",
+    "rtc": "Real-time clock module",
+    "servo": "RC servo motor",
+    "stepper": "Stepper motor",
+    "motor-driver": "Motor driver module",
+    "stepper-driver": "Stepper motor driver module",
+    "dc-motor-driver": "DC motor driver module",
+    "pwm-driver": "PWM output driver module",
+    "camera": "Camera module",
+    "fan": "Cooling fan",
+    "heat-set-insert": "Heat-set threaded insert assortment",
+    "fastener": "Mechanical fastener assortment",
+    "magnet": "Permanent magnet assortment",
+    "power-meter": "Voltage/current measurement tool",
+}
+
+
+def _generic_component_description(definition: dict) -> str:
+    specs = definition.get("specifications") or {}
+    item_type = str(specs.get("type") or "").strip().lower()
+    base = GENERIC_COMPONENT_TYPE_DESCRIPTIONS.get(item_type)
+    if not base:
+        category = str(definition.get("category") or "").strip()
+        return f"General-purpose {category.lower()} component." if category else ""
+
+    qualifiers = []
+    for key in ("value", "resolution", "interface", "voltage", "output", "power", "channels", "capacity", "size"):
+        value = specs.get(key)
+        if value in (None, "", [], {}):
+            continue
+        if key == "interface":
+            qualifiers.append(f"{value} interface")
+        elif key == "channels":
+            qualifiers.append(f"{value} channels")
+        else:
+            qualifiers.append(str(value))
+
+    if qualifiers:
+        return f"{base} with {', '.join(qualifiers[:3])}."
+    return base + "."
+
+
 def _merge_missing(target: dict, incoming: dict) -> dict:
     out = deepcopy(target)
     for key, value in incoming.items():
@@ -1015,4 +1133,6 @@ def apply_component_profile(definition: dict) -> dict:
         enriched = _merge_missing(enriched, {"specifications": profile})
         if not str(enriched.get("description") or "").strip() and profile.get("function"):
             enriched["description"] = str(profile["function"]).strip().rstrip(".") + "."
+    if not str(enriched.get("description") or "").strip():
+        enriched["description"] = _generic_component_description(enriched)
     return enriched
