@@ -42,6 +42,22 @@ class CatalogueSourcePolicyTests(SimpleTestCase):
             with self.subTest(url=url):
                 self.assertEqual(classify_source_url(url).key, "manufacturer")
 
+    def test_printer_vendor_hosts_are_manufacturer_sources(self):
+        urls = [
+            "https://www.creality.com/products/example",
+            "https://bambulab.com/en/example",
+            "https://www.prusa3d.com/product/example/",
+            "https://store.anycubic.com/products/example",
+            "https://www.flashforge.com/example",
+            "https://www.elegoo.com/products/example",
+            "https://qidi3d.com/pages/example",
+            "https://www.sovol3d.com/products/example",
+            "https://www.snapmaker.com/en-US/example",
+        ]
+        for url in urls:
+            with self.subTest(url=url):
+                self.assertEqual(classify_source_url(url).key, "manufacturer")
+
     def test_specialist_and_community_sources_are_distinct(self):
         self.assertEqual(
             classify_source_url("https://www.espboards.dev/esp32/example/").key,
