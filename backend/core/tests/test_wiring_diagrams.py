@@ -177,6 +177,28 @@ class WiringDiagramApiTests(TestCase):
         self.assertTrue(any(row["code"] == "ground-power-conflict" and row["severity"] == "error" for row in item["diagnostics"]))
         self.assertEqual(item["diagnostic_summary"]["connections"]["bad-wire"], "error")
 
+    def test_typed_obvious_pin_names_are_checked_when_catalogue_pin_is_missing(self):
+        incomplete = BoardModel.objects.create(
+            name="Incomplete catalogue board",
+            pinout={"pins": [{"name": "GPIO1"}]},
+        )
+        diagram = WiringDiagram.objects.create(owner=self.owner, project=self.project, name="Typed pins")
+        response = self.client.patch(
+            f"/api/projects/{self.project.id}/wiring/{diagram.id}/",
+            data={
+                "nodes": [
+                    {"id": "left", "type": "board", "reference_id": str(incomplete.id), "label": "", "x": 0, "y": 0},
+                    {"id": "right", "type": "board", "reference_id": str(incomplete.id), "label": "Second board", "x": 240, "y": 0},
+                ],
+                "connections": [{"id": "typed-power", "from_node": "left", "from_pin": "GND", "to_node": "right", "to_pin": "5V"}],
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        item = response.json()["item"]
+        self.assertEqual(item["diagnostic_summary"]["connections"]["typed-power"], "error")
+        self.assertTrue(any(row["code"] == "ground-power-conflict" for row in item["diagnostics"]))
+
     def test_power_voltage_range_is_checked(self):
         source = BoardModel.objects.create(
             name="5V source",
