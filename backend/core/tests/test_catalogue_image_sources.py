@@ -8,6 +8,7 @@ from core.catalogue_image_sources import (
     _board_image_queries,
     _is_computer_board,
     _page_image_candidates,
+    _curated_sbc_source_page,
     _commons_license_allowed,
     _component_image_queries,
     _espboards_slug_candidates,
@@ -208,6 +209,25 @@ class CatalogueImageSourceTests(unittest.TestCase):
             _structured_product_image(soup, "https://vendor.example/product"),
             "https://vendor.example/media/linked-widget.jpg",
         )
+
+    def test_curated_sbc_source_mapping_is_exact(self):
+        self.board.manufacturer.name = "NVIDIA"
+        self.board.manufacturer.save(update_fields=["name"])
+        self.board.name = "Jetson Orin Nano Super Developer Kit"
+        self.board.specifications = {"board_type": "sbc"}
+        self.board.save(update_fields=["name", "specifications", "updated_at"])
+        self.assertEqual(
+            _curated_sbc_source_page(self.board),
+            "https://docs.nvidia.com/jetson/orin-nano-devkit/user-guide/latest/",
+        )
+
+    def test_curated_sbc_source_mapping_ignores_microcontrollers(self):
+        self.board.manufacturer.name = "NVIDIA"
+        self.board.manufacturer.save(update_fields=["name"])
+        self.board.name = "Jetson Orin Nano Super Developer Kit"
+        self.board.specifications = {"board_type": "microcontroller"}
+        self.board.save(update_fields=["name", "specifications", "updated_at"])
+        self.assertEqual(_curated_sbc_source_page(self.board), "")
 
     def test_page_image_candidates_prefer_structured_product_image(self):
         html = """
