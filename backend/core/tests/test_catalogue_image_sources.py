@@ -214,10 +214,11 @@ class CatalogueImageSourceTests(unittest.TestCase):
         manufacturer = Mock(name="manufacturer")
         manufacturer.name = "NVIDIA"
         board = Mock(
-            name="Jetson Orin Nano Super Developer Kit",
+            spec=["Jetson Orin Nano Super Developer Kit"],
             manufacturer=manufacturer,
             specifications={"board_type": "sbc"},
         )
+        board.name = board.spec[0]
         self.assertEqual(
             _curated_sbc_source_page(board),
             "https://docs.nvidia.com/jetson/orin-nano-devkit/user-guide/latest/",
@@ -227,10 +228,11 @@ class CatalogueImageSourceTests(unittest.TestCase):
         manufacturer = Mock(name="manufacturer")
         manufacturer.name = "NVIDIA"
         board = Mock(
-            name="Jetson Orin Nano Super Developer Kit",
+            spec=["Jetson Orin Nano Super Developer Kit"],
             manufacturer=manufacturer,
             specifications={"board_type": "microcontroller"},
         )
+        board.name = board.spec[0]
         self.assertEqual(_curated_sbc_source_page(board), "")
 
     def test_page_image_candidates_prefer_structured_product_image(self):
@@ -365,6 +367,7 @@ class CatalogueImageSourceTests(unittest.TestCase):
             found["external_image_url"],
             "https://raw.githubusercontent.com/OrcaSlicer/OrcaSlicer/main/resources/profiles/Creality/Creality%20K2_cover.png",
         )
+        board.name = board.spec[0]
         self.assertEqual(found["image_source_provider"], "OrcaSlicer")
         self.assertEqual(found["image_source_discovery"], "exact-profile-cover")
         self.assertEqual(found["image_source_tier"], "specialist")
@@ -540,6 +543,7 @@ class CatalogueImagePriorityTests(TestCase):
             self.printer.image_metadata["external_image_url"],
             "https://raw.githubusercontent.com/example/cover.png",
         )
+        board.name = board.spec[0]
         self.assertEqual(
             self.printer.image_metadata["source_trace"][-1]["tier"],
             "specialist",
@@ -680,6 +684,7 @@ class CatalogueImagePriorityTests(TestCase):
             self.component.specifications["external_image_url"],
             "https://cdn.example/official.jpg",
         )
+        board.name = board.spec[0]
         self.assertEqual(
             self.component.specifications["source_trace"][-1]["tier"],
             "manufacturer",
