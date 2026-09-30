@@ -853,6 +853,7 @@ def run_catalogue_image_seed(
     limit: int | None = None,
     force_retry: bool = False,
     kinds: list[str] | tuple[str, ...] | None = None,
+    board_types: list[str] | tuple[str, ...] | None = None,
 ) -> dict:
     from .models import BoardModel, ComponentModel, PrinterCatalogModel
 
