@@ -246,6 +246,37 @@ class WiringDiagramApiTests(TestCase):
         self.assertEqual(item["diagnostic_summary"]["connections"]["wrong"], "warning")
         self.assertEqual(item["diagnostic_summary"]["connections"]["right-wire"], "valid")
 
+    def test_standalone_wiring_can_be_created_and_assigned_to_project(self):
+        response = self.client.post(
+            "/api/wiring/",
+            data={"name": "Bench experiment", "nodes": [], "connections": [], "canvas": {}},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        item = response.json()["item"]
+        self.assertEqual(item["project_id"], "")
+
+        listing = self.client.get("/api/wiring/")
+        self.assertEqual(listing.status_code, 200)
+        self.assertEqual(len(listing.json()["rows"]), 1)
+
+        assigned = self.client.post(
+            f"/api/wiring/{item['id']}/assign-project/",
+            data={"project_id": str(self.project.id)},
+            content_type="application/json",
+        )
+        self.assertEqual(assigned.status_code, 200, assigned.content)
+        self.assertEqual(assigned.json()["item"]["project_id"], str(self.project.id))
+        self.assertEqual(self.client.get("/api/wiring/").json()["rows"], [])
+        self.assertTrue(WiringDiagram.objects.filter(pk=item["id"], project=self.project).exists())
+
+    def test_standalone_wiring_is_owner_scoped(self):
+        diagram = WiringDiagram.objects.create(owner=self.owner, project=None, name="Private experiment")
+        other = get_user_model().objects.create_user(username="wiring-other", password="test-password")
+        self.client.force_login(other)
+        self.assertEqual(self.client.get(f"/api/wiring/{diagram.id}/").status_code, 404)
+        self.assertEqual(self.client.get("/api/wiring/").json()["rows"], [])
+
     def test_private_inventory_cannot_be_referenced_in_another_users_wiring(self):
         diagram = WiringDiagram.objects.create(
             owner=self.owner,
