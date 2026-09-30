@@ -13,6 +13,7 @@ from core.catalogue_image_sources import (
     _printer_image_queries,
     _printer_multi_material_image_queries,
     _structured_product_image,
+    find_curated_printer_image,
     find_orcaslicer_printer_cover,
     find_source_page_image,
     run_catalogue_image_seed,
@@ -484,6 +485,92 @@ class CatalogueImagePriorityTests(TestCase):
         self.assertEqual(
             self.printer.image_metadata["source_trace"][-1]["tier"],
             "specialist",
+        )
+        cache_add.assert_called_once()
+        cache_delete.assert_called_once()
+
+    @override_settings(
+        CATALOGUE_IMAGE_MAX_PER_RUN=1,
+        CATALOGUE_IMAGE_RETRY_DAYS=1,
+        CATALOGUE_IMAGE_WIKIMEDIA=True,
+        CATALOGUE_IMAGE_OPENVERSE=True,
+    )
+    @patch("core.catalogue_image_sources.cache.delete")
+    @patch("core.catalogue_image_sources.cache.add", return_value=True)
+    @patch("core.catalogue_image_sources._search_open_media_with_diagnostics")
+    def test_multi_material_without_authoritative_image_is_deferred(
+        self,
+        search,
+        cache_add,
+        cache_delete,
+    ):
+        self.printer.multi_material_system = "bambu_ams"
+        self.printer.image_metadata = {
+            "external_image_url": "https://raw.githubusercontent.com/example/base.png",
+        }
+        self.printer.save(update_fields=["multi_material_system", "image_metadata", "updated_at"])
+
+        result = run_catalogue_image_seed(
+            limit=1,
+            force_retry=True,
+            kinds=["printers"],
+        )
+
+        self.assertEqual(result["processed"], 0)
+        self.assertEqual(result["failed"], 0)
+        self.assertEqual(result["by_kind"]["printers"]["skipped"], 2)
+        search.assert_not_called()
+        self.printer.refresh_from_db()
+        self.assertEqual(
+            self.printer.image_multi_material_metadata["auto_image_last_result"],
+            "deferred-no-authoritative-multi-material-image",
+        )
+        cache_add.assert_called_once()
+        cache_delete.assert_called_once()
+
+    @override_settings(
+        CATALOGUE_IMAGE_MAX_PER_RUN=1,
+        CATALOGUE_IMAGE_RETRY_DAYS=1,
+        CATALOGUE_IMAGE_WIKIMEDIA=True,
+        CATALOGUE_IMAGE_OPENVERSE=True,
+    )
+    @patch("core.catalogue_image_sources.cache.delete")
+    @patch("core.catalogue_image_sources.cache.add", return_value=True)
+    @patch("core.catalogue_image_sources._search_open_media_with_diagnostics")
+    def test_curated_multi_material_image_is_recorded_without_fuzzy_search(
+        self,
+        search,
+        cache_add,
+        cache_delete,
+    ):
+        self.printer.multi_material_system = "creality_cfs"
+        self.printer.image_metadata = {
+            "external_image_url": "https://raw.githubusercontent.com/example/base.png",
+        }
+        self.printer.features = {
+            "official_image_multi_material_url": "https://cdn.example/printer-combo.png",
+            "official_image_multi_material_source_page": "https://vendor.example/printer-combo",
+            "official_image_multi_material_source_provider": "Vendor official",
+        }
+        self.printer.save(update_fields=[
+            "multi_material_system", "image_metadata", "features", "updated_at"
+        ])
+
+        result = run_catalogue_image_seed(
+            limit=1,
+            force_retry=True,
+            kinds=["printers"],
+        )
+
+        self.assertEqual(result["processed"], 0)
+        self.assertEqual(result["remote"], 1)
+        self.assertEqual(result["failed"], 0)
+        self.assertEqual(result["by_provider"]["Vendor official"], 1)
+        search.assert_not_called()
+        self.printer.refresh_from_db()
+        self.assertEqual(
+            self.printer.image_multi_material_metadata["external_image_url"],
+            "https://cdn.example/printer-combo.png",
         )
         cache_add.assert_called_once()
         cache_delete.assert_called_once()
