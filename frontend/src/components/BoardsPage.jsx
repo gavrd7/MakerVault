@@ -185,6 +185,7 @@ function BoardDetail({ board, loading, canEdit, canAddInventory, boards, compone
     { key: "usb", label: "USB connector", value: board.usb_connector || "" },
     { key: "dimensions", label: "Dimensions", value: board.dimensions_mm?.length && board.dimensions_mm?.width ? `${board.dimensions_mm.length} × ${board.dimensions_mm.width} mm` : "" },
   ];
+  const isComputerBoard = specs.board_type === "sbc" || specs.board_type === "compute_module";
   const technicalRows = [
     { key: "clock_mhz", label: "Clock", value: specs.clock_mhz == null ? "" : `${specs.clock_mhz} MHz` },
     { key: "eeprom_kb", label: "EEPROM", value: specs.eeprom_kb == null ? "" : `${specs.eeprom_kb} KB` },
@@ -204,7 +205,7 @@ function BoardDetail({ board, loading, canEdit, canAddInventory, boards, compone
     { key: "ieee_802154", label: "802.15.4", value: specs.ieee_802154 === true ? "Yes" : specs.ieee_802154 === false ? "No" : "" },
     { key: "pio_state_machines", label: "PIO state machines", value: specs.pio_state_machines ?? "" },
     { key: "wireless", label: "Wireless", value: radios.length ? radios.join(" · ") : "" },
-  ];
+  ].filter(row => !isComputerBoard || ["clock_mhz", "cpu_cores", "operating_voltage", "pin_count", "uart_count", "spi_count", "i2c_count", "wireless"].includes(row.key));
 
   async function enrichBoard() {
     setEnriching(true); setEnrichMessage("");
@@ -257,7 +258,7 @@ function BoardDetail({ board, loading, canEdit, canAddInventory, boards, compone
       </section>}
 
       <section className="boardDetailSection">
-        <h4>Technical details</h4>
+        <h4>{isComputerBoard ? "I/O & technical details" : "Technical details"}</h4>
         <BoardSpecGrid rows={technicalRows} status={fieldStatus} />
       </section>
 
