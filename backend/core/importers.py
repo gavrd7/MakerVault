@@ -23,6 +23,15 @@ CATALOGUE_SOURCE_HOST_SUFFIXES = {
     "nvidia.com",
     "khadas.com",
     "raspberrypi.com",
+    "creality.com",
+    "bambulab.com",
+    "prusa3d.com",
+    "anycubic.com",
+    "flashforge.com",
+    "elegoo.com",
+    "qidi3d.com",
+    "sovol3d.com",
+    "snapmaker.com",
 }
 
 
