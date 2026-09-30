@@ -41,6 +41,7 @@ from .storage_usage import StorageQuotaExceeded, ensure_storage_capacity, storag
 from .user_admin import admin_user_summary, purge_user_private_data
 from .private_storage import private_storage_key_status
 from .search_service import run_search
+from .wiring import normalise_wiring, serialise_wiring_diagram
 from .maker_tags import (
     resolve_tag_target,
     serialise_tag,
@@ -77,6 +78,7 @@ from .models import (
     Project,
     RepositoryLink,
     Spool,
+    WiringDiagram,
     ExternalPrinterLink,
     ExternalSpoolLink,
 )
@@ -166,6 +168,105 @@ def _sync_rfid_tag_to_spool(tag, *, previous=None):
     if existing != tag.code:
         spool.rfid_uid = tag.code
         spool.save(update_fields=["rfid_uid", "updated_at"])
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def project_wiring_diagrams(request, project_id):
+    project = Project.objects.filter(owner=request.user, pk=project_id).first()
+    if not project:
+        return _error("Project not found.", status=404)
+
+    if request.method == "GET":
+        rows = WiringDiagram.objects.filter(owner=request.user, project=project)
+        return JsonResponse({"rows": [serialise_wiring_diagram(item) for item in rows]})
+
+    denied = _require_permission(request, "core.add_wiringdiagram")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        name = str(payload.get("name") or "").strip()
+        if not name:
+            raise ValidationError({"name": "Diagram name is required."})
+        nodes, connections, canvas = normalise_wiring(
+            request.user,
+            payload.get("nodes") or [],
+            payload.get("connections") or [],
+            payload.get("canvas") or {},
+        )
+        diagram = WiringDiagram(
+            owner=request.user,
+            project=project,
+            name=name,
+            description=str(payload.get("description") or "").strip(),
+            nodes=nodes,
+            connections=connections,
+            canvas=canvas,
+        )
+        diagram.full_clean()
+        diagram.save()
+        return JsonResponse({"item": serialise_wiring_diagram(diagram, detailed=True)}, status=201)
+    except ValidationError as exc:
+        return _validation_response(exc)
+    except IntegrityError:
+        return _error("A wiring diagram with that name already exists in this project.")
+
+
+@login_required
+@require_http_methods(["GET", "PATCH", "DELETE"])
+def project_wiring_diagram_detail(request, project_id, diagram_id):
+    diagram = WiringDiagram.objects.filter(
+        owner=request.user,
+        project_id=project_id,
+        pk=diagram_id,
+    ).select_related("project").first()
+    if not diagram:
+        return _error("Wiring diagram not found.", status=404)
+
+    if request.method == "GET":
+        return JsonResponse({"item": serialise_wiring_diagram(diagram, detailed=True)})
+
+    if request.method == "DELETE":
+        denied = _require_permission(request, "core.delete_wiringdiagram")
+        if denied:
+            return denied
+        diagram.delete()
+        return JsonResponse({"deleted": True})
+
+    denied = _require_permission(request, "core.change_wiringdiagram")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        if "name" in payload:
+            name = str(payload.get("name") or "").strip()
+            if not name:
+                raise ValidationError({"name": "Diagram name is required."})
+            diagram.name = name
+        if "description" in payload:
+            diagram.description = str(payload.get("description") or "").strip()
+
+        structure_changed = any(key in payload for key in ("nodes", "connections", "canvas"))
+        if structure_changed:
+            nodes, connections, canvas = normalise_wiring(
+                request.user,
+                payload.get("nodes", diagram.nodes),
+                payload.get("connections", diagram.connections),
+                payload.get("canvas", diagram.canvas),
+            )
+            diagram.nodes = nodes
+            diagram.connections = connections
+            diagram.canvas = canvas
+            diagram.revision += 1
+
+        diagram.full_clean()
+        diagram.save()
+        return JsonResponse({"item": serialise_wiring_diagram(diagram, detailed=True)})
+    except ValidationError as exc:
+        return _validation_response(exc)
+    except IntegrityError:
+        return _error("A wiring diagram with that name already exists in this project.")
 
 
 @login_required
@@ -5404,6 +5505,9 @@ def public_config(request):
             "change_printjob": request.user.has_perm("core.change_printjob"),
             "add_maker_tag": request.user.has_perm("core.add_makertag"),
             "change_maker_tag": request.user.has_perm("core.change_makertag"),
+            "add_wiring_diagram": request.user.has_perm("core.add_wiringdiagram"),
+            "change_wiring_diagram": request.user.has_perm("core.change_wiringdiagram"),
+            "delete_wiring_diagram": request.user.has_perm("core.delete_wiringdiagram"),
         },
         "importers": ["ESPBoards.dev"],
     })
