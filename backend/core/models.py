@@ -1,5 +1,4 @@
 import uuid
-import re
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -1071,7 +1070,7 @@ class MakerTag(TimeStampedModel):
     def normalise_code(kind, value):
         text = str(value or "").strip()
         if str(kind or "").lower() in {"nfc", "rfid"}:
-            return re.sub(r"[^0-9A-Fa-f]", "", text).upper()
+            return text.upper()
         return text
 
     def clean(self):
