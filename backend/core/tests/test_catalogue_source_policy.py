@@ -27,6 +27,21 @@ class CatalogueSourcePolicyTests(SimpleTestCase):
             "manufacturer",
         )
 
+    def test_sbc_vendor_hosts_are_manufacturer_sources(self):
+        urls = [
+            "https://www.orangepi.org/html/hardWare/example.html",
+            "https://www.hardkernel.com/shop/example/",
+            "https://docs.radxa.com/en/rock5/example",
+            "https://docs.banana-pi.org/en/example",
+            "https://docs.beagleboard.org/boards/example/",
+            "https://www.lattepanda.com/example",
+            "https://developer.nvidia.com/embedded/example",
+            "https://docs.khadas.com/products/sbc/example",
+        ]
+        for url in urls:
+            with self.subTest(url=url):
+                self.assertEqual(classify_source_url(url).key, "manufacturer")
+
     def test_specialist_and_community_sources_are_distinct(self):
         self.assertEqual(
             classify_source_url("https://www.espboards.dev/esp32/example/").key,
