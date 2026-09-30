@@ -238,6 +238,20 @@ BOARD_PROFILES = {
             "reference_url": "https://www.espboards.dev/esp32/esp32-c6-super-mini/",
         },
     },
+    ("Adafruit", "Feather ESP32-S3"): {
+        "usb_connector": "USB-C",
+        "dimensions_mm": {"length": 50.8, "width": 22.86},
+        "specifications": {
+            "adc_channels": 6,
+            "native_usb": True,
+            "usb_capability": "Native USB HID / CDC / MIDI / mass storage",
+            "operating_voltage": "3.3 V",
+            "not_applicable_specs": ["dac_channels", "ieee_802154", "pio_state_machines"],
+            "reference_provider": "Adafruit",
+            "reference_url": "https://learn.adafruit.com/adafruit-esp32-s3-feather",
+            "variant_note": "Feather ESP32-S3 exists in multiple flash/PSRAM variants; memory remains unresolved unless the exact variant is known.",
+        },
+    },
     ("Adafruit", "Feather RP2040"): {
         "flash_mb": 8,
         "ram_kb": 264,
