@@ -1175,6 +1175,7 @@ def dashboard(request):
         "spools": Spool.objects.filter(owner=request.user).count(),
         "printers": Printer.objects.filter(owner=request.user).count(),
         "models_3d": Model3D.objects.filter(owner=request.user).count(),
+        "maker_tags": MakerTag.objects.filter(owner=request.user, status="active").count(),
     }
     return JsonResponse(data)
 
@@ -5401,6 +5402,8 @@ def public_config(request):
             "delete_model3d": request.user.has_perm("core.delete_model3d"),
             "add_printjob": request.user.has_perm("core.add_printjob"),
             "change_printjob": request.user.has_perm("core.change_printjob"),
+            "add_maker_tag": request.user.has_perm("core.add_makertag"),
+            "change_maker_tag": request.user.has_perm("core.change_makertag"),
         },
         "importers": ["ESPBoards.dev"],
     })
