@@ -715,6 +715,14 @@ def _inventory_allocated_quantity(item):
     return allocated or Decimal("0")
 
 
+def _inventory_free_quantity(item):
+    """Return stock that is genuinely free for a new allocation."""
+    if item.status != "available" or item.project_id:
+        return Decimal("0")
+    allocated = _inventory_allocated_quantity(item)
+    return max((item.quantity or Decimal("0")) - allocated, Decimal("0"))
+
+
 def _serialise_inventory(item):
     image_url = ""
     if item.image:
@@ -727,7 +735,7 @@ def _serialise_inventory(item):
     if not image_url and item.component:
         image_url = _image_url(item.component)
     allocated = _inventory_allocated_quantity(item)
-    available = max((item.quantity or Decimal("0")) - allocated, Decimal("0"))
+    available = _inventory_free_quantity(item)
     return {
         "id": str(item.id),
         "inventory_id": item.inventory_id,
@@ -878,10 +886,7 @@ def _record_bom_allocation_history(allocation, user, event_type, *, previous_qua
 def _serialise_bom_allocation(allocation):
     inventory = allocation.inventory_item
     inventory_allocated = _inventory_allocated_quantity(inventory)
-    inventory_available = max(
-        (inventory.quantity or Decimal("0")) - inventory_allocated,
-        Decimal("0"),
-    )
+    inventory_available = _inventory_free_quantity(inventory)
     return {
         "id": allocation.pk,
         "inventory_item_id": str(inventory.pk),
@@ -2212,6 +2217,14 @@ def _validate_allocation_capacity(bom_item, inventory, quantity, *, excluding_id
     quantity = Decimal(quantity)
     if quantity <= 0:
         raise ValidationError({"quantity": "Allocation quantity must be greater than zero."})
+    if not excluding_id and inventory.status != "available":
+        raise ValidationError({
+            "inventory_item": f"{inventory.inventory_id} is {inventory.get_status_display().lower()} and is not free for allocation."
+        })
+    if not excluding_id and inventory.project_id and inventory.project_id != bom_item.project_id:
+        raise ValidationError({
+            "inventory_item": f"{inventory.inventory_id} is already assigned to another project."
+        })
 
     bom_allocations = bom_item.allocations.all()
     inventory_allocations = inventory.bom_allocations.all()
