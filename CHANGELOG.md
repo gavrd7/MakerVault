@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.7.1 — in development
+## v0.7.1 — 2026-09-30
 
 - Multi-material printer image maintenance now avoids fuzzy AMS/CFS/MMU searches: only curated manufacturer-backed combo imagery is accepted automatically, while unresolved variants are deferred without consuming the image-search attempt limit.
 - Fixed printer catalogue coverage reporting so remotely referenced specialist/manufacturer images count as complete just like board/component remote imagery.
