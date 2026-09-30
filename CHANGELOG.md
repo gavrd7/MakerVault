@@ -15,6 +15,8 @@
 - Added a rights-conscious official-manufacturer remote-image fallback for curated printer catalogue entries, starting with Creality K2/K2 Combo. Official images are referenced from the manufacturer/store rather than copied into MakerVault media storage.
 - Fixed board/component detail imagery to preserve full aspect ratio in a larger contain-first frame; component images now open in the zoom/fullscreen viewer too.
 - Broadened board/component image enrichment with form-factor-aware component queries and remote OpenGraph image fallbacks from already-known catalogue source pages; source-page images remain remote rather than being copied without redistribution rights.
+- Added an explicit hierarchical catalogue source policy: manual values → official manufacturer sources → MakerVault curated profiles → specialist catalogues → maintained community sources → open media → generic fallbacks. Lower-authority sources only fill unresolved gaps and source decisions retain a bounded provenance trace.
+- Expanded official component references and curated metadata for BME280, VL53L0X, INA219 and ADS1115; known part functions now seed a short description when a component description is otherwise empty.
 - Expanded curated board technical profiles for Adafruit Feather RP2040, Adafruit QT Py ESP32-C3, Arduino Leonardo and Mega 2560, and now tracks explicit USB-capability metadata in completeness reporting.
 - Removed the unused broad django-allauth `socialaccount` dependency extra after pip-audit flagged OAuthLib CVE-2026-49265; MakerVault now declares only the OIDC client dependencies it actually uses (`requests` and `PyJWT[crypto]`), preserving OpenID Connect login without the vulnerable package.
 
