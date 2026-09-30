@@ -823,7 +823,7 @@ def find_source_page_image(obj, diagnostics: list[dict] | None = None) -> dict |
         page_url = source["url"]
         tier = classify_source_url(page_url, source_type=source.get("source_type", ""))
         try:
-            final_url, html = fetch_import_html(page_url)
+            final_url, html = fetch_catalogue_source_html(page_url)
         except ImporterError as exc:
             if diagnostics is not None:
                 diagnostics.append({
