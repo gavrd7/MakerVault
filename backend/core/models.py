@@ -1,4 +1,5 @@
 import uuid
+import re
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -1015,3 +1016,108 @@ class PrintMaterialUsage(TimeStampedModel):
     def __str__(self):
         material = self.spool.spool_id if self.spool else str(self.filament or "Material")
         return f"{self.print_job} · {material}"
+
+
+class MakerTag(TimeStampedModel):
+    """Physical QR/NFC/RFID identity attached to one owner-scoped MakerVault record."""
+
+    KINDS = [
+        ("qr", "QR code"),
+        ("nfc", "NFC tag"),
+        ("rfid", "RFID tag"),
+    ]
+    STATUSES = [
+        ("active", "Active"),
+        ("retired", "Retired"),
+    ]
+    TARGET_TYPES = [
+        ("inventory", "Inventory item"),
+        ("spool", "Spool"),
+        ("printer", "Printer"),
+        ("project", "Project"),
+        ("location", "Storage / printing location"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="makervault_tags",
+    )
+    public_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    kind = models.CharField(max_length=16, choices=KINDS, default="qr")
+    code = models.CharField(max_length=255)
+    label = models.CharField(max_length=200, blank=True)
+    status = models.CharField(max_length=16, choices=STATUSES, default="active")
+    target_type = models.CharField(max_length=24, choices=TARGET_TYPES)
+    target_id = models.UUIDField()
+    notes = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    retired_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["status", "label", "kind", "code"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["kind", "code"],
+                name="unique_maker_tag_identity",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["owner", "target_type", "target_id"], name="maker_tag_target_idx"),
+        ]
+
+    @staticmethod
+    def normalise_code(kind, value):
+        text = str(value or "").strip()
+        if str(kind or "").lower() in {"nfc", "rfid"}:
+            return re.sub(r"[^0-9A-Fa-f]", "", text).upper()
+        return text
+
+    def clean(self):
+        super().clean()
+        self.kind = str(self.kind or "").strip().lower()
+        self.code = self.normalise_code(self.kind, self.code)
+        if not self.code:
+            raise ValidationError({"code": "Tag identity cannot be blank."})
+        if self.status == "retired" and self.retired_at is None:
+            # API actions stamp retired_at. Keep model validation tolerant of
+            # migration/import callers that set status before timestamp.
+            pass
+
+    def save(self, *args, **kwargs):
+        self.code = self.normalise_code(self.kind, self.code)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.label or f"{self.get_kind_display()} {self.code}"
+
+
+class MakerTagEvent(TimeStampedModel):
+    EVENT_TYPES = [
+        ("created", "Created"),
+        ("assigned", "Assigned"),
+        ("reassigned", "Reassigned"),
+        ("retired", "Retired"),
+        ("reactivated", "Reactivated"),
+        ("updated", "Updated"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tag = models.ForeignKey(MakerTag, on_delete=models.CASCADE, related_name="events")
+    event_type = models.CharField(max_length=20, choices=EVENT_TYPES)
+    summary = models.CharField(max_length=500)
+    details = models.JSONField(default=dict, blank=True)
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="makervault_tag_events",
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.tag} — {self.get_event_type_display()}"
