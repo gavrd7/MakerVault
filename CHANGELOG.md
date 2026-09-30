@@ -1,4 +1,5 @@
 # Changelog
+- Expanded the Board Catalogue beyond microcontrollers with first-class SBC and compute-module/SoM classification, curated Orange Pi, ODROID, Radxa, Banana Pi, BeagleBoard, LattePanda, NVIDIA Jetson and Khadas families, SBC-specific technical presentation, and board-type filtering. Added Expansion Boards to Components for HATs, pHATs, Arduino Shields, FeatherWings and host-specific add-ons with structured host/interface compatibility metadata.
 
 ## v0.7.2 — in development
 
