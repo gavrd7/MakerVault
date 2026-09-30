@@ -293,9 +293,9 @@ function BoardDetail({ board, loading, canEdit, canAddInventory, boards, compone
         lockCatalogueItem
         title={"Add " + board.display_name + " to inventory"}
         onClose={() => setInventoryOpen(false)}
-        onCreated={async item => {
+        onCreated={async (item, items) => {
           setInventoryOpen(false);
-          await onInventoryCreated?.(item);
+          await onInventoryCreated?.(item, items);
         }}
       />}
     </aside>
