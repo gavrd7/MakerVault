@@ -17,6 +17,15 @@ NODE_TYPES = {
     "custom": "Custom node",
 }
 
+POWER_NAMES = {"VCC", "VDD", "VIN", "VBUS", "V+", "+V", "3V3", "3.3V", "5V", "12V", "24V"}
+GROUND_NAMES = {"GND", "GROUND", "AGND", "DGND", "PGND", "0V", "VSS"}
+INPUT_WORDS = {"IN", "INPUT", "RX", "MISO"}
+OUTPUT_WORDS = {"OUT", "OUTPUT", "TX", "MOSI"}
+POWER_ROLES = {"power", "power_input", "power_output"}
+GROUND_ROLES = {"ground"}
+INPUT_ROLES = {"input", "digital_input", "analog_input", "power_input", "uart_rx", "spi_miso"}
+OUTPUT_ROLES = {"output", "digital_output", "analog_output", "power_output", "uart_tx", "spi_mosi"}
+
 
 def _clean_text(value, max_length):
     return re.sub(r"\s+", " ", str(value or "").strip())[:max_length]
@@ -94,43 +103,149 @@ def _reference_subtitle(node_type, obj):
     return ""
 
 
-def _pin_hints(node_type, obj):
-    if node_type == "board":
-        pinout = obj.pinout or {}
-        if isinstance(pinout, dict):
-            pins = pinout.get("pins") if isinstance(pinout.get("pins"), list) else None
-            if pins:
-                values = []
-                for item in pins:
-                    if isinstance(item, dict):
-                        label = item.get("name") or item.get("label") or item.get("pin")
-                    else:
-                        label = item
-                    if label:
-                        values.append(str(label))
-                return values[:100]
-            return [str(key) for key in list(pinout)[:100] if key not in {"notes", "source"}]
-    if node_type == "component":
-        specs = obj.specifications or {}
-        pins = specs.get("pins") or specs.get("pinout") or []
-        if isinstance(pins, dict):
-            return [str(key) for key in list(pins)[:100]]
-        if isinstance(pins, list):
-            values = []
-            for item in pins[:100]:
-                if isinstance(item, dict):
-                    value = item.get("name") or item.get("label") or item.get("pin")
-                else:
-                    value = item
-                if value:
-                    values.append(str(value))
-            return values
+def _raw_pin_entries(node_type, obj):
     if node_type == "inventory":
         if obj.board_id:
-            return _pin_hints("board", obj.board)
+            return _raw_pin_entries("board", obj.board)
         if obj.component_id:
-            return _pin_hints("component", obj.component)
-    return []
+            return _raw_pin_entries("component", obj.component)
+        return []
+    data = obj.pinout if node_type == "board" else (obj.specifications or {}).get("pins") or (obj.specifications or {}).get("pinout")
+    if not data:
+        return []
+    if isinstance(data, dict):
+        nested = data.get("pins")
+        if isinstance(nested, list):
+            return nested
+        entries = []
+        for name, value in data.items():
+            if name in {"notes", "source"}:
+                continue
+            if isinstance(value, dict):
+                entries.append({"name": name, **value})
+            else:
+                entries.append({"name": name, "description": str(value or "")})
+        return entries
+    return data if isinstance(data, list) else []
+
+
+def _normalise_role(value):
+    text = _clean_text(value, 60).lower().replace("-", "_").replace(" ", "_")
+    aliases = {
+        "gnd": "ground", "vss": "ground", "supply_ground": "ground",
+        "vcc": "power", "vdd": "power", "supply": "power",
+        "power_in": "power_input", "supply_input": "power_input",
+        "power_out": "power_output", "supply_output": "power_output",
+        "gpio": "gpio", "io": "gpio",
+        "adc": "analog_input", "dac": "analog_output",
+        "rx": "uart_rx", "tx": "uart_tx",
+        "sda": "i2c_sda", "scl": "i2c_scl",
+        "mosi": "spi_mosi", "miso": "spi_miso", "sck": "spi_clock", "clk": "clock",
+    }
+    return aliases.get(text, text)
+
+
+def _float_or_none(value):
+    if value is None or value == "":
+        return None
+    try:
+        number = float(str(value).lower().replace("v", "").strip())
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _voltage_from_name(name):
+    upper = str(name or "").upper().replace(" ", "")
+    match = re.fullmatch(r"(\d+(?:\.\d+)?)V", upper)
+    if match:
+        return float(match.group(1))
+    match = re.fullmatch(r"(\d+)V(\d+)", upper)
+    if match:
+        return float(f"{match.group(1)}.{match.group(2)}")
+    return None
+
+
+def _infer_role(name):
+    upper = re.sub(r"[^A-Z0-9.+-]", "", str(name or "").upper())
+    if upper in GROUND_NAMES or upper.endswith("GND"):
+        return "ground", "name"
+    if upper in POWER_NAMES or _voltage_from_name(upper) is not None:
+        return "power", "name"
+    if upper in {"SDA", "I2CSDA"} or upper.endswith("SDA"):
+        return "i2c_sda", "name"
+    if upper in {"SCL", "I2CSCL"} or upper.endswith("SCL"):
+        return "i2c_scl", "name"
+    if upper in {"TX", "TXD", "UARTTX"} or upper.endswith("_TX"):
+        return "uart_tx", "name"
+    if upper in {"RX", "RXD", "UARTRX"} or upper.endswith("_RX"):
+        return "uart_rx", "name"
+    if upper in {"MOSI", "COPI"}:
+        return "spi_mosi", "name"
+    if upper in {"MISO", "CIPO"}:
+        return "spi_miso", "name"
+    if upper in {"SCK", "SCLK", "SPI_CLK", "SPICLK"}:
+        return "spi_clock", "name"
+    if re.fullmatch(r"(GPIO|IO|D)\d+", upper):
+        return "gpio", "name"
+    if re.fullmatch(r"(ADC|A)\d+", upper):
+        return "analog_input", "name"
+    if upper in INPUT_WORDS:
+        return "input", "name"
+    if upper in OUTPUT_WORDS:
+        return "output", "name"
+    return "unknown", "unknown"
+
+
+def _pin_metadata_from_entry(entry):
+    if isinstance(entry, dict):
+        name = entry.get("name") or entry.get("label") or entry.get("pin") or ""
+        role_value = entry.get("role") or entry.get("type") or entry.get("electrical_role") or entry.get("function")
+        role = _normalise_role(role_value) if role_value else ""
+        source = "catalogue" if role else "unknown"
+        if not role:
+            role, source = _infer_role(name)
+        voltage = _float_or_none(entry.get("voltage") or entry.get("voltage_v") or entry.get("logic_voltage"))
+        min_voltage = _float_or_none(entry.get("min_voltage") or entry.get("voltage_min") or entry.get("min_voltage_v"))
+        max_voltage = _float_or_none(entry.get("max_voltage") or entry.get("voltage_max") or entry.get("max_voltage_v"))
+        if voltage is None:
+            voltage = _voltage_from_name(name)
+            if voltage is not None and source == "unknown":
+                source = "name"
+        return {
+            "name": str(name),
+            "role": role or "unknown",
+            "voltage": voltage,
+            "min_voltage": min_voltage,
+            "max_voltage": max_voltage,
+            "source": source,
+        }
+    name = str(entry or "")
+    role, source = _infer_role(name)
+    return {"name": name, "role": role, "voltage": _voltage_from_name(name), "min_voltage": None, "max_voltage": None, "source": source}
+
+
+def _pin_metadata(node_type, obj):
+    return [_pin_metadata_from_entry(entry) for entry in _raw_pin_entries(node_type, obj) if (entry if not isinstance(entry, dict) else entry.get("name") or entry.get("label") or entry.get("pin"))]
+
+
+def _pin_hints(node_type, obj):
+    return [pin["name"] for pin in _pin_metadata(node_type, obj)][:100]
+
+
+def _node_pin_profiles(owner, nodes):
+    profiles = {}
+    for node in nodes:
+        if node.get("type") == "custom" or not node.get("reference_id"):
+            profiles[node["id"]] = {}
+            continue
+        try:
+            obj = _resolve_reference(owner, node["type"], node["reference_id"])
+        except ValidationError:
+            profiles[node["id"]] = {}
+            continue
+        profiles[node["id"]] = {pin["name"].casefold(): pin for pin in _pin_metadata(node["type"], obj)}
+    return profiles
 
 
 def normalise_wiring(owner, nodes, connections, canvas=None):
@@ -235,30 +350,125 @@ def normalise_wiring(owner, nodes, connections, canvas=None):
     return clean_nodes, clean_connections, clean_canvas
 
 
-def wiring_warnings(nodes, connections):
+def _diagnostic(severity, code, message, edge=None):
+    return {
+        "severity": severity,
+        "code": code,
+        "message": message,
+        "connection_id": edge.get("id") if edge else "",
+    }
+
+
+def _endpoint_text(label, pin):
+    return f"{label} · {pin}"
+
+
+def _voltage_range(pin):
+    if pin.get("voltage") is not None:
+        return pin["voltage"], pin["voltage"]
+    return pin.get("min_voltage"), pin.get("max_voltage")
+
+
+def _connection_diagnostics(edge, labels, profiles):
+    a = profiles.get(edge["from_node"], {}).get(edge["from_pin"].casefold()) or _pin_metadata_from_entry(edge["from_pin"])
+    b = profiles.get(edge["to_node"], {}).get(edge["to_pin"].casefold()) or _pin_metadata_from_entry(edge["to_pin"])
+    a_text = _endpoint_text(labels.get(edge["from_node"], edge["from_node"]), edge["from_pin"])
+    b_text = _endpoint_text(labels.get(edge["to_node"], edge["to_node"]), edge["to_pin"])
+    ar, br = a["role"], b["role"]
+    diagnostics = []
+
+    if (ar in GROUND_ROLES and br in POWER_ROLES) or (br in GROUND_ROLES and ar in POWER_ROLES):
+        diagnostics.append(_diagnostic("error", "ground-power-conflict", f"Ground is connected to a power pin: {a_text} ↔ {b_text}.", edge))
+        return diagnostics
+
+    if ar == "i2c_sda" and br == "i2c_scl" or ar == "i2c_scl" and br == "i2c_sda":
+        diagnostics.append(_diagnostic("warning", "i2c-line-mismatch", f"I²C SDA is connected to SCL: {a_text} ↔ {b_text}.", edge))
+    if ar == "uart_tx" and br == "uart_tx":
+        diagnostics.append(_diagnostic("warning", "uart-tx-tx", f"Two UART TX pins are connected: {a_text} ↔ {b_text}. Usually TX should connect to RX.", edge))
+    if ar == "uart_rx" and br == "uart_rx":
+        diagnostics.append(_diagnostic("warning", "uart-rx-rx", f"Two UART RX pins are connected: {a_text} ↔ {b_text}. Usually RX should connect to TX.", edge))
+    if ar == "spi_mosi" and br == "spi_miso" or ar == "spi_miso" and br == "spi_mosi":
+        diagnostics.append(_diagnostic("warning", "spi-data-mismatch", f"SPI MOSI/COPI is connected to MISO/CIPO: {a_text} ↔ {b_text}. Verify the intended bus wiring.", edge))
+
+    if ar in OUTPUT_ROLES and br in OUTPUT_ROLES:
+        diagnostics.append(_diagnostic("warning", "output-output", f"Two output pins are connected: {a_text} ↔ {b_text}. Verify neither side is driving against the other.", edge))
+
+    for source, target, source_text, target_text in ((a, b, a_text, b_text), (b, a, b_text, a_text)):
+        source_v = source.get("voltage")
+        target_min, target_max = _voltage_range(target)
+        if source_v is None or source["role"] not in {"power", "power_output"}:
+            continue
+        if target_max is not None and source_v > target_max + 0.05:
+            diagnostics.append(_diagnostic("error", "overvoltage", f"{source_text} supplies {source_v:g} V but {target_text} is rated to a maximum of {target_max:g} V.", edge))
+        elif target_min is not None and source_v < target_min - 0.05:
+            diagnostics.append(_diagnostic("warning", "undervoltage", f"{source_text} supplies {source_v:g} V but {target_text} expects at least {target_min:g} V.", edge))
+
+    known = ar != "unknown" and br != "unknown"
+    if not diagnostics and known:
+        compatible = (
+            ar == br
+            or {ar, br} <= {"gpio", "input", "output", "digital_input", "digital_output"}
+            or {ar, br} == {"uart_tx", "uart_rx"}
+            or ar == br == "i2c_sda"
+            or ar == br == "i2c_scl"
+            or ar == br == "spi_clock"
+            or (ar in POWER_ROLES and br in POWER_ROLES)
+            or (ar in GROUND_ROLES and br in GROUND_ROLES)
+        )
+        if compatible:
+            diagnostics.append(_diagnostic("valid", "compatible", f"Compatible connection: {a_text} ↔ {b_text}.", edge))
+    return diagnostics
+
+
+def wiring_diagnostics(owner, nodes, connections):
     labels = {node["id"]: node.get("label") or node["id"] for node in nodes}
+    profiles = _node_pin_profiles(owner, nodes)
     endpoints = Counter()
+    diagnostics = []
     has_ground = False
+
     for edge in connections:
+        diagnostics.extend(_connection_diagnostics(edge, labels, profiles))
         for node_key, pin_key in (("from_node", "from_pin"), ("to_node", "to_pin")):
             endpoint = (edge[node_key], edge[pin_key].casefold())
             endpoints[endpoint] += 1
-            if any(token in edge[pin_key].casefold() for token in ("gnd", "ground", "0v")):
+            pin = profiles.get(edge[node_key], {}).get(edge[pin_key].casefold()) or _pin_metadata_from_entry(edge[pin_key])
+            if pin["role"] == "ground":
                 has_ground = True
 
-    warnings = []
     for (node_id, pin), count in endpoints.items():
         if count > 1:
-            warnings.append({
-                "code": "shared-endpoint",
-                "message": f"{labels.get(node_id, node_id)} pin {pin} is used by {count} connections; confirm the fan-out is intentional.",
-            })
+            diagnostics.append(_diagnostic(
+                "advisory",
+                "shared-endpoint",
+                f"{labels.get(node_id, node_id)} pin {pin} is used by {count} connections; confirm the fan-out is intentional.",
+            ))
     if connections and not has_ground:
-        warnings.append({
-            "code": "no-common-ground",
-            "message": "No ground/common connection is shown. Verify whether the devices in this circuit require a shared ground.",
-        })
-    return warnings[:30]
+        diagnostics.append(_diagnostic(
+            "advisory",
+            "no-common-ground",
+            "No ground/common connection is shown. Verify whether the devices in this circuit require a shared ground.",
+        ))
+
+    rank = {"error": 0, "warning": 1, "advisory": 2, "valid": 3, "unknown": 4}
+    diagnostics.sort(key=lambda item: (rank.get(item["severity"], 9), item["message"]))
+    return diagnostics[:100]
+
+
+def _diagnostic_summary(diagnostics, connection_ids):
+    counts = Counter(item["severity"] for item in diagnostics)
+    by_connection = {}
+    for connection_id in connection_ids:
+        relevant = [item for item in diagnostics if item.get("connection_id") == connection_id]
+        if not relevant:
+            by_connection[connection_id] = "unknown"
+            continue
+        severity_order = {"error": 0, "warning": 1, "advisory": 2, "valid": 3, "unknown": 4}
+        by_connection[connection_id] = min(relevant, key=lambda item: severity_order.get(item["severity"], 9))["severity"]
+    return {
+        "counts": {key: counts.get(key, 0) for key in ("error", "warning", "advisory", "valid")},
+        "connections": by_connection,
+    }
 
 
 def serialise_wiring_diagram(diagram: WiringDiagram, *, detailed=False):
@@ -275,6 +485,7 @@ def serialise_wiring_diagram(diagram: WiringDiagram, *, detailed=False):
                     "label": _reference_label(node["type"], ref),
                     "subtitle": _reference_subtitle(node["type"], ref),
                     "pin_hints": _pin_hints(node["type"], ref),
+                    "pins": _pin_metadata(node["type"], ref),
                 }
             else:
                 enriched["reference"] = None
@@ -292,11 +503,14 @@ def serialise_wiring_diagram(diagram: WiringDiagram, *, detailed=False):
         "updated_at": diagram.updated_at.isoformat(),
     }
     if detailed:
+        diagnostics = wiring_diagnostics(diagram.owner, diagram.nodes or [], diagram.connections or [])
         payload.update({
             "nodes": nodes,
             "connections": diagram.connections or [],
             "canvas": diagram.canvas or {},
-            "warnings": wiring_warnings(diagram.nodes or [], diagram.connections or []),
+            "diagnostics": diagnostics,
+            "diagnostic_summary": _diagnostic_summary(diagnostics, [edge["id"] for edge in diagram.connections or []]),
+            "warnings": [item for item in diagnostics if item["severity"] in {"error", "warning", "advisory"}],
             "node_types": [{"value": value, "label": label} for value, label in NODE_TYPES.items()],
         })
     return payload
