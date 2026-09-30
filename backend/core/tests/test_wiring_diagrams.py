@@ -272,8 +272,7 @@ class WiringDiagramApiTests(TestCase):
 
     def test_standalone_wiring_is_owner_scoped(self):
         diagram = WiringDiagram.objects.create(owner=self.owner, project=None, name="Private experiment")
-        other = get_user_model().objects.create_user(username="wiring-other", password="test-password")
-        self.client.force_login(other)
+        self.client.force_login(self.other)
         self.assertEqual(self.client.get(f"/api/wiring/{diagram.id}/").status_code, 404)
         self.assertEqual(self.client.get("/api/wiring/").json()["rows"], [])
 
