@@ -9,6 +9,32 @@ function uid(prefix) {
   return prefix + "-" + value;
 }
 
+function downloadWiringFile(filename, contents, type) {
+  const blob = new Blob([contents], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function safeFilename(value) {
+  return String(value || "wiring-diagram").trim().replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "wiring-diagram";
+}
+
+function xmlEscape(value) {
+  return String(value ?? "").replace(/[<>&"']/g, char => ({
+    "<": "&lt;",
+    ">": "&gt;",
+    "&": "&amp;",
+    '"': "&quot;",
+    "'": "&apos;",
+  }[char]));
+}
+
 function referenceRows(type, boards, components, inventory) {
   if (type === "board") return (boards || []).map(row => ({
     id: row.id,
@@ -274,6 +300,61 @@ function WiringEditor({ project, diagram, boards, components, inventory, canChan
   const canvasWidth = Math.max(960, ...draft.nodes.map(node => Number(node.x || 0) + 220));
   const canvasHeight = Math.max(560, ...draft.nodes.map(node => Number(node.y || 0) + 140));
 
+  function exportJson() {
+    const payload = {
+      format: "makervault-wiring",
+      version: 1,
+      project: { id: project.id, name: project.name },
+      diagram: {
+        id: draft.id,
+        name: draft.name,
+        description: draft.description,
+        revision: draft.revision,
+        nodes: draft.nodes.map(({ reference, ...node }) => node),
+        connections: draft.connections,
+        canvas: draft.canvas,
+      },
+    };
+    downloadWiringFile(
+      safeFilename(project.name + "-" + draft.name) + ".wiring.json",
+      JSON.stringify(payload, null, 2) + "\n",
+      "application/json",
+    );
+  }
+
+  function exportSvg() {
+    const pad = 30;
+    const width = Math.max(520, canvasWidth + pad * 2);
+    const height = Math.max(360, canvasHeight + pad * 2);
+    const lines = draft.connections.map(edge => {
+      const from = nodeById[edge.from_node];
+      const to = nodeById[edge.to_node];
+      if (!from || !to) return "";
+      const x1 = Number(from.x) + 90 + pad;
+      const y1 = Number(from.y) + 42 + pad;
+      const x2 = Number(to.x) + 90 + pad;
+      const y2 = Number(to.y) + 42 + pad;
+      const colour = /^#[0-9a-f]{6}$/i.test(edge.color || "") ? edge.color : "#7c5cff";
+      const midX = (x1 + x2) / 2;
+      const midY = (y1 + y2) / 2;
+      return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${colour}" stroke-width="3" stroke-linecap="round"/>` +
+        (edge.label ? `<text x="${midX}" y="${midY - 6}" fill="#4c5563" font-size="12" text-anchor="middle">${xmlEscape(edge.label)}</text>` : "");
+    }).join("");
+
+    const nodes = draft.nodes.map(node => {
+      const x = Number(node.x) + pad;
+      const y = Number(node.y) + pad;
+      return `<g><rect x="${x}" y="${y}" width="180" height="84" rx="12" fill="#f7f8fb" stroke="#667085"/><text x="${x + 12}" y="${y + 25}" fill="#667085" font-size="10" font-weight="700">${xmlEscape(node.type.toUpperCase())}</text><text x="${x + 12}" y="${y + 49}" fill="#111827" font-size="14" font-weight="700">${xmlEscape(node.label)}</text></g>`;
+    }).join("");
+
+    const svg = `<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="100%" height="100%" fill="#ffffff"/><text x="${pad}" y="22" fill="#111827" font-family="system-ui,sans-serif" font-size="16" font-weight="700">${xmlEscape(project.name)} — ${xmlEscape(draft.name)}</text><g font-family="system-ui,sans-serif">${lines}${nodes}</g></svg>`;
+    downloadWiringFile(
+      safeFilename(project.name + "-" + draft.name) + ".svg",
+      svg,
+      "image/svg+xml",
+    );
+  }
+
   return <div className="wiringEditorBackdrop">
     <section className="wiringEditor">
       <div className="wiringEditorHeader">
@@ -284,6 +365,8 @@ function WiringEditor({ project, diagram, boards, components, inventory, canChan
         </div>
         <div className="wiringHeaderActions">
           {dirty && <Badge tone="accent">Unsaved</Badge>}
+          <button onClick={exportJson}>Export JSON</button>
+          <button onClick={exportSvg}>Export SVG</button>
           {canChange && <button className="primary" disabled={busy || !dirty} onClick={save}>{busy ? "Saving…" : "Save"}</button>}
           <button onClick={close}>Close</button>
         </div>
