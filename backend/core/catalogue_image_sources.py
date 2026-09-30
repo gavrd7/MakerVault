@@ -479,7 +479,8 @@ CURATED_SBC_SOURCE_PAGES = {
 
 
 def _curated_sbc_source_page(obj) -> str:
-    if not _is_computer_board(obj):
+    specs = getattr(obj, "specifications", None) or {}
+    if str(specs.get("board_type") or "").strip().lower() not in {"sbc", "compute_module"}:
         return ""
     manufacturer = str(getattr(getattr(obj, "manufacturer", None), "name", "") or "").strip()
     name = str(getattr(obj, "name", "") or "").strip()
