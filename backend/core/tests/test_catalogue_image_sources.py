@@ -179,6 +179,41 @@ class CatalogueImageSourceTests(unittest.TestCase):
             "https://vendor.example/img/fallback.png",
         )
 
+    def test_structured_product_image_resolves_linked_image_object(self):
+        html = """
+        <script type="application/ld+json">
+        {
+          "@graph": [
+            {"@type":"Product","name":"Linked Widget","image":{"@id":"https://vendor.example/product#primaryimage"}},
+            {"@type":"ImageObject","@id":"https://vendor.example/product#primaryimage","contentUrl":"/media/linked-widget.jpg"}
+          ]
+        }
+        </script>
+        """
+        soup = __import__("bs4").BeautifulSoup(html, "html.parser")
+        self.assertEqual(
+            _structured_product_image(soup, "https://vendor.example/product"),
+            "https://vendor.example/media/linked-widget.jpg",
+        )
+
+    @patch("core.catalogue_image_sources.fetch_import_html")
+    def test_source_page_remote_image_supports_secure_opengraph_variant(self, fetch_html):
+        class Source:
+            url = "https://vendor.example/products/widget"
+            source_type = "manufacturer"
+            name = "Vendor"
+
+        component = DummyComponent()
+        component.source = Source()
+        component.specifications = {}
+        fetch_html.return_value = (
+            "https://vendor.example/products/widget",
+            '<html><head><meta property="og:image:secure_url" content="/images/widget-secure.jpg"></head></html>',
+        )
+        found = find_source_page_image(component)
+        self.assertEqual(found["external_image_url"], "https://vendor.example/images/widget-secure.jpg")
+        self.assertEqual(found["image_source_discovery"], "meta")
+
     @patch("core.catalogue_image_sources.fetch_import_html")
     def test_source_page_remote_image_uses_opengraph_without_caching(self, fetch_html):
         class Source:
