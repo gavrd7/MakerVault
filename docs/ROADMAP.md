@@ -235,6 +235,23 @@ This file tracks completed MakerVault milestones and the planned path toward a s
 - Review configuration defaults, diagnostics and support bundles/logging.
 - Define the supported v1 deployment model and release/upgrade policy.
 
+## Post-v1 exploration
+
+### MakerVault hardware tag reader
+
+**Goal:** provide an optional local hardware companion for fast physical-object identification without making dedicated hardware a requirement for MakerVault.
+
+- Explore an ESP32-based network reader using common NFC/RFID hardware such as PN532-class readers.
+- Allow a tap/scan to resolve a Maker Tag against the user's MakerVault instance over the local network.
+- Support useful workshop workflows such as identifying inventory/components, spools, printers and storage locations; opening the linked record; and initiating context-aware actions where appropriate.
+- Reuse the generic Maker Tags identity model and API rather than introducing a hardware-specific tag database.
+- Design secure device enrolment/authentication, revocation and least-privilege API access before allowing reader-initiated changes.
+- Consider a simple enclosure/PCB/reference build plus ESPHome/Home Assistant interoperability where it does not compromise the standalone MakerVault workflow.
+- Keep ordinary QR scanning, phone NFC and USB/OTG readers fully supported so the hardware reader remains optional.
+- Revisit implementation after the stable v1 release rather than expanding pre-v1 scope.
+
+---
+
 ## Ongoing tracks
 
 The following remain cross-cutting rather than tied to only one milestone:
