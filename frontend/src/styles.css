@@ -2060,3 +2060,15 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
 
 .wiringPinInput select{min-width:0}
 .wiringPinInput small{color:#718096;font-size:10px;line-height:1.35}
+
+.tagCaptureControls{display:grid;gap:7px;min-width:0}
+.tagCaptureControls.compact{grid-template-columns:minmax(220px,1fr);min-width:min(100%,340px)}
+.tagCaptureControls input{width:100%;min-width:0}
+.tagCaptureControls small{color:#8390a2;font-size:11px;line-height:1.35}
+.tagCaptureControls .tagCaptureNotice{color:#a995ff}
+.tagResolvePanel form .tagCaptureControls{flex:1 1 320px}
+@media(max-width:700px){
+  .tagResolvePanel form{align-items:stretch}
+  .tagResolvePanel form>select,.tagResolvePanel form>.tagCaptureControls,.tagResolvePanel form>button{width:100%;max-width:none}
+  .tagCaptureControls.compact{grid-template-columns:1fr}
+}
