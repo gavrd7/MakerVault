@@ -25,7 +25,7 @@ from .catalogue_images import (
     fetch_public_image,
     set_catalogue_image_metadata,
 )
-from .importers import ImporterError, fetch_import_html
+from .importers import ImporterError, fetch_catalogue_source_html, fetch_import_html
 
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
@@ -425,7 +425,7 @@ def find_espboards_image(board) -> ImageCandidate | None:
     for slug in _espboards_slug_candidates(board):
         page_url = f"https://www.espboards.dev/esp32/{quote(slug)}/"
         try:
-            final_url, html = fetch_import_html(page_url)
+            final_url, html = fetch_catalogue_source_html(page_url)
         except ImporterError:
             continue
         soup = BeautifulSoup(html, "html.parser")
