@@ -35,22 +35,49 @@ function xmlEscape(value) {
   }[char]));
 }
 
+function rawPins(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value.pins)) return value.pins;
+  if (typeof value === "object") return Object.entries(value)
+    .filter(([name]) => !["notes", "source"].includes(name))
+    .map(([name, details]) => typeof details === "object" && details !== null ? { name, ...details } : { name, description: String(details || "") });
+  return [];
+}
+
+function normaliseClientPin(entry) {
+  if (typeof entry === "string") return { name: entry, role: "unknown" };
+  const name = entry?.name || entry?.label || entry?.pin || "";
+  const role = String(entry?.role || entry?.type || entry?.electrical_role || entry?.function || "unknown").toLowerCase().replaceAll("-", "_").replaceAll(" ", "_");
+  const voltage = entry?.voltage ?? entry?.voltage_v ?? entry?.logic_voltage ?? null;
+  return { ...entry, name, role, voltage };
+}
+
 function referenceRows(type, boards, components, inventory) {
+  const boardMap = Object.fromEntries((boards || []).map(row => [row.id, row]));
+  const componentMap = Object.fromEntries((components || []).map(row => [row.id, row]));
   if (type === "board") return (boards || []).map(row => ({
     id: row.id,
     label: row.display_name || row.name,
     subtitle: [row.family, row.mcu].filter(Boolean).join(" · "),
+    pins: rawPins(row.pinout).map(normaliseClientPin).filter(pin => pin.name),
   }));
   if (type === "component") return (components || []).map(row => ({
     id: row.id,
     label: row.name,
     subtitle: row.category || "",
+    pins: rawPins(row.specifications?.pins || row.specifications?.pinout).map(normaliseClientPin).filter(pin => pin.name),
   }));
-  if (type === "inventory") return (inventory || []).map(row => ({
-    id: row.id,
-    label: row.name || row.display_name || row.inventory_id,
-    subtitle: [row.inventory_id, row.status_label].filter(Boolean).join(" · "),
-  }));
+  if (type === "inventory") return (inventory || []).map(row => {
+    const source = row.board_id ? boardMap[row.board_id] : componentMap[row.component_id];
+    const pins = row.board_id ? rawPins(source?.pinout) : rawPins(source?.specifications?.pins || source?.specifications?.pinout);
+    return {
+      id: row.id,
+      label: row.name || row.display_name || row.inventory_id,
+      subtitle: [row.inventory_id, row.status_label].filter(Boolean).join(" · "),
+      pins: pins.map(normaliseClientPin).filter(pin => pin.name),
+    };
+  });
   return [];
 }
 
@@ -214,7 +241,7 @@ function WiringEditor({ project, diagram, boards, components, inventory, canChan
       x: 28 + (index % 3) * 220,
       y: 28 + Math.floor(index / 3) * 130,
       notes: "",
-      reference: ref ? { label: ref.label, subtitle: ref.subtitle, pin_hints: [], pins: [] } : undefined,
+      reference: ref ? { label: ref.label, subtitle: ref.subtitle, pin_hints: (ref.pins || []).map(pin => pin.name), pins: ref.pins || [] } : undefined,
     };
     mutate(current => ({ ...current, nodes: [...current.nodes, node] }));
     setCustomLabel("");
