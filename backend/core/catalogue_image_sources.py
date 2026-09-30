@@ -488,21 +488,48 @@ CURATED_SBC_SOURCE_PAGES = {
 }
 
 
-def _curated_sbc_source_page(obj) -> str:
+CURATED_SBC_SOURCE_FALLBACKS = {
+    ("BeagleBoard.org", "BeaglePlay"): (
+        "https://www.beagleboard.org/boards/beagleplay",
+    ),
+    ("Orange Pi", "Orange Pi 5 Plus"): (
+        "https://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_5_Plus",
+        "https://www.orangepi.org/",
+    ),
+    ("Orange Pi", "Orange Pi 5 Pro"): (
+        "https://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_5_Pro",
+        "https://www.orangepi.org/",
+    ),
+}
+
+
+def _curated_sbc_source_pages(obj) -> list[str]:
     specs = getattr(obj, "specifications", None) or {}
     if str(specs.get("board_type") or "").strip().lower() not in {"sbc", "compute_module"}:
-        return ""
+        return []
     manufacturer = str(getattr(getattr(obj, "manufacturer", None), "name", "") or "").strip()
     name = str(getattr(obj, "name", "") or "").strip()
-    return CURATED_SBC_SOURCE_PAGES.get((manufacturer, name), "")
+    key = (manufacturer, name)
+    pages = []
+    primary = CURATED_SBC_SOURCE_PAGES.get(key, "")
+    if primary:
+        pages.append(primary)
+    for url in CURATED_SBC_SOURCE_FALLBACKS.get(key, ()):
+        if url and url not in pages:
+            pages.append(url)
+    return pages
+
+
+def _curated_sbc_source_page(obj) -> str:
+    pages = _curated_sbc_source_pages(obj)
+    return pages[0] if pages else ""
 
 
 def _candidate_source_pages(obj) -> list[dict]:
     specs = getattr(obj, "specifications", None) or {}
     candidates = []
     seen = set()
-    curated_url = _curated_sbc_source_page(obj)
-    if curated_url:
+    for curated_url in _curated_sbc_source_pages(obj):
         candidates.append({
             "url": curated_url,
             "source_type": "manufacturer",
