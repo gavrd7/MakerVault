@@ -184,6 +184,7 @@ function WiringEditor({ project, diagram, boards, components, inventory, canChan
   const [referenceId, setReferenceId] = useState("");
   const [customLabel, setCustomLabel] = useState("");
   const [connection, setConnection] = useState({ from_node: "", from_pin: "", to_node: "", to_pin: "", label: "", color: "#7c5cff" });
+  const [editingConnectionId, setEditingConnectionId] = useState("");
   const [drag, setDrag] = useState(null);
   const canvasRef = useRef(null);
 
@@ -230,20 +231,41 @@ function WiringEditor({ project, diagram, boards, components, inventory, canChan
   function addConnection(event) {
     event.preventDefault();
     if (!canChange || !connection.from_node || !connection.to_node || !connection.from_pin.trim() || !connection.to_pin.trim()) return;
+    const nextEdge = {
+      id: editingConnectionId || uid("wire"),
+      from_node: connection.from_node,
+      from_pin: connection.from_pin.trim(),
+      to_node: connection.to_node,
+      to_pin: connection.to_pin.trim(),
+      label: connection.label.trim(),
+      color: connection.color,
+      notes: "",
+    };
     mutate(current => ({
       ...current,
-      connections: [...current.connections, {
-        id: uid("wire"),
-        from_node: connection.from_node,
-        from_pin: connection.from_pin.trim(),
-        to_node: connection.to_node,
-        to_pin: connection.to_pin.trim(),
-        label: connection.label.trim(),
-        color: connection.color,
-        notes: "",
-      }],
+      connections: editingConnectionId
+        ? current.connections.map(edge => edge.id === editingConnectionId ? nextEdge : edge)
+        : [...current.connections, nextEdge],
     }));
-    setConnection(current => ({ ...current, from_pin: "", to_pin: "", label: "" }));
+    setEditingConnectionId("");
+    setConnection({ from_node: "", from_pin: "", to_node: "", to_pin: "", label: "", color: "#7c5cff" });
+  }
+
+  function editConnection(edge) {
+    setEditingConnectionId(edge.id);
+    setConnection({
+      from_node: edge.from_node,
+      from_pin: edge.from_pin,
+      to_node: edge.to_node,
+      to_pin: edge.to_pin,
+      label: edge.label || "",
+      color: edge.color || "#7c5cff",
+    });
+  }
+
+  function cancelConnectionEdit() {
+    setEditingConnectionId("");
+    setConnection({ from_node: "", from_pin: "", to_node: "", to_pin: "", label: "", color: "#7c5cff" });
   }
 
   function startDrag(event, node) {
@@ -397,7 +419,7 @@ function WiringEditor({ project, diagram, boards, components, inventory, canChan
           </section>
 
           <section>
-            <h3>Add connection</h3>
+            <h3>{editingConnectionId ? "Edit connection" : "Add connection"}</h3>
             <form onSubmit={addConnection}>
               <label>From<select value={connection.from_node} disabled={!canChange} onChange={e => setConnection(current => ({ ...current, from_node: e.target.value }))}><option value="">Choose node…</option>{draft.nodes.map(node => <option key={node.id} value={node.id}>{node.label}</option>)}</select></label>
               <PinInput label="From pin" node={nodeById[connection.from_node]} value={connection.from_pin} disabled={!canChange} onChange={value => setConnection(current => ({ ...current, from_pin: value }))} listId="wiring-from-pins" />
@@ -405,7 +427,10 @@ function WiringEditor({ project, diagram, boards, components, inventory, canChan
               <PinInput label="To pin" node={nodeById[connection.to_node]} value={connection.to_pin} disabled={!canChange} onChange={value => setConnection(current => ({ ...current, to_pin: value }))} listId="wiring-to-pins" />
               <label>Label<input value={connection.label} disabled={!canChange} onChange={e => setConnection(current => ({ ...current, label: e.target.value }))} placeholder="I²C SDA, 5V power…" /></label>
               <label>Wire colour<input type="color" value={connection.color} disabled={!canChange} onChange={e => setConnection(current => ({ ...current, color: e.target.value }))} /></label>
-              <button className="primary" disabled={!canChange || !connection.from_node || !connection.to_node || !connection.from_pin.trim() || !connection.to_pin.trim()}>＋ Connect</button>
+              <div className="wiringConnectionFormActions">
+                {editingConnectionId && <button type="button" onClick={cancelConnectionEdit}>Cancel</button>}
+                <button className="primary" disabled={!canChange || !connection.from_node || !connection.to_node || !connection.from_pin.trim() || !connection.to_pin.trim()}>{editingConnectionId ? "Save connection" : "＋ Connect"}</button>
+              </div>
             </form>
           </section>
         </aside>
@@ -440,8 +465,17 @@ function WiringEditor({ project, diagram, boards, components, inventory, canChan
                   const to = nodeById[edge.to_node];
                   if (!from || !to) return null;
                   const severity = diagnosticByConnection[edge.id] || "unknown";
+                  const x1 = Number(from.x) + 90;
+                  const y1 = Number(from.y) + 42;
+                  const x2 = Number(to.x) + 90;
+                  const y2 = Number(to.y) + 42;
+                  const midX = (x1 + x2) / 2;
+                  const midY = (y1 + y2) / 2;
                   return <g key={edge.id} className={"wiringLine wiringLine-" + severity}>
-                    <line x1={Number(from.x) + 90} y1={Number(from.y) + 42} x2={Number(to.x) + 90} y2={Number(to.y) + 42} stroke={severity === "unknown" ? (edge.color || "#7c5cff") : undefined} strokeWidth="3" />
+                    <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={severity === "unknown" ? (edge.color || "#7c5cff") : undefined} strokeWidth="3" />
+                    <rect className="wiringLineLabelBg" x={midX - 70} y={midY - 13} width="140" height="26" rx="7" />
+                    <text className="wiringLineLabel" x={midX} y={midY - 2} textAnchor="middle">{edge.from_pin} → {edge.to_pin}</text>
+                    {edge.label && <text className="wiringLineSubLabel" x={midX} y={midY + 9} textAnchor="middle">{edge.label}</text>}
                   </g>;
                 })}
               </svg>
@@ -454,6 +488,16 @@ function WiringEditor({ project, diagram, boards, components, inventory, canChan
                 <div className="wiringNodeHead"><span>{node.type}</span>{canChange && <button type="button" title="Remove node" onPointerDown={e => e.stopPropagation()} onClick={() => removeNode(node.id)}>×</button>}</div>
                 <strong>{node.label}</strong>
                 <small>{node.reference?.subtitle || (node.type === "custom" ? "Custom wiring node" : "Catalogue / inventory reference")}</small>
+                {(node.reference?.pins || []).length > 0 && <div className="wiringNodePins">
+                  {(node.reference.pins || []).slice(0, 18).map(pin => {
+                    const used = draft.connections.some(edge =>
+                      (edge.from_node === node.id && edge.from_pin.toLowerCase() === pin.name.toLowerCase()) ||
+                      (edge.to_node === node.id && edge.to_pin.toLowerCase() === pin.name.toLowerCase())
+                    );
+                    return <span className={used ? "used" : ""} key={pin.name}><b>{pin.name}</b>{pin.role && pin.role !== "unknown" ? <em>{pin.role.replaceAll("_", " ")}</em> : null}</span>;
+                  })}
+                  {node.reference.pins.length > 18 && <small>+{node.reference.pins.length - 18} more pins</small>}
+                </div>}
               </div>)}
               {!draft.nodes.length && <div className="wiringCanvasEmpty">Add boards, components, inventory or custom nodes from the toolbox.</div>}
             </div>
@@ -469,7 +513,11 @@ function WiringEditor({ project, diagram, boards, components, inventory, canChan
                 <strong>{nodeById[edge.from_node]?.label || edge.from_node} · {edge.from_pin} → {nodeById[edge.to_node]?.label || edge.to_node} · {edge.to_pin}</strong>
                 <small>{edge.label || "Unlabelled connection"}</small>
               </div>
-              <div className="wiringConnectionActions"><span className={"wiringConnectionStatus " + severity}>{severity}</span>{canChange && <button type="button" onClick={() => mutate(current => ({ ...current, connections: current.connections.filter(item => item.id !== edge.id) }))}>Remove</button>}</div>
+              <div className="wiringConnectionActions">
+                <span className={"wiringConnectionStatus " + severity}>{severity}</span>
+                {canChange && <button type="button" onClick={() => editConnection(edge)}>Edit</button>}
+                {canChange && <button type="button" onClick={() => mutate(current => ({ ...current, connections: current.connections.filter(item => item.id !== edge.id) }))}>Remove</button>}
+              </div>
             </div>;
             })}
             {!draft.connections.length && <p className="muted">No pin-to-pin connections yet.</p>}
