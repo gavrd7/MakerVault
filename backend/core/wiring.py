@@ -222,8 +222,14 @@ def normalise_wiring(owner, nodes, connections, canvas=None):
         })
 
     clean_canvas = canvas if isinstance(canvas, dict) else {}
+    try:
+        zoom = float(clean_canvas.get("zoom", 1) or 1)
+    except (TypeError, ValueError):
+        zoom = 1.0
+    if not math.isfinite(zoom):
+        zoom = 1.0
     clean_canvas = {
-        "zoom": max(0.25, min(float(clean_canvas.get("zoom", 1) or 1), 3.0)),
+        "zoom": max(0.25, min(zoom, 3.0)),
         "show_grid": bool(clean_canvas.get("show_grid", True)),
     }
     return clean_nodes, clean_connections, clean_canvas
