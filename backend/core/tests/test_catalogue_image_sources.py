@@ -263,6 +263,37 @@ class CatalogueImageSourceTests(unittest.TestCase):
         candidates = _page_image_candidates(soup, "https://vendor.example/board")
         self.assertEqual(candidates[0], ("https://vendor.example/product-board.jpg", "structured"))
 
+    def test_page_image_candidates_support_lazy_product_images(self):
+        html = """
+        <html><body>
+          <img class="woocommerce-product-gallery__image"
+               src="data:image/gif;base64,placeholder"
+               data-large_image="/uploads/odroid-c5-main.webp"
+               alt="ODROID-C5">
+        </body></html>
+        """
+        soup = __import__("bs4").BeautifulSoup(html, "html.parser")
+        candidates = _page_image_candidates(soup, "https://www.hardkernel.com/shop/odroid-c5/")
+        self.assertEqual(
+            candidates[0],
+            ("https://www.hardkernel.com/uploads/odroid-c5-main.webp", "page-image"),
+        )
+
+    def test_page_image_candidates_support_gallery_anchor_images(self):
+        html = """
+        <html><body>
+          <a class="woocommerce-product-gallery__image" href="/uploads/rock5b.jpg">
+            <img src="/tiny-placeholder.gif" alt="ROCK 5B">
+          </a>
+        </body></html>
+        """
+        soup = __import__("bs4").BeautifulSoup(html, "html.parser")
+        candidates = _page_image_candidates(soup, "https://example.test/product/")
+        self.assertIn(
+            ("https://example.test/uploads/rock5b.jpg", "gallery-image"),
+            candidates,
+        )
+
     def test_page_image_candidates_support_documentation_page_images(self):
         html = """
         <html><body>
