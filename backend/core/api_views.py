@@ -1574,6 +1574,11 @@ def inventory_detail(request, item_id):
                     raise ValidationError({
                         "quantity": "Each inventory record represents one physical item. Add another inventory record instead of increasing quantity."
                     })
+                allocated = item.bom_allocations.aggregate(total=Sum("quantity"))["total"] or Decimal("0")
+                if allocated > Decimal("1"):
+                    raise ValidationError({
+                        "quantity": f"This legacy grouped record still has {allocated} allocated. Split it into individual inventory units before changing quantity."
+                    })
                 item.quantity = Decimal("1")
             if "purchase_price" in payload:
                 item.purchase_price = _parse_decimal(payload["purchase_price"], "purchase_price")
