@@ -453,10 +453,51 @@ def find_espboards_image(board) -> ImageCandidate | None:
     return None
 
 
+CURATED_SBC_SOURCE_PAGES = {
+    ("BeagleBoard.org", "BeaglePlay"): "https://docs.beagleboard.org/latest/boards/beagleplay/index.html",
+    ("BeagleBoard.org", "BeagleBone Black"): "https://docs.beagleboard.org/latest/boards/beaglebone/black/index.html",
+    ("Banana Pi", "BPI-M7"): "https://docs.banana-pi.org/en/BPI-M7/BananaPi_BPI-M7",
+    ("Hardkernel", "ODROID-M2"): "https://www.hardkernel.com/shop/odroid-m2-with-16gbyte-ram/",
+    ("LattePanda", "LattePanda Sigma"): "https://www.lattepanda.com/lattepanda-sigma",
+    ("NVIDIA", "Jetson Orin Nano Super Developer Kit"): "https://docs.nvidia.com/jetson/orin-nano-devkit/user-guide/latest/",
+    ("NVIDIA", "Jetson AGX Orin Developer Kit"): "https://www.nvidia.com/en-gb/autonomous-machines/embedded-systems/jetson-orin/",
+    ("NVIDIA", "Jetson Orin Nano 8GB"): "https://www.nvidia.com/en-gb/autonomous-machines/embedded-systems/",
+    ("NVIDIA", "Jetson Orin Nano 4GB"): "https://www.nvidia.com/en-gb/autonomous-machines/embedded-systems/",
+    ("NVIDIA", "Jetson Orin NX 8GB"): "https://www.nvidia.com/en-gb/autonomous-machines/embedded-systems/",
+    ("NVIDIA", "Jetson Orin NX 16GB"): "https://www.nvidia.com/en-gb/autonomous-machines/embedded-systems/",
+    ("NVIDIA", "Jetson AGX Orin 32GB"): "https://www.nvidia.com/en-gb/autonomous-machines/embedded-systems/",
+    ("NVIDIA", "Jetson AGX Orin 64GB"): "https://www.nvidia.com/en-gb/autonomous-machines/embedded-systems/",
+    ("Khadas", "VIM4"): "https://www.khadas.com/about",
+    ("Khadas", "Edge2 Maker Kit"): "https://www.khadas.com/about",
+    ("Radxa", "ROCK 3A"): "https://docs.radxa.com/en/productlist",
+    ("Radxa", "ROCK 4B+"): "https://docs.radxa.com/en/productlist",
+    ("Radxa", "ROCK 5A"): "https://docs.radxa.com/en/productlist",
+    ("Radxa", "ROCK 5B"): "https://docs.radxa.com/en/productlist",
+    ("Radxa", "ROCK 5C"): "https://docs.radxa.com/en/productlist",
+    ("Radxa", "CM5"): "https://docs.radxa.com/en/productlist",
+}
+
+
+def _curated_sbc_source_page(obj) -> str:
+    if not _is_computer_board(obj):
+        return ""
+    manufacturer = str(getattr(getattr(obj, "manufacturer", None), "name", "") or "").strip()
+    name = str(getattr(obj, "name", "") or "").strip()
+    return CURATED_SBC_SOURCE_PAGES.get((manufacturer, name), "")
+
+
 def _candidate_source_pages(obj) -> list[dict]:
     specs = getattr(obj, "specifications", None) or {}
     candidates = []
     seen = set()
+    curated_url = _curated_sbc_source_page(obj)
+    if curated_url:
+        candidates.append({
+            "url": curated_url,
+            "source_type": "manufacturer",
+            "provider": "Official manufacturer",
+        })
+        seen.add(curated_url)
     for key in (
         "reference_url",
         "technical_source_url",
