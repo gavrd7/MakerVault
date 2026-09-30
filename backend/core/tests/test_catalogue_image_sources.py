@@ -10,6 +10,7 @@ from core.catalogue_image_sources import (
     _is_computer_board,
     _page_image_candidates,
     _curated_sbc_source_page,
+    _curated_sbc_source_pages,
     _commons_license_allowed,
     _component_image_queries,
     _espboards_slug_candidates,
@@ -240,6 +241,29 @@ class CatalogueImageSourceTests(unittest.TestCase):
                     specifications={"board_type": "sbc"},
                 )
                 self.assertEqual(_curated_sbc_source_page(board), expected)
+
+    def test_curated_sbc_source_pages_include_exact_fallbacks(self):
+        beagleplay = SimpleNamespace(
+            name="BeaglePlay",
+            manufacturer=SimpleNamespace(name="BeagleBoard.org"),
+            specifications={"board_type": "sbc"},
+        )
+        orange_plus = SimpleNamespace(
+            name="Orange Pi 5 Plus",
+            manufacturer=SimpleNamespace(name="Orange Pi"),
+            specifications={"board_type": "sbc"},
+        )
+
+        self.assertIn(
+            "https://www.beagleboard.org/boards/beagleplay",
+            _curated_sbc_source_pages(beagleplay),
+        )
+        pages = _curated_sbc_source_pages(orange_plus)
+        self.assertIn(
+            "https://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_5_Plus",
+            pages,
+        )
+        self.assertIn("https://www.orangepi.org/", pages)
 
     def test_curated_sbc_source_mapping_ignores_microcontrollers(self):
         manufacturer = SimpleNamespace(name="NVIDIA")
