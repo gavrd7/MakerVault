@@ -909,6 +909,43 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
     }
   }
 
+  async function copyDiagnostics(connection) {
+    const payload = {
+      maker_vault: "printer-adapter-diagnostics",
+      printer: {
+        name: printer.name,
+        manufacturer: printer.manufacturer,
+        model: printer.model,
+      },
+      adapter: {
+        key: connection.adapter,
+        label: connection.adapter_label,
+        protocol: connection.protocol,
+        validation: connection.validation,
+        validation_label: connection.validation_label,
+        compatibility_hint: connection.compatibility_hint,
+      },
+      connection: {
+        status: connection.status,
+        stale: connection.stale,
+        capabilities: connection.capabilities,
+        last_checked_at: connection.last_checked_at,
+        last_seen_at: connection.last_seen_at,
+        last_error: connection.last_error,
+        config_flags: connection.config,
+      },
+      snapshot: connection.snapshot || {},
+    };
+    const text = JSON.stringify(payload, null, 2);
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
+      await navigator.clipboard.writeText(text);
+      setNotice(connection.adapter_label + " diagnostics copied. Review filenames/serials before sharing.");
+    } catch (_err) {
+      window.prompt("Copy these sanitized MakerVault diagnostics:", text);
+    }
+  }
+
   async function removeConnection(connection) {
     if (!window.confirm("Remove " + connection.adapter_label + " from " + printer.name + "?")) return;
     setBusy(connection.id); setError(""); setNotice("");
@@ -1016,11 +1053,13 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
             </div>}
           </div>
           {snapshot.warnings?.map((warning, index) => <small className="integrationError" key={"warning-" + index}>{warning}</small>)}
+          {connection.validation_label && <small>{connection.validation_label}{connection.protocol ? " · " + connection.protocol : ""}</small>}
           <small>Capabilities: {Object.entries(connection.capabilities || {}).filter(([, enabled]) => enabled).map(([key]) => key.replaceAll("_", " ")).join(", ") || "Not reported yet"}</small>
           <small>Last seen: {connection.last_seen_at ? formatDate(connection.last_seen_at) : "Never"}</small>
           {connection.last_error && <small className="integrationError">{connection.last_error}</small>}
           <div className="settingsActions compact">
             <button type="button" disabled={busy === connection.id || !connection.enabled || !connection.supported} onClick={() => refreshConnection(connection)}>{busy === connection.id ? "Working…" : "Refresh"}</button>
+            <button type="button" onClick={() => copyDiagnostics(connection)}>Copy diagnostics</button>
             <button type="button" disabled={busy === connection.id} onClick={() => toggleConnection(connection)}>{connection.enabled ? "Disable" : "Enable"}</button>
             <button type="button" className="dangerButton" disabled={busy === connection.id} onClick={() => removeConnection(connection)}>Remove</button>
           </div>
