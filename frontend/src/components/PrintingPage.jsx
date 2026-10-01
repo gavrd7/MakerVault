@@ -845,11 +845,14 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
           <div className="settingsCallout integrationAuthorityCallout">
             <strong>{snapshot.state_label || "No live snapshot yet"}</strong>
             <p>{snapshot.job?.file_name || (connection.status === "connected" ? "Printer reachable; no active filename reported." : "Refresh this source to test the connection.")}</p>
-            {pct != null && <p>{pct.toFixed(1)}% · {snapshot.job?.elapsed_seconds != null ? Math.round(snapshot.job.elapsed_seconds / 60) + " min elapsed" : ""}{snapshot.job?.remaining_seconds != null ? " · " + Math.round(snapshot.job.remaining_seconds / 60) + " min remaining" : ""}</p>}
+            {pct != null && <>
+              <div className="printingLiveProgress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={pct}><span style={{ width: pct + "%" }} /></div>
+              <p>{pct.toFixed(1)}% · {snapshot.job?.elapsed_seconds != null ? Math.round(snapshot.job.elapsed_seconds / 60) + " min elapsed" : ""}{snapshot.job?.remaining_seconds != null ? " · " + Math.round(snapshot.job.remaining_seconds / 60) + " min remaining" : ""}</p>
+            </>}
             {(snapshot.temperatures?.tool0?.actual_c != null || snapshot.temperatures?.bed?.actual_c != null || snapshot.temperatures?.chamber?.actual_c != null) && <p>
-              {snapshot.temperatures?.tool0?.actual_c != null ? "Tool " + snapshot.temperatures.tool0.actual_c + "°C" : ""}
-              {snapshot.temperatures?.bed?.actual_c != null ? " · Bed " + snapshot.temperatures.bed.actual_c + "°C" : ""}
-              {snapshot.temperatures?.chamber?.actual_c != null ? " · Chamber " + snapshot.temperatures.chamber.actual_c + "°C" : ""}
+              {snapshot.temperatures?.tool0?.actual_c != null ? "Tool " + snapshot.temperatures.tool0.actual_c + "°C" + (snapshot.temperatures.tool0.target_c != null ? "/" + snapshot.temperatures.tool0.target_c + "°C" : "") : ""}
+              {snapshot.temperatures?.bed?.actual_c != null ? " · Bed " + snapshot.temperatures.bed.actual_c + "°C" + (snapshot.temperatures.bed.target_c != null ? "/" + snapshot.temperatures.bed.target_c + "°C" : "") : ""}
+              {snapshot.temperatures?.chamber?.actual_c != null ? " · Chamber " + snapshot.temperatures.chamber.actual_c + "°C" + (snapshot.temperatures.chamber.target_c != null ? "/" + snapshot.temperatures.chamber.target_c + "°C" : "") : ""}
             </p>}
             {(snapshot.job?.current_layer != null || snapshot.job?.total_layers != null) && <p>
               Layer {snapshot.job?.current_layer ?? "?"}{snapshot.job?.total_layers != null ? " / " + snapshot.job.total_layers : ""}
