@@ -561,10 +561,17 @@ def _anycubic_materials(box_data: dict) -> list[dict]:
     return rows
 
 
-def normalise_anycubic_snapshot(info_data: dict, box_data: dict | None = None, *, identity: dict | None = None) -> dict:
+def normalise_anycubic_snapshot(
+    info_data: dict,
+    box_data: dict | None = None,
+    *,
+    identity: dict | None = None,
+    peripheral_data: dict | None = None,
+) -> dict:
     if not isinstance(info_data, dict):
         raise ManufacturerAdapterError("Anycubic printer returned an unexpected info payload.")
     identity = identity or {}
+    peripheral_data = peripheral_data if isinstance(peripheral_data, dict) else {}
     project = info_data.get("project")
     if not isinstance(project, dict) or not project:
         project = info_data.get("last_project") if isinstance(info_data.get("last_project"), dict) else {}
@@ -611,8 +618,16 @@ def normalise_anycubic_snapshot(info_data: dict, box_data: dict | None = None, *
             "raw_state": str(info_data.get("state") or ""),
             "project_state": str(project.get("state") or ""),
             "pause_code": project.get("pause"),
-            "camera_available": bool(camera_url),
-            "ace_connected": bool(materials or box_data),
+            "camera_available": bool(camera_url or peripheral_data.get("camera")),
+            "ace_connected": bool(
+                materials
+                or box_data
+                or peripheral_data.get("multiColorBox")
+            ),
+            # Empty/absent ACE getInfo responses are common while idle. Only a
+            # received multiColorBox payload is authoritative enough to retire
+            # previously loaded slot observations.
+            "ace_slots_observed": bool(box_data),
             "ace_units": len((box_data or {}).get("multi_color_box") or []) if isinstance(box_data, dict) else 0,
             "fan_percent": _number(info_data.get("fan_speed_pct")),
             "aux_fan_percent": _number(info_data.get("aux_fan_speed_pct")),
@@ -632,6 +647,7 @@ def poll_anycubic_local(endpoint_url: str, config: dict | None = None) -> dict:
 
     info_data = {}
     box_data = {}
+    peripheral_data = {}
     info_ready = threading.Event()
     box_ready = threading.Event()
     error = {"message": ""}
@@ -670,6 +686,7 @@ def poll_anycubic_local(endpoint_url: str, config: dict | None = None) -> dict:
         publish_query("tempature")
         publish_query("fan")
         publish_query("multiColorBox", action="getInfo")
+        publish_query("peripherie")
 
     def on_message(_client_obj, _userdata, message):
         try:
@@ -699,6 +716,8 @@ def poll_anycubic_local(endpoint_url: str, config: dict | None = None) -> dict:
         elif message_type == "multiColorBox":
             box_data.update(data)
             box_ready.set()
+        elif message_type == "peripherie":
+            peripheral_data.update(data)
 
     client.on_connect = on_connect
     client.on_message = on_message
@@ -714,7 +733,12 @@ def poll_anycubic_local(endpoint_url: str, config: dict | None = None) -> dict:
         box_ready.wait(1.5)
         if not info_data:
             raise ManufacturerAdapterError("Anycubic printer returned no usable live telemetry.")
-        return normalise_anycubic_snapshot(info_data, box_data, identity=identity)
+        return normalise_anycubic_snapshot(
+            info_data,
+            box_data,
+            identity=identity,
+            peripheral_data=peripheral_data,
+        )
     except (OSError, mqtt.MQTTException) as exc:
         raise ManufacturerAdapterError("MakerVault could not reach the Anycubic local MQTT broker.") from exc
     finally:
