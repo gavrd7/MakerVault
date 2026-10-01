@@ -43,6 +43,7 @@ from .private_storage import private_storage_key_status
 from .search_service import run_search
 from .wiring import normalise_wiring, serialise_wiring_diagram
 from .maker_tags import (
+    TAG_TECHNOLOGIES,
     resolve_tag_target,
     serialise_tag,
     tag_target_options,
@@ -154,7 +155,7 @@ def _sync_rfid_tag_to_spool(tag, *, previous=None):
             old_spool.rfid_uid = ""
             old_spool.save(update_fields=["rfid_uid", "updated_at"])
 
-    if tag.kind != "rfid" or tag.target_type != "spool":
+    if tag.kind != "rfid" or tag.target_type != "spool" or not MakerTag.is_uid_like(tag.code):
         return
 
     spool = Spool.objects.filter(owner=tag.owner, pk=tag.target_id).first()
@@ -399,6 +400,7 @@ def maker_tags(request):
             "rows": [serialise_tag(tag) for tag in qs[:5000]],
             "targets": tag_target_options(request.user),
             "kinds": [{"value": value, "label": label} for value, label in MakerTag.KINDS],
+            "technologies": [{"value": value, "label": label} for value, label in TAG_TECHNOLOGIES],
             "target_types": [{"value": value, "label": label} for value, label in MakerTag.TARGET_TYPES],
         })
 
@@ -428,7 +430,7 @@ def maker_tags(request):
         if kind == "rfid" and target_type == "spool":
             existing = str(target.rfid_uid or "").strip().upper()
             submitted = MakerTag.normalise_code(kind, tag.code)
-            if existing and submitted and existing != submitted:
+            if existing and submitted and MakerTag.is_uid_like(submitted) and existing != submitted:
                 raise ValidationError({
                     "code": "This spool already has a different RFID UID. Use the existing RFID value."
                 })
@@ -510,7 +512,7 @@ def maker_tag_detail(request, tag_id):
         if tag.kind == "rfid" and tag.target_type == "spool":
             existing = str(target.rfid_uid or "").strip().upper()
             submitted = MakerTag.normalise_code(tag.kind, tag.code)
-            if existing and existing not in {submitted, previous.get("code", "")}:
+            if existing and MakerTag.is_uid_like(submitted) and existing not in {submitted, previous.get("code", "")}:
                 raise ValidationError({
                     "code": "The target spool already has a different RFID UID."
                 })
@@ -563,7 +565,29 @@ def maker_tag_resolve_token(request, public_token):
 @require_http_methods(["GET"])
 def maker_tag_resolve_code(request):
     kind = str(request.GET.get("kind") or "").strip().lower()
-    code = MakerTag.normalise_code(kind, request.GET.get("code"))
+    raw_code = str(request.GET.get("code") or "").strip()
+    if not raw_code:
+        return _error("Provide a tag identity code.")
+
+    if kind == "auto":
+        matches = []
+        for candidate_kind, _label in MakerTag.KINDS:
+            code = MakerTag.normalise_code(candidate_kind, raw_code)
+            tag = MakerTag.objects.filter(
+                owner=request.user,
+                kind=candidate_kind,
+                code=code,
+                status="active",
+            ).first()
+            if tag and tag.pk not in {item.pk for item in matches}:
+                matches.append(tag)
+        if not matches:
+            return _error("Active Maker Tag not found.", status=404)
+        if len(matches) > 1:
+            return _error("More than one tag matches this reader value. Choose NFC, RFID or QR explicitly.")
+        return JsonResponse({"item": serialise_tag(matches[0], include_events=True)})
+
+    code = MakerTag.normalise_code(kind, raw_code)
     if kind not in dict(MakerTag.KINDS) or not code:
         return _error("Provide a supported tag type and identity code.")
     tag = MakerTag.objects.filter(
