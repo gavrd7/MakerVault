@@ -30,7 +30,7 @@ from .importers import ImporterError, fetch_catalogue_source_html, fetch_import_
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 OPENVERSE_API = "https://api.openverse.org/v1/images/"
-IMAGE_SEED_VERSION = "0.7.2-authoritative-images-11"
+IMAGE_SEED_VERSION = "0.7.2-authoritative-images-12"
 USER_AGENT = f"MakerVault/{getattr(settings, 'MAKERVAULT_VERSION', 'dev')} (+self-hosted catalogue image seeder)"
 def _commons_license_allowed(license_name: str) -> bool:
     """Allow only licences suitable for normal open redistribution."""
@@ -488,8 +488,8 @@ def find_espboards_image(board) -> ImageCandidate | None:
 
 
 CURATED_SBC_SOURCE_PAGES = {
-    ("Banana Pi", "BPI-M5"): "https://www.banana-pi.org/en/banana-pi-sbcs/55.html",
-    ("Banana Pi", "BPI-M7"): "https://www.banana-pi.org/en/banana-pi-sbcs/169.html",
+    ("Banana Pi", "BPI-M5"): "https://docs.banana-pi.org/en/BPI-M5/Photo_BPI-M5",
+    ("Banana Pi", "BPI-M7"): "https://docs.banana-pi.org/en/BPI-M7/BananaPi_BPI-M7",
     ("BeagleBoard.org", "BeagleBone Black"): "https://www.beagleboard.org/boards/beaglebone-black",
     ("BeagleBoard.org", "BeaglePlay"): "https://docs.beagleboard.org/latest/boards/beagleplay/index.html",
     ("BeagleBoard.org", "BeagleY-AI"): "https://docs.beagleboard.org/latest/boards/beagley/ai/01-introduction.html",
@@ -526,9 +526,9 @@ CURATED_SBC_SOURCE_PAGES = {
 
 CURATED_MCU_SOURCE_PAGES = {
     ("Generic", "ESP32-2432S028R CYD"): "https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display",
-    ("Adafruit", "Feather ESP32-S3"): "https://www.adafruit.com/product/5885",
-    ("Adafruit", "Feather RP2040"): "https://www.adafruit.com/product/4884",
-    ("Adafruit", "QT Py ESP32-C3"): "https://www.adafruit.com/product/5405",
+    ("Adafruit", "Feather ESP32-S3"): "https://learn.adafruit.com/adafruit-esp32-s3-feather",
+    ("Adafruit", "Feather RP2040"): "https://learn.adafruit.com/adafruit-feather-rp2040-pico",
+    ("Adafruit", "QT Py ESP32-C3"): "https://learn.adafruit.com/adafruit-qt-py-esp32-c3-wifi-dev-board/pinouts",
     ("Arduino", "Nano 33 IoT"): "https://docs.arduino.cc/hardware/nano-33-iot",
     ("Arduino", "Nano ESP32"): "https://docs.arduino.cc/hardware/nano-esp32",
     ("DFRobot", "FireBeetle 2 ESP32-E"): "https://www.dfrobot.com/product-2195.html",
@@ -898,6 +898,16 @@ def _page_image_candidates(soup: BeautifulSoup, base_url: str) -> list[tuple[str
         resolved = urljoin(base_url, raw)
         parsed = urlparse(resolved)
         if parsed.scheme != "https" or not parsed.netloc or resolved in seen:
+            return
+        path_hint = (parsed.path or "").lower()
+        # Source pages frequently publish brand/social artwork alongside the
+        # actual product photo. Never promote obvious chrome/placeholders to a
+        # catalogue image merely because they are first in page metadata.
+        if any(token in path_hint for token in (
+            "favicon", "site-logo", "/logo", "_logo", "-logo",
+            "avatar", "placeholder", "default-image", "social-card",
+            "social_share", "social-share", "banner",
+        )):
             return
         seen.add(resolved)
         candidates.append((resolved, method))
