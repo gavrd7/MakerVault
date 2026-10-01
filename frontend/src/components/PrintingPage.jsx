@@ -48,6 +48,16 @@ function liveProgress(snapshot) {
   return Math.max(0, Math.min(100, Number(value)));
 }
 
+function shouldShowLiveProgress(snapshot) {
+  const pct = liveProgress(snapshot);
+  const state = String(snapshot?.state || "").toLowerCase();
+  return pct != null && Boolean(
+    snapshot?.job?.file_name
+    || pct > 0
+    || ["printing", "processing", "paused", "complete", "completed"].includes(state)
+  );
+}
+
 function liveTemperature(temp) {
   if (temp?.actual_c == null) return "—";
   const actual = Number(temp.actual_c).toFixed(1).replace(".0", "");
@@ -62,6 +72,7 @@ function PrinterLiveSummary({ printer, onOpen }) {
   const snapshot = connection.snapshot || {};
   const stateKey = liveStateKey(snapshot, connection);
   const pct = liveProgress(snapshot);
+  const showProgress = shouldShowLiveProgress(snapshot);
   const job = snapshot.job || {};
   const temps = snapshot.temperatures || {};
   const connected = connection.status === "connected" && !connection.stale;
@@ -77,7 +88,7 @@ function PrinterLiveSummary({ printer, onOpen }) {
       </div>
       <button type="button" className="printerLiveOpen" onClick={onOpen}>Open live</button>
     </div>
-    {pct != null && <div className="printerLiveProgressLine">
+    {showProgress && <div className="printerLiveProgressLine">
       <div className="printerLiveProgressTrack"><span style={{ width: pct + "%" }} /></div>
       <strong>{pct.toFixed(pct % 1 ? 1 : 0)}%</strong>
     </div>}
@@ -898,6 +909,7 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
       {(data.rows || []).map(connection => {
         const snapshot = connection.snapshot || {};
         const pct = progress(snapshot);
+        const showProgress = shouldShowLiveProgress(snapshot);
         const tone = connection.stale ? "danger" : connection.status === "connected" ? "good" : connection.status === "error" || connection.status === "disconnected" ? "danger" : connection.experimental ? "accent" : "neutral";
         return <article key={connection.id}>
           <div className="settingsIntegrationHead">
@@ -920,9 +932,9 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
                   <small>{snapshot.job?.file_name || (connection.status === "connected" ? "Printer reachable · no active file" : "Refresh this source to test the connection")}</small>
                 </div>
               </div>
-              {pct != null && <strong className="printingLivePercent">{pct.toFixed(pct % 1 ? 1 : 0)}%</strong>}
+              {showProgress && <strong className="printingLivePercent">{pct.toFixed(pct % 1 ? 1 : 0)}%</strong>}
             </div>
-            {pct != null && <div className="printingLiveProgress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={pct}><span style={{ width: pct + "%" }} /></div>}
+            {showProgress && <div className="printingLiveProgress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={pct}><span style={{ width: pct + "%" }} /></div>}
             <div className="printingLiveMetrics">
               {snapshot.temperatures?.tool0?.actual_c != null && <div><span>Nozzle</span><strong>{liveTemperature(snapshot.temperatures.tool0)}</strong></div>}
               {snapshot.temperatures?.bed?.actual_c != null && <div><span>Bed</span><strong>{liveTemperature(snapshot.temperatures.bed)}</strong></div>}
