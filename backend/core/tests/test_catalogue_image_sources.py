@@ -271,6 +271,28 @@ class CatalogueImageSourceTests(unittest.TestCase):
             "XIAO RP2040",
         )
 
+    def test_board_queries_strip_lookup_only_noise(self):
+        board = SimpleNamespace(
+            name="XIAO RP2040 - Supports Arduino, MicroPython and CircuitPython [base]",
+            mcu="RP2040",
+            manufacturer=SimpleNamespace(name="Seeed Studio®"),
+        )
+        queries = _board_image_queries(board)
+        self.assertEqual(queries[0], "Seeed Studio XIAO RP2040")
+        self.assertNotIn("[base]", " ".join(queries).lower())
+        self.assertNotIn("supports arduino", " ".join(queries).lower())
+        self.assertNotIn("®", " ".join(queries))
+
+    def test_base_suffix_is_lookup_noise_not_product_identity(self):
+        self.assertEqual(
+            _normalise_search_label("OrangePi 5 Plus [base]"),
+            "OrangePi 5 Plus",
+        )
+        self.assertEqual(
+            _normalise_catalogue_identity("Orange Pi 5 Plus [base]"),
+            _normalise_catalogue_identity("OrangePi 5 Plus"),
+        )
+
     def test_curated_mcu_source_pages_cover_known_board_failures(self):
         cases = [
             ("Adafruit", "Feather RP2040", "https://www.adafruit.com/product/4884"),
