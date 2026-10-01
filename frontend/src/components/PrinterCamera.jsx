@@ -10,6 +10,9 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
   const [selected, setSelected] = useState("");
   const [settings, setSettings] = useState(false);
   const [candidates, setCandidates] = useState([]);
+  const [provider, setProvider] = useState(null);
+  const [presets, setPresets] = useState([]);
+  const [warnings, setWarnings] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -20,16 +23,17 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
     try {
       const result = await apiFetch(root);
       setRows(result.rows);
+      setProvider(result.provider); setPresets(result.presets || []);
       setSelected(current => result.rows.some(item => item.id === current) ? current : result.rows[0]?.id || "");
     } catch (err) { setError(err.message); }
   }
   useEffect(() => { load(); }, [connection.id]);
   useEffect(() => { if (!connection.enabled && activeCamera?.startsWith(connection.id + ":")) setActiveCamera(""); }, [connection.enabled]);
   async function discover() {
-    setBusy(true); setError(""); setNotice("");
+    setBusy(true); setError(""); setNotice(""); setWarnings([]);
     try {
       const result = await apiFetch(root + "discover/", { method: "POST", body: {} });
-      setCandidates(result.candidates);
+      setCandidates(result.candidates); setWarnings(result.warnings || []);
       if (!result.candidates.length) setNotice("No supported camera URLs were found. You can enter one below.");
     } catch (err) { setError(err.message); }
     finally { setBusy(false); }
@@ -60,8 +64,10 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
     {notice && <p role="status">{notice}</p>}
     {error && <p className="integrationError" role="alert">{error}</p>}
     {settings && canEdit && <form className="formGrid printerCameraForm" onSubmit={save}>
-      <div className="full settingsActions"><button type="button" disabled={busy || !connection.enabled} onClick={discover}>{busy ? "Working…" : "Find camera sources"}</button>{camera && <button type="button" disabled={busy} onClick={remove}>Remove selected source</button>}</div>
-      {!!candidates.length && <label className="full">Discovered sources / presets<select defaultValue="" onChange={e => { const item = candidates[Number(e.target.value)]; if (item) setForm(item); }}><option value="" disabled>Choose a source to configure</option>{candidates.map((item, index) => <option key={item.id} value={index}>{item.name} · {LABELS[item.mode]}</option>)}</select><small>Presets are candidates; saving does not confirm playback.</small></label>}
+      <div className="full"><small>{provider?.guidance} If this printer exposes Moonraker or OctoPrint, you can also add that integration and configure its camera.</small></div>
+      {warnings.map(message => <p className="full" role="status" key={message}>{message}</p>)}
+      <div className="full settingsActions">{!!presets.length && <button type="button" disabled={busy} onClick={() => { setCandidates(presets); setWarnings([]); setNotice("K1 presets loaded. Choose the route that works in your printer installation."); }}>K1 / Helper Script presets</button>}<button type="button" disabled={busy || !connection.enabled} onClick={discover}>{busy ? "Working…" : "Find camera sources"}</button>{camera && <button type="button" disabled={busy} onClick={remove}>Remove selected source</button>}</div>
+      {!!candidates.length && <label className="full">Discovered sources / presets<select value="" onChange={e => { const item = candidates[Number(e.target.value)]; if (item) setForm(item); }}><option value="" disabled>Choose a source to configure</option>{candidates.map((item, index) => <option key={item.id} value={index}>{item.name} · {LABELS[item.mode]}</option>)}</select><small>Presets are candidates; saving does not confirm playback.</small></label>}
       <label>Name<input required maxLength={100} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></label>
       <label>Feed type<select value={form.mode} onChange={e => setForm({ ...form, mode: e.target.value })}><option value="snapshot">JPEG / PNG snapshot</option><option value="mjpeg">MJPEG (refreshed images)</option>{connection.adapter === "creality_local" && <option value="creality_webrtc">Creality WebRTC (experimental)</option>}</select></label>
       <label className="full">Camera URL<input required type="url" value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} placeholder="http://printer-address:8080/?action=snapshot" /><small>Use the same host as this printer source. Include the camera port and path. Embedded usernames and passwords are unsupported.</small></label>

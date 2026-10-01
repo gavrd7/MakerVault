@@ -10,7 +10,7 @@ from django.views.decorators.http import require_http_methods
 
 from .api_views import _error, _read_json, _require_permission
 from .models import PrinterConnection
-from .printer_cameras import CameraError, discover, frame, negotiate, normalise_source, sources
+from .printer_cameras import CameraError, discover_result, frame, negotiate, normalise_source, sources, provider_info, setup_presets
 
 
 def connection_for(request, printer_id, connection_id):
@@ -52,7 +52,7 @@ def camera_sources(request, printer_id, connection_id):
         return _error("Printer source not found.", 404)
     if request.method == "GET":
         can_edit = request.user.has_perm("core.change_printer")
-        return private_response(JsonResponse({"rows": [{key: value for key, value in item.items() if key != "url" or can_edit} for item in sources(connection)], "can_edit": can_edit}))
+        return private_response(JsonResponse({"rows": [{key: value for key, value in item.items() if key != "url" or can_edit} for item in sources(connection)], "can_edit": can_edit, "provider": provider_info(connection), "presets": setup_presets(connection) if can_edit else []}))
     denied = _require_permission(request, "core.change_printer")
     if denied:
         return denied
@@ -89,8 +89,8 @@ def camera_discover(request, printer_id, connection_id):
         return _error("Enable this printer source before camera discovery.")
     try:
         with camera_slot(request.user.pk):
-            candidates = discover(connection)
-        return private_response(JsonResponse({"candidates": candidates}))
+            result = discover_result(connection)
+        return private_response(JsonResponse(result))
     except (CameraError, TypeError, ValueError, AttributeError) as exc:
         return _error(str(exc) if isinstance(exc, CameraError) else "Camera discovery returned an unsupported response.", 502)
 

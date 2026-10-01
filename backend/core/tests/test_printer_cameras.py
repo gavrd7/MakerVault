@@ -77,6 +77,97 @@ class CameraProtocolTests(SimpleTestCase):
         self.assertTrue(rows[0]["flip_horizontal"])
         self.assertEqual(rows[0]["mode"], "snapshot")
 
+    def test_provider_registry_covers_adapters_without_claiming_playback(self):
+        from core.printer_cameras import PROVIDERS, provider_info
+        self.assertEqual(set(PROVIDERS), {key for key, _ in PrinterConnection.ADAPTERS})
+        for adapter, _ in PrinterConnection.ADAPTERS:
+            self.connection.adapter = adapter
+            info = provider_info(self.connection)
+            self.assertFalse(info['hardware_validated'])
+            self.assertEqual('creality_webrtc' in info['modes'], adapter == 'creality_local')
+
+    @patch('core.printer_cameras.json_request')
+    def test_k1_presets_preserve_host_and_do_not_probe(self, get):
+        from core.printer_cameras import setup_presets
+        self.connection.endpoint_url = 'ws://[fd00::50]:9999'
+        self.connection.adapter = 'creality_local'
+        rows = discover(self.connection)
+        self.assertEqual(len(rows), 7)
+        self.assertIn('http://[fd00::50]:4408/webcam/?action=stream', [row['url'] for row in rows])
+        self.assertIn('http://[fd00::50]:4409/webcam/?action=snapshot', [row['url'] for row in rows])
+        self.connection.adapter = 'moonraker'
+        self.assertEqual(len(setup_presets(self.connection)), 6)
+        get.assert_not_called()
+
+    @patch('core.printer_cameras.json_request')
+    def test_octoprint_uses_stream_when_snapshot_is_printer_local(self, get):
+        self.connection.adapter = 'octoprint'
+        self.connection.endpoint_url = 'https://printer.lan/octoprint'
+        get.return_value = {'webcam': {'snapshotUrl': 'http://127.0.0.1:8080/?action=snapshot', 'streamUrl': '/webcam/?action=stream', 'flipH': True, 'flipV': True, 'rotate90': True}}
+        rows = discover(self.connection)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['url'], 'https://printer.lan/webcam/?action=stream')
+        self.assertEqual(rows[0]['mode'], 'mjpeg')
+        self.assertEqual(rows[0]['rotation'], 90)
+        self.assertTrue(rows[0]['flip_horizontal'])
+        self.assertTrue(rows[0]['flip_vertical'])
+        get.assert_called_once_with(self.connection, 'https://printer.lan/octoprint/api/settings')
+
+    @patch('core.printer_cameras.json_request')
+    def test_prusalink_native_read_only_discovery_filters_ids(self, get):
+        self.connection.adapter = 'prusa'
+        self.connection.endpoint_url = 'http://printer.lan'
+        get.return_value = {'camera_list': [
+            {'camera_id': 'cam_A-1', 'connected': True, 'config': {'name': 'Enclosure'}},
+            {'camera_id': '../settings', 'connected': True},
+            {'camera_id': 'offline', 'connected': False},
+        ]}
+        rows = discover(self.connection)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['name'], 'Enclosure')
+        self.assertEqual(rows[0]['url'], 'http://printer.lan/api/v1/cameras/cam_A-1/snap')
+        get.assert_called_once_with(self.connection, 'http://printer.lan/api/v1/cameras')
+
+    @patch('core.printer_cameras.json_request')
+    def test_manufacturer_urls_are_classified_without_fetching_or_leaking(self, get):
+        from core.printer_cameras import discover_result
+        for adapter in ('anycubic', 'flashforge'):
+            self.connection.adapter = adapter
+            for url, mode in [('http://printer.lan/cam.jpg', 'snapshot'), ('http://printer.lan:8080/?action=stream', 'mjpeg')]:
+                self.connection.last_snapshot = {'camera_url': url}
+                rows = discover(self.connection)
+                self.assertEqual(rows[0]['mode'], mode)
+            for url in ('rtsp://user:private@printer.lan/video', 'http://printer.lan/video.m3u8?token=private', 'http://other.lan/cam.jpg?token=private', 'http://user:private@printer.lan/cam.jpg'):
+                self.connection.last_snapshot = {'camera_url': url}
+                result = discover_result(self.connection)
+                self.assertEqual(result['candidates'], [])
+                self.assertTrue(result['warnings'])
+                self.assertNotIn('private', json.dumps(result))
+        get.assert_not_called()
+
+    @patch('core.printer_cameras.json_request')
+    def test_all_moonraker_profiles_share_discovery(self, get):
+        from core.printer_cameras import MOONRAKER
+        get.return_value = {'result': {'webcams': [{'snapshot_url': '/webcam/?action=snapshot'}]}}
+        for adapter in MOONRAKER:
+            self.connection.adapter = adapter
+            self.assertEqual(discover(self.connection)[0]['mode'], 'snapshot')
+        self.assertEqual(get.call_count, len(MOONRAKER))
+
+    @patch('core.printer_cameras.json_request')
+    def test_manual_providers_do_not_guess_native_endpoints(self, get):
+        from core.printer_cameras import discover_result
+        for adapter in ('bambu_local', 'simplyprint', 'other'):
+            self.connection.adapter = adapter
+            self.assertEqual(discover_result(self.connection)['candidates'], [])
+        get.assert_not_called()
+
+    @patch('core.printer_cameras.json_request')
+    def test_malformed_camera_lists_fail_cleanly(self, get):
+        get.return_value = {'result': {'webcams': {'not': 'a list'}}}
+        with self.assertRaises(CameraError):
+            discover(self.connection)
+
     @patch("core.printer_cameras.upstream")
     def test_snapshot_and_mjpeg_return_only_valid_image_and_close(self, get):
         data = jpeg()
@@ -183,6 +274,19 @@ class CameraApiTests(TestCase):
         result = self.client.get(self.root).json()
         self.assertNotIn("url", result["rows"][0])
         self.assertFalse(result["can_edit"])
+
+    @patch("core.printer_cameras.upstream")
+    def test_provider_setup_and_discovery_are_scoped_and_do_not_probe_presets(self, upstream):
+        setup = self.client.get(self.root).json()
+        self.assertEqual(setup["provider"]["id"], "creality")
+        self.assertEqual(len(setup["presets"]), 6)
+        result = self.client.post(self.root + "discover/", {}, content_type="application/json")
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(len(result.json()["candidates"]), 7)
+        self.owner.user_permissions.clear()
+        self.assertEqual(self.client.get(self.root).json()["presets"], [])
+        self.assertEqual(self.client.post(self.root + "discover/", {}, content_type="application/json").status_code, 403)
+        upstream.assert_not_called()
 
     def test_setup_permission_csrf_and_host_validation(self):
         self.assertEqual(self.client.post(self.root, {"mode": "snapshot", "url": "http://other.lan/image"}, content_type="application/json").status_code, 400)

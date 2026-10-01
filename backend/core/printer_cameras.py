@@ -2,10 +2,11 @@
 import base64
 import ipaddress
 import json
+import re
 import socket
 import time
 from io import BytesIO
-from urllib.parse import urljoin, urlsplit, urlunsplit
+from urllib.parse import parse_qs, urljoin, urlsplit, urlunsplit
 
 import urllib3
 from websockets.sync.client import connect as ws_connect
@@ -86,6 +87,40 @@ def summary(connection):
     return {"configured": len(configured), "viewable": bool(connection.enabled and configured), "hardware_validated": False}
 
 
+# Discovery is independent of playback: new providers return the same validated
+# source contract and reuse the bounded, owner-scoped transports below.
+PROVIDERS = {
+    **{key: ("moonraker", "Read cameras configured in Moonraker. Klipper itself does not serve camera images.") for key in MOONRAKER},
+    "octoprint": ("octoprint", "Read the default webcam settings. The API key needs Settings Read permission."),
+    "creality_local": ("creality", "Choose the K1 route that works in your installation, or experimental K2 WebRTC. Presets do not verify playback."),
+    "prusa": ("prusalink", "Read local PrusaLink cameras where its camera API is available. Requires an API key; Prusa Connect cloud cameras are not imported."),
+    "anycubic": ("reported", "Use a supported camera URL reported by the printer. RTSP needs a media relay, which is not included yet."),
+    "flashforge": ("reported", "Use a supported camera URL reported by the printer. Opaque or unsupported stream formats require manual setup or a future relay."),
+    "bambu_local": ("manual", "Native Bambu camera transport is not implemented. A separately provided same-host HTTP image feed can be configured manually."),
+    "simplyprint": ("manual", "SimplyPrint cloud camera access is not implemented. Use a local Moonraker or OctoPrint integration where the printer supports it."),
+    "other": ("manual", "Enter a same-host HTTP snapshot or MJPEG URL, or add a Moonraker / OctoPrint integration where available."),
+}
+
+
+def provider_info(connection):
+    kind, guidance = PROVIDERS.get(connection.adapter, PROVIDERS["other"])
+    return {"id": kind, "guidance": guidance, "modes": ["snapshot", "mjpeg"] + (["creality_webrtc"] if connection.adapter == "creality_local" else []), "hardware_validated": False}
+
+
+def k1_presets(connection):
+    base = endpoint(connection)
+    host = f"[{base.hostname}]" if ":" in base.hostname else base.hostname
+    routes = [("K1 direct", 8080, "/"), ("K1 Helper Script / Fluidd", 4408, "/webcam/"), ("K1 Helper Script / Mainsail", 4409, "/webcam/")]
+    return [normalise_source(connection, {"name": name + " · " + mode, "mode": mode, "url": f"http://{host}:{port}{path}?action={action}"}, f"preset-k1-{port}-{mode}") for name, port, path in routes for mode, action in (("snapshot", "snapshot"), ("mjpeg", "stream"))]
+
+
+def setup_presets(connection):
+    try:
+        return k1_presets(connection) if connection.adapter in {"creality_local", "moonraker"} else []
+    except (CameraError, ValueError):
+        return []
+
+
 def resolve_address(host, port):
     try:
         addresses = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
@@ -159,35 +194,80 @@ def json_request(connection, url):
 
 
 def discover(connection):
+    """Compatibility helper for callers interested only in usable candidates."""
+    return discover_result(connection)["candidates"]
+
+
+def discover_result(connection):
     base = endpoint(connection)
-    rows = []
-    if connection.adapter in MOONRAKER:
-        payload = json_request(connection, connection.endpoint_url.rstrip("/") + "/server/webcams/list")
+    kind = provider_info(connection)["id"]
+    rows, warnings = [], []
+    api = connection.endpoint_url.rstrip("/")
+    if kind == "moonraker":
+        payload = json_request(connection, api + "/server/webcams/list")
         rows = (payload.get("result", payload) or {}).get("webcams", [])
-    elif connection.adapter == "octoprint":
-        payload = json_request(connection, connection.endpoint_url.rstrip("/") + "/api/settings")
+    elif kind == "octoprint":
+        payload = json_request(connection, api + "/api/settings")
         webcam = payload.get("webcam") or {}
-        rows = [{"name": "OctoPrint camera", "snapshot_url": webcam.get("snapshotUrl"), "stream_url": webcam.get("streamUrl")}]
-    elif connection.adapter == "creality_local":
+        rows = [{"name": "OctoPrint camera", "snapshot_url": webcam.get("snapshotUrl"), "stream_url": webcam.get("streamUrl"), "flip_horizontal": webcam.get("flipH"), "flip_vertical": webcam.get("flipV"), "rotation": 90 if webcam.get("rotate90") else 0}]
+    elif kind == "prusalink":
+        payload = json_request(connection, api + "/api/v1/cameras")
+        cameras = payload.get("camera_list", [])
+        if not isinstance(cameras, list):
+            raise CameraError("PrusaLink returned an invalid camera list.")
+        for camera in cameras[:8]:
+            if not isinstance(camera, dict) or camera.get("connected") is not True:
+                continue
+            camera_id = camera.get("camera_id")
+            # IDs are path segments, never arbitrary upstream paths or URLs.
+            if not isinstance(camera_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", camera_id):
+                warnings.append("A PrusaLink camera has an unsupported identifier.")
+                continue
+            config = camera.get("config") or {}
+            rows.append({"name": config.get("name", "PrusaLink camera") if isinstance(config, dict) else "PrusaLink camera", "snapshot_url": api + f"/api/v1/cameras/{camera_id}/snap"})
+    elif kind == "creality":
         host = f"[{base.hostname}]" if ":" in base.hostname else base.hostname
-        return [normalise_source(connection, {"name": "K1 HTTP camera", "mode": "snapshot", "url": f"http://{host}:8080/?action=snapshot"}, "candidate-k1"), normalise_source(connection, {"name": "K2 Creality WebRTC (experimental)", "mode": "creality_webrtc", "url": f"http://{host}:8000/call/webrtc_local"}, "candidate-k2")]
-    else:
-        return []
+        candidates = k1_presets(connection)
+        candidates.append(normalise_source(connection, {"name": "K2 Creality WebRTC (experimental)", "mode": "creality_webrtc", "url": f"http://{host}:8000/call/webrtc_local"}, "candidate-k2"))
+        return {"candidates": candidates, "warnings": [], "provider": provider_info(connection)}
+    elif kind == "reported":
+        snapshot = getattr(connection, "last_snapshot", {}) or {}
+        url = snapshot.get("camera_url") if isinstance(snapshot, dict) else None
+        if url:
+            parsed = urlsplit(str(url))
+            action = parse_qs(parsed.query).get("action", [""])[0].lower()
+            path = parsed.path.lower()
+            if parsed.scheme not in {"http", "https"}:
+                warnings.append("The printer reports a non-HTTP camera stream. A media relay is required; native playback is not implemented yet.")
+            elif path.endswith((".jpg", ".jpeg", ".png", "/snapshot", "/snap")) or action == "snapshot":
+                rows = [{"name": "Manufacturer camera", "snapshot_url": url}]
+            elif path.endswith((".mjpg", ".mjpeg")) or action == "stream":
+                rows = [{"name": "Manufacturer camera", "stream_url": url}]
+            else:
+                warnings.append("The printer reports a camera URL with an unknown format. Enter a verified snapshot or MJPEG URL manually.")
+        else:
+            warnings.append("No camera URL was reported by the latest printer status. Refresh monitoring or configure a verified feed manually.")
+    if not isinstance(rows, list):
+        raise CameraError("Camera discovery returned an invalid camera list.")
     candidates = []
     for index, row in enumerate(rows[:8]):
         if not isinstance(row, dict) or row.get("enabled") is False:
             continue
-        url = row.get("snapshot_url") or row.get("stream_url")
-        if not url:
-            continue
-        try:
-            # Unknown WebRTC/HLS sources cannot be silently relabelled MJPEG.
-            if not row.get("snapshot_url") and row.get("service", "mjpegstreamer") not in {"mjpegstreamer", "mjpeg", "uv4l"}:
+        # Prefer snapshots but allow a usable stream when its snapshot is local
+        # to the printer (e.g. OctoPrint's localhost snapshot configuration).
+        for key, mode in (("snapshot_url", "snapshot"), ("stream_url", "mjpeg")):
+            url = row.get(key)
+            if not url:
                 continue
-            candidates.append(normalise_source(connection, {**row, "mode": "snapshot" if row.get("snapshot_url") else "mjpeg", "url": url}, f"candidate-{index}"))
-        except (CameraError, TypeError, ValueError):
-            continue
-    return candidates
+            if mode == "mjpeg" and row.get("service", "mjpegstreamer") not in {"mjpegstreamer", "mjpeg", "uv4l"}:
+                warnings.append("A camera uses an unsupported stream format. Configure its HTTP snapshot if available.")
+                continue
+            try:
+                candidates.append(normalise_source(connection, {**row, "mode": mode, "url": url}, f"candidate-{index}"))
+                break
+            except (CameraError, TypeError, ValueError):
+                warnings.append("A camera URL or orientation was rejected. Use a valid same-host HTTP URL without embedded credentials.")
+    return {"candidates": candidates, "warnings": list(dict.fromkeys(warnings)), "provider": provider_info(connection)}
 
 
 def frame(connection, source):

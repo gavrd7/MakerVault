@@ -2,6 +2,7 @@
 
 ## v0.9.0 — Camera feeds (in development)
 
+- Added shared camera-provider discovery/guidance across all adapters, K1 direct/Fluidd/Mainsail presets, experimental PrusaLink snapshots and recognised Anycubic/FlashForge HTTP sources. Unsupported native/cloud transports stay explicit.
 - Added on-demand camera setup, discovery, source selection, stop/reconnect, orientation and fullscreen inside Open live.
 - Added owner-scoped refreshed HTTP camera images and experimental Creality K2 legacy/token-protected WebRTC signalling. No automatic playback.
 - Added same-host target validation, DNS pinning, strict TLS, redirect rejection, bounded image responses and camera credential redaction.
