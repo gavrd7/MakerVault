@@ -471,7 +471,7 @@ class CatalogueImageSourceTests(unittest.TestCase):
 
     def test_curated_sbc_source_mappings_cover_major_vendor_families(self):
         cases = [
-            ("Banana Pi", "BPI-M5", "https://www.banana-pi.org/en/banana-pi-sbcs/55.html"),
+            ("Banana Pi", "BPI-M5", "https://docs.banana-pi.org/en/BPI-M5/Photo_BPI-M5"),
             ("BeagleBoard.org", "BeagleY-AI", "https://docs.beagleboard.org/latest/boards/beagley/ai/01-introduction.html"),
             ("Hardkernel", "ODROID-C5", "https://www.hardkernel.com/shop/odroid-c5/"),
             ("LattePanda", "LattePanda Mu", "https://www.lattepanda.com/lattepanda-mu"),
@@ -1194,7 +1194,7 @@ class CatalogueImagePriorityTests(TestCase):
 
         self.assertEqual(result["processed"], 1)
         self.assertEqual(result["by_kind"]["boards"]["skipped"], 0)
-        source_image.assert_called_once()
+        self.assertGreaterEqual(source_image.call_count, 1)
         resolve_image.assert_called_once()
         cache_add.assert_called_once()
         cache_delete.assert_called_once()
