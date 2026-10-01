@@ -33,6 +33,7 @@ function ndefRecordText(record) {
 
 function TagCaptureControls({ kind, value, onCapture, autoFocus = false, compact = false }) {
   const inputRef = useRef(null);
+  const phoneNfcMode = kind === "nfc" || kind === "auto";
   const [nfcBusy, setNfcBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const capability = nfcCapability();
@@ -77,19 +78,19 @@ function TagCaptureControls({ kind, value, onCapture, autoFocus = false, compact
   }
 
   return <div className={"tagCaptureControls" + (compact ? " compact" : "")}>
-    {(kind === "nfc") && <button type="button" onClick={scanNfc} disabled={nfcBusy}>{nfcBusy ? "Waiting for NFC…" : "Scan with phone NFC"}</button>}
+    {phoneNfcMode && <button type="button" onClick={scanNfc} disabled={nfcBusy}>{nfcBusy ? "Waiting for NFC…" : "Scan with phone NFC"}</button>}
     <input
       ref={inputRef}
       value={value}
       onChange={e => onCapture(e.target.value)}
       onKeyDown={e => { if (!compact && e.key === "Enter") e.preventDefault(); }}
-      placeholder={kind === "qr" ? "QR identity code…" : "Scan with USB/OTG reader or enter UID…"}
+      placeholder={kind === "qr" ? "QR identity code…" : "Scan/paste reader identity, UID or EPC…"}
       autoComplete="off"
       autoCapitalize="characters"
       spellCheck={false}
     />
-    {(kind === "nfc" || kind === "rfid") && <small>
-      USB/OTG keyboard readers can scan directly into this field. {kind === "nfc" && (capability.supported ? "This browser also supports direct NFC capture." : capability.reason)}
+    {(kind === "nfc" || kind === "rfid" || kind === "auto") && <small>
+      MakerVault accepts the stable identity emitted by the reader rather than requiring a particular chip family. USB/OTG keyboard readers can scan directly into this field. {phoneNfcMode && (capability.supported ? "This browser also supports direct NDEF-compatible NFC capture." : capability.reason)}
     </small>}
     {notice && <small className="tagCaptureNotice">{notice}</small>}
   </div>;
@@ -104,7 +105,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
   const [addOpen, setAddOpen] = useState(false);
   const [detail, setDetail] = useState(null);
   const [editTag, setEditTag] = useState(null);
-  const [resolveKind, setResolveKind] = useState("rfid");
+  const [resolveKind, setResolveKind] = useState("auto");
   const [resolveCode, setResolveCode] = useState("");
   const [resolveBusy, setResolveBusy] = useState(false);
 
@@ -196,10 +197,11 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
     <section className="panel tagResolvePanel">
       <div>
         <strong>Resolve a physical tag</strong>
-        <small>Useful for NFC/RFID readers that paste or report a UID.</small>
+        <small>Scan or paste any stable code supplied by a compatible phone or PC reader. Auto-detect searches NFC, RFID and QR identities.</small>
       </div>
       <form onSubmit={resolveIdentity}>
         <select value={resolveKind} onChange={e => setResolveKind(e.target.value)}>
+          <option value="auto">Auto-detect reader identity</option>
           <option value="rfid">RFID</option>
           <option value="nfc">NFC</option>
           <option value="qr">QR identity code</option>
@@ -288,6 +290,7 @@ function MakerTagForm({ title, data, tag = null, onClose, onSaved }) {
     target_id: tag?.target_id || "",
     notes: tag?.notes || "",
     status: tag?.status || "active",
+    technology: tag?.technology || tag?.metadata?.technology || "",
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -306,7 +309,14 @@ function MakerTagForm({ title, data, tag = null, onClose, onSaved }) {
     event.preventDefault();
     setBusy(true); setError("");
     try {
-      const body = { ...form };
+      const { technology, ...fields } = form;
+      const body = {
+        ...fields,
+        metadata: {
+          ...(tag?.metadata || {}),
+          technology: (form.kind === "nfc" || form.kind === "rfid") ? technology : "",
+        },
+      };
       if (form.kind === "qr" && !tag) body.code = form.code.trim();
       const result = await apiFetch(tag ? "/api/tags/" + tag.id + "/" : "/api/tags/", {
         method: tag ? "PATCH" : "POST",
@@ -331,6 +341,9 @@ function MakerTagForm({ title, data, tag = null, onClose, onSaved }) {
           ? <input value={form.code} onChange={e => set("code", e.target.value)} placeholder="Leave blank to generate" />
           : <TagCaptureControls kind={form.kind} value={form.code} onCapture={value => set("code", value)} autoFocus={!tag} />}
       </label>
+      {(form.kind === "nfc" || form.kind === "rfid") && <label className="full">Tag / reader technology (optional)<select value={form.technology} onChange={e => set("technology", e.target.value)}>
+        {(data?.technologies || []).map(item => <option key={item.value || "auto"} value={item.value}>{item.label}</option>)}
+      </select></label>}
       <label className="full">Label<input value={form.label} onChange={e => set("label", e.target.value)} placeholder="e.g. Loft server ESP32, Black ABS spool" /></label>
 
       <label>Target type<select value={form.target_type} onChange={e => set("target_type", e.target.value)}>
@@ -345,15 +358,14 @@ function MakerTagForm({ title, data, tag = null, onClose, onSaved }) {
       <label className={tag ? "" : "full"}>Notes<textarea rows="4" value={form.notes} onChange={e => set("notes", e.target.value)} placeholder="Optional physical label/location notes…" /></label>
 
       {(form.kind === "nfc" || form.kind === "rfid") && <div className="settingsCallout full">
-        <strong>{form.kind === "nfc" ? "NFC capture options" : "RFID capture options"}</strong>
-        <p>{form.kind === "nfc"
-          ? "On supported Android browsers over HTTPS, Scan with phone NFC can capture a readable tag identity. iPhone/iPad browsers do not currently expose Web NFC; use an NDEF tag containing the MakerVault scan URL, a USB/OTG keyboard reader, or enter the UID manually."
-          : "Most USB and OTG RFID readers behave like keyboards. Put the cursor in Identity code and scan; MakerVault receives the reader output without a driver-specific integration."}</p>
+        <strong>Broad reader compatibility</strong>
+        <p>MakerVault stores the stable value your reader supplies and does not require one specific NFC/RFID chip family. Android browsers with Web NFC can capture supported NDEF-compatible tags directly. iPhone/iPad can open a MakerVault NDEF URL with the normal system NFC reader, while USB/Bluetooth/OTG readers on phones or PCs can paste UID, EPC or vendor reader codes into the identity field.</p>
+        <p>Hardware still determines what can actually be scanned: an iPhone cannot expose every low-frequency/UHF tag or arbitrary raw UID to a web page, but those tags can still be used through a compatible external reader.</p>
       </div>}
 
       {form.kind === "rfid" && form.target_type === "spool" && <div className="settingsCallout full">
         <strong>Spool RFID compatibility</strong>
-        <p>MakerVault reuses the spool's existing RFID identity. If that spool already has an RFID UID, this tag must use the same value.</p>
+        <p>Conventional hexadecimal RFID UIDs are mirrored to the spool's legacy RFID field for CFS/current integrations. Other reader identities remain valid Maker Tags without being forced into that legacy UID field.</p>
       </div>}
 
       <div className="formActions full">
@@ -433,6 +445,7 @@ function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged, onOpenTarget
         <h3>{tag.code}</h3>
         <p>{tag.target?.type_label || tag.target_type}</p>
         <strong>{targetLabel(tag)}</strong>
+        {(tag.kind === "nfc" || tag.kind === "rfid") && <small>Reader technology: {tag.technology_label || "Auto / unspecified"}</small>}
         {tag.notes && <small>{tag.notes}</small>}
       </div>
 
