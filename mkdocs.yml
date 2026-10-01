@@ -72,7 +72,9 @@ nav:
       - Print history and costs: using/print-history.md
   - Optional integrations:
       - Spoolman: integrations/spoolman.md
-      - Creality CFS: integrations/creality.md
+      - Creality local & CFS: integrations/creality.md
+      - Bambu Lab local & AMS: integrations/bambu.md
+      - PrusaLink: integrations/prusalink.md
       - SimplyPrint: integrations/simplyprint.md
   - Running your installation:
       - Accounts and storage: administration/accounts.md
