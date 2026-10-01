@@ -709,14 +709,24 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
 
   const selectableAdapters = (data.adapters || []).filter(item => item.supported);
   const configured = new Set((data.rows || []).map(item => item.adapter));
-  const available = selectableAdapters.filter(item => !configured.has(item.key));
+  const preferredAdapter = String(printer.manufacturer || "").toLowerCase().includes("creality") ? "creality_local" : "";
+  const available = selectableAdapters
+    .filter(item => !configured.has(item.key))
+    .sort((left, right) => Number(right.key === preferredAdapter) - Number(left.key === preferredAdapter));
 
   useEffect(() => {
     if (!available.length) return;
-    if (!available.some(item => item.key === form.adapter)) {
-      setForm(current => ({ ...current, adapter: available[0].key }));
-    }
-  }, [available.map(item => item.key).join("|")]);
+    const nextAdapter = available.some(item => item.key === form.adapter)
+      ? form.adapter
+      : (available.find(item => item.key === preferredAdapter)?.key || available[0].key);
+    setForm(current => ({
+      ...current,
+      adapter: nextAdapter,
+      endpoint_url: nextAdapter === "creality_local" && !current.endpoint_url
+        ? (printer.connection_host || "")
+        : current.endpoint_url,
+    }));
+  }, [available.map(item => item.key).join("|"), preferredAdapter, printer.connection_host]);
 
   async function addConnection(event) {
     event.preventDefault();
@@ -794,6 +804,18 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
     return value == null ? null : Math.max(0, Math.min(100, Number(value)));
   }
 
+  function adapterChanged(adapter) {
+    setForm(current => ({
+      ...current,
+      adapter,
+      endpoint_url: adapter === "creality_local"
+        ? (current.endpoint_url || printer.connection_host || "")
+        : (current.adapter === "creality_local" ? "" : current.endpoint_url),
+      api_key: adapter === "creality_local" ? "" : current.api_key,
+    }));
+  }
+
+
   return <Modal
     title={"Live monitoring · " + printer.name}
     subtitle="Attach one or more provider-neutral status sources to this physical printer. Local connections are preferred and monitoring is read-only by default."
@@ -811,17 +833,25 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
         return <article key={connection.id}>
           <div className="settingsIntegrationHead">
             <strong>{connection.adapter_label}</strong>
-            <Badge tone={tone}>{connection.stale ? "Stale" : connection.status_label}</Badge>
+            <div className="printingBadges">
+              {connection.experimental && <Badge tone="accent">Experimental</Badge>}
+              <Badge tone={tone}>{connection.stale ? "Stale" : connection.status_label}</Badge>
+            </div>
           </div>
           <small>{connection.endpoint_url || "Endpoint not configured"}</small>
           <div className="settingsCallout integrationAuthorityCallout">
             <strong>{snapshot.state_label || "No live snapshot yet"}</strong>
             <p>{snapshot.job?.file_name || (connection.status === "connected" ? "Printer reachable; no active filename reported." : "Refresh this source to test the connection.")}</p>
             {pct != null && <p>{pct.toFixed(1)}% · {snapshot.job?.elapsed_seconds != null ? Math.round(snapshot.job.elapsed_seconds / 60) + " min elapsed" : ""}{snapshot.job?.remaining_seconds != null ? " · " + Math.round(snapshot.job.remaining_seconds / 60) + " min remaining" : ""}</p>}
-            {(snapshot.temperatures?.tool0?.actual_c != null || snapshot.temperatures?.bed?.actual_c != null) && <p>
+            {(snapshot.temperatures?.tool0?.actual_c != null || snapshot.temperatures?.bed?.actual_c != null || snapshot.temperatures?.chamber?.actual_c != null) && <p>
               {snapshot.temperatures?.tool0?.actual_c != null ? "Tool " + snapshot.temperatures.tool0.actual_c + "°C" : ""}
               {snapshot.temperatures?.bed?.actual_c != null ? " · Bed " + snapshot.temperatures.bed.actual_c + "°C" : ""}
+              {snapshot.temperatures?.chamber?.actual_c != null ? " · Chamber " + snapshot.temperatures.chamber.actual_c + "°C" : ""}
             </p>}
+            {(snapshot.job?.current_layer != null || snapshot.job?.total_layers != null) && <p>
+              Layer {snapshot.job?.current_layer ?? "?"}{snapshot.job?.total_layers != null ? " / " + snapshot.job.total_layers : ""}
+            </p>}
+            {connection.adapter === "creality_local" && snapshot.source_metadata?.cfs_connected && <p>CFS detected on the printer LAN connection.</p>}
           </div>
           <small>Capabilities: {Object.entries(connection.capabilities || {}).filter(([, enabled]) => enabled).map(([key]) => key.replaceAll("_", " ")).join(", ") || "Not reported yet"}</small>
           <small>Last seen: {connection.last_seen_at ? formatDate(connection.last_seen_at) : "Never"}</small>
@@ -839,20 +869,24 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
     {!!available.length && <form className="formGrid" onSubmit={addConnection}>
       <div className="full settingsCallout">
         <strong>Add live source</strong>
-        <p>v0.7.3 starts with first-class Moonraker/Klipper and OctoPrint monitoring. A single physical printer can use more than one source without creating duplicate MakerVault printer records.</p>
+        <p>v0.7.3 supports Moonraker/Klipper and OctoPrint, plus an experimental Creality LAN adapter for K-series/K2-family printers. A single physical printer can use more than one source without creating duplicate MakerVault printer records.</p>
       </div>
-      <label>Adapter<select value={form.adapter} onChange={e => setForm(current => ({ ...current, adapter: e.target.value }))}>
-        {available.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
+      <label>Adapter<select value={form.adapter} onChange={e => adapterChanged(e.target.value)}>
+        {available.map(item => <option key={item.key} value={item.key}>{item.label}{item.experimental ? " · experimental" : ""}</option>)}
       </select></label>
-      <label>Service URL<input required value={form.endpoint_url} onChange={e => setForm(current => ({ ...current, endpoint_url: e.target.value }))} placeholder={form.adapter === "moonraker" ? "http://printer.local:7125" : "http://octoprint.local"} /></label>
-      <label>API key (optional)<input type="password" value={form.api_key} onChange={e => setForm(current => ({ ...current, api_key: e.target.value }))} autoComplete="new-password" placeholder="Only when your service requires one" /></label>
+      <label>{form.adapter === "creality_local" ? "Printer host / IP" : "Service URL"}<input required value={form.endpoint_url} onChange={e => setForm(current => ({ ...current, endpoint_url: e.target.value }))} placeholder={form.adapter === "creality_local" ? "192.168.1.34" : form.adapter === "moonraker" ? "http://printer.local:7125" : "http://octoprint.local"} /></label>
+      {form.adapter !== "creality_local" && <label>API key (optional)<input type="password" value={form.api_key} onChange={e => setForm(current => ({ ...current, api_key: e.target.value }))} autoComplete="new-password" placeholder="Only when your service requires one" /></label>}
+      {form.adapter === "creality_local" && <div className="settingsCallout">
+        <strong>Creality LAN WebSocket</strong>
+        <p>MakerVault will use the printer's local Creality Print protocol on port 9999. Your existing printer host/IP is pre-filled when available; no Creality Cloud login is required.</p>
+      </div>}
       <label>Polling interval<div className="intervalInput"><input type="number" min="10" max="3600" step="5" value={form.poll_interval_seconds} onChange={e => setForm(current => ({ ...current, poll_interval_seconds: e.target.value }))} /><span>seconds</span></div></label>
       <div className="formActions full"><button className="primary" disabled={busy === "add"}>{busy === "add" ? "Adding…" : "Add live source"}</button></div>
     </form>}
 
     <div className="settingsCallout">
       <strong>Read-only first</strong>
-      <p>Moonraker and OctoPrint may advertise pause/resume/cancel capabilities, but this first slice only reads printer state. Control actions will be added behind explicit permissions and confirmations later in v0.7.3.</p>
+      <p>Moonraker, OctoPrint and Creality local may advertise pause/resume/cancel capabilities, but this first slice only reads printer state. Control actions will be added behind explicit permissions and confirmations later in v0.7.3.</p>
     </div>
   </Modal>;
 }
