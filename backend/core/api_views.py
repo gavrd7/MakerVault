@@ -4703,7 +4703,7 @@ def printing_printer_connections(request, printer_id):
             return _error("Choose a supported MakerVault printer adapter.")
 
         endpoint_url = str(payload.get("endpoint_url") or "").strip()
-        if not endpoint_url and adapter in {"creality_local", "bambu_local", "prusa", "flashforge", "anycubic"}:
+        if not endpoint_url and adapter in {"creality_local", "bambu_local", "prusa", "flashforge", "anycubic", "elegoo", "qidi", "sovol", "snapmaker", "voron"}:
             endpoint_url = str(printer.connection_host or "").strip()
         if endpoint_url:
             endpoint_url = normalise_connection_endpoint(adapter, endpoint_url)
