@@ -18,6 +18,16 @@ class CatalogueSourceURLValidationTests(SimpleTestCase):
         self.assertEqual(safe.host, "docs.beagleboard.org")
 
     @patch("core.importers._host_is_public", return_value=True)
+    def test_catalogue_source_allows_printer_manufacturer_hosts(self, _public):
+        for url in (
+            "https://www.creality.com/products/example",
+            "https://bambulab.com/en/example",
+            "https://qidi3d.com/pages/example",
+        ):
+            with self.subTest(url=url):
+                self.assertTrue(validate_catalogue_source_url(url).host)
+
+    @patch("core.importers._host_is_public", return_value=True)
     def test_catalogue_source_rejects_unlisted_hosts(self, _public):
         with self.assertRaises(ImporterError):
             validate_catalogue_source_url("https://example.com/product")
