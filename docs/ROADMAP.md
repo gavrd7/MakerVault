@@ -122,7 +122,7 @@ This file tracks completed MakerVault milestones and the planned path toward a s
 
 ### v0.7.3 — Live printer connectivity, monitoring & manufacturer adapters
 
-**In development:** the provider-neutral live layer now covers Moonraker/Klipper, OctoPrint, Creality local, Bambu Lab local and PrusaLink. Creality has been validated against a K2; Bambu/Prusa remain experimental pending volunteer hardware validation. Live Bambu AMS/Creality CFS observations now map into the same provider-neutral printer-slot records without auto-creating physical spools. Anycubic, FlashForge and the remaining manufacturer-specific paths are the next adapter targets, while Elegoo/QIDI/Sovol/Voron can also reuse Moonraker where their firmware exposes it.
+**In development:** the provider-neutral live layer now covers Moonraker/Klipper, OctoPrint, Creality local, Bambu Lab local, PrusaLink, Anycubic LAN and FlashForge local. Creality has been validated against a K2; Bambu/Prusa/Anycubic/FlashForge remain experimental pending volunteer hardware validation. Live CFS, AMS, ACE and FlashForge material-station observations map into the same provider-neutral printer-slot records without auto-creating physical spools. Elegoo/QIDI/Sovol/Voron can reuse Moonraker where their firmware exposes it; Snapmaker and remaining manufacturer-specific gaps are still open.
 
 **Goal:** make printer monitoring local-first and provider-neutral, with SimplyPrint remaining optional.
 
