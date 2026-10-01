@@ -839,6 +839,9 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
             </div>
           </div>
           <small>{connection.endpoint_url || "Endpoint not configured"}</small>
+          {(snapshot.source_metadata?.hostname || snapshot.source_metadata?.model) && <small>
+            {[snapshot.source_metadata?.hostname, snapshot.source_metadata?.model].filter(Boolean).join(" · ")}
+          </small>}
           <div className="settingsCallout integrationAuthorityCallout">
             <strong>{snapshot.state_label || "No live snapshot yet"}</strong>
             <p>{snapshot.job?.file_name || (connection.status === "connected" ? "Printer reachable; no active filename reported." : "Refresh this source to test the connection.")}</p>
@@ -861,6 +864,7 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
               </div>)}
             </div>}
           </div>
+          {snapshot.warnings?.map((warning, index) => <small className="integrationError" key={"warning-" + index}>{warning}</small>)}
           <small>Capabilities: {Object.entries(connection.capabilities || {}).filter(([, enabled]) => enabled).map(([key]) => key.replaceAll("_", " ")).join(", ") || "Not reported yet"}</small>
           <small>Last seen: {connection.last_seen_at ? formatDate(connection.last_seen_at) : "Never"}</small>
           {connection.last_error && <small className="integrationError">{connection.last_error}</small>}
