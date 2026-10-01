@@ -13,6 +13,13 @@ from websockets.exceptions import WebSocketException
 from django.utils import timezone
 
 from .live_print_jobs import sync_print_job_from_snapshot
+from .manufacturer_printer_adapters import (
+    ManufacturerAdapterError,
+    normalise_bambu_endpoint,
+    normalise_prusalink_endpoint,
+    poll_bambu_local,
+    poll_prusalink,
+)
 
 
 class PrinterConnectionError(RuntimeError):
@@ -103,14 +110,28 @@ ADAPTERS = {
     "bambu_local": AdapterDefinition(
         key="bambu_local",
         label="Bambu Lab local",
-        supported=False,
+        supported=True,
         experimental=True,
         local_first=True,
-        capabilities={**COMMON_MONITORING, "camera": True, "materials": True},
+        capabilities={
+            **COMMON_MONITORING,
+            "camera": True,
+            "materials": True,
+            "pause": True,
+            "resume": True,
+            "cancel": True,
+        },
     ),
     "anycubic": AdapterDefinition("anycubic", "Anycubic", False, True, True, dict(COMMON_MONITORING)),
     "flashforge": AdapterDefinition("flashforge", "FlashForge", False, True, True, dict(COMMON_MONITORING)),
-    "prusa": AdapterDefinition("prusa", "Prusa", False, True, True, dict(COMMON_MONITORING)),
+    "prusa": AdapterDefinition(
+        "prusa",
+        "PrusaLink",
+        True,
+        True,
+        True,
+        {**COMMON_MONITORING, "camera": True, "pause": True, "resume": True, "cancel": True},
+    ),
     "elegoo": AdapterDefinition("elegoo", "Elegoo", False, True, True, dict(COMMON_MONITORING)),
     "qidi": AdapterDefinition("qidi", "QIDI", False, True, True, dict(COMMON_MONITORING)),
     "sovol": AdapterDefinition("sovol", "Sovol", False, True, True, dict(COMMON_MONITORING)),
@@ -194,6 +215,16 @@ def normalise_creality_endpoint(raw_url: str) -> str:
 def normalise_connection_endpoint(adapter: str, raw_url: str) -> str:
     if adapter == "creality_local":
         return normalise_creality_endpoint(raw_url)
+    if adapter == "bambu_local":
+        try:
+            return normalise_bambu_endpoint(raw_url)
+        except ManufacturerAdapterError as exc:
+            raise PrinterConnectionError(str(exc)) from exc
+    if adapter == "prusa":
+        try:
+            return normalise_prusalink_endpoint(raw_url)
+        except ManufacturerAdapterError as exc:
+            raise PrinterConnectionError(str(exc)) from exc
     return normalise_printer_endpoint(raw_url)
 
 
@@ -721,6 +752,8 @@ POLLERS: dict[str, Callable[[str, dict | None], dict]] = {
     "moonraker": poll_moonraker,
     "octoprint": poll_octoprint,
     "creality_local": poll_creality_local,
+    "bambu_local": poll_bambu_local,
+    "prusa": poll_prusalink,
 }
 
 
@@ -736,6 +769,13 @@ def poll_connection(connection) -> dict:
 
     try:
         snapshot = POLLERS[connection.adapter](connection.endpoint_url, connection.config or {})
+    except ManufacturerAdapterError as exc:
+        wrapped = PrinterConnectionError(str(exc))
+        connection.status = "disconnected"
+        connection.last_error = str(wrapped)
+        connection.last_checked_at = timezone.now()
+        connection.save(update_fields=["status", "last_error", "last_checked_at", "updated_at"])
+        raise wrapped from exc
     except PrinterConnectionError as exc:
         connection.status = "disconnected"
         connection.last_error = str(exc)
@@ -755,14 +795,21 @@ def poll_connection(connection) -> dict:
     connection.last_checked_at = now
     connection.last_seen_at = now
     capabilities = dict(definition.capabilities)
+    metadata = snapshot.get("source_metadata") or {}
     if connection.adapter == "creality_local":
-        metadata = snapshot.get("source_metadata") or {}
         capabilities["camera"] = bool(
             metadata.get("video_available") or metadata.get("webrtc_support")
         )
         capabilities["materials"] = bool(
             metadata.get("cfs_connected") or snapshot.get("materials")
         )
+    elif connection.adapter == "bambu_local":
+        capabilities["camera"] = bool(metadata.get("camera_available"))
+        capabilities["materials"] = bool(
+            metadata.get("ams_connected") or snapshot.get("materials")
+        )
+    elif connection.adapter == "prusa":
+        capabilities["camera"] = bool(metadata.get("camera_available"))
     connection.capabilities = capabilities
     connection.last_snapshot = snapshot
     connection.save(update_fields=[
