@@ -40,6 +40,9 @@ CATALOGUE_SOURCE_HOST_SUFFIXES = {
     "sparkfun.com",
     "seeedstudio.com",
     "waveshare.com",
+    "m5stack.com",
+    "lilygo.cc",
+    "heltec.org",
 }
 
 
