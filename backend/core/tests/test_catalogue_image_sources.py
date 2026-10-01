@@ -2,6 +2,8 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from bs4 import BeautifulSoup
+
 from django.test import TestCase, override_settings
 
 from core.catalogue_coverage import _printer_coverage
@@ -127,6 +129,32 @@ class CatalogueImageSourceTests(unittest.TestCase):
         }
         get.return_value = response
         self.assertIsNone(search_wikimedia_commons("Example", minimum_score=0.0))
+
+    def test_page_image_candidates_support_modern_lazy_and_picture_markup(self):
+        soup = BeautifulSoup(
+            """
+            <picture>
+              <source data-srcset="/img/board-small.webp 640w, /img/board-large.webp 1400w">
+              <img data-lazy="/img/board-lazy.webp" alt="Product board">
+            </picture>
+            """,
+            "html.parser",
+        )
+        candidates = _page_image_candidates(soup, "https://vendor.example/product/")
+        urls = [url for url, _method in candidates]
+        self.assertIn("https://vendor.example/img/board-lazy.webp", urls)
+        self.assertIn("https://vendor.example/img/board-large.webp", urls)
+
+    def test_page_image_candidates_support_css_background_images(self):
+        soup = BeautifulSoup(
+            '<div class="product-photo" style="background-image:url(\'/assets/board.png\')"></div>',
+            "html.parser",
+        )
+        candidates = _page_image_candidates(soup, "https://vendor.example/product/")
+        self.assertIn(
+            ("https://vendor.example/assets/board.png", "css-background"),
+            candidates,
+        )
 
     def test_commons_license_filter_rejects_noncommercial_and_nd(self):
         self.assertTrue(_commons_license_allowed("CC BY 4.0"))
