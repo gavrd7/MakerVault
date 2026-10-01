@@ -12,6 +12,7 @@ from core.catalogue_image_sources import (
     _is_computer_board,
     _page_image_candidates,
     _curated_sbc_source_page,
+    _curated_board_source_pages,
     _curated_sbc_source_pages,
     _commons_license_allowed,
     _component_image_queries,
@@ -228,6 +229,34 @@ class CatalogueImageSourceTests(unittest.TestCase):
         self.assertEqual(pages[0]["url"], "https://bambulab.com/en/p1")
         self.assertEqual(pages[0]["source_type"], "manufacturer")
         self.assertEqual(pages[0]["provider"], "Bambu Lab official")
+
+    def test_curated_mcu_source_pages_cover_known_board_failures(self):
+        cases = [
+            ("Adafruit", "Feather RP2040", "https://www.adafruit.com/product/4884"),
+            ("Arduino", "Nano ESP32", "https://docs.arduino.cc/hardware/nano-esp32"),
+            ("DFRobot", "FireBeetle 2 ESP32-E", "https://www.dfrobot.com/product-2195.html"),
+            ("Espressif", "ESP32-P4-Function-EV-Board", "https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32p4/esp32-p4-function-ev-board/index.html"),
+        ]
+        for manufacturer_name, board_name, expected in cases:
+            with self.subTest(board=board_name):
+                board = SimpleNamespace(
+                    name=board_name,
+                    manufacturer=SimpleNamespace(name=manufacturer_name),
+                    specifications={"board_type": "microcontroller"},
+                )
+                self.assertEqual(_curated_board_source_pages(board), [expected])
+
+    def test_orange_pi_5_plus_prefers_official_wiki_source(self):
+        board = SimpleNamespace(
+            name="Orange Pi 5 Plus",
+            manufacturer=SimpleNamespace(name="Orange Pi"),
+            specifications={"board_type": "sbc"},
+        )
+        pages = _curated_board_source_pages(board)
+        self.assertEqual(
+            pages[0],
+            "https://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_5_Plus",
+        )
 
     def test_curated_sbc_source_mapping_is_exact(self):
         manufacturer = SimpleNamespace(name="NVIDIA")
