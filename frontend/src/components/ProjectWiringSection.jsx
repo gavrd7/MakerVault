@@ -53,6 +53,62 @@ function normaliseClientPin(entry) {
   return { ...entry, name, role, voltage };
 }
 
+function fallbackPinRole(name) {
+  const upper = String(name || "").trim().toUpperCase().replace(/[^A-Z0-9.+-]/g, "");
+  if (!upper) return "unknown";
+  if (["GND", "GROUND", "AGND", "DGND", "PGND", "0V", "VSS"].includes(upper) || upper.endsWith("GND")) return "ground";
+  if (["VCC", "VDD", "VIN", "VBUS", "V+", "+V", "3V3", "3.3V", "5V", "12V", "24V"].includes(upper) || /^(VCC|VDD|VIN|VBUS)[0-9.]*$/.test(upper) || /^\d+(?:\.\d+)?V$/.test(upper)) return "power";
+  if (upper === "SDA" || upper.endsWith("SDA")) return "i2c_sda";
+  if (upper === "SCL" || upper.endsWith("SCL")) return "i2c_scl";
+  if (["TX", "TXD", "UARTTX"].includes(upper)) return "uart_tx";
+  if (["RX", "RXD", "UARTRX"].includes(upper)) return "uart_rx";
+  if (["MOSI", "COPI"].includes(upper)) return "spi_mosi";
+  if (["MISO", "CIPO"].includes(upper)) return "spi_miso";
+  if (["SCK", "SCLK", "SPICLK"].includes(upper)) return "spi_clock";
+  if (/^(GPIO|IO|D)\d+$/.test(upper)) return "gpio";
+  return "unknown";
+}
+
+function nodePinRole(node, pinName) {
+  const match = (node?.reference?.pins || []).find(pin => String(pin.name || "").toLowerCase() === String(pinName || "").toLowerCase());
+  const role = String(match?.role || "").toLowerCase();
+  return role && role !== "unknown" ? role : fallbackPinRole(pinName);
+}
+
+function obviousConnectionDiagnostics(nodes, connections) {
+  const nodeById = Object.fromEntries((nodes || []).map(node => [node.id, node]));
+  const powerRoles = new Set(["power", "power_input", "power_output"]);
+  const groundRoles = new Set(["ground"]);
+  const rows = [];
+  for (const edge of connections || []) {
+    const fromRole = nodePinRole(nodeById[edge.from_node], edge.from_pin);
+    const toRole = nodePinRole(nodeById[edge.to_node], edge.to_pin);
+    const fromLabel = nodeById[edge.from_node]?.label || edge.from_node;
+    const toLabel = nodeById[edge.to_node]?.label || edge.to_node;
+    const endpoints = fromLabel + " · " + edge.from_pin + " ↔ " + toLabel + " · " + edge.to_pin;
+    if ((groundRoles.has(fromRole) && powerRoles.has(toRole)) || (groundRoles.has(toRole) && powerRoles.has(fromRole))) {
+      rows.push({ severity: "error", code: "ground-power-conflict", connection_id: edge.id, message: "Ground is connected directly to a power pin: " + endpoints + "." });
+      continue;
+    }
+    if ((fromRole === "i2c_sda" && toRole === "i2c_scl") || (fromRole === "i2c_scl" && toRole === "i2c_sda")) {
+      rows.push({ severity: "warning", code: "i2c-line-mismatch", connection_id: edge.id, message: "I²C SDA is connected to SCL: " + endpoints + "." });
+    }
+    if (fromRole === "uart_tx" && toRole === "uart_tx") {
+      rows.push({ severity: "warning", code: "uart-tx-tx", connection_id: edge.id, message: "Two UART TX pins are connected: " + endpoints + "." });
+    }
+    if (fromRole === "uart_rx" && toRole === "uart_rx") {
+      rows.push({ severity: "warning", code: "uart-rx-rx", connection_id: edge.id, message: "Two UART RX pins are connected: " + endpoints + "." });
+    }
+  }
+  return rows;
+}
+
+function fallbackTerminalHints(node) {
+  if (!node) return [];
+  if (node.type === "custom") return ["GND", "VCC", "VIN", "3V3", "5V", "12V", "SDA", "SCL", "TX", "RX", "MOSI", "MISO", "SCK", "IN", "OUT"];
+  return ["GND", "3V3", "5V", "VCC", "VIN", "SDA", "SCL", "TX", "RX", "MOSI", "MISO", "SCK"];
+}
+
 function referenceRows(type, boards, components, inventory) {
   const boardMap = Object.fromEntries((boards || []).map(row => [row.id, row]));
   const componentMap = Object.fromEntries((components || []).map(row => [row.id, row]));
@@ -210,12 +266,18 @@ export function WiringEditor({ project = null, diagram, boards, components, inve
   const [nodeType, setNodeType] = useState("board");
   const [referenceId, setReferenceId] = useState("");
   const [customLabel, setCustomLabel] = useState("");
+  const [nodeSearch, setNodeSearch] = useState("");
   const [connection, setConnection] = useState({ from_node: "", from_pin: "", to_node: "", to_pin: "", label: "", color: "#7c5cff" });
   const [editingConnectionId, setEditingConnectionId] = useState("");
   const [drag, setDrag] = useState(null);
   const canvasRef = useRef(null);
 
   const refs = useMemo(() => referenceRows(nodeType, boards, components, inventory), [nodeType, boards, components, inventory]);
+  const visibleRefs = useMemo(() => {
+    const term = nodeSearch.trim().toLowerCase();
+    if (!term) return refs;
+    return refs.filter(row => [row.label, row.subtitle].filter(Boolean).join(" ").toLowerCase().includes(term));
+  }, [refs, nodeSearch]);
   useEffect(() => {
     if (nodeType === "custom") return;
     if (!referenceId || !refs.some(row => row.id === referenceId)) setReferenceId(refs[0]?.id || "");
@@ -347,8 +409,27 @@ export function WiringEditor({ project = null, diagram, boards, components, inve
   }
 
   const nodeById = Object.fromEntries(draft.nodes.map(node => [node.id, node]));
-  const diagnosticByConnection = draft.diagnostic_summary?.connections || {};
-  const diagnosticCounts = draft.diagnostic_summary?.counts || {};
+  const savedDiagnosticByConnection = draft.diagnostic_summary?.connections || {};
+  const liveDiagnostics = useMemo(
+    () => dirty ? obviousConnectionDiagnostics(draft.nodes, draft.connections) : (draft.diagnostics || []),
+    [dirty, draft.nodes, draft.connections, draft.diagnostics],
+  );
+  const diagnosticByConnection = useMemo(() => {
+    if (!dirty) return savedDiagnosticByConnection;
+    const result = {};
+    for (const edge of draft.connections) result[edge.id] = "unknown";
+    for (const item of liveDiagnostics) {
+      if (!item.connection_id) continue;
+      const current = result[item.connection_id] || "unknown";
+      const rank = { error: 0, warning: 1, advisory: 2, valid: 3, unknown: 4 };
+      if (rank[item.severity] < rank[current]) result[item.connection_id] = item.severity;
+    }
+    return result;
+  }, [dirty, draft.connections, liveDiagnostics, savedDiagnosticByConnection]);
+  const diagnosticCounts = useMemo(() => {
+    if (!dirty) return draft.diagnostic_summary?.counts || {};
+    return liveDiagnostics.reduce((counts, item) => ({ ...counts, [item.severity]: (counts[item.severity] || 0) + 1 }), {});
+  }, [dirty, liveDiagnostics, draft.diagnostic_summary]);
   const nodeHeight = node => 84 + Math.ceil(Math.min(node.reference?.pins?.length || 0, 18) / 3) * 22;
   const canvasWidth = Math.max(960, ...draft.nodes.map(node => Number(node.x || 0) + 240));
   const canvasHeight = Math.max(560, ...draft.nodes.map(node => Number(node.y || 0) + nodeHeight(node) + 50));
@@ -432,16 +513,19 @@ export function WiringEditor({ project = null, diagram, boards, components, inve
           <section>
             <h3>Add node</h3>
             <form onSubmit={addNode}>
-              <label>Type<select value={nodeType} disabled={!canChange} onChange={e => { setNodeType(e.target.value); setReferenceId(""); }}>
+              <label>Type<select value={nodeType} disabled={!canChange} onChange={e => { setNodeType(e.target.value); setReferenceId(""); setNodeSearch(""); }}>
                 <option value="board">Board catalogue</option>
                 <option value="component">Component catalogue</option>
                 <option value="inventory">Inventory item</option>
                 <option value="custom">Custom node</option>
               </select></label>
-              {nodeType !== "custom" && <label>Record<select value={referenceId} disabled={!canChange} onChange={e => setReferenceId(e.target.value)}>
-                {!refs.length && <option value="">No records available</option>}
-                {refs.map(row => <option key={row.id} value={row.id}>{row.label}{row.subtitle ? " · " + row.subtitle : ""}</option>)}
-              </select></label>}
+              {nodeType !== "custom" && <>
+                <label>Search records<input value={nodeSearch} disabled={!canChange} onChange={e => setNodeSearch(e.target.value)} placeholder={"Search " + (nodeType === "board" ? "boards" : nodeType === "component" ? "components" : "inventory") + "…"} /></label>
+                <label>Record<select value={referenceId} disabled={!canChange} onChange={e => setReferenceId(e.target.value)}>
+                  {!visibleRefs.length && <option value="">No matching records</option>}
+                  {visibleRefs.map(row => <option key={row.id} value={row.id}>{row.label}{row.subtitle ? " · " + row.subtitle : ""}</option>)}
+                </select></label>
+              </>}
               <label>{nodeType === "custom" ? "Label" : "Label override"}<input value={customLabel} disabled={!canChange} onChange={e => setCustomLabel(e.target.value)} placeholder={nodeType === "custom" ? "Power supply, terminal block…" : "Optional"} /></label>
               <button className="primary" disabled={!canChange || (nodeType !== "custom" && !referenceId) || (nodeType === "custom" && !customLabel.trim())}>＋ Add node</button>
             </form>
@@ -474,11 +558,11 @@ export function WiringEditor({ project = null, diagram, boards, components, inve
                 <span className="diagValid">{diagnosticCounts.valid || 0} validated</span>
               </div>
             </div>
-            {(draft.diagnostics || []).filter(item => item.severity !== "valid").map((item, index) => <div className={"wiringDiagnostic wiringDiagnostic-" + item.severity} key={item.code + "-" + item.connection_id + "-" + index}>
+            {liveDiagnostics.filter(item => item.severity !== "valid").map((item, index) => <div className={"wiringDiagnostic wiringDiagnostic-" + item.severity} key={item.code + "-" + item.connection_id + "-" + index}>
               <strong>{item.severity === "error" ? "Error" : item.severity === "warning" ? "Warning" : "Check"}</strong>
               <span>{item.message}</span>
             </div>)}
-            {draft.connections.length > 0 && !(draft.diagnostics || []).some(item => item.severity !== "valid") && <div className="wiringDiagnostic wiringDiagnostic-valid"><strong>OK</strong><span>No high-confidence electrical conflicts detected in the connections MakerVault can classify.</span></div>}
+            {draft.connections.length > 0 && !liveDiagnostics.some(item => item.severity !== "valid") && <div className="wiringDiagnostic wiringDiagnostic-valid"><strong>OK</strong><span>{dirty ? "No obvious label-level conflicts detected. Save to run the full catalogue-backed checks." : "No high-confidence electrical conflicts detected in the connections MakerVault can classify."}</span></div>}
           </section>
           <div
             className={"wiringCanvasScroll" + (draft.canvas?.show_grid === false ? " noGrid" : "")}
@@ -559,31 +643,35 @@ export function WiringEditor({ project = null, diagram, boards, components, inve
 
 function PinInput({ label, node, value, onChange, disabled, listId }) {
   const pins = node?.reference?.pins || [];
-  const hints = pins.length ? pins.map(pin => pin.name) : (node?.reference?.pin_hints || []);
-  const isCataloguePin = hints.some(pin => pin.toLowerCase() === String(value || "").toLowerCase());
+  const catalogueHints = pins.length ? pins.map(pin => pin.name) : (node?.reference?.pin_hints || []);
+  const hints = catalogueHints.length ? catalogueHints : fallbackTerminalHints(node);
+  const isCataloguePin = catalogueHints.some(pin => pin.toLowerCase() === String(value || "").toLowerCase());
+  const isFallbackPin = !catalogueHints.length && hints.some(pin => pin.toLowerCase() === String(value || "").toLowerCase());
 
   return <label className="wiringPinInput">
     {label}
-    {hints.length > 0 && <select
-      value={isCataloguePin ? value : ""}
-      disabled={disabled}
+    <select
+      value={(isCataloguePin || isFallbackPin) ? value : ""}
+      disabled={disabled || !node}
       onChange={e => {
         if (e.target.value) onChange(e.target.value);
       }}
     >
-      <option value="">Choose catalogue pin…</option>
+      <option value="">{!node ? "Choose a node first…" : catalogueHints.length ? "Choose catalogue pin…" : "Choose common terminal…"}</option>
       {pins.length > 0
         ? pins.map(pin => <option key={pin.name} value={pin.name}>{pin.name}{pin.role && pin.role !== "unknown" ? " · " + pin.role.replaceAll("_", " ") : ""}{pin.voltage != null ? " · " + pin.voltage + "V" : ""}</option>)
         : hints.map(pin => <option key={pin} value={pin}>{pin}</option>)}
-    </select>}
+    </select>
     <input
       list={hints.length ? listId : undefined}
       value={value}
-      disabled={disabled}
+      disabled={disabled || !node}
       onChange={e => onChange(e.target.value)}
-      placeholder={hints.length ? "Or enter another pin / terminal…" : "GPIO4, GND, SDA…"}
+      placeholder={catalogueHints.length ? "Or enter another pin / terminal…" : "Or enter an exact pin / terminal…"}
     />
     {hints.length > 0 && <datalist id={listId}>{hints.map(pin => <option key={pin} value={pin} />)}</datalist>}
-    {hints.length > 0 && <small>{isCataloguePin ? "Catalogue pin selected — electrical metadata will be used for checks." : "You can select a known catalogue pin above or enter a pin/terminal manually."}</small>}
+    {node && <small>{catalogueHints.length
+      ? (isCataloguePin ? "Catalogue pin selected — electrical metadata will be used for checks." : "Select a known catalogue pin above or enter another pin/terminal manually.")
+      : "This catalogue record has no structured pinout yet. Common terminals are offered as a convenience; enter the exact pin name when needed."}</small>}
   </label>;
 }
