@@ -890,7 +890,10 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
       });
       await onAdded(result.item);
     } catch (err) {
-      setError("Could not add the live source: " + err.message);
+      const reasons = Object.entries(err.fields || {}).map(([field, messages]) =>
+        `${field.replaceAll("_", " ")}: ${Array.isArray(messages) ? messages.join(" ") : messages}`
+      ).join("; ");
+      setError("Could not add the live source: " + (reasons || err.message));
     } finally {
       setBusy("");
     }
