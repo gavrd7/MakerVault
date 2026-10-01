@@ -53,6 +53,13 @@ export default function App() {
   }, [section]);
 
   useEffect(() => {
+    if (section !== "Dashboard") return undefined;
+    refreshDashboard();
+    const timer = window.setInterval(refreshDashboard, 15000);
+    return () => window.clearInterval(timer);
+  }, [section, refreshDashboard]);
+
+  useEffect(() => {
     Promise.all([
       apiFetch("/api/dashboard/"), apiFetch("/api/inventory/"), apiFetch("/api/config/"),
       apiFetch("/api/boards/"), apiFetch("/api/components/"), apiFetch("/api/projects/"),
