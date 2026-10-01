@@ -282,6 +282,26 @@ class PrinterConnectivityApiTests(TestCase):
         self.assertEqual(len(overview.json()["printers"]), 1)
         self.assertEqual(len(overview.json()["printers"][0]["live_connections"]), 2)
 
+    def test_stale_connected_source_is_not_promoted_as_live_status(self):
+        connection = PrinterConnection.objects.create(
+            printer=self.printer,
+            adapter="moonraker",
+            endpoint_url="http://printer.local:7125",
+            poll_interval_seconds=10,
+            status="connected",
+            last_checked_at=timezone.now() - timedelta(minutes=5),
+            last_seen_at=timezone.now() - timedelta(minutes=5),
+            last_snapshot={"state": "printing", "state_label": "Printing"},
+        )
+
+        response = self.client.get("/api/printing/")
+        self.assertEqual(response.status_code, 200, response.content)
+        printer = response.json()["printers"][0]
+        self.assertIsNone(printer["live_status"])
+        self.assertEqual(len(printer["live_connections"]), 1)
+        self.assertTrue(printer["live_connections"][0]["stale"])
+        self.assertEqual(printer["live_connections"][0]["status_label"], "Stale")
+
     def test_connection_endpoints_are_owner_scoped(self):
         foreign = Printer.objects.create(owner=self.other, name="Other printer", model="Other")
         connection = PrinterConnection.objects.create(
