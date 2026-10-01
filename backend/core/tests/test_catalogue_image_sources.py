@@ -11,6 +11,7 @@ from core.catalogue_image_sources import (
     _candidate_source_pages,
     _is_computer_board,
     _page_image_candidates,
+    _normalise_catalogue_identity,
     _curated_sbc_source_page,
     _curated_board_source_pages,
     _curated_sbc_source_pages,
@@ -229,6 +230,27 @@ class CatalogueImageSourceTests(unittest.TestCase):
         self.assertEqual(pages[0]["url"], "https://bambulab.com/en/p1")
         self.assertEqual(pages[0]["source_type"], "manufacturer")
         self.assertEqual(pages[0]["provider"], "Bambu Lab official")
+
+    def test_catalogue_identity_ignores_trademark_spacing_and_punctuation(self):
+        self.assertEqual(
+            _normalise_catalogue_identity("Orange Pi®"),
+            _normalise_catalogue_identity("OrangePi"),
+        )
+        self.assertEqual(
+            _normalise_catalogue_identity("Arduino®"),
+            _normalise_catalogue_identity("Arduino"),
+        )
+
+    def test_curated_mcu_mapping_accepts_trademarked_manufacturer_name(self):
+        board = SimpleNamespace(
+            name="Nano ESP32",
+            manufacturer=SimpleNamespace(name="Arduino®"),
+            specifications={"board_type": "microcontroller"},
+        )
+        self.assertEqual(
+            _curated_board_source_pages(board),
+            ["https://docs.arduino.cc/hardware/nano-esp32"],
+        )
 
     def test_curated_mcu_source_pages_cover_known_board_failures(self):
         cases = [
