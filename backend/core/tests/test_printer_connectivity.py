@@ -374,7 +374,6 @@ class PrinterConnectivityApiTests(TestCase):
             f"/api/printing/printers/{self.printer.id}/connections/",
             data={
                 "adapter": "creality_local",
-                "endpoint_url": self.printer.connection_host,
                 "poll_interval_seconds": 15,
             },
             content_type="application/json",
