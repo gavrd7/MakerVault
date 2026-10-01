@@ -13,6 +13,7 @@ from websockets.exceptions import WebSocketException
 from django.utils import timezone
 
 from .live_print_jobs import sync_print_job_from_snapshot
+from .live_material_slots import sync_live_material_slots
 from .manufacturer_printer_adapters import (
     ManufacturerAdapterError,
     normalise_bambu_endpoint,
@@ -784,9 +785,11 @@ def poll_connection(connection) -> dict:
         raise
 
     job_result = sync_print_job_from_snapshot(connection, snapshot)
+    material_result = sync_live_material_slots(connection, snapshot)
     snapshot = {
         **snapshot,
         "maker_vault_job": job_result,
+        "maker_vault_materials": material_result,
     }
 
     now = timezone.now()
