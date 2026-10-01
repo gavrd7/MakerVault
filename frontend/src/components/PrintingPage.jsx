@@ -694,7 +694,11 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
     }
   }
 
-  useEffect(() => { loadConnections(); }, [printer.id]);
+  useEffect(() => {
+    loadConnections();
+    const timer = window.setInterval(loadConnections, 10000);
+    return () => window.clearInterval(timer);
+  }, [printer.id]);
 
   const selectableAdapters = (data.adapters || []).filter(item => item.supported);
   const configured = new Set((data.rows || []).map(item => item.adapter));
@@ -796,11 +800,11 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
       {(data.rows || []).map(connection => {
         const snapshot = connection.snapshot || {};
         const pct = progress(snapshot);
-        const tone = connection.status === "connected" ? "good" : connection.status === "error" || connection.status === "disconnected" ? "danger" : connection.experimental ? "accent" : "neutral";
+        const tone = connection.stale ? "danger" : connection.status === "connected" ? "good" : connection.status === "error" || connection.status === "disconnected" ? "danger" : connection.experimental ? "accent" : "neutral";
         return <article key={connection.id}>
           <div className="settingsIntegrationHead">
             <strong>{connection.adapter_label}</strong>
-            <Badge tone={tone}>{connection.status_label}</Badge>
+            <Badge tone={tone}>{connection.stale ? "Stale" : connection.status_label}</Badge>
           </div>
           <small>{connection.endpoint_url || "Endpoint not configured"}</small>
           <div className="settingsCallout integrationAuthorityCallout">
