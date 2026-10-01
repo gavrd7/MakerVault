@@ -639,7 +639,7 @@ def _candidate_source_pages(obj) -> list[dict]:
 
     for curated_url in _curated_board_source_pages(obj):
         curated_host = (urlparse(curated_url).hostname or "").lower()
-        if curated_host == "github.com" or curated_host.endsWith(".github.com"):
+        if curated_host == "github.com" or curated_host.endswith(".github.com"):
             add(curated_url, source_type="github", provider="Community / ecosystem")
         else:
             add(curated_url, source_type="manufacturer", provider="Official manufacturer")
