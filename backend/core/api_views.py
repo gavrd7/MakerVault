@@ -1420,6 +1420,58 @@ def admin_user_delete(request, user_id):
 @login_required
 @require_http_methods(["GET"])
 def dashboard(request):
+    owned_printers = list(
+        Printer.objects.filter(owner=request.user)
+        .select_related("printer_manufacturer", "manufacturer", "catalog_model", "printing_location")
+        .prefetch_related("live_connections")
+        .order_by("name")
+    )
+    live_printers = []
+    for printer in owned_printers:
+        connections = [
+            _serialise_printer_connection(connection)
+            for connection in printer.live_connections.all()
+            if connection.enabled
+        ]
+        if not connections:
+            continue
+        connection = next(
+            (
+                item for item in connections
+                if item["status"] == "connected" and not item["stale"]
+            ),
+            connections[0],
+        )
+        snapshot = connection.get("snapshot") or {}
+        catalogue = _serialise_printer_catalog_model(printer.catalog_model) if printer.catalog_model else None
+        image = ""
+        if catalogue:
+            image = (
+                catalogue.get("image_multi_material")
+                if printer.multi_material_installed and catalogue.get("image_multi_material")
+                else catalogue.get("image")
+            ) or ""
+        maker = printer.printer_manufacturer or printer.manufacturer
+        live_printers.append({
+            "id": str(printer.id),
+            "name": printer.name,
+            "manufacturer": maker.name if maker else "",
+            "model": printer.model,
+            "location": printer.printing_location.name if printer.printing_location else printer.location,
+            "image": image,
+            "adapter": connection["adapter"],
+            "adapter_label": connection["adapter_label"],
+            "connection_status": connection["status"],
+            "connection_status_label": connection["status_label"],
+            "stale": connection["stale"],
+            "last_seen_at": connection["last_seen_at"],
+            "state": str(snapshot.get("state") or "unknown"),
+            "state_label": str(snapshot.get("state_label") or connection["status_label"]),
+            "job": snapshot.get("job") or {},
+            "temperatures": snapshot.get("temperatures") or {},
+            "warnings": snapshot.get("warnings") or [],
+        })
+
     data = {
         "inventory_total": InventoryItem.objects.filter(owner=request.user).count(),
         "inventory_available": InventoryItem.objects.filter(owner=request.user).filter(status="available").count(),
@@ -1430,9 +1482,10 @@ def dashboard(request):
         "component_models": ComponentModel.objects.count(),
         "filament_products": FilamentProduct.objects.count(),
         "spools": Spool.objects.filter(owner=request.user).count(),
-        "printers": Printer.objects.filter(owner=request.user).count(),
+        "printers": len(owned_printers),
         "models_3d": Model3D.objects.filter(owner=request.user).count(),
         "maker_tags": MakerTag.objects.filter(owner=request.user, status="active").count(),
+        "live_printers": live_printers,
     }
     return JsonResponse(data)
 
