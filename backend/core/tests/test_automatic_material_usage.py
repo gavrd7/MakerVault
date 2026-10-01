@@ -60,6 +60,14 @@ class AutomaticMaterialUsageTests(TestCase):
         self.job.save()
         self.assertIsNone(material_summary(self.job)["used_g"])
 
+    def test_partial_printer_estimate_survives_missing_final_reading(self):
+        capture_material(self.job, {"job": {"filament_used_g": 2, "filament_usage_estimated": True, "filament_usage_basis": "extrusion_length"}})
+        capture_material(self.job, {"job": {"filament_estimated_g": 10}})
+        with patch("core.print_material_reporting.matching_gcode") as match:
+            capture_material(self.job)
+            match.assert_not_called()
+        self.assertEqual(material_summary(self.job)["used_g"], 2)
+
     def test_partial_extrusion_estimate_and_filename_guard(self):
         self.job.status = "failed"
         self.job.save()

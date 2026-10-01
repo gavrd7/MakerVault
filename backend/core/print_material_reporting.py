@@ -103,7 +103,7 @@ def capture_material(job, snapshot=None, asset=None):
     current = settings.get("automatic_material_usage") or {}
     report = report_from_snapshot(job, snapshot or {})
     if not report and job.status == "success":
-        if current and current.get("source") == "uploaded_gcode":
+        if current and current.get("source") in {"uploaded_gcode", "printer_report"}:
             return
         if current and not current.get("estimated", True):
             return
@@ -114,6 +114,8 @@ def capture_material(job, snapshot=None, asset=None):
     if report == current:
         return
     if current and not current.get("estimated", True) and report.get("estimated", True):
+        return
+    if current.get("source") == "printer_report" and report.get("source") != "printer_report":
         return
     settings["automatic_material_usage"] = report
     job.settings = settings
