@@ -122,7 +122,7 @@ This file tracks completed MakerVault milestones and the planned path toward a s
 
 ### v0.7.3 — Live printer connectivity, monitoring & manufacturer adapters
 
-**In development:** the provider-neutral live-connection model and adapter contract are now in place, with first-class Moonraker/Klipper and OctoPrint polling, owner-scoped connection APIs and a read-only live-monitoring UI. Manufacturer-specific adapters, scheduled polling, automatic PrintJob lifecycle mapping and validated optional controls remain to be implemented.
+**In development:** the provider-neutral live-connection model and adapter contract are in place, with first-class Moonraker/Klipper and OctoPrint polling, owner-scoped connection APIs, per-connection scheduled polling, a read-only live-monitoring UI and conservative automatic PrintJob lifecycle mapping. Manufacturer-specific adapters, richer camera/material telemetry, multi-material adapter formalisation and validated optional controls remain to be implemented.
 
 **Goal:** make printer monitoring local-first and provider-neutral, with SimplyPrint remaining optional.
 
