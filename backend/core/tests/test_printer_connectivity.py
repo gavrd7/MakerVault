@@ -1,0 +1,230 @@
+from unittest.mock import Mock, patch
+
+from django.contrib.auth import get_user_model
+from django.test import TestCase
+
+from core.models import Printer, PrinterConnection
+from core.printer_connectivity import (
+    PrinterConnectionError,
+    adapter_catalogue,
+    poll_connection,
+    poll_moonraker,
+    poll_octoprint,
+)
+
+
+class PrinterConnectivityAdapterTests(TestCase):
+    def response(self, payload, status=200):
+        result = Mock(status_code=status)
+        result.json.return_value = payload
+        return result
+
+    @patch("core.printer_connectivity.requests.get")
+    def test_moonraker_normalises_live_snapshot(self, get_mock):
+        def side_effect(url, **kwargs):
+            if url.endswith("/server/info"):
+                return self.response({
+                    "result": {
+                        "klippy_state": "ready",
+                        "moonraker_version": "0.9.3",
+                    }
+                })
+            if "/printer/objects/query?" in url:
+                return self.response({
+                    "result": {
+                        "status": {
+                            "print_stats": {
+                                "state": "printing",
+                                "filename": "Benchy.gcode",
+                                "print_duration": 300,
+                            },
+                            "virtual_sdcard": {"progress": 0.25},
+                            "display_status": {"progress": 0.25},
+                            "extruder": {"temperature": 214.2, "target": 220},
+                            "heater_bed": {"temperature": 59.8, "target": 60},
+                        }
+                    }
+                })
+            raise AssertionError(url)
+
+        get_mock.side_effect = side_effect
+        snapshot = poll_moonraker("http://moonraker.local:7125", {"api_key": "secret"})
+
+        self.assertTrue(snapshot["online"])
+        self.assertEqual(snapshot["state"], "printing")
+        self.assertEqual(snapshot["job"]["file_name"], "Benchy.gcode")
+        self.assertEqual(snapshot["job"]["progress"], 25.0)
+        self.assertEqual(snapshot["job"]["elapsed_seconds"], 300)
+        self.assertEqual(snapshot["job"]["remaining_seconds"], 900)
+        self.assertEqual(snapshot["temperatures"]["tool0"]["actual_c"], 214.2)
+        self.assertEqual(snapshot["temperatures"]["bed"]["target_c"], 60.0)
+        self.assertEqual(snapshot["source_metadata"]["klippy_state"], "ready")
+        self.assertTrue(all(call.kwargs["headers"]["X-Api-Key"] == "secret" for call in get_mock.call_args_list))
+
+    @patch("core.printer_connectivity.requests.get")
+    def test_octoprint_normalises_live_snapshot(self, get_mock):
+        def side_effect(url, **kwargs):
+            if url.endswith("/api/version"):
+                return self.response({"api": "0.1", "server": "1.11.0", "text": "OctoPrint 1.11.0"})
+            if url.endswith("/api/job"):
+                return self.response({
+                    "state": "Printing",
+                    "job": {"file": {"display": "Gear.3mf"}},
+                    "progress": {
+                        "completion": 62.5,
+                        "printTime": 600,
+                        "printTimeLeft": 360,
+                    },
+                })
+            if url.endswith("/api/printer"):
+                return self.response({
+                    "state": {"text": "Printing"},
+                    "temperature": {
+                        "tool0": {"actual": 205.5, "target": 210},
+                        "bed": {"actual": 60.1, "target": 60},
+                    },
+                })
+            raise AssertionError(url)
+
+        get_mock.side_effect = side_effect
+        snapshot = poll_octoprint("http://octoprint.local", {"api_key": "octo-key"})
+
+        self.assertTrue(snapshot["online"])
+        self.assertEqual(snapshot["state"], "printing")
+        self.assertEqual(snapshot["job"]["file_name"], "Gear.3mf")
+        self.assertEqual(snapshot["job"]["progress"], 62.5)
+        self.assertEqual(snapshot["job"]["remaining_seconds"], 360)
+        self.assertEqual(snapshot["temperatures"]["tool0"]["target_c"], 210.0)
+        self.assertEqual(snapshot["source_metadata"]["server"], "1.11.0")
+
+    def test_adapter_catalogue_marks_unvalidated_manufacturer_adapters_experimental(self):
+        rows = {row["key"]: row for row in adapter_catalogue()}
+        self.assertTrue(rows["moonraker"]["supported"])
+        self.assertTrue(rows["octoprint"]["supported"])
+        self.assertFalse(rows["bambu_local"]["supported"])
+        self.assertTrue(rows["bambu_local"]["experimental"])
+        self.assertTrue(rows["voron"]["experimental"])
+
+
+class PrinterConnectivityApiTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_superuser(
+            username="printer-live-admin",
+            email="printer-live@example.com",
+            password="test-password",
+        )
+        self.other = User.objects.create_user(
+            username="printer-live-other",
+            email="other@example.com",
+            password="test-password",
+        )
+        self.client.force_login(self.user)
+        self.printer = Printer.objects.create(
+            owner=self.user,
+            name="Workshop Voron",
+            model="Voron 2.4",
+        )
+
+    def test_create_live_connection_redacts_api_key_and_exposes_capabilities(self):
+        response = self.client.post(
+            f"/api/printing/printers/{self.printer.id}/connections/",
+            data={
+                "adapter": "moonraker",
+                "endpoint_url": "http://192.168.1.44:7125/",
+                "poll_interval_seconds": 20,
+                "api_key": "moon-secret",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        item = response.json()["item"]
+        self.assertEqual(item["adapter"], "moonraker")
+        self.assertEqual(item["endpoint_url"], "http://192.168.1.44:7125")
+        self.assertEqual(item["status"], "disconnected")
+        self.assertTrue(item["supported"])
+        self.assertTrue(item["local_first"])
+        self.assertTrue(item["capabilities"]["job"])
+        self.assertTrue(item["capabilities"]["pause"])
+        self.assertTrue(item["config"]["api_key_configured"])
+        self.assertNotIn("api_key", item["config"])
+
+        connection = PrinterConnection.objects.get(printer=self.printer, adapter="moonraker")
+        self.assertEqual(connection.config["api_key"], "moon-secret")
+
+    def test_one_physical_printer_can_have_multiple_live_sources_without_duplication(self):
+        for adapter, endpoint in [
+            ("moonraker", "http://printer.local:7125"),
+            ("octoprint", "http://printer.local"),
+        ]:
+            response = self.client.post(
+                f"/api/printing/printers/{self.printer.id}/connections/",
+                data={"adapter": adapter, "endpoint_url": endpoint},
+                content_type="application/json",
+            )
+            self.assertEqual(response.status_code, 201, response.content)
+
+        overview = self.client.get("/api/printing/")
+        self.assertEqual(overview.status_code, 200, overview.content)
+        self.assertEqual(len(overview.json()["printers"]), 1)
+        self.assertEqual(len(overview.json()["printers"][0]["live_connections"]), 2)
+
+    def test_connection_endpoints_are_owner_scoped(self):
+        foreign = Printer.objects.create(owner=self.other, name="Other printer", model="Other")
+        connection = PrinterConnection.objects.create(
+            printer=foreign,
+            adapter="moonraker",
+            endpoint_url="http://other.local:7125",
+            status="disconnected",
+        )
+        response = self.client.get(f"/api/printing/printers/{foreign.id}/connections/")
+        self.assertEqual(response.status_code, 404)
+        delete = self.client.delete(
+            f"/api/printing/printers/{foreign.id}/connections/{connection.id}/"
+        )
+        self.assertEqual(delete.status_code, 404)
+
+    @patch("core.api_views.poll_connection")
+    def test_refresh_returns_normalised_snapshot(self, poll_mock):
+        connection = PrinterConnection.objects.create(
+            printer=self.printer,
+            adapter="moonraker",
+            endpoint_url="http://printer.local:7125",
+            status="disconnected",
+        )
+        snapshot = {
+            "adapter": "moonraker",
+            "online": True,
+            "state": "idle",
+            "state_label": "Idle",
+            "job": {"file_name": "", "progress": None},
+            "temperatures": {},
+            "warnings": [],
+            "materials": [],
+            "captured_at": "2026-10-01T08:00:00+00:00",
+        }
+
+        def refresh(item):
+            item.status = "connected"
+            item.capabilities = {"job": True}
+            item.last_snapshot = snapshot
+            item.save()
+            return snapshot
+
+        poll_mock.side_effect = refresh
+        response = self.client.post(
+            f"/api/printing/printers/{self.printer.id}/connections/{connection.id}/refresh/"
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["snapshot"]["state"], "idle")
+        self.assertEqual(response.json()["item"]["status"], "connected")
+
+    def test_unimplemented_adapter_fails_closed(self):
+        connection = PrinterConnection.objects.create(
+            printer=self.printer,
+            adapter="bambu_local",
+            endpoint_url="http://bambu.local",
+            status="experimental",
+        )
+        with self.assertRaises(PrinterConnectionError):
+            poll_connection(connection)
