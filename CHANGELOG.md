@@ -1,4 +1,5 @@
 # Changelog
+
 ## v0.7.2 — in development
 
 - Expanded the Board Catalogue beyond microcontrollers with first-class SBC and compute-module/SoM classification, curated Orange Pi, ODROID, Radxa, Banana Pi, BeagleBoard, LattePanda, NVIDIA Jetson and Khadas families, SBC-specific technical presentation, and board-type filtering. Added Expansion Boards to Components for HATs, pHATs, Arduino Shields, FeatherWings and host-specific add-ons with structured host/interface compatibility metadata.
@@ -17,6 +18,11 @@
 - Expanded Maker Tag acquisition: USB/OTG keyboard-wedge RFID/NFC readers can scan directly into focused identity fields, supported secure-context Android browsers can capture Web NFC tags, and NFC tag details expose/can write the MakerVault NDEF scan URL so normal phone NFC handling (including iPhone) can open the assigned record without browser UID access.
 - Added catalogue-aware pin selectors to both ends of a wiring connection. Known board/component/inventory pins can be chosen from a dropdown with role/voltage context while free-text pin entry remains available for incomplete catalogues and custom terminals.
 - Fixed catalogue pin selectors for newly-added nodes by carrying board/component pin data into the editor before the first save. Added a standalone Wiring Lab page for experimental diagrams, with later transfer into an owned project while preserving structured wiring data.
+
+- Hardened board-image lookup identity handling so trademark symbols, marketing/SEO suffixes, `[base]` helper labels and manufacturer spacing aliases do not prevent exact catalogue matches.
+- Expanded authoritative board-image source discovery across current manufacturer documentation, modern lazy/product-image markup and carefully allow-listed source hosts without weakening SSRF/TLS protections.
+- Added a maintained community-source fallback for the generic ESP32-2432S028R CYD while preserving community provenance rather than mislabelling it as manufacturer content.
+- Live board-image validation now resolves 43 of 45 targeted boards; the remaining Orange Pi 5 Plus/5 Pro records retain their official sources and fail closed when `orangepi.org` cannot be retrieved rather than accepting a lower-confidence image.
 
 ## v0.7.1 — 2026-09-30
 
