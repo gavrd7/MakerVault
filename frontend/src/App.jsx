@@ -116,6 +116,11 @@ export default function App() {
       setSection("3D Printing");
       return;
     }
+    if (tag.target_type === "printed_part") {
+      setSearchTarget({ type: "printed_parts", id: tag.target.id, section: "3D Printing", token });
+      setSection("3D Printing");
+      return;
+    }
     if (tag.target_type === "location") {
       setSection("3D Printing");
     }
@@ -157,4 +162,5 @@ export default function App() {
     }} />}
   </div>;
 }
+
 

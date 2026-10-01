@@ -122,7 +122,7 @@ This file tracks completed MakerVault milestones and the planned path toward a s
 
 ### v0.7.3 — Live printer connectivity, monitoring & manufacturer adapters
 
-**In development:** the provider-neutral live layer now covers Moonraker/Klipper, OctoPrint, Creality local, Bambu Lab local, PrusaLink, Anycubic LAN and FlashForge local. Creality has been validated against a K2; Bambu/Prusa/Anycubic/FlashForge remain experimental pending volunteer hardware validation. Live CFS, AMS, ACE and FlashForge material-station observations map into the same provider-neutral printer-slot records without auto-creating physical spools. Elegoo/QIDI/Sovol/Voron can reuse Moonraker where their firmware exposes it; Snapmaker and remaining manufacturer-specific gaps are still open.
+**Released v0.7.3.2:** the provider-neutral live layer now covers Moonraker/Klipper, OctoPrint, Creality local, Bambu Lab local, PrusaLink, Anycubic LAN and FlashForge local. Creality connection and print monitoring have been validated against K2 and K1; K1 also passed Moonraker monitoring; Bambu/Prusa/Anycubic/FlashForge remain experimental pending volunteer hardware validation. Live CFS, AMS, ACE and FlashForge material-station observations map into the same provider-neutral printer-slot records without auto-creating physical spools. Elegoo/QIDI/Sovol/Voron can reuse Moonraker where their firmware exposes it; Snapmaker and remaining manufacturer-specific gaps are still open.
 
 **Goal:** make printer monitoring local-first and provider-neutral, with SimplyPrint remaining optional.
 
@@ -175,6 +175,8 @@ This file tracks completed MakerVault milestones and the planned path toward a s
 
 ### v0.8.0 — Printed parts & physical tracking
 
+**In development:** explicit retained-part batches with owner-scoped project/location/state tracking, replacement links, change history and Maker Tags. Whole-job material context is shown without duplicating filament totals. Automatic part creation is not enabled.
+
 **Goal:** close the loop from digital model and print job to the physical object that now exists.
 
 - Introduce first-class Printed Part records.
@@ -182,7 +184,7 @@ This file tracks completed MakerVault milestones and the planned path toward a s
 - Track physical state such as available, installed/in-use, spare, failed, scrapped or retired.
 - Track storage/location and project installation.
 - Reuse the v0.7.2 Maker Tags system for QR/NFC identification and physical labels.
-- Allow a completed monitored print job to offer or automatically create printed-part records where model/quantity confidence is high.
+- Offer explicit printed-part creation from successful monitored print jobs. Never create parts automatically by default; saving models and retaining parts are optional, while filament accounting covers all confidently tracked print jobs where a usable source is available.
 - Track replacements, reprints and scrapped/failed physical parts without losing production history.
 - Surface project-level views of installed/required/spare printed parts.
 
@@ -251,3 +253,4 @@ The following remain cross-cutting rather than tied to only one milestone:
 - performance and database/indexing work as real-world data sets grow.
 
 Version scope may still be adjusted as implementation teaches us more, but the sequence above represents the current intended path to v1.
+

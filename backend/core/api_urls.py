@@ -1,7 +1,9 @@
 from django.urls import path
-from . import api_views
+from . import api_views, printed_parts
 
 urlpatterns = [
+    path("printing/parts/", printed_parts.printed_parts, name="api-printed-parts"),
+    path("printing/parts/<uuid:part_id>/", printed_parts.printed_part_detail, name="api-printed-part-detail"),
     path("dashboard/", api_views.dashboard, name="api-dashboard"),
     path("storage/", api_views.user_storage, name="api-user-storage"),
     path("search/", api_views.universal_search, name="api-universal-search"),
@@ -85,3 +87,4 @@ urlpatterns = [
     path("settings/users/<int:user_id>/purge/", api_views.admin_user_purge, name="api-admin-user-purge"),
     path("settings/users/<int:user_id>/delete/", api_views.admin_user_delete, name="api-admin-user-delete"),
 ]
+

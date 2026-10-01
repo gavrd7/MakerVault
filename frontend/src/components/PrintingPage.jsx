@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { apiFetch } from "../api";
+import PrintedPartsSection from "./PrintedPartsSection";
 import PrinterJobControls from "./PrinterJobControls";
 import { Badge, LoadingBlock, Modal } from "./Common";
 import ModelViewerModal, { isViewableModelFile } from "./ModelViewer";
@@ -150,6 +151,7 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [sourceNotice, setSourceNotice] = useState("");
+  const [partJob, setPartJob] = useState(null);
   const [modal, setModal] = useState("");
   const [manageModel, setManageModel] = useState(null);
   const [managePrinter, setManagePrinter] = useState(null);
@@ -182,6 +184,7 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
     if (searchTarget.type === "models") setWorkspaceView("models");
     else if (searchTarget.type === "spools") setWorkspaceView("spools");
     else if (searchTarget.type === "filaments") setWorkspaceView("filaments");
+    else if (searchTarget.type === "printed_parts") setWorkspaceView("overview");
     else if (searchTarget.type === "printers") setWorkspaceView("overview");
   }, [searchTarget?.token]);
 
@@ -439,10 +442,15 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
             {job.filament_usage_source && <small>{({ uploaded_gcode: "Uploaded G-code", printer_report: "Printer report", printer_gcode_metadata: "Printer G-code estimate", recorded: "Recorded usage" })[job.filament_usage_source] || job.filament_usage_source}</small>}
             {job.material_cost != null && <strong>{formatMoney(job.material_cost, config?.currency || "GBP")}</strong>}
           </div>
+          <div className="printingBadges">
+          {job.status === "success" && config?.permissions?.add_printedpart && <button onClick={() => setPartJob(job)}>Create printed parts</button>}
           <Badge tone={job.status === "success" ? "good" : job.status === "failed" ? "danger" : job.status === "printing" ? "accent" : "neutral"}>{job.status_label}</Badge>
+          </div>
         </article>)}
       </div>
     </section>}
+
+    <PrintedPartsSection config={config} projects={projects || []} createJob={partJob} onCreateConsumed={() => setPartJob(null)} focusId={searchTarget?.type === "printed_parts" ? searchTarget.id : ""} refreshToken={data} />
 
     {modal === "printer" && <PrinterModal manufacturers={data?.printer_manufacturers || []} models={data?.printer_catalogue_models || []} locations={data?.locations || []} onClose={() => setModal("")} onSaved={saved} />}
     {modal === "location" && <LocationModal onClose={() => setModal("")} onSaved={saved} />}
@@ -2618,3 +2626,4 @@ function PrintJobModal({ gcodeFiles = [], printers, spools, models, projects, cu
     </form>
   </Modal>;
 }
+
