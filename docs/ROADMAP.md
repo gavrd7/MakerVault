@@ -108,40 +108,21 @@ This file tracks completed MakerVault milestones and the planned path toward a s
 - Preserved licensing/source attribution and remote-reference behaviour for imagery that cannot safely be redistributed.
 - Validated the milestone against live catalogue data and completed backend, frontend, dependency/security and Docker image CI checks before release.
 
+### v0.7.2 — Maker Tags & interactive wiring
+
+- Added owner-scoped QR, NFC and RFID Maker Tags for inventory, spools, printers, projects and locations, including reassignment/history, printable QR labels, broad reader identities and mobile/desktop scan workflows.
+- Added project-attached and standalone structured Wiring Lab diagrams with searchable board/component/inventory nodes, catalogue-aware pin selectors, drag positioning, editable connections and JSON/SVG export.
+- Added cautious electrical validation for obvious power/ground, voltage, bus-direction and output conflicts while preserving explicit unknown states for incomplete catalogue data.
+- Completed a focused board catalogue/image-quality pass with lookup normalisation, authoritative source refreshes and conservative community fallbacks where manufacturer sources do not exist.
+- Validated the milestone on mobile/live data and completed frontend, backend, dependency/security and Docker image CI before release on 1 October 2026.
+
 ## Planned milestones
 
 ---
 
-### v0.7.2 — Maker Tags & interactive wiring
-
-**In development — final validation:** Maker Tags identity, assignment/history APIs and the responsive management/scan UI are implemented. The structured interactive wiring workspace is in place with draggable nodes, catalogue-aware pin selection, pin-to-pin connections, cautious validation, JSON/SVG export, standalone Wiring Lab support and scan-to-target navigation. The accompanying catalogue/image-quality pass is also complete apart from two deliberately unresolved Orange Pi source-fetch failures. Remaining work is final live-install smoke testing and full CI before merge.
-
-**Goal:** connect physical objects to MakerVault and add a maker-friendly structured wiring workspace.
-
-#### Maker Tags — QR / NFC
-
-- Introduce a generic tag identity model rather than a spool-only implementation.
-- Support QR-code identities and NFC/RFID UIDs.
-- Allow tags to resolve to inventory items, spools, printers, projects, storage locations and future printed parts/equipment.
-- Generate printable QR labels and mobile-friendly scan targets.
-- Support assignment, reassignment, duplicate detection and tag retirement/history.
-- Reuse existing physical spool RFID support instead of creating a parallel identity system.
-- Keep the tag target ownership-aware in multi-user installations.
-
-#### Interactive wiring diagrams
-
-- Add a project wiring workspace built around MakerVault boards/components.
-- Place boards/components as structured nodes rather than static images only.
-- Support pin-to-pin connections with labels, colours/notes and connection metadata.
-- Save diagrams as editable structured data and provide export/snapshot options.
-- Use catalogue pin/capability metadata where available.
-- Add lightweight maker-oriented validation such as duplicate pin use, voltage/capability warnings and missing common-ground hints where confidence is sufficient.
-- Retain ordinary uploaded wiring/schematic files alongside the interactive editor.
-- Deliberately avoid trying to replace professional PCB/EDA tools such as KiCad.
-
----
-
 ### v0.7.3 — Live printer connectivity, monitoring & manufacturer adapters
+
+**In development:** the provider-neutral live-connection model and adapter contract are now in place, with first-class Moonraker/Klipper and OctoPrint polling, owner-scoped connection APIs and a read-only live-monitoring UI. Manufacturer-specific adapters, scheduled polling, automatic PrintJob lifecycle mapping and validated optional controls remain to be implemented.
 
 **Goal:** make printer monitoring local-first and provider-neutral, with SimplyPrint remaining optional.
 
