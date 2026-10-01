@@ -10,8 +10,11 @@ from core.tasks import live_printer_connections_tick
 from core.live_print_jobs import sync_print_job_from_snapshot
 from core.live_material_slots import sync_live_material_slots
 from core.manufacturer_printer_adapters import (
+    ManufacturerAdapterError,
     _anycubic_decrypt_ctrl,
     _anycubic_sign,
+    _mqtt_identifier,
+    _same_network_origin,
     normalise_anycubic_endpoint,
     normalise_anycubic_snapshot,
     normalise_bambu_endpoint,
@@ -230,6 +233,29 @@ class PrinterConnectivityAdapterTests(TestCase):
         self.assertEqual(errored["state"], "error")
         self.assertEqual(errored["source_metadata"]["activity_state"], "printing")
         self.assertEqual(errored["warnings"], ["Creality error 500 (key 121)"])
+
+    def test_manufacturer_mqtt_identity_rejects_topic_wildcards(self):
+        self.assertEqual(_mqtt_identifier("01P00TESTSERIAL", "Serial"), "01P00TESTSERIAL")
+        for value in ("device/#", "device+wildcard", ""):
+            with self.subTest(value=value):
+                with self.assertRaises(ManufacturerAdapterError):
+                    _mqtt_identifier(value, "Serial")
+
+    def test_anycubic_control_url_cannot_escape_selected_printer_host(self):
+        self.assertEqual(
+            _same_network_origin(
+                "http://192.168.1.70:18910/ctrl",
+                "http://192.168.1.70:18910",
+                "control",
+            ),
+            "http://192.168.1.70:18910/ctrl",
+        )
+        with self.assertRaises(ManufacturerAdapterError):
+            _same_network_origin(
+                "http://169.254.169.254/latest/meta-data",
+                "http://192.168.1.70:18910",
+                "control",
+            )
 
     def test_anycubic_sign_matches_validated_lan_protocol(self):
         self.assertEqual(
