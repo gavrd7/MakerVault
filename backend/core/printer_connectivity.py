@@ -229,6 +229,22 @@ def _number(value):
         return None
 
 
+def _flag(value, default=False):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    number = _finite_number(value)
+    if number is not None:
+        return number != 0
+    text = str(value).strip().casefold()
+    if text in {"true", "yes", "on", "connected", "online"}:
+        return True
+    if text in {"false", "no", "off", "disconnected", "offline", ""}:
+        return False
+    return default
+
+
 def _seconds(value):
     number = _number(value)
     if number is None or number < 0:
@@ -488,7 +504,7 @@ def normalise_creality_snapshot(payload: dict) -> dict:
 
     snapshot = _blank_snapshot("creality_local")
     snapshot.update({
-        "online": bool(payload.get("connect", 1)),
+        "online": _flag(payload.get("connect"), default=True),
         "state": state,
         "state_label": {
             "self-testing": "Self-testing",
@@ -516,9 +532,9 @@ def normalise_creality_snapshot(payload: dict) -> dict:
             "model_version": str(payload.get("modelVersion") or ""),
             "raw_state": payload.get("state"),
             "device_state": payload.get("deviceState"),
-            "cfs_connected": bool(payload.get("cfsConnect")),
-            "webrtc_support": bool(payload.get("webrtcSupport")),
-            "video_available": bool(payload.get("video") or payload.get("video1")),
+            "cfs_connected": _flag(payload.get("cfsConnect")),
+            "webrtc_support": _flag(payload.get("webrtcSupport")),
+            "video_available": _flag(payload.get("video")) or _flag(payload.get("video1")),
             "feedrate_percent": _finite_number(payload.get("curFeedratePct")),
             "flowrate_percent": _finite_number(payload.get("curFlowratePct")),
             "model_fan_percent": _finite_number(payload.get("modelFanPct")),
@@ -584,8 +600,10 @@ async def _fetch_creality_status(endpoint_url: str) -> dict:
                     continue
                 merged.update(data)
                 enough = (
-                    ("state" in merged or "printProgress" in merged)
-                    and ("nozzleTemp" in merged or "hostname" in merged)
+                    "state" in merged
+                    and ("printProgress" in merged or "dProgress" in merged)
+                    and "nozzleTemp" in merged
+                    and "bedTemp0" in merged
                 )
                 if enough:
                     return merged
