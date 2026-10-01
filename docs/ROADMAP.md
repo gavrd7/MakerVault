@@ -175,7 +175,7 @@ This file tracks completed MakerVault milestones and the planned path toward a s
 
 ### v0.8.0 — Printed parts & physical tracking
 
-**In development:** explicit retained-part batches with owner-scoped project/location/state tracking, replacement links, change history and Maker Tags. Whole-job material context is shown without duplicating filament totals. Automatic part creation is not enabled.
+**Released v0.8.0:** explicit retained-part batches with owner-scoped project/location/state tracking, replacement links, change history and Maker Tags. Whole-job material context is shown without duplicating filament totals. Automatic part creation is not enabled.
 
 **Goal:** close the loop from digital model and print job to the physical object that now exists.
 
@@ -190,19 +190,9 @@ This file tracks completed MakerVault milestones and the planned path toward a s
 
 ---
 
-### v0.9.0 — Printer lifecycle, maintenance & workshop operations
+### v0.9.0 — Skipped
 
-**Goal:** move MakerVault from printer inventory/monitoring into practical long-term equipment management.
-
-- Printer maintenance/service logs.
-- Nozzle changes and nozzle inventory/history.
-- Lubrication, belt, filter and other periodic service tasks.
-- Consumables and wear-part tracking.
-- Configurable maintenance intervals based on time, print hours or usage where telemetry is available.
-- Maintenance reminders and dashboard status.
-- Firmware/version history where integrations expose it.
-- Printer runtime and reliability summaries from live monitoring/history.
-- Potential workshop equipment/tool tracking using the same Maker Tag foundation where it adds value.
+The owner removed printer maintenance and workshop operations from the planned scope on 1 October 2026. Maintenance logs, service schedules, wear-part tracking and maintenance reminders will not be implemented as a milestone. The next planned milestone after v0.8.0 is v1.0 release hardening and documentation; outstanding camera feeds and printer-adapter validation remain separately tracked.
 
 ---
 
