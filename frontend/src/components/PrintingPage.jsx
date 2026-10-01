@@ -808,7 +808,9 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
         ? "prusa"
         : manufacturerKey.includes("flashforge")
           ? "flashforge"
-          : ["elegoo", "qidi", "sovol", "voron"].some(name => manufacturerKey.includes(name))
+          : manufacturerKey.includes("anycubic")
+            ? "anycubic"
+            : ["elegoo", "qidi", "sovol", "voron"].some(name => manufacturerKey.includes(name))
             ? "moonraker"
             : "";
   const available = selectableAdapters
@@ -823,7 +825,7 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
     setForm(current => ({
       ...current,
       adapter: nextAdapter,
-      endpoint_url: ["creality_local", "bambu_local", "prusa", "flashforge"].includes(nextAdapter) && !current.endpoint_url
+      endpoint_url: ["creality_local", "bambu_local", "prusa", "flashforge", "anycubic"].includes(nextAdapter) && !current.endpoint_url
         ? (printer.connection_host || "")
         : current.endpoint_url,
       serial: ["bambu_local", "flashforge"].includes(nextAdapter) && !current.serial
@@ -918,13 +920,13 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
   }
 
   function adapterChanged(adapter) {
-    const manufacturerLocal = ["creality_local", "bambu_local", "prusa", "flashforge"].includes(adapter);
+    const manufacturerLocal = ["creality_local", "bambu_local", "prusa", "flashforge", "anycubic"].includes(adapter);
     setForm(current => ({
       ...current,
       adapter,
       endpoint_url: manufacturerLocal
         ? (current.endpoint_url || printer.connection_host || "")
-        : (["creality_local", "bambu_local", "prusa", "flashforge"].includes(current.adapter) ? "" : current.endpoint_url),
+        : (["creality_local", "bambu_local", "prusa", "flashforge", "anycubic"].includes(current.adapter) ? "" : current.endpoint_url),
       api_key: ["creality_local", "bambu_local"].includes(adapter) ? "" : current.api_key,
       access_code: adapter === "bambu_local" ? current.access_code : "",
       serial: ["bambu_local", "flashforge"].includes(adapter) ? (current.serial || printer.serial_number || "") : current.serial,
@@ -1023,7 +1025,7 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
       <label>Adapter<select value={form.adapter} onChange={e => adapterChanged(e.target.value)}>
         {available.map(item => <option key={item.key} value={item.key}>{item.label}{item.experimental ? " · experimental" : ""}</option>)}
       </select></label>
-      <label>{["creality_local", "bambu_local", "prusa", "flashforge"].includes(form.adapter) ? "Printer host / IP" : "Service URL"}<input required value={form.endpoint_url} onChange={e => setForm(current => ({ ...current, endpoint_url: e.target.value }))} placeholder={form.adapter === "creality_local" ? "192.168.1.34" : form.adapter === "bambu_local" ? "192.168.1.45" : form.adapter === "prusa" ? "prusa.local" : form.adapter === "flashforge" ? "192.168.1.60" : form.adapter === "moonraker" ? "http://printer.local:7125" : "http://octoprint.local"} /></label>
+      <label>{["creality_local", "bambu_local", "prusa", "flashforge", "anycubic"].includes(form.adapter) ? "Printer host / IP" : "Service URL"}<input required value={form.endpoint_url} onChange={e => setForm(current => ({ ...current, endpoint_url: e.target.value }))} placeholder={form.adapter === "creality_local" ? "192.168.1.34" : form.adapter === "bambu_local" ? "192.168.1.45" : form.adapter === "prusa" ? "prusa.local" : form.adapter === "flashforge" ? "192.168.1.60" : form.adapter === "anycubic" ? "192.168.1.70" : form.adapter === "moonraker" ? "http://printer.local:7125" : "http://octoprint.local"} /></label>
       {!["creality_local", "bambu_local"].includes(form.adapter) && <label>API key (optional)<input type="password" value={form.api_key} onChange={e => setForm(current => ({ ...current, api_key: e.target.value }))} autoComplete="new-password" placeholder={form.adapter === "prusa" ? "Legacy / API-key PrusaLink setups" : "Only when your service requires one"} /></label>}
       {form.adapter === "creality_local" && <div className="settingsCallout">
         <strong>Creality LAN WebSocket</strong>
@@ -1053,13 +1055,17 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
           <p>MakerVault polls the printer's local HTTP API on port 8898 using its serial number and check code. Supported telemetry includes job state/progress, layers, temperatures and material-station slots where the printer reports them.</p>
         </div>
       </>}
+      {form.adapter === "anycubic" && <div className="settingsCallout full">
+        <strong>Anycubic LAN mode</strong>
+        <p>MakerVault performs the printer's local signed LAN handshake on port 18910, then opens its temporary MQTT/TLS session on port 9883. No Anycubic Cloud credentials are required. The printer must be in LAN mode; this adapter currently targets the Kobra 3 / S1-generation protocol and remains experimental.</p>
+      </div>}
       <label>Polling interval<div className="intervalInput"><input type="number" min="10" max="3600" step="5" value={form.poll_interval_seconds} onChange={e => setForm(current => ({ ...current, poll_interval_seconds: e.target.value }))} /><span>seconds</span></div></label>
       <div className="formActions full"><button className="primary" disabled={busy === "add"}>{busy === "add" ? "Adding…" : "Add live source"}</button></div>
     </form>}
 
     <div className="settingsCallout">
       <strong>Read-only first</strong>
-      <p>Moonraker, OctoPrint, Creality, Bambu, PrusaLink and FlashForge may advertise pause/resume/cancel capabilities, but MakerVault still treats this monitoring layer as read-only. Control actions remain behind a later permissioned/confirmed pass.</p>
+      <p>Moonraker, OctoPrint, Creality, Bambu, PrusaLink, FlashForge and Anycubic may advertise pause/resume/cancel capabilities, but MakerVault still treats this monitoring layer as read-only. Control actions remain behind a later permissioned/confirmed pass.</p>
     </div>
   </Modal>;
 }
