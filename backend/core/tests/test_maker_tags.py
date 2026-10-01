@@ -162,7 +162,7 @@ class MakerTagApiTests(TestCase):
             "/api/tags/",
             data={
                 "kind": "rfid",
-                "code": "new-tag-42",
+                "code": "04-aa-bb-cc",
                 "target_type": "spool",
                 "target_id": str(self.spool.id),
             },
@@ -170,8 +170,63 @@ class MakerTagApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 201, response.content)
         self.spool.refresh_from_db()
-        self.assertEqual(self.spool.rfid_uid, "NEW-TAG-42")
-        self.assertEqual(response.json()["item"]["code"], "NEW-TAG-42")
+        self.assertEqual(self.spool.rfid_uid, "04AABBCC")
+        self.assertEqual(response.json()["item"]["code"], "04AABBCC")
+
+    def test_reader_identity_preserves_case_when_not_a_hex_uid(self):
+        response = self.client.post(
+            "/api/tags/",
+            data={
+                "kind": "rfid",
+                "code": "ReaderCode-AbC-42",
+                "target_type": "inventory",
+                "target_id": str(self.inventory.id),
+                "metadata": {"technology": "usb_hid"},
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        item = response.json()["item"]
+        self.assertEqual(item["code"], "ReaderCode-AbC-42")
+        self.assertEqual(item["technology"], "usb_hid")
+        self.assertEqual(item["technology_label"], "USB / HID reader output")
+
+    def test_opaque_spool_reader_identity_does_not_overwrite_legacy_rfid_uid(self):
+        response = self.client.post(
+            "/api/tags/",
+            data={
+                "kind": "rfid",
+                "code": "PCReader-MixedCase-42",
+                "target_type": "spool",
+                "target_id": str(self.spool.id),
+                "metadata": {"technology": "usb_hid"},
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        self.spool.refresh_from_db()
+        self.assertEqual(self.spool.rfid_uid, "ABC123")
+        self.assertEqual(response.json()["item"]["code"], "PCReader-MixedCase-42")
+
+    def test_auto_resolve_matches_reader_identity_without_knowing_tag_kind(self):
+        tag = MakerTag.objects.create(
+            owner=self.owner,
+            kind="nfc",
+            code="04:Aa:bb:CC",
+            target_type="inventory",
+            target_id=self.inventory.id,
+            metadata={"technology": "iso14443"},
+        )
+        response = self.client.get("/api/tags/resolve/?kind=auto&code=04-aa-bb-cc")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["item"]["id"], str(tag.id))
+        self.assertEqual(response.json()["item"]["code"], "04AABBCC")
+
+    def test_tag_list_exposes_reader_technology_choices(self):
+        response = self.client.get("/api/tags/")
+        self.assertEqual(response.status_code, 200, response.content)
+        values = {item["value"] for item in response.json()["technologies"]}
+        self.assertTrue({"ndef", "iso14443", "iso15693", "lf_rfid", "uhf_epc", "usb_hid"} <= values)
 
     def test_physical_identity_cannot_be_duplicated_across_users(self):
         MakerTag.objects.create(
