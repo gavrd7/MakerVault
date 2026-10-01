@@ -23,6 +23,9 @@
 - Expanded authoritative board-image source discovery across current manufacturer documentation, modern lazy/product-image markup and carefully allow-listed source hosts without weakening SSRF/TLS protections.
 - Added a maintained community-source fallback for the generic ESP32-2432S028R CYD while preserving community provenance rather than mislabelling it as manufacturer content.
 - Live board-image validation now resolves 43 of 45 targeted boards; the remaining Orange Pi 5 Plus/5 Pro records retain their official sources and fail closed when `orangepi.org` cannot be retrieved rather than accepting a lower-confidence image.
+- Follow-up mobile/live testing added searchable Add node catalogue pickers, an always-visible pin selector with safe common-terminal fallbacks, exact pin metadata for ESP32-C3 DevKitM-1 and common WS2812 rings/strips, and immediate GND-to-power/I²C/UART conflict feedback before a wiring diagram is saved.
+- Broadened Maker Tags so NFC/RFID reader identities are treated as opaque values unless they are conventional hexadecimal UIDs, added auto-detection across tag kinds plus optional technology hints for NDEF, ISO 14443/15693, LF/UHF and HID readers, and retained legacy spool RFID mirroring only for UID-like values.
+- Reworked source-page image selection to reject obvious logos/placeholders/decorative backgrounds, prefer semantically-labelled product photographs, refresh stale remote references for all board types, move Adafruit boards to current Learning System sources, and use Banana Pi's dedicated product-photo documentation pages.
 
 ## v0.7.1 — 2026-09-30
 
