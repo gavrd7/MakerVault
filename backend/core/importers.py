@@ -126,7 +126,9 @@ def _fetch_safe_html(raw_url: str, validator, *, user_agent: str) -> tuple[str, 
     current = validator(raw_url).url
     headers = {
         "User-Agent": user_agent,
-        "Accept": "text/html,application/xhtml+xml",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-GB,en;q=0.9",
+        "Cache-Control": "no-cache",
     }
 
     for _ in range(5):
@@ -185,7 +187,7 @@ def fetch_catalogue_source_html(raw_url: str) -> tuple[str, str]:
     return _fetch_safe_html(
         raw_url,
         validate_catalogue_source_url,
-        user_agent="MakerVault/0.7 (+self-hosted catalogue enrichment)",
+        user_agent="Mozilla/5.0 (compatible; MakerVault/0.7; +self-hosted catalogue enrichment)",
     )
 
 def fetch_import_html(raw_url: str) -> tuple[str, str]:
