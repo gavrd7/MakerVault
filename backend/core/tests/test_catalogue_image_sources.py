@@ -371,7 +371,7 @@ class CatalogueImageSourceTests(unittest.TestCase):
 
         sbc_cases = [
             ("BPI-M5", "https://docs.banana-pi.org/en/BPI-M5/Photo_BPI-M5"),
-            ("BPI-M7", "https://docs.banana-pi.org/en/BPI-M7/BananaPi_BPI-M7"),
+            ("BPI-M7", "https://docs.banana-pi.org/en/BPI-M7/Photo_BPI-M7"),
         ]
         for board_name, expected in sbc_cases:
             with self.subTest(board=board_name):
