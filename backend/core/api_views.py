@@ -34,6 +34,7 @@ from .filament_catalogue import (
 )
 from .printing_catalogue_seed import COMMON_FILAMENT_MATERIALS
 from .model_analysis import ModelAnalysisError, analyse_file_asset
+from .print_material_reporting import capture_material, gcode_report, material_summary
 from .printing_integrations import PrintingIntegrationError, probe_simplyprint, probe_spoolman
 from .printer_connectivity import (
     ADAPTERS as PRINTER_ADAPTERS,
@@ -2032,6 +2033,10 @@ def files_lookup(request):
         asset.file = uploaded
         asset.full_clean()
         asset.save()
+        if original_name.lower().endswith(".gcode"):
+            gcode_report(asset)
+            for job in PrintJob.objects.filter(owner=request.user, status="success", settings__live_monitor__filename__iendswith=original_name):
+                capture_material(job)
         if project:
             project.save(update_fields=["updated_at"])
         return JsonResponse({"file": _serialise_file_asset(asset)}, status=201)
@@ -3955,11 +3960,14 @@ def _printing_analytics(owner):
         actual_minutes=Sum("actual_minutes"),
         estimated_minutes=Sum("estimated_minutes"),
     )
-    usage_totals = PrintMaterialUsage.objects.filter(print_job__owner=owner).aggregate(
-        used_g=Sum("used_g"),
-        waste_g=Sum("waste_g"),
-        jobs_with_usage=Count("print_job_id", distinct=True),
-    )
+    summaries = [material_summary(job) for job in PrintJob.objects.filter(owner=owner).prefetch_related("material_usages")]
+    known = [row for row in summaries if row["used_g"] is not None]
+    wastes = [row["waste_g"] for row in summaries if row["waste_g"] is not None]
+    usage_totals = {
+        "used_g": sum(Decimal(str(row["used_g"])) for row in known) if known else None,
+        "waste_g": sum(Decimal(str(value)) for value in wastes) if wastes else None,
+        "jobs_with_usage": len(known),
+    }
     default_currency = settings.MAKERVAULT_CURRENCY
     material_cost = (
         PrintMaterialUsage.objects.filter(print_job__owner=owner, currency=default_currency)
@@ -4008,6 +4016,7 @@ def _printing_analytics(owner):
         "waste_g": _float(usage_totals["waste_g"]),
         "jobs_with_material_usage": int(usage_totals["jobs_with_usage"]),
         "jobs_without_material_usage": total_jobs - int(usage_totals["jobs_with_usage"]),
+        "estimated_usage_jobs": sum(1 for row in known if row["estimated"]),
         "material_cost": _float(material_cost),
         "currency": default_currency,
         "foreign_cost_rows_excluded": foreign_cost_rows,
@@ -4017,6 +4026,7 @@ def _printing_analytics(owner):
 
 def _serialise_print_job(job):
     usages = list(job.material_usages.all())
+    effective_usage = material_summary(job, usages)
     total_used = sum((usage.used_g or Decimal("0") for usage in usages), Decimal("0"))
     total_waste = sum((usage.waste_g or Decimal("0") for usage in usages), Decimal("0"))
     costs = [usage.material_cost for usage in usages if usage.material_cost is not None]
@@ -4038,8 +4048,11 @@ def _serialise_print_job(job):
         "filename": str(live_meta.get("filename") or ""),
         "history_source": "live_printer" if live_meta.get("source") == "live_printer" else "manual",
         "material_usages": [_serialise_print_material_usage(usage) for usage in usages],
-        "filament_used_g": _float(total_used) if usages else None,
-        "waste_g": _float(total_waste) if usages else None,
+        "filament_used_g": effective_usage["used_g"],
+        "waste_g": effective_usage["waste_g"],
+        "filament_usage_source": effective_usage["source"],
+        "filament_usage_estimated": effective_usage["estimated"],
+        "filament_usage_file_id": effective_usage.get("file_id"),
         "material_cost": _float(total_cost),
         "actual_minutes": job.actual_minutes,
         "created_at": job.created_at.isoformat(),
@@ -4136,6 +4149,10 @@ def printing_overview(request):
             for item in PrintingLocation.objects.filter(owner=request.user).order_by("name")
         ],
         "common_filament_materials": COMMON_FILAMENT_MATERIALS,
+        "gcode_files": [
+            _serialise_file_asset(asset)
+            for asset in FileAsset.objects.filter(owner=request.user, superseded_by__isnull=True, metadata__extension=".gcode").select_related("project", "board__manufacturer", "component__category")[:5000]
+        ],
         "model_files": [
             _serialise_file_asset(asset)
             for asset in FileAsset.objects.filter(owner=request.user).filter(
@@ -5945,7 +5962,7 @@ def printing_jobs(request):
                 layer_height_mm=_parse_decimal(payload.get("layer_height_mm"), "layer_height_mm"),
                 nozzle_mm=_parse_decimal(payload.get("nozzle_mm"), "nozzle_mm"),
                 slicer=str(payload.get("slicer") or "").strip(),
-                settings=payload.get("settings") if isinstance(payload.get("settings"), dict) else {},
+                settings={key: value for key, value in payload.get("settings", {}).items() if key != "automatic_material_usage"} if isinstance(payload.get("settings"), dict) else {},
                 notes=str(payload.get("notes") or "").strip(),
             )
             job.full_clean()
@@ -5955,6 +5972,11 @@ def printing_jobs(request):
                 if not isinstance(material_payload, dict):
                     raise ValidationError({"material_usages": "Each material usage must be an object."})
                 _build_print_material_usage(job, printer, material_payload).save()
+            if payload.get("gcode_file_id"):
+                asset = FileAsset.objects.filter(owner=request.user, pk=payload["gcode_file_id"]).first()
+                if not asset or not gcode_report(asset):
+                    raise ValidationError({"gcode_file_id": "Choose an owned plain G-code file with explicit filament weight in grams."})
+                capture_material(job, asset=asset)
 
         job = PrintJob.objects.filter(owner=request.user).select_related(
             "printer", "project", "model_revision__model"

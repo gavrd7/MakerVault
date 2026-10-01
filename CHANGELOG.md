@@ -2,6 +2,9 @@
 
 ## v0.7.3.2 — in development
 
+- Added bounded plain-G-code gram parsing, unambiguous owner-scoped live-job matching and a print-history G-code selector. Full-file weights count only for successful prints and are labelled estimated.
+- Added Moonraker extrusion-length/metadata consumption estimates with explicit provenance, manual-usage precedence, no repeated-poll accumulation and no automatic spool deductions or invented waste/cost.
+
 - Live-source setup now closes after saving and confirms the source/printer on the overview. Save failures retain setup values and display the reason in the dialog.
 
 - Print Analytics and recent prints distinguish missing material usage from recorded zero, show usage coverage for partial totals, and preserve small fractional gram values.

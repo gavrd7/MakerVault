@@ -5,6 +5,7 @@ import math
 from django.utils import timezone
 
 from .models import PrintJob
+from .print_material_reporting import capture_material
 
 
 TERMINAL_STATES = {
@@ -107,6 +108,7 @@ def sync_print_job_from_snapshot(connection, snapshot: dict) -> dict:
                 estimated_minutes=estimated,
                 settings={"live_monitor": meta},
             )
+            capture_material(active, snapshot)
             return {
                 "action": "created",
                 "job_id": str(active.id),
@@ -133,6 +135,7 @@ def sync_print_job_from_snapshot(connection, snapshot: dict) -> dict:
         if elapsed is not None and remaining is not None:
             active.estimated_minutes = _minutes(float(elapsed) + float(remaining))
         active.save(update_fields=["settings", "estimated_minutes", "updated_at"])
+        capture_material(active, snapshot)
         return {
             "action": "updated",
             "job_id": str(active.id),
@@ -161,6 +164,7 @@ def sync_print_job_from_snapshot(connection, snapshot: dict) -> dict:
         if actual is not None:
             active.actual_minutes = actual
         active.save(update_fields=["settings", "status", "actual_minutes", "updated_at"])
+        capture_material(active, snapshot)
         return {
             "action": "completed",
             "job_id": str(active.id),
@@ -177,6 +181,7 @@ def sync_print_job_from_snapshot(connection, snapshot: dict) -> dict:
         settings["live_monitor"] = meta
         active.settings = settings
         active.save(update_fields=["settings", "updated_at"])
+        capture_material(active, snapshot)
         return {
             "action": "updated",
             "job_id": str(active.id),
@@ -184,3 +189,4 @@ def sync_print_job_from_snapshot(connection, snapshot: dict) -> dict:
         }
 
     return {"action": "none", "reason": "no-confident-transition"}
+

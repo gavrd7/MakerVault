@@ -313,7 +313,7 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
       <div className="printingAnalyticsMetrics">
         <article><span>Successful</span><strong>{data.analytics.successful || 0}</strong><small>of {data.analytics.completed || 0} completed</small></article>
         <article><span>Print time</span><strong>{formatDurationMinutes(data.analytics.actual_minutes)}</strong><small>actual recorded time</small></article>
-        <article><span>Filament used</span><strong>{recordedGrams(data.analytics.filament_used_g)}</strong><small>{data.analytics.filament_used_g == null ? "No material usage recorded" : `plus ${recordedGrams(data.analytics.waste_g)} waste · ${data.analytics.jobs_with_material_usage} of ${data.analytics.jobs} prints recorded`}</small></article>
+        <article><span>Filament used</span><strong>{recordedGrams(data.analytics.filament_used_g)}</strong><small>{data.analytics.filament_used_g == null ? "No material usage recorded" : `${data.analytics.waste_g == null ? "Waste not recorded" : "plus " + recordedGrams(data.analytics.waste_g) + " waste"} · ${data.analytics.jobs_with_material_usage} of ${data.analytics.jobs} prints with usage${data.analytics.estimated_usage_jobs ? " · includes " + data.analytics.estimated_usage_jobs + " estimated" : ""}`}</small></article>
         <article><span>Material cost</span><strong>{data.analytics.material_cost == null ? "Not recorded" : formatMoney(data.analytics.material_cost, data.analytics.currency || config?.currency)}</strong><small>{data.analytics.foreign_cost_rows_excluded ? data.analytics.foreign_cost_rows_excluded + " other-currency row(s) excluded" : "recorded/estimated spool cost"}</small></article>
       </div>
       {!!data.analytics.printers?.length && <div className="printingAnalyticsPrinters">
@@ -435,7 +435,8 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
             <small>{job.printer} · {formatDate(job.created_at)}{job.actual_minutes ? " · " + formatDurationMinutes(job.actual_minutes) : ""}{job.history_source === "live_printer" ? " · Auto-tracked" : ""}</small>
           </div>
           <div className="printingRecentPrintStats">
-            <span>{job.filament_used_g == null ? "Filament not recorded" : recordedGrams(job.filament_used_g) + " used"}{job.waste_g > 0 ? " · " + recordedGrams(job.waste_g) + " waste" : ""}</span>
+            <span>{job.filament_used_g == null ? "Filament not recorded" : recordedGrams(job.filament_used_g) + (job.filament_usage_estimated ? " estimated" : " used")}{job.waste_g > 0 ? " · " + recordedGrams(job.waste_g) + " waste" : ""}</span>
+            {job.filament_usage_source && <small>{({ uploaded_gcode: "Uploaded G-code", printer_report: "Printer report", printer_gcode_metadata: "Printer G-code estimate", recorded: "Recorded usage" })[job.filament_usage_source] || job.filament_usage_source}</small>}
             {job.material_cost != null && <strong>{formatMoney(job.material_cost, config?.currency || "GBP")}</strong>}
           </div>
           <Badge tone={job.status === "success" ? "good" : job.status === "failed" ? "danger" : job.status === "printing" ? "accent" : "neutral"}>{job.status_label}</Badge>
@@ -462,6 +463,7 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
     {modal === "model" && <ModelModal projects={projects || []} canUpload={Boolean(config?.permissions?.add_file)} onClose={() => setModal("")} onSaved={saved} />}
     {modal === "print" && <PrintJobModal
       printers={data?.printers || []}
+      gcodeFiles={data?.gcode_files || []}
       spools={data?.spools || []}
       models={data?.models || []}
       projects={projects || []}
@@ -2479,7 +2481,7 @@ function automaticUsageCost(row, spools, currency) {
   return gramsTotal * Number(spool.cost_per_g);
 }
 
-function PrintJobModal({ printers, spools, models, projects, currency, onClose, onSaved }) {
+function PrintJobModal({ gcodeFiles = [], printers, spools, models, projects, currency, onClose, onSaved }) {
   const revisionOptions = models.flatMap(model =>
     model.revisions.map(revision => ({
       id: revision.id,
@@ -2490,6 +2492,7 @@ function PrintJobModal({ printers, spools, models, projects, currency, onClose, 
   const [form, setForm] = useState({
     printer_id: printers[0]?.id || "",
     model_revision_id: "",
+    gcode_file_id: "",
     project_id: "",
     status: "success",
     quantity: 1,
@@ -2530,7 +2533,7 @@ function PrintJobModal({ printers, spools, models, projects, currency, onClose, 
     setBusy(true); setError("");
     try {
       const material_usages = usages
-        .filter(row => row.spool_id || row.used_g || row.waste_g || row.material_cost)
+        .filter(row => ["used_g", "waste_g", "material_cost"].some(key => row[key] !== "" && row[key] != null))
         .map(row => ({
           ...row,
           used_g: row.used_g || 0,
@@ -2572,6 +2575,11 @@ function PrintJobModal({ printers, spools, models, projects, currency, onClose, 
         <option value="">No project</option>
         {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
       </select></label>
+
+      <label className="full">Uploaded G-code estimate (optional)<select value={form.gcode_file_id} onChange={e => set("gcode_file_id", e.target.value)}>
+        <option value="">No G-code estimate</option>
+        {gcodeFiles.map(file => <option key={file.id} value={file.id}>{file.filename}</option>)}
+      </select><small>Upload plain .gcode through Files first. Completed prints can use its explicit gram estimate; entered material usage takes precedence. Estimates do not deduct spool stock.</small></label>
 
       <label>Quantity<input type="number" min="1" step="1" value={form.quantity} onChange={e => set("quantity", e.target.value)} /></label>
       <label>Actual duration (min)<input type="number" min="1" step="1" value={form.actual_minutes} onChange={e => set("actual_minutes", e.target.value)} /></label>
