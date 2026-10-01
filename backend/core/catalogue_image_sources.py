@@ -30,7 +30,7 @@ from .importers import ImporterError, fetch_catalogue_source_html, fetch_import_
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 OPENVERSE_API = "https://api.openverse.org/v1/images/"
-IMAGE_SEED_VERSION = "0.7.2-authoritative-images-8"
+IMAGE_SEED_VERSION = "0.7.2-authoritative-images-9"
 USER_AGENT = f"MakerVault/{getattr(settings, 'MAKERVAULT_VERSION', 'dev')} (+self-hosted catalogue image seeder)"
 def _commons_license_allowed(license_name: str) -> bool:
     """Allow only licences suitable for normal open redistribution."""
@@ -534,12 +534,13 @@ CURATED_MCU_SOURCE_PAGES = {
     ("Elecrow", "CrowPanel ESP32 2.8in HMI"): "https://www.elecrow.com/wiki/esp32-display-282727-intelligent-touch-screen-wi-fi26ble-240320-hmi-display.html",
     ("Elecrow", "CrowPanel ESP32 3.5in HMI"): "https://elecrow.com/wiki/esp32-display-352727-intelligent-touch-screen-wi-fi26ble-320480-hmi-display.html",
     ("Espressif", "ESP32-P4-Function-EV-Board"): "https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32p4/esp32-p4-function-ev-board/user_guide.html",
-    ("Heltec", "WiFi LoRa 32 V3"): "https://wiki.heltec.org/docs/devices/open-source-hardware/esp32-series/lora-32/wifi-lora-32/",
+    ("Heltec", "WiFi LoRa 32 V3"): "https://heltec.org/project/wifi-lora-32-v3/",
     ("Heltec", "Wireless Stick Lite V3"): "https://wiki.heltec.org/docs/devices/open-source-hardware/esp32-series/lora-32/wireless-stick-lite/",
-    ("LilyGo", "T-Deck"): "https://wiki.lilygo.cc/products/t-deck/t-deck/",
-    ("LilyGo", "T-Display-S3"): "https://wiki.lilygo.cc/products/t-display-s3/t-display-s3/",
-    ("M5Stack", "Atom Lite"): "https://docs.m5stack.com/en/core/atom_lite",
+    ("LilyGo", "T-Deck"): "https://wiki.lilygo.cc/products/t-deck-series/t-deck/",
+    ("LilyGo", "T-Display-S3"): "https://wiki.lilygo.cc/products/t-display-series/t-display-s3/",
+    ("M5Stack", "Atom Lite"): "https://docs.m5stack.com/en/core/ATOM%20Lite",
     ("M5Stack", "CoreS3"): "https://docs.m5stack.com/en/core/CoreS3",
+    ("Seeed Studio", "XIAO RP2350"): "https://wiki.seeedstudio.com/xiao_rp2350_arduino/",
     ("Seeed Studio", "XIAO RP2040"): "https://wiki.seeedstudio.com/XIAO-RP2040/",
 }
 
