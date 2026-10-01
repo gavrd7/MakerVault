@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import asyncio
+import json
+import math
 from dataclasses import dataclass
 from typing import Callable
 from urllib.parse import urlparse
 
 import requests
+import websockets
+from websockets.exceptions import WebSocketException
 from django.utils import timezone
 
 from .live_print_jobs import sync_print_job_from_snapshot
@@ -75,10 +80,17 @@ ADAPTERS = {
     "creality_local": AdapterDefinition(
         key="creality_local",
         label="Creality local",
-        supported=False,
+        supported=True,
         experimental=True,
         local_first=True,
-        capabilities={**COMMON_MONITORING, "materials": True},
+        capabilities={
+            **COMMON_MONITORING,
+            "materials": True,
+            "camera": True,
+            "pause": True,
+            "resume": True,
+            "cancel": True,
+        },
     ),
     "simplyprint": AdapterDefinition(
         key="simplyprint",
@@ -141,6 +153,48 @@ def normalise_printer_endpoint(raw_url: str) -> str:
     if parsed.username or parsed.password:
         raise PrinterConnectionError("Do not embed credentials in the printer service URL.")
     return value
+
+
+def normalise_creality_endpoint(raw_url: str) -> str:
+    """Return the Creality LAN WebSocket endpoint used by Creality Print.
+
+    Existing MakerVault printers commonly store only a host/IP in
+    `connection_host`, so the adapter accepts a bare host as well as HTTP/WS
+    URLs and canonicalises them to the local WebSocket service on port 9999.
+    """
+    value = str(raw_url or "").strip().rstrip("/")
+    if not value:
+        raise PrinterConnectionError("Enter the Creality printer host or WebSocket URL.")
+
+    if "://" not in value:
+        parsed = urlparse("//" + value)
+        scheme = "ws"
+    else:
+        parsed = urlparse(value)
+        if parsed.scheme not in {"http", "https", "ws", "wss"}:
+            raise PrinterConnectionError("Creality local endpoints must use a host, HTTP(S), or WS(S) URL.")
+        scheme = "wss" if parsed.scheme in {"https", "wss"} else "ws"
+
+    if not parsed.hostname:
+        raise PrinterConnectionError("Creality local endpoint must include a host.")
+    if parsed.username or parsed.password:
+        raise PrinterConnectionError("Do not embed credentials in the Creality printer endpoint.")
+
+    host = parsed.hostname
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"
+
+    # Creality Print's local WebSocket protocol is exposed on 9999. Preserve
+    # an explicitly supplied WS/WSS port for reverse proxies/test fixtures;
+    # ordinary HTTP UI ports are not the telemetry service.
+    port = parsed.port if parsed.scheme in {"ws", "wss"} and parsed.port else 9999
+    return f"{scheme}://{host}:{port}"
+
+
+def normalise_connection_endpoint(adapter: str, raw_url: str) -> str:
+    if adapter == "creality_local":
+        return normalise_creality_endpoint(raw_url)
+    return normalise_printer_endpoint(raw_url)
 
 
 def _json(response, context: str) -> dict:
@@ -365,9 +419,197 @@ def poll_octoprint(endpoint_url: str, config: dict | None = None) -> dict:
     return snapshot
 
 
+def _finite_number(value):
+    number = _number(value)
+    if number is None or not math.isfinite(number):
+        return None
+    return number
+
+
+def _creality_state(payload: dict) -> str:
+    err = payload.get("err")
+    errcode = _finite_number(err.get("errcode") if isinstance(err, dict) else err)
+    if errcode not in (None, 0):
+        return "error"
+
+    self_test = _finite_number(payload.get("withSelfTest"))
+    if self_test is not None and 1 <= self_test <= 99:
+        return "self-testing"
+
+    filename = str(payload.get("printFileName") or "").strip()
+    progress = _finite_number(
+        payload.get("printProgress")
+        if payload.get("printProgress") is not None
+        else payload.get("dProgress")
+    )
+    raw_state = _finite_number(payload.get("state"))
+    raw_state = int(raw_state) if raw_state is not None else None
+
+    if filename:
+        if progress is not None and progress >= 100:
+            return "complete"
+        if raw_state == 5:
+            return "paused"
+        if raw_state == 4:
+            return "cancelled"
+        if raw_state == 1:
+            return "printing"
+        if raw_state == 0:
+            return "processing"
+    return "idle"
+
+
+def normalise_creality_snapshot(payload: dict) -> dict:
+    """Convert Creality's proprietary LAN telemetry into MakerVault's contract."""
+    if not isinstance(payload, dict):
+        raise PrinterConnectionError("Creality printer returned an unexpected telemetry payload.")
+
+    state = _creality_state(payload)
+    progress = _finite_number(
+        payload.get("printProgress")
+        if payload.get("printProgress") is not None
+        else payload.get("dProgress")
+    )
+    if progress is not None:
+        progress = max(0.0, min(100.0, progress))
+
+    filename = str(payload.get("printFileName") or "").strip().replace("\\", "/")
+    filename = filename.rsplit("/", 1)[-1] if filename else ""
+
+    err = payload.get("err") if isinstance(payload.get("err"), dict) else {}
+    errcode = _finite_number(err.get("errcode"))
+    warnings = []
+    if errcode not in (None, 0):
+        key = err.get("key")
+        warnings.append(
+            f"Creality error {int(errcode)}"
+            + (f" (key {key})" if key not in (None, "") else "")
+        )
+
+    snapshot = _blank_snapshot("creality_local")
+    snapshot.update({
+        "online": bool(payload.get("connect", 1)),
+        "state": state,
+        "state_label": {
+            "self-testing": "Self-testing",
+            "processing": "Preparing",
+            "complete": "Complete",
+            "cancelled": "Stopped",
+        }.get(state, state.replace("_", " ").title()),
+        "job": {
+            "file_name": filename,
+            "progress": round(progress, 2) if progress is not None else None,
+            "elapsed_seconds": _seconds(payload.get("printJobTime")),
+            "remaining_seconds": _seconds(payload.get("printLeftTime")),
+            "current_layer": int(_finite_number(payload.get("layer"))) if _finite_number(payload.get("layer")) is not None else None,
+            "total_layers": int(_finite_number(payload.get("TotalLayer"))) if _finite_number(payload.get("TotalLayer")) is not None else None,
+        },
+        "temperatures": {
+            "tool0": _temperature(payload.get("nozzleTemp"), payload.get("targetNozzleTemp")),
+            "bed": _temperature(payload.get("bedTemp0"), payload.get("targetBedTemp0")),
+            "chamber": _temperature(payload.get("boxTemp"), payload.get("targetBoxTemp")),
+        },
+        "warnings": warnings,
+        "source_metadata": {
+            "hostname": str(payload.get("hostname") or ""),
+            "model": str(payload.get("model") or ""),
+            "model_version": str(payload.get("modelVersion") or ""),
+            "raw_state": payload.get("state"),
+            "device_state": payload.get("deviceState"),
+            "cfs_connected": bool(payload.get("cfsConnect")),
+            "webrtc_support": bool(payload.get("webrtcSupport")),
+            "video_available": bool(payload.get("video") or payload.get("video1")),
+            "feedrate_percent": _finite_number(payload.get("curFeedratePct")),
+            "flowrate_percent": _finite_number(payload.get("curFlowratePct")),
+            "model_fan_percent": _finite_number(payload.get("modelFanPct")),
+            "case_fan_percent": _finite_number(payload.get("caseFanPct")),
+            "auxiliary_fan_percent": _finite_number(payload.get("auxiliaryFanPct")),
+            "used_material_length": _finite_number(payload.get("usedMaterialLength")),
+            "material_status": payload.get("materialStatus"),
+            "protocol": "Creality LAN WebSocket :9999",
+        },
+        "captured_at": timezone.now().isoformat(),
+    })
+    return snapshot
+
+
+def _creality_payload_data(payload) -> dict:
+    if not isinstance(payload, dict):
+        return {}
+    params = payload.get("params")
+    if isinstance(params, dict):
+        result = dict(payload)
+        result.pop("params", None)
+        result.update(params)
+        return result
+    return dict(payload)
+
+
+async def _fetch_creality_status(endpoint_url: str) -> dict:
+    uri = normalise_creality_endpoint(endpoint_url)
+    merged = {}
+    try:
+        async with websockets.connect(
+            uri,
+            ping_interval=None,
+            subprotocols=["wsslicer"],
+            open_timeout=5,
+            close_timeout=1,
+            proxy=None,
+        ) as ws:
+            # K-series printers normally send a complete status frame
+            # immediately. ReqPrinterPara gives us a deterministic fallback and
+            # is read-only.
+            await ws.send(json.dumps(
+                {"method": "get", "params": {"ReqPrinterPara": 1}},
+                separators=(",", ":"),
+            ))
+            deadline = asyncio.get_running_loop().time() + 7
+            while asyncio.get_running_loop().time() < deadline:
+                timeout = max(0.1, deadline - asyncio.get_running_loop().time())
+                raw = await asyncio.wait_for(ws.recv(), timeout=timeout)
+                if isinstance(raw, (bytes, bytearray)):
+                    raw = raw.decode("utf-8", "ignore")
+                if raw == "ok":
+                    continue
+                try:
+                    payload = json.loads(raw)
+                except (TypeError, ValueError):
+                    continue
+                if isinstance(payload, dict) and payload.get("ModeCode") == "heart_beat":
+                    await ws.send("ok")
+                    continue
+                data = _creality_payload_data(payload)
+                if not data:
+                    continue
+                merged.update(data)
+                enough = (
+                    ("state" in merged or "printProgress" in merged)
+                    and ("nozzleTemp" in merged or "hostname" in merged)
+                )
+                if enough:
+                    return merged
+    except (OSError, asyncio.TimeoutError, WebSocketException) as exc:
+        raise PrinterConnectionError("MakerVault could not reach the Creality LAN WebSocket service on port 9999.") from exc
+
+    if merged:
+        return merged
+    raise PrinterConnectionError("The Creality printer connected but did not return usable telemetry.")
+
+
+def poll_creality_local(endpoint_url: str, config: dict | None = None) -> dict:
+    del config
+    try:
+        payload = asyncio.run(_fetch_creality_status(endpoint_url))
+    except RuntimeError as exc:
+        raise PrinterConnectionError("MakerVault could not start the Creality telemetry reader.") from exc
+    return normalise_creality_snapshot(payload)
+
+
 POLLERS: dict[str, Callable[[str, dict | None], dict]] = {
     "moonraker": poll_moonraker,
     "octoprint": poll_octoprint,
+    "creality_local": poll_creality_local,
 }
 
 
@@ -401,7 +643,14 @@ def poll_connection(connection) -> dict:
     connection.last_error = ""
     connection.last_checked_at = now
     connection.last_seen_at = now
-    connection.capabilities = dict(definition.capabilities)
+    capabilities = dict(definition.capabilities)
+    if connection.adapter == "creality_local":
+        metadata = snapshot.get("source_metadata") or {}
+        capabilities["camera"] = bool(
+            metadata.get("video_available") or metadata.get("webrtc_support")
+        )
+        capabilities["materials"] = bool(metadata.get("cfs_connected"))
+    connection.capabilities = capabilities
     connection.last_snapshot = snapshot
     connection.save(update_fields=[
         "status", "last_error", "last_checked_at", "last_seen_at",
