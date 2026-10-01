@@ -60,6 +60,23 @@ class CatalogueProfileTests(unittest.TestCase):
         self.assertEqual(nano["dimensions_mm"], {"length": 43.18, "width": 17.77})
         self.assertEqual(nano["specifications"]["pin_count"], 30)
 
+    def test_esp32_c3_devkit_profile_exposes_wiring_pin_metadata(self):
+        item = apply_board_profile({
+            "manufacturer": "Espressif",
+            "name": "ESP32-C3-DevKitM-1",
+            "mcu": "ESP32-C3",
+            "specifications": {},
+        })
+        pins = {pin["name"]: pin for pin in item["pinout"]["pins"]}
+        self.assertEqual(pins["GND"]["role"], "ground")
+        self.assertEqual(pins["3V3"]["role"], "power_output")
+        self.assertEqual(pins["TX"]["role"], "uart_tx")
+        self.assertEqual(pins["RX"]["role"], "uart_rx")
+        self.assertEqual(
+            item["specifications"]["reference_provider"],
+            "Espressif",
+        )
+
     def test_adafruit_and_arduino_profiles_fill_common_catalogue_gaps(self):
         feather = apply_board_profile({
             "manufacturer": "Adafruit",
