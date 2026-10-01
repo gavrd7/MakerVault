@@ -15,6 +15,16 @@ function liveProgress(row) {
   return Math.max(0, Math.min(100, Number(value)));
 }
 
+function showLiveProgress(row) {
+  const pct = liveProgress(row);
+  const state = String(row?.state || "").toLowerCase();
+  return pct != null && Boolean(
+    row?.job?.file_name
+    || pct > 0
+    || ["printing", "processing", "paused", "complete", "completed"].includes(state)
+  );
+}
+
 function liveTemp(temp) {
   if (temp?.actual_c == null) return null;
   return Math.round(Number(temp.actual_c)) + "°";
@@ -52,6 +62,7 @@ export default function Dashboard({ dashboard, inventory, onNavigate }) {
       <div className="dashboardLiveGrid">
         {dashboard.live_printers.map(printer => {
           const pct = liveProgress(printer);
+          const showProgress = showLiveProgress(printer);
           const tone = liveStateTone(printer);
           return <button className={"dashboardLivePrinter dashboardLivePrinter-" + (printer.state || "unknown")} key={printer.id} onClick={() => onNavigate("3D Printing")}>
             <div className="dashboardLivePrinterImage">
@@ -73,8 +84,8 @@ export default function Dashboard({ dashboard, inventory, onNavigate }) {
                   liveTemp(printer.temperatures?.chamber) ? "Chamber " + liveTemp(printer.temperatures?.chamber) : "",
                 ].filter(Boolean).join(" · ")}</span>
               </div>
-              {pct != null && <div className="dashboardLiveProgress"><span style={{ width: pct + "%" }} /></div>}
-              {pct != null && <small className="dashboardLiveProgressLabel">{pct.toFixed(pct % 1 ? 1 : 0)}%</small>}
+              {showProgress && <div className="dashboardLiveProgress"><span style={{ width: pct + "%" }} /></div>}
+              {showProgress && <small className="dashboardLiveProgressLabel">{pct.toFixed(pct % 1 ? 1 : 0)}%</small>}
             </div>
           </button>;
         })}
