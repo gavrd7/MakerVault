@@ -68,7 +68,12 @@ def sync_print_job_from_snapshot(connection, snapshot: dict) -> dict:
     printer converge on the same active monitored job rather than creating
     duplicates. Idle/offline transitions never imply success.
     """
-    state = str(snapshot.get("state") or "").strip().lower()
+    source_metadata = snapshot.get("source_metadata") or {}
+    state = str(
+        source_metadata.get("activity_state")
+        or snapshot.get("state")
+        or ""
+    ).strip().lower()
     job_data = snapshot.get("job") or {}
     filename = str(job_data.get("file_name") or "").strip()
     elapsed = job_data.get("elapsed_seconds")
