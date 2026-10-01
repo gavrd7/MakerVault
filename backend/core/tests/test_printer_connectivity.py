@@ -1156,8 +1156,8 @@ class PrinterConnectivityApiTests(TestCase):
     def test_unimplemented_adapter_fails_closed(self):
         connection = PrinterConnection.objects.create(
             printer=self.printer,
-            adapter="snapmaker",
-            endpoint_url="http://snapmaker.local",
+            adapter="other",
+            endpoint_url="http://custom-printer.local",
             status="experimental",
         )
         with self.assertRaises(PrinterConnectionError):
@@ -1184,8 +1184,8 @@ class PrinterConnectivityApiTests(TestCase):
         )
         PrinterConnection.objects.create(
             printer=self.printer,
-            adapter="snapmaker",
-            endpoint_url="http://snapmaker.local",
+            adapter="other",
+            endpoint_url="http://custom-printer.local",
             poll_interval_seconds=10,
             status="experimental",
         )
