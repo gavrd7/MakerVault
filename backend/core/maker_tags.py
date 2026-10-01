@@ -21,6 +21,19 @@ class TagTargetDefinition:
     model: type
 
 
+TAG_TECHNOLOGIES = [
+    ("", "Auto / unspecified"),
+    ("ndef", "NDEF / phone-tappable NFC"),
+    ("iso14443", "NFC / ISO 14443 UID"),
+    ("iso15693", "NFC-V / ISO 15693 UID"),
+    ("mifare", "MIFARE / DESFire reader identity"),
+    ("lf_rfid", "LF RFID (125/134 kHz)"),
+    ("uhf_epc", "UHF / EPC Gen2 / RAIN RFID"),
+    ("usb_hid", "USB / HID reader output"),
+    ("other", "Other reader/tag technology"),
+]
+
+
 TARGETS = {
     "inventory": TagTargetDefinition("inventory", "Inventory item", InventoryItem),
     "spool": TagTargetDefinition("spool", "Spool", Spool),
