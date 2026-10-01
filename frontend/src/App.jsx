@@ -122,7 +122,7 @@ export default function App() {
   }
 
   function page() {
-    if (section === "Dashboard") return <Dashboard dashboard={dashboard} inventory={inventory} onNavigate={setSection} />;
+    if (section === "Dashboard") return <Dashboard dashboard={dashboard} inventory={inventory} onNavigate={setSection} onChanged={refreshDashboard} onOpenLive={printer => { setSearchTarget({ type: "printers", id: printer.id, openLive: true, token: Date.now() }); setSection("3D Printing"); }} />;
     if (section === "Search") return <SearchPage initialQuery={searchQuery} projects={projects} onOpenResult={openSearchResult} />;
     if (section === "Maker Tags") return <MakerTagsPage config={config} resolveToken={tagResolveToken} onResolveConsumed={() => { setTagResolveToken(""); const params = new URLSearchParams(window.location.search); params.delete("tag"); const query = params.toString(); window.history.replaceState({}, "", window.location.pathname + (query ? "?" + query : "") + window.location.hash); }} onChanged={refreshDashboard} onOpenTarget={openTagTarget} />;
     if (section === "Interactive Wiring") return <WiringPage boards={boards} components={components} inventory={inventory} projects={projects} config={config} onOpenProject={projectId => { setProjectTarget(projectId); setSection("Projects"); }} />;
@@ -157,3 +157,4 @@ export default function App() {
     }} />}
   </div>;
 }
+

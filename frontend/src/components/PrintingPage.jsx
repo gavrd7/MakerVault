@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { apiFetch } from "../api";
+import PrinterJobControls from "./PrinterJobControls";
 import { Badge, LoadingBlock, Modal } from "./Common";
 import ModelViewerModal, { isViewableModelFile } from "./ModelViewer";
 import { suggestNextVersion } from "./FileVersionModal";
@@ -77,7 +78,7 @@ function liveTemperature(temp) {
   return actual + "° / " + target + "°";
 }
 
-function PrinterLiveSummary({ printer, onOpen }) {
+function PrinterLiveSummary({ printer, onOpen, canControl, onChanged }) {
   const connection = printer.live_status || (printer.live_connections || []).find(item => item.enabled);
   if (!connection) return null;
   const snapshot = connection.snapshot || {};
@@ -97,12 +98,15 @@ function PrinterLiveSummary({ printer, onOpen }) {
           <small>{job.file_name || connection.adapter_label || "Live printer source"}</small>
         </div>
       </div>
-      <button type="button" className="printerLiveOpen" onClick={onOpen}>Open live</button>
     </div>
     {showProgress && <div className="printerLiveProgressLine">
       <div className="printerLiveProgressTrack"><span style={{ width: pct + "%" }} /></div>
       <strong>{pct.toFixed(pct % 1 ? 1 : 0)}%</strong>
     </div>}
+    <div className="printerLiveActions">
+      <PrinterJobControls printer={printer} connection={connection} canControl={canControl} onChanged={onChanged} />
+      <button type="button" className="printerLiveOpen" onClick={onOpen}>Open live</button>
+    </div>
     <div className="printerLiveQuickStats">
       {liveNozzles(snapshot).map(([key, temp]) => <span key={key}><small>{liveNozzleLabel(snapshot, key)}</small><strong>{liveTemperature(temp)}</strong></span>)}
       {temps.bed?.actual_c != null && <span><small>Bed</small><strong>{liveTemperature(temps.bed)}</strong></span>}
@@ -185,6 +189,13 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
     }, 0);
     return () => window.clearTimeout(timer);
   }, [data, searchTarget?.token, searchTarget?.id]);
+
+  const [openedLiveTarget, setOpenedLiveTarget] = useState(null);
+  useEffect(() => {
+    if (!data || !searchTarget?.openLive || searchTarget.type !== "printers" || openedLiveTarget === searchTarget.token) return;
+    const printer = data.printers?.find(item => item.id === searchTarget.id);
+    if (printer) { setLivePrinter(printer); setOpenedLiveTarget(searchTarget.token); }
+  }, [data, searchTarget, openedLiveTarget]);
 
   async function saved() {
     setModal("");
@@ -321,7 +332,7 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
 
     <section className="panel printingSection">
       <div className="panelHead"><div><h3>Printers &amp; loaded filament</h3><p>Filament slots are provider-neutral so CFS, AMS and later systems can use the same model.</p></div></div>
-      <div className="printingCards">
+      <div className="printingCards printingPrinterCards">
         {(data?.printers || []).map(printer => <article className={"printingCard printingPrinterCard" + (searchTarget?.type === "printers" && searchTarget.id === printer.id ? " searchTargetRow" : "")} id={"printer-search-target-" + printer.id} key={printer.id}>
           <div className="printingPrinterHeader">
             <div className="printingPrinterImage">
@@ -360,7 +371,7 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
               </small>}
             </div>
           </div>
-          <PrinterLiveSummary printer={printer} onOpen={() => setLivePrinter(printer)} />
+          <PrinterLiveSummary printer={printer} onOpen={() => setLivePrinter(printer)} canControl={canChangePrinter} onChanged={load} />
           <div className="printingSlotGrid">
             {printer.slots.filter(slot => slot.is_loaded).map(slot => <div className="printingSlot" key={slot.id}>
               <span className="printingSwatch" style={slot.color_hex ? { background: slot.color_hex } : undefined} />
@@ -934,33 +945,6 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
     }
   }
 
-  async function controlPrinter(connection, action) {
-    const file = connection.snapshot?.job?.file_name || "Unknown job";
-    if (action === "cancel" && !window.confirm(`Cancel the print on ${printer.name}?\n\nJob: ${file}\n\nThis stops the current print.`)) return;
-    setBusy(connection.id); setError(""); setNotice("");
-    try {
-      // Use Web Crypto's random bytes on self-hosted HTTP as well as HTTPS.
-      const bytes = window.crypto.getRandomValues(new Uint8Array(16));
-      bytes[6] = (bytes[6] & 15) | 64;
-      bytes[8] = (bytes[8] & 63) | 128;
-      const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
-      const requestId = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-      const result = await apiFetch("/api/printing/printers/" + printer.id + "/connections/" + connection.id + "/control/", {
-        method: "POST", body: {
-          action, request_id: requestId, job_token: connection.controls.job_token,
-          confirmed_cancel: action === "cancel",
-        },
-      });
-      setNotice(result.command.message);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      await loadConnections();
-      await onChanged();
-      setBusy("");
-    }
-  }
-
   async function copyDiagnostics(connection) {
     const payload = {
       maker_vault: "printer-adapter-diagnostics",
@@ -1047,7 +1031,7 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
     {error && <div className="formError">{error}</div>}
     {notice && <div className="notice">{notice}</div>}
 
-    <div className="printingIntegrationGrid">
+    <div className="printingIntegrationGrid printerLiveSources">
       {(data.rows || []).map(connection => {
         const snapshot = connection.snapshot || {};
         const pct = progress(snapshot);
@@ -1106,19 +1090,16 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
           </div>
           {snapshot.warnings?.map((warning, index) => <small className="integrationError" key={"warning-" + index}>{warning}</small>)}
           {connection.validation_label && <small>{connection.validation_label}{connection.protocol ? " · " + connection.protocol : ""}</small>}
-          <small>Capabilities: {Object.entries(connection.capabilities || {}).filter(([, enabled]) => enabled).map(([key]) => key.replaceAll("_", " ")).join(", ") || "Not reported yet"}</small>
+          <div className="printerLiveFeatures" aria-label="Live data features">
+            {[["job", "Job"], ["progress", "Progress"], ["temperatures", "Temperatures"], ["materials", "Loaded filament"]].filter(([key]) => connection.capabilities?.[key]).map(([key, label]) => <Badge key={key}>{label}</Badge>)}
+          </div>
+          {connection.capabilities?.camera && <small className="printerCameraNote">Camera reported by printer · camera feed is not available in MakerVault for this source.</small>}
           <small>Last seen: {connection.last_seen_at ? formatDate(connection.last_seen_at) : "Never"}</small>
           {connection.last_error && <small className="integrationError">{connection.last_error}</small>}
-          {connection.controls?.supported && data.can_control && <div className="settingsCallout">
-            <label><input type="checkbox" checked={connection.controls.enabled} disabled={Boolean(busy)} onChange={() => toggleControls(connection)} /> Allow Pause, Resume and Cancel</label>
+          {connection.controls?.supported && data.can_control && <div className="settingsCallout printerControlsSettings">
+            <label className="printerControlsToggle"><input type="checkbox" checked={connection.controls.enabled} disabled={Boolean(busy)} onChange={() => toggleControls(connection)} /><span>Allow Pause, Resume and Cancel</span></label>
             <small>{connection.controls.enabled ? "Controls enabled for this source. Actions require a current active job." : "Read-only monitoring. Enable controls for this source to act on a print."}</small>
-            {connection.controls.enabled && <div className="settingsActions compact">
-              {["pause", "resume", "cancel"].map(action => <button type="button" key={action} className={action === "cancel" ? "dangerButton" : undefined}
-                disabled={Boolean(busy) || !connection.controls.actions.includes(action)}
-                onClick={() => controlPrinter(connection, action)}>
-                {action === "cancel" ? "Cancel print…" : action === "pause" ? "Pause" : "Resume"}
-              </button>)}
-            </div>}
+            <PrinterJobControls printer={printer} connection={connection} canControl={data.can_control} disabled={Boolean(busy)} onChanged={async () => { await loadConnections(); await onChanged(); }} />
           </div>}
           <div className="settingsActions compact">
             <button type="button" disabled={busy === connection.id || !connection.enabled || !connection.supported} onClick={() => refreshConnection(connection)}>{busy === connection.id ? "Working…" : "Refresh"}</button>

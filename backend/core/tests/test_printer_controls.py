@@ -59,6 +59,32 @@ class PrinterControlApiTests(TestCase):
         self.assertEqual(response.json()["item"]["snapshot"]["state"], "printing")
         self.send_mock.assert_called_once()
 
+    def test_dashboard_exposes_owned_source_controls_without_credentials(self):
+        self.connection.config = {"access_code": "secret-access-code", "api_key": "secret-api-key"}
+        self.connection.save()
+        response = self.client.get("/api/dashboard/")
+        self.assertEqual(response.status_code, 200)
+        row = response.json()["live_printers"][0]
+        self.assertEqual(row["connection_id"], str(self.connection.id))
+        self.assertTrue(row["can_control"])
+        self.assertEqual(row["controls"]["actions"], ["pause", "cancel"])
+        self.assertEqual(row["controls"]["job_token"], job_token(self.snapshot))
+        self.assertNotIn("secret-access-code", response.content.decode())
+        self.assertNotIn("secret-api-key", response.content.decode())
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.get("/api/dashboard/").json()["live_printers"], [])
+
+    def test_dashboard_viewer_cannot_control_and_stale_job_has_no_actions(self):
+        self.printer.owner = self.other
+        self.printer.save()
+        self.client.force_login(self.other)
+        row = self.client.get("/api/dashboard/").json()["live_printers"][0]
+        self.assertFalse(row["can_control"])
+        self.connection.last_seen_at = timezone.now() - timedelta(seconds=61)
+        self.connection.save()
+        row = self.client.get("/api/dashboard/").json()["live_printers"][0]
+        self.assertEqual(row["controls"]["actions"], [])
+
     def test_replay_does_not_send_again(self):
         self.assertEqual(self.post().status_code, 202)
         self.assertEqual(self.post().status_code, 202)

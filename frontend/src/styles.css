@@ -2187,3 +2187,43 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
   .tagResolvePanel form>select,.tagResolvePanel form>.tagCaptureControls,.tagResolvePanel form>button{width:100%;max-width:none}
   .tagCaptureControls.compact{grid-template-columns:1fr}
 }
+/* Live printer cards size to their own available space, including in modals. */
+.printingCards.printingPrinterCards{grid-template-columns:repeat(auto-fit,minmax(min(480px,100%),1fr))}
+.printingPrinterCard{min-width:0;container-type:inline-size}
+.printingPrinterHeader .printingCardHead{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;min-width:0}
+.printingPrinterHeader .printingPrinterControls{min-width:0;justify-items:start;justify-content:start}
+.printingPrinterHeader .printingPrinterStatus,.printingPrinterHeader .printingPrinterActions{justify-content:flex-start;flex-wrap:wrap}
+.printingPrinterIdentity strong,.printingPrinterIdentity small{overflow-wrap:anywhere}
+.printingPrinterCard .printingSlotGrid{grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr))}
+.printingIntegrationGrid.printerLiveSources{grid-template-columns:minmax(0,1fr)}
+.printerLiveSources>article,.printerLiveSources .printingLivePanel{min-width:0;grid-template-columns:minmax(0,1fr)}
+.printerLiveSources>article>small{overflow-wrap:anywhere}
+.printerLiveState,.printerLiveState>div{min-width:0}
+.printerLiveState small{max-width:100%;font-size:12px}
+.printerLiveState strong{font-size:14px}
+.printerLiveQuickStats small{font-size:10px}
+.printerLiveQuickStats strong{font-size:12px}
+.printerLiveActions{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:10px;min-width:0}
+.printerLiveOpen{white-space:nowrap;flex-shrink:0;min-height:36px;margin-left:auto;font-size:12px}
+.printerJobControls{min-width:0;flex:1 1 120px}
+.printerJobControlButtons{display:flex;gap:6px;align-items:center}
+.printerJobControlButtons .printerJobControl{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;min-width:36px;padding:7px;border-radius:8px}
+.printerJobControl svg{width:18px;height:18px}
+.printerJobControlCancel{color:#ff9292}
+.printerJobControl:disabled{opacity:.35;cursor:not-allowed}
+.printerJobControl:focus-visible,.printerLiveOpen:focus-visible{outline:2px solid #8fbaff;outline-offset:3px}
+.printerJobControlMessage{display:block;margin-top:7px;font-size:12px;overflow-wrap:anywhere}
+.printerLiveFeatures{display:flex;flex-wrap:wrap;gap:6px}
+.printerCameraNote{display:block;line-height:1.5}
+.printerControlsSettings .printerControlsToggle{display:grid;grid-template-columns:18px minmax(0,1fr);align-items:center;gap:10px;margin:0;line-height:1.5}
+.printerControlsSettings .printerControlsToggle input{width:18px;height:18px;margin:0;padding:0}
+.printerControlsSettings>small{display:block;margin:8px 0;line-height:1.5}
+.dashboardLivePrinterHead strong{font-size:14px}
+.dashboardLivePrinterHead small,.dashboardLivePrinterMeta{font-size:11px}
+.dashboardLivePrinterHead>div,.dashboardLivePrinterMeta>span{min-width:0}
+.dashboardLivePrinterMeta>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@container (max-width:360px){
+  .printingPrinterHeader{grid-template-columns:64px minmax(0,1fr);gap:10px}
+  .printingPrinterImage{width:64px;height:64px}
+  .printingPrinterHeader .printingPrinterActions{flex-wrap:wrap}
+}

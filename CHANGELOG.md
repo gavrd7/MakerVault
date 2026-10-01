@@ -2,6 +2,10 @@
 
 ## v0.7.3.2 — in development
 
+- Fixed narrow printer headers and live-source modal overflow; single printer cards now fill the available width and loaded filament slots use responsive columns.
+- Added compact, accessible Pause, Resume and confirmed Cancel icons beside progress summaries on the dashboard and 3D Printing page, using the same opt-in and job validation as the live monitor.
+- Dashboard Open live opens the selected printer directly. Camera metadata now explicitly says when a viewable feed is unavailable.
+
 - Added disabled-by-default per-source Pause, Resume and confirmed Cancel for Creality local, Moonraker manufacturer profiles and OctoPrint.
 - Added ownership/editor permission checks, fresh job/state validation, persistent command receipts, replay protection and a short cross-source command cooldown.
 - Added explicit sent/uncertain-delivery messaging without fabricating printer state or Print History results.
