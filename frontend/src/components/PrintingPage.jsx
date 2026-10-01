@@ -764,7 +764,17 @@ function LocationModal({ onClose, onSaved }) {
 
 function PrinterConnectionsModal({ printer, onClose, onChanged }) {
   const [data, setData] = useState({ rows: [], adapters: [] });
-  const [form, setForm] = useState({ adapter: "moonraker", endpoint_url: "", poll_interval_seconds: 30, api_key: "" });
+  const [form, setForm] = useState({
+    adapter: "moonraker",
+    endpoint_url: "",
+    poll_interval_seconds: 30,
+    api_key: "",
+    access_code: "",
+    serial: printer.serial_number || "",
+    username: "",
+    password: "",
+    check_code: "",
+  });
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -789,10 +799,35 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
 
   const selectableAdapters = (data.adapters || []).filter(item => item.supported);
   const configured = new Set((data.rows || []).map(item => item.adapter));
-  const preferredAdapter = String(printer.manufacturer || "").toLowerCase().includes("creality") ? "creality_local" : "";
+  const manufacturerKey = String(printer.manufacturer || "").toLowerCase();
+  const modelKey = String(printer.model || "").toLowerCase();
+  const preferredAdapter = manufacturerKey.includes("creality")
+    ? "creality_local"
+    : manufacturerKey.includes("bambu")
+      ? "bambu_local"
+      : manufacturerKey.includes("prusa")
+        ? "prusa"
+        : manufacturerKey.includes("flashforge")
+          ? "flashforge"
+          : manufacturerKey.includes("anycubic")
+            ? "anycubic"
+            : manufacturerKey.includes("elegoo") && (modelKey.includes("neptune 4") || modelKey.includes("orangestorm"))
+              ? "elegoo"
+              : manufacturerKey.includes("qidi") && ["plus4", "plus 4", "q1 pro", "x-max 3", "x-plus 3", "x-smart 3", "q2"].some(name => modelKey.includes(name))
+                ? "qidi"
+                : manufacturerKey.includes("sovol") && modelKey.includes("sv08")
+                  ? "sovol"
+                  : manufacturerKey.includes("snapmaker") && modelKey.includes("u1")
+                    ? "snapmaker"
+                    : manufacturerKey.includes("voron")
+                      ? "voron"
+                      : "";
   const available = selectableAdapters
     .filter(item => !configured.has(item.key))
     .sort((left, right) => Number(right.key === preferredAdapter) - Number(left.key === preferredAdapter));
+  const selectedAdapterInfo = available.find(item => item.key === form.adapter)
+    || selectableAdapters.find(item => item.key === form.adapter)
+    || null;
 
   useEffect(() => {
     if (!available.length) return;
@@ -802,9 +837,12 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
     setForm(current => ({
       ...current,
       adapter: nextAdapter,
-      endpoint_url: nextAdapter === "creality_local" && !current.endpoint_url
+      endpoint_url: ["creality_local", "bambu_local", "prusa", "flashforge", "anycubic", "elegoo", "qidi", "sovol", "snapmaker", "voron"].includes(nextAdapter) && !current.endpoint_url
         ? (printer.connection_host || "")
         : current.endpoint_url,
+      serial: ["bambu_local", "flashforge"].includes(nextAdapter) && !current.serial
+        ? (printer.serial_number || "")
+        : current.serial,
     }));
   }, [available.map(item => item.key).join("|"), preferredAdapter, printer.connection_host]);
 
@@ -816,7 +854,16 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
         method: "POST",
         body: form,
       });
-      setForm(current => ({ ...current, endpoint_url: "", api_key: "" }));
+      setForm(current => ({
+        ...current,
+        endpoint_url: "",
+        api_key: "",
+        access_code: "",
+        username: "",
+        password: "",
+        check_code: "",
+        serial: printer.serial_number || "",
+      }));
       await loadConnections();
       await onChanged();
       setNotice("Live printer source added. Use Refresh to test and capture the first snapshot.");
@@ -862,6 +909,43 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
     }
   }
 
+  async function copyDiagnostics(connection) {
+    const payload = {
+      maker_vault: "printer-adapter-diagnostics",
+      printer: {
+        name: printer.name,
+        manufacturer: printer.manufacturer,
+        model: printer.model,
+      },
+      adapter: {
+        key: connection.adapter,
+        label: connection.adapter_label,
+        protocol: connection.protocol,
+        validation: connection.validation,
+        validation_label: connection.validation_label,
+        compatibility_hint: connection.compatibility_hint,
+      },
+      connection: {
+        status: connection.status,
+        stale: connection.stale,
+        capabilities: connection.capabilities,
+        last_checked_at: connection.last_checked_at,
+        last_seen_at: connection.last_seen_at,
+        last_error: connection.last_error,
+        config_flags: connection.config,
+      },
+      snapshot: connection.snapshot || {},
+    };
+    const text = JSON.stringify(payload, null, 2);
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
+      await navigator.clipboard.writeText(text);
+      setNotice(connection.adapter_label + " diagnostics copied. Review filenames/serials before sharing.");
+    } catch (_err) {
+      window.prompt("Copy these sanitized MakerVault diagnostics:", text);
+    }
+  }
+
   async function removeConnection(connection) {
     if (!window.confirm("Remove " + connection.adapter_label + " from " + printer.name + "?")) return;
     setBusy(connection.id); setError(""); setNotice("");
@@ -885,13 +969,19 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
   }
 
   function adapterChanged(adapter) {
+    const manufacturerLocal = ["creality_local", "bambu_local", "prusa", "flashforge", "anycubic", "elegoo", "qidi", "sovol", "snapmaker", "voron"].includes(adapter);
     setForm(current => ({
       ...current,
       adapter,
-      endpoint_url: adapter === "creality_local"
+      endpoint_url: manufacturerLocal
         ? (current.endpoint_url || printer.connection_host || "")
-        : (current.adapter === "creality_local" ? "" : current.endpoint_url),
-      api_key: adapter === "creality_local" ? "" : current.api_key,
+        : (["creality_local", "bambu_local", "prusa", "flashforge", "anycubic", "elegoo", "qidi", "sovol", "snapmaker", "voron"].includes(current.adapter) ? "" : current.endpoint_url),
+      api_key: ["creality_local", "bambu_local"].includes(adapter) ? "" : current.api_key,
+      access_code: adapter === "bambu_local" ? current.access_code : "",
+      serial: ["bambu_local", "flashforge"].includes(adapter) ? (current.serial || printer.serial_number || "") : current.serial,
+      username: adapter === "prusa" ? current.username : "",
+      password: adapter === "prusa" ? current.password : "",
+      check_code: adapter === "flashforge" ? current.check_code : "",
     }));
   }
 
@@ -943,14 +1033,14 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
               {snapshot.job?.remaining_seconds != null && <div><span>Remaining</span><strong>{Math.round(snapshot.job.remaining_seconds / 60)} min</strong></div>}
               {(snapshot.job?.current_layer != null || snapshot.job?.total_layers != null) && <div><span>Layer</span><strong>{snapshot.job?.current_layer ?? "—"} / {snapshot.job?.total_layers ?? "—"}</strong></div>}
             </div>
-            {connection.adapter === "creality_local" && snapshot.source_metadata?.cfs_connected && <div className="printingLiveSectionTitle"><span>CFS live slots</span><small>{snapshot.materials?.length || 0} detected</small></div>}
-            {connection.adapter === "creality_local" && snapshot.materials?.length > 0 && <div className="printingLiveMaterials">
+            {snapshot.materials?.length > 0 && <div className="printingLiveSectionTitle"><span>{connection.adapter === "bambu_local" ? "AMS live slots" : connection.adapter === "creality_local" ? "CFS live slots" : "Material slots"}</span><small>{snapshot.materials.length} detected</small></div>}
+            {snapshot.materials?.length > 0 && <div className="printingLiveMaterials">
               {snapshot.materials.slice(0, 8).map((material, index) => {
                 const remaining = material.remaining_percent == null ? null : Math.max(0, Math.min(100, Number(material.remaining_percent)));
                 return <div className={"printingLiveMaterial" + (material.selected ? " selected" : "")} key={(material.unit_index ?? 0) + "-" + material.slot_index + "-" + index}>
                   <span className="printingSwatch" style={material.color_hex ? { background: material.color_hex } : undefined} />
                   <div className="printingLiveMaterialMain">
-                    <span>CFS {Number(material.unit_index || 0) + 1} · slot {Number(material.slot_index || 0) + 1}{material.selected ? " · loaded" : ""}</span>
+                    <span>{material.system === "bambu_ams" ? "AMS" : material.system === "creality_cfs" ? "CFS" : "Unit"} {Number(material.unit_index || 0) + 1} · slot {Number(material.slot_index || 0) + 1}{material.selected ? " · loaded" : ""}</span>
                     <strong>{material.product_name || material.material || "Filament"}</strong>
                     <small>{[material.vendor, material.material].filter(Boolean).join(" · ") || "Material details unavailable"}</small>
                   </div>
@@ -963,11 +1053,13 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
             </div>}
           </div>
           {snapshot.warnings?.map((warning, index) => <small className="integrationError" key={"warning-" + index}>{warning}</small>)}
+          {connection.validation_label && <small>{connection.validation_label}{connection.protocol ? " · " + connection.protocol : ""}</small>}
           <small>Capabilities: {Object.entries(connection.capabilities || {}).filter(([, enabled]) => enabled).map(([key]) => key.replaceAll("_", " ")).join(", ") || "Not reported yet"}</small>
           <small>Last seen: {connection.last_seen_at ? formatDate(connection.last_seen_at) : "Never"}</small>
           {connection.last_error && <small className="integrationError">{connection.last_error}</small>}
           <div className="settingsActions compact">
             <button type="button" disabled={busy === connection.id || !connection.enabled || !connection.supported} onClick={() => refreshConnection(connection)}>{busy === connection.id ? "Working…" : "Refresh"}</button>
+            <button type="button" onClick={() => copyDiagnostics(connection)}>Copy diagnostics</button>
             <button type="button" disabled={busy === connection.id} onClick={() => toggleConnection(connection)}>{connection.enabled ? "Disable" : "Enable"}</button>
             <button type="button" className="dangerButton" disabled={busy === connection.id} onClick={() => removeConnection(connection)}>Remove</button>
           </div>
@@ -979,16 +1071,49 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
     {!!available.length && <form className="formGrid" onSubmit={addConnection}>
       <div className="full settingsCallout">
         <strong>Add live source</strong>
-        <p>v0.7.3 supports Moonraker/Klipper and OctoPrint, plus an experimental Creality LAN adapter for K-series/K2-family printers. A single physical printer can use more than one source without creating duplicate MakerVault printer records.</p>
+        <p>MakerVault supports Moonraker/Klipper and OctoPrint plus experimental manufacturer-local adapters for Creality, Bambu Lab and PrusaLink. A single physical printer can use more than one source without creating duplicate MakerVault printer records.</p>
       </div>
       <label>Adapter<select value={form.adapter} onChange={e => adapterChanged(e.target.value)}>
         {available.map(item => <option key={item.key} value={item.key}>{item.label}{item.experimental ? " · experimental" : ""}</option>)}
       </select></label>
-      <label>{form.adapter === "creality_local" ? "Printer host / IP" : "Service URL"}<input required value={form.endpoint_url} onChange={e => setForm(current => ({ ...current, endpoint_url: e.target.value }))} placeholder={form.adapter === "creality_local" ? "192.168.1.34" : form.adapter === "moonraker" ? "http://printer.local:7125" : "http://octoprint.local"} /></label>
-      {form.adapter !== "creality_local" && <label>API key (optional)<input type="password" value={form.api_key} onChange={e => setForm(current => ({ ...current, api_key: e.target.value }))} autoComplete="new-password" placeholder="Only when your service requires one" /></label>}
+      {selectedAdapterInfo && <div className="settingsCallout">
+        <strong>{selectedAdapterInfo.validation_label || (selectedAdapterInfo.experimental ? "Experimental" : "Supported")}</strong>
+        <p>{selectedAdapterInfo.compatibility_hint || selectedAdapterInfo.protocol || "MakerVault will use this provider as a read-only live source."}</p>
+        {selectedAdapterInfo.protocol && <small>Protocol: {selectedAdapterInfo.protocol}</small>}
+      </div>}
+      <label>{["creality_local", "bambu_local", "prusa", "flashforge", "anycubic", "elegoo", "qidi", "sovol", "snapmaker", "voron"].includes(form.adapter) ? "Printer host / IP" : "Service URL"}<input required value={form.endpoint_url} onChange={e => setForm(current => ({ ...current, endpoint_url: e.target.value }))} placeholder={form.adapter === "creality_local" ? "192.168.1.34" : form.adapter === "bambu_local" ? "192.168.1.45" : form.adapter === "prusa" ? "prusa.local" : form.adapter === "flashforge" ? "192.168.1.60" : form.adapter === "anycubic" ? "192.168.1.70" : ["moonraker", "elegoo", "qidi", "sovol", "snapmaker", "voron"].includes(form.adapter) ? "printer.local or http://printer.local:7125" : "http://octoprint.local"} /></label>
+      {!["creality_local", "bambu_local"].includes(form.adapter) && <label>API key (optional)<input type="password" value={form.api_key} onChange={e => setForm(current => ({ ...current, api_key: e.target.value }))} autoComplete="new-password" placeholder={form.adapter === "prusa" ? "Legacy / API-key PrusaLink setups" : "Only when your service requires one"} /></label>}
       {form.adapter === "creality_local" && <div className="settingsCallout">
         <strong>Creality LAN WebSocket</strong>
-        <p>MakerVault will use the printer's local Creality Print protocol on port 9999. Your existing printer host/IP is pre-filled when available; no Creality Cloud login is required.</p>
+        <p>MakerVault uses the printer's local Creality Print protocol on port 9999. Your existing printer host/IP is pre-filled when available; no Creality Cloud login is required.</p>
+      </div>}
+      {form.adapter === "bambu_local" && <>
+        <label>Printer serial<input required value={form.serial} onChange={e => setForm(current => ({ ...current, serial: e.target.value }))} placeholder="Printer serial number" /></label>
+        <label>LAN access code<input required type="password" value={form.access_code} onChange={e => setForm(current => ({ ...current, access_code: e.target.value }))} autoComplete="new-password" placeholder="LAN access code from printer" /></label>
+        <div className="settingsCallout full">
+          <strong>Bambu Lab local MQTT</strong>
+          <p>MakerVault connects directly to the printer over MQTT/TLS on port 8883 using the LAN access code and serial number. The access code stays server-side. This adapter is experimental until community hardware validation is complete.</p>
+        </div>
+      </>}
+      {form.adapter === "prusa" && <>
+        <label>PrusaLink username (optional)<input value={form.username} onChange={e => setForm(current => ({ ...current, username: e.target.value }))} autoComplete="username" placeholder="For HTTP Digest authentication" /></label>
+        <label>PrusaLink password (optional)<input type="password" value={form.password} onChange={e => setForm(current => ({ ...current, password: e.target.value }))} autoComplete="new-password" placeholder="For HTTP Digest authentication" /></label>
+        <div className="settingsCallout full">
+          <strong>PrusaLink local API</strong>
+          <p>Current PrusaLink exposes local status and job telemetry through its documented HTTP API. MakerVault supports HTTP Digest credentials and legacy API-key setups; credentials stay server-side.</p>
+        </div>
+      </>}
+      {form.adapter === "flashforge" && <>
+        <label>Printer serial<input required value={form.serial} onChange={e => setForm(current => ({ ...current, serial: e.target.value }))} placeholder="Printer serial number" /></label>
+        <label>Check code<input required type="password" value={form.check_code} onChange={e => setForm(current => ({ ...current, check_code: e.target.value }))} autoComplete="new-password" placeholder="Local printer check code" /></label>
+        <div className="settingsCallout full">
+          <strong>FlashForge local API</strong>
+          <p>MakerVault polls the printer's local HTTP API on port 8898 using its serial number and check code. Supported telemetry includes job state/progress, layers, temperatures and material-station slots where the printer reports them.</p>
+        </div>
+      </>}
+      {form.adapter === "anycubic" && <div className="settingsCallout full">
+        <strong>Anycubic LAN mode</strong>
+        <p>MakerVault performs the printer's local signed LAN handshake on port 18910, then opens its temporary MQTT/TLS session on port 9883. No Anycubic Cloud credentials are required. The printer must be in LAN mode; this adapter currently targets the Kobra 3 / S1-generation protocol and remains experimental.</p>
       </div>}
       <label>Polling interval<div className="intervalInput"><input type="number" min="10" max="3600" step="5" value={form.poll_interval_seconds} onChange={e => setForm(current => ({ ...current, poll_interval_seconds: e.target.value }))} /><span>seconds</span></div></label>
       <div className="formActions full"><button className="primary" disabled={busy === "add"}>{busy === "add" ? "Adding…" : "Add live source"}</button></div>
@@ -996,7 +1121,7 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
 
     <div className="settingsCallout">
       <strong>Read-only first</strong>
-      <p>Moonraker, OctoPrint and Creality local may advertise pause/resume/cancel capabilities, but this first slice only reads printer state. Control actions will be added behind explicit permissions and confirmations later in v0.7.3.</p>
+      <p>All live adapters, including the manufacturer Moonraker profiles, remain read-only in MakerVault even where the upstream printer supports pause/resume/cancel. Control actions stay behind a later permissioned/confirmed pass.</p>
     </div>
   </Modal>;
 }

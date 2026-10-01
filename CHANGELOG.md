@@ -12,6 +12,12 @@
 - Creality printers now prefer the Creality local adapter in the Live setup flow and reuse the owned printer's existing local host/IP, while continuing to keep Creality Cloud credentials out of the local monitoring path.
 - Added a lightweight 10-second Celery scheduler that respects each live connection's own 10–3600 second poll interval, reserves due polls before queueing and ignores inactive printers or unimplemented adapters.
 - Added conservative automatic PrintJob lifecycle mapping: a live source creates a job only when it reports an active print with a filename, multiple adapters converge on the same physical printer/job, explicit terminal states complete/cancel/fail the record, and idle/offline never imply success.
+- Added experimental **Bambu Lab local** monitoring over LAN MQTT/TLS with printer state, job/progress/timing, layers, temperatures, HMS warnings, camera metadata and AMS tray/material telemetry; LAN access codes remain server-side.
+- Added experimental **PrusaLink** monitoring using its documented local status/job API with HTTP Digest and legacy API-key authentication support.
+- Formalised live multi-material observations into the existing provider-neutral printer-slot model so Bambu AMS and Creality CFS live data can update slot state without inventing duplicate physical spools or replacing user-confirmed spool links.
+- Added experimental **Anycubic LAN** monitoring for the signed Kobra 3 / S1-generation local protocol, including job/temperature telemetry, local camera metadata and ACE / ACE Pro slot observations without storing cloud credentials.
+- Added experimental **FlashForge local** monitoring over the modern port-8898 HTTP API, including job/layer/temperature/error telemetry and provider-neutral material-station slots.
+- Expanded the provider-neutral multi-material system vocabulary for Anycubic ACE, FlashForge material stations, Prusa MMU, Sovol and Voron/community toolchanger systems while preserving existing CFS/AMS/QIDI/Elegoo/Snapmaker values.
 
 ## v0.7.2 — 2026-10-01
 

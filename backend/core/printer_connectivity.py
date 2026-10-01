@@ -13,6 +13,18 @@ from websockets.exceptions import WebSocketException
 from django.utils import timezone
 
 from .live_print_jobs import sync_print_job_from_snapshot
+from .live_material_slots import sync_live_material_slots
+from .manufacturer_printer_adapters import (
+    ManufacturerAdapterError,
+    normalise_anycubic_endpoint,
+    normalise_bambu_endpoint,
+    normalise_flashforge_endpoint,
+    normalise_prusalink_endpoint,
+    poll_anycubic_local,
+    poll_bambu_local,
+    poll_flashforge,
+    poll_prusalink,
+)
 
 
 class PrinterConnectionError(RuntimeError):
@@ -103,42 +115,207 @@ ADAPTERS = {
     "bambu_local": AdapterDefinition(
         key="bambu_local",
         label="Bambu Lab local",
-        supported=False,
+        supported=True,
         experimental=True,
         local_first=True,
-        capabilities={**COMMON_MONITORING, "camera": True, "materials": True},
+        capabilities={
+            **COMMON_MONITORING,
+            "camera": True,
+            "materials": True,
+            "pause": True,
+            "resume": True,
+            "cancel": True,
+        },
     ),
-    "anycubic": AdapterDefinition("anycubic", "Anycubic", False, True, True, dict(COMMON_MONITORING)),
-    "flashforge": AdapterDefinition("flashforge", "FlashForge", False, True, True, dict(COMMON_MONITORING)),
-    "prusa": AdapterDefinition("prusa", "Prusa", False, True, True, dict(COMMON_MONITORING)),
-    "elegoo": AdapterDefinition("elegoo", "Elegoo", False, True, True, dict(COMMON_MONITORING)),
-    "qidi": AdapterDefinition("qidi", "QIDI", False, True, True, dict(COMMON_MONITORING)),
-    "sovol": AdapterDefinition("sovol", "Sovol", False, True, True, dict(COMMON_MONITORING)),
-    "snapmaker": AdapterDefinition("snapmaker", "Snapmaker", False, True, True, dict(COMMON_MONITORING)),
+    "anycubic": AdapterDefinition(
+        "anycubic",
+        "Anycubic LAN",
+        True,
+        True,
+        True,
+        {
+            **COMMON_MONITORING,
+            "camera": True,
+            "materials": True,
+            "pause": True,
+            "resume": True,
+            "cancel": True,
+        },
+    ),
+    "flashforge": AdapterDefinition(
+        "flashforge",
+        "FlashForge local",
+        True,
+        True,
+        True,
+        {
+            **COMMON_MONITORING,
+            "camera": True,
+            "materials": True,
+            "pause": True,
+            "resume": True,
+            "cancel": True,
+        },
+    ),
+    "prusa": AdapterDefinition(
+        "prusa",
+        "PrusaLink",
+        True,
+        True,
+        True,
+        {**COMMON_MONITORING, "camera": True, "pause": True, "resume": True, "cancel": True},
+    ),
+    "elegoo": AdapterDefinition(
+        "elegoo",
+        "Elegoo · Moonraker",
+        True,
+        True,
+        True,
+        {**COMMON_MONITORING, "pause": True, "resume": True, "cancel": True},
+    ),
+    "qidi": AdapterDefinition(
+        "qidi",
+        "QIDI · Moonraker",
+        True,
+        True,
+        True,
+        {**COMMON_MONITORING, "camera": True, "pause": True, "resume": True, "cancel": True},
+    ),
+    "sovol": AdapterDefinition(
+        "sovol",
+        "Sovol · Moonraker",
+        True,
+        True,
+        True,
+        {**COMMON_MONITORING, "camera": True, "pause": True, "resume": True, "cancel": True},
+    ),
+    "snapmaker": AdapterDefinition(
+        "snapmaker",
+        "Snapmaker U1 · Moonraker",
+        True,
+        True,
+        True,
+        {**COMMON_MONITORING, "camera": True, "pause": True, "resume": True, "cancel": True},
+    ),
     "voron": AdapterDefinition(
         "voron",
-        "Voron metadata / community layer",
-        False,
+        "Voron · Moonraker",
         True,
         True,
-        {**COMMON_MONITORING, "printer_state": False, "job": False, "temperatures": False},
+        True,
+        {**COMMON_MONITORING, "camera": True, "pause": True, "resume": True, "cancel": True, "macros": True},
     ),
     "other": AdapterDefinition("other", "Other / custom", False, True, True, dict(COMMON_MONITORING)),
 }
 
 
+ADAPTER_VALIDATION = {
+    "moonraker": {
+        "validation": "established_protocol",
+        "validation_label": "Established protocol",
+        "protocol": "Moonraker / Klipper HTTP",
+        "compatibility_hint": "Any printer exposing a compatible Moonraker HTTP API.",
+    },
+    "octoprint": {
+        "validation": "established_protocol",
+        "validation_label": "Established protocol",
+        "protocol": "OctoPrint HTTP API",
+        "compatibility_hint": "Any printer managed through a compatible OctoPrint server.",
+    },
+    "creality_local": {
+        "validation": "hardware_validated",
+        "validation_label": "Hardware validated",
+        "protocol": "Creality LAN WebSocket",
+        "compatibility_hint": "Validated on MakerVault development hardware with a Creality K2; other K-series firmware remains experimental.",
+    },
+    "bambu_local": {
+        "validation": "community_validation",
+        "validation_label": "Community validation required",
+        "protocol": "Bambu LAN MQTT/TLS",
+        "compatibility_hint": "Bambu Lab printers that expose LAN MQTT with a serial number and LAN access code.",
+    },
+    "prusa": {
+        "validation": "community_validation",
+        "validation_label": "Community validation required",
+        "protocol": "PrusaLink local HTTP API",
+        "compatibility_hint": "Printers running a compatible PrusaLink local API.",
+    },
+    "anycubic": {
+        "validation": "community_validation",
+        "validation_label": "Community validation required",
+        "protocol": "Anycubic signed LAN HTTP + MQTT",
+        "compatibility_hint": "Targets Kobra 3 / Kobra S1-generation LAN mode and ACE/ACE Pro telemetry where exposed.",
+    },
+    "flashforge": {
+        "validation": "community_validation",
+        "validation_label": "Community validation required",
+        "protocol": "FlashForge local HTTP",
+        "compatibility_hint": "Targets newer FlashForge local APIs exposing port 8898 detail telemetry and optional material-station data.",
+    },
+    "elegoo": {
+        "validation": "community_validation",
+        "validation_label": "Community validation required",
+        "protocol": "Moonraker / Klipper HTTP",
+        "compatibility_hint": "Neptune 4 family and OrangeStorm models that expose Moonraker; not a generic Centauri profile.",
+    },
+    "qidi": {
+        "validation": "community_validation",
+        "validation_label": "Community validation required",
+        "protocol": "Moonraker / Klipper HTTP",
+        "compatibility_hint": "Klipper-based QIDI models such as Plus4, Q1 Pro, X-Max 3, X-Plus 3, X-Smart 3 and Q2.",
+    },
+    "sovol": {
+        "validation": "community_validation",
+        "validation_label": "Community validation required",
+        "protocol": "Moonraker / Klipper HTTP",
+        "compatibility_hint": "SV08-family printers and other Sovol models that actually expose Moonraker.",
+    },
+    "snapmaker": {
+        "validation": "community_validation",
+        "validation_label": "Community validation required",
+        "protocol": "Moonraker / Klipper HTTP",
+        "compatibility_hint": "Snapmaker U1. Older Snapmaker product families are not assumed to use this protocol.",
+    },
+    "voron": {
+        "validation": "community_validation",
+        "validation_label": "Community validation required",
+        "protocol": "Moonraker / Klipper HTTP",
+        "compatibility_hint": "Voron/community Klipper installations with Moonraker enabled.",
+    },
+    "simplyprint": {
+        "validation": "planned",
+        "validation_label": "Service integration",
+        "protocol": "SimplyPrint API",
+        "compatibility_hint": "Optional cloud/service source; not required for local printer monitoring.",
+    },
+    "other": {
+        "validation": "planned",
+        "validation_label": "Not implemented",
+        "protocol": "",
+        "compatibility_hint": "Reserved for future/custom adapters.",
+    },
+}
+
+
 def adapter_catalogue() -> list[dict]:
-    return [
-        {
+    rows = []
+    for item in ADAPTERS.values():
+        validation = ADAPTER_VALIDATION.get(item.key, {
+            "validation": "community_validation" if item.experimental else "planned",
+            "validation_label": "Community validation required" if item.experimental else "Planned",
+            "protocol": "",
+            "compatibility_hint": "",
+        })
+        rows.append({
             "key": item.key,
             "label": item.label,
             "supported": item.supported,
             "experimental": item.experimental,
             "local_first": item.local_first,
             "capabilities": item.capabilities,
-        }
-        for item in ADAPTERS.values()
-    ]
+            **validation,
+        })
+    return rows
 
 
 def normalise_printer_endpoint(raw_url: str) -> str:
@@ -153,6 +330,36 @@ def normalise_printer_endpoint(raw_url: str) -> str:
     if parsed.username or parsed.password:
         raise PrinterConnectionError("Do not embed credentials in the printer service URL.")
     return value
+
+
+def normalise_moonraker_endpoint(raw_url: str) -> str:
+    """Normalise a Moonraker HTTP endpoint while preserving route prefixes."""
+    value = str(raw_url or "").strip().rstrip("/")
+    if not value:
+        raise PrinterConnectionError("Enter the Moonraker printer host or URL.")
+    if "://" not in value:
+        parsed = urlparse("//" + value)
+        scheme = "http"
+    else:
+        parsed = urlparse(value)
+        if parsed.scheme not in {"http", "https"}:
+            raise PrinterConnectionError("Moonraker endpoints must use HTTP or HTTPS.")
+        scheme = parsed.scheme
+    if not parsed.hostname:
+        raise PrinterConnectionError("Moonraker endpoint must include a host.")
+    if parsed.username or parsed.password:
+        raise PrinterConnectionError("Do not embed credentials in the Moonraker endpoint.")
+
+    host = parsed.hostname
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"
+    # Preserve explicit reverse-proxy URLs and route prefixes. Bare hosts use
+    # Moonraker's conventional 7125 port.
+    explicit_url = "://" in value
+    port = parsed.port if parsed.port else (None if explicit_url and parsed.path not in {"", "/"} else 7125)
+    suffix = f":{port}" if port else ""
+    path = (parsed.path or "").rstrip("/")
+    return f"{scheme}://{host}{suffix}{path}"
 
 
 def normalise_creality_endpoint(raw_url: str) -> str:
@@ -192,8 +399,30 @@ def normalise_creality_endpoint(raw_url: str) -> str:
 
 
 def normalise_connection_endpoint(adapter: str, raw_url: str) -> str:
+    if adapter in {"moonraker", "elegoo", "qidi", "sovol", "snapmaker", "voron"}:
+        return normalise_moonraker_endpoint(raw_url)
     if adapter == "creality_local":
         return normalise_creality_endpoint(raw_url)
+    if adapter == "bambu_local":
+        try:
+            return normalise_bambu_endpoint(raw_url)
+        except ManufacturerAdapterError as exc:
+            raise PrinterConnectionError(str(exc)) from exc
+    if adapter == "prusa":
+        try:
+            return normalise_prusalink_endpoint(raw_url)
+        except ManufacturerAdapterError as exc:
+            raise PrinterConnectionError(str(exc)) from exc
+    if adapter == "flashforge":
+        try:
+            return normalise_flashforge_endpoint(raw_url)
+        except ManufacturerAdapterError as exc:
+            raise PrinterConnectionError(str(exc)) from exc
+    if adapter == "anycubic":
+        try:
+            return normalise_anycubic_endpoint(raw_url)
+        except ManufacturerAdapterError as exc:
+            raise PrinterConnectionError(str(exc)) from exc
     return normalise_printer_endpoint(raw_url)
 
 
@@ -719,8 +948,17 @@ def poll_creality_local(endpoint_url: str, config: dict | None = None) -> dict:
 
 POLLERS: dict[str, Callable[[str, dict | None], dict]] = {
     "moonraker": poll_moonraker,
+    "elegoo": poll_moonraker,
+    "qidi": poll_moonraker,
+    "sovol": poll_moonraker,
+    "snapmaker": poll_moonraker,
+    "voron": poll_moonraker,
     "octoprint": poll_octoprint,
     "creality_local": poll_creality_local,
+    "bambu_local": poll_bambu_local,
+    "prusa": poll_prusalink,
+    "flashforge": poll_flashforge,
+    "anycubic": poll_anycubic_local,
 }
 
 
@@ -736,6 +974,13 @@ def poll_connection(connection) -> dict:
 
     try:
         snapshot = POLLERS[connection.adapter](connection.endpoint_url, connection.config or {})
+    except ManufacturerAdapterError as exc:
+        wrapped = PrinterConnectionError(str(exc))
+        connection.status = "disconnected"
+        connection.last_error = str(wrapped)
+        connection.last_checked_at = timezone.now()
+        connection.save(update_fields=["status", "last_error", "last_checked_at", "updated_at"])
+        raise wrapped from exc
     except PrinterConnectionError as exc:
         connection.status = "disconnected"
         connection.last_error = str(exc)
@@ -743,10 +988,22 @@ def poll_connection(connection) -> dict:
         connection.save(update_fields=["status", "last_error", "last_checked_at", "updated_at"])
         raise
 
+    if connection.adapter in {"elegoo", "qidi", "sovol", "snapmaker", "voron"}:
+        source_metadata = dict(snapshot.get("source_metadata") or {})
+        source_metadata["protocol"] = "Moonraker / Klipper"
+        source_metadata["manufacturer_profile"] = connection.adapter
+        snapshot = {
+            **snapshot,
+            "adapter": connection.adapter,
+            "source_metadata": source_metadata,
+        }
+
     job_result = sync_print_job_from_snapshot(connection, snapshot)
+    material_result = sync_live_material_slots(connection, snapshot)
     snapshot = {
         **snapshot,
         "maker_vault_job": job_result,
+        "maker_vault_materials": material_result,
     }
 
     now = timezone.now()
@@ -755,13 +1012,30 @@ def poll_connection(connection) -> dict:
     connection.last_checked_at = now
     connection.last_seen_at = now
     capabilities = dict(definition.capabilities)
+    metadata = snapshot.get("source_metadata") or {}
     if connection.adapter == "creality_local":
-        metadata = snapshot.get("source_metadata") or {}
         capabilities["camera"] = bool(
             metadata.get("video_available") or metadata.get("webrtc_support")
         )
         capabilities["materials"] = bool(
             metadata.get("cfs_connected") or snapshot.get("materials")
+        )
+    elif connection.adapter == "bambu_local":
+        capabilities["camera"] = bool(metadata.get("camera_available"))
+        capabilities["materials"] = bool(
+            metadata.get("ams_connected") or snapshot.get("materials")
+        )
+    elif connection.adapter == "prusa":
+        capabilities["camera"] = bool(metadata.get("camera_available"))
+    elif connection.adapter == "flashforge":
+        capabilities["camera"] = bool(metadata.get("camera_available"))
+        capabilities["materials"] = bool(
+            metadata.get("material_station_connected") or snapshot.get("materials")
+        )
+    elif connection.adapter == "anycubic":
+        capabilities["camera"] = bool(metadata.get("camera_available"))
+        capabilities["materials"] = bool(
+            metadata.get("ace_connected") or snapshot.get("materials")
         )
     connection.capabilities = capabilities
     connection.last_snapshot = snapshot
