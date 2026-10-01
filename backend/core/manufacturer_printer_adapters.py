@@ -870,6 +870,8 @@ def normalise_flashforge_snapshot(payload: dict, *, serial="") -> dict:
             return None
         return number
 
+    station_info = detail.get("matlStationInfo") if isinstance(detail.get("matlStationInfo"), dict) else {}
+    station_slots_observed = isinstance(station_info.get("slotInfos"), list)
     materials = _flashforge_materials(detail)
     error_code = str(detail.get("errorCode") or "").strip()
     warnings = [f"FlashForge error {error_code}"] if error_code and error_code not in {"0", "none", "None"} else []
@@ -918,6 +920,7 @@ def normalise_flashforge_snapshot(payload: dict, *, serial="") -> dict:
                     ) > 0
                 )
             ),
+            "material_station_slots_observed": station_slots_observed,
             "camera_available": bool(detail.get("camera") == 1 or camera_url),
             "lidar_available": bool(detail.get("lidar") == 1),
             "speed_percent": _number(detail.get("printSpeedAdjust")),
