@@ -30,7 +30,7 @@ from .importers import ImporterError, fetch_catalogue_source_html, fetch_import_
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 OPENVERSE_API = "https://api.openverse.org/v1/images/"
-IMAGE_SEED_VERSION = "0.7.2-authoritative-images-7"
+IMAGE_SEED_VERSION = "0.7.2-authoritative-images-8"
 USER_AGENT = f"MakerVault/{getattr(settings, 'MAKERVAULT_VERSION', 'dev')} (+self-hosted catalogue image seeder)"
 def _commons_license_allowed(license_name: str) -> bool:
     """Allow only licences suitable for normal open redistribution."""
@@ -540,6 +540,7 @@ CURATED_MCU_SOURCE_PAGES = {
     ("LilyGo", "T-Display-S3"): "https://wiki.lilygo.cc/products/t-display-s3/t-display-s3/",
     ("M5Stack", "Atom Lite"): "https://docs.m5stack.com/en/core/atom_lite",
     ("M5Stack", "CoreS3"): "https://docs.m5stack.com/en/core/CoreS3",
+    ("Seeed Studio", "XIAO RP2040"): "https://wiki.seeedstudio.com/XIAO-RP2040/",
 }
 
 
