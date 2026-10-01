@@ -1,3 +1,4 @@
+from decimal import Decimal
 from datetime import timedelta
 from unittest.mock import Mock, patch
 
@@ -5,7 +6,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
-from core.models import PrintJob, Printer, PrinterConnection, PrinterFilamentSlot
+from core.models import FilamentProduct, PrintJob, Printer, PrinterConnection, PrinterFilamentSlot, Spool
 from core.tasks import live_printer_connections_tick
 from core.live_print_jobs import sync_print_job_from_snapshot
 from core.live_material_slots import sync_live_material_slots
@@ -667,6 +668,59 @@ class LiveMaterialSlotTests(TestCase):
         self.assertEqual(slot.metadata["remaining_percent"], 73.0)
         self.assertTrue(slot.metadata["selected"])
         self.assertEqual(slot.metadata["adapter"], "bambu_local")
+
+    def test_live_material_refresh_preserves_confirmed_spool_and_updates_weight_only_when_linked(self):
+        filament = FilamentProduct.objects.create(
+            name="PLA Basic",
+            material="PLA",
+            nominal_weight_g=Decimal("1000.00"),
+        )
+        spool = Spool.objects.create(
+            owner=self.user,
+            spool_id="SP-TEST-001",
+            filament=filament,
+            initial_weight_g=Decimal("1000.00"),
+            remaining_weight_g=Decimal("900.00"),
+            status="open",
+        )
+        PrinterFilamentSlot.objects.create(
+            printer=self.printer,
+            system="bambu_ams",
+            unit_index=0,
+            slot_index=1,
+            spool=spool,
+            material="PLA",
+            is_loaded=True,
+            metadata={"link_source": "user_confirmed"},
+        )
+
+        result = sync_live_material_slots(self.connection, {
+            "materials": [{
+                "system": "bambu_ams",
+                "unit_index": 0,
+                "slot_index": 1,
+                "vendor": "Bambu Lab",
+                "material": "PLA",
+                "product_name": "PLA Basic",
+                "color_hex": "#ffffff",
+                "remaining_percent": 73,
+                "selected": True,
+            }],
+            "source_metadata": {"ams_connected": True},
+        })
+
+        self.assertEqual(result["updated_spool_weights"], 1)
+        slot = PrinterFilamentSlot.objects.get(
+            printer=self.printer,
+            system="bambu_ams",
+            unit_index=0,
+            slot_index=1,
+        )
+        spool.refresh_from_db()
+        self.assertEqual(slot.spool_id, spool.id)
+        self.assertEqual(slot.metadata["link_source"], "user_confirmed")
+        self.assertEqual(spool.remaining_weight_g, Decimal("730.00"))
+        self.assertEqual(Spool.objects.count(), 1)
 
     def test_flashforge_station_presence_without_slot_report_does_not_retire_cached_slots(self):
         connection = PrinterConnection.objects.create(
