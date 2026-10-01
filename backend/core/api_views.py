@@ -3957,6 +3957,7 @@ def printing_overview(request):
             "filament_slots__spool__filament__manufacturer",
             "filament_slots__spool__filament__filament_manufacturer",
             "external_links",
+            "live_connections",
         )
     )
     spools = list(
