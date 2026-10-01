@@ -27,6 +27,17 @@ class CatalogueSourcePolicyTests(SimpleTestCase):
             "manufacturer",
         )
 
+    def test_maker_board_vendor_hosts_are_manufacturer_sources(self):
+        urls = [
+            "https://www.elecrow.com/wiki/example",
+            "https://heltec.org/project/example/",
+            "https://wiki.lilygo.cc/products/example/",
+            "https://docs.m5stack.com/en/example",
+        ]
+        for url in urls:
+            with self.subTest(url=url):
+                self.assertEqual(classify_source_url(url).key, "manufacturer")
+
     def test_sbc_vendor_hosts_are_manufacturer_sources(self):
         urls = [
             "https://www.orangepi.org/html/hardWare/example.html",
