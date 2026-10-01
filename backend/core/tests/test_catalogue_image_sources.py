@@ -354,7 +354,7 @@ class CatalogueImageSourceTests(unittest.TestCase):
             _normalise_catalogue_identity("OrangePi 5 Plus"),
         )
 
-    def test_curated_adfruit_and_banana_pi_sources_use_current_documentation(self):
+    def test_curated_adafruit_and_banana_pi_sources_use_current_documentation(self):
         mcu_cases = [
             ("Adafruit", "Feather ESP32-S3", "https://learn.adafruit.com/adafruit-esp32-s3-feather"),
             ("Adafruit", "Feather RP2040", "https://learn.adafruit.com/adafruit-feather-rp2040-pico"),
@@ -408,7 +408,7 @@ class CatalogueImageSourceTests(unittest.TestCase):
 
     def test_curated_mcu_source_pages_cover_known_board_failures(self):
         cases = [
-            ("Adafruit", "Feather RP2040", "https://www.adafruit.com/product/4884"),
+            ("Adafruit", "Feather RP2040", "https://learn.adafruit.com/adafruit-feather-rp2040-pico"),
             ("Arduino", "Nano ESP32", "https://docs.arduino.cc/hardware/nano-esp32"),
             ("DFRobot", "FireBeetle 2 ESP32-E", "https://www.dfrobot.com/product-2195.html"),
             ("Espressif", "ESP32-P4-Function-EV-Board", "https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32p4/esp32-p4-function-ev-board/user_guide.html"),
