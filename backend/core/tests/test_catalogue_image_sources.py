@@ -293,6 +293,27 @@ class CatalogueImageSourceTests(unittest.TestCase):
             _normalise_catalogue_identity("OrangePi 5 Plus"),
         )
 
+    def test_curated_mcu_sources_cover_vendor_failure_cluster(self):
+        cases = [
+            ("Espressif", "ESP32-P4-Function-EV-Board", "docs.espressif.com"),
+            ("Heltec", "WiFi LoRa 32 V3", "wiki.heltec.org"),
+            ("Heltec", "Wireless Stick Lite V3", "wiki.heltec.org"),
+            ("LilyGo", "T-Deck", "wiki.lilygo.cc"),
+            ("LilyGo", "T-Display-S3", "wiki.lilygo.cc"),
+            ("M5Stack", "Atom Lite", "docs.m5stack.com"),
+            ("M5Stack", "CoreS3", "docs.m5stack.com"),
+        ]
+        for manufacturer_name, board_name, expected_host in cases:
+            with self.subTest(board=board_name):
+                board = SimpleNamespace(
+                    name=board_name,
+                    manufacturer=SimpleNamespace(name=manufacturer_name),
+                    specifications={"board_type": "microcontroller"},
+                )
+                pages = _curated_board_source_pages(board)
+                self.assertEqual(len(pages), 1)
+                self.assertIn(expected_host, pages[0])
+
     def test_curated_mcu_source_pages_cover_known_board_failures(self):
         cases = [
             ("Adafruit", "Feather RP2040", "https://www.adafruit.com/product/4884"),
@@ -318,7 +339,7 @@ class CatalogueImageSourceTests(unittest.TestCase):
         pages = _curated_board_source_pages(board)
         self.assertEqual(
             pages[0],
-            "https://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_5_Plus",
+            "https://www.orangepi.org/html/hardWare/computerAndMicrocontrollers/details/Orange-Pi-5-plus.html",
         )
 
     def test_curated_sbc_source_mapping_is_exact(self):
