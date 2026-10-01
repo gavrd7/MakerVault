@@ -888,10 +888,11 @@ def _is_computer_board(obj) -> bool:
 
 def _page_image_candidates(soup: BeautifulSoup, base_url: str) -> list[tuple[str, str]]:
     """Return likely product images in priority order from a known source page."""
-    candidates: list[tuple[str, str]] = []
+    preferred: list[tuple[str, str]] = []
+    fallback: list[tuple[str, str]] = []
     seen: set[str] = set()
 
-    def add(value, method):
+    def add(value, method, *, prefer=False):
         raw = str(value or "").strip()
         if not raw:
             return
@@ -910,10 +911,63 @@ def _page_image_candidates(soup: BeautifulSoup, base_url: str) -> list[tuple[str
         )):
             return
         seen.add(resolved)
-        candidates.append((resolved, method))
+        (preferred if prefer else fallback).append((resolved, method))
 
-    # Product-aware structured metadata is stronger than generic social cards.
-    add(_structured_product_image(soup, base_url), "structured")
+    # Product-aware structured metadata is the strongest page-level signal.
+    add(_structured_product_image(soup, base_url), "structured", prefer=True)
+
+    # Prefer semantically-labelled product/board photographs over social cards
+    # or decorative hero/background assets. This avoids treating a vendor logo
+    # or blank marketing background as a successful catalogue image.
+    image_tags = list(soup.find_all("img", limit=120))
+    for semantic_only in (True, False):
+        for tag in image_tags:
+            text = " ".join([
+                str(tag.get("alt") or ""),
+                str(tag.get("title") or ""),
+                " ".join(str(part) for part in (tag.get("class") or [])),
+            ]).lower()
+            if any(word in text for word in (
+                "logo", "icon", "avatar", "banner", "flag", "spinner",
+                "background", "decorative",
+            )):
+                continue
+            semantic = any(word in text for word in (
+                "product", "board", "photo", "hardware", "device", "front", "back",
+            ))
+            if semantic != semantic_only:
+                continue
+            value = (
+                tag.get("data-large_image")
+                or tag.get("data-zoom-image")
+                or tag.get("data-lazy-src")
+                or tag.get("data-lazy")
+                or tag.get("data-src")
+                or tag.get("data-original")
+                or tag.get("data-url")
+                or tag.get("data-image")
+                or tag.get("src")
+                or ""
+            )
+            for srcset_key in ("data-srcset", "srcset"):
+                if not value and tag.get(srcset_key):
+                    entries = [entry.strip() for entry in str(tag.get(srcset_key)).split(",") if entry.strip()]
+                    if entries:
+                        value = entries[-1].split(" ", 1)[0]
+            add(value, "page-image", prefer=semantic_only)
+
+    # Full-size product gallery links are also strong image candidates.
+    for tag in soup.find_all("a", limit=120):
+        classes = " ".join(str(part) for part in (tag.get("class") or [])).lower()
+        rel = " ".join(str(part) for part in (tag.get("rel") or [])).lower()
+        if not any(word in classes + " " + rel for word in ("woocommerce", "gallery", "zoom", "product")):
+            continue
+        href = str(tag.get("href") or "").strip()
+        if re.search(r"\.(?:jpe?g|png|webp)(?:\?.*)?$", href, re.I):
+            add(href, "gallery-image", prefer=True)
+
+    # Social metadata remains useful when a source page does not expose a
+    # semantically-labelled product image.
     for attrs in (
         {"property": "og:image:secure_url"},
         {"property": "og:image"},
@@ -925,37 +979,6 @@ def _page_image_candidates(soup: BeautifulSoup, base_url: str) -> list[tuple[str
         if tag:
             add(tag.get("content"), "meta")
 
-    # Documentation/wiki and commerce sites often lazy-load their primary
-    # product photography. Support common WordPress/WooCommerce and docs
-    # attributes without downloading or copying the remote image.
-    for tag in soup.find_all("img", limit=120):
-        text = " ".join([
-            str(tag.get("alt") or ""),
-            str(tag.get("title") or ""),
-            str(tag.get("class") or ""),
-        ]).lower()
-        if any(word in text for word in ("logo", "icon", "avatar", "banner", "flag", "spinner")):
-            continue
-        value = (
-            tag.get("data-large_image")
-            or tag.get("data-zoom-image")
-            or tag.get("data-lazy-src")
-            or tag.get("data-lazy")
-            or tag.get("data-src")
-            or tag.get("data-original")
-            or tag.get("data-url")
-            or tag.get("data-image")
-            or tag.get("src")
-            or ""
-        )
-        for srcset_key in ("data-srcset", "srcset"):
-            if not value and tag.get(srcset_key):
-                # Prefer the largest candidate from a responsive image set.
-                entries = [entry.strip() for entry in str(tag.get(srcset_key)).split(",") if entry.strip()]
-                if entries:
-                    value = entries[-1].split(" ", 1)[0]
-        add(value, "page-image")
-
     # Modern documentation/product sites sometimes render imagery through
     # <source> elements or inline CSS rather than a conventional <img src>.
     for tag in soup.find_all("source", limit=120):
@@ -965,7 +988,12 @@ def _page_image_candidates(soup: BeautifulSoup, base_url: str) -> list[tuple[str
             entries = [entry.strip() for entry in srcset.split(",") if entry.strip()]
             if entries:
                 value = entries[-1].split(" ", 1)[0]
-        add(value, "picture-source")
+        context_tag = tag.parent
+        context = " ".join([
+            str(getattr(context_tag, "get", lambda *_: "")("class") or ""),
+            str(getattr(context_tag, "get", lambda *_: "")("aria-label") or ""),
+        ]).lower()
+        add(value, "picture-source", prefer=any(word in context for word in ("product", "board", "photo", "gallery")))
 
     css_url = re.compile(r"""url\(\s*['"]?([^'")]+)['"]?\s*\)""", re.I)
     for tag in soup.find_all(style=True, limit=160):
@@ -973,23 +1001,13 @@ def _page_image_candidates(soup: BeautifulSoup, base_url: str) -> list[tuple[str
         ident = str(tag.get("id") or "").lower()
         label = str(tag.get("aria-label") or "").lower()
         context = " ".join((classes, ident, label))
-        if any(word in context for word in ("logo", "icon", "avatar", "banner", "spinner")):
+        if any(word in context for word in ("logo", "icon", "avatar", "banner", "spinner", "background")):
             continue
+        semantic = any(word in context for word in ("product", "board", "photo", "gallery"))
         for match in css_url.finditer(str(tag.get("style") or "")):
-            add(match.group(1), "css-background")
+            add(match.group(1), "css-background", prefer=semantic)
 
-    # Some product galleries expose the full-size photograph only on the
-    # surrounding anchor while the <img> itself is a tiny placeholder.
-    for tag in soup.find_all("a", limit=120):
-        classes = " ".join(str(part) for part in (tag.get("class") or [])).lower()
-        rel = " ".join(str(part) for part in (tag.get("rel") or [])).lower()
-        if not any(word in classes + " " + rel for word in ("woocommerce", "gallery", "zoom", "product")):
-            continue
-        href = str(tag.get("href") or "").strip()
-        if re.search(r"\.(?:jpe?g|png|webp)(?:\?.*)?$", href, re.I):
-            add(href, "gallery-image")
-    return candidates
-
+    return preferred + fallback
 
 def find_source_page_image(obj, diagnostics: list[dict] | None = None) -> dict | None:
     """Find a remote product image from an already-known catalogue source page.
