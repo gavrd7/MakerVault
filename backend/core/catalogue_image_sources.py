@@ -119,6 +119,18 @@ def _normalise_tokens(value: str) -> set[str]:
     return {word for word in words if len(word) > 1 and word not in stop}
 
 
+def _normalise_catalogue_identity(value: str) -> str:
+    """Normalise manufacturer/model labels for exact curated-source matching."""
+    value = str(value or "").replace("®", "").replace("™", "").replace("©", "")
+    return re.sub(r"[^a-z0-9]+", "", value.casefold())
+
+
+def _normalise_search_label(value: str) -> str:
+    """Remove trademark noise while preserving readable search spacing."""
+    value = str(value or "").replace("®", "").replace("™", "").replace("©", "")
+    return re.sub(r"\s+", " ", value).strip()
+
+
 def _title_score(title: str, query: str) -> float:
     wanted = _normalise_tokens(query)
     found = _normalise_tokens(title.replace("File:", ""))
@@ -138,7 +150,7 @@ def _commons_query_for_component(component) -> str:
 
 
 def _commons_query_for_board(board) -> str:
-    maker = board.manufacturer.name if board.manufacturer else ""
+    maker = _normalise_search_label(board.manufacturer.name) if board.manufacturer else ""
     board_type = str((board.specifications or {}).get("board_type") or "microcontroller")
     suffix = {
         "sbc": "single board computer",
@@ -524,12 +536,30 @@ def _curated_sbc_source_pages(obj) -> list[str]:
         return []
     manufacturer = str(getattr(getattr(obj, "manufacturer", None), "name", "") or "").strip()
     name = str(getattr(obj, "name", "") or "").strip()
-    key = (manufacturer, name)
+    manufacturer_key = _normalise_catalogue_identity(manufacturer)
+    name_key = _normalise_catalogue_identity(name)
     pages = []
-    primary = CURATED_SBC_SOURCE_PAGES.get(key, "")
-    if primary:
-        pages.append(primary)
-    for url in CURATED_SBC_SOURCE_FALLBACKS.get(key, ()):
+    matched_key = None
+    for key in CURATED_SBC_SOURCE_PAGES:
+        if (
+            _normalise_catalogue_identity(key[0]) == manufacturer_key
+            and _normalise_catalogue_identity(key[1]) == name_key
+        ):
+            matched_key = key
+            primary = CURATED_SBC_SOURCE_PAGES[key]
+            if primary:
+                pages.append(primary)
+            break
+    fallback_key = matched_key
+    if fallback_key is None:
+        for key in CURATED_SBC_SOURCE_FALLBACKS:
+            if (
+                _normalise_catalogue_identity(key[0]) == manufacturer_key
+                and _normalise_catalogue_identity(key[1]) == name_key
+            ):
+                fallback_key = key
+                break
+    for url in CURATED_SBC_SOURCE_FALLBACKS.get(fallback_key, ()):
         if url and url not in pages:
             pages.append(url)
     return pages
@@ -547,8 +577,15 @@ def _curated_board_source_pages(obj) -> list[str]:
         return _curated_sbc_source_pages(obj)
     manufacturer = str(getattr(getattr(obj, "manufacturer", None), "name", "") or "").strip()
     name = str(getattr(obj, "name", "") or "").strip()
-    url = CURATED_MCU_SOURCE_PAGES.get((manufacturer, name), "")
-    return [url] if url else []
+    manufacturer_key = _normalise_catalogue_identity(manufacturer)
+    name_key = _normalise_catalogue_identity(name)
+    for (mapped_manufacturer, mapped_name), url in CURATED_MCU_SOURCE_PAGES.items():
+        if (
+            _normalise_catalogue_identity(mapped_manufacturer) == manufacturer_key
+            and _normalise_catalogue_identity(mapped_name) == name_key
+        ):
+            return [url]
+    return []
 
 
 def _candidate_source_pages(obj) -> list[dict]:
