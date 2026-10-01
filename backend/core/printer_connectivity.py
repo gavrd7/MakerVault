@@ -17,8 +17,10 @@ from .live_material_slots import sync_live_material_slots
 from .manufacturer_printer_adapters import (
     ManufacturerAdapterError,
     normalise_bambu_endpoint,
+    normalise_flashforge_endpoint,
     normalise_prusalink_endpoint,
     poll_bambu_local,
+    poll_flashforge,
     poll_prusalink,
 )
 
@@ -124,7 +126,21 @@ ADAPTERS = {
         },
     ),
     "anycubic": AdapterDefinition("anycubic", "Anycubic", False, True, True, dict(COMMON_MONITORING)),
-    "flashforge": AdapterDefinition("flashforge", "FlashForge", False, True, True, dict(COMMON_MONITORING)),
+    "flashforge": AdapterDefinition(
+        "flashforge",
+        "FlashForge local",
+        True,
+        True,
+        True,
+        {
+            **COMMON_MONITORING,
+            "camera": True,
+            "materials": True,
+            "pause": True,
+            "resume": True,
+            "cancel": True,
+        },
+    ),
     "prusa": AdapterDefinition(
         "prusa",
         "PrusaLink",
@@ -224,6 +240,11 @@ def normalise_connection_endpoint(adapter: str, raw_url: str) -> str:
     if adapter == "prusa":
         try:
             return normalise_prusalink_endpoint(raw_url)
+        except ManufacturerAdapterError as exc:
+            raise PrinterConnectionError(str(exc)) from exc
+    if adapter == "flashforge":
+        try:
+            return normalise_flashforge_endpoint(raw_url)
         except ManufacturerAdapterError as exc:
             raise PrinterConnectionError(str(exc)) from exc
     return normalise_printer_endpoint(raw_url)
@@ -755,6 +776,7 @@ POLLERS: dict[str, Callable[[str, dict | None], dict]] = {
     "creality_local": poll_creality_local,
     "bambu_local": poll_bambu_local,
     "prusa": poll_prusalink,
+    "flashforge": poll_flashforge,
 }
 
 
@@ -813,6 +835,11 @@ def poll_connection(connection) -> dict:
         )
     elif connection.adapter == "prusa":
         capabilities["camera"] = bool(metadata.get("camera_available"))
+    elif connection.adapter == "flashforge":
+        capabilities["camera"] = bool(metadata.get("camera_available"))
+        capabilities["materials"] = bool(
+            metadata.get("material_station_connected") or snapshot.get("materials")
+        )
     connection.capabilities = capabilities
     connection.last_snapshot = snapshot
     connection.save(update_fields=[
