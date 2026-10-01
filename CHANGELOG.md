@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.7.3.2 — in development
+
+- Added disabled-by-default per-source Pause, Resume and confirmed Cancel for Creality local, Moonraker manufacturer profiles and OctoPrint.
+- Added ownership/editor permission checks, fresh job/state validation, persistent command receipts, replay protection and a short cross-source command cooldown.
+- Added explicit sent/uncertain-delivery messaging without fabricating printer state or Print History results.
+- Added optional-control documentation and regression coverage for permissions, CSRF, opt-in, changed jobs, request replay, uncertain delivery and exact protocol commands.
+- Other adapters remain monitoring-only in this control pass. K2 and other hardware control validation remains outstanding.
+
 ## v0.7.3 — in development
 
 - Started the live printer connectivity milestone with a provider-neutral `PrinterConnection` layer that attaches multiple live sources to one physical MakerVault printer without duplicating inventory.

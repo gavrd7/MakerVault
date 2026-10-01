@@ -634,8 +634,10 @@ def poll_octoprint(endpoint_url: str, config: dict | None = None) -> dict:
 
     state_text = str((job_payload.get("state") or printer_payload.get("state", {}).get("text") or "Unknown")).strip()
     lower = state_text.casefold()
-    if "print" in lower:
-        state = "printing"
+    if lower in {"pausing", "resuming", "cancelling", "canceling", "finishing"}:
+        state = "processing"
+    elif "print" in lower:
+        state = "paused" if "pause" in lower else "printing"
     elif "pause" in lower:
         state = "paused"
     elif "error" in lower or "offline" in lower:
@@ -870,6 +872,9 @@ def normalise_creality_snapshot(payload: dict) -> dict:
             "model_version": str(payload.get("modelVersion") or ""),
             "raw_state": payload.get("state"),
             "activity_state": activity_state,
+            "print_id": str(payload.get("printId") or ""),
+            "print_start_time": payload.get("printStartTime"),
+            "power_loss_recovery": _flag(payload.get("repoPlrStatus")),
             "device_state": payload.get("deviceState"),
             "cfs_connected": _flag(payload.get("cfsConnect")) or bool(materials),
             "cfs_loaded_slots": len(materials),

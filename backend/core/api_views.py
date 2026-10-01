@@ -43,6 +43,7 @@ from .printer_connectivity import (
     normalise_connection_endpoint,
     poll_connection,
 )
+from .printer_controls import CONTROL_ADAPTERS, PrinterControlError, control_availability, execute_control
 from .printing_sync import PrintingSyncError, next_spool_id, resolve_spoolman_review, sync_printing_integration
 from .tasks import queue_catalogue_maintenance_now
 from .storage_usage import StorageQuotaExceeded, ensure_storage_capacity, storage_settings, storage_summary
@@ -3824,6 +3825,7 @@ def _serialise_printer_connection(connection):
         "adapter": connection.adapter,
         "adapter_label": definition.label if definition else connection.get_adapter_display(),
         "enabled": connection.enabled,
+        "controls": control_availability(connection),
         "endpoint_url": connection.endpoint_url,
         "poll_interval_seconds": connection.poll_interval_seconds,
         "status": connection.status,
@@ -4696,6 +4698,7 @@ def printing_printer_connections(request, printer_id):
         return JsonResponse({
             "rows": [_serialise_printer_connection(item) for item in rows],
             "adapters": adapter_catalogue(),
+            "can_control": request.user.has_perm("core.change_printer"),
         })
 
     denied = _require_permission(request, "core.change_printer")
@@ -4782,6 +4785,12 @@ def printing_printer_connection_detail(request, printer_id, connection_id):
     try:
         payload = _read_json(request)
         definition = PRINTER_ADAPTERS.get(item.adapter)
+        if "controls_enabled" in payload:
+            if not isinstance(payload["controls_enabled"], bool):
+                return _error("Printer control permission must be true or false.")
+            if payload["controls_enabled"] and item.adapter not in CONTROL_ADAPTERS:
+                return _error("Printer controls are not implemented for this adapter.")
+            item.controls_enabled = payload["controls_enabled"]
         if "enabled" in payload:
             item.enabled = bool(payload.get("enabled"))
         if "endpoint_url" in payload:
@@ -4859,6 +4868,30 @@ def printing_printer_connection_refresh(request, printer_id, connection_id):
             "error": str(exc),
             "item": _serialise_printer_connection(item),
         }, status=502)
+
+
+@login_required
+@require_http_methods(["POST"])
+def printing_printer_connection_control(request, printer_id, connection_id):
+    item = PrinterConnection.objects.select_related("printer").filter(
+        pk=connection_id, printer_id=printer_id, printer__owner=request.user,
+    ).first()
+    if not item:
+        return _error("Printer connection not found.", status=404)
+    denied = _require_permission(request, "core.change_printer")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        receipt = execute_control(item, request.user, payload)
+        item.refresh_from_db()
+        return JsonResponse({"command": receipt, "item": _serialise_printer_connection(item)}, status=202)
+    except PrinterControlError as exc:
+        return _error(str(exc), status=exc.status)
+    except IntegrityError:
+        return _error("That command request ID is already in use.", status=409)
+    except (ValidationError, ValueError) as exc:
+        return _error(str(exc))
 
 
 @login_required

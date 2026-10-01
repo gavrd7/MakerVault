@@ -161,6 +161,8 @@ This file tracks completed MakerVault milestones and the planned path toward a s
 
 #### Optional printer control
 
+**v0.7.3.2 implementation:** per-source opt-in and owner/editor-guarded Pause, Resume and confirmed Cancel for Creality local, Moonraker manufacturer profiles and OctoPrint. Persistent receipts prevent request replay; fresh job/state checks guard dispatch. Controls require hardware validation, beginning with the development K2. Other adapters remain monitoring-only for this pass; hardware validation is tracked in [TODO #37](https://github.com/gavrd7/MakerVault/issues/37).
+
 - Design adapters with explicit capability/permission reporting from the start.
 - Initial monitoring remains read-only by default.
 - Add Pause/Resume and confirmed Cancel only where the adapter safely supports them.

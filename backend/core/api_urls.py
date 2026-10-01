@@ -23,6 +23,7 @@ urlpatterns = [
     path("printing/printers/<uuid:printer_id>/connections/", api_views.printing_printer_connections, name="api-printing-printer-connections"),
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/", api_views.printing_printer_connection_detail, name="api-printing-printer-connection-detail"),
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/refresh/", api_views.printing_printer_connection_refresh, name="api-printing-printer-connection-refresh"),
+    path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/control/", api_views.printing_printer_connection_control, name="api-printing-printer-connection-control"),
     path("printing/spools/", api_views.printing_spools, name="api-printing-spools"),
     path("printing/spools/<uuid:spool_id>/", api_views.printing_spool_detail, name="api-printing-spool-detail"),
     path("printing/slots/<uuid:slot_id>/add-to-inventory/", api_views.printing_slot_add_to_inventory, name="api-printing-slot-add-to-inventory"),

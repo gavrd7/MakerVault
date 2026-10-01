@@ -791,7 +791,6 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
   const [notice, setNotice] = useState("");
 
   async function loadConnections() {
-    setError("");
     try {
       const result = await apiFetch("/api/printing/printers/" + printer.id + "/connections/");
       setData(result);
@@ -916,6 +915,48 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
     } catch (err) {
       setError(err.message);
     } finally {
+      setBusy("");
+    }
+  }
+
+  async function toggleControls(connection) {
+    setBusy(connection.id); setError(""); setNotice("");
+    try {
+      await apiFetch("/api/printing/printers/" + printer.id + "/connections/" + connection.id + "/", {
+        method: "PATCH", body: { controls_enabled: !connection.controls.enabled },
+      });
+      await loadConnections();
+      await onChanged();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function controlPrinter(connection, action) {
+    const file = connection.snapshot?.job?.file_name || "Unknown job";
+    if (action === "cancel" && !window.confirm(`Cancel the print on ${printer.name}?\n\nJob: ${file}\n\nThis stops the current print.`)) return;
+    setBusy(connection.id); setError(""); setNotice("");
+    try {
+      // Use Web Crypto's random bytes on self-hosted HTTP as well as HTTPS.
+      const bytes = window.crypto.getRandomValues(new Uint8Array(16));
+      bytes[6] = (bytes[6] & 15) | 64;
+      bytes[8] = (bytes[8] & 63) | 128;
+      const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+      const requestId = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+      const result = await apiFetch("/api/printing/printers/" + printer.id + "/connections/" + connection.id + "/control/", {
+        method: "POST", body: {
+          action, request_id: requestId, job_token: connection.controls.job_token,
+          confirmed_cancel: action === "cancel",
+        },
+      });
+      setNotice(result.command.message);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      await loadConnections();
+      await onChanged();
       setBusy("");
     }
   }
@@ -1068,6 +1109,17 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
           <small>Capabilities: {Object.entries(connection.capabilities || {}).filter(([, enabled]) => enabled).map(([key]) => key.replaceAll("_", " ")).join(", ") || "Not reported yet"}</small>
           <small>Last seen: {connection.last_seen_at ? formatDate(connection.last_seen_at) : "Never"}</small>
           {connection.last_error && <small className="integrationError">{connection.last_error}</small>}
+          {connection.controls?.supported && data.can_control && <div className="settingsCallout">
+            <label><input type="checkbox" checked={connection.controls.enabled} disabled={Boolean(busy)} onChange={() => toggleControls(connection)} /> Allow Pause, Resume and Cancel</label>
+            <small>{connection.controls.enabled ? "Controls enabled for this source. Actions require a current active job." : "Read-only monitoring. Enable controls for this source to act on a print."}</small>
+            {connection.controls.enabled && <div className="settingsActions compact">
+              {["pause", "resume", "cancel"].map(action => <button type="button" key={action} className={action === "cancel" ? "dangerButton" : undefined}
+                disabled={Boolean(busy) || !connection.controls.actions.includes(action)}
+                onClick={() => controlPrinter(connection, action)}>
+                {action === "cancel" ? "Cancel print…" : action === "pause" ? "Pause" : "Resume"}
+              </button>)}
+            </div>}
+          </div>}
           <div className="settingsActions compact">
             <button type="button" disabled={busy === connection.id || !connection.enabled || !connection.supported} onClick={() => refreshConnection(connection)}>{busy === connection.id ? "Working…" : "Refresh"}</button>
             <button type="button" onClick={() => copyDiagnostics(connection)}>Copy diagnostics</button>

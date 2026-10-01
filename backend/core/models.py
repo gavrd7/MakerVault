@@ -848,6 +848,7 @@ class PrinterConnection(TimeStampedModel):
     )
     adapter = models.CharField(max_length=40, choices=ADAPTERS)
     enabled = models.BooleanField(default=True)
+    controls_enabled = models.BooleanField(default=False)
     endpoint_url = models.CharField(max_length=500, blank=True)
     poll_interval_seconds = models.PositiveSmallIntegerField(default=30)
     status = models.CharField(max_length=24, choices=STATUSES, default="not_configured")
@@ -876,6 +877,18 @@ class PrinterConnection(TimeStampedModel):
 
     def __str__(self):
         return f"{self.printer} · {self.get_adapter_display()}"
+
+
+class PrinterControlRequest(TimeStampedModel):
+    """Persistent command receipt prevents resending an uncertain request."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    connection = models.ForeignKey(PrinterConnection, on_delete=models.CASCADE, related_name="control_requests")
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    action = models.CharField(max_length=10, choices=[("pause", "Pause"), ("resume", "Resume"), ("cancel", "Cancel")])
+    expected_job = models.CharField(max_length=64)
+    status = models.CharField(max_length=12, default="pending", choices=[("pending", "Pending"), ("sent", "Sent"), ("rejected", "Rejected"), ("unknown", "Unknown")])
+    message = models.TextField(blank=True)
 
 
 class PrinterFilamentSlot(TimeStampedModel):
