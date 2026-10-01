@@ -1428,6 +1428,8 @@ def dashboard(request):
     )
     live_printers = []
     for printer in owned_printers:
+        if not printer.is_active:
+            continue
         connections = [
             _serialise_printer_connection(connection)
             for connection in printer.live_connections.all()
