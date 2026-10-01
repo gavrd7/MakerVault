@@ -27,6 +27,7 @@ from core.printer_connectivity import (
     adapter_catalogue,
     normalise_creality_endpoint,
     normalise_creality_snapshot,
+    normalise_moonraker_endpoint,
     poll_connection,
     poll_moonraker,
     poll_octoprint,
@@ -38,6 +39,28 @@ class PrinterConnectivityAdapterTests(TestCase):
         result = Mock(status_code=status)
         result.json.return_value = payload
         return result
+
+    def test_moonraker_manufacturer_endpoint_defaults_and_prefixes(self):
+        self.assertEqual(
+            normalise_moonraker_endpoint("neptune4.local"),
+            "http://neptune4.local:7125",
+        )
+        self.assertEqual(
+            normalise_moonraker_endpoint("http://qidi.local"),
+            "http://qidi.local:7125",
+        )
+        self.assertEqual(
+            normalise_moonraker_endpoint("http://u1.local/moonraker/printer1"),
+            "http://u1.local/moonraker/printer1",
+        )
+
+    def test_adapter_catalogue_exposes_supported_moonraker_manufacturer_profiles(self):
+        rows = {row["key"]: row for row in adapter_catalogue()}
+        for key in ("elegoo", "qidi", "sovol", "snapmaker", "voron"):
+            with self.subTest(adapter=key):
+                self.assertTrue(rows[key]["supported"])
+                self.assertTrue(rows[key]["experimental"])
+                self.assertTrue(rows[key]["local_first"])
 
     @patch("core.printer_connectivity.requests.get")
     def test_moonraker_normalises_live_snapshot(self, get_mock):
@@ -946,6 +969,25 @@ class PrinterConnectivityApiTests(TestCase):
         self.assertTrue(item["experimental"])
         connection = PrinterConnection.objects.get(printer=self.printer, adapter="anycubic")
         self.assertEqual(connection.config, {})
+
+    def test_moonraker_manufacturer_profile_reuses_owned_host(self):
+        self.printer.connection_host = "sv08.local"
+        self.printer.save(update_fields=["connection_host", "updated_at"])
+
+        response = self.client.post(
+            f"/api/printing/printers/{self.printer.id}/connections/",
+            data={
+                "adapter": "sovol",
+                "poll_interval_seconds": 30,
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        item = response.json()["item"]
+        self.assertEqual(item["adapter"], "sovol")
+        self.assertEqual(item["endpoint_url"], "http://sv08.local:7125")
+        self.assertTrue(item["supported"])
+        self.assertTrue(item["experimental"])
 
     def test_one_physical_printer_can_have_multiple_live_sources_without_duplication(self):
         for adapter, endpoint in [
