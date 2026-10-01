@@ -12,6 +12,7 @@ from core.catalogue_image_sources import (
     _is_computer_board,
     _page_image_candidates,
     _normalise_catalogue_identity,
+    _normalise_search_label,
     _curated_sbc_source_page,
     _curated_board_source_pages,
     _curated_sbc_source_pages,
