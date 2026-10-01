@@ -54,6 +54,18 @@ class CatalogueSeedTests(unittest.TestCase):
         }
         self.assertTrue(expected.issubset(names))
 
+    def test_common_ws2812_parts_include_wiring_pin_metadata(self):
+        names = {"WS2812 12 LED ring", "WS2812B LED strip"}
+        rows = {item["name"]: item for item in COMPONENT_DEFINITIONS if item["name"] in names}
+        self.assertEqual(set(rows), names)
+        for name, item in rows.items():
+            with self.subTest(component=name):
+                pins = {pin["name"]: pin for pin in item["specifications"]["pins"]}
+                self.assertEqual(pins["GND"]["role"], "ground")
+                self.assertEqual(pins["5V"]["role"], "power_input")
+                self.assertEqual(pins["DIN"]["role"], "input")
+                self.assertEqual(pins["DOUT"]["role"], "output")
+
     def test_component_identity_keys_are_unique(self):
         keys = [
             (item["name"], item.get("part_number", ""))
