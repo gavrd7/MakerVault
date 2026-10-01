@@ -31,6 +31,7 @@ class PrinterConnectivityAdapterTests(TestCase):
                     "result": {
                         "klippy_state": "ready",
                         "moonraker_version": "0.9.3",
+                        "warnings": ["Test warning"],
                     }
                 })
             if "/printer/objects/query?" in url:
@@ -41,6 +42,7 @@ class PrinterConnectivityAdapterTests(TestCase):
                                 "state": "printing",
                                 "filename": "Benchy.gcode",
                                 "print_duration": 300,
+                                "info": {"current_layer": 42, "total_layer": 168},
                             },
                             "virtual_sdcard": {"progress": 0.25},
                             "display_status": {"progress": 0.25},
@@ -62,6 +64,9 @@ class PrinterConnectivityAdapterTests(TestCase):
         self.assertEqual(snapshot["job"]["remaining_seconds"], 900)
         self.assertEqual(snapshot["temperatures"]["tool0"]["actual_c"], 214.2)
         self.assertEqual(snapshot["temperatures"]["bed"]["target_c"], 60.0)
+        self.assertEqual(snapshot["job"]["current_layer"], 42)
+        self.assertEqual(snapshot["job"]["total_layers"], 168)
+        self.assertEqual(snapshot["warnings"], ["Test warning"])
         self.assertEqual(snapshot["source_metadata"]["klippy_state"], "ready")
         self.assertTrue(all(call.kwargs["headers"]["X-Api-Key"] == "secret" for call in get_mock.call_args_list))
 
@@ -75,7 +80,7 @@ class PrinterConnectivityAdapterTests(TestCase):
                     "state": "Printing",
                     "job": {"file": {"display": "Gear.3mf"}},
                     "progress": {
-                        "completion": 62.5,
+                        "completion": 0.625,
                         "printTime": 600,
                         "printTimeLeft": 360,
                     },
