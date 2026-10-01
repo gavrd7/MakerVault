@@ -145,6 +145,26 @@ class CatalogueImageSourceTests(unittest.TestCase):
         self.assertIn("https://vendor.example/img/board-lazy.webp", urls)
         self.assertIn("https://vendor.example/img/board-large.webp", urls)
 
+    def test_page_image_candidates_prefer_product_photo_over_background_art(self):
+        soup = BeautifulSoup(
+            """
+            <html><body>
+              <img src="/assets/hero-white.webp" alt="background">
+              <img src="/assets/lattepanda-3-delta.webp" alt="product board photo">
+            </body></html>
+            """,
+            "html.parser",
+        )
+        candidates = _page_image_candidates(soup, "https://www.lattepanda.com/lattepanda-3-delta")
+        self.assertEqual(
+            candidates[0],
+            ("https://www.lattepanda.com/assets/lattepanda-3-delta.webp", "page-image"),
+        )
+        self.assertNotIn(
+            ("https://www.lattepanda.com/assets/hero-white.webp", "page-image"),
+            candidates,
+        )
+
     def test_page_image_candidates_reject_obvious_brand_placeholder_assets(self):
         soup = BeautifulSoup(
             """
