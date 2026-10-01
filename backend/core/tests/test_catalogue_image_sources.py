@@ -1172,6 +1172,43 @@ class CatalogueImagePriorityTests(TestCase):
     @patch("core.catalogue_image_sources.cache.add", return_value=True)
     @patch("core.catalogue_image_sources.resolve_catalogue_image", return_value=None)
     @patch("core.catalogue_image_sources.find_source_page_image", return_value=None)
+    def test_new_generation_rechecks_remote_microcontroller_reference(
+        self,
+        source_image,
+        resolve_image,
+        cache_add,
+        cache_delete,
+    ):
+        self.board.specifications = {
+            "board_type": "microcontroller",
+            "external_image_url": "https://stale.example/board.jpg",
+            "auto_image_attempt_version": "older-generation",
+        }
+        self.board.save(update_fields=["specifications", "updated_at"])
+
+        result = run_catalogue_image_seed(
+            limit=1,
+            force_retry=False,
+            kinds=["boards"],
+        )
+
+        self.assertEqual(result["processed"], 1)
+        self.assertEqual(result["by_kind"]["boards"]["skipped"], 0)
+        source_image.assert_called_once()
+        resolve_image.assert_called_once()
+        cache_add.assert_called_once()
+        cache_delete.assert_called_once()
+
+    @override_settings(
+        CATALOGUE_IMAGE_MAX_PER_RUN=1,
+        CATALOGUE_IMAGE_RETRY_DAYS=1,
+        CATALOGUE_IMAGE_WIKIMEDIA=True,
+        CATALOGUE_IMAGE_OPENVERSE=True,
+    )
+    @patch("core.catalogue_image_sources.cache.delete")
+    @patch("core.catalogue_image_sources.cache.add", return_value=True)
+    @patch("core.catalogue_image_sources.resolve_catalogue_image", return_value=None)
+    @patch("core.catalogue_image_sources.find_source_page_image", return_value=None)
     def test_force_retry_reprocesses_remote_board_reference(
         self,
         source_image,
