@@ -25,6 +25,8 @@ def _system_connected(snapshot: dict, system: str) -> bool:
         return bool(metadata.get("ams_connected"))
     if system == "creality_cfs":
         return bool(metadata.get("cfs_connected"))
+    if system == "flashforge_station":
+        return bool(metadata.get("material_station_connected"))
     return bool(snapshot.get("materials"))
 
 
@@ -48,6 +50,8 @@ def sync_live_material_slots(connection, snapshot: dict) -> dict:
         systems.add("bambu_ams")
     elif connection.adapter == "creality_local":
         systems.add("creality_cfs")
+    elif connection.adapter == "flashforge":
+        systems.add("flashforge_station")
 
     if not systems:
         return {"systems": [], "loaded_slots": 0, "updated_spool_weights": 0}
