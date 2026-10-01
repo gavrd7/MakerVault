@@ -191,6 +191,7 @@ class PrinterConnectivityAdapterTests(TestCase):
             "err": {"errcode": 500, "key": 121},
         })
         self.assertEqual(errored["state"], "error")
+        self.assertEqual(errored["source_metadata"]["activity_state"], "printing")
         self.assertEqual(errored["warnings"], ["Creality error 500 (key 121)"])
 
     @patch("core.printer_connectivity.requests.get")
@@ -312,6 +313,22 @@ class LivePrintJobMappingTests(TestCase):
         job = PrintJob.objects.get()
         self.assertEqual(len(job.settings["live_monitor"]["sources"]), 2)
         self.assertEqual(job.settings["live_monitor"]["last_progress"], 40)
+
+    def test_provider_activity_state_prevents_stale_creality_error_from_failing_job(self):
+        sync_print_job_from_snapshot(self.moonraker, self.snapshot())
+        result = sync_print_job_from_snapshot(
+            self.moonraker,
+            {
+                **self.snapshot(progress=50, elapsed=600, remaining=600),
+                "state": "error",
+                "source_metadata": {"activity_state": "printing"},
+                "warnings": ["Creality error 500 (key 121)"],
+            },
+        )
+
+        self.assertEqual(result["action"], "updated")
+        job = PrintJob.objects.get()
+        self.assertEqual(job.status, "printing")
 
     def test_terminal_snapshot_completes_active_job(self):
         sync_print_job_from_snapshot(self.moonraker, self.snapshot())
