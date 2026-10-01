@@ -929,7 +929,7 @@ def _page_image_candidates(soup: BeautifulSoup, base_url: str) -> list[tuple[str
             ]).lower()
             if any(word in text for word in (
                 "logo", "icon", "avatar", "banner", "flag", "spinner",
-                "background", "decorative",
+                "background", "decorative", "author", "profile", "for user",
             )):
                 continue
             semantic = any(word in text for word in (
