@@ -472,6 +472,52 @@ class PrinterConnectivityApiTests(TestCase):
         self.assertTrue(printer["live_connections"][0]["stale"])
         self.assertEqual(printer["live_connections"][0]["status_label"], "Stale")
 
+    def test_dashboard_exposes_compact_owner_scoped_live_printer_status(self):
+        PrinterConnection.objects.create(
+            printer=self.printer,
+            adapter="creality_local",
+            endpoint_url="ws://192.168.1.34:9999",
+            poll_interval_seconds=30,
+            status="connected",
+            last_checked_at=timezone.now(),
+            last_seen_at=timezone.now(),
+            last_snapshot={
+                "state": "printing",
+                "state_label": "Printing",
+                "job": {
+                    "file_name": "benchy.gcode",
+                    "progress": 42.5,
+                    "remaining_seconds": 900,
+                },
+                "temperatures": {
+                    "tool0": {"actual_c": 220, "target_c": 220},
+                    "bed": {"actual_c": 60, "target_c": 60},
+                },
+                "warnings": [],
+            },
+        )
+        foreign = Printer.objects.create(owner=self.other, name="Hidden printer", model="Other")
+        PrinterConnection.objects.create(
+            printer=foreign,
+            adapter="moonraker",
+            endpoint_url="http://other.local:7125",
+            status="connected",
+            last_checked_at=timezone.now(),
+            last_seen_at=timezone.now(),
+            last_snapshot={"state": "idle", "state_label": "Idle"},
+        )
+
+        response = self.client.get("/api/dashboard/")
+        self.assertEqual(response.status_code, 200, response.content)
+        live = response.json()["live_printers"]
+        self.assertEqual(len(live), 1)
+        self.assertEqual(live[0]["id"], str(self.printer.id))
+        self.assertEqual(live[0]["adapter"], "creality_local")
+        self.assertEqual(live[0]["state"], "printing")
+        self.assertEqual(live[0]["job"]["file_name"], "benchy.gcode")
+        self.assertEqual(live[0]["job"]["progress"], 42.5)
+        self.assertEqual(live[0]["temperatures"]["tool0"]["actual_c"], 220)
+
     def test_connection_endpoints_are_owner_scoped(self):
         foreign = Printer.objects.create(owner=self.other, name="Other printer", model="Other")
         connection = PrinterConnection.objects.create(
