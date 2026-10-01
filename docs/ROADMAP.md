@@ -133,7 +133,9 @@ This file tracks completed MakerVault milestones and the planned path toward a s
 - Allow one MakerVault printer to combine multiple useful sources without creating duplicate printer records.
 - Prefer direct/local connections where available; cloud/service integrations remain optional.
 - Add automatic creation/update/completion of MakerVault PrintJob records from live printer activity where confidence is sufficient.
+- Implemented explicit plain-G-code gram estimates and Moonraker extrusion-length/metadata estimates with source labels and manual-row precedence. TODO: additional manufacturer-reported weights, binary/archived G-code and explicit per-tool/spool allocation. Missing metadata remains unrecorded; duration and CFS percentages are not converted to grams.
 - Keep polling/subscription frequency configurable and avoid making the core app dependent on any single manufacturer ecosystem.
+- TODO: implement and hardware-test viewable camera streams per adapter, including Creality/K2. A camera capability or WebRTC flag alone does not provide a browser feed; the live UI must explicitly identify unavailable feeds until stream support is implemented.
 
 #### Core printer adapters
 
@@ -160,6 +162,8 @@ This file tracks completed MakerVault milestones and the planned path toward a s
 - Promote an adapter from experimental to supported only after successful real-hardware validation.
 
 #### Optional printer control
+
+**v0.7.3.2 implementation:** per-source opt-in and owner/editor-guarded Pause, Resume and confirmed Cancel for Creality local, Moonraker manufacturer profiles and OctoPrint. Persistent receipts prevent request replay; fresh job/state checks guard dispatch. Controls require hardware validation, beginning with the development K2. Other adapters remain monitoring-only for this pass; hardware validation is tracked in [TODO #37](https://github.com/gavrd7/MakerVault/issues/37).
 
 - Design adapters with explicit capability/permission reporting from the start.
 - Initial monitoring remains read-only by default.

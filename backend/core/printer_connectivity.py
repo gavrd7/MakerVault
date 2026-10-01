@@ -5,8 +5,9 @@ import json
 import math
 import re
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Callable
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote
 
 import requests
 import websockets
@@ -14,6 +15,7 @@ from websockets.exceptions import WebSocketException
 from django.utils import timezone
 
 from .live_print_jobs import sync_print_job_from_snapshot
+from .print_material_reporting import weight
 from .live_material_slots import sync_live_material_slots
 from .manufacturer_printer_adapters import (
     ManufacturerAdapterError,
@@ -615,6 +617,25 @@ def poll_moonraker(endpoint_url: str, config: dict | None = None) -> dict:
         },
         "captured_at": timezone.now().isoformat(),
     })
+    filename = snapshot["job"]["file_name"]
+    filament_mm = _number(print_stats.get("filament_used"))
+    if filename and filament_mm is not None and not isinstance(print_stats.get("filament_used"), bool) and math.isfinite(filament_mm) and filament_mm >= 0:
+        snapshot["job"]["filament_used_mm"] = filament_mm
+        try:
+            raw_metadata = _get(base + "/server/files/metadata?filename=" + quote(filename, safe=""), headers=headers).get("result")
+            metadata = raw_metadata if isinstance(raw_metadata, dict) else {}
+            grams = weight(metadata.get("filament_weight_total"))
+            length = _number(metadata.get("filament_total"))
+            if grams is not None:
+                snapshot["job"]["filament_estimated_g"] = grams
+            if grams is not None and length is not None and not isinstance(metadata.get("filament_total"), bool) and math.isfinite(length) and length > 0:
+                consumed = weight(Decimal(str(grams)) * Decimal(str(filament_mm)) / Decimal(str(length)))
+                if consumed is not None:
+                    snapshot["job"]["filament_used_g"] = consumed
+                    snapshot["job"]["filament_usage_estimated"] = True
+                    snapshot["job"]["filament_usage_basis"] = "extrusion_length"
+        except PrinterConnectionError:
+            snapshot["warnings"].append("Filament weight metadata is temporarily unavailable.")
     return snapshot
 
 
@@ -634,8 +655,10 @@ def poll_octoprint(endpoint_url: str, config: dict | None = None) -> dict:
 
     state_text = str((job_payload.get("state") or printer_payload.get("state", {}).get("text") or "Unknown")).strip()
     lower = state_text.casefold()
-    if "print" in lower:
-        state = "printing"
+    if lower in {"pausing", "resuming", "cancelling", "canceling", "finishing"}:
+        state = "processing"
+    elif "print" in lower:
+        state = "paused" if "pause" in lower else "printing"
     elif "pause" in lower:
         state = "paused"
     elif "error" in lower or "offline" in lower:
@@ -870,6 +893,9 @@ def normalise_creality_snapshot(payload: dict) -> dict:
             "model_version": str(payload.get("modelVersion") or ""),
             "raw_state": payload.get("state"),
             "activity_state": activity_state,
+            "print_id": str(payload.get("printId") or ""),
+            "print_start_time": payload.get("printStartTime"),
+            "power_loss_recovery": _flag(payload.get("repoPlrStatus")),
             "device_state": payload.get("deviceState"),
             "cfs_connected": _flag(payload.get("cfsConnect")) or bool(materials),
             "cfs_loaded_slots": len(materials),

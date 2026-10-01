@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.7.3.2 — in development
+
+- Added bounded plain-G-code gram parsing, unambiguous owner-scoped live-job matching and a print-history G-code selector. Full-file weights count only for successful prints and are labelled estimated.
+- Added Moonraker extrusion-length/metadata consumption estimates with explicit provenance, manual-usage precedence, no repeated-poll accumulation and no automatic spool deductions or invented waste/cost.
+
+- Live-source setup now closes after saving and confirms the source/printer on the overview. Save failures retain setup values and display the reason in the dialog.
+
+- Print Analytics and recent prints distinguish missing material usage from recorded zero, show usage coverage for partial totals, and preserve small fractional gram values.
+
+- Equalised loaded-filament card heights across rows and stabilised model-library title, badge and action placement at narrow panel widths.
+
+- Fixed narrow printer headers and live-source modal overflow; single printer cards now fill the available width and loaded filament slots use responsive columns.
+- Added compact, accessible Pause, Resume and confirmed Cancel icons beside progress summaries on the dashboard and 3D Printing page, using the same opt-in and job validation as the live monitor.
+- Dashboard Open live opens the selected printer directly. Camera metadata now explicitly says when a viewable feed is unavailable.
+
+- Added disabled-by-default per-source Pause, Resume and confirmed Cancel for Creality local, Moonraker manufacturer profiles and OctoPrint.
+- Added ownership/editor permission checks, fresh job/state validation, persistent command receipts, replay protection and a short cross-source command cooldown.
+- Added explicit sent/uncertain-delivery messaging without fabricating printer state or Print History results.
+- Added optional-control documentation and regression coverage for permissions, CSRF, opt-in, changed jobs, request replay, uncertain delivery and exact protocol commands.
+- Other adapters remain monitoring-only in this control pass. K2 and other hardware control validation remains outstanding.
+
 ## v0.7.3 — in development
 
 - Started the live printer connectivity milestone with a provider-neutral `PrinterConnection` layer that attaches multiple live sources to one physical MakerVault printer without duplicating inventory.

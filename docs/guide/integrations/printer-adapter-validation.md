@@ -26,7 +26,7 @@ For each printer/firmware combination:
 5. If the printer has a material system, compare every reported slot with the physical unit.
 6. Start a small ordinary test print.
 7. Confirm filename, progress, elapsed/remaining time and layer counters where the adapter supports them.
-8. Pause/resume from the printer itself if desired and check that MakerVault observes the state change. MakerVault remains read-only.
+8. Pause/resume from the printer itself and check that MakerVault observes the state change. For sources with [optional controls](printer-controls.md), separately test the disabled-by-default opt-in, Pause, Resume and confirmed Cancel on a small print.
 9. Let the print finish or cancel it from the printer and confirm Print History records the correct terminal state.
 10. Return to idle and confirm MakerVault does not invent a second PrintJob.
 11. Use **Copy diagnostics** from the live-source card and review the JSON before sharing it with the MakerVault maintainer.
@@ -60,3 +60,5 @@ Diagnostics may contain the printer model/serial and active print filename, so r
 - **Elegoo/QIDI/Sovol/Snapmaker U1/Voron profiles:** reuse Moonraker and require representative manufacturer firmware validation.
 
 An adapter should only lose its experimental/community-validation label after successful real-hardware testing on representative firmware.
+
+Hardware testing still to do is tracked in [TODO #37](https://github.com/gavrd7/MakerVault/issues/37). K2 monitoring confirmation does not validate the new control commands. Validate control behaviour separately and record failures or firmware differences before promoting that capability.

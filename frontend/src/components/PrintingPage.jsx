@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { apiFetch } from "../api";
+import PrinterJobControls from "./PrinterJobControls";
 import { Badge, LoadingBlock, Modal } from "./Common";
 import ModelViewerModal, { isViewableModelFile } from "./ModelViewer";
 import { suggestNextVersion } from "./FileVersionModal";
@@ -7,6 +8,11 @@ import { suggestNextVersion } from "./FileVersionModal";
 function grams(value) {
   if (value == null) return "—";
   return `${Number(value).toFixed(0)} g`;
+}
+
+function recordedGrams(value) {
+  if (value == null) return "Not recorded";
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(Number(value)) + " g";
 }
 
 function formatDate(value) {
@@ -77,7 +83,7 @@ function liveTemperature(temp) {
   return actual + "° / " + target + "°";
 }
 
-function PrinterLiveSummary({ printer, onOpen }) {
+function PrinterLiveSummary({ printer, onOpen, canControl, onChanged }) {
   const connection = printer.live_status || (printer.live_connections || []).find(item => item.enabled);
   if (!connection) return null;
   const snapshot = connection.snapshot || {};
@@ -97,12 +103,15 @@ function PrinterLiveSummary({ printer, onOpen }) {
           <small>{job.file_name || connection.adapter_label || "Live printer source"}</small>
         </div>
       </div>
-      <button type="button" className="printerLiveOpen" onClick={onOpen}>Open live</button>
     </div>
     {showProgress && <div className="printerLiveProgressLine">
       <div className="printerLiveProgressTrack"><span style={{ width: pct + "%" }} /></div>
       <strong>{pct.toFixed(pct % 1 ? 1 : 0)}%</strong>
     </div>}
+    <div className="printerLiveActions">
+      <PrinterJobControls printer={printer} connection={connection} canControl={canControl} onChanged={onChanged} />
+      <button type="button" className="printerLiveOpen" onClick={onOpen}>Open live</button>
+    </div>
     <div className="printerLiveQuickStats">
       {liveNozzles(snapshot).map(([key, temp]) => <span key={key}><small>{liveNozzleLabel(snapshot, key)}</small><strong>{liveTemperature(temp)}</strong></span>)}
       {temps.bed?.actual_c != null && <span><small>Bed</small><strong>{liveTemperature(temps.bed)}</strong></span>}
@@ -140,6 +149,7 @@ function newestGeometryAnalysis(model) {
 export default function PrintingPage({ config, projects, searchTarget = null }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
+  const [sourceNotice, setSourceNotice] = useState("");
   const [modal, setModal] = useState("");
   const [manageModel, setManageModel] = useState(null);
   const [managePrinter, setManagePrinter] = useState(null);
@@ -185,6 +195,13 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
     }, 0);
     return () => window.clearTimeout(timer);
   }, [data, searchTarget?.token, searchTarget?.id]);
+
+  const [openedLiveTarget, setOpenedLiveTarget] = useState(null);
+  useEffect(() => {
+    if (!data || !searchTarget?.openLive || searchTarget.type !== "printers" || openedLiveTarget === searchTarget.token) return;
+    const printer = data.printers?.find(item => item.id === searchTarget.id);
+    if (printer) { setLivePrinter(printer); setOpenedLiveTarget(searchTarget.token); }
+  }, [data, searchTarget, openedLiveTarget]);
 
   async function saved() {
     setModal("");
@@ -274,6 +291,7 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
     </section>
 
     {error && <div className="error">{error}</div>}
+    {sourceNotice && <div className="notice printingSourceNotice" role="status"><span>{sourceNotice}</span><button type="button" aria-label="Dismiss confirmation" onClick={() => setSourceNotice("")}>×</button></div>}
 
     <div className="printingMetrics">
       <article><span>Models</span><strong>{summary.models || 0}</strong></article>
@@ -295,8 +313,8 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
       <div className="printingAnalyticsMetrics">
         <article><span>Successful</span><strong>{data.analytics.successful || 0}</strong><small>of {data.analytics.completed || 0} completed</small></article>
         <article><span>Print time</span><strong>{formatDurationMinutes(data.analytics.actual_minutes)}</strong><small>actual recorded time</small></article>
-        <article><span>Filament used</span><strong>{grams(data.analytics.filament_used_g)}</strong><small>plus {grams(data.analytics.waste_g)} waste</small></article>
-        <article><span>Material cost</span><strong>{formatMoney(data.analytics.material_cost, data.analytics.currency || config?.currency)}</strong><small>{data.analytics.foreign_cost_rows_excluded ? data.analytics.foreign_cost_rows_excluded + " other-currency row(s) excluded" : "recorded/estimated spool cost"}</small></article>
+        <article><span>Filament used</span><strong>{recordedGrams(data.analytics.filament_used_g)}</strong><small>{data.analytics.filament_used_g == null ? "No material usage recorded" : `${data.analytics.waste_g == null ? "Waste not recorded" : "plus " + recordedGrams(data.analytics.waste_g) + " waste"} · ${data.analytics.jobs_with_material_usage} of ${data.analytics.jobs} prints with usage${data.analytics.estimated_usage_jobs ? " · includes " + data.analytics.estimated_usage_jobs + " estimated" : ""}`}</small></article>
+        <article><span>Material cost</span><strong>{data.analytics.material_cost == null ? "Not recorded" : formatMoney(data.analytics.material_cost, data.analytics.currency || config?.currency)}</strong><small>{data.analytics.foreign_cost_rows_excluded ? data.analytics.foreign_cost_rows_excluded + " other-currency row(s) excluded" : "recorded/estimated spool cost"}</small></article>
       </div>
       {!!data.analytics.printers?.length && <div className="printingAnalyticsPrinters">
         {data.analytics.printers.slice(0, 6).map(printer => <div key={printer.printer_id}>
@@ -321,7 +339,7 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
 
     <section className="panel printingSection">
       <div className="panelHead"><div><h3>Printers &amp; loaded filament</h3><p>Filament slots are provider-neutral so CFS, AMS and later systems can use the same model.</p></div></div>
-      <div className="printingCards">
+      <div className="printingCards printingPrinterCards">
         {(data?.printers || []).map(printer => <article className={"printingCard printingPrinterCard" + (searchTarget?.type === "printers" && searchTarget.id === printer.id ? " searchTargetRow" : "")} id={"printer-search-target-" + printer.id} key={printer.id}>
           <div className="printingPrinterHeader">
             <div className="printingPrinterImage">
@@ -360,7 +378,7 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
               </small>}
             </div>
           </div>
-          <PrinterLiveSummary printer={printer} onOpen={() => setLivePrinter(printer)} />
+          <PrinterLiveSummary printer={printer} onOpen={() => setLivePrinter(printer)} canControl={canChangePrinter} onChanged={load} />
           <div className="printingSlotGrid">
             {printer.slots.filter(slot => slot.is_loaded).map(slot => <div className="printingSlot" key={slot.id}>
               <span className="printingSwatch" style={slot.color_hex ? { background: slot.color_hex } : undefined} />
@@ -397,7 +415,7 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
 
       <div className="panel printingSection">
         <div className="panelHead"><div><h3>Model library</h3><p>Showing the 5 most recently updated models.</p></div><button onClick={() => setWorkspaceView("models")}>View all {summary.models || 0}</button></div>
-        <div className="printingList">
+        <div className="printingList printingModelList">
           {recentModels.map(model => <article className="printingListRow printingModelRow" key={model.id}>
             <div><strong>{model.name}</strong><small>{model.project || "Standalone model"} · {model.revision_count} revision{model.revision_count === 1 ? "" : "s"}</small></div>
             <div className="printingBadges">{model.revisions.flatMap(r => r.assets).slice(0,3).map(asset => <Badge key={asset.id}>{asset.file.category_label}</Badge>)}</div>
@@ -417,7 +435,8 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
             <small>{job.printer} · {formatDate(job.created_at)}{job.actual_minutes ? " · " + formatDurationMinutes(job.actual_minutes) : ""}{job.history_source === "live_printer" ? " · Auto-tracked" : ""}</small>
           </div>
           <div className="printingRecentPrintStats">
-            {job.filament_used_g > 0 && <span>{grams(job.filament_used_g)} used{job.waste_g > 0 ? " · " + grams(job.waste_g) + " waste" : ""}</span>}
+            <span>{job.filament_used_g == null ? "Filament not recorded" : recordedGrams(job.filament_used_g) + (job.filament_usage_estimated ? " estimated" : " used")}{job.waste_g > 0 ? " · " + recordedGrams(job.waste_g) + " waste" : ""}</span>
+            {job.filament_usage_source && <small>{({ uploaded_gcode: "Uploaded G-code", printer_report: "Printer report", printer_gcode_metadata: "Printer G-code estimate", recorded: "Recorded usage" })[job.filament_usage_source] || job.filament_usage_source}</small>}
             {job.material_cost != null && <strong>{formatMoney(job.material_cost, config?.currency || "GBP")}</strong>}
           </div>
           <Badge tone={job.status === "success" ? "good" : job.status === "failed" ? "danger" : job.status === "printing" ? "accent" : "neutral"}>{job.status_label}</Badge>
@@ -444,6 +463,7 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
     {modal === "model" && <ModelModal projects={projects || []} canUpload={Boolean(config?.permissions?.add_file)} onClose={() => setModal("")} onSaved={saved} />}
     {modal === "print" && <PrintJobModal
       printers={data?.printers || []}
+      gcodeFiles={data?.gcode_files || []}
       spools={data?.spools || []}
       models={data?.models || []}
       projects={projects || []}
@@ -454,6 +474,11 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
     {livePrinter && <PrinterConnectionsModal
       printer={livePrinter}
       onClose={() => setLivePrinter(null)}
+      onAdded={async connection => {
+        setSourceNotice(`${connection.adapter_label} successfully added for ${livePrinter.name}. Open live to check the connection status.`);
+        setLivePrinter(null);
+        await load();
+      }}
       onChanged={async () => {
         const fresh = await load();
         const updated = fresh?.printers?.find(item => item.id === livePrinter.id);
@@ -648,7 +673,7 @@ function ModelLibraryPage({ models, files, printers, projects, canAddModel, canC
         <div><strong>{models.length} model{models.length === 1 ? "" : "s"}</strong><small>{rows.length !== models.length ? rows.length + " matching" : "Newest updated first"}</small></div>
         <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search model, project, description or tag…" />
       </div>
-      <div className="printingList">
+      <div className="printingList printingModelList">
         {rows.map(model => {
           const analysis = newestGeometryAnalysis(model);
           const dims = analysis?.dimensions_mm;
@@ -773,7 +798,7 @@ function LocationModal({ onClose, onSaved }) {
   </Modal>;
 }
 
-function PrinterConnectionsModal({ printer, onClose, onChanged }) {
+function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
   const [data, setData] = useState({ rows: [], adapters: [] });
   const [form, setForm] = useState({
     adapter: "moonraker",
@@ -791,7 +816,6 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
   const [notice, setNotice] = useState("");
 
   async function loadConnections() {
-    setError("");
     try {
       const result = await apiFetch("/api/printing/printers/" + printer.id + "/connections/");
       setData(result);
@@ -859,27 +883,19 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
 
   async function addConnection(event) {
     event.preventDefault();
+    if (busy) return;
     setBusy("add"); setError(""); setNotice("");
     try {
-      await apiFetch("/api/printing/printers/" + printer.id + "/connections/", {
+      const result = await apiFetch("/api/printing/printers/" + printer.id + "/connections/", {
         method: "POST",
         body: form,
       });
-      setForm(current => ({
-        ...current,
-        endpoint_url: "",
-        api_key: "",
-        access_code: "",
-        username: "",
-        password: "",
-        check_code: "",
-        serial: printer.serial_number || "",
-      }));
-      await loadConnections();
-      await onChanged();
-      setNotice("Live printer source added. Use Refresh to test and capture the first snapshot.");
+      await onAdded(result.item);
     } catch (err) {
-      setError(err.message);
+      const reasons = Object.entries(err.fields || {}).map(([field, messages]) =>
+        `${field.replaceAll("_", " ")}: ${Array.isArray(messages) ? messages.join(" ") : messages}`
+      ).join("; ");
+      setError("Could not add the live source: " + (reasons || err.message));
     } finally {
       setBusy("");
     }
@@ -911,6 +927,21 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
         "/api/printing/printers/" + printer.id + "/connections/" + connection.id + "/",
         { method: "PATCH", body: { enabled: !connection.enabled } },
       );
+      await loadConnections();
+      await onChanged();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function toggleControls(connection) {
+    setBusy(connection.id); setError(""); setNotice("");
+    try {
+      await apiFetch("/api/printing/printers/" + printer.id + "/connections/" + connection.id + "/", {
+        method: "PATCH", body: { controls_enabled: !connection.controls.enabled },
+      });
       await loadConnections();
       await onChanged();
     } catch (err) {
@@ -1003,10 +1034,10 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
     onClose={onClose}
     wide
   >
-    {error && <div className="formError">{error}</div>}
+    {error && <div className="formError" role="alert">{error}</div>}
     {notice && <div className="notice">{notice}</div>}
 
-    <div className="printingIntegrationGrid">
+    <div className="printingIntegrationGrid printerLiveSources">
       {(data.rows || []).map(connection => {
         const snapshot = connection.snapshot || {};
         const pct = progress(snapshot);
@@ -1065,9 +1096,17 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
           </div>
           {snapshot.warnings?.map((warning, index) => <small className="integrationError" key={"warning-" + index}>{warning}</small>)}
           {connection.validation_label && <small>{connection.validation_label}{connection.protocol ? " · " + connection.protocol : ""}</small>}
-          <small>Capabilities: {Object.entries(connection.capabilities || {}).filter(([, enabled]) => enabled).map(([key]) => key.replaceAll("_", " ")).join(", ") || "Not reported yet"}</small>
+          <div className="printerLiveFeatures" aria-label="Live data features">
+            {[["job", "Job"], ["progress", "Progress"], ["temperatures", "Temperatures"], ["materials", "Loaded filament"]].filter(([key]) => connection.capabilities?.[key]).map(([key, label]) => <Badge key={key}>{label}</Badge>)}
+          </div>
+          {connection.camera?.reported && <small className="printerCameraNote">Camera reported by printer · camera feed is not available in MakerVault for this source.</small>}
           <small>Last seen: {connection.last_seen_at ? formatDate(connection.last_seen_at) : "Never"}</small>
           {connection.last_error && <small className="integrationError">{connection.last_error}</small>}
+          {connection.controls?.supported && data.can_control && <div className="settingsCallout printerControlsSettings">
+            <label className="printerControlsToggle"><input type="checkbox" checked={connection.controls.enabled} disabled={Boolean(busy)} onChange={() => toggleControls(connection)} /><span>Allow Pause, Resume and Cancel</span></label>
+            <small>{connection.controls.enabled ? "Controls enabled for this source. Actions require a current active job." : "Read-only monitoring. Enable controls for this source to act on a print."}</small>
+            <PrinterJobControls printer={printer} connection={connection} canControl={data.can_control} disabled={Boolean(busy)} onChanged={async () => { await loadConnections(); await onChanged(); }} />
+          </div>}
           <div className="settingsActions compact">
             <button type="button" disabled={busy === connection.id || !connection.enabled || !connection.supported} onClick={() => refreshConnection(connection)}>{busy === connection.id ? "Working…" : "Refresh"}</button>
             <button type="button" onClick={() => copyDiagnostics(connection)}>Copy diagnostics</button>
@@ -2442,7 +2481,7 @@ function automaticUsageCost(row, spools, currency) {
   return gramsTotal * Number(spool.cost_per_g);
 }
 
-function PrintJobModal({ printers, spools, models, projects, currency, onClose, onSaved }) {
+function PrintJobModal({ gcodeFiles = [], printers, spools, models, projects, currency, onClose, onSaved }) {
   const revisionOptions = models.flatMap(model =>
     model.revisions.map(revision => ({
       id: revision.id,
@@ -2453,6 +2492,7 @@ function PrintJobModal({ printers, spools, models, projects, currency, onClose, 
   const [form, setForm] = useState({
     printer_id: printers[0]?.id || "",
     model_revision_id: "",
+    gcode_file_id: "",
     project_id: "",
     status: "success",
     quantity: 1,
@@ -2493,7 +2533,7 @@ function PrintJobModal({ printers, spools, models, projects, currency, onClose, 
     setBusy(true); setError("");
     try {
       const material_usages = usages
-        .filter(row => row.spool_id || row.used_g || row.waste_g || row.material_cost)
+        .filter(row => ["used_g", "waste_g", "material_cost"].some(key => row[key] !== "" && row[key] != null))
         .map(row => ({
           ...row,
           used_g: row.used_g || 0,
@@ -2535,6 +2575,11 @@ function PrintJobModal({ printers, spools, models, projects, currency, onClose, 
         <option value="">No project</option>
         {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
       </select></label>
+
+      <label className="full">Uploaded G-code estimate (optional)<select value={form.gcode_file_id} onChange={e => set("gcode_file_id", e.target.value)}>
+        <option value="">No G-code estimate</option>
+        {gcodeFiles.map(file => <option key={file.id} value={file.id}>{file.filename}</option>)}
+      </select><small>Upload plain .gcode through Files first. Completed prints can use its explicit gram estimate; entered material usage takes precedence. Estimates do not deduct spool stock.</small></label>
 
       <label>Quantity<input type="number" min="1" step="1" value={form.quantity} onChange={e => set("quantity", e.target.value)} /></label>
       <label>Actual duration (min)<input type="number" min="1" step="1" value={form.actual_minutes} onChange={e => set("actual_minutes", e.target.value)} /></label>
