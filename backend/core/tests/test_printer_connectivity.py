@@ -5,8 +5,9 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
-from core.models import Printer, PrinterConnection
+from core.models import PrintJob, Printer, PrinterConnection
 from core.tasks import live_printer_connections_tick
+from core.live_print_jobs import sync_print_job_from_snapshot
 from core.printer_connectivity import (
     PrinterConnectionError,
     adapter_catalogue,
@@ -107,6 +108,115 @@ class PrinterConnectivityAdapterTests(TestCase):
         self.assertFalse(rows["bambu_local"]["supported"])
         self.assertTrue(rows["bambu_local"]["experimental"])
         self.assertTrue(rows["voron"]["experimental"])
+
+
+class LivePrintJobMappingTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username="live-job-owner",
+            email="live-job@example.com",
+            password="test-password",
+        )
+        self.printer = Printer.objects.create(
+            owner=self.user,
+            name="Live printer",
+            model="Test",
+        )
+        self.moonraker = PrinterConnection.objects.create(
+            printer=self.printer,
+            adapter="moonraker",
+            endpoint_url="http://printer.local:7125",
+            status="connected",
+        )
+
+    def snapshot(self, state="printing", filename="part.gcode", progress=25, elapsed=300, remaining=900):
+        return {
+            "adapter": "moonraker",
+            "online": True,
+            "state": state,
+            "state_label": state.title(),
+            "job": {
+                "file_name": filename,
+                "progress": progress,
+                "elapsed_seconds": elapsed,
+                "remaining_seconds": remaining,
+            },
+            "temperatures": {},
+            "warnings": [],
+            "materials": [],
+        }
+
+    def test_printing_snapshot_creates_one_monitored_job(self):
+        result = sync_print_job_from_snapshot(self.moonraker, self.snapshot())
+
+        self.assertEqual(result["action"], "created")
+        job = PrintJob.objects.get()
+        self.assertEqual(job.status, "printing")
+        self.assertEqual(job.printer_id, self.printer.id)
+        self.assertEqual(job.estimated_minutes, 20)
+        meta = job.settings["live_monitor"]
+        self.assertEqual(meta["filename"], "part.gcode")
+        self.assertEqual(meta["last_progress"], 25)
+        self.assertEqual(meta["source"], "live_printer")
+        self.assertEqual(meta["sources"][0]["adapter"], "moonraker")
+
+    def test_second_adapter_converges_on_same_active_job(self):
+        first = sync_print_job_from_snapshot(self.moonraker, self.snapshot())
+        octoprint = PrinterConnection.objects.create(
+            printer=self.printer,
+            adapter="octoprint",
+            endpoint_url="http://printer.local",
+            status="connected",
+        )
+
+        second = sync_print_job_from_snapshot(
+            octoprint,
+            self.snapshot(progress=40, elapsed=480, remaining=720),
+        )
+
+        self.assertEqual(first["action"], "created")
+        self.assertEqual(second["action"], "updated")
+        self.assertEqual(PrintJob.objects.count(), 1)
+        job = PrintJob.objects.get()
+        self.assertEqual(len(job.settings["live_monitor"]["sources"]), 2)
+        self.assertEqual(job.settings["live_monitor"]["last_progress"], 40)
+
+    def test_terminal_snapshot_completes_active_job(self):
+        sync_print_job_from_snapshot(self.moonraker, self.snapshot())
+        result = sync_print_job_from_snapshot(
+            self.moonraker,
+            self.snapshot(state="complete", progress=100, elapsed=1200, remaining=0),
+        )
+
+        self.assertEqual(result["action"], "completed")
+        job = PrintJob.objects.get()
+        self.assertEqual(job.status, "success")
+        self.assertEqual(job.actual_minutes, 20)
+        self.assertEqual(job.settings["live_monitor"]["last_state"], "complete")
+
+    def test_missing_filename_does_not_create_automatic_job(self):
+        result = sync_print_job_from_snapshot(
+            self.moonraker,
+            self.snapshot(filename=""),
+        )
+
+        self.assertEqual(result["action"], "none")
+        self.assertEqual(result["reason"], "missing-filename")
+        self.assertFalse(PrintJob.objects.exists())
+
+    def test_idle_snapshot_does_not_imply_success(self):
+        sync_print_job_from_snapshot(self.moonraker, self.snapshot())
+        result = sync_print_job_from_snapshot(
+            self.moonraker,
+            self.snapshot(state="idle", progress=None, elapsed=None, remaining=None),
+        )
+
+        self.assertEqual(result["action"], "none")
+        job = PrintJob.objects.get()
+        self.assertEqual(job.status, "printing")
+
+
 
 
 class PrinterConnectivityApiTests(TestCase):
