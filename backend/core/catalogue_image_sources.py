@@ -1265,7 +1265,6 @@ def run_catalogue_image_seed(
                             force_retry
                             or (
                                 isinstance(obj, BoardModel)
-                                and _is_computer_board(obj)
                                 and metadata.get("auto_image_attempt_version") != IMAGE_SEED_VERSION
                             )
                         )
