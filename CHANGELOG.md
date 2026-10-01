@@ -7,6 +7,8 @@
 - Added owner-scoped live-connection CRUD/refresh APIs, redacted API-key handling, configurable 10–3600 second polling metadata and explicit adapter capability reporting.
 - Added a printer Live monitoring workspace in the 3D Printing UI with source setup, connection testing/refresh, status/temperature/job display and read-only-first capability messaging.
 - Added explicit experimental placeholders for Creality local, Bambu Lab, Anycubic, FlashForge, Prusa, Elegoo, QIDI, Sovol, Snapmaker and Voron/community adapter families so unvalidated hardware support is not presented as complete.
+- Added a lightweight 10-second Celery scheduler that respects each live connection's own 10–3600 second poll interval, reserves due polls before queueing and ignores inactive printers or unimplemented adapters.
+- Added conservative automatic PrintJob lifecycle mapping: a live source creates a job only when it reports an active print with a filename, multiple adapters converge on the same physical printer/job, explicit terminal states complete/cancel/fail the record, and idle/offline never imply success.
 
 ## v0.7.2 — 2026-10-01
 
