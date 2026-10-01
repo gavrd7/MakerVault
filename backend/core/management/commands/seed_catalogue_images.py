@@ -67,6 +67,8 @@ class Command(BaseCommand):
         if result.get("failures"):
             self.stdout.write("  sample failures:")
             for item in result["failures"][:10]:
+                variant = item.get("variant")
+                variant_text = f" [{variant}]" if variant and variant != "base" else ""
                 self.stdout.write(
-                    f"    - {item['kind']} {item['name']} [{item['variant']}]: {item['reason']}"
+                    f"    - {item['kind']} {item['name']}{variant_text}: {item['reason']}"
                 )
