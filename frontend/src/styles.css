@@ -2198,6 +2198,9 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
 .printingIntegrationGrid.printerLiveSources{grid-template-columns:minmax(0,1fr)}
 .printerLiveSources>article,.printerLiveSources .printingLivePanel{min-width:0;grid-template-columns:minmax(0,1fr)}
 .printerLiveSources>article>small{overflow-wrap:anywhere}
+.printerLiveSources .settingsIntegrationHead{flex-wrap:wrap}
+.printerLiveSources .printingLiveMetrics span{font-size:10px}
+.printerLiveSources .printingLiveMetrics strong{font-size:13px}
 .printerLiveState,.printerLiveState>div{min-width:0}
 .printerLiveState small{max-width:100%;font-size:12px}
 .printerLiveState strong{font-size:14px}
@@ -2223,7 +2226,7 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
 .dashboardLivePrinterHead>div,.dashboardLivePrinterMeta>span{min-width:0}
 .dashboardLivePrinterMeta>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @container (max-width:360px){
-  .printingPrinterHeader{grid-template-columns:64px minmax(0,1fr);gap:10px}
-  .printingPrinterImage{width:64px;height:64px}
+  .printingPrinterHeader{grid-template-columns:minmax(0,1fr)!important;gap:10px}
+  .printingPrinterImage{width:64px!important;min-width:64px!important;height:64px!important}
   .printingPrinterHeader .printingPrinterActions{flex-wrap:wrap}
 }

@@ -134,6 +134,7 @@ This file tracks completed MakerVault milestones and the planned path toward a s
 - Prefer direct/local connections where available; cloud/service integrations remain optional.
 - Add automatic creation/update/completion of MakerVault PrintJob records from live printer activity where confidence is sufficient.
 - Keep polling/subscription frequency configurable and avoid making the core app dependent on any single manufacturer ecosystem.
+- TODO: implement and hardware-test viewable camera streams per adapter, including Creality/K2. A camera capability or WebRTC flag alone does not provide a browser feed; the live UI must explicitly identify unavailable feeds until stream support is implemented.
 
 #### Core printer adapters
 

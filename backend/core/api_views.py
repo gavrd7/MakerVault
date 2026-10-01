@@ -3822,6 +3822,15 @@ def _serialise_printer_connection(connection):
     safe_config["access_code_configured"] = bool(str((connection.config or {}).get("access_code") or "").strip())
     safe_config["password_configured"] = bool(str((connection.config or {}).get("password") or "").strip())
     safe_config["check_code_configured"] = bool(str((connection.config or {}).get("check_code") or "").strip())
+    capabilities = dict(connection.capabilities or (definition.capabilities if definition else {}))
+    snapshot = connection.last_snapshot or {}
+    metadata = snapshot.get("source_metadata") or {}
+    camera_reported = bool(
+        metadata.get("camera_available") or metadata.get("video_available")
+        or metadata.get("webrtc_support") or snapshot.get("camera_url")
+    )
+    # Telemetry flags and RTSP URLs are camera metadata, not a browser feed.
+    capabilities["camera"] = False
     return {
         "id": str(connection.id),
         "printer_id": str(connection.printer_id),
@@ -3842,8 +3851,9 @@ def _serialise_printer_connection(connection):
         "validation_label": validation.get("validation_label", ""),
         "protocol": validation.get("protocol", ""),
         "compatibility_hint": validation.get("compatibility_hint", ""),
-        "capabilities": connection.capabilities or (dict(definition.capabilities) if definition else {}),
-        "snapshot": connection.last_snapshot or {},
+        "capabilities": capabilities,
+        "camera": {"reported": camera_reported, "viewable": False},
+        "snapshot": snapshot,
         "last_checked_at": connection.last_checked_at.isoformat() if connection.last_checked_at else None,
         "last_seen_at": connection.last_seen_at.isoformat() if connection.last_seen_at else None,
         "last_error": connection.last_error,

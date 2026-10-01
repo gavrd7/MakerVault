@@ -1093,7 +1093,7 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
           <div className="printerLiveFeatures" aria-label="Live data features">
             {[["job", "Job"], ["progress", "Progress"], ["temperatures", "Temperatures"], ["materials", "Loaded filament"]].filter(([key]) => connection.capabilities?.[key]).map(([key, label]) => <Badge key={key}>{label}</Badge>)}
           </div>
-          {connection.capabilities?.camera && <small className="printerCameraNote">Camera reported by printer · camera feed is not available in MakerVault for this source.</small>}
+          {connection.camera?.reported && <small className="printerCameraNote">Camera reported by printer · camera feed is not available in MakerVault for this source.</small>}
           <small>Last seen: {connection.last_seen_at ? formatDate(connection.last_seen_at) : "Never"}</small>
           {connection.last_error && <small className="integrationError">{connection.last_error}</small>}
           {connection.controls?.supported && data.can_control && <div className="settingsCallout printerControlsSettings">

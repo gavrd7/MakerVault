@@ -85,6 +85,20 @@ class PrinterControlApiTests(TestCase):
         row = self.client.get("/api/dashboard/").json()["live_printers"][0]
         self.assertEqual(row["controls"]["actions"], [])
 
+    def test_camera_metadata_does_not_advertise_a_viewable_feed(self):
+        from core.api_views import _serialise_printer_connection
+        self.connection.capabilities = {"camera": True, "job": True}
+        self.connection.last_snapshot = {**self.snapshot, "source_metadata": {"webrtc_support": True}}
+        row = _serialise_printer_connection(self.connection)
+        self.assertTrue(row["camera"]["reported"])
+        self.assertFalse(row["camera"]["viewable"])
+        self.assertFalse(row["capabilities"]["camera"])
+        self.assertTrue(self.connection.capabilities["camera"])
+        self.connection.last_snapshot = {**self.snapshot, "camera_url": "rtsp://printer.local/live"}
+        self.assertFalse(_serialise_printer_connection(self.connection)["camera"]["viewable"])
+        self.connection.last_snapshot = self.snapshot
+        self.assertFalse(_serialise_printer_connection(self.connection)["camera"]["reported"])
+
     def test_replay_does_not_send_again(self):
         self.assertEqual(self.post().status_code, 202)
         self.assertEqual(self.post().status_code, 202)

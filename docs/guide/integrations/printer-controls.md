@@ -24,6 +24,10 @@ Upstream capability labels do not guarantee that MakerVault implements a control
 
 You must own the printer and have permission to edit printers. Viewer accounts cannot enable or send controls. Disable the checkbox to return the source to read-only monitoring.
 
+After enabling a source, compact controls also appear beside the progress summary on the dashboard and 3D Printing page: two bars pause, the play triangle resumes a paused print, and the square cancels after confirmation. Unavailable actions are disabled. **Open live** on the dashboard opens that printer's live monitor directly.
+
+Camera detection is separate from streaming support. A camera or WebRTC flag in telemetry does not supply a viewable feed. Sources with camera metadata show an explicit feed-unavailable note until camera streaming is implemented and tested.
+
 ## How state checks work
 
 Actions require a connected source with an active named job and a status observed within the last 60 seconds. MakerVault refreshes the source again before sending the command. If the job or state changed, the request is rejected and you must refresh and confirm again. Power-loss recovery on Creality is handled from the printer itself.
