@@ -1,6 +1,6 @@
 # MakerVault roadmap
 
-_Last updated: 30 September 2026_
+_Last updated: 1 October 2026_
 
 This file tracks completed MakerVault milestones and the planned path toward a stable v1 release. The `main` branch is the deployable source of truth.
 
@@ -114,7 +114,7 @@ This file tracks completed MakerVault milestones and the planned path toward a s
 
 ### v0.7.2 — Maker Tags & interactive wiring
 
-**In development:** Maker Tags identity, assignment/history APIs and the responsive management/scan UI are implemented. The first structured interactive wiring workspace is also in place with draggable nodes, pin-to-pin connections and cautious validation; JSON/SVG export and scan-to-target navigation are also implemented; the remaining milestone work is refinement and live-install validation.
+**In development — final validation:** Maker Tags identity, assignment/history APIs and the responsive management/scan UI are implemented. The structured interactive wiring workspace is in place with draggable nodes, catalogue-aware pin selection, pin-to-pin connections, cautious validation, JSON/SVG export, standalone Wiring Lab support and scan-to-target navigation. The accompanying catalogue/image-quality pass is also complete apart from two deliberately unresolved Orange Pi source-fetch failures. Remaining work is final live-install smoke testing and full CI before merge.
 
 **Goal:** connect physical objects to MakerVault and add a maker-friendly structured wiring workspace.
 
