@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import math
+import re
 from dataclasses import dataclass
 from typing import Callable
 from urllib.parse import urlparse
@@ -524,7 +525,7 @@ def poll_moonraker(endpoint_url: str, config: dict | None = None) -> dict:
 
     server = _get(base + "/server/info", headers=headers)
     objects = _get(
-        base + "/printer/objects/query?print_stats&display_status&virtual_sdcard&extruder&heater_bed",
+        base + "/printer/objects/query?print_stats&display_status&virtual_sdcard&extruder&heater_bed&heaters&toolhead",
         headers=headers,
     )
     result = objects.get("result") or {}
@@ -535,6 +536,36 @@ def poll_moonraker(endpoint_url: str, config: dict | None = None) -> dict:
     virtual_sd = status.get("virtual_sdcard") or {}
     extruder = status.get("extruder") or {}
     bed = status.get("heater_bed") or {}
+
+    # Discover actual heaters, rather than guessing tool count from the model.
+    heaters = status.get("heaters")
+    available = heaters.get("available_heaters", []) if isinstance(heaters, dict) else []
+    available = available if isinstance(available, list) else []
+    extra_tools = sorted({
+        name for name in available
+        if isinstance(name, str) and re.fullmatch(r"extruder[1-9][0-9]?", name)
+    }, key=lambda name: int(name[8:]))[:32]
+    temperatures = {
+        "tool0": _temperature(extruder.get("temperature"), extruder.get("target")),
+        "bed": _temperature(bed.get("temperature"), bed.get("target")),
+    }
+    tool_names = {"tool0": "extruder"} if isinstance(status.get("extruder"), dict) else {}
+    tool_warnings = []
+    if extra_tools:
+        try:
+            extra = _get(base + "/printer/objects/query?" + "&".join(extra_tools), headers=headers)
+            extra_status = (extra.get("result") or {}).get("status") or {}
+            for name in extra_tools:
+                value = extra_status.get(name)
+                if isinstance(value, dict):
+                    key = "tool" + name[8:]
+                    temperatures[key] = _temperature(value.get("temperature"), value.get("target"))
+                    tool_names[key] = name
+        except PrinterConnectionError:
+            tool_warnings.append("Additional nozzle temperatures are temporarily unavailable.")
+    toolhead = status.get("toolhead")
+    active_extruder = toolhead.get("extruder") if isinstance(toolhead, dict) else None
+    active_tool = next((key for key, name in tool_names.items() if name == active_extruder), None)
 
     state = str(print_stats.get("state") or "").strip().lower() or "unknown"
     state_map = {
@@ -570,18 +601,17 @@ def poll_moonraker(endpoint_url: str, config: dict | None = None) -> dict:
             "current_layer": print_info.get("current_layer"),
             "total_layers": print_info.get("total_layer"),
         },
-        "temperatures": {
-            "tool0": _temperature(extruder.get("temperature"), extruder.get("target")),
-            "bed": _temperature(bed.get("temperature"), bed.get("target")),
-        },
+        "temperatures": temperatures,
         "warnings": [
             str(item)
             for item in ((server.get("result") or {}).get("warnings") or [])
             if str(item).strip()
-        ],
+        ] + tool_warnings,
         "source_metadata": {
             "klippy_state": str((server.get("result") or {}).get("klippy_state") or ""),
             "moonraker_version": str((server.get("result") or {}).get("moonraker_version") or ""),
+            "tool_names": tool_names,
+            "active_tool": active_tool,
         },
         "captured_at": timezone.now().isoformat(),
     })

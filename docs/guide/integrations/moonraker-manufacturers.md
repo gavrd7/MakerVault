@@ -40,7 +40,8 @@ Where the printer's Moonraker build exposes it, MakerVault reads:
 - print progress
 - elapsed/estimated remaining time
 - current/total layer metadata when present
-- nozzle and bed temperatures
+- nozzle and bed temperatures, including additional standard Klipper extruders when reported
+- the active nozzle when Klipper identifies it
 - Moonraker/Klipper warnings
 
 The v0.7.3 live layer remains read-only even when Moonraker advertises pause/resume/cancel or macro capabilities.
@@ -56,3 +57,14 @@ In particular:
 - Snapmaker 2.0/A-series models are not treated as U1 Moonraker printers merely because the manufacturer is Snapmaker.
 
 If a model is not automatically preferred, the generic **Moonraker / Klipper** source remains available for users who know their printer exposes it.
+
+## Multiple nozzles
+
+MakerVault discovers standard `extruder`, `extruder1`, `extruder2` and subsequent numbered heaters from Klipper's `heaters.available_heaters` response. Live cards show each reported nozzle separately and mark the active nozzle from `toolhead.extruder`. Tool numbering is preserved even when an intermediate tool is absent. Custom-named tool systems are not inferred.
+
+This extends the shared adapter for compatible Snapmaker, Voron and other multi-extruder installations. It does not create material slots or infer which physical spool is loaded. Manufacturer/model support remains experimental until hardware validation.
+
+If additional nozzle readings temporarily fail, the main print status and first-nozzle/bed readings remain available with a warning.
+
+Protocol references: [Moonraker object queries](https://moonraker.readthedocs.io/en/latest/external_api/printer/#query-printer-object-status) and [Klipper status fields](https://www.klipper3d.org/Status_Reference.html#heaters).
+

@@ -58,6 +58,17 @@ function shouldShowLiveProgress(snapshot) {
   );
 }
 
+function liveNozzles(snapshot) {
+  return Object.entries(snapshot.temperatures || {})
+    .filter(([key, value]) => /^tool\d+$/.test(key) && value?.actual_c != null)
+    .sort(([a], [b]) => Number(a.slice(4)) - Number(b.slice(4)));
+}
+
+function liveNozzleLabel(snapshot, key) {
+  const label = liveNozzles(snapshot).length > 1 ? `Nozzle ${Number(key.slice(4)) + 1}` : "Nozzle";
+  return snapshot.source_metadata?.active_tool === key ? `${label} · active` : label;
+}
+
 function liveTemperature(temp) {
   if (temp?.actual_c == null) return "—";
   const actual = Number(temp.actual_c).toFixed(1).replace(".0", "");
@@ -93,7 +104,7 @@ function PrinterLiveSummary({ printer, onOpen }) {
       <strong>{pct.toFixed(pct % 1 ? 1 : 0)}%</strong>
     </div>}
     <div className="printerLiveQuickStats">
-      {temps.tool0?.actual_c != null && <span><small>Nozzle</small><strong>{liveTemperature(temps.tool0)}</strong></span>}
+      {liveNozzles(snapshot).map(([key, temp]) => <span key={key}><small>{liveNozzleLabel(snapshot, key)}</small><strong>{liveTemperature(temp)}</strong></span>)}
       {temps.bed?.actual_c != null && <span><small>Bed</small><strong>{liveTemperature(temps.bed)}</strong></span>}
       {temps.chamber?.actual_c != null && <span><small>Chamber</small><strong>{liveTemperature(temps.chamber)}</strong></span>}
       {(job.current_layer != null || job.total_layers != null) && <span><small>Layer</small><strong>{job.current_layer ?? "—"} / {job.total_layers ?? "—"}</strong></span>}
@@ -1026,7 +1037,7 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
             </div>
             {showProgress && <div className="printingLiveProgress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={pct}><span style={{ width: pct + "%" }} /></div>}
             <div className="printingLiveMetrics">
-              {snapshot.temperatures?.tool0?.actual_c != null && <div><span>Nozzle</span><strong>{liveTemperature(snapshot.temperatures.tool0)}</strong></div>}
+              {liveNozzles(snapshot).map(([key, temp]) => <div key={key}><span>{liveNozzleLabel(snapshot, key)}</span><strong>{liveTemperature(temp)}</strong></div>)}
               {snapshot.temperatures?.bed?.actual_c != null && <div><span>Bed</span><strong>{liveTemperature(snapshot.temperatures.bed)}</strong></div>}
               {snapshot.temperatures?.chamber?.actual_c != null && <div><span>Chamber</span><strong>{liveTemperature(snapshot.temperatures.chamber)}</strong></div>}
               {snapshot.job?.elapsed_seconds != null && <div><span>Elapsed</span><strong>{Math.round(snapshot.job.elapsed_seconds / 60)} min</strong></div>}
