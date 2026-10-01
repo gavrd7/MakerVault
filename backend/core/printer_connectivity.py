@@ -16,9 +16,11 @@ from .live_print_jobs import sync_print_job_from_snapshot
 from .live_material_slots import sync_live_material_slots
 from .manufacturer_printer_adapters import (
     ManufacturerAdapterError,
+    normalise_anycubic_endpoint,
     normalise_bambu_endpoint,
     normalise_flashforge_endpoint,
     normalise_prusalink_endpoint,
+    poll_anycubic_local,
     poll_bambu_local,
     poll_flashforge,
     poll_prusalink,
@@ -125,7 +127,21 @@ ADAPTERS = {
             "cancel": True,
         },
     ),
-    "anycubic": AdapterDefinition("anycubic", "Anycubic", False, True, True, dict(COMMON_MONITORING)),
+    "anycubic": AdapterDefinition(
+        "anycubic",
+        "Anycubic LAN",
+        True,
+        True,
+        True,
+        {
+            **COMMON_MONITORING,
+            "camera": True,
+            "materials": True,
+            "pause": True,
+            "resume": True,
+            "cancel": True,
+        },
+    ),
     "flashforge": AdapterDefinition(
         "flashforge",
         "FlashForge local",
@@ -245,6 +261,11 @@ def normalise_connection_endpoint(adapter: str, raw_url: str) -> str:
     if adapter == "flashforge":
         try:
             return normalise_flashforge_endpoint(raw_url)
+        except ManufacturerAdapterError as exc:
+            raise PrinterConnectionError(str(exc)) from exc
+    if adapter == "anycubic":
+        try:
+            return normalise_anycubic_endpoint(raw_url)
         except ManufacturerAdapterError as exc:
             raise PrinterConnectionError(str(exc)) from exc
     return normalise_printer_endpoint(raw_url)
@@ -777,6 +798,7 @@ POLLERS: dict[str, Callable[[str, dict | None], dict]] = {
     "bambu_local": poll_bambu_local,
     "prusa": poll_prusalink,
     "flashforge": poll_flashforge,
+    "anycubic": poll_anycubic_local,
 }
 
 
@@ -839,6 +861,11 @@ def poll_connection(connection) -> dict:
         capabilities["camera"] = bool(metadata.get("camera_available"))
         capabilities["materials"] = bool(
             metadata.get("material_station_connected") or snapshot.get("materials")
+        )
+    elif connection.adapter == "anycubic":
+        capabilities["camera"] = bool(metadata.get("camera_available"))
+        capabilities["materials"] = bool(
+            metadata.get("ace_connected") or snapshot.get("materials")
         )
     connection.capabilities = capabilities
     connection.last_snapshot = snapshot
