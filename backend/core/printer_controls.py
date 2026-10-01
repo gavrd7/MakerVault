@@ -114,6 +114,8 @@ def _receipt(command):
 
 
 def execute_control(connection, user, payload):
+    if not isinstance(payload, dict):
+        raise PrinterControlError("Request body must be a JSON object.", 400)
     action = payload.get("action")
     expected = payload.get("job_token")
     try:

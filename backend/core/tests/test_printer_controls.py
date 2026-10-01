@@ -103,6 +103,19 @@ class PrinterControlApiTests(TestCase):
         self.assertEqual(self.post(request_id="bad-id").status_code, 400)
         self.send_mock.assert_not_called()
 
+    def test_non_object_json_is_rejected(self):
+        response = self.client.post(self.url, "[]", content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+        self.send_mock.assert_not_called()
+
+    def test_fresh_paused_job_can_resume(self):
+        self.snapshot = {**self.snapshot, "state": "paused"}
+        self.connection.last_snapshot = self.snapshot
+        self.connection.save()
+        response = self.post(action="resume", job_token=job_token(self.snapshot))
+        self.assertEqual(response.status_code, 202, response.content)
+        self.send_mock.assert_called_once()
+
     def test_stale_disabled_and_unsupported_sources_are_rejected(self):
         for changes in (
             {"last_seen_at": timezone.now() - timedelta(seconds=61)},
