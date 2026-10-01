@@ -7,6 +7,8 @@ from urllib.parse import urlparse
 import requests
 from django.utils import timezone
 
+from .live_print_jobs import sync_print_job_from_snapshot
+
 
 class PrinterConnectionError(RuntimeError):
     pass
@@ -369,6 +371,12 @@ def poll_connection(connection) -> dict:
         connection.last_checked_at = timezone.now()
         connection.save(update_fields=["status", "last_error", "last_checked_at", "updated_at"])
         raise
+
+    job_result = sync_print_job_from_snapshot(connection, snapshot)
+    snapshot = {
+        **snapshot,
+        "maker_vault_job": job_result,
+    }
 
     now = timezone.now()
     connection.status = "connected"
