@@ -744,9 +744,17 @@
 .printingSection{overflow:hidden}
 .printingCards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:16px}
 .printingCard{border:1px solid #29313c;border-radius:12px;padding:14px;background:#0d131a}
-.printingCardHead{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.printingCardHead{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}
 .printingCardHead strong,.printingCardHead small{display:block}
 .printingCardHead small{color:#7f8a9c;margin-top:3px}
+.printingPrinterIdentity{min-width:0;flex:1}
+.printingPrinterControls{display:grid;justify-items:end;gap:9px;min-width:240px}
+.printingPrinterStatus{display:flex;justify-content:flex-end;align-items:center;gap:6px;flex-wrap:wrap}
+.printingPrinterStatus .badge{min-height:28px;padding:5px 10px;font-size:10px;font-weight:700;letter-spacing:.01em;cursor:default}
+.printingPrinterActions{display:flex;justify-content:flex-end;gap:8px;width:100%}
+.printingPrinterAction{min-height:36px;padding:8px 13px;border-radius:9px;font-size:12px;font-weight:750}
+.printingPrinterActionLive{border-color:#51488b;background:#201d3a;color:#d5ceff}
+.printingPrinterActionLive:hover{border-color:#7258e8;background:#2a2550;color:#fff}
 .printingPrinterHeader{display:grid;grid-template-columns:96px minmax(0,1fr);gap:14px;align-items:center}
 .printingPrinterHeaderMain{min-width:0}
 .printingPrinterImage{display:flex;align-items:center;justify-content:center;width:96px;height:82px;overflow:hidden;border:1px solid #2b3644;border-radius:10px;background:#111821}
@@ -756,6 +764,11 @@
 @media(max-width:620px){
   .printingPrinterHeader{grid-template-columns:70px minmax(0,1fr)}
   .printingPrinterImage{width:70px;height:66px}
+  .printingCardHead{display:grid;gap:10px}
+  .printingPrinterControls{justify-items:stretch;min-width:0}
+  .printingPrinterStatus{justify-content:flex-start}
+  .printingPrinterActions{display:grid;grid-template-columns:1fr 1fr}
+  .printingPrinterAction{width:100%}
 }
 .printingSlotGrid{display:grid;gap:8px;margin-top:12px}
 .printingSlot{display:grid;grid-template-columns:18px minmax(0,1fr);gap:9px;align-items:start;padding:9px;border:1px solid #252f3b;border-radius:9px;background:#101821}
@@ -777,10 +790,112 @@
 .printingModelRow>div:first-child{min-width:0;flex:1}
 .printingBadges{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
 .printingEmptyInline{padding:18px;color:#7f8a9c}
-.printingIntegrationGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:16px}
+.printingIntegrationGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(430px,100%),1fr));gap:12px;padding:16px}
 .printingIntegrationGrid article{display:grid;gap:6px;border:1px solid #29313c;border-radius:11px;padding:12px;background:#0d131a}
 .printingIntegrationGrid span{color:#8793a5;font-size:12px;line-height:1.4}
 .printingIntegrationGrid .badge{justify-self:start}
+.printingLiveProgress{height:7px;overflow:hidden;border:1px solid #344052;border-radius:999px;background:#10161e;margin:8px 0 3px}
+.printingLiveProgress>span{display:block;height:100%;min-width:2px;background:#8069ee;border-radius:inherit;transition:width .2s ease}
+.printingLiveMaterials{display:grid;gap:6px;margin-top:6px}
+.printingLiveMaterial{display:grid;grid-template-columns:18px minmax(70px,.7fr) minmax(100px,1fr);gap:5px 8px;align-items:center;padding:7px 8px;border:1px solid #2a3442;border-radius:8px;background:#0c1219}
+.printingLiveMaterial .printingSwatch{grid-row:1/3}
+.printingLiveMaterial strong{font-size:11px}
+.printingLiveMaterial small{grid-column:2/4;margin:0;color:#7f8a9c;font-size:10px}
+/* v0.7.3 live printer presentation */
+.printerLiveSummary{--live-accent:#708096;margin-top:13px;padding:11px 12px;border:1px solid #303b49;border-left:3px solid var(--live-accent);border-radius:10px;background:linear-gradient(135deg,#101821,#0d131a)}
+.printerLiveSummary-idle,.printerLiveSummary-complete{--live-accent:#4fc98a}
+.printerLiveSummary-printing{--live-accent:#8c76ff}
+.printerLiveSummary-paused{--live-accent:#e0aa58}
+.printerLiveSummary-error,.printerLiveSummary-stale,.printerLiveSummary-stopped{--live-accent:#ee6d78}
+.printerLiveSummaryHead{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.printerLiveState{display:flex;align-items:center;gap:9px;min-width:0}
+.printerLiveStateDot,.printingLiveStateDot{display:block;width:9px;height:9px;flex:0 0 9px;border-radius:50%;background:var(--live-accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--live-accent) 15%,transparent)}
+.printerLiveState strong,.printerLiveState small{display:block}
+.printerLiveState strong{font-size:12px;color:#e5ebf5}
+.printerLiveState small{margin-top:2px;color:#78869a;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.printerLiveOpen{min-height:30px;padding:5px 9px;border-color:#465368;background:#151e29;font-size:10px}
+.printerLiveProgressLine{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px;align-items:center;margin-top:10px}
+.printerLiveProgressTrack{height:6px;overflow:hidden;border-radius:999px;background:#202a36}
+.printerLiveProgressTrack span{display:block;height:100%;border-radius:inherit;background:var(--live-accent);transition:width .25s ease}
+.printerLiveProgressLine>strong{min-width:34px;color:#dbe3ef;font-size:10px;text-align:right}
+.printerLiveQuickStats{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+.printerLiveQuickStats>span{display:flex;align-items:baseline;gap:5px;padding:5px 7px;border:1px solid #283341;border-radius:7px;background:#0c1218}
+.printerLiveQuickStats small{color:#6f7d90;font-size:8px;text-transform:uppercase;letter-spacing:.04em}
+.printerLiveQuickStats strong{color:#cfd8e5;font-size:10px}
+
+.printingLivePanel{--live-accent:#718096;display:grid;gap:12px;margin-top:5px;padding:14px;border:1px solid #303c4b;border-top:3px solid var(--live-accent);border-radius:12px;background:linear-gradient(145deg,#111a24,#0c1219)}
+.printingLivePanel-idle,.printingLivePanel-complete{--live-accent:#4fc98a}
+.printingLivePanel-printing{--live-accent:#8c76ff}
+.printingLivePanel-paused{--live-accent:#e0aa58}
+.printingLivePanel-error,.printingLivePanel-stale,.printingLivePanel-stopped{--live-accent:#ee6d78}
+.printingLivePanelHead{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.printingLivePanelState{display:flex;align-items:center;gap:10px;min-width:0}
+.printingLivePanelState>div{min-width:0}
+.printingLivePanelState strong,.printingLivePanelState small{display:block}
+.printingLivePanelState strong{font-size:16px;color:#edf2f8}
+.printingLivePanelState small{margin-top:3px;color:#8592a4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.printingLivePercent{font-size:19px;color:var(--live-accent)}
+.printingLiveProgress{height:9px;margin:0;overflow:hidden;border:0;border-radius:999px;background:#202a36}
+.printingLiveProgress>span{display:block;height:100%;min-width:2px;border-radius:inherit;background:linear-gradient(90deg,var(--live-accent),color-mix(in srgb,var(--live-accent) 64%,#fff));transition:width .25s ease}
+.printingLiveMetrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.printingLiveMetrics>div{padding:8px 9px;border:1px solid #283442;border-radius:8px;background:#0b1117}
+.printingLiveMetrics span,.printingLiveMetrics strong{display:block}
+.printingLiveMetrics span{color:#748297;font-size:8px;text-transform:uppercase;letter-spacing:.06em}
+.printingLiveMetrics strong{margin-top:3px;color:#d8e0eb;font-size:11px}
+.printingLiveSectionTitle{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:2px}
+.printingLiveSectionTitle span{color:#cbd5e3!important;font-size:10px!important;font-weight:800;text-transform:uppercase;letter-spacing:.06em}
+.printingLiveSectionTitle small{color:#6f7d90;font-size:9px}
+.printingLiveMaterials{display:grid;gap:7px;margin-top:0}
+.printingLiveMaterial{display:grid;grid-template-columns:18px minmax(0,1fr) minmax(78px,.38fr);gap:8px;align-items:center;padding:9px;border:1px solid #293543;border-radius:9px;background:#0b1117}
+.printingLiveMaterial.selected{border-color:#5a4fa0;background:#121126;box-shadow:inset 2px 0 #8c76ff}
+.printingLiveMaterial .printingSwatch{grid-row:auto;margin:0}
+.printingLiveMaterialMain{min-width:0}
+.printingLiveMaterialMain>span,.printingLiveMaterialMain>strong,.printingLiveMaterialMain>small{display:block}
+.printingLiveMaterialMain>span{color:#718095!important;font-size:9px!important}
+.printingLiveMaterialMain>strong{margin-top:1px;font-size:11px}
+.printingLiveMaterialMain>small{margin-top:1px;color:#7f8a9c;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.printingMaterialRemaining{display:grid;gap:4px;justify-items:end}
+.printingMaterialRemaining>strong{font-size:11px}
+.printingMaterialTrack{width:100%;height:5px;overflow:hidden;border-radius:999px;background:#202a36}
+.printingMaterialTrack span{display:block;height:100%;border-radius:inherit;background:#8c76ff}
+
+.dashboardLivePanel{overflow:hidden}
+.dashboardLiveGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(360px,100%),1fr));gap:10px;padding:14px 16px 16px}
+.dashboardLivePrinter{display:grid;grid-template-columns:64px minmax(0,1fr);gap:11px;width:100%;padding:11px;text-align:left;border:1px solid #2b3542;border-radius:11px;background:linear-gradient(135deg,#101720,#0d131a);color:#dfe7f3}
+.dashboardLivePrinter:hover{border-color:#4b5a70;background:#131c27}
+.dashboardLivePrinter-printing,.dashboardLivePrinter-processing,.dashboardLivePrinter-paused{border-left:3px solid #8c76ff}
+.dashboardLivePrinter-idle,.dashboardLivePrinter-complete,.dashboardLivePrinter-completed{border-left:3px solid #4fc98a}
+.dashboardLivePrinter-error,.dashboardLivePrinter-failed,.dashboardLivePrinter-cancelled{border-left:3px solid #ee6d78}
+.dashboardLivePrinter-idle .dashboardLiveProgress span,.dashboardLivePrinter-complete .dashboardLiveProgress span{background:#4fc98a}
+.dashboardLivePrinter-error .dashboardLiveProgress span,.dashboardLivePrinter-failed .dashboardLiveProgress span{background:#ee6d78}
+.dashboardLivePrinterImage{display:grid;place-items:center;width:64px;height:64px;border:1px solid #2f3a49;border-radius:9px;background:#0a1016;overflow:hidden}
+.dashboardLivePrinterImage img{width:100%;height:100%;object-fit:contain;padding:4px}
+.dashboardLivePrinterImage span{color:#637187;font-size:14px;font-weight:800}
+.dashboardLivePrinterMain{min-width:0}
+.dashboardLivePrinterHead{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.dashboardLivePrinterHead>div{min-width:0}
+.dashboardLivePrinterHead strong,.dashboardLivePrinterHead small{display:block}
+.dashboardLivePrinterHead strong{font-size:13px}
+.dashboardLivePrinterHead small{margin-top:2px;color:#778599;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dashboardLivePrinterMeta{display:flex;justify-content:space-between;gap:8px;margin-top:7px;color:#8b98aa;font-size:9px}
+.dashboardLivePrinterMeta span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dashboardLiveProgress{height:5px;margin-top:8px;overflow:hidden;border-radius:999px;background:#202a36}
+.dashboardLiveProgress span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#745eea,#a58cff)}
+.dashboardLiveProgressLabel{display:block;margin-top:3px;color:#998cf3;font-size:9px;text-align:right}
+
+@media(max-width:620px){
+  .printerLiveSummaryHead{align-items:flex-start}
+  .printerLiveOpen{flex:0 0 auto}
+  .printerLiveQuickStats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .printerLiveQuickStats>span{justify-content:space-between}
+  .printingLiveMetrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .printingLiveMaterial{grid-template-columns:18px minmax(0,1fr)}
+  .printingMaterialRemaining{grid-column:2;justify-items:stretch}
+  .printingMaterialRemaining>strong{text-align:right}
+  .dashboardLivePrinter{grid-template-columns:52px minmax(0,1fr)}
+  .dashboardLivePrinterImage{width:52px;height:52px}
+  .dashboardLivePrinterMeta{display:grid;gap:3px}
+}
 @media(max-width:1200px){
   .printingMetrics{grid-template-columns:repeat(3,minmax(0,1fr))}
   .printingIntegrationGrid{grid-template-columns:repeat(2,minmax(0,1fr))}

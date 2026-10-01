@@ -29,6 +29,79 @@ function formatDurationMinutes(value) {
   return hours ? hours + "h " + remainder + "m" : remainder + " min";
 }
 
+function liveStateKey(snapshot, connection = null) {
+  if (connection?.stale) return "stale";
+  if (connection && ["error", "disconnected"].includes(connection.status)) return "error";
+  const state = String(snapshot?.state || "unknown").toLowerCase();
+  if (["printing", "processing", "self-testing"].includes(state)) return "printing";
+  if (state === "paused") return "paused";
+  if (["complete", "completed", "success"].includes(state)) return "complete";
+  if (["error", "failed"].includes(state)) return "error";
+  if (["cancelled", "canceled", "stopped"].includes(state)) return "stopped";
+  if (state === "idle") return "idle";
+  return "unknown";
+}
+
+function liveProgress(snapshot) {
+  const value = snapshot?.job?.progress;
+  if (value == null || Number.isNaN(Number(value))) return null;
+  return Math.max(0, Math.min(100, Number(value)));
+}
+
+function shouldShowLiveProgress(snapshot) {
+  const pct = liveProgress(snapshot);
+  const state = String(snapshot?.state || "").toLowerCase();
+  return pct != null && Boolean(
+    snapshot?.job?.file_name
+    || pct > 0
+    || ["printing", "processing", "paused", "complete", "completed"].includes(state)
+  );
+}
+
+function liveTemperature(temp) {
+  if (temp?.actual_c == null) return "—";
+  const actual = Number(temp.actual_c).toFixed(1).replace(".0", "");
+  if (temp.target_c == null || Number(temp.target_c) <= 0) return actual + "°";
+  const target = Number(temp.target_c).toFixed(0);
+  return actual + "° / " + target + "°";
+}
+
+function PrinterLiveSummary({ printer, onOpen }) {
+  const connection = printer.live_status || (printer.live_connections || []).find(item => item.enabled);
+  if (!connection) return null;
+  const snapshot = connection.snapshot || {};
+  const stateKey = liveStateKey(snapshot, connection);
+  const pct = liveProgress(snapshot);
+  const showProgress = shouldShowLiveProgress(snapshot);
+  const job = snapshot.job || {};
+  const temps = snapshot.temperatures || {};
+  const connected = connection.status === "connected" && !connection.stale;
+
+  return <div className={"printerLiveSummary printerLiveSummary-" + stateKey}>
+    <div className="printerLiveSummaryHead">
+      <div className="printerLiveState">
+        <span className="printerLiveStateDot" aria-hidden="true" />
+        <div>
+          <strong>{connected ? (snapshot.state_label || "Connected") : (connection.status_label || "Unavailable")}</strong>
+          <small>{job.file_name || connection.adapter_label || "Live printer source"}</small>
+        </div>
+      </div>
+      <button type="button" className="printerLiveOpen" onClick={onOpen}>Open live</button>
+    </div>
+    {showProgress && <div className="printerLiveProgressLine">
+      <div className="printerLiveProgressTrack"><span style={{ width: pct + "%" }} /></div>
+      <strong>{pct.toFixed(pct % 1 ? 1 : 0)}%</strong>
+    </div>}
+    <div className="printerLiveQuickStats">
+      {temps.tool0?.actual_c != null && <span><small>Nozzle</small><strong>{liveTemperature(temps.tool0)}</strong></span>}
+      {temps.bed?.actual_c != null && <span><small>Bed</small><strong>{liveTemperature(temps.bed)}</strong></span>}
+      {temps.chamber?.actual_c != null && <span><small>Chamber</small><strong>{liveTemperature(temps.chamber)}</strong></span>}
+      {(job.current_layer != null || job.total_layers != null) && <span><small>Layer</small><strong>{job.current_layer ?? "—"} / {job.total_layers ?? "—"}</strong></span>}
+      {job.remaining_seconds != null && Number(job.remaining_seconds) > 0 && <span><small>Remaining</small><strong>{Math.max(1, Math.round(Number(job.remaining_seconds) / 60))} min</strong></span>}
+    </div>
+  </div>;
+}
+
 function newestFirst(rows) {
   const activityTime = row => Math.max(
     new Date(row.updated_at || row.created_at || 0).getTime() || 0,
@@ -59,6 +132,7 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
   const [modal, setModal] = useState("");
   const [manageModel, setManageModel] = useState(null);
   const [managePrinter, setManagePrinter] = useState(null);
+  const [livePrinter, setLivePrinter] = useState(null);
   const [claimSlot, setClaimSlot] = useState(null);
   const [workspaceView, setWorkspaceView] = useState("overview");
 
@@ -75,6 +149,12 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
   }
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    if (workspaceView !== "overview") return undefined;
+    const timer = window.setInterval(load, 15000);
+    return () => window.clearInterval(timer);
+  }, [workspaceView]);
 
   useEffect(() => {
     if (!searchTarget?.type) return;
@@ -244,13 +324,23 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
             </div>
             <div className="printingPrinterHeaderMain">
               <div className="printingCardHead">
-                <div><strong>{printer.name}</strong><small>{[printer.manufacturer, printer.model, printer.location].filter(Boolean).join(" · ")}</small></div>
-                <div className="printingBadges">
-                  {printer.is_active ? <Badge tone="good">Active</Badge> : <Badge>Inactive</Badge>}
-                  {printer.simplyprint?.external_id && <Badge tone={printer.simplyprint?.online ? "good" : printer.simplyprint?.state === "offline" ? "danger" : "accent"}>SimplyPrint · {printer.simplyprint?.state || (printer.simplyprint?.online ? "online" : "linked")}</Badge>}
-                  {printer.installed_multi_material_label && <Badge>{printer.installed_multi_material_label}</Badge>}
-                  {printer.multi_material_installed && <Badge>{printer.slots.length} slots</Badge>}
-                  {canChangePrinter && <button type="button" onClick={() => setManagePrinter(printer)}>Manage</button>}
+                <div className="printingPrinterIdentity">
+                  <strong>{printer.name}</strong>
+                  <small>{[printer.manufacturer, printer.model, printer.location].filter(Boolean).join(" · ")}</small>
+                </div>
+                <div className="printingPrinterControls">
+                  <div className="printingPrinterStatus" aria-label={"Status for " + printer.name}>
+                    {printer.is_active ? <Badge tone="good">Active</Badge> : <Badge>Inactive</Badge>}
+                    {printer.simplyprint?.external_id && <Badge tone={printer.simplyprint?.online ? "good" : printer.simplyprint?.state === "offline" ? "danger" : "accent"}>SimplyPrint · {printer.simplyprint?.state || (printer.simplyprint?.online ? "online" : "linked")}</Badge>}
+                    {printer.live_status && <Badge tone="good">{printer.live_status.adapter_label} · {printer.live_status.snapshot?.state_label || "Connected"}</Badge>}
+                    {!printer.live_status && printer.live_connections?.length > 0 && <Badge tone={printer.live_connections.some(item => item.status === "error" || item.status === "disconnected") ? "danger" : "neutral"}>{printer.live_connections.length} live source{printer.live_connections.length === 1 ? "" : "s"}</Badge>}
+                    {printer.installed_multi_material_label && <Badge>{printer.installed_multi_material_label}</Badge>}
+                    {printer.multi_material_installed && <Badge>{printer.slots.length} slots</Badge>}
+                  </div>
+                  {canChangePrinter && <div className="printingPrinterActions" aria-label={"Actions for " + printer.name}>
+                    <button className="printingPrinterAction printingPrinterActionLive" type="button" onClick={() => setLivePrinter(printer)}>Live monitor</button>
+                    <button className="printingPrinterAction" type="button" onClick={() => setManagePrinter(printer)}>Manage printer</button>
+                  </div>}
                 </div>
               </div>
               {((printer.multi_material_installed && printer.catalogue?.image_multi_material && printer.catalogue?.image_multi_material_source_provider) || printer.catalogue?.image_source_provider) && <small className="printingPrinterImageCredit">
@@ -259,6 +349,7 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
               </small>}
             </div>
           </div>
+          <PrinterLiveSummary printer={printer} onOpen={() => setLivePrinter(printer)} />
           <div className="printingSlotGrid">
             {printer.slots.filter(slot => slot.is_loaded).map(slot => <div className="printingSlot" key={slot.id}>
               <span className="printingSwatch" style={slot.color_hex ? { background: slot.color_hex } : undefined} />
@@ -311,8 +402,8 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
       <div className="printingList">
         {data.recent_prints.map(job => <article className="printingListRow printingRecentPrintRow" key={job.id}>
           <div>
-            <strong>{job.model || "Unlinked print"}{job.revision ? ` · ${job.revision}` : ""}</strong>
-            <small>{job.printer} · {formatDate(job.created_at)}{job.actual_minutes ? " · " + formatDurationMinutes(job.actual_minutes) : ""}</small>
+            <strong>{job.model || job.filename || "Unlinked print"}{job.revision ? ` · ${job.revision}` : ""}</strong>
+            <small>{job.printer} · {formatDate(job.created_at)}{job.actual_minutes ? " · " + formatDurationMinutes(job.actual_minutes) : ""}{job.history_source === "live_printer" ? " · Auto-tracked" : ""}</small>
           </div>
           <div className="printingRecentPrintStats">
             {job.filament_used_g > 0 && <span>{grams(job.filament_used_g)} used{job.waste_g > 0 ? " · " + grams(job.waste_g) + " waste" : ""}</span>}
@@ -348,6 +439,16 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
       currency={config?.currency || "GBP"}
       onClose={() => setModal("")}
       onSaved={saved}
+    />}
+    {livePrinter && <PrinterConnectionsModal
+      printer={livePrinter}
+      onClose={() => setLivePrinter(null)}
+      onChanged={async () => {
+        const fresh = await load();
+        const updated = fresh?.printers?.find(item => item.id === livePrinter.id);
+        if (updated) setLivePrinter(updated);
+        return fresh;
+      }}
     />}
     {managePrinter && <PrinterManageModal
       printer={managePrinter}
@@ -660,6 +761,246 @@ function LocationModal({ onClose, onSaved }) {
     </form>
   </Modal>;
 }
+
+function PrinterConnectionsModal({ printer, onClose, onChanged }) {
+  const [data, setData] = useState({ rows: [], adapters: [] });
+  const [form, setForm] = useState({ adapter: "moonraker", endpoint_url: "", poll_interval_seconds: 30, api_key: "" });
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  async function loadConnections() {
+    setError("");
+    try {
+      const result = await apiFetch("/api/printing/printers/" + printer.id + "/connections/");
+      setData(result);
+      return result;
+    } catch (err) {
+      setError(err.message);
+      return null;
+    }
+  }
+
+  useEffect(() => {
+    loadConnections();
+    const timer = window.setInterval(loadConnections, 10000);
+    return () => window.clearInterval(timer);
+  }, [printer.id]);
+
+  const selectableAdapters = (data.adapters || []).filter(item => item.supported);
+  const configured = new Set((data.rows || []).map(item => item.adapter));
+  const preferredAdapter = String(printer.manufacturer || "").toLowerCase().includes("creality") ? "creality_local" : "";
+  const available = selectableAdapters
+    .filter(item => !configured.has(item.key))
+    .sort((left, right) => Number(right.key === preferredAdapter) - Number(left.key === preferredAdapter));
+
+  useEffect(() => {
+    if (!available.length) return;
+    const nextAdapter = available.some(item => item.key === form.adapter)
+      ? form.adapter
+      : (available.find(item => item.key === preferredAdapter)?.key || available[0].key);
+    setForm(current => ({
+      ...current,
+      adapter: nextAdapter,
+      endpoint_url: nextAdapter === "creality_local" && !current.endpoint_url
+        ? (printer.connection_host || "")
+        : current.endpoint_url,
+    }));
+  }, [available.map(item => item.key).join("|"), preferredAdapter, printer.connection_host]);
+
+  async function addConnection(event) {
+    event.preventDefault();
+    setBusy("add"); setError(""); setNotice("");
+    try {
+      await apiFetch("/api/printing/printers/" + printer.id + "/connections/", {
+        method: "POST",
+        body: form,
+      });
+      setForm(current => ({ ...current, endpoint_url: "", api_key: "" }));
+      await loadConnections();
+      await onChanged();
+      setNotice("Live printer source added. Use Refresh to test and capture the first snapshot.");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function refreshConnection(connection) {
+    setBusy(connection.id); setError(""); setNotice("");
+    try {
+      const result = await apiFetch(
+        "/api/printing/printers/" + printer.id + "/connections/" + connection.id + "/refresh/",
+        { method: "POST" },
+      );
+      await loadConnections();
+      await onChanged();
+      setNotice((result.item?.adapter_label || "Printer source") + " refreshed.");
+    } catch (err) {
+      setError(err.message);
+      await loadConnections();
+      await onChanged();
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function toggleConnection(connection) {
+    setBusy(connection.id); setError(""); setNotice("");
+    try {
+      await apiFetch(
+        "/api/printing/printers/" + printer.id + "/connections/" + connection.id + "/",
+        { method: "PATCH", body: { enabled: !connection.enabled } },
+      );
+      await loadConnections();
+      await onChanged();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function removeConnection(connection) {
+    if (!window.confirm("Remove " + connection.adapter_label + " from " + printer.name + "?")) return;
+    setBusy(connection.id); setError(""); setNotice("");
+    try {
+      await apiFetch(
+        "/api/printing/printers/" + printer.id + "/connections/" + connection.id + "/",
+        { method: "DELETE" },
+      );
+      await loadConnections();
+      await onChanged();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  function progress(snapshot) {
+    const value = snapshot?.job?.progress;
+    return value == null ? null : Math.max(0, Math.min(100, Number(value)));
+  }
+
+  function adapterChanged(adapter) {
+    setForm(current => ({
+      ...current,
+      adapter,
+      endpoint_url: adapter === "creality_local"
+        ? (current.endpoint_url || printer.connection_host || "")
+        : (current.adapter === "creality_local" ? "" : current.endpoint_url),
+      api_key: adapter === "creality_local" ? "" : current.api_key,
+    }));
+  }
+
+
+  return <Modal
+    title={"Live monitoring · " + printer.name}
+    subtitle="Attach one or more provider-neutral status sources to this physical printer. Local connections are preferred and monitoring is read-only by default."
+    onClose={onClose}
+    wide
+  >
+    {error && <div className="formError">{error}</div>}
+    {notice && <div className="notice">{notice}</div>}
+
+    <div className="printingIntegrationGrid">
+      {(data.rows || []).map(connection => {
+        const snapshot = connection.snapshot || {};
+        const pct = progress(snapshot);
+        const showProgress = shouldShowLiveProgress(snapshot);
+        const tone = connection.stale ? "danger" : connection.status === "connected" ? "good" : connection.status === "error" || connection.status === "disconnected" ? "danger" : connection.experimental ? "accent" : "neutral";
+        return <article key={connection.id}>
+          <div className="settingsIntegrationHead">
+            <strong>{connection.adapter_label}</strong>
+            <div className="printingBadges">
+              {connection.experimental && <Badge tone="accent">Experimental</Badge>}
+              <Badge tone={tone}>{connection.stale ? "Stale" : connection.status_label}</Badge>
+            </div>
+          </div>
+          <small>{connection.endpoint_url || "Endpoint not configured"}</small>
+          {(snapshot.source_metadata?.hostname || snapshot.source_metadata?.model) && <small>
+            {[snapshot.source_metadata?.hostname, snapshot.source_metadata?.model].filter(Boolean).join(" · ")}
+          </small>}
+          <div className={"printingLivePanel printingLivePanel-" + liveStateKey(snapshot, connection)}>
+            <div className="printingLivePanelHead">
+              <div className="printingLivePanelState">
+                <span className="printingLiveStateDot" aria-hidden="true" />
+                <div>
+                  <strong>{snapshot.state_label || "No live snapshot yet"}</strong>
+                  <small>{snapshot.job?.file_name || (connection.status === "connected" ? "Printer reachable · no active file" : "Refresh this source to test the connection")}</small>
+                </div>
+              </div>
+              {showProgress && <strong className="printingLivePercent">{pct.toFixed(pct % 1 ? 1 : 0)}%</strong>}
+            </div>
+            {showProgress && <div className="printingLiveProgress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={pct}><span style={{ width: pct + "%" }} /></div>}
+            <div className="printingLiveMetrics">
+              {snapshot.temperatures?.tool0?.actual_c != null && <div><span>Nozzle</span><strong>{liveTemperature(snapshot.temperatures.tool0)}</strong></div>}
+              {snapshot.temperatures?.bed?.actual_c != null && <div><span>Bed</span><strong>{liveTemperature(snapshot.temperatures.bed)}</strong></div>}
+              {snapshot.temperatures?.chamber?.actual_c != null && <div><span>Chamber</span><strong>{liveTemperature(snapshot.temperatures.chamber)}</strong></div>}
+              {snapshot.job?.elapsed_seconds != null && <div><span>Elapsed</span><strong>{Math.round(snapshot.job.elapsed_seconds / 60)} min</strong></div>}
+              {snapshot.job?.remaining_seconds != null && <div><span>Remaining</span><strong>{Math.round(snapshot.job.remaining_seconds / 60)} min</strong></div>}
+              {(snapshot.job?.current_layer != null || snapshot.job?.total_layers != null) && <div><span>Layer</span><strong>{snapshot.job?.current_layer ?? "—"} / {snapshot.job?.total_layers ?? "—"}</strong></div>}
+            </div>
+            {connection.adapter === "creality_local" && snapshot.source_metadata?.cfs_connected && <div className="printingLiveSectionTitle"><span>CFS live slots</span><small>{snapshot.materials?.length || 0} detected</small></div>}
+            {connection.adapter === "creality_local" && snapshot.materials?.length > 0 && <div className="printingLiveMaterials">
+              {snapshot.materials.slice(0, 8).map((material, index) => {
+                const remaining = material.remaining_percent == null ? null : Math.max(0, Math.min(100, Number(material.remaining_percent)));
+                return <div className={"printingLiveMaterial" + (material.selected ? " selected" : "")} key={(material.unit_index ?? 0) + "-" + material.slot_index + "-" + index}>
+                  <span className="printingSwatch" style={material.color_hex ? { background: material.color_hex } : undefined} />
+                  <div className="printingLiveMaterialMain">
+                    <span>CFS {Number(material.unit_index || 0) + 1} · slot {Number(material.slot_index || 0) + 1}{material.selected ? " · loaded" : ""}</span>
+                    <strong>{material.product_name || material.material || "Filament"}</strong>
+                    <small>{[material.vendor, material.material].filter(Boolean).join(" · ") || "Material details unavailable"}</small>
+                  </div>
+                  {remaining != null && <div className="printingMaterialRemaining">
+                    <strong>{Math.round(remaining)}%</strong>
+                    <div className="printingMaterialTrack"><span style={{ width: remaining + "%", background: material.color_hex || undefined }} /></div>
+                  </div>}
+                </div>;
+              })}
+            </div>}
+          </div>
+          {snapshot.warnings?.map((warning, index) => <small className="integrationError" key={"warning-" + index}>{warning}</small>)}
+          <small>Capabilities: {Object.entries(connection.capabilities || {}).filter(([, enabled]) => enabled).map(([key]) => key.replaceAll("_", " ")).join(", ") || "Not reported yet"}</small>
+          <small>Last seen: {connection.last_seen_at ? formatDate(connection.last_seen_at) : "Never"}</small>
+          {connection.last_error && <small className="integrationError">{connection.last_error}</small>}
+          <div className="settingsActions compact">
+            <button type="button" disabled={busy === connection.id || !connection.enabled || !connection.supported} onClick={() => refreshConnection(connection)}>{busy === connection.id ? "Working…" : "Refresh"}</button>
+            <button type="button" disabled={busy === connection.id} onClick={() => toggleConnection(connection)}>{connection.enabled ? "Disable" : "Enable"}</button>
+            <button type="button" className="dangerButton" disabled={busy === connection.id} onClick={() => removeConnection(connection)}>Remove</button>
+          </div>
+        </article>;
+      })}
+      {!data.rows?.length && <div className="printingEmptyInline">No live printer sources are configured yet.</div>}
+    </div>
+
+    {!!available.length && <form className="formGrid" onSubmit={addConnection}>
+      <div className="full settingsCallout">
+        <strong>Add live source</strong>
+        <p>v0.7.3 supports Moonraker/Klipper and OctoPrint, plus an experimental Creality LAN adapter for K-series/K2-family printers. A single physical printer can use more than one source without creating duplicate MakerVault printer records.</p>
+      </div>
+      <label>Adapter<select value={form.adapter} onChange={e => adapterChanged(e.target.value)}>
+        {available.map(item => <option key={item.key} value={item.key}>{item.label}{item.experimental ? " · experimental" : ""}</option>)}
+      </select></label>
+      <label>{form.adapter === "creality_local" ? "Printer host / IP" : "Service URL"}<input required value={form.endpoint_url} onChange={e => setForm(current => ({ ...current, endpoint_url: e.target.value }))} placeholder={form.adapter === "creality_local" ? "192.168.1.34" : form.adapter === "moonraker" ? "http://printer.local:7125" : "http://octoprint.local"} /></label>
+      {form.adapter !== "creality_local" && <label>API key (optional)<input type="password" value={form.api_key} onChange={e => setForm(current => ({ ...current, api_key: e.target.value }))} autoComplete="new-password" placeholder="Only when your service requires one" /></label>}
+      {form.adapter === "creality_local" && <div className="settingsCallout">
+        <strong>Creality LAN WebSocket</strong>
+        <p>MakerVault will use the printer's local Creality Print protocol on port 9999. Your existing printer host/IP is pre-filled when available; no Creality Cloud login is required.</p>
+      </div>}
+      <label>Polling interval<div className="intervalInput"><input type="number" min="10" max="3600" step="5" value={form.poll_interval_seconds} onChange={e => setForm(current => ({ ...current, poll_interval_seconds: e.target.value }))} /><span>seconds</span></div></label>
+      <div className="formActions full"><button className="primary" disabled={busy === "add"}>{busy === "add" ? "Adding…" : "Add live source"}</button></div>
+    </form>}
+
+    <div className="settingsCallout">
+      <strong>Read-only first</strong>
+      <p>Moonraker, OctoPrint and Creality local may advertise pause/resume/cancel capabilities, but this first slice only reads printer state. Control actions will be added behind explicit permissions and confirmations later in v0.7.3.</p>
+    </div>
+  </Modal>;
+}
+
 
 function PrinterManageModal({ printer, manufacturers, models, locations, onClose, onSaved }) {
   const initialMaker = printer.manufacturer_id || manufacturers.find(x => x.name === printer.manufacturer)?.id || "";

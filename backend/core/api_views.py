@@ -35,6 +35,13 @@ from .filament_catalogue import (
 from .printing_catalogue_seed import COMMON_FILAMENT_MATERIALS
 from .model_analysis import ModelAnalysisError, analyse_file_asset
 from .printing_integrations import PrintingIntegrationError, probe_simplyprint, probe_spoolman
+from .printer_connectivity import (
+    ADAPTERS as PRINTER_ADAPTERS,
+    PrinterConnectionError,
+    adapter_catalogue,
+    normalise_connection_endpoint,
+    poll_connection,
+)
 from .printing_sync import PrintingSyncError, next_spool_id, resolve_spoolman_review, sync_printing_integration
 from .tasks import queue_catalogue_maintenance_now
 from .storage_usage import StorageQuotaExceeded, ensure_storage_capacity, storage_settings, storage_summary
@@ -69,6 +76,7 @@ from .models import (
     ModelRevision,
     ModelRevisionAsset,
     Printer,
+    PrinterConnection,
     PrinterCatalogModel,
     PrinterFilamentSlot,
     PrinterManufacturer,
@@ -1412,6 +1420,60 @@ def admin_user_delete(request, user_id):
 @login_required
 @require_http_methods(["GET"])
 def dashboard(request):
+    owned_printers = list(
+        Printer.objects.filter(owner=request.user)
+        .select_related("printer_manufacturer", "manufacturer", "catalog_model", "printing_location")
+        .prefetch_related("live_connections")
+        .order_by("name")
+    )
+    live_printers = []
+    for printer in owned_printers:
+        if not printer.is_active:
+            continue
+        connections = [
+            _serialise_printer_connection(connection)
+            for connection in printer.live_connections.all()
+            if connection.enabled
+        ]
+        if not connections:
+            continue
+        connection = next(
+            (
+                item for item in connections
+                if item["status"] == "connected" and not item["stale"]
+            ),
+            connections[0],
+        )
+        snapshot = connection.get("snapshot") or {}
+        catalogue = _serialise_printer_catalog_model(printer.catalog_model) if printer.catalog_model else None
+        image = ""
+        if catalogue:
+            image = (
+                catalogue.get("image_multi_material")
+                if printer.multi_material_installed and catalogue.get("image_multi_material")
+                else catalogue.get("image")
+            ) or ""
+        maker = printer.printer_manufacturer or printer.manufacturer
+        live_printers.append({
+            "id": str(printer.id),
+            "name": printer.name,
+            "manufacturer": maker.name if maker else "",
+            "model": printer.model,
+            "location": printer.printing_location.name if printer.printing_location else printer.location,
+            "image": image,
+            "adapter": connection["adapter"],
+            "adapter_label": connection["adapter_label"],
+            "connection_status": connection["status"],
+            "connection_status_label": connection["status_label"],
+            "stale": connection["stale"],
+            "last_seen_at": connection["last_seen_at"],
+            "state": str(snapshot.get("state") or "unknown"),
+            "state_label": str(snapshot.get("state_label") or connection["status_label"]),
+            "job": snapshot.get("job") or {},
+            "temperatures": snapshot.get("temperatures") or {},
+            "warnings": snapshot.get("warnings") or [],
+        })
+
     data = {
         "inventory_total": InventoryItem.objects.filter(owner=request.user).count(),
         "inventory_available": InventoryItem.objects.filter(owner=request.user).filter(status="available").count(),
@@ -1422,9 +1484,10 @@ def dashboard(request):
         "component_models": ComponentModel.objects.count(),
         "filament_products": FilamentProduct.objects.count(),
         "spools": Spool.objects.filter(owner=request.user).count(),
-        "printers": Printer.objects.filter(owner=request.user).count(),
+        "printers": len(owned_printers),
         "models_3d": Model3D.objects.filter(owner=request.user).count(),
         "maker_tags": MakerTag.objects.filter(owner=request.user, status="active").count(),
+        "live_printers": live_printers,
     }
     return JsonResponse(data)
 
@@ -3735,9 +3798,62 @@ def _serialise_printer_slot(slot):
     }
 
 
+def _serialise_printer_connection(connection):
+    definition = PRINTER_ADAPTERS.get(connection.adapter)
+    stale_after_seconds = max(60, int(connection.poll_interval_seconds or 30) * 3)
+    stale = bool(
+        connection.enabled
+        and connection.status == "connected"
+        and connection.last_seen_at
+        and connection.last_seen_at < timezone.now() - timedelta(seconds=stale_after_seconds)
+    )
+    safe_config = {
+        key: value
+        for key, value in (connection.config or {}).items()
+        if key not in {"api_key", "token", "password", "access_code"}
+    }
+    safe_config["api_key_configured"] = bool(str((connection.config or {}).get("api_key") or "").strip())
+    return {
+        "id": str(connection.id),
+        "printer_id": str(connection.printer_id),
+        "adapter": connection.adapter,
+        "adapter_label": definition.label if definition else connection.get_adapter_display(),
+        "enabled": connection.enabled,
+        "endpoint_url": connection.endpoint_url,
+        "poll_interval_seconds": connection.poll_interval_seconds,
+        "status": connection.status,
+        "status_label": "Stale" if stale else connection.get_status_display(),
+        "stale": stale,
+        "stale_after_seconds": stale_after_seconds,
+        "supported": bool(definition and definition.supported),
+        "experimental": bool(definition and definition.experimental),
+        "local_first": bool(definition and definition.local_first),
+        "capabilities": connection.capabilities or (dict(definition.capabilities) if definition else {}),
+        "snapshot": connection.last_snapshot or {},
+        "last_checked_at": connection.last_checked_at.isoformat() if connection.last_checked_at else None,
+        "last_seen_at": connection.last_seen_at.isoformat() if connection.last_seen_at else None,
+        "last_error": connection.last_error,
+        "config": safe_config,
+    }
+
+
 def _serialise_printer(printer):
     maker = printer.printer_manufacturer or printer.manufacturer
     catalogue = printer.catalog_model
+    live_connections = [
+        _serialise_printer_connection(connection)
+        for connection in printer.live_connections.all()
+    ]
+    live_status = next(
+        (
+            connection
+            for connection in live_connections
+            if connection["enabled"]
+            and connection["status"] == "connected"
+            and not connection["stale"]
+        ),
+        None,
+    )
     return {
         "id": str(printer.id),
         "name": printer.name,
@@ -3780,6 +3896,8 @@ def _serialise_printer(printer):
             for link in printer.external_links.all()
         ],
         "simplyprint": (printer.profile_data or {}).get("simplyprint") or {},
+        "live_connections": live_connections,
+        "live_status": live_status,
         "updated_at": printer.updated_at.isoformat(),
     }
 
@@ -3876,6 +3994,8 @@ def _serialise_print_job(job):
     total_waste = sum((usage.waste_g or Decimal("0") for usage in usages), Decimal("0"))
     costs = [usage.material_cost for usage in usages if usage.material_cost is not None]
     total_cost = sum(costs, Decimal("0")) if costs else None
+    settings_payload = job.settings if isinstance(job.settings, dict) else {}
+    live_meta = settings_payload.get("live_monitor") if isinstance(settings_payload.get("live_monitor"), dict) else {}
     return {
         "id": str(job.id),
         "status": job.status,
@@ -3888,6 +4008,8 @@ def _serialise_print_job(job):
         "model_revision_id": str(job.model_revision_id) if job.model_revision_id else None,
         "model": job.model_revision.model.name if job.model_revision else "",
         "revision": job.model_revision.version if job.model_revision else "",
+        "filename": str(live_meta.get("filename") or ""),
+        "history_source": "live_printer" if live_meta.get("source") == "live_printer" else "manual",
         "material_usages": [_serialise_print_material_usage(usage) for usage in usages],
         "filament_used_g": _float(total_used),
         "waste_g": _float(total_waste),
@@ -3910,6 +4032,7 @@ def printing_overview(request):
             "filament_slots__spool__filament__manufacturer",
             "filament_slots__spool__filament__filament_manufacturer",
             "external_links",
+            "live_connections",
         )
     )
     spools = list(
@@ -4365,6 +4488,7 @@ def printing_printers(request):
         ).prefetch_related(
             "filament_slots__spool__filament__manufacturer",
             "filament_slots__spool__filament__filament_manufacturer",
+            "live_connections",
         )
         return JsonResponse({"rows": [_serialise_printer(item) for item in qs]})
 
@@ -4454,6 +4578,7 @@ def printing_printer_detail(request, printer_id):
     ).prefetch_related(
         "filament_slots__spool__filament__manufacturer",
         "filament_slots__spool__filament__filament_manufacturer",
+        "live_connections",
     ).filter(pk=printer_id).first()
     if not item:
         return _error("Printer not found.", status=404)
@@ -4543,10 +4668,160 @@ def printing_printer_detail(request, printer_id):
         ).prefetch_related(
             "filament_slots__spool__filament__manufacturer",
             "filament_slots__spool__filament__filament_manufacturer",
+            "live_connections",
         ).get(pk=item.pk)
         return JsonResponse({"item": _serialise_printer(item)})
     except ValidationError as exc:
         return _validation_response(exc)
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def printing_printer_connections(request, printer_id):
+    printer = Printer.objects.filter(owner=request.user, pk=printer_id).first()
+    if not printer:
+        return _error("Printer not found.", status=404)
+
+    if request.method == "GET":
+        rows = printer.live_connections.all()
+        return JsonResponse({
+            "rows": [_serialise_printer_connection(item) for item in rows],
+            "adapters": adapter_catalogue(),
+        })
+
+    denied = _require_permission(request, "core.change_printer")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        adapter = str(payload.get("adapter") or "").strip()
+        definition = PRINTER_ADAPTERS.get(adapter)
+        if not definition:
+            return _error("Choose a supported MakerVault printer adapter.")
+
+        endpoint_url = str(payload.get("endpoint_url") or "").strip()
+        if not endpoint_url and adapter == "creality_local":
+            endpoint_url = str(printer.connection_host or "").strip()
+        if endpoint_url:
+            endpoint_url = normalise_connection_endpoint(adapter, endpoint_url)
+        interval = int(payload.get("poll_interval_seconds") or 30)
+        config = dict(payload.get("config") or {})
+        if "api_key" in payload and str(payload.get("api_key") or "").strip():
+            config["api_key"] = str(payload.get("api_key") or "").strip()
+
+        item = PrinterConnection(
+            printer=printer,
+            adapter=adapter,
+            enabled=payload.get("enabled") is not False,
+            endpoint_url=endpoint_url,
+            poll_interval_seconds=interval,
+            capabilities=dict(definition.capabilities),
+            config=config,
+        )
+        if not item.enabled:
+            item.status = "disabled"
+        elif not endpoint_url:
+            item.status = "not_configured"
+        elif definition.experimental and not definition.supported:
+            item.status = "experimental"
+        else:
+            item.status = "disconnected"
+        item.full_clean()
+        item.save()
+        return JsonResponse({"item": _serialise_printer_connection(item)}, status=201)
+    except (ValidationError, ValueError) as exc:
+        if isinstance(exc, ValidationError):
+            return _validation_response(exc)
+        return _error(str(exc))
+    except PrinterConnectionError as exc:
+        return _error(str(exc))
+    except IntegrityError:
+        return _error("That printer already has this live adapter.", status=409)
+
+
+@login_required
+@require_http_methods(["PATCH", "DELETE"])
+def printing_printer_connection_detail(request, printer_id, connection_id):
+    item = PrinterConnection.objects.select_related("printer").filter(
+        pk=connection_id,
+        printer_id=printer_id,
+        printer__owner=request.user,
+    ).first()
+    if not item:
+        return _error("Printer connection not found.", status=404)
+
+    denied = _require_permission(request, "core.change_printer")
+    if denied:
+        return denied
+
+    if request.method == "DELETE":
+        item.delete()
+        return JsonResponse({"deleted": True})
+
+    try:
+        payload = _read_json(request)
+        definition = PRINTER_ADAPTERS.get(item.adapter)
+        if "enabled" in payload:
+            item.enabled = bool(payload.get("enabled"))
+        if "endpoint_url" in payload:
+            raw_url = str(payload.get("endpoint_url") or "").strip()
+            item.endpoint_url = normalise_connection_endpoint(item.adapter, raw_url) if raw_url else ""
+        if "poll_interval_seconds" in payload:
+            item.poll_interval_seconds = int(payload.get("poll_interval_seconds"))
+        config = dict(item.config or {})
+        if "api_key" in payload and str(payload.get("api_key") or "").strip():
+            config["api_key"] = str(payload.get("api_key") or "").strip()
+        if payload.get("clear_api_key") is True:
+            config.pop("api_key", None)
+        if "config" in payload and isinstance(payload.get("config"), dict):
+            for key, value in payload["config"].items():
+                if key not in {"api_key", "token", "password", "access_code"}:
+                    config[key] = value
+        item.config = config
+
+        if not item.enabled:
+            item.status = "disabled"
+        elif not item.endpoint_url:
+            item.status = "not_configured"
+        elif definition and definition.experimental and not definition.supported:
+            item.status = "experimental"
+        elif item.status in {"disabled", "not_configured", "experimental"}:
+            item.status = "disconnected"
+
+        item.full_clean()
+        item.save()
+        return JsonResponse({"item": _serialise_printer_connection(item)})
+    except (ValidationError, ValueError) as exc:
+        if isinstance(exc, ValidationError):
+            return _validation_response(exc)
+        return _error(str(exc))
+    except PrinterConnectionError as exc:
+        return _error(str(exc))
+
+
+@login_required
+@require_http_methods(["POST"])
+def printing_printer_connection_refresh(request, printer_id, connection_id):
+    item = PrinterConnection.objects.select_related("printer").filter(
+        pk=connection_id,
+        printer_id=printer_id,
+        printer__owner=request.user,
+    ).first()
+    if not item:
+        return _error("Printer connection not found.", status=404)
+    try:
+        snapshot = poll_connection(item)
+        item.refresh_from_db()
+        return JsonResponse({
+            "item": _serialise_printer_connection(item),
+            "snapshot": snapshot,
+        })
+    except PrinterConnectionError as exc:
+        item.refresh_from_db()
+        return JsonResponse({
+            "error": str(exc),
+            "item": _serialise_printer_connection(item),
+        }, status=502)
 
 
 @login_required
