@@ -485,6 +485,21 @@ CURATED_SBC_SOURCE_PAGES = {
     ("Radxa", "ROCK 5B"): "https://docs.radxa.com/en/rock5/rock5b/getting-started/introduction",
     ("Radxa", "ROCK 5C"): "https://docs.radxa.com/en/rock5/rock5c",
     ("Radxa", "CM5"): "https://docs.radxa.com/en/compute-module/cm5",
+    ("Orange Pi", "Orange Pi 5 Plus"): "https://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_5_Plus",
+    ("Orange Pi", "Orange Pi 5 Pro"): "https://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_5_Pro",
+}
+
+
+CURATED_MCU_SOURCE_PAGES = {
+    ("Adafruit", "Feather ESP32-S3"): "https://www.adafruit.com/product/5885",
+    ("Adafruit", "Feather RP2040"): "https://www.adafruit.com/product/4884",
+    ("Adafruit", "QT Py ESP32-C3"): "https://www.adafruit.com/product/5405",
+    ("Arduino", "Nano 33 IoT"): "https://docs.arduino.cc/hardware/nano-33-iot",
+    ("Arduino", "Nano ESP32"): "https://docs.arduino.cc/hardware/nano-esp32",
+    ("DFRobot", "FireBeetle 2 ESP32-E"): "https://www.dfrobot.com/product-2195.html",
+    ("Elecrow", "CrowPanel ESP32 2.8in HMI"): "https://www.elecrow.com/wiki/esp32-display-282727-intelligent-touch-screen-wi-fi26ble-240320-hmi-display.html",
+    ("Elecrow", "CrowPanel ESP32 3.5in HMI"): "https://elecrow.com/wiki/esp32-display-352727-intelligent-touch-screen-wi-fi26ble-320480-hmi-display.html",
+    ("Espressif", "ESP32-P4-Function-EV-Board"): "https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32p4/esp32-p4-function-ev-board/index.html",
 }
 
 
@@ -493,11 +508,11 @@ CURATED_SBC_SOURCE_FALLBACKS = {
         "https://www.beagleboard.org/boards/beagleplay",
     ),
     ("Orange Pi", "Orange Pi 5 Plus"): (
-        "https://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_5_Plus",
+        "https://www.orangepi.org/html/hardWare/computerAndMicrocontrollers/details/Orange-Pi-5-plus.html",
         "https://www.orangepi.org/",
     ),
     ("Orange Pi", "Orange Pi 5 Pro"): (
-        "https://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_5_Pro",
+        "https://www.orangepi.org/html/hardWare/computerAndMicrocontrollers/details/Orange-Pi-5-Pro.html",
         "https://www.orangepi.org/",
     ),
 }
@@ -525,6 +540,17 @@ def _curated_sbc_source_page(obj) -> str:
     return pages[0] if pages else ""
 
 
+def _curated_board_source_pages(obj) -> list[str]:
+    specs = getattr(obj, "specifications", None) or {}
+    board_type = str(specs.get("board_type") or "microcontroller").strip().lower()
+    if board_type in {"sbc", "compute_module"}:
+        return _curated_sbc_source_pages(obj)
+    manufacturer = str(getattr(getattr(obj, "manufacturer", None), "name", "") or "").strip()
+    name = str(getattr(obj, "name", "") or "").strip()
+    url = CURATED_MCU_SOURCE_PAGES.get((manufacturer, name), "")
+    return [url] if url else []
+
+
 def _candidate_source_pages(obj) -> list[dict]:
     """Return authoritative/source pages shared by boards, components and printers."""
     specs = getattr(obj, "specifications", None) or {}
@@ -543,7 +569,7 @@ def _candidate_source_pages(obj) -> list[dict]:
         })
         seen.add(value)
 
-    for curated_url in _curated_sbc_source_pages(obj):
+    for curated_url in _curated_board_source_pages(obj):
         add(curated_url, source_type="manufacturer", provider="Official manufacturer")
 
     manufacturer = getattr(obj, "manufacturer", None)
