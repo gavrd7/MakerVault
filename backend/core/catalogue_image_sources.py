@@ -1017,6 +1017,7 @@ def run_catalogue_image_seed(
             "by_kind": {},
             "by_provider": {},
             "remote": 0,
+            "artwork": 0,
             "failures": [],
         }
 
@@ -1061,9 +1062,9 @@ def run_catalogue_image_seed(
             reverse=True,
         )
 
-    processed = cached = failed = skipped = remote = 0
+    processed = cached = failed = skipped = remote = artwork = 0
     by_kind = {
-        key: {"processed": 0, "cached": 0, "remote": 0, "failed": 0, "skipped": 0}
+        key: {"processed": 0, "cached": 0, "remote": 0, "artwork": 0, "failed": 0, "skipped": 0}
         for key in order
     }
     by_provider = {}
@@ -1088,6 +1089,7 @@ def run_catalogue_image_seed(
                             "by_kind": by_kind,
                             "by_provider": by_provider,
                             "remote": remote,
+                            "artwork": artwork,
                             "failures": failures,
                             "order": order,
                         }
@@ -1317,6 +1319,15 @@ def run_catalogue_image_seed(
                                 by_provider[provider_key] = by_provider.get(provider_key, 0) + 1
                                 continue
 
+                            if isinstance(obj, ComponentModel):
+                                metadata["auto_image_last_result"] = "generic-artwork"
+                                metadata["image_source_type"] = "generic-artwork"
+                                field = set_catalogue_image_metadata(obj, metadata, variant=variant)
+                                obj.save(update_fields=[field, "updated_at"] if field else ["updated_at"])
+                                artwork += 1
+                                by_kind[kind]["artwork"] += 1
+                                continue
+
                             failed += 1
                             by_kind[kind]["failed"] += 1
                             metadata["auto_image_last_result"] = "no-confident-match"
@@ -1381,6 +1392,7 @@ def run_catalogue_image_seed(
             "by_kind": by_kind,
             "by_provider": by_provider,
             "remote": remote,
+            "artwork": artwork,
             "failures": failures,
             "order": order,
         }
