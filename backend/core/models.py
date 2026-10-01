@@ -562,9 +562,14 @@ class PrinterCatalogModel(TimeStampedModel):
         ("", "None / unknown"),
         ("creality_cfs", "Creality CFS"),
         ("bambu_ams", "Bambu Lab AMS"),
+        ("anycubic_ace", "Anycubic ACE / ACE Pro"),
+        ("flashforge_station", "FlashForge material station"),
+        ("prusa_mmu", "Prusa MMU"),
         ("elegoo", "Elegoo multi-material"),
         ("qidi", "QIDI multi-material"),
+        ("sovol", "Sovol multi-material / toolchanger"),
         ("snapmaker", "Snapmaker multi-material"),
+        ("voron", "Voron community multi-material / toolchanger"),
         ("other", "Other"),
     ]
 
@@ -878,9 +883,14 @@ class PrinterFilamentSlot(TimeStampedModel):
         ("creality_cfs", "Creality CFS"),
         ("simplyprint", "SimplyPrint"),
         ("bambu_ams", "Bambu Lab AMS"),
+        ("anycubic_ace", "Anycubic ACE / ACE Pro"),
+        ("flashforge_station", "FlashForge material station"),
+        ("prusa_mmu", "Prusa MMU"),
         ("elegoo", "Elegoo multi-material"),
         ("qidi", "QIDI multi-material"),
+        ("sovol", "Sovol multi-material / toolchanger"),
         ("snapmaker", "Snapmaker multi-material"),
+        ("voron", "Voron community multi-material / toolchanger"),
         ("generic", "Generic / other"),
     ]
 
