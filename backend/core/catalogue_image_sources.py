@@ -901,6 +901,8 @@ def _page_image_candidates(soup: BeautifulSoup, base_url: str) -> list[tuple[str
         if parsed.scheme != "https" or not parsed.netloc or resolved in seen:
             return
         path_hint = (parsed.path or "").lower()
+        if path_hint.endswith((".svg", ".ico")):
+            return
         # Source pages frequently publish brand/social artwork alongside the
         # actual product photo. Never promote obvious chrome/placeholders to a
         # catalogue image merely because they are first in page metadata.
