@@ -193,6 +193,13 @@ def live_printer_connections_tick():
         )
         for item in rows:
             if item.last_checked_at:
+                if item.status == "connecting":
+                    # Treat an in-flight poll as leased. The lease is longer
+                    # than normal HTTP adapter timeouts but eventually expires
+                    # so a crashed worker cannot leave a source stuck forever.
+                    lease_seconds = max(60, item.poll_interval_seconds * 2)
+                    if item.last_checked_at + timedelta(seconds=lease_seconds) > now:
+                        continue
                 next_due = item.last_checked_at + timedelta(seconds=item.poll_interval_seconds)
                 if next_due > now:
                     continue
