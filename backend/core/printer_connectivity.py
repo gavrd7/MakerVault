@@ -442,10 +442,10 @@ def _finite_number(value):
     return number
 
 
-def _creality_state(payload: dict) -> str:
+def _creality_state(payload: dict, *, ignore_error=False) -> str:
     err = payload.get("err")
     errcode = _finite_number(err.get("errcode") if isinstance(err, dict) else err)
-    if errcode not in (None, 0):
+    if not ignore_error and errcode not in (None, 0):
         return "error"
 
     self_test = _finite_number(payload.get("withSelfTest"))
@@ -555,6 +555,7 @@ def normalise_creality_snapshot(payload: dict) -> dict:
         raise PrinterConnectionError("Creality printer returned an unexpected telemetry payload.")
 
     state = _creality_state(payload)
+    activity_state = _creality_state(payload, ignore_error=True)
     progress = _finite_number(
         payload.get("printProgress")
         if payload.get("printProgress") is not None
@@ -609,6 +610,7 @@ def normalise_creality_snapshot(payload: dict) -> dict:
             "model": str(payload.get("model") or ""),
             "model_version": str(payload.get("modelVersion") or ""),
             "raw_state": payload.get("state"),
+            "activity_state": activity_state,
             "device_state": payload.get("deviceState"),
             "cfs_connected": _flag(payload.get("cfsConnect")) or bool(materials),
             "cfs_loaded_slots": len(materials),
