@@ -1,3 +1,4 @@
+import re
 import uuid
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -1068,9 +1069,20 @@ class MakerTag(TimeStampedModel):
 
     @staticmethod
     def normalise_code(kind, value):
+        """Normalise only identifiers whose representation is safely case-insensitive.
+
+        NFC/RFID reader output is intentionally treated as opaque by default:
+        keyboard/HID readers may emit vendor strings, EPC values or NDEF text
+        where case can be meaningful. Conventional hexadecimal UIDs are
+        canonicalised so common colon/dash/space formatting differences do not
+        create duplicate physical identities.
+        """
         text = str(value or "").strip()
-        if str(kind or "").lower() in {"nfc", "rfid"}:
-            return text.upper()
+        if str(kind or "").lower() not in {"nfc", "rfid"}:
+            return text
+        compact = re.sub(r"[:\-\s]", "", text)
+        if len(compact) >= 4 and len(compact) % 2 == 0 and re.fullmatch(r"[0-9A-Fa-f]+", compact):
+            return compact.upper()
         return text
 
     def clean(self):
