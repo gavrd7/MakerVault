@@ -44,6 +44,7 @@ from .printer_connectivity import (
     normalise_connection_endpoint,
     poll_connection,
 )
+from .printer_cameras import summary as camera_summary
 from .printer_controls import CONTROL_ADAPTERS, PrinterControlError, control_availability, execute_control
 from .printing_sync import PrintingSyncError, next_spool_id, resolve_spoolman_review, sync_printing_integration
 from .tasks import queue_catalogue_maintenance_now
@@ -3821,7 +3822,7 @@ def _serialise_printer_connection(connection):
     safe_config = {
         key: value
         for key, value in (connection.config or {}).items()
-        if key not in {"api_key", "token", "password", "access_code", "check_code"}
+        if key not in {"api_key", "token", "password", "access_code", "check_code", "cameras"}
     }
     safe_config["api_key_configured"] = bool(str((connection.config or {}).get("api_key") or "").strip())
     safe_config["access_code_configured"] = bool(str((connection.config or {}).get("access_code") or "").strip())
@@ -3834,8 +3835,8 @@ def _serialise_printer_connection(connection):
         metadata.get("camera_available") or metadata.get("video_available")
         or metadata.get("webrtc_support") or snapshot.get("camera_url")
     )
-    # Telemetry flags and RTSP URLs are camera metadata, not a browser feed.
-    capabilities["camera"] = False
+    camera_info = camera_summary(connection)
+    capabilities["camera"] = camera_info["viewable"]
     return {
         "id": str(connection.id),
         "printer_id": str(connection.printer_id),
@@ -3857,7 +3858,7 @@ def _serialise_printer_connection(connection):
         "protocol": validation.get("protocol", ""),
         "compatibility_hint": validation.get("compatibility_hint", ""),
         "capabilities": capabilities,
-        "camera": {"reported": camera_reported, "viewable": False},
+        "camera": {"reported": camera_reported, **camera_info},
         "snapshot": snapshot,
         "last_checked_at": connection.last_checked_at.isoformat() if connection.last_checked_at else None,
         "last_seen_at": connection.last_seen_at.isoformat() if connection.last_seen_at else None,
@@ -6092,4 +6093,5 @@ def public_config(request):
         },
         "importers": ["ESPBoards.dev"],
     })
+
 

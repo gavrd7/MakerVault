@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { apiFetch } from "../api";
 import PrintedPartsSection from "./PrintedPartsSection";
+import PrinterCamera from "./PrinterCamera";
 import PrinterJobControls from "./PrinterJobControls";
 import { Badge, LoadingBlock, Modal } from "./Common";
 import ModelViewerModal, { isViewableModelFile } from "./ModelViewer";
@@ -807,6 +808,7 @@ function LocationModal({ onClose, onSaved }) {
 }
 
 function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
+  const [activeCamera, setActiveCamera] = useState("");
   const [data, setData] = useState({ rows: [], adapters: [] });
   const [form, setForm] = useState({
     adapter: "moonraker",
@@ -1107,7 +1109,7 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
           <div className="printerLiveFeatures" aria-label="Live data features">
             {[["job", "Job"], ["progress", "Progress"], ["temperatures", "Temperatures"], ["materials", "Loaded filament"]].filter(([key]) => connection.capabilities?.[key]).map(([key, label]) => <Badge key={key}>{label}</Badge>)}
           </div>
-          {connection.camera?.reported && <small className="printerCameraNote">Camera reported by printer · camera feed is not available in MakerVault for this source.</small>}
+          <PrinterCamera printerId={printer.id} connection={connection} canEdit={data.can_control} activeCamera={activeCamera} setActiveCamera={setActiveCamera} onChanged={loadConnections} />
           <small>Last seen: {connection.last_seen_at ? formatDate(connection.last_seen_at) : "Never"}</small>
           {connection.last_error && <small className="integrationError">{connection.last_error}</small>}
           {connection.controls?.supported && data.can_control && <div className="settingsCallout printerControlsSettings">
@@ -2626,4 +2628,5 @@ function PrintJobModal({ gcodeFiles = [], printers, spools, models, projects, cu
     </form>
   </Modal>;
 }
+
 

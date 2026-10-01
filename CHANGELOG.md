@@ -1,6 +1,13 @@
 # Changelog
 
-## v0.8.0 — Printed parts (in development)
+## v0.9.0 — Camera feeds (in development)
+
+- Added on-demand camera setup, discovery, source selection, stop/reconnect, orientation and fullscreen inside Open live.
+- Added owner-scoped refreshed HTTP camera images and experimental Creality K2 legacy/token-protected WebRTC signalling. No automatic playback.
+- Added same-host target validation, DNS pinning, strict TLS, redirect rejection, bounded image responses and camera credential redaction.
+- Added protocol/access regression tests and browser playback lifecycle tests. Hardware playback validation remains pending.
+
+## v0.8.0 — Printed parts
 
 - Explicitly retain physical parts from successful prints, or record existing parts without a saved model or print link. No automatic creation.
 - Track quantities, project installation, location, physical status, replacements and change history; reuse Maker Tags for printed parts.
@@ -567,4 +574,5 @@
 ## v0.1.0
 
 - Initial MakerVault Docker/Django/PostgreSQL/Redis foundation.
+
 
