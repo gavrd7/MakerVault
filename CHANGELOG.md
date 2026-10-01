@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.7.2 — in development
+
+- Expanded the Board Catalogue beyond microcontrollers with first-class SBC and compute-module/SoM classification, curated Orange Pi, ODROID, Radxa, Banana Pi, BeagleBoard, LattePanda, NVIDIA Jetson and Khadas families, SBC-specific technical presentation, and board-type filtering. Added Expansion Boards to Components for HATs, pHATs, Arduino Shields, FeatherWings and host-specific add-ons with structured host/interface compatibility metadata.
+
+- Started the Maker Tags & interactive wiring milestone.
+- Added the Maker Tags foundation with owner-scoped QR, NFC and RFID identities that can target inventory items, spools, printers, projects and storage/printing locations.
+- Existing physical spool RFID identities migrate into Maker Tags while the spool RFID field remains a compatibility mirror for current integrations.
+- Added tag assignment/reassignment, retirement/reactivation and per-tag history without exposing another user's physical identities.
+- Added authenticated QR scan links, direct NFC/RFID identity resolution, duplicate identity protection and printable QR label rendering.
+- Added a responsive Maker Tags workspace with target selection, filtering, tag detail/history and dashboard status.
+- Added the first interactive project wiring workspace with structured board/component/inventory/custom nodes, draggable canvas positioning and pin-to-pin connections.
+- Wiring diagrams are owner-scoped to projects, preserve editable structured data, expose catalogue pin hints where available, reject duplicate/self connections and surface cautious shared-pin/common-ground checks.
+- Added portable JSON export and SVG wiring snapshots, plus direct navigation from scanned Maker Tags to their tagged MakerVault records.
+- Added rule-based electrical sanity checks for interactive wiring: ground/power conflicts, catalogue-backed voltage range checks, UART/I²C/SPI direction mistakes, output-to-output warnings, per-connection validation state and visual error/warning highlighting. Unknown catalogue data remains explicitly unvalidated rather than guessed.
+- Refined the wiring editor from live testing: catalogue pins are visible on nodes, used pins are highlighted, wire labels show endpoint pins on the canvas, connections can be edited in place, the lower connection list scrolls correctly, and obvious typed power labels such as GND/5V are checked even when a catalogue pinout is incomplete.
+- Expanded Maker Tag acquisition: USB/OTG keyboard-wedge RFID/NFC readers can scan directly into focused identity fields, supported secure-context Android browsers can capture Web NFC tags, and NFC tag details expose/can write the MakerVault NDEF scan URL so normal phone NFC handling (including iPhone) can open the assigned record without browser UID access.
+- Added catalogue-aware pin selectors to both ends of a wiring connection. Known board/component/inventory pins can be chosen from a dropdown with role/voltage context while free-text pin entry remains available for incomplete catalogues and custom terminals.
+- Fixed catalogue pin selectors for newly-added nodes by carrying board/component pin data into the editor before the first save. Added a standalone Wiring Lab page for experimental diagrams, with later transfer into an owned project while preserving structured wiring data.
+
+- Hardened board-image lookup identity handling so trademark symbols, marketing/SEO suffixes, `[base]` helper labels and manufacturer spacing aliases do not prevent exact catalogue matches.
+- Expanded authoritative board-image source discovery across current manufacturer documentation, modern lazy/product-image markup and carefully allow-listed source hosts without weakening SSRF/TLS protections.
+- Added a maintained community-source fallback for the generic ESP32-2432S028R CYD while preserving community provenance rather than mislabelling it as manufacturer content.
+- Live board-image validation now resolves 43 of 45 targeted boards; the remaining Orange Pi 5 Plus/5 Pro records retain their official sources and fail closed when `orangepi.org` cannot be retrieved rather than accepting a lower-confidence image.
+- Follow-up mobile/live testing added searchable Add node catalogue pickers, an always-visible pin selector with safe common-terminal fallbacks, exact pin metadata for ESP32-C3 DevKitM-1 and common WS2812 rings/strips, and immediate GND-to-power/I²C/UART conflict feedback before a wiring diagram is saved.
+- Broadened Maker Tags so NFC/RFID reader identities are treated as opaque values unless they are conventional hexadecimal UIDs, added auto-detection across tag kinds plus optional technology hints for NDEF, ISO 14443/15693, LF/UHF and HID readers, and retained legacy spool RFID mirroring only for UID-like values.
+- Reworked source-page image selection to reject obvious logos/placeholders/decorative backgrounds, prefer semantically-labelled product photographs, refresh stale remote references for all board types, move Adafruit boards to current Learning System sources, and use Banana Pi's dedicated product-photo documentation pages.
+
 ## v0.7.1 — 2026-09-30
 
 - Multi-material printer image maintenance now avoids fuzzy AMS/CFS/MMU searches: only curated manufacturer-backed combo imagery is accepted automatically, while unresolved variants are deferred without consuming the image-search attempt limit.

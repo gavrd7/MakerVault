@@ -60,6 +60,23 @@ class CatalogueProfileTests(unittest.TestCase):
         self.assertEqual(nano["dimensions_mm"], {"length": 43.18, "width": 17.77})
         self.assertEqual(nano["specifications"]["pin_count"], 30)
 
+    def test_esp32_c3_devkit_profile_exposes_wiring_pin_metadata(self):
+        item = apply_board_profile({
+            "manufacturer": "Espressif",
+            "name": "ESP32-C3-DevKitM-1",
+            "mcu": "ESP32-C3",
+            "specifications": {},
+        })
+        pins = {pin["name"]: pin for pin in item["pinout"]["pins"]}
+        self.assertEqual(pins["GND"]["role"], "ground")
+        self.assertEqual(pins["3V3"]["role"], "power_output")
+        self.assertEqual(pins["TX"]["role"], "uart_tx")
+        self.assertEqual(pins["RX"]["role"], "uart_rx")
+        self.assertEqual(
+            item["specifications"]["reference_provider"],
+            "Espressif",
+        )
+
     def test_adafruit_and_arduino_profiles_fill_common_catalogue_gaps(self):
         feather = apply_board_profile({
             "manufacturer": "Adafruit",
@@ -160,6 +177,18 @@ class CatalogueProfileTests(unittest.TestCase):
             "Temperature, humidity and pressure sensor.",
         )
         self.assertEqual(result["specifications"]["reference_provider"], "Bosch Sensortec")
+
+
+    def test_orange_pi_sbc_profile_fills_computer_specs(self):
+        enriched = apply_board_profile({
+            "manufacturer": "Orange Pi", "name": "Orange Pi 5 Plus", "family": "Orange Pi 5",
+            "mcu": "Rockchip RK3588", "specifications": {"board_type": "sbc"},
+        })
+        self.assertEqual(enriched["specifications"]["board_type"], "sbc")
+        self.assertEqual(enriched["specifications"]["cpu_cores"], 8)
+        self.assertEqual(enriched["specifications"]["npu_tops"], 6)
+        self.assertEqual(enriched["gpio_count"], 28)
+        self.assertEqual(enriched["dimensions_mm"], {"length": 100, "width": 75})
 
     def test_component_profile_adds_official_reference_and_description(self):
         result = apply_component_profile({

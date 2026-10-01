@@ -41,6 +41,13 @@ from .storage_usage import StorageQuotaExceeded, ensure_storage_capacity, storag
 from .user_admin import admin_user_summary, purge_user_private_data
 from .private_storage import private_storage_key_status
 from .search_service import run_search
+from .wiring import normalise_wiring, serialise_wiring_diagram
+from .maker_tags import (
+    TAG_TECHNOLOGIES,
+    resolve_tag_target,
+    serialise_tag,
+    tag_target_options,
+)
 from .models import (
     BoardCompatibility,
     BoardModel,
@@ -55,6 +62,8 @@ from .models import (
     FileAsset,
     InventoryItem,
     InventoryHistory,
+    MakerTag,
+    MakerTagEvent,
     Manufacturer,
     Model3D,
     ModelRevision,
@@ -70,6 +79,7 @@ from .models import (
     Project,
     RepositoryLink,
     Spool,
+    WiringDiagram,
     ExternalPrinterLink,
     ExternalSpoolLink,
 )
@@ -117,6 +127,478 @@ def _require_permission(request, codename):
 
 def _float(value):
     return float(value) if value is not None else None
+
+
+def _record_tag_event(tag, user, event_type, summary, details=None):
+    MakerTagEvent.objects.create(
+        tag=tag,
+        changed_by=user,
+        event_type=event_type,
+        summary=summary,
+        details=details or {},
+    )
+
+
+def _sync_rfid_tag_to_spool(tag, *, previous=None):
+    """Keep the legacy spool RFID field as a compatibility mirror for RFID Maker Tags."""
+    if previous and previous.get("kind") == "rfid" and previous.get("target_type") == "spool":
+        old_spool = Spool.objects.filter(
+            owner=tag.owner,
+            pk=previous.get("target_id"),
+        ).first()
+        if old_spool and old_spool.rfid_uid == previous.get("code") and (
+            tag.kind != "rfid"
+            or tag.target_type != "spool"
+            or str(tag.target_id) != str(previous.get("target_id"))
+            or tag.code != previous.get("code")
+        ):
+            old_spool.rfid_uid = ""
+            old_spool.save(update_fields=["rfid_uid", "updated_at"])
+
+    if tag.kind != "rfid" or tag.target_type != "spool" or not MakerTag.is_uid_like(tag.code):
+        return
+
+    spool = Spool.objects.filter(owner=tag.owner, pk=tag.target_id).first()
+    if not spool:
+        return
+    existing = str(spool.rfid_uid or "").strip().upper()
+    if existing and existing != tag.code:
+        raise ValidationError({
+            "code": "This spool already has a different RFID UID. Use its existing RFID identity or clear it first."
+        })
+    if existing != tag.code:
+        spool.rfid_uid = tag.code
+        spool.save(update_fields=["rfid_uid", "updated_at"])
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def wiring_lab_diagrams(request):
+    """Standalone wiring workspaces for experimentation before project assignment."""
+    if request.method == "GET":
+        rows = WiringDiagram.objects.filter(owner=request.user, project__isnull=True)
+        return JsonResponse({"rows": [serialise_wiring_diagram(item) for item in rows]})
+
+    denied = _require_permission(request, "core.add_wiringdiagram")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        name = str(payload.get("name") or "").strip()
+        if not name:
+            raise ValidationError({"name": "Diagram name is required."})
+        nodes, connections, canvas = normalise_wiring(
+            request.user,
+            payload.get("nodes") or [],
+            payload.get("connections") or [],
+            payload.get("canvas") or {},
+        )
+        diagram = WiringDiagram(
+            owner=request.user,
+            project=None,
+            name=name,
+            description=str(payload.get("description") or "").strip(),
+            nodes=nodes,
+            connections=connections,
+            canvas=canvas,
+        )
+        diagram.full_clean()
+        diagram.save()
+        return JsonResponse({"item": serialise_wiring_diagram(diagram, detailed=True)}, status=201)
+    except ValidationError as exc:
+        return _validation_response(exc)
+    except IntegrityError:
+        return _error("A standalone wiring diagram with that name already exists.")
+
+
+@login_required
+@require_http_methods(["GET", "PATCH", "DELETE"])
+def wiring_lab_diagram_detail(request, diagram_id):
+    diagram = WiringDiagram.objects.filter(owner=request.user, project__isnull=True, pk=diagram_id).first()
+    if not diagram:
+        return _error("Standalone wiring diagram not found.", status=404)
+
+    if request.method == "GET":
+        return JsonResponse({"item": serialise_wiring_diagram(diagram, detailed=True)})
+    if request.method == "DELETE":
+        denied = _require_permission(request, "core.delete_wiringdiagram")
+        if denied:
+            return denied
+        diagram.delete()
+        return JsonResponse({"deleted": True})
+
+    denied = _require_permission(request, "core.change_wiringdiagram")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        if "name" in payload:
+            name = str(payload.get("name") or "").strip()
+            if not name:
+                raise ValidationError({"name": "Diagram name is required."})
+            diagram.name = name
+        if "description" in payload:
+            diagram.description = str(payload.get("description") or "").strip()
+        if any(key in payload for key in ("nodes", "connections", "canvas")):
+            nodes, connections, canvas = normalise_wiring(
+                request.user,
+                payload.get("nodes", diagram.nodes),
+                payload.get("connections", diagram.connections),
+                payload.get("canvas", diagram.canvas),
+            )
+            diagram.nodes = nodes
+            diagram.connections = connections
+            diagram.canvas = canvas
+            diagram.revision += 1
+        diagram.full_clean()
+        diagram.save()
+        return JsonResponse({"item": serialise_wiring_diagram(diagram, detailed=True)})
+    except ValidationError as exc:
+        return _validation_response(exc)
+    except IntegrityError:
+        return _error("A standalone wiring diagram with that name already exists.")
+
+
+@login_required
+@require_http_methods(["POST"])
+def wiring_lab_assign_project(request, diagram_id):
+    denied = _require_permission(request, "core.change_wiringdiagram")
+    if denied:
+        return denied
+    diagram = WiringDiagram.objects.filter(owner=request.user, project__isnull=True, pk=diagram_id).first()
+    if not diagram:
+        return _error("Standalone wiring diagram not found.", status=404)
+    try:
+        payload = _read_json(request)
+        project = Project.objects.filter(owner=request.user, pk=payload.get("project_id")).first()
+        if not project:
+            raise ValidationError({"project_id": "Choose one of your projects."})
+        if WiringDiagram.objects.filter(project=project, name=diagram.name).exclude(pk=diagram.pk).exists():
+            raise ValidationError({"project_id": "That project already has a wiring diagram with this name."})
+        diagram.project = project
+        diagram.full_clean()
+        diagram.save(update_fields=["project", "updated_at"])
+        return JsonResponse({"item": serialise_wiring_diagram(diagram, detailed=True)})
+    except ValidationError as exc:
+        return _validation_response(exc)
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def project_wiring_diagrams(request, project_id):
+    project = Project.objects.filter(owner=request.user, pk=project_id).first()
+    if not project:
+        return _error("Project not found.", status=404)
+
+    if request.method == "GET":
+        rows = WiringDiagram.objects.filter(owner=request.user, project=project)
+        return JsonResponse({"rows": [serialise_wiring_diagram(item) for item in rows]})
+
+    denied = _require_permission(request, "core.add_wiringdiagram")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        name = str(payload.get("name") or "").strip()
+        if not name:
+            raise ValidationError({"name": "Diagram name is required."})
+        nodes, connections, canvas = normalise_wiring(
+            request.user,
+            payload.get("nodes") or [],
+            payload.get("connections") or [],
+            payload.get("canvas") or {},
+        )
+        diagram = WiringDiagram(
+            owner=request.user,
+            project=project,
+            name=name,
+            description=str(payload.get("description") or "").strip(),
+            nodes=nodes,
+            connections=connections,
+            canvas=canvas,
+        )
+        diagram.full_clean()
+        diagram.save()
+        return JsonResponse({"item": serialise_wiring_diagram(diagram, detailed=True)}, status=201)
+    except ValidationError as exc:
+        return _validation_response(exc)
+    except IntegrityError:
+        return _error("A wiring diagram with that name already exists in this project.")
+
+
+@login_required
+@require_http_methods(["GET", "PATCH", "DELETE"])
+def project_wiring_diagram_detail(request, project_id, diagram_id):
+    diagram = WiringDiagram.objects.filter(
+        owner=request.user,
+        project_id=project_id,
+        pk=diagram_id,
+    ).select_related("project").first()
+    if not diagram:
+        return _error("Wiring diagram not found.", status=404)
+
+    if request.method == "GET":
+        return JsonResponse({"item": serialise_wiring_diagram(diagram, detailed=True)})
+
+    if request.method == "DELETE":
+        denied = _require_permission(request, "core.delete_wiringdiagram")
+        if denied:
+            return denied
+        diagram.delete()
+        return JsonResponse({"deleted": True})
+
+    denied = _require_permission(request, "core.change_wiringdiagram")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        if "name" in payload:
+            name = str(payload.get("name") or "").strip()
+            if not name:
+                raise ValidationError({"name": "Diagram name is required."})
+            diagram.name = name
+        if "description" in payload:
+            diagram.description = str(payload.get("description") or "").strip()
+
+        structure_changed = any(key in payload for key in ("nodes", "connections", "canvas"))
+        if structure_changed:
+            nodes, connections, canvas = normalise_wiring(
+                request.user,
+                payload.get("nodes", diagram.nodes),
+                payload.get("connections", diagram.connections),
+                payload.get("canvas", diagram.canvas),
+            )
+            diagram.nodes = nodes
+            diagram.connections = connections
+            diagram.canvas = canvas
+            diagram.revision += 1
+
+        diagram.full_clean()
+        diagram.save()
+        return JsonResponse({"item": serialise_wiring_diagram(diagram, detailed=True)})
+    except ValidationError as exc:
+        return _validation_response(exc)
+    except IntegrityError:
+        return _error("A wiring diagram with that name already exists in this project.")
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def maker_tags(request):
+    if request.method == "GET":
+        qs = MakerTag.objects.filter(owner=request.user)
+        kind = str(request.GET.get("kind") or "").strip().lower()
+        status = str(request.GET.get("status") or "").strip().lower()
+        target_type = str(request.GET.get("target_type") or "").strip().lower()
+        if kind:
+            qs = qs.filter(kind=kind)
+        if status:
+            qs = qs.filter(status=status)
+        if target_type:
+            qs = qs.filter(target_type=target_type)
+        return JsonResponse({
+            "rows": [serialise_tag(tag) for tag in qs[:5000]],
+            "targets": tag_target_options(request.user),
+            "kinds": [{"value": value, "label": label} for value, label in MakerTag.KINDS],
+            "technologies": [{"value": value, "label": label} for value, label in TAG_TECHNOLOGIES],
+            "target_types": [{"value": value, "label": label} for value, label in MakerTag.TARGET_TYPES],
+        })
+
+    denied = _require_permission(request, "core.add_makertag")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        kind = str(payload.get("kind") or "qr").strip().lower()
+        if kind not in dict(MakerTag.KINDS):
+            raise ValidationError({"kind": "Choose a supported tag type."})
+        target_type = str(payload.get("target_type") or "").strip().lower()
+        target = resolve_tag_target(request.user, target_type, payload.get("target_id"))
+
+        tag = MakerTag(
+            owner=request.user,
+            kind=kind,
+            code=str(payload.get("code") or "").strip(),
+            label=str(payload.get("label") or "").strip(),
+            target_type=target_type,
+            target_id=target.pk,
+            notes=str(payload.get("notes") or "").strip(),
+            metadata=payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {},
+        )
+        if kind == "qr" and not tag.code:
+            tag.code = f"MV-{tag.public_token.hex[:16].upper()}"
+        if kind == "rfid" and target_type == "spool":
+            existing = str(target.rfid_uid or "").strip().upper()
+            submitted = MakerTag.normalise_code(kind, tag.code)
+            if existing and submitted and MakerTag.is_uid_like(submitted) and existing != submitted:
+                raise ValidationError({
+                    "code": "This spool already has a different RFID UID. Use the existing RFID value."
+                })
+            if existing and not submitted:
+                tag.code = existing
+
+        with transaction.atomic():
+            tag.full_clean()
+            tag.save()
+            _sync_rfid_tag_to_spool(tag)
+            _record_tag_event(
+                tag,
+                request.user,
+                "created",
+                f"Created {tag.get_kind_display()} identity and assigned it to {tag.target_type}.",
+                {"target_type": tag.target_type, "target_id": str(tag.target_id)},
+            )
+        return JsonResponse({"item": serialise_tag(tag, include_events=True)}, status=201)
+    except ValidationError as exc:
+        return _validation_response(exc)
+    except (ValueError, IntegrityError) as exc:
+        return _error(str(exc))
+
+
+@login_required
+@require_http_methods(["GET", "PATCH"])
+def maker_tag_detail(request, tag_id):
+    tag = MakerTag.objects.filter(owner=request.user, pk=tag_id).first()
+    if not tag:
+        return _error("Maker Tag not found.", status=404)
+    if request.method == "GET":
+        return JsonResponse({"item": serialise_tag(tag, include_events=True)})
+
+    denied = _require_permission(request, "core.change_makertag")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        previous = {
+            "kind": tag.kind,
+            "code": tag.code,
+            "target_type": tag.target_type,
+            "target_id": str(tag.target_id),
+            "status": tag.status,
+        }
+
+        if "kind" in payload:
+            kind = str(payload.get("kind") or "").strip().lower()
+            if kind not in dict(MakerTag.KINDS):
+                raise ValidationError({"kind": "Choose a supported tag type."})
+            tag.kind = kind
+        if "code" in payload:
+            tag.code = str(payload.get("code") or "").strip()
+        if "label" in payload:
+            tag.label = str(payload.get("label") or "").strip()
+        if "notes" in payload:
+            tag.notes = str(payload.get("notes") or "").strip()
+        if "metadata" in payload and isinstance(payload.get("metadata"), dict):
+            tag.metadata = payload["metadata"]
+
+        target_type = str(payload.get("target_type") or tag.target_type).strip().lower()
+        target_id = payload.get("target_id") or tag.target_id
+        target = resolve_tag_target(request.user, target_type, target_id)
+        tag.target_type = target_type
+        tag.target_id = target.pk
+
+        if tag.kind == "qr" and not str(tag.code or "").strip():
+            tag.code = f"MV-{tag.public_token.hex[:16].upper()}"
+
+        requested_status = str(payload.get("status") or tag.status).strip().lower()
+        if requested_status not in dict(MakerTag.STATUSES):
+            raise ValidationError({"status": "Choose Active or Retired."})
+        if requested_status == "retired" and tag.status != "retired":
+            tag.retired_at = timezone.now()
+        elif requested_status == "active" and tag.status == "retired":
+            tag.retired_at = None
+        tag.status = requested_status
+
+        if tag.kind == "rfid" and tag.target_type == "spool":
+            existing = str(target.rfid_uid or "").strip().upper()
+            submitted = MakerTag.normalise_code(tag.kind, tag.code)
+            if existing and MakerTag.is_uid_like(submitted) and existing not in {submitted, previous.get("code", "")}:
+                raise ValidationError({
+                    "code": "The target spool already has a different RFID UID."
+                })
+
+        with transaction.atomic():
+            tag.full_clean()
+            tag.save()
+            _sync_rfid_tag_to_spool(tag, previous=previous)
+
+            reassigned = (
+                previous["target_type"] != tag.target_type
+                or previous["target_id"] != str(tag.target_id)
+            )
+            if previous["status"] != tag.status:
+                event_type = "retired" if tag.status == "retired" else "reactivated"
+                summary = f"{tag.get_status_display()} Maker Tag."
+            elif reassigned:
+                event_type = "reassigned"
+                summary = f"Reassigned Maker Tag to {tag.target_type}."
+            else:
+                event_type = "updated"
+                summary = "Updated Maker Tag details."
+            _record_tag_event(tag, request.user, event_type, summary, {
+                "previous": previous,
+                "target_type": tag.target_type,
+                "target_id": str(tag.target_id),
+            })
+
+        return JsonResponse({"item": serialise_tag(tag, include_events=True)})
+    except ValidationError as exc:
+        return _validation_response(exc)
+    except (ValueError, IntegrityError) as exc:
+        return _error(str(exc))
+
+
+@login_required
+@require_http_methods(["GET"])
+def maker_tag_resolve_token(request, public_token):
+    tag = MakerTag.objects.filter(
+        owner=request.user,
+        public_token=public_token,
+        status="active",
+    ).first()
+    if not tag:
+        return _error("Active Maker Tag not found.", status=404)
+    return JsonResponse({"item": serialise_tag(tag, include_events=True)})
+
+
+@login_required
+@require_http_methods(["GET"])
+def maker_tag_resolve_code(request):
+    kind = str(request.GET.get("kind") or "").strip().lower()
+    raw_code = str(request.GET.get("code") or "").strip()
+    if not raw_code:
+        return _error("Provide a tag identity code.")
+
+    if kind == "auto":
+        matches = []
+        for candidate_kind, _label in MakerTag.KINDS:
+            code = MakerTag.normalise_code(candidate_kind, raw_code)
+            tag = MakerTag.objects.filter(
+                owner=request.user,
+                kind=candidate_kind,
+                code=code,
+                status="active",
+            ).first()
+            if tag and tag.pk not in {item.pk for item in matches}:
+                matches.append(tag)
+        if not matches:
+            return _error("Active Maker Tag not found.", status=404)
+        if len(matches) > 1:
+            return _error("More than one tag matches this reader value. Choose NFC, RFID or QR explicitly.")
+        return JsonResponse({"item": serialise_tag(matches[0], include_events=True)})
+
+    code = MakerTag.normalise_code(kind, raw_code)
+    if kind not in dict(MakerTag.KINDS) or not code:
+        return _error("Provide a supported tag type and identity code.")
+    tag = MakerTag.objects.filter(
+        owner=request.user,
+        kind=kind,
+        code=code,
+        status="active",
+    ).first()
+    if not tag:
+        return _error("Active Maker Tag not found.", status=404)
+    return JsonResponse({"item": serialise_tag(tag, include_events=True)})
 
 
 @login_required
@@ -205,6 +687,13 @@ def _serialise_board(board, detailed=False):
         "source_url": board.source.url if board.source else "",
         "compatibility": compatibility,
         "updated_at": board.updated_at.isoformat(),
+        # Pinout is compact structured catalogue data used by the wiring editor.
+        # Include it in catalogue rows so a newly-added node can offer pin choices
+        # immediately, before the diagram's first save/reload.
+        "pinout": board.pinout,
+        # Board type is needed by the catalogue list/filter and wiring picker.
+        # Avoid shipping the full specifications object for every catalogue row.
+        "board_type": (board.specifications or {}).get("board_type", "microcontroller"),
     }
     if detailed:
         data.update({
@@ -250,6 +739,14 @@ def _inventory_allocated_quantity(item):
     return allocated or Decimal("0")
 
 
+def _inventory_free_quantity(item):
+    """Return stock that is genuinely free for a new allocation."""
+    if item.status != "available" or item.project_id:
+        return Decimal("0")
+    allocated = _inventory_allocated_quantity(item)
+    return max((item.quantity or Decimal("0")) - allocated, Decimal("0"))
+
+
 def _serialise_inventory(item):
     image_url = ""
     if item.image:
@@ -262,7 +759,7 @@ def _serialise_inventory(item):
     if not image_url and item.component:
         image_url = _image_url(item.component)
     allocated = _inventory_allocated_quantity(item)
-    available = max((item.quantity or Decimal("0")) - allocated, Decimal("0"))
+    available = _inventory_free_quantity(item)
     return {
         "id": str(item.id),
         "inventory_id": item.inventory_id,
@@ -413,10 +910,7 @@ def _record_bom_allocation_history(allocation, user, event_type, *, previous_qua
 def _serialise_bom_allocation(allocation):
     inventory = allocation.inventory_item
     inventory_allocated = _inventory_allocated_quantity(inventory)
-    inventory_available = max(
-        (inventory.quantity or Decimal("0")) - inventory_allocated,
-        Decimal("0"),
-    )
+    inventory_available = _inventory_free_quantity(inventory)
     return {
         "id": allocation.pk,
         "inventory_item_id": str(inventory.pk),
@@ -930,8 +1424,21 @@ def dashboard(request):
         "spools": Spool.objects.filter(owner=request.user).count(),
         "printers": Printer.objects.filter(owner=request.user).count(),
         "models_3d": Model3D.objects.filter(owner=request.user).count(),
+        "maker_tags": MakerTag.objects.filter(owner=request.user, status="active").count(),
     }
     return JsonResponse(data)
+
+
+def _inventory_unit_count(value):
+    try:
+        parsed = Decimal(str(value if value not in (None, "") else 1))
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise ValidationError({"quantity": "Enter a whole number of items."}) from exc
+    if parsed != parsed.to_integral_value() or parsed < 1:
+        raise ValidationError({"quantity": "Inventory quantity must be a whole number of at least 1."})
+    if parsed > 500:
+        raise ValidationError({"quantity": "Add no more than 500 inventory items at once."})
+    return int(parsed)
 
 
 @login_required
@@ -952,6 +1459,18 @@ def inventory(request):
         if item_type not in dict(InventoryItem.ITEM_TYPES):
             return _error("Unknown inventory item type.")
 
+        unit_count = _inventory_unit_count(payload.get("quantity", 1))
+        requested_inventory_id = str(payload.get("inventory_id") or "").strip()
+        requested_serial = str(payload.get("serial_number") or "").strip()
+        if unit_count > 1 and requested_inventory_id:
+            raise ValidationError({
+                "inventory_id": "Leave Inventory ID blank when adding multiple items so each unit can receive its own ID."
+            })
+        if unit_count > 1 and requested_serial:
+            raise ValidationError({
+                "serial_number": "Add items one at a time when assigning a serial or unique ID."
+            })
+
         board = None
         component = None
         if payload.get("board_id"):
@@ -969,29 +1488,40 @@ def inventory(request):
             if not project:
                 return _error("Selected project was not found.")
 
+        created_items = []
         with transaction.atomic():
-            item = InventoryItem(
-                owner=request.user,
-                inventory_id=(str(payload.get("inventory_id") or "").strip() or _next_inventory_id(request.user, item_type)),
-                item_type=item_type,
-                board=board,
-                component=component,
-                custom_name=str(payload.get("custom_name") or "").strip(),
-                quantity=_parse_decimal(payload.get("quantity", 1), "quantity", allow_none=False),
-                status=str(payload.get("status") or "available"),
-                project=project,
-                location=str(payload.get("location") or "").strip(),
-                serial_number=str(payload.get("serial_number") or "").strip(),
-                purchase_price=_parse_decimal(payload.get("purchase_price"), "purchase_price"),
-                currency=str(payload.get("currency") or settings.MAKERVAULT_CURRENCY).upper()[:3],
-                supplier=str(payload.get("supplier") or "").strip(),
-                purchase_url=str(payload.get("purchase_url") or "").strip(),
-                notes=str(payload.get("notes") or "").strip(),
-            )
-            item.full_clean()
-            item.save()
-            _record_inventory_history(item, request.user, created=True)
-        return JsonResponse({"item": _serialise_inventory(item)}, status=201)
+            for index in range(unit_count):
+                item = InventoryItem(
+                    owner=request.user,
+                    inventory_id=(requested_inventory_id if unit_count == 1 else _next_inventory_id(request.user, item_type)),
+                    item_type=item_type,
+                    board=board,
+                    component=component,
+                    custom_name=str(payload.get("custom_name") or "").strip(),
+                    quantity=Decimal("1"),
+                    status=str(payload.get("status") or "available"),
+                    project=project,
+                    location=str(payload.get("location") or "").strip(),
+                    serial_number=(requested_serial if unit_count == 1 else ""),
+                    purchase_price=_parse_decimal(payload.get("purchase_price"), "purchase_price"),
+                    currency=str(payload.get("currency") or settings.MAKERVAULT_CURRENCY).upper()[:3],
+                    supplier=str(payload.get("supplier") or "").strip(),
+                    purchase_url=str(payload.get("purchase_url") or "").strip(),
+                    notes=str(payload.get("notes") or "").strip(),
+                )
+                if not item.inventory_id:
+                    item.inventory_id = _next_inventory_id(request.user, item_type)
+                item.full_clean()
+                item.save()
+                _record_inventory_history(item, request.user, created=True)
+                created_items.append(item)
+
+        serialised = [_serialise_inventory(item) for item in created_items]
+        return JsonResponse({
+            "item": serialised[0],
+            "items": serialised,
+            "created_count": len(serialised),
+        }, status=201)
     except ValidationError as exc:
         return _validation_response(exc)
     except (ValueError, IntegrityError) as exc:
@@ -1068,12 +1598,17 @@ def inventory_detail(request, item_id):
                     setattr(item, field, str(payload[field] or "").strip())
     
             if "quantity" in payload:
-                item.quantity = _parse_decimal(payload["quantity"], "quantity", allow_none=False)
-                allocated = item.bom_allocations.aggregate(total=Sum("quantity"))["total"] or Decimal("0")
-                if item.quantity < allocated:
+                requested_quantity = _inventory_unit_count(payload["quantity"])
+                if requested_quantity != 1:
                     raise ValidationError({
-                        "quantity": f"Quantity cannot be lower than the {allocated} already allocated to BOMs."
+                        "quantity": "Each inventory record represents one physical item. Add another inventory record instead of increasing quantity."
                     })
+                allocated = item.bom_allocations.aggregate(total=Sum("quantity"))["total"] or Decimal("0")
+                if allocated > Decimal("1"):
+                    raise ValidationError({
+                        "quantity": f"This legacy grouped record still has {allocated} allocated. Split it into individual inventory units before changing quantity."
+                    })
+                item.quantity = Decimal("1")
             if "purchase_price" in payload:
                 item.purchase_price = _parse_decimal(payload["purchase_price"], "purchase_price")
             if "currency" in payload:
@@ -1706,6 +2241,14 @@ def _validate_allocation_capacity(bom_item, inventory, quantity, *, excluding_id
     quantity = Decimal(quantity)
     if quantity <= 0:
         raise ValidationError({"quantity": "Allocation quantity must be greater than zero."})
+    if not excluding_id and inventory.status != "available":
+        raise ValidationError({
+            "inventory_item": f"{inventory.inventory_id} is {inventory.get_status_display().lower()} and is not free for allocation."
+        })
+    if not excluding_id and inventory.project_id and inventory.project_id != bom_item.project_id:
+        raise ValidationError({
+            "inventory_item": f"{inventory.inventory_id} is already assigned to another project."
+        })
 
     bom_allocations = bom_item.allocations.all()
     inventory_allocations = inventory.bom_allocations.all()
@@ -5156,6 +5699,11 @@ def public_config(request):
             "delete_model3d": request.user.has_perm("core.delete_model3d"),
             "add_printjob": request.user.has_perm("core.add_printjob"),
             "change_printjob": request.user.has_perm("core.change_printjob"),
+            "add_maker_tag": request.user.has_perm("core.add_makertag"),
+            "change_maker_tag": request.user.has_perm("core.change_makertag"),
+            "add_wiring_diagram": request.user.has_perm("core.add_wiringdiagram"),
+            "change_wiring_diagram": request.user.has_perm("core.change_wiringdiagram"),
+            "delete_wiring_diagram": request.user.has_perm("core.delete_wiringdiagram"),
         },
         "importers": ["ESPBoards.dev"],
     })

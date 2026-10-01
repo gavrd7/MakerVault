@@ -1,11 +1,23 @@
 import unittest
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
+
+from bs4 import BeautifulSoup
 
 from django.test import TestCase, override_settings
 
 from core.catalogue_coverage import _printer_coverage
 from core.catalogue_image_sources import (
+    CatalogueImageError,
     _board_image_queries,
+    _candidate_source_pages,
+    _is_computer_board,
+    _page_image_candidates,
+    _normalise_catalogue_identity,
+    _normalise_search_label,
+    _curated_sbc_source_page,
+    _curated_board_source_pages,
+    _curated_sbc_source_pages,
     _commons_license_allowed,
     _component_image_queries,
     _espboards_slug_candidates,
@@ -118,6 +130,65 @@ class CatalogueImageSourceTests(unittest.TestCase):
         get.return_value = response
         self.assertIsNone(search_wikimedia_commons("Example", minimum_score=0.0))
 
+    def test_page_image_candidates_support_modern_lazy_and_picture_markup(self):
+        soup = BeautifulSoup(
+            """
+            <picture>
+              <source data-srcset="/img/board-small.webp 640w, /img/board-large.webp 1400w">
+              <img data-lazy="/img/board-lazy.webp" alt="Product board">
+            </picture>
+            """,
+            "html.parser",
+        )
+        candidates = _page_image_candidates(soup, "https://vendor.example/product/")
+        urls = [url for url, _method in candidates]
+        self.assertIn("https://vendor.example/img/board-lazy.webp", urls)
+        self.assertIn("https://vendor.example/img/board-large.webp", urls)
+
+    def test_page_image_candidates_prefer_product_photo_over_background_art(self):
+        soup = BeautifulSoup(
+            """
+            <html><body>
+              <img src="/assets/hero-white.webp" alt="background">
+              <img src="/assets/lattepanda-3-delta.webp" alt="product board photo">
+            </body></html>
+            """,
+            "html.parser",
+        )
+        candidates = _page_image_candidates(soup, "https://www.lattepanda.com/lattepanda-3-delta")
+        self.assertEqual(
+            candidates[0],
+            ("https://www.lattepanda.com/assets/lattepanda-3-delta.webp", "page-image"),
+        )
+        self.assertNotIn(
+            ("https://www.lattepanda.com/assets/hero-white.webp", "page-image"),
+            candidates,
+        )
+
+    def test_page_image_candidates_reject_obvious_brand_placeholder_assets(self):
+        soup = BeautifulSoup(
+            """
+            <html><head><meta property="og:image" content="/assets/site-logo.png"></head>
+            <body><img src="/images/bpi-m5-board.jpg" alt="BPI-M5 board"></body></html>
+            """,
+            "html.parser",
+        )
+        candidates = _page_image_candidates(soup, "https://docs.banana-pi.org/en/BPI-M5/")
+        urls = [url for url, _method in candidates]
+        self.assertNotIn("https://docs.banana-pi.org/assets/site-logo.png", urls)
+        self.assertIn("https://docs.banana-pi.org/images/bpi-m5-board.jpg", urls)
+
+    def test_page_image_candidates_support_css_background_images(self):
+        soup = BeautifulSoup(
+            '<div class="product-photo" style="background-image:url(\'/assets/board.png\')"></div>',
+            "html.parser",
+        )
+        candidates = _page_image_candidates(soup, "https://vendor.example/product/")
+        self.assertIn(
+            ("https://vendor.example/assets/board.png", "css-background"),
+            candidates,
+        )
+
     def test_commons_license_filter_rejects_noncommercial_and_nd(self):
         self.assertTrue(_commons_license_allowed("CC BY 4.0"))
         self.assertTrue(_commons_license_allowed("CC BY-SA 4.0"))
@@ -127,6 +198,14 @@ class CatalogueImageSourceTests(unittest.TestCase):
         self.assertFalse(_commons_license_allowed("CC BY-ND 4.0"))
         self.assertFalse(_commons_license_allowed("CC BY-NC-SA 4.0"))
 
+
+    def test_computer_board_detection_uses_catalogue_classification(self):
+        board = BoardModel(name="ROCK 5B", specifications={"board_type": "sbc"})
+        module = BoardModel(name="CM5", specifications={"board_type": "compute_module"})
+        mcu = BoardModel(name="Pico", specifications={"board_type": "microcontroller"})
+        self.assertTrue(_is_computer_board(board))
+        self.assertTrue(_is_computer_board(module))
+        self.assertFalse(_is_computer_board(mcu))
 
     def test_query_generation_prefers_exact_names(self):
         self.assertEqual(_board_image_queries(DummyGenericBoard())[0], "ESP32 C3 Super Mini")
@@ -199,7 +278,346 @@ class CatalogueImageSourceTests(unittest.TestCase):
             "https://vendor.example/media/linked-widget.jpg",
         )
 
-    @patch("core.catalogue_image_sources.fetch_import_html")
+    def test_printer_source_page_participates_in_shared_authoritative_resolution(self):
+        printer = SimpleNamespace(
+            name="P1S",
+            manufacturer=SimpleNamespace(name="Bambu Lab"),
+            features={},
+            source_url="https://bambulab.com/en/p1",
+            source=None,
+        )
+
+        pages = _candidate_source_pages(printer)
+
+        self.assertEqual(pages[0]["url"], "https://bambulab.com/en/p1")
+        self.assertEqual(pages[0]["source_type"], "manufacturer")
+        self.assertEqual(pages[0]["provider"], "Bambu Lab official")
+
+    def test_catalogue_identity_ignores_trademark_spacing_and_punctuation(self):
+        self.assertEqual(
+            _normalise_catalogue_identity("Orange Pi®"),
+            _normalise_catalogue_identity("OrangePi"),
+        )
+        self.assertEqual(
+            _normalise_catalogue_identity("Arduino®"),
+            _normalise_catalogue_identity("Arduino"),
+        )
+
+    def test_curated_mcu_mapping_accepts_trademarked_manufacturer_name(self):
+        board = SimpleNamespace(
+            name="Nano ESP32",
+            manufacturer=SimpleNamespace(name="Arduino®"),
+            specifications={"board_type": "microcontroller"},
+        )
+        self.assertEqual(
+            _curated_board_source_pages(board),
+            ["https://docs.arduino.cc/hardware/nano-esp32"],
+        )
+
+    def test_catalogue_identity_ignores_trademarks_and_marketing_suffixes(self):
+        self.assertEqual(
+            _normalise_catalogue_identity(
+                "Seeed Studio® XIAO RP2040 Supports Arduino, MicroPython and CircuitPython"
+            ),
+            _normalise_catalogue_identity("Seeed Studio XIAO RP2040"),
+        )
+        self.assertEqual(
+            _normalise_catalogue_identity("OrangePi"),
+            _normalise_catalogue_identity("Orange Pi"),
+        )
+        self.assertEqual(
+            _normalise_search_label(
+                "XIAO RP2040 Supports Arduino, MicroPython and CircuitPython"
+            ),
+            "XIAO RP2040",
+        )
+
+    def test_board_queries_strip_lookup_only_noise(self):
+        board = SimpleNamespace(
+            name="XIAO RP2040 - Supports Arduino, MicroPython and CircuitPython [base]",
+            mcu="RP2040",
+            manufacturer=SimpleNamespace(name="Seeed Studio®"),
+        )
+        queries = _board_image_queries(board)
+        self.assertEqual(queries[0], "Seeed Studio XIAO RP2040")
+        self.assertNotIn("[base]", " ".join(queries).lower())
+        self.assertNotIn("supports arduino", " ".join(queries).lower())
+        self.assertNotIn("®", " ".join(queries))
+
+    def test_base_suffix_is_lookup_noise_not_product_identity(self):
+        self.assertEqual(
+            _normalise_search_label("OrangePi 5 Plus [base]"),
+            "OrangePi 5 Plus",
+        )
+        self.assertEqual(
+            _normalise_catalogue_identity("Orange Pi 5 Plus [base]"),
+            _normalise_catalogue_identity("OrangePi 5 Plus"),
+        )
+
+    def test_curated_adafruit_and_banana_pi_sources_use_current_documentation(self):
+        mcu_cases = [
+            ("Adafruit", "Feather ESP32-S3", "https://learn.adafruit.com/adafruit-esp32-s3-feather"),
+            ("Adafruit", "Feather RP2040", "https://learn.adafruit.com/adafruit-feather-rp2040-pico"),
+            ("Adafruit", "QT Py ESP32-C3", "https://learn.adafruit.com/adafruit-qt-py-esp32-c3-wifi-dev-board/pinouts"),
+        ]
+        for manufacturer_name, board_name, expected in mcu_cases:
+            with self.subTest(board=board_name):
+                board = SimpleNamespace(
+                    name=board_name,
+                    manufacturer=SimpleNamespace(name=manufacturer_name),
+                    specifications={"board_type": "microcontroller"},
+                )
+                self.assertEqual(_curated_board_source_pages(board), [expected])
+
+        sbc_cases = [
+            ("BPI-M5", "https://docs.banana-pi.org/en/BPI-M5/Photo_BPI-M5"),
+            ("BPI-M7", "https://docs.banana-pi.org/en/BPI-M7/Photo_BPI-M7"),
+        ]
+        for board_name, expected in sbc_cases:
+            with self.subTest(board=board_name):
+                board = SimpleNamespace(
+                    name=board_name,
+                    manufacturer=SimpleNamespace(name="Banana Pi"),
+                    specifications={"board_type": "sbc"},
+                )
+                self.assertEqual(_curated_sbc_source_page(board), expected)
+
+    def test_curated_mcu_sources_cover_vendor_failure_cluster(self):
+        cases = [
+            ("Espressif", "ESP32-P4-Function-EV-Board", "docs.espressif.com"),
+            ("Heltec", "WiFi LoRa 32 V3", "heltec.org"),
+            ("Heltec", "Wireless Stick Lite V3", "wiki.heltec.org"),
+            ("LilyGo", "T-Deck", "wiki.lilygo.cc"),
+            ("LilyGo", "T-Display-S3", "wiki.lilygo.cc"),
+            ("M5Stack", "Atom Lite", "docs.m5stack.com"),
+            ("M5Stack", "CoreS3", "docs.m5stack.com"),
+            ("Seeed Studio", "XIAO RP2040", "wiki.seeedstudio.com"),
+            ("Seeed Studio", "XIAO RP2350", "wiki.seeedstudio.com"),
+            ("Generic", "ESP32-2432S028R CYD", "github.com"),
+        ]
+        for manufacturer_name, board_name, expected_host in cases:
+            with self.subTest(board=board_name):
+                board = SimpleNamespace(
+                    name=board_name,
+                    manufacturer=SimpleNamespace(name=manufacturer_name),
+                    specifications={"board_type": "microcontroller"},
+                )
+                pages = _curated_board_source_pages(board)
+                self.assertEqual(len(pages), 1)
+                self.assertIn(expected_host, pages[0])
+
+    def test_curated_mcu_source_pages_cover_known_board_failures(self):
+        cases = [
+            ("Adafruit", "Feather RP2040", "https://learn.adafruit.com/adafruit-feather-rp2040-pico"),
+            ("Arduino", "Nano ESP32", "https://docs.arduino.cc/hardware/nano-esp32"),
+            ("DFRobot", "FireBeetle 2 ESP32-E", "https://www.dfrobot.com/product-2195.html"),
+            ("Espressif", "ESP32-P4-Function-EV-Board", "https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32p4/esp32-p4-function-ev-board/user_guide.html"),
+            ("Seeed Studio", "XIAO RP2040", "https://wiki.seeedstudio.com/XIAO-RP2040/"),
+            ("Seeed Studio", "XIAO RP2350", "https://wiki.seeedstudio.com/xiao_rp2350_arduino/"),
+        ]
+        for manufacturer_name, board_name, expected in cases:
+            with self.subTest(board=board_name):
+                board = SimpleNamespace(
+                    name=board_name,
+                    manufacturer=SimpleNamespace(name=manufacturer_name),
+                    specifications={"board_type": "microcontroller"},
+                )
+                self.assertEqual(_curated_board_source_pages(board), [expected])
+
+    def test_cyd_curated_source_is_community_not_manufacturer(self):
+        board = SimpleNamespace(
+            name="ESP32-2432S028R CYD",
+            manufacturer=SimpleNamespace(name="Generic"),
+            specifications={"board_type": "microcontroller"},
+            features={},
+            source_url="",
+            source=None,
+        )
+
+        pages = _candidate_source_pages(board)
+
+        self.assertEqual(
+            pages[0]["url"],
+            "https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display",
+        )
+        self.assertEqual(pages[0]["source_type"], "github")
+        self.assertEqual(pages[0]["provider"], "Community / ecosystem")
+        self.assertEqual(pages[0]["tier"], "community")
+        self.assertEqual(pages[0]["priority"], 40)
+
+    def test_orange_pi_5_plus_prefers_official_wiki_source(self):
+        board = SimpleNamespace(
+            name="Orange Pi 5 Plus",
+            manufacturer=SimpleNamespace(name="Orange Pi"),
+            specifications={"board_type": "sbc"},
+        )
+        pages = _curated_board_source_pages(board)
+        self.assertEqual(
+            pages[0],
+            "https://www.orangepi.org/html/hardWare/computerAndMicrocontrollers/details/Orange-Pi-5-plus.html",
+        )
+
+    def test_curated_sbc_source_mapping_is_exact(self):
+        manufacturer = SimpleNamespace(name="NVIDIA")
+        board = SimpleNamespace(
+            name="Jetson Orin Nano Super Developer Kit",
+            manufacturer=manufacturer,
+            specifications={"board_type": "sbc"},
+        )
+        self.assertEqual(
+            _curated_sbc_source_page(board),
+            "https://docs.nvidia.com/jetson/orin-nano-devkit/user-guide/latest/",
+        )
+
+    def test_curated_sbc_source_mappings_cover_major_vendor_families(self):
+        cases = [
+            ("Banana Pi", "BPI-M5", "https://docs.banana-pi.org/en/BPI-M5/Photo_BPI-M5"),
+            ("BeagleBoard.org", "BeagleY-AI", "https://docs.beagleboard.org/latest/boards/beagley/ai/01-introduction.html"),
+            ("Hardkernel", "ODROID-C5", "https://www.hardkernel.com/shop/odroid-c5/"),
+            ("LattePanda", "LattePanda Mu", "https://www.lattepanda.com/lattepanda-mu"),
+            ("Khadas", "VIM4", "https://www.khadas.com/vim4"),
+            ("Radxa", "ROCK 5B", "https://docs.radxa.com/en/rock5/rock5b/getting-started/introduction"),
+        ]
+        for manufacturer_name, board_name, expected in cases:
+            with self.subTest(board=board_name):
+                board = SimpleNamespace(
+                    name=board_name,
+                    manufacturer=SimpleNamespace(name=manufacturer_name),
+                    specifications={"board_type": "sbc"},
+                )
+                self.assertEqual(_curated_sbc_source_page(board), expected)
+
+    def test_curated_sbc_source_pages_include_exact_fallbacks(self):
+        beagleplay = SimpleNamespace(
+            name="BeaglePlay",
+            manufacturer=SimpleNamespace(name="BeagleBoard.org"),
+            specifications={"board_type": "sbc"},
+        )
+        orange_plus = SimpleNamespace(
+            name="Orange Pi 5 Plus",
+            manufacturer=SimpleNamespace(name="Orange Pi"),
+            specifications={"board_type": "sbc"},
+        )
+
+        self.assertIn(
+            "https://www.beagleboard.org/boards/beagleplay",
+            _curated_sbc_source_pages(beagleplay),
+        )
+        pages = _curated_sbc_source_pages(orange_plus)
+        self.assertIn(
+            "https://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_5_Plus",
+            pages,
+        )
+        self.assertIn("https://www.orangepi.org/", pages)
+
+    def test_curated_sbc_source_mapping_ignores_microcontrollers(self):
+        manufacturer = SimpleNamespace(name="NVIDIA")
+        board = SimpleNamespace(
+            name="Jetson Orin Nano Super Developer Kit",
+            manufacturer=manufacturer,
+            specifications={"board_type": "microcontroller"},
+        )
+        self.assertEqual(_curated_sbc_source_page(board), "")
+
+    def test_page_image_candidates_prefer_structured_product_image(self):
+        html = """
+        <html><head>
+          <meta property="og:image" content="/social-card.jpg">
+          <script type="application/ld+json">
+            {"@type":"Product","name":"Board","image":"/product-board.jpg"}
+          </script>
+        </head></html>
+        """
+        soup = __import__("bs4").BeautifulSoup(html, "html.parser")
+        candidates = _page_image_candidates(soup, "https://vendor.example/board")
+        self.assertEqual(candidates[0], ("https://vendor.example/product-board.jpg", "structured"))
+
+    @patch("core.catalogue_image_sources.fetch_catalogue_source_html")
+    @patch("core.catalogue_image_sources._candidate_source_pages")
+    def test_source_page_image_uses_catalogue_source_fetcher(self, pages, fetch):
+        pages.return_value = [{
+            "url": "https://docs.beagleboard.org/latest/boards/beagleplay/index.html",
+            "source_type": "manufacturer",
+            "provider": "BeagleBoard.org",
+        }]
+        fetch.return_value = (
+            "https://docs.beagleboard.org/latest/boards/beagleplay/index.html",
+            '<html><head><meta property="og:image" content="/img/beagleplay.jpg"></head></html>',
+        )
+
+        result = find_source_page_image(SimpleNamespace())
+
+        self.assertEqual(
+            result["external_image_url"],
+            "https://docs.beagleboard.org/img/beagleplay.jpg",
+        )
+        fetch.assert_called_once_with(
+            "https://docs.beagleboard.org/latest/boards/beagleplay/index.html"
+        )
+
+    @patch("core.catalogue_image_sources.fetch_catalogue_source_html")
+    @patch("core.catalogue_image_sources._candidate_source_pages")
+    def test_source_page_diagnostics_record_missing_image_candidate(self, pages, fetch):
+        pages.return_value = [{
+            "url": "https://docs.example.test/board",
+            "source_type": "manufacturer",
+            "provider": "Example",
+        }]
+        fetch.return_value = (
+            "https://docs.example.test/board",
+            "<html><body><h1>Board documentation</h1></body></html>",
+        )
+        diagnostics = []
+
+        result = find_source_page_image(SimpleNamespace(), diagnostics=diagnostics)
+
+        self.assertIsNone(result)
+        self.assertEqual(diagnostics[0]["result"], "no-image-candidate")
+        self.assertEqual(diagnostics[0]["tier"], "manufacturer")
+
+    def test_page_image_candidates_support_lazy_product_images(self):
+        html = """
+        <html><body>
+          <img class="woocommerce-product-gallery__image"
+               src="data:image/gif;base64,placeholder"
+               data-large_image="/uploads/odroid-c5-main.webp"
+               alt="ODROID-C5">
+        </body></html>
+        """
+        soup = __import__("bs4").BeautifulSoup(html, "html.parser")
+        candidates = _page_image_candidates(soup, "https://www.hardkernel.com/shop/odroid-c5/")
+        self.assertEqual(
+            candidates[0],
+            ("https://www.hardkernel.com/uploads/odroid-c5-main.webp", "page-image"),
+        )
+
+    def test_page_image_candidates_support_gallery_anchor_images(self):
+        html = """
+        <html><body>
+          <a class="woocommerce-product-gallery__image" href="/uploads/rock5b.jpg">
+            <img src="/tiny-placeholder.gif" alt="ROCK 5B">
+          </a>
+        </body></html>
+        """
+        soup = __import__("bs4").BeautifulSoup(html, "html.parser")
+        candidates = _page_image_candidates(soup, "https://example.test/product/")
+        self.assertIn(
+            ("https://example.test/uploads/rock5b.jpg", "gallery-image"),
+            candidates,
+        )
+
+    def test_page_image_candidates_support_documentation_page_images(self):
+        html = """
+        <html><body>
+          <img src="/logo.png" alt="Vendor logo">
+          <img data-src="/images/board-front.webp" alt="Example Board front view">
+        </body></html>
+        """
+        soup = __import__("bs4").BeautifulSoup(html, "html.parser")
+        candidates = _page_image_candidates(soup, "https://docs.vendor.example/boards/example")
+        self.assertEqual(candidates[0], ("https://docs.vendor.example/images/board-front.webp", "page-image"))
+
+    @patch("core.catalogue_image_sources.fetch_catalogue_source_html")
     def test_source_page_remote_image_supports_secure_opengraph_variant(self, fetch_html):
         class Source:
             url = "https://vendor.example/products/widget"
@@ -217,7 +635,7 @@ class CatalogueImageSourceTests(unittest.TestCase):
         self.assertEqual(found["external_image_url"], "https://vendor.example/images/widget-secure.jpg")
         self.assertEqual(found["image_source_discovery"], "meta")
 
-    @patch("core.catalogue_image_sources.fetch_import_html")
+    @patch("core.catalogue_image_sources.fetch_catalogue_source_html")
     def test_source_page_remote_image_uses_opengraph_without_caching(self, fetch_html):
         class Source:
             url = "https://vendor.example/products/widget"
@@ -233,7 +651,7 @@ class CatalogueImageSourceTests(unittest.TestCase):
         self.assertEqual(found["image_source_provider"], "vendor.example")
         self.assertEqual(found["image_source_type"], "source-page-remote")
 
-    @patch("core.catalogue_image_sources.fetch_import_html")
+    @patch("core.catalogue_image_sources.fetch_catalogue_source_html")
     def test_source_page_remote_image_uses_structured_metadata_when_meta_missing(self, fetch_html):
         class Source:
             url = "https://vendor.example/products/widget"
@@ -251,7 +669,7 @@ class CatalogueImageSourceTests(unittest.TestCase):
         self.assertEqual(found["external_image_url"], "https://vendor.example/images/widget.jpg")
         self.assertEqual(found["image_source_discovery"], "structured")
 
-    @patch("core.catalogue_image_sources.fetch_import_html")
+    @patch("core.catalogue_image_sources.fetch_catalogue_source_html")
     def test_source_pages_try_manufacturer_before_generic(self, fetch_html):
         class Source:
             url = "https://example.net/widget"
@@ -391,6 +809,89 @@ class CatalogueImagePriorityTests(TestCase):
     )
     @patch("core.catalogue_image_sources.cache.delete")
     @patch("core.catalogue_image_sources.cache.add", return_value=True)
+    @patch("core.catalogue_image_sources.find_source_page_image", return_value=None)
+    @patch("core.catalogue_image_sources.resolve_catalogue_image", return_value=None)
+    def test_component_without_exact_image_uses_generic_artwork(
+        self,
+        resolve_image,
+        source_image,
+        cache_add,
+        cache_delete,
+    ):
+        result = run_catalogue_image_seed(
+            limit=1,
+            force_retry=True,
+            kinds=["components"],
+        )
+
+        self.assertEqual(result["failed"], 0)
+        self.assertEqual(result["artwork"], 1)
+        self.assertEqual(result["by_kind"]["components"]["artwork"], 1)
+        self.component.refresh_from_db()
+        self.assertEqual(
+            self.component.specifications["auto_image_last_result"],
+            "generic-artwork",
+        )
+        cache_add.assert_called_once()
+        cache_delete.assert_called_once()
+
+    @override_settings(
+        CATALOGUE_IMAGE_MAX_PER_RUN=1,
+        CATALOGUE_IMAGE_RETRY_DAYS=1,
+        CATALOGUE_IMAGE_WIKIMEDIA=True,
+        CATALOGUE_IMAGE_OPENVERSE=True,
+    )
+    @patch("core.catalogue_image_sources.cache.delete")
+    @patch("core.catalogue_image_sources.cache.add", return_value=True)
+    @patch("core.catalogue_image_sources.cache_candidate", side_effect=CatalogueImageError("HTTP 424"))
+    @patch("core.catalogue_image_sources.resolve_catalogue_image")
+    @patch("core.catalogue_image_sources.find_source_page_image", return_value=None)
+    def test_component_cache_error_falls_back_to_generic_artwork(
+        self,
+        source_image,
+        resolve_image,
+        cache_candidate,
+        cache_add,
+        cache_delete,
+    ):
+        from core.catalogue_image_sources import ImageCandidate
+
+        resolve_image.return_value = ImageCandidate(
+            image_url="https://example.test/component.jpg",
+            source_page_url="https://example.test/component",
+            provider="Wikimedia Commons",
+            license_name="CC BY-SA 4.0",
+            query="test component",
+        )
+
+        result = run_catalogue_image_seed(
+            limit=1,
+            force_retry=True,
+            kinds=["components"],
+        )
+
+        self.assertEqual(result["failed"], 0)
+        self.assertEqual(result["artwork"], 1)
+        self.component.refresh_from_db()
+        self.assertEqual(
+            self.component.specifications["auto_image_last_result"],
+            "generic-artwork-after-image-error",
+        )
+        self.assertEqual(
+            self.component.specifications["auto_image_last_error"],
+            "HTTP 424",
+        )
+        cache_add.assert_called_once()
+        cache_delete.assert_called_once()
+
+    @override_settings(
+        CATALOGUE_IMAGE_MAX_PER_RUN=1,
+        CATALOGUE_IMAGE_RETRY_DAYS=1,
+        CATALOGUE_IMAGE_WIKIMEDIA=True,
+        CATALOGUE_IMAGE_OPENVERSE=True,
+    )
+    @patch("core.catalogue_image_sources.cache.delete")
+    @patch("core.catalogue_image_sources.cache.add", return_value=True)
     @patch("core.catalogue_image_sources.cache_candidate")
     @patch("core.catalogue_image_sources._search_open_media_with_diagnostics")
     def test_targeted_printer_pass_does_not_spend_limit_on_other_catalogues(
@@ -512,7 +1013,7 @@ class CatalogueImagePriorityTests(TestCase):
 
         result = run_catalogue_image_seed(
             limit=1,
-            force_retry=True,
+            force_retry=False,
             kinds=["printers"],
         )
 
@@ -558,7 +1059,7 @@ class CatalogueImagePriorityTests(TestCase):
 
         result = run_catalogue_image_seed(
             limit=1,
-            force_retry=True,
+            force_retry=False,
             kinds=["printers"],
         )
 
@@ -626,6 +1127,113 @@ class CatalogueImagePriorityTests(TestCase):
             self.component.specifications["source_trace"][-1]["tier"],
             "manufacturer",
         )
+        cache_add.assert_called_once()
+        cache_delete.assert_called_once()
+
+    @override_settings(CATALOGUE_IMAGE_MAX_PER_RUN=0)
+    @patch("core.catalogue_image_sources.cache.delete")
+    @patch("core.catalogue_image_sources.cache.add", return_value=True)
+    @patch("core.catalogue_image_sources.resolve_catalogue_image", return_value=None)
+    @patch("core.catalogue_image_sources.find_source_page_image", return_value=None)
+    def test_board_type_filter_targets_only_sbc_records(
+        self,
+        source_image,
+        resolve_image,
+        cache_add,
+        cache_delete,
+    ):
+        self.board.specifications = {"board_type": "microcontroller"}
+        self.board.save(update_fields=["specifications", "updated_at"])
+        BoardModel.objects.create(
+            name="Test SBC",
+            family="Test",
+            specifications={"board_type": "sbc"},
+        )
+
+        result = run_catalogue_image_seed(
+            limit=0,
+            force_retry=True,
+            kinds=["boards"],
+            board_types=["sbc"],
+        )
+
+        self.assertEqual(result["processed"], 1)
+        self.assertEqual(result["by_kind"]["boards"]["processed"], 1)
+        resolve_image.assert_called_once()
+        self.assertEqual(resolve_image.call_args.args[0].name, "Test SBC")
+
+    @override_settings(
+        CATALOGUE_IMAGE_MAX_PER_RUN=1,
+        CATALOGUE_IMAGE_RETRY_DAYS=1,
+        CATALOGUE_IMAGE_WIKIMEDIA=True,
+        CATALOGUE_IMAGE_OPENVERSE=True,
+    )
+    @patch("core.catalogue_image_sources.cache.delete")
+    @patch("core.catalogue_image_sources.cache.add", return_value=True)
+    @patch("core.catalogue_image_sources.resolve_catalogue_image", return_value=None)
+    @patch("core.catalogue_image_sources.find_source_page_image", return_value=None)
+    def test_new_generation_rechecks_remote_microcontroller_reference(
+        self,
+        source_image,
+        resolve_image,
+        cache_add,
+        cache_delete,
+    ):
+        self.board.specifications = {
+            "board_type": "microcontroller",
+            "external_image_url": "https://stale.example/board.jpg",
+            "auto_image_attempt_version": "older-generation",
+        }
+        self.board.save(update_fields=["specifications", "updated_at"])
+
+        result = run_catalogue_image_seed(
+            limit=1,
+            force_retry=False,
+            kinds=["boards"],
+        )
+
+        self.assertEqual(result["processed"], 1)
+        self.assertEqual(result["by_kind"]["boards"]["skipped"], 0)
+        self.assertGreaterEqual(source_image.call_count, 1)
+        resolve_image.assert_called_once()
+        cache_add.assert_called_once()
+        cache_delete.assert_called_once()
+
+    @override_settings(
+        CATALOGUE_IMAGE_MAX_PER_RUN=1,
+        CATALOGUE_IMAGE_RETRY_DAYS=1,
+        CATALOGUE_IMAGE_WIKIMEDIA=True,
+        CATALOGUE_IMAGE_OPENVERSE=True,
+    )
+    @patch("core.catalogue_image_sources.cache.delete")
+    @patch("core.catalogue_image_sources.cache.add", return_value=True)
+    @patch("core.catalogue_image_sources.resolve_catalogue_image", return_value=None)
+    @patch("core.catalogue_image_sources.find_source_page_image", return_value=None)
+    def test_force_retry_reprocesses_remote_board_reference(
+        self,
+        source_image,
+        resolve_image,
+        cache_add,
+        cache_delete,
+    ):
+        self.board.specifications = {
+            "board_type": "sbc",
+            "external_image_url": "https://stale.example/board.jpg",
+            "auto_image_attempt_version": "older-generation",
+        }
+        self.board.save(update_fields=["specifications", "updated_at"])
+
+        result = run_catalogue_image_seed(
+            limit=1,
+            force_retry=True,
+            kinds=["boards"],
+        )
+
+        self.assertEqual(result["processed"], 1)
+        self.assertEqual(result["by_kind"]["boards"]["skipped"], 0)
+        self.assertEqual(result["by_kind"]["boards"]["failed"], 1)
+        source_image.assert_called()
+        resolve_image.assert_called_once()
         cache_add.assert_called_once()
         cache_delete.assert_called_once()
 

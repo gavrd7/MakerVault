@@ -1,6 +1,6 @@
 # MakerVault roadmap
 
-_Last updated: 30 September 2026_
+_Last updated: 1 October 2026_
 
 This file tracks completed MakerVault milestones and the planned path toward a stable v1 release. The `main` branch is the deployable source of truth.
 
@@ -113,6 +113,8 @@ This file tracks completed MakerVault milestones and the planned path toward a s
 ---
 
 ### v0.7.2 — Maker Tags & interactive wiring
+
+**In development — final validation:** Maker Tags identity, assignment/history APIs and the responsive management/scan UI are implemented. The structured interactive wiring workspace is in place with draggable nodes, catalogue-aware pin selection, pin-to-pin connections, cautious validation, JSON/SVG export, standalone Wiring Lab support and scan-to-target navigation. The accompanying catalogue/image-quality pass is also complete apart from two deliberately unresolved Orange Pi source-fetch failures. Remaining work is final live-install smoke testing and full CI before merge.
 
 **Goal:** connect physical objects to MakerVault and add a maker-friendly structured wiring workspace.
 
@@ -232,6 +234,23 @@ This file tracks completed MakerVault milestones and the planned path toward a s
 - Security review of authentication, file handling, integrations, remote printer access and destructive workflows.
 - Review configuration defaults, diagnostics and support bundles/logging.
 - Define the supported v1 deployment model and release/upgrade policy.
+
+## Post-v1 exploration
+
+### MakerVault hardware tag reader
+
+**Goal:** provide an optional local hardware companion for fast physical-object identification without making dedicated hardware a requirement for MakerVault.
+
+- Explore an ESP32-based network reader using common NFC/RFID hardware such as PN532-class readers.
+- Allow a tap/scan to resolve a Maker Tag against the user's MakerVault instance over the local network.
+- Support useful workshop workflows such as identifying inventory/components, spools, printers and storage locations; opening the linked record; and initiating context-aware actions where appropriate.
+- Reuse the generic Maker Tags identity model and API rather than introducing a hardware-specific tag database.
+- Design secure device enrolment/authentication, revocation and least-privilege API access before allowing reader-initiated changes.
+- Consider a simple enclosure/PCB/reference build plus ESPHome/Home Assistant interoperability where it does not compromise the standalone MakerVault workflow.
+- Keep ordinary QR scanning, phone NFC and USB/OTG readers fully supported so the hardware reader remains optional.
+- Revisit implementation after the stable v1 release rather than expanding pre-v1 scope.
+
+---
 
 ## Ongoing tracks
 

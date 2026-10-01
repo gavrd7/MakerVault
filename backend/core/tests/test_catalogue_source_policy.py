@@ -27,6 +27,48 @@ class CatalogueSourcePolicyTests(SimpleTestCase):
             "manufacturer",
         )
 
+    def test_maker_board_vendor_hosts_are_manufacturer_sources(self):
+        urls = [
+            "https://www.elecrow.com/wiki/example",
+            "https://heltec.org/project/example/",
+            "https://wiki.lilygo.cc/products/example/",
+            "https://docs.m5stack.com/en/example",
+        ]
+        for url in urls:
+            with self.subTest(url=url):
+                self.assertEqual(classify_source_url(url).key, "manufacturer")
+
+    def test_sbc_vendor_hosts_are_manufacturer_sources(self):
+        urls = [
+            "https://www.orangepi.org/html/hardWare/example.html",
+            "https://www.hardkernel.com/shop/example/",
+            "https://docs.radxa.com/en/rock5/example",
+            "https://docs.banana-pi.org/en/example",
+            "https://docs.beagleboard.org/boards/example/",
+            "https://www.lattepanda.com/example",
+            "https://developer.nvidia.com/embedded/example",
+            "https://docs.khadas.com/products/sbc/example",
+        ]
+        for url in urls:
+            with self.subTest(url=url):
+                self.assertEqual(classify_source_url(url).key, "manufacturer")
+
+    def test_printer_vendor_hosts_are_manufacturer_sources(self):
+        urls = [
+            "https://www.creality.com/products/example",
+            "https://bambulab.com/en/example",
+            "https://www.prusa3d.com/product/example/",
+            "https://store.anycubic.com/products/example",
+            "https://www.flashforge.com/example",
+            "https://www.elegoo.com/products/example",
+            "https://qidi3d.com/pages/example",
+            "https://www.sovol3d.com/products/example",
+            "https://www.snapmaker.com/en-US/example",
+        ]
+        for url in urls:
+            with self.subTest(url=url):
+                self.assertEqual(classify_source_url(url).key, "manufacturer")
+
     def test_specialist_and_community_sources_are_distinct(self):
         self.assertEqual(
             classify_source_url("https://www.espboards.dev/esp32/example/").key,

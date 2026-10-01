@@ -238,6 +238,37 @@ BOARD_PROFILES = {
             "reference_url": "https://www.espboards.dev/esp32/esp32-c6-super-mini/",
         },
     },
+    ("Espressif", "ESP32-C3-DevKitM-1"): {
+        "gpio_count": 13,
+        "pinout": {
+            "pins": [
+                {"name": "GND", "role": "ground"},
+                {"name": "3V3", "role": "power_output", "voltage": 3.3},
+                {"name": "5V", "role": "power", "voltage": 5.0},
+                {"name": "IO0", "role": "gpio"},
+                {"name": "IO1", "role": "gpio"},
+                {"name": "IO2", "role": "gpio"},
+                {"name": "IO3", "role": "gpio"},
+                {"name": "IO4", "role": "gpio"},
+                {"name": "IO5", "role": "gpio"},
+                {"name": "IO6", "role": "gpio"},
+                {"name": "IO7", "role": "gpio"},
+                {"name": "IO8", "role": "gpio"},
+                {"name": "IO9", "role": "gpio"},
+                {"name": "IO10", "role": "gpio"},
+                {"name": "IO18", "role": "gpio"},
+                {"name": "IO19", "role": "gpio"},
+                {"name": "TX", "role": "uart_tx"},
+                {"name": "RX", "role": "uart_rx"},
+                {"name": "RST", "role": "input"}
+            ],
+            "source": "https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c3/esp32-c3-devkitm-1/user_guide.html"
+        },
+        "specifications": {
+            "reference_provider": "Espressif",
+            "reference_url": "https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c3/esp32-c3-devkitm-1/user_guide.html"
+        },
+    },
     ("Adafruit", "Feather ESP32-S3"): {
         "usb_connector": "USB-C",
         "dimensions_mm": {"length": 50.8, "width": 22.86},
@@ -766,6 +797,18 @@ BOARD_PROFILES = {
             "native_usb": True,
             "reference_url": "https://www.pjrc.com/store/teensy41.html",
         },
+    },
+    ("Orange Pi", "Orange Pi 5 Plus"): {
+        "gpio_count": 28, "dimensions_mm": {"length": 100, "width": 75},
+        "specifications": {"clock_mhz": 2400, "cpu_cores": 8, "ram_options": ["4 GB", "8 GB", "16 GB", "32 GB"], "storage": ["microSD", "eMMC module", "M.2 2280 NVMe"], "ethernet": "2× 2.5GbE", "gpio_header": "40-pin · 28 GPIO · 3.3 V", "uart_count": 6, "i2c_count": 4, "npu_tops": 6, "power_input": "USB-C 5 V / 4 A", "os_support": ["Orange Pi OS", "Ubuntu", "Debian", "OpenWrt", "Android"], "reference_provider": "Orange Pi", "reference_url": "https://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_5_Plus"},
+    },
+    ("Orange Pi", "Orange Pi 5 Pro"): {
+        "dimensions_mm": {"length": 89, "width": 56}, "wifi": True, "bluetooth": True,
+        "specifications": {"clock_mhz": 2400, "cpu_cores": 8, "ram_options": ["4 GB", "8 GB", "16 GB"], "storage": ["microSD", "eMMC module", "M.2 NVMe/SATA"], "ethernet": "Gigabit Ethernet", "gpio_header": "40-pin", "npu_tops": 6, "power_input": "USB-C 5 V / 5 A", "os_support": ["Orange Pi OS", "Ubuntu", "Debian", "Android"], "reference_provider": "Orange Pi"},
+    },
+    ("Orange Pi", "Orange Pi Zero 3"): {
+        "dimensions_mm": {"length": 55, "width": 50}, "gpio_count": 16, "wifi": True, "bluetooth": True,
+        "specifications": {"clock_mhz": 1500, "cpu_cores": 4, "ram_options": ["1 GB", "1.5 GB", "2 GB", "4 GB"], "storage": ["microSD", "16 MB SPI flash"], "ethernet": "Gigabit Ethernet", "gpio_header": "26-pin plus 13-pin function header", "uart_count": 1, "i2c_count": 1, "spi_count": 1, "power_input": "USB-C 5 V", "wifi_standard": "802.11 a/b/g/n/ac", "bluetooth_generation": "Bluetooth 5.0", "os_support": ["Orange Pi OS", "Ubuntu", "Debian", "Android"], "reference_provider": "Orange Pi", "reference_url": "https://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_Zero_3"},
     },
 }
 

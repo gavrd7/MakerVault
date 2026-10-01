@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
 import { themeQuartz } from "ag-grid-community";
 import { apiFetch } from "../api";
-import { Badge, BoardImage, ImageManagerModal, ImageViewer, LoadingBlock, Modal } from "./Common";
+import { Badge, ComponentArtwork, ImageManagerModal, ImageViewer, LoadingBlock, Modal } from "./Common";
 import { AddInventoryModal } from "./InventoryPage";
 
 function prettyKey(key) {
@@ -33,7 +33,7 @@ export default function ComponentsPage({ components, setComponents, boards, proj
   }, [components, query, category]);
 
   const columns = useMemo(() => [
-    { headerName: "", field: "image", width: 72, sortable: false, filter: false, cellRenderer: p => <BoardImage src={p.value} alt={p.data?.name || ""} size="tiny" placeholder="PART" /> },
+    { headerName: "", field: "image", width: 72, sortable: false, filter: false, cellRenderer: p => <ComponentArtwork src={p.value} alt={p.data?.name || ""} size="tiny" type={p.data?.type} category={p.data?.category} partNumber={p.data?.part_number} /> },
     { field: "category", minWidth: 155 },
     { field: "name", headerName: "Component", minWidth: 255, flex: 1 },
     { field: "part_number", headerName: "Part / IC", minWidth: 135 },
@@ -131,7 +131,7 @@ function ComponentDetail({ component, loading, canEdit, canAddInventory, boards,
         disabled={!component.image}
         title={component.image ? "Open image viewer" : undefined}
       >
-        <BoardImage src={component.image} alt={component.name} size="large" placeholder="PART" />
+        <ComponentArtwork src={component.image} alt={component.name} size="large" type={component.type} category={component.category} partNumber={component.part_number} />
       </button>
       <div className="detailTitleRow"><div><h2>{component.name}</h2><p className="muted detailMaker">{component.category}</p></div><div className="detailActions">{canAddInventory && <button className="primary" onClick={() => setInventoryOpen(true)}>＋ Add to inventory</button>}{canEdit && <button onClick={() => setImageOpen(true)}>Image</button>}</div></div>
       <p className="muted">{component.description || "Reusable makerspace component definition."}</p>

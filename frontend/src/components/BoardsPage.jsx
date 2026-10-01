@@ -61,27 +61,32 @@ export default function BoardsPage({ boards, setBoards, components, projects, co
   const [query, setQuery] = useState("");
   const [manufacturer, setManufacturer] = useState("");
   const [family, setFamily] = useState("");
+  const [boardType, setBoardType] = useState("");
   const [selected, setSelected] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
 
   const manufacturers = useMemo(() => [...new Set(boards.map(b => b.manufacturer).filter(Boolean))].sort(), [boards]);
   const families = useMemo(() => [...new Set(boards.map(b => b.family).filter(Boolean))].sort(), [boards]);
+  const boardTypes = useMemo(() => [...new Set(boards.map(b => b.board_type || b.specifications?.board_type).filter(Boolean))].sort(), [boards]);
+  const boardTypeLabel = value => ({ microcontroller: "Microcontroller", sbc: "Single-board computer", compute_module: "Compute module / SoM" }[value] || value);
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return boards.filter(board =>
       (!manufacturer || board.manufacturer === manufacturer)
       && (!family || board.family === family)
+      && (!boardType || (board.board_type || board.specifications?.board_type) === boardType)
       && (!q || [board.name, board.manufacturer, board.family, board.mcu, board.variant].join(" ").toLowerCase().includes(q))
     );
-  }, [boards, query, manufacturer, family]);
+  }, [boards, query, manufacturer, family, boardType]);
 
   const columns = useMemo(() => [
-    { headerName: "", field: "image", width: 72, sortable: false, filter: false, cellRenderer: p => <BoardImage src={p.value} alt={p.data?.name || ""} size="tiny" /> },
+    { headerName: "", field: "image", width: 72, sortable: false, filter: false, cellRenderer: p => <BoardImage src={p.value} alt={p.data?.name || ""} size="tiny" placeholder={({ sbc: "SBC", compute_module: "SoM" }[p.data?.board_type || p.data?.specifications?.board_type] || "MCU")} /> },
     { field: "manufacturer", minWidth: 150 },
     { field: "name", headerName: "Board", minWidth: 230, flex: 1 },
+    { headerName: "Type", minWidth: 155, valueGetter: p => boardTypeLabel(p.data?.board_type || p.data?.specifications?.board_type || "microcontroller") },
     { field: "family", minWidth: 125 },
-    { field: "mcu", headerName: "MCU", minWidth: 135 },
+    { field: "mcu", headerName: "Processor / MCU", minWidth: 155 },
     { field: "flash_mb", headerName: "Flash", width: 105, valueFormatter: p => formatMemoryMb(p.value) },
     { headerName: "Wireless", minWidth: 190, valueGetter: p => [p.data.wifi && "Wi-Fi", p.data.bluetooth && "BT", p.data.zigbee && "Zigbee", p.data.thread && "Thread"].filter(Boolean).join(" · ") },
     { field: "source", minWidth: 145 },
@@ -111,6 +116,7 @@ export default function BoardsPage({ boards, setBoards, components, projects, co
         <div className="toolbarActions">
           <input className="searchInput" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search boards…" />
           <select value={manufacturer} onChange={e => setManufacturer(e.target.value)}><option value="">All manufacturers</option>{manufacturers.map(x => <option key={x}>{x}</option>)}</select>
+          <select value={boardType} onChange={e => setBoardType(e.target.value)}><option value="">All board types</option>{boardTypes.map(x => <option key={x} value={x}>{boardTypeLabel(x)}</option>)}</select>
           <select value={family} onChange={e => setFamily(e.target.value)}><option value="">All families</option>{families.map(x => <option key={x}>{x}</option>)}</select>
           {config?.permissions?.add_board && <>
             <button onClick={() => setShowAdd(true)}>＋ Manual</button>
@@ -167,6 +173,7 @@ function BoardDetail({ board, loading, canEdit, canAddInventory, boards, compone
     .filter(([on]) => on).map(([, label]) => label);
 
   const specs = board.specifications || {};
+  const boardTypeLabel = ({ microcontroller: "Microcontroller", sbc: "Single-board computer", compute_module: "Compute module / SoM" }[specs.board_type] || specs.board_type || "Microcontroller");
   const fieldStatus = specs.technical_field_status || {};
   const coreRows = [
     { key: "mcu", label: "MCU", value: board.mcu || "" },
@@ -178,6 +185,7 @@ function BoardDetail({ board, loading, canEdit, canAddInventory, boards, compone
     { key: "usb", label: "USB connector", value: board.usb_connector || "" },
     { key: "dimensions", label: "Dimensions", value: board.dimensions_mm?.length && board.dimensions_mm?.width ? `${board.dimensions_mm.length} × ${board.dimensions_mm.width} mm` : "" },
   ];
+  const isComputerBoard = specs.board_type === "sbc" || specs.board_type === "compute_module";
   const technicalRows = [
     { key: "clock_mhz", label: "Clock", value: specs.clock_mhz == null ? "" : `${specs.clock_mhz} MHz` },
     { key: "eeprom_kb", label: "EEPROM", value: specs.eeprom_kb == null ? "" : `${specs.eeprom_kb} KB` },
@@ -197,7 +205,7 @@ function BoardDetail({ board, loading, canEdit, canAddInventory, boards, compone
     { key: "ieee_802154", label: "802.15.4", value: specs.ieee_802154 === true ? "Yes" : specs.ieee_802154 === false ? "No" : "" },
     { key: "pio_state_machines", label: "PIO state machines", value: specs.pio_state_machines ?? "" },
     { key: "wireless", label: "Wireless", value: radios.length ? radios.join(" · ") : "" },
-  ];
+  ].filter(row => !isComputerBoard || ["clock_mhz", "cpu_cores", "operating_voltage", "pin_count", "uart_count", "spi_count", "i2c_count", "wireless"].includes(row.key));
 
   async function enrichBoard() {
     setEnriching(true); setEnrichMessage("");
@@ -218,7 +226,7 @@ function BoardDetail({ board, loading, canEdit, canAddInventory, boards, compone
       <div className="detailHead boardDetailHead"><h3>Board details</h3><button className="iconButton" onClick={onClose} aria-label="Close board details">×</button></div>
       <div className="boardDetailScroll">
       {loading ? <LoadingBlock label="Loading board details…" /> : <>
-      <button type="button" className="boardHeroImage imageViewerTrigger" onClick={() => board.image && setViewerOpen(true)} disabled={!board.image} title={board.image ? "Open image viewer" : undefined}><BoardImage src={board.image} alt={board.display_name} size="large" /></button>
+      <button type="button" className="boardHeroImage imageViewerTrigger" onClick={() => board.image && setViewerOpen(true)} disabled={!board.image} title={board.image ? "Open image viewer" : undefined}><BoardImage src={board.image} alt={board.display_name} size="large"  placeholder={({ sbc: "SBC", compute_module: "SoM" }[specs.board_type] || "MCU")} /></button>
       <div className="detailTitleRow boardTitleRow">
         <h2>{board.display_name}</h2>
         <div className="detailActions">
@@ -229,15 +237,28 @@ function BoardDetail({ board, loading, canEdit, canAddInventory, boards, compone
       </div>
       <p className="muted boardSubtitle">{board.description || `${board.family || "Development board"}${board.mcu ? ` · ${board.mcu}` : ""}`}</p>
       {enrichMessage && <div className="detailNotice">{enrichMessage}</div>}
-      <div className="badgeRow boardBadgeRow">{radios.map(x => <Badge key={x} tone="accent">{x}</Badge>)}{board.usb_connector && <Badge>{board.usb_connector}</Badge>}</div>
+      <div className="badgeRow boardBadgeRow"><Badge tone="accent">{boardTypeLabel}</Badge>{radios.map(x => <Badge key={x} tone="accent">{x}</Badge>)}{board.usb_connector && <Badge>{board.usb_connector}</Badge>}</div>
 
       <section className="boardDetailSection">
         <h4>Core specifications</h4>
         <BoardSpecGrid rows={coreRows} status={fieldStatus} />
       </section>
 
+      {(specs.board_type === "sbc" || specs.board_type === "compute_module") && <section className="boardDetailSection">
+        <h4>Computer / module details</h4>
+        <dl className="detailSpecs">
+          {[
+            ["CPU", specs.cpu], ["RAM options", specs.ram_options], ["Storage", specs.storage],
+            ["Ethernet", specs.ethernet], ["GPIO / expansion header", specs.gpio_header],
+            ["AI / NPU", specs.ai_performance || (specs.npu_tops ? `${specs.npu_tops} TOPS` : "")],
+            ["Operating systems", specs.os_support], ["Form factor", specs.form_factor],
+            ["Carrier required", specs.carrier_required === true ? "Yes" : specs.carrier_required === false ? "No" : ""],
+          ].filter(([, value]) => value !== "" && value != null).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{Array.isArray(value) ? value.join(", ") : String(value)}</dd></div>)}
+        </dl>
+      </section>}
+
       <section className="boardDetailSection">
-        <h4>Technical details</h4>
+        <h4>{isComputerBoard ? "I/O & technical details" : "Technical details"}</h4>
         <BoardSpecGrid rows={technicalRows} status={fieldStatus} />
       </section>
 
@@ -272,9 +293,9 @@ function BoardDetail({ board, loading, canEdit, canAddInventory, boards, compone
         lockCatalogueItem
         title={"Add " + board.display_name + " to inventory"}
         onClose={() => setInventoryOpen(false)}
-        onCreated={async item => {
+        onCreated={async (item, items) => {
           setInventoryOpen(false);
-          await onInventoryCreated?.(item);
+          await onInventoryCreated?.(item, items);
         }}
       />}
     </aside>

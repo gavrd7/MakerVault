@@ -12,6 +12,12 @@ class Command(BaseCommand):
         parser.add_argument("--limit", type=int, default=None, help="Maximum records to attempt in this run.")
         parser.add_argument("--force-retry", action="store_true", help="Retry records attempted recently.")
         parser.add_argument(
+            "--board-type",
+            action="append",
+            choices=["microcontroller", "sbc", "compute_module"],
+            help="When seeding boards, limit the pass to a board type. Repeat to include more than one.",
+        )
+        parser.add_argument(
             "--kind",
             action="append",
             choices=["printers", "boards", "components"],
@@ -35,19 +41,21 @@ class Command(BaseCommand):
             limit=options["limit"],
             force_retry=options["force_retry"],
             kinds=options.get("kind") or None,
+            board_types=options.get("board_type") or None,
         )
         self.stdout.write(
             self.style.SUCCESS(
                 "Catalogue image seeding: "
                 f"status={result['status']} processed={result['processed']} "
                 f"cached={result['cached']} remote={result.get('remote', 0)} "
-                f"failed={result['failed']} skipped={result['skipped']}"
+                f"artwork={result.get('artwork', 0)} failed={result['failed']} skipped={result['skipped']}"
             )
         )
         for kind, stats in (result.get("by_kind") or {}).items():
             self.stdout.write(
                 f"  {kind}: processed={stats['processed']} cached={stats['cached']} "
-                f"remote={stats.get('remote', 0)} failed={stats['failed']} skipped={stats['skipped']}"
+                f"remote={stats.get('remote', 0)} artwork={stats.get('artwork', 0)} "
+                f"failed={stats['failed']} skipped={stats['skipped']}"
             )
         if result.get("by_provider"):
             self.stdout.write(
@@ -59,6 +67,8 @@ class Command(BaseCommand):
         if result.get("failures"):
             self.stdout.write("  sample failures:")
             for item in result["failures"][:10]:
+                variant = item.get("variant")
+                variant_text = f" [{variant}]" if variant and variant != "base" else ""
                 self.stdout.write(
-                    f"    - {item['kind']} {item['name']} [{item['variant']}]: {item['reason']}"
+                    f"    - {item['kind']} {item['name']}{variant_text}: {item['reason']}"
                 )

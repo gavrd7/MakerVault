@@ -5,6 +5,7 @@ export default function Dashboard({ dashboard, inventory, onNavigate }) {
   const cards = dashboard ? [
     ["Inventory", dashboard.inventory_total, `${dashboard.inventory_available} available · ${dashboard.inventory_in_use} in use`, "Inventory"],
     ["Projects", dashboard.projects_total, `${dashboard.projects_active} active`, "Projects"],
+    ["Maker Tags", dashboard.maker_tags || 0, "active physical identities", "Maker Tags"],
     ["Board models", dashboard.board_models, "catalogue records", "Board Catalogue"],
     ["Components", dashboard.component_models, "catalogue records", "Components"],
     ["Filaments / spools", `${dashboard.filament_products} / ${dashboard.spools}`, "products / physical spools", "3D Printing"],

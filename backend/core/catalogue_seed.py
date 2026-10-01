@@ -90,6 +90,59 @@ BOARD_DEFINITIONS = [
 ]
 
 
+# SBCs and compute modules are first-class boards.  Keep their richer Linux/PC
+# attributes in specifications so the catalogue can evolve without forcing
+# microcontroller-only columns onto every board type.
+BOARD_DEFINITIONS += [
+    board("Orange Pi", "Orange Pi 5 Plus", "Orange Pi 5", "Rockchip RK3588", "ARM64", ["Linux"], usb_connector="USB-C", specifications={"reference_url":"https://www.orangepi.org/html/hardWare/computerAndMicrocontrollers/details/Orange-Pi-5-plus.html","reference_provider":"Orange Pi","board_type":"sbc","cpu":"4× Cortex-A76 + 4× Cortex-A55","gpio_header":"40-pin","storage":["microSD","eMMC","M.2 NVMe"],"ethernet":"2× 2.5GbE","os_support":["Orange Pi OS","Ubuntu","Debian"]}),
+    board("Orange Pi", "Orange Pi 5 Pro", "Orange Pi 5", "Rockchip RK3588S", "ARM64", ["Linux"], usb_connector="USB-C", specifications={"reference_url":"https://www.orangepi.org/html/hardWare/computerAndMicrocontrollers/details/Orange-Pi-5-Pro.html","reference_provider":"Orange Pi","board_type":"sbc","gpio_header":"40-pin","storage":["microSD","eMMC","M.2"],"os_support":["Orange Pi OS","Ubuntu","Debian"]}),
+    board("Orange Pi", "Orange Pi Zero 3", "Orange Pi Zero", "Allwinner H618", "ARM64", ["Linux"], usb_connector="USB-C", wifi=True, bluetooth=True, specifications={"reference_url":"https://www.orangepi.org/html/hardWare/computerAndMicrocontrollers/details/Orange-Pi-Zero-3.html","reference_provider":"Orange Pi","board_type":"sbc","cpu":"4× Cortex-A53","form_factor":"compact SBC","storage":["microSD"],"os_support":["Orange Pi OS","Debian","Ubuntu"]}),
+    board("Hardkernel", "ODROID-M1", "ODROID-M", "Rockchip RK3568B2", "ARM64", ["Linux"], usb_connector="USB-C", specifications={"reference_url":"https://www.hardkernel.com/shop/odroid-m1-with-8gbyte-ram/","reference_provider":"Hardkernel","board_type":"sbc","storage":["microSD","eMMC","M.2 NVMe","SATA"],"os_support":["Ubuntu","Debian"]}),
+    board("Hardkernel", "ODROID-M1S", "ODROID-M", "Rockchip RK3566", "ARM64", ["Linux"], usb_connector="USB-C", specifications={"reference_url":"https://www.hardkernel.com/shop/odroid-m1s-with-8gbyte-ram/","reference_provider":"Hardkernel","board_type":"sbc","storage":["microSD","eMMC","M.2 NVMe"],"os_support":["Ubuntu","Debian"]}),
+    board("Hardkernel", "ODROID-M2", "ODROID-M", "Rockchip RK3588S2", "ARM64", ["Linux"], usb_connector="USB-C", specifications={"board_type":"sbc","cpu":"4× Cortex-A76 + 4× Cortex-A55","storage":["microSD","eMMC","M.2"],"os_support":["Ubuntu","Debian"]}),
+    board("Hardkernel", "ODROID-C5", "ODROID-C", "Amlogic S905X5M", "ARM64", ["Linux"], usb_connector="USB-C", specifications={"board_type":"sbc","storage":["microSD","eMMC"],"os_support":["Ubuntu","Debian"]}),
+    board("Hardkernel", "ODROID-N2+", "ODROID-N", "Amlogic S922X", "ARM64", ["Linux"], specifications={"reference_url":"https://www.hardkernel.com/shop/odroid-n2-with-4gbyte-ram-2/","reference_provider":"Hardkernel","board_type":"sbc","storage":["microSD","eMMC"],"os_support":["Ubuntu","Debian"]}),
+    board("Hardkernel", "ODROID-H4", "ODROID-H", "Intel N97", "x86_64", ["Linux","Windows"], specifications={"reference_url":"https://www.hardkernel.com/shop/odroid-h4/","reference_provider":"Hardkernel","board_type":"sbc","form_factor":"x86 SBC","storage":["SATA","M.2 NVMe"],"os_support":["Linux","Windows"]}),
+    board("Hardkernel", "ODROID-H4 Plus", "ODROID-H", "Intel N97", "x86_64", ["Linux","Windows"], specifications={"reference_url":"https://www.hardkernel.com/shop/odroid-h4-plus/","reference_provider":"Hardkernel","board_type":"sbc","form_factor":"x86 SBC","storage":["SATA","M.2 NVMe"],"os_support":["Linux","Windows"]}),
+    board("Radxa", "ROCK 3A", "ROCK 3", "Rockchip RK3568", "ARM64", ["Linux"], usb_connector="USB-C", specifications={"reference_url":"https://docs.radxa.com/en/rock3/rock3a","reference_provider":"Radxa","board_type":"sbc","gpio_header":"40-pin","os_support":["Debian","Ubuntu"]}),
+    board("Radxa", "ROCK 4B+", "ROCK 4", "Rockchip RK3399", "ARM64", ["Linux"], usb_connector="USB-C", wifi=True, bluetooth=True, specifications={"board_type":"sbc","gpio_header":"40-pin","os_support":["Debian","Ubuntu"]}),
+    board("Radxa", "ROCK 5A", "ROCK 5", "Rockchip RK3588S", "ARM64", ["Linux"], usb_connector="USB-C", specifications={"reference_url":"https://docs.radxa.com/en/rock5/rock5a","reference_provider":"Radxa","board_type":"sbc","cpu":"4× Cortex-A76 + 4× Cortex-A55","npu_tops":6,"os_support":["Debian","Ubuntu"]}),
+    board("Radxa", "ROCK 5B", "ROCK 5", "Rockchip RK3588", "ARM64", ["Linux"], usb_connector="USB-C", specifications={"reference_url":"https://docs.radxa.com/en/rock5/rock5b/getting-started/introduction","reference_provider":"Radxa","board_type":"sbc","cpu":"4× Cortex-A76 + 4× Cortex-A55","npu_tops":6,"ethernet":"2.5GbE","os_support":["Debian","Ubuntu"]}),
+    board("Radxa", "ROCK 5C", "ROCK 5", "Rockchip RK3588S2", "ARM64", ["Linux"], usb_connector="USB-C", wifi=True, bluetooth=True, specifications={"reference_url":"https://docs.radxa.com/en/rock5/rock5c","reference_provider":"Radxa","board_type":"sbc","gpio_header":"40-pin","npu_tops":6,"ethernet":"GbE","os_support":["Debian","Ubuntu"]}),
+    board("Radxa", "CM5", "Radxa CM", "Rockchip RK3588S2", "ARM64", ["Linux"], specifications={"reference_url":"https://docs.radxa.com/en/compute-module/cm5","reference_provider":"Radxa","board_type":"compute_module","form_factor":"56 × 41 mm SoM","npu_tops":6,"storage":["eMMC"],"carrier_required":True}),
+    board("Banana Pi", "BPI-M5", "Banana Pi M", "Amlogic S905X3", "ARM64", ["Linux"], specifications={"reference_url":"https://wiki.banana-pi.org/Banana_Pi_BPI-M5","reference_provider":"Banana Pi","board_type":"sbc","cpu":"4× Cortex-A55","ram_options":["4 GB"],"storage":["microSD","eMMC"],"ethernet":"GbE"}),
+    board("Banana Pi", "BPI-M7", "Banana Pi M", "Rockchip RK3588", "ARM64", ["Linux"], wifi=True, specifications={"reference_url":"https://wiki.banana-pi.org/Banana_Pi_BPI-M7","reference_provider":"Banana Pi","board_type":"sbc","cpu":"4× Cortex-A76 + 4× Cortex-A55","ram_options":["4 GB","8 GB","16 GB","32 GB"],"storage":["microSD","eMMC","M.2 NVMe"],"ethernet":"2× 2.5GbE","gpio_header":"40-pin","npu_tops":6}),
+    board("BeagleBoard.org", "BeagleBone Black", "BeagleBone", "TI Sitara AM3358", "ARM Cortex-A8", ["Linux"], usb_connector="Mini-USB", specifications={"reference_url":"https://www.beagleboard.org/boards/beaglebone-black","reference_provider":"BeagleBoard.org","board_type":"sbc","gpio_header":"2× 46-pin","storage":["microSD","eMMC"],"os_support":["Debian"]}),
+    board("BeagleBoard.org", "BeaglePlay", "Beagle", "TI Sitara AM625", "ARM64", ["Linux"], wifi=True, bluetooth=True, specifications={"reference_url":"https://docs.beagleboard.org/latest/boards/beagleplay/index.html","reference_provider":"BeagleBoard.org","board_type":"sbc","cpu":"4× Cortex-A53 + Cortex-M4F + PRU","ram_options":["2 GB"],"storage":["microSD","16 GB eMMC"],"ethernet":"GbE","expansion":["mikroBUS","Grove","Qwiic"]}),
+    board("BeagleBoard.org", "BeagleY-AI", "Beagle", "TI AM67A", "ARM64", ["Linux"], specifications={"reference_url":"https://www.beagleboard.org/boards/beagley-ai","reference_provider":"BeagleBoard.org","board_type":"sbc","form_factor":"Raspberry Pi 5 compatible","os_support":["Debian"]}),
+    board("LattePanda", "LattePanda 3 Delta", "LattePanda", "Intel Celeron N5105", "x86_64", ["Windows","Linux","Arduino"], specifications={"reference_url":"https://www.lattepanda.com/lattepanda-3-delta","reference_provider":"LattePanda","board_type":"sbc","coprocessor":"ATmega32U4","storage":["eMMC","M.2"],"os_support":["Windows","Linux"]}),
+    board("LattePanda", "LattePanda Sigma", "LattePanda", "Intel Core i5-1340P", "x86_64", ["Windows","Linux","Arduino"], specifications={"reference_url":"https://www.lattepanda.com/lattepanda-sigma","reference_provider":"LattePanda","board_type":"sbc","cpu":"12 cores / 16 threads","coprocessor":"ATmega32U4","ram_options":["16 GB","32 GB"],"storage":["M.2 NVMe/SATA","SATA"],"ethernet":"2× 2.5GbE","gpio_header":"34-pin","os_support":["Windows 10/11","Ubuntu","Proxmox VE"]}),
+    board("LattePanda", "LattePanda Mu", "LattePanda Mu", "Intel N100 / Core i3-N305", "x86_64", ["Windows","Linux"], specifications={"reference_url":"https://www.lattepanda.com/lattepanda-mu","reference_provider":"LattePanda","board_type":"compute_module","ram_options":["8 GB","16 GB"],"storage":["64 GB eMMC"],"carrier_required":True,"os_support":["Windows 10/11","Ubuntu"]}),
+    board("NVIDIA", "Jetson Orin Nano Super Developer Kit", "Jetson Orin", "Jetson Orin Nano", "ARM64", ["JetPack","Linux"], specifications={"reference_url":"https://developer.nvidia.com/embedded/learn/get-started-jetson-orin-nano-devkit","reference_provider":"NVIDIA","board_type":"sbc","cpu":"6× Cortex-A78AE","ai_performance":"67 TOPS","module_family":"Jetson Orin Nano/NX","os_support":["NVIDIA JetPack"]}),
+    board("NVIDIA", "Jetson AGX Orin Developer Kit", "Jetson Orin", "Jetson AGX Orin", "ARM64", ["JetPack","Linux"], specifications={"reference_url":"https://developer.nvidia.com/embedded/jetson-agx-orin-developer-kit","reference_provider":"NVIDIA","board_type":"sbc","cpu":"12× Cortex-A78AE","ai_performance":"up to 275 TOPS","os_support":["NVIDIA JetPack"]}),
+    board("NVIDIA", "Jetson Orin Nano 8GB", "Jetson Orin", "Jetson Orin Nano", "ARM64", ["JetPack","Linux"], specifications={"reference_url":"https://developer.nvidia.com/embedded/jetson-modules","reference_provider":"NVIDIA","board_type":"compute_module","ram_options":["8 GB"],"ai_performance":"up to 67 TOPS","carrier_required":True}),
+    board("NVIDIA", "Jetson Orin Nano 4GB", "Jetson Orin", "Jetson Orin Nano", "ARM64", ["JetPack","Linux"], specifications={"reference_url":"https://developer.nvidia.com/embedded/jetson-modules","reference_provider":"NVIDIA","board_type":"compute_module","ram_options":["4 GB"],"ai_performance":"up to 34 TOPS","carrier_required":True}),
+    board("NVIDIA", "Jetson Orin NX 8GB", "Jetson Orin", "Jetson Orin NX", "ARM64", ["JetPack","Linux"], specifications={"reference_url":"https://developer.nvidia.com/embedded/jetson-modules","reference_provider":"NVIDIA","board_type":"compute_module","ram_options":["8 GB"],"ai_performance":"up to 117 TOPS","carrier_required":True}),
+    board("NVIDIA", "Jetson Orin NX 16GB", "Jetson Orin", "Jetson Orin NX", "ARM64", ["JetPack","Linux"], specifications={"reference_url":"https://developer.nvidia.com/embedded/jetson-modules","reference_provider":"NVIDIA","board_type":"compute_module","ram_options":["16 GB"],"ai_performance":"up to 157 TOPS","carrier_required":True}),
+    board("NVIDIA", "Jetson AGX Orin 32GB", "Jetson Orin", "Jetson AGX Orin", "ARM64", ["JetPack","Linux"], specifications={"reference_url":"https://developer.nvidia.com/embedded/jetson-modules","reference_provider":"NVIDIA","board_type":"compute_module","ram_options":["32 GB"],"ai_performance":"up to 241 TOPS","carrier_required":True}),
+    board("NVIDIA", "Jetson AGX Orin 64GB", "Jetson Orin", "Jetson AGX Orin", "ARM64", ["JetPack","Linux"], specifications={"reference_url":"https://developer.nvidia.com/embedded/jetson-modules","reference_provider":"NVIDIA","board_type":"compute_module","ram_options":["64 GB"],"ai_performance":"up to 275 TOPS","carrier_required":True}),
+    board("Khadas", "Edge2 Maker Kit", "Khadas Edge", "Rockchip RK3588S2", "ARM64", ["Linux"], usb_connector="USB-C", wifi=True, specifications={"reference_url":"https://www.khadas.com/edge2","reference_provider":"Khadas","board_type":"sbc","cpu":"4× Cortex-A76 + 4× Cortex-A55","ram_options":["8 GB","16 GB"],"storage":["32/64 GB eMMC"],"npu_tops":6}),
+    board("Khadas", "VIM4", "Khadas VIM", "Amlogic A311D2", "ARM64", ["Linux"], usb_connector="USB-C", wifi=True, bluetooth=True, specifications={"reference_url":"https://www.khadas.com/vim4","reference_provider":"Khadas","board_type":"sbc","storage":["eMMC","microSD"],"os_support":["Ubuntu","Android"]}),
+]
+
+# Classify the existing catalogue too, including the Raspberry Pi SBCs that
+# pre-date this expansion.  Explicit definitions always win.
+for _board in BOARD_DEFINITIONS:
+    _specs = _board.setdefault("specifications", {})
+    if "board_type" not in _specs:
+        _name = _board["name"].lower()
+        _maker = _board["manufacturer"]
+        if _maker == "Raspberry Pi" and not ("pico" in _name):
+            _specs["board_type"] = "sbc"
+        else:
+            _specs["board_type"] = "microcontroller"
+
+
 CATEGORY_TREE = {
     "Passives": None,
     "Semiconductors": None,
@@ -110,6 +163,7 @@ CATEGORY_TREE = {
     "Logic & Level Shifting": None,
     "Mechanical & Thermal": None,
     "Test & Measurement": None,
+    "Expansion Boards": None,
 }
 
 
@@ -155,12 +209,12 @@ COMPONENT_DEFINITIONS = [
     component("LEDs & Lighting","5mm RGB LED common cathode","",type="rgb-led",package="5 mm through-hole"),
     component("LEDs & Lighting","WS2812B addressable RGB LED","WS2812B",type="addressable-led",protocol="single-wire",voltage="5 V"),
     component("LEDs & Lighting","SK6812 RGBW addressable LED","SK6812",type="addressable-led",protocol="single-wire",voltage="5 V"),
-    component("LEDs & Lighting","WS2812 8 LED ring","",type="led-ring",protocol="single-wire",led_count=8,voltage="5 V"),
-    component("LEDs & Lighting","WS2812 12 LED ring","",type="led-ring",protocol="single-wire",led_count=12,voltage="5 V"),
-    component("LEDs & Lighting","WS2812 16 LED ring","",type="led-ring",protocol="single-wire",led_count=16,voltage="5 V"),
-    component("LEDs & Lighting","WS2812 24 LED ring","",type="led-ring",protocol="single-wire",led_count=24,voltage="5 V"),
+    component("LEDs & Lighting","WS2812 8 LED ring","",type="led-ring",protocol="single-wire",led_count=8,voltage="5 V",pins=[{"name":"5V","role":"power_input","voltage":5.0},{"name":"GND","role":"ground"},{"name":"DIN","role":"input"},{"name":"DOUT","role":"output"}]),
+    component("LEDs & Lighting","WS2812 12 LED ring","",type="led-ring",protocol="single-wire",led_count=12,voltage="5 V",pins=[{"name":"5V","role":"power_input","voltage":5.0},{"name":"GND","role":"ground"},{"name":"DIN","role":"input"},{"name":"DOUT","role":"output"}]),
+    component("LEDs & Lighting","WS2812 16 LED ring","",type="led-ring",protocol="single-wire",led_count=16,voltage="5 V",pins=[{"name":"5V","role":"power_input","voltage":5.0},{"name":"GND","role":"ground"},{"name":"DIN","role":"input"},{"name":"DOUT","role":"output"}]),
+    component("LEDs & Lighting","WS2812 24 LED ring","",type="led-ring",protocol="single-wire",led_count=24,voltage="5 V",pins=[{"name":"5V","role":"power_input","voltage":5.0},{"name":"GND","role":"ground"},{"name":"DIN","role":"input"},{"name":"DOUT","role":"output"}]),
     component("LEDs & Lighting","WS2812 8x8 RGB matrix","",type="led-matrix",protocol="single-wire",resolution="8x8",voltage="5 V"),
-    component("LEDs & Lighting","WS2812B LED strip","",type="led-strip",protocol="single-wire",voltage="5 V"),
+    component("LEDs & Lighting","WS2812B LED strip","",type="led-strip",protocol="single-wire",voltage="5 V",pins=[{"name":"5V","role":"power_input","voltage":5.0},{"name":"GND","role":"ground"},{"name":"DIN","role":"input"},{"name":"DOUT","role":"output"}]),
 
     component("Displays","SSD1306 0.96in OLED 128x64 I2C","SSD1306",type="oled",interface="I2C",resolution="128x64",voltage="3.3-5 V"),
     component("Displays","SH1106 1.3in OLED 128x64 I2C","SH1106",type="oled",interface="I2C",resolution="128x64"),
@@ -550,4 +604,27 @@ COMPONENT_DEFINITIONS = [
     component("Test & Measurement","USB-C inline voltage/current meter","",type="power-meter",interface="USB-C"),
     component("Test & Measurement","INA3221 3-channel power monitor module","INA3221",type="power-monitor",interface="I2C",channels=3),
 
+]
+
+
+# Host-specific add-on boards live in Components rather than masquerading as
+# independently programmable boards.  Compatibility metadata is deliberately
+# structured for future wiring/stacking validation.
+COMPONENT_DEFINITIONS += [
+    component("Expansion Boards","Raspberry Pi Sense HAT","",type="hat",manufacturer="Raspberry Pi",host_family="Raspberry Pi 40-pin",host_interface="40-pin GPIO",interfaces=["I2C","GPIO"],stackable=False),
+    component("Expansion Boards","Raspberry Pi PoE+ HAT","",type="hat",manufacturer="Raspberry Pi",host_family="Raspberry Pi 40-pin",host_interface="40-pin GPIO",function="Power over Ethernet"),
+    component("Expansion Boards","Raspberry Pi M.2 HAT+","",type="hat",manufacturer="Raspberry Pi",host_family="Raspberry Pi 5",host_interface="PCIe FFC",function="M.2 NVMe storage"),
+    component("Expansion Boards","Adafruit Motor HAT for Raspberry Pi","",type="hat",manufacturer="Adafruit",host_family="Raspberry Pi 40-pin",host_interface="40-pin GPIO",interfaces=["I2C"],function="DC/stepper motor control"),
+    component("Expansion Boards","Adafruit 16-Channel PWM/Servo HAT","",type="hat",manufacturer="Adafruit",host_family="Raspberry Pi 40-pin",host_interface="40-pin GPIO",interfaces=["I2C"],function="PWM/servo control"),
+    component("Expansion Boards","Pimoroni Enviro pHAT","",type="phat",manufacturer="Pimoroni",host_family="Raspberry Pi 40-pin",host_interface="40-pin GPIO",interfaces=["I2C","SPI","ADC"]),
+    component("Expansion Boards","Arduino Ethernet Shield","",type="shield",manufacturer="Arduino",host_family="Arduino Uno/Mega",host_interface="Arduino shield headers",interfaces=["SPI"],function="Ethernet"),
+    component("Expansion Boards","Arduino Motor Shield Rev3","",type="shield",manufacturer="Arduino",host_family="Arduino Uno/Mega",host_interface="Arduino shield headers",function="DC/stepper motor control"),
+    component("Expansion Boards","Arduino Proto Shield Rev3","",type="shield",manufacturer="Arduino",host_family="Arduino Uno",host_interface="Arduino shield headers",function="Prototyping"),
+    component("Expansion Boards","Adafruit FeatherWing OLED","",type="featherwing",manufacturer="Adafruit",host_family="Adafruit Feather",host_interface="Feather headers",interfaces=["I2C"],function="OLED display"),
+    component("Expansion Boards","Adafruit Motor FeatherWing","",type="featherwing",manufacturer="Adafruit",host_family="Adafruit Feather",host_interface="Feather headers",interfaces=["I2C"],function="DC/stepper motor control"),
+    component("Expansion Boards","SparkFun Qwiic HAT for Raspberry Pi","",type="hat",manufacturer="SparkFun",host_family="Raspberry Pi 40-pin",host_interface="40-pin GPIO",interfaces=["I2C","Qwiic"],function="Qwiic expansion"),
+    component("Expansion Boards","Seeed Grove Base HAT for Raspberry Pi","",type="hat",manufacturer="Seeed Studio",host_family="Raspberry Pi 40-pin",host_interface="40-pin GPIO",interfaces=["I2C","UART","GPIO","PWM","ADC"],function="Grove expansion"),
+    component("Expansion Boards","Radxa 25W PoE+ HAT","",type="hat",manufacturer="Radxa",host_family="Radxa ROCK",host_interface="GPIO header",function="Power over Ethernet",compatible_hosts=["ROCK 5B","ROCK 5C"]),
+    component("Expansion Boards","Radxa Penta SATA HAT","",type="hat",manufacturer="Radxa",host_family="Radxa ROCK",host_interface="PCIe/FPC",function="Five-port SATA expansion",compatible_hosts=["ROCK 5C"]),
+    component("Expansion Boards","ODROID M.2 4×1 Card","",type="expansion-board",manufacturer="Hardkernel",host_family="ODROID H",host_interface="M.2",function="Four M.2 PCIe Gen3 x1 slots",compatible_hosts=["ODROID-H4 series"]),
 ]
