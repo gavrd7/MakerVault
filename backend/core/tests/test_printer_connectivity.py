@@ -10,6 +10,7 @@ from core.tasks import live_printer_connections_tick
 from core.live_print_jobs import sync_print_job_from_snapshot
 from core.live_material_slots import sync_live_material_slots
 from core.manufacturer_printer_adapters import (
+    _anycubic_decrypt_ctrl,
     _anycubic_sign,
     normalise_anycubic_endpoint,
     normalise_anycubic_snapshot,
@@ -217,6 +218,15 @@ class PrinterConnectivityAdapterTests(TestCase):
             "3dc9739a6e5de8f075c6999fe3c3aaef",
         )
 
+    def test_anycubic_ctrl_decrypt_matches_validated_handshake_fixture(self):
+        payload = _anycubic_decrypt_ctrl(
+            "wrbZJ/oIbP72EQD7ZzfueSleVpnsBgxO6EYDkkIhAx0LbY+zyTWiFtgOFJmq90JYm84I/rpf10RxXO7AMhVK6i+vVgMQPWq+PjYAaTX+x2ObPzfOZWcqy6g+dOPDuO2a",
+            "0123456789abcdefFEDCBA9876543210",
+            "localtok12345678",
+        )
+        self.assertEqual(payload["broker"], "mqtts://192.168.1.50:9883")
+        self.assertEqual(payload["deviceId"], "ea42a05c")
+
     def test_anycubic_snapshot_normalises_kobra_and_ace_telemetry(self):
         self.assertEqual(
             normalise_anycubic_endpoint("192.168.1.70"),
@@ -273,6 +283,7 @@ class PrinterConnectivityAdapterTests(TestCase):
                 "device_id": "DEV-TEST",
                 "model_name": "Anycubic Kobra S1 Max",
             },
+            peripheral_data={"camera": 1, "multiColorBox": 1},
         )
 
         self.assertEqual(snapshot["state"], "printing")
@@ -288,6 +299,9 @@ class PrinterConnectivityAdapterTests(TestCase):
         self.assertEqual(snapshot["materials"][0]["remaining_percent"], 82.0)
         self.assertTrue(snapshot["materials"][0]["selected"])
         self.assertTrue(snapshot["materials"][0]["drying_active"])
+        self.assertTrue(snapshot["source_metadata"]["ace_connected"])
+        self.assertTrue(snapshot["source_metadata"]["ace_slots_observed"])
+        self.assertTrue(snapshot["source_metadata"]["camera_available"])
         self.assertEqual(snapshot["source_metadata"]["protocol"], "Anycubic LAN signed HTTP + MQTT/TLS")
 
     def test_bambu_endpoint_and_snapshot_normalise_local_mqtt_and_ams(self):
@@ -598,6 +612,34 @@ class LiveMaterialSlotTests(TestCase):
         self.assertEqual(slot.metadata["remaining_percent"], 73.0)
         self.assertTrue(slot.metadata["selected"])
         self.assertEqual(slot.metadata["adapter"], "bambu_local")
+
+    def test_anycubic_ace_presence_without_slot_report_does_not_retire_cached_slots(self):
+        connection = PrinterConnection.objects.create(
+            printer=self.printer,
+            adapter="anycubic",
+            endpoint_url="http://192.168.1.70:18910",
+            status="connected",
+        )
+        slot = PrinterFilamentSlot.objects.create(
+            printer=self.printer,
+            system="anycubic_ace",
+            unit_index=0,
+            slot_index=1,
+            material="PETG",
+            is_loaded=True,
+        )
+
+        result = sync_live_material_slots(connection, {
+            "materials": [],
+            "source_metadata": {
+                "ace_connected": True,
+                "ace_slots_observed": False,
+            },
+        })
+
+        self.assertEqual(result["loaded_slots"], 0)
+        slot.refresh_from_db()
+        self.assertTrue(slot.is_loaded)
 
     def test_empty_connected_ams_marks_previous_slot_unloaded(self):
         PrinterFilamentSlot.objects.create(
