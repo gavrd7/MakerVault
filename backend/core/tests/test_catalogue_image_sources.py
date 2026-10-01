@@ -701,7 +701,7 @@ class CatalogueImagePriorityTests(TestCase):
 
         result = run_catalogue_image_seed(
             limit=1,
-            force_retry=True,
+            force_retry=False,
             kinds=["printers"],
         )
 
@@ -747,7 +747,7 @@ class CatalogueImagePriorityTests(TestCase):
 
         result = run_catalogue_image_seed(
             limit=1,
-            force_retry=True,
+            force_retry=False,
             kinds=["printers"],
         )
 
