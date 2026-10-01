@@ -489,7 +489,7 @@ def find_espboards_image(board) -> ImageCandidate | None:
 
 CURATED_SBC_SOURCE_PAGES = {
     ("Banana Pi", "BPI-M5"): "https://docs.banana-pi.org/en/BPI-M5/Photo_BPI-M5",
-    ("Banana Pi", "BPI-M7"): "https://docs.banana-pi.org/en/BPI-M7/BananaPi_BPI-M7",
+    ("Banana Pi", "BPI-M7"): "https://docs.banana-pi.org/en/BPI-M7/Photo_BPI-M7",
     ("BeagleBoard.org", "BeagleBone Black"): "https://www.beagleboard.org/boards/beaglebone-black",
     ("BeagleBoard.org", "BeaglePlay"): "https://docs.beagleboard.org/latest/boards/beagleplay/index.html",
     ("BeagleBoard.org", "BeagleY-AI"): "https://docs.beagleboard.org/latest/boards/beagley/ai/01-introduction.html",
