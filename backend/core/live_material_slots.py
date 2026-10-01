@@ -28,7 +28,7 @@ def _system_connected(snapshot: dict, system: str) -> bool:
     if system == "flashforge_station":
         return bool(metadata.get("material_station_connected"))
     if system == "anycubic_ace":
-        return bool(metadata.get("ace_connected"))
+        return bool(metadata.get("ace_slots_observed"))
     return bool(snapshot.get("materials"))
 
 
