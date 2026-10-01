@@ -46,12 +46,18 @@ def relation(owner, model, value, field):
     return obj
 
 
+def quantity(value, field):
+    if not str(value).strip().isdigit():
+        raise ValidationError({field: "Enter a positive whole number."})
+    return _parse_positive_int(value, field, allow_none=False)
+
+
 def apply_fields(part, payload):
     for field in ("name", "status", "notes"):
         if field in payload:
             setattr(part, field, str(payload.get(field) or "").strip())
     if "quantity" in payload:
-        part.quantity = _parse_positive_int(payload["quantity"], "quantity", allow_none=False)
+        part.quantity = quantity(payload["quantity"], "quantity")
     for field, model in (("project", Project), ("location", PrintingLocation), ("replaces", PrintedPart)):
         if field + "_id" in payload:
             setattr(part, field, relation(part.owner, model, payload[field + "_id"], field))
@@ -93,7 +99,7 @@ def printed_parts(request):
                 if job.status != "success":
                     return _error("Only successful prints can create retained parts.")
                 if payload.get("print_job_quantity") not in (None, ""):
-                    count = _parse_positive_int(payload["print_job_quantity"], "print_job_quantity", allow_none=False)
+                    count = quantity(payload["print_job_quantity"], "print_job_quantity")
                     if count != job.quantity:
                         denied = _require_permission(request, "core.change_printjob")
                         if denied:

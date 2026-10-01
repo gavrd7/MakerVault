@@ -442,8 +442,10 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
             {job.filament_usage_source && <small>{({ uploaded_gcode: "Uploaded G-code", printer_report: "Printer report", printer_gcode_metadata: "Printer G-code estimate", recorded: "Recorded usage" })[job.filament_usage_source] || job.filament_usage_source}</small>}
             {job.material_cost != null && <strong>{formatMoney(job.material_cost, config?.currency || "GBP")}</strong>}
           </div>
+          <div className="printingBadges">
           {job.status === "success" && config?.permissions?.add_printedpart && <button onClick={() => setPartJob(job)}>Create printed parts</button>}
           <Badge tone={job.status === "success" ? "good" : job.status === "failed" ? "danger" : job.status === "printing" ? "accent" : "neutral"}>{job.status_label}</Badge>
+          </div>
         </article>)}
       </div>
     </section>}

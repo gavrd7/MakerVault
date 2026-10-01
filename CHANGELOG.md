@@ -6,7 +6,7 @@
 - Track quantities, project installation, location, physical status, replacements and change history; reuse Maker Tags for printed parts.
 - Keep filament analytics independent of saved models and retained parts. Whole-job usage/cost context is never duplicated into consumption totals.
 
-## v0.7.3.2 — in development
+## v0.7.3.2 — released
 
 - Added bounded plain-G-code gram parsing, unambiguous owner-scoped live-job matching and a print-history G-code selector. Full-file weights count only for successful prints and are labelled estimated.
 - Added Moonraker extrusion-length/metadata consumption estimates with explicit provenance, manual-usage precedence, no repeated-poll accumulation and no automatic spool deductions or invented waste/cost.

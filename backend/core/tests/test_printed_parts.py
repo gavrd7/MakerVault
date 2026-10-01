@@ -49,6 +49,11 @@ class PrintedPartsTests(TestCase):
         self.assertEqual(self.create(quantity=2).status_code, 400)
         self.assertEqual(PrintedPart.objects.count(), 1)
 
+    def test_fractional_and_boolean_quantities_are_rejected(self):
+        for value in (1.5, True, "1.5"):
+            self.assertEqual(self.create(quantity=value).status_code, 400)
+        self.assertFalse(PrintedPart.objects.exists())
+
     def test_failed_print_cannot_create_parts(self):
         self.job.status = "failed"
         self.job.save()
