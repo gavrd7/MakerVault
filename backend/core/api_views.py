@@ -3813,6 +3813,8 @@ def _serialise_printer_connection(connection):
         if key not in {"api_key", "token", "password", "access_code"}
     }
     safe_config["api_key_configured"] = bool(str((connection.config or {}).get("api_key") or "").strip())
+    safe_config["access_code_configured"] = bool(str((connection.config or {}).get("access_code") or "").strip())
+    safe_config["password_configured"] = bool(str((connection.config or {}).get("password") or "").strip())
     return {
         "id": str(connection.id),
         "printer_id": str(connection.printer_id),
@@ -4700,7 +4702,7 @@ def printing_printer_connections(request, printer_id):
             return _error("Choose a supported MakerVault printer adapter.")
 
         endpoint_url = str(payload.get("endpoint_url") or "").strip()
-        if not endpoint_url and adapter == "creality_local":
+        if not endpoint_url and adapter in {"creality_local", "bambu_local", "prusa"}:
             endpoint_url = str(printer.connection_host or "").strip()
         if endpoint_url:
             endpoint_url = normalise_connection_endpoint(adapter, endpoint_url)
@@ -4708,6 +4710,16 @@ def printing_printer_connections(request, printer_id):
         config = dict(payload.get("config") or {})
         if "api_key" in payload and str(payload.get("api_key") or "").strip():
             config["api_key"] = str(payload.get("api_key") or "").strip()
+        if "access_code" in payload and str(payload.get("access_code") or "").strip():
+            config["access_code"] = str(payload.get("access_code") or "").strip()
+        if "username" in payload:
+            config["username"] = str(payload.get("username") or "").strip()
+        if "password" in payload and str(payload.get("password") or "").strip():
+            config["password"] = str(payload.get("password") or "")
+        if "serial" in payload:
+            config["serial"] = str(payload.get("serial") or "").strip()
+        if adapter == "bambu_local" and not str(config.get("serial") or "").strip():
+            config["serial"] = str(printer.serial_number or "").strip()
 
         item = PrinterConnection(
             printer=printer,
@@ -4771,8 +4783,20 @@ def printing_printer_connection_detail(request, printer_id, connection_id):
         config = dict(item.config or {})
         if "api_key" in payload and str(payload.get("api_key") or "").strip():
             config["api_key"] = str(payload.get("api_key") or "").strip()
+        if "access_code" in payload and str(payload.get("access_code") or "").strip():
+            config["access_code"] = str(payload.get("access_code") or "").strip()
+        if "username" in payload:
+            config["username"] = str(payload.get("username") or "").strip()
+        if "password" in payload and str(payload.get("password") or "").strip():
+            config["password"] = str(payload.get("password") or "")
+        if "serial" in payload:
+            config["serial"] = str(payload.get("serial") or "").strip()
         if payload.get("clear_api_key") is True:
             config.pop("api_key", None)
+        if payload.get("clear_access_code") is True:
+            config.pop("access_code", None)
+        if payload.get("clear_password") is True:
+            config.pop("password", None)
         if "config" in payload and isinstance(payload.get("config"), dict):
             for key, value in payload["config"].items():
                 if key not in {"api_key", "token", "password", "access_code"}:
