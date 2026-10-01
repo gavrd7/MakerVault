@@ -245,16 +245,23 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
             </div>
             <div className="printingPrinterHeaderMain">
               <div className="printingCardHead">
-                <div><strong>{printer.name}</strong><small>{[printer.manufacturer, printer.model, printer.location].filter(Boolean).join(" · ")}</small></div>
-                <div className="printingBadges">
-                  {printer.is_active ? <Badge tone="good">Active</Badge> : <Badge>Inactive</Badge>}
-                  {printer.simplyprint?.external_id && <Badge tone={printer.simplyprint?.online ? "good" : printer.simplyprint?.state === "offline" ? "danger" : "accent"}>SimplyPrint · {printer.simplyprint?.state || (printer.simplyprint?.online ? "online" : "linked")}</Badge>}
-                  {printer.live_status && <Badge tone="good">{printer.live_status.adapter_label} · {printer.live_status.snapshot?.state_label || "Connected"}</Badge>}
-                  {!printer.live_status && printer.live_connections?.length > 0 && <Badge tone={printer.live_connections.some(item => item.status === "error" || item.status === "disconnected") ? "danger" : "neutral"}>{printer.live_connections.length} live source{printer.live_connections.length === 1 ? "" : "s"}</Badge>}
-                  {printer.installed_multi_material_label && <Badge>{printer.installed_multi_material_label}</Badge>}
-                  {printer.multi_material_installed && <Badge>{printer.slots.length} slots</Badge>}
-                  {canChangePrinter && <button type="button" onClick={() => setLivePrinter(printer)}>Live</button>}
-                  {canChangePrinter && <button type="button" onClick={() => setManagePrinter(printer)}>Manage</button>}
+                <div className="printingPrinterIdentity">
+                  <strong>{printer.name}</strong>
+                  <small>{[printer.manufacturer, printer.model, printer.location].filter(Boolean).join(" · ")}</small>
+                </div>
+                <div className="printingPrinterControls">
+                  <div className="printingPrinterStatus" aria-label={"Status for " + printer.name}>
+                    {printer.is_active ? <Badge tone="good">Active</Badge> : <Badge>Inactive</Badge>}
+                    {printer.simplyprint?.external_id && <Badge tone={printer.simplyprint?.online ? "good" : printer.simplyprint?.state === "offline" ? "danger" : "accent"}>SimplyPrint · {printer.simplyprint?.state || (printer.simplyprint?.online ? "online" : "linked")}</Badge>}
+                    {printer.live_status && <Badge tone="good">{printer.live_status.adapter_label} · {printer.live_status.snapshot?.state_label || "Connected"}</Badge>}
+                    {!printer.live_status && printer.live_connections?.length > 0 && <Badge tone={printer.live_connections.some(item => item.status === "error" || item.status === "disconnected") ? "danger" : "neutral"}>{printer.live_connections.length} live source{printer.live_connections.length === 1 ? "" : "s"}</Badge>}
+                    {printer.installed_multi_material_label && <Badge>{printer.installed_multi_material_label}</Badge>}
+                    {printer.multi_material_installed && <Badge>{printer.slots.length} slots</Badge>}
+                  </div>
+                  {canChangePrinter && <div className="printingPrinterActions" aria-label={"Actions for " + printer.name}>
+                    <button className="printingPrinterAction printingPrinterActionLive" type="button" onClick={() => setLivePrinter(printer)}>Live monitor</button>
+                    <button className="printingPrinterAction" type="button" onClick={() => setManagePrinter(printer)}>Manage printer</button>
+                  </div>}
                 </div>
               </div>
               {((printer.multi_material_installed && printer.catalogue?.image_multi_material && printer.catalogue?.image_multi_material_source_provider) || printer.catalogue?.image_source_provider) && <small className="printingPrinterImageCredit">
