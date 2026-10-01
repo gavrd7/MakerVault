@@ -480,6 +480,7 @@ class PrinterConnectivityAdapterTests(TestCase):
         self.assertEqual(snapshot["temperatures"]["tool0"]["actual_c"], 215.0)
         self.assertIsNone(snapshot["temperatures"]["chamber"]["actual_c"])
         self.assertTrue(snapshot["source_metadata"]["material_station_connected"])
+        self.assertTrue(snapshot["source_metadata"]["material_station_slots_observed"])
         self.assertTrue(snapshot["source_metadata"]["camera_available"])
         self.assertEqual(snapshot["materials"][0]["system"], "flashforge_station")
         self.assertEqual(snapshot["materials"][0]["slot_index"], 0)
@@ -666,6 +667,34 @@ class LiveMaterialSlotTests(TestCase):
         self.assertEqual(slot.metadata["remaining_percent"], 73.0)
         self.assertTrue(slot.metadata["selected"])
         self.assertEqual(slot.metadata["adapter"], "bambu_local")
+
+    def test_flashforge_station_presence_without_slot_report_does_not_retire_cached_slots(self):
+        connection = PrinterConnection.objects.create(
+            printer=self.printer,
+            adapter="flashforge",
+            endpoint_url="http://192.168.1.60:8898",
+            status="connected",
+        )
+        slot = PrinterFilamentSlot.objects.create(
+            printer=self.printer,
+            system="flashforge_station",
+            unit_index=0,
+            slot_index=1,
+            material="PLA",
+            is_loaded=True,
+        )
+
+        result = sync_live_material_slots(connection, {
+            "materials": [],
+            "source_metadata": {
+                "material_station_connected": True,
+                "material_station_slots_observed": False,
+            },
+        })
+
+        self.assertEqual(result["loaded_slots"], 0)
+        slot.refresh_from_db()
+        self.assertTrue(slot.is_loaded)
 
     def test_anycubic_ace_presence_without_slot_report_does_not_retire_cached_slots(self):
         connection = PrinterConnection.objects.create(
