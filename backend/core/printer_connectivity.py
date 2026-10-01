@@ -200,8 +200,8 @@ def _blank_snapshot(adapter: str) -> dict:
             "progress": None,
             "elapsed_seconds": None,
             "remaining_seconds": None,
-            "current_layer": None,
-            "total_layers": None,
+            "current_layer": print_info.get("current_layer"),
+            "total_layers": print_info.get("total_layer"),
         },
         "temperatures": {},
         "thumbnail_url": "",
@@ -231,6 +231,7 @@ def poll_moonraker(endpoint_url: str, config: dict | None = None) -> dict:
     result = objects.get("result") or {}
     status = result.get("status") or {}
     print_stats = status.get("print_stats") or {}
+    print_info = print_stats.get("info") or {}
     display = status.get("display_status") or {}
     virtual_sd = status.get("virtual_sdcard") or {}
     extruder = status.get("extruder") or {}
@@ -274,6 +275,11 @@ def poll_moonraker(endpoint_url: str, config: dict | None = None) -> dict:
             "tool0": _temperature(extruder.get("temperature"), extruder.get("target")),
             "bed": _temperature(bed.get("temperature"), bed.get("target")),
         },
+        "warnings": [
+            str(item)
+            for item in ((server.get("result") or {}).get("warnings") or [])
+            if str(item).strip()
+        ],
         "source_metadata": {
             "klippy_state": str((server.get("result") or {}).get("klippy_state") or ""),
             "moonraker_version": str((server.get("result") or {}).get("moonraker_version") or ""),
@@ -314,8 +320,19 @@ def poll_octoprint(endpoint_url: str, config: dict | None = None) -> dict:
 
     progress_data = job_payload.get("progress") or {}
     completion = _number(progress_data.get("completion"))
+    if completion is not None:
+        # OctoPrint's documented job response reports completion as a 0..1
+        # fraction. Accept 0..100 values too for compatibility with plugins
+        # and older/alternate response shims.
+        completion = completion * 100 if 0 <= completion <= 1 else completion
     job = job_payload.get("job") or {}
     file_data = job.get("file") or {}
+    elapsed = _seconds(progress_data.get("printTime"))
+    remaining = _seconds(progress_data.get("printTimeLeft"))
+    if remaining is None:
+        estimated = _seconds(job.get("estimatedPrintTime"))
+        if estimated is not None and elapsed is not None:
+            remaining = max(0, estimated - elapsed)
     temps = printer_payload.get("temperature") or {}
     tool0 = temps.get("tool0") or {}
     bed = temps.get("bed") or {}
@@ -328,8 +345,8 @@ def poll_octoprint(endpoint_url: str, config: dict | None = None) -> dict:
         "job": {
             "file_name": str(file_data.get("display") or file_data.get("name") or file_data.get("path") or ""),
             "progress": round(max(0.0, min(100.0, completion)), 2) if completion is not None else None,
-            "elapsed_seconds": _seconds(progress_data.get("printTime")),
-            "remaining_seconds": _seconds(progress_data.get("printTimeLeft")),
+            "elapsed_seconds": elapsed,
+            "remaining_seconds": remaining,
             "current_layer": None,
             "total_layers": None,
         },
@@ -337,6 +354,7 @@ def poll_octoprint(endpoint_url: str, config: dict | None = None) -> dict:
             "tool0": _temperature(tool0.get("actual"), tool0.get("target")),
             "bed": _temperature(bed.get("actual"), bed.get("target")),
         },
+        "warnings": [str(job_payload.get("error"))] if job_payload.get("error") else [],
         "source_metadata": {
             "api": str(version.get("api") or ""),
             "server": str(version.get("server") or ""),
