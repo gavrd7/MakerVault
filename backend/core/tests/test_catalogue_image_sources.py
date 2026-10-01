@@ -6,6 +6,7 @@ from django.test import TestCase, override_settings
 
 from core.catalogue_coverage import _printer_coverage
 from core.catalogue_image_sources import (
+    CatalogueImageError,
     _board_image_queries,
     _candidate_source_pages,
     _is_computer_board,
@@ -602,6 +603,55 @@ class CatalogueImagePriorityTests(TestCase):
         self.assertEqual(
             self.component.specifications["auto_image_last_result"],
             "generic-artwork",
+        )
+        cache_add.assert_called_once()
+        cache_delete.assert_called_once()
+
+    @override_settings(
+        CATALOGUE_IMAGE_MAX_PER_RUN=1,
+        CATALOGUE_IMAGE_RETRY_DAYS=1,
+        CATALOGUE_IMAGE_WIKIMEDIA=True,
+        CATALOGUE_IMAGE_OPENVERSE=True,
+    )
+    @patch("core.catalogue_image_sources.cache.delete")
+    @patch("core.catalogue_image_sources.cache.add", return_value=True)
+    @patch("core.catalogue_image_sources.cache_candidate", side_effect=CatalogueImageError("HTTP 424"))
+    @patch("core.catalogue_image_sources.resolve_catalogue_image")
+    @patch("core.catalogue_image_sources.find_source_page_image", return_value=None)
+    def test_component_cache_error_falls_back_to_generic_artwork(
+        self,
+        source_image,
+        resolve_image,
+        cache_candidate,
+        cache_add,
+        cache_delete,
+    ):
+        from core.catalogue_image_sources import ImageCandidate
+
+        resolve_image.return_value = ImageCandidate(
+            image_url="https://example.test/component.jpg",
+            source_page_url="https://example.test/component",
+            provider="Wikimedia Commons",
+            license_name="CC BY-SA 4.0",
+            query="test component",
+        )
+
+        result = run_catalogue_image_seed(
+            limit=1,
+            force_retry=True,
+            kinds=["components"],
+        )
+
+        self.assertEqual(result["failed"], 0)
+        self.assertEqual(result["artwork"], 1)
+        self.component.refresh_from_db()
+        self.assertEqual(
+            self.component.specifications["auto_image_last_result"],
+            "generic-artwork-after-image-error",
+        )
+        self.assertEqual(
+            self.component.specifications["auto_image_last_error"],
+            "HTTP 424",
         )
         cache_add.assert_called_once()
         cache_delete.assert_called_once()
