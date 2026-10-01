@@ -1,6 +1,14 @@
 # Changelog
 
-## v0.7.2 — in development
+## v0.7.3 — in development
+
+- Started the live printer connectivity milestone with a provider-neutral `PrinterConnection` layer that attaches multiple live sources to one physical MakerVault printer without duplicating inventory.
+- Added first-class local Moonraker/Klipper and OctoPrint adapters with a shared normalised snapshot contract for online/state, current job, progress, elapsed/remaining time and tool/bed temperatures.
+- Added owner-scoped live-connection CRUD/refresh APIs, redacted API-key handling, configurable 10–3600 second polling metadata and explicit adapter capability reporting.
+- Added a printer Live monitoring workspace in the 3D Printing UI with source setup, connection testing/refresh, status/temperature/job display and read-only-first capability messaging.
+- Added explicit experimental placeholders for Creality local, Bambu Lab, Anycubic, FlashForge, Prusa, Elegoo, QIDI, Sovol, Snapmaker and Voron/community adapter families so unvalidated hardware support is not presented as complete.
+
+## v0.7.2 — 2026-10-01
 
 - Expanded the Board Catalogue beyond microcontrollers with first-class SBC and compute-module/SoM classification, curated Orange Pi, ODROID, Radxa, Banana Pi, BeagleBoard, LattePanda, NVIDIA Jetson and Khadas families, SBC-specific technical presentation, and board-type filtering. Added Expansion Boards to Components for HATs, pHATs, Arduino Shields, FeatherWings and host-specific add-ons with structured host/interface compatibility metadata.
 
