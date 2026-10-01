@@ -12,6 +12,8 @@ from core.live_material_slots import sync_live_material_slots
 from core.manufacturer_printer_adapters import (
     normalise_bambu_endpoint,
     normalise_bambu_snapshot,
+    normalise_flashforge_endpoint,
+    normalise_flashforge_snapshot,
     normalise_prusalink_endpoint,
     normalise_prusalink_snapshot,
     poll_prusalink,
@@ -265,6 +267,71 @@ class PrinterConnectivityAdapterTests(TestCase):
         self.assertTrue(snapshot["source_metadata"]["camera_available"])
         self.assertEqual(snapshot["source_metadata"]["serial"], "01P00TESTSERIAL")
 
+    def test_flashforge_endpoint_and_snapshot_normalise_local_detail_payload(self):
+        self.assertEqual(
+            normalise_flashforge_endpoint("192.168.1.60"),
+            "http://192.168.1.60:8898",
+        )
+        snapshot = normalise_flashforge_snapshot({
+            "code": 0,
+            "detail": {
+                "name": "FlashForge AD5X",
+                "model": "AD5X",
+                "pid": 38,
+                "firmwareVersion": "1.1.7",
+                "status": "printing",
+                "printFileName": "multi_color_test.3mf",
+                "printProgress": 0.25,
+                "estimatedTime": 1800,
+                "printDuration": 600,
+                "printLayer": 10,
+                "targetPrintLayer": 40,
+                "rightTemp": 215,
+                "rightTargetTemp": 220,
+                "platTemp": 55,
+                "platTargetTemp": 60,
+                "chamberTemp": -108,
+                "chamberTargetTemp": -108,
+                "camera": 1,
+                "errorCode": "",
+                "hasMatlStation": True,
+                "matlStationInfo": {
+                    "currentLoadSlot": 1,
+                    "slotCnt": 4,
+                    "slotInfos": [
+                        {
+                            "slotId": 1,
+                            "hasFilament": True,
+                            "materialName": "PLA",
+                            "materialColor": "#FF6600",
+                        },
+                        {
+                            "slotId": 2,
+                            "hasFilament": False,
+                            "materialName": "",
+                            "materialColor": "",
+                        },
+                    ],
+                },
+            },
+        }, serial="FF-TEST")
+
+        self.assertEqual(snapshot["state"], "printing")
+        self.assertEqual(snapshot["job"]["file_name"], "multi_color_test.3mf")
+        self.assertEqual(snapshot["job"]["progress"], 25.0)
+        self.assertEqual(snapshot["job"]["elapsed_seconds"], 600)
+        self.assertEqual(snapshot["job"]["remaining_seconds"], 1800)
+        self.assertEqual(snapshot["job"]["current_layer"], 10)
+        self.assertEqual(snapshot["job"]["total_layers"], 40)
+        self.assertEqual(snapshot["temperatures"]["tool0"]["actual_c"], 215.0)
+        self.assertIsNone(snapshot["temperatures"]["chamber"]["actual_c"])
+        self.assertTrue(snapshot["source_metadata"]["material_station_connected"])
+        self.assertTrue(snapshot["source_metadata"]["camera_available"])
+        self.assertEqual(snapshot["materials"][0]["system"], "flashforge_station")
+        self.assertEqual(snapshot["materials"][0]["slot_index"], 0)
+        self.assertTrue(snapshot["materials"][0]["selected"])
+        self.assertEqual(snapshot["materials"][0]["color_hex"], "#ff6600")
+
     def test_prusalink_snapshot_normalises_documented_status_contract(self):
         self.assertEqual(
             normalise_prusalink_endpoint("prusa.local"),
@@ -382,6 +449,8 @@ class PrinterConnectivityAdapterTests(TestCase):
         self.assertTrue(rows["bambu_local"]["experimental"])
         self.assertTrue(rows["prusa"]["supported"])
         self.assertTrue(rows["prusa"]["experimental"])
+        self.assertTrue(rows["flashforge"]["supported"])
+        self.assertTrue(rows["flashforge"]["experimental"])
         self.assertTrue(rows["voron"]["experimental"])
 
 
@@ -704,6 +773,29 @@ class PrinterConnectivityApiTests(TestCase):
         self.assertEqual(item["config"]["username"], "maker")
         self.assertTrue(item["config"]["password_configured"])
         self.assertNotIn("password", item["config"])
+
+    def test_flashforge_connection_reuses_host_and_serial_but_redacts_check_code(self):
+        self.printer.connection_host = "192.168.1.60"
+        self.printer.serial_number = "FF-TEST-SERIAL"
+        self.printer.save(update_fields=["connection_host", "serial_number", "updated_at"])
+
+        response = self.client.post(
+            f"/api/printing/printers/{self.printer.id}/connections/",
+            data={
+                "adapter": "flashforge",
+                "check_code": "local-check-code",
+                "poll_interval_seconds": 20,
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        item = response.json()["item"]
+        self.assertEqual(item["endpoint_url"], "http://192.168.1.60:8898")
+        self.assertEqual(item["config"]["serial"], "FF-TEST-SERIAL")
+        self.assertTrue(item["config"]["check_code_configured"])
+        self.assertNotIn("check_code", item["config"])
+        connection = PrinterConnection.objects.get(printer=self.printer, adapter="flashforge")
+        self.assertEqual(connection.config["check_code"], "local-check-code")
 
     def test_one_physical_printer_can_have_multiple_live_sources_without_duplication(self):
         for adapter, endpoint in [
