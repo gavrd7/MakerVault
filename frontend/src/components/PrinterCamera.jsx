@@ -143,7 +143,8 @@ function CameraPlayback({ camera, url }) {
     }
     return () => { cancelled = true; controller.abort(); clearTimeout(videoTimeout); stopFrames?.(); closePeer(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [camera.id, url, attempt]);
-  const transform = `rotate(${camera.rotation || 0}deg) scale(${camera.flip_horizontal ? -1 : 1}, ${camera.flip_vertical ? -1 : 1})`;
+  const fit = Number(camera.rotation || 0) % 180 ? 9 / 16 : 1;
+  const transform = `rotate(${camera.rotation || 0}deg) scale(${(camera.flip_horizontal ? -1 : 1) * fit}, ${(camera.flip_vertical ? -1 : 1) * fit})`;
   return <div className="printerCameraPlayback" ref={container}>
     <div className="printerCameraToolbar"><small role="status">{status}</small><button type="button" onClick={() => setAttempt(value => value + 1)}>Reconnect</button><button type="button" onClick={() => { const target = container.current; if (target?.requestFullscreen) target.requestFullscreen().catch(() => setError("Fullscreen is unavailable in this browser.")); else if (video.current?.webkitEnterFullscreen) video.current.webkitEnterFullscreen(); else setError("Fullscreen is unavailable in this browser."); }}>Fullscreen</button></div>
     <div className="printerCameraViewport">

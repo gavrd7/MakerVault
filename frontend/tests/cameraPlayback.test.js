@@ -29,11 +29,13 @@ test("closing frame viewer aborts in-flight fetch and ignores late frame", async
   assert.equal(calls, 0);
 });
 
-test("frame reconnect stops after three failures", async () => {
+test("frame reconnect stops after three failures", { timeout: 1000 }, async () => {
   let calls = 0;
   const errors = [];
-  const stop = startFrameLoop({ request: async () => { calls++; throw new Error("offline"); }, onFrame: () => {}, onError: (_err, retrying) => errors.push(retrying), interval: 1 });
-  await new Promise(done => setTimeout(done, 40));
+  let done;
+  const finished = new Promise(resolve => { done = resolve; });
+  const stop = startFrameLoop({ request: async () => { calls++; throw new Error("offline"); }, onFrame: () => {}, onError: (_err, retrying) => { errors.push(retrying); if (!retrying) done(); }, interval: 1 });
+  await finished;
   stop();
   assert.equal(calls, 3);
   assert.deepEqual(errors, [true, true, false]);

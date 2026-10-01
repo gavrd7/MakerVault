@@ -3835,6 +3835,8 @@ def _serialise_printer_connection(connection):
         metadata.get("camera_available") or metadata.get("video_available")
         or metadata.get("webrtc_support") or snapshot.get("camera_url")
     )
+    # Camera URLs may contain credentials or query tokens; playback uses dedicated routes.
+    snapshot = {**snapshot, "camera_url": ""} if snapshot.get("camera_url") else snapshot
     camera_info = camera_summary(connection)
     capabilities["camera"] = camera_info["viewable"]
     return {

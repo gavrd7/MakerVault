@@ -40,7 +40,7 @@ class CameraProtocolTests(SimpleTestCase):
 
     @patch("core.printer_cameras.socket.getaddrinfo")
     def test_private_printer_allowed_but_special_services_denied(self, resolve):
-        for address in ("127.0.0.1", "169.254.169.254", "::1", "0.0.0.0", "224.0.0.1"):
+        for address in ("127.0.0.1", "169.254.169.254", "::1", "0.0.0.0", "224.0.0.1"):  # nosec B104 -- rejection fixtures; no bind operation
             resolve.return_value = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (address, 80))]
             with self.assertRaises(CameraError):
                 resolve_address("printer.lan", 80)
@@ -172,8 +172,11 @@ class CameraApiTests(TestCase):
         get.assert_not_called()
 
     def test_config_and_diagnostics_omit_camera_urls_and_tokens(self):
+        self.connection.last_snapshot = {"camera_url": "rtsp://user:private@printer.lan/video"}
         result = _serialise_printer_connection(self.connection)
         self.assertNotIn("private", json.dumps(result))
+        self.assertTrue(result["camera"]["reported"])
+        self.assertEqual(self.connection.last_snapshot["camera_url"], "rtsp://user:private@printer.lan/video")
         self.assertNotIn("cameras", result["config"])
         self.assertTrue(result["camera"]["viewable"])
         self.owner.user_permissions.clear()
