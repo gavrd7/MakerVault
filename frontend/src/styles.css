@@ -2230,3 +2230,28 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
   .printingPrinterImage{width:64px!important;min-width:64px!important;height:64px!important}
   .printingPrinterHeader .printingPrinterActions{flex-wrap:wrap}
 }
+
+/* Equal-height material cards and stable model rows at every panel width. */
+.printingPrinterCard .printingSlotGrid{grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));grid-auto-rows:1fr;align-items:stretch}
+.printingPrinterCard .printingSlot{min-width:0;height:100%}
+.printingSlot>div{min-width:0;display:flex;flex-direction:column;align-items:flex-start}
+.printingSlot strong,.printingSlot small{max-width:100%;overflow-wrap:anywhere}
+.printingSlot .slotInventoryAction{margin-top:auto;padding-top:6px}
+.printingSection{container-type:inline-size}
+.printingModelList{grid-auto-rows:1fr;align-items:stretch}
+.printingModelList .printingModelRow{display:grid;grid-template-columns:minmax(0,1fr) minmax(120px,.35fr) auto;grid-template-areas:"identity badges actions";gap:10px 14px;align-items:center;min-height:88px}
+.printingModelRow>div:first-child{grid-area:identity;min-width:0}
+.printingModelRow>div:first-child strong,.printingModelRow>div:first-child small{overflow-wrap:anywhere}
+.printingModelRow>.printingBadges{grid-area:badges;justify-content:flex-start;align-content:flex-start;min-width:0}
+.printingModelRow>.printingBadges .badge{max-width:100%;white-space:normal;overflow-wrap:anywhere}
+.printingModelRow>button,.printingModelRow>.printingLibraryActions{grid-area:actions;align-self:center;justify-self:end}
+.printingModelRow>button{white-space:nowrap;min-width:94px}
+.printingColumns>.printingSection>.panelHead>button{white-space:nowrap;flex-shrink:0}
+@container (max-width:620px){
+  .printingModelList .printingModelRow{grid-template-columns:minmax(0,1fr) auto!important;grid-template-areas:"identity actions" "badges actions";align-items:start;row-gap:8px}
+  .printingModelRow>.printingLibraryActions{flex-wrap:wrap;max-width:120px}
+}
+@container (max-width:320px){
+  .printingModelList .printingModelRow{grid-template-columns:minmax(0,1fr)!important;grid-template-areas:"identity" "badges" "actions"}
+  .printingModelRow>button,.printingModelRow>.printingLibraryActions{justify-self:start}
+}

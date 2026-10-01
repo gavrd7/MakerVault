@@ -408,7 +408,7 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
 
       <div className="panel printingSection">
         <div className="panelHead"><div><h3>Model library</h3><p>Showing the 5 most recently updated models.</p></div><button onClick={() => setWorkspaceView("models")}>View all {summary.models || 0}</button></div>
-        <div className="printingList">
+        <div className="printingList printingModelList">
           {recentModels.map(model => <article className="printingListRow printingModelRow" key={model.id}>
             <div><strong>{model.name}</strong><small>{model.project || "Standalone model"} · {model.revision_count} revision{model.revision_count === 1 ? "" : "s"}</small></div>
             <div className="printingBadges">{model.revisions.flatMap(r => r.assets).slice(0,3).map(asset => <Badge key={asset.id}>{asset.file.category_label}</Badge>)}</div>
@@ -659,7 +659,7 @@ function ModelLibraryPage({ models, files, printers, projects, canAddModel, canC
         <div><strong>{models.length} model{models.length === 1 ? "" : "s"}</strong><small>{rows.length !== models.length ? rows.length + " matching" : "Newest updated first"}</small></div>
         <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search model, project, description or tag…" />
       </div>
-      <div className="printingList">
+      <div className="printingList printingModelList">
         {rows.map(model => {
           const analysis = newestGeometryAnalysis(model);
           const dims = analysis?.dimensions_mm;
