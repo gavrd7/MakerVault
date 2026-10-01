@@ -78,7 +78,7 @@ class Command(BaseCommand):
                     [
                         "family", "mcu", "architecture", "flash_mb", "psram_mb", "ram_kb",
                         "gpio_count", "wifi", "bluetooth", "zigbee", "thread", "usb_connector",
-                        "dimensions_mm", "description",
+                        "dimensions_mm", "description", "pinout",
                     ],
                 )
                 specs = {
