@@ -8,6 +8,13 @@ from django.utils import timezone
 from core.models import PrintJob, Printer, PrinterConnection
 from core.tasks import live_printer_connections_tick
 from core.live_print_jobs import sync_print_job_from_snapshot
+from core.manufacturer_printer_adapters import (
+    normalise_bambu_endpoint,
+    normalise_bambu_snapshot,
+    normalise_prusalink_endpoint,
+    normalise_prusalink_snapshot,
+    poll_prusalink,
+)
 from core.printer_connectivity import (
     PrinterConnectionError,
     adapter_catalogue,
@@ -194,6 +201,139 @@ class PrinterConnectivityAdapterTests(TestCase):
         self.assertEqual(errored["source_metadata"]["activity_state"], "printing")
         self.assertEqual(errored["warnings"], ["Creality error 500 (key 121)"])
 
+    def test_bambu_endpoint_and_snapshot_normalise_local_mqtt_and_ams(self):
+        self.assertEqual(
+            normalise_bambu_endpoint("192.168.1.55"),
+            "mqtts://192.168.1.55:8883",
+        )
+        snapshot = normalise_bambu_snapshot({
+            "print": {
+                "gcode_state": "RUNNING",
+                "subtask_name": "gearbox.3mf",
+                "mc_percent": 48,
+                "mc_remaining_time": 12,
+                "layer_num": 33,
+                "total_layer_num": 120,
+                "nozzle_temper": 219.5,
+                "nozzle_target_temper": 220,
+                "bed_temper": 59.8,
+                "bed_target_temper": 60,
+                "chamber_temper": 35,
+                "spd_lvl": 2,
+                "spd_mag": 100,
+                "hms": [],
+                "ipcam": {"ipcam_dev": "1"},
+                "ams": {
+                    "tray_now": "1",
+                    "ams": [{
+                        "id": "0",
+                        "temp": "24.5",
+                        "humidity": "32",
+                        "tray": [
+                            {"id": "0"},
+                            {
+                                "id": "1",
+                                "tray_type": "PLA",
+                                "tray_sub_brands": "PLA Basic",
+                                "tray_color": "FF6600FF",
+                                "remain": 73,
+                                "tag_uid": "AABBCCDDEEFF0011",
+                                "tray_info_idx": "GFA00",
+                                "nozzle_temp_min": "190",
+                                "nozzle_temp_max": "240",
+                            },
+                        ],
+                    }],
+                },
+            }
+        }, serial="01P00TESTSERIAL")
+
+        self.assertTrue(snapshot["online"])
+        self.assertEqual(snapshot["state"], "printing")
+        self.assertEqual(snapshot["job"]["file_name"], "gearbox.3mf")
+        self.assertEqual(snapshot["job"]["progress"], 48.0)
+        self.assertEqual(snapshot["job"]["remaining_seconds"], 720)
+        self.assertEqual(snapshot["job"]["current_layer"], 33)
+        self.assertEqual(snapshot["temperatures"]["chamber"]["actual_c"], 35.0)
+        self.assertEqual(snapshot["materials"][0]["system"], "bambu_ams")
+        self.assertEqual(snapshot["materials"][0]["slot_index"], 1)
+        self.assertEqual(snapshot["materials"][0]["color_hex"], "#ff6600")
+        self.assertEqual(snapshot["materials"][0]["remaining_percent"], 73.0)
+        self.assertTrue(snapshot["materials"][0]["selected"])
+        self.assertTrue(snapshot["materials"][0]["rfid_detected"])
+        self.assertTrue(snapshot["source_metadata"]["camera_available"])
+        self.assertEqual(snapshot["source_metadata"]["serial"], "01P00TESTSERIAL")
+
+    def test_prusalink_snapshot_normalises_documented_status_contract(self):
+        self.assertEqual(
+            normalise_prusalink_endpoint("prusa.local"),
+            "http://prusa.local",
+        )
+        snapshot = normalise_prusalink_snapshot(
+            {
+                "printer": {
+                    "state": "PRINTING",
+                    "temp_nozzle": 214.9,
+                    "target_nozzle": 215,
+                    "temp_bed": 59.5,
+                    "target_bed": 60,
+                    "speed": 100,
+                    "flow": 98,
+                    "status_printer": {"ok": True, "message": "OK"},
+                },
+                "job": {
+                    "id": 42,
+                    "progress": 40,
+                    "time_remaining": 520,
+                    "time_printing": 526,
+                },
+                "camera": {"id": "CAM123"},
+            },
+            {
+                "id": 42,
+                "state": "PRINTING",
+                "progress": 42,
+                "time_remaining": 500,
+                "time_printing": 540,
+                "file": {"display_name": "Spice Harvester.gcode"},
+            },
+            {"printer_type": "CORE One", "firmware": "6.3.0"},
+        )
+
+        self.assertEqual(snapshot["state"], "printing")
+        self.assertEqual(snapshot["job"]["file_name"], "Spice Harvester.gcode")
+        self.assertEqual(snapshot["job"]["progress"], 42.0)
+        self.assertEqual(snapshot["job"]["elapsed_seconds"], 540)
+        self.assertEqual(snapshot["job"]["remaining_seconds"], 500)
+        self.assertEqual(snapshot["temperatures"]["tool0"]["actual_c"], 214.9)
+        self.assertTrue(snapshot["source_metadata"]["camera_available"])
+        self.assertEqual(snapshot["source_metadata"]["printer_type"], "CORE One")
+
+    @patch("core.manufacturer_printer_adapters.requests.get")
+    def test_prusalink_poll_uses_local_api_key_when_configured(self, get_mock):
+        def side_effect(url, **kwargs):
+            if url.endswith("/api/v1/status"):
+                return self.response({
+                    "printer": {
+                        "state": "IDLE",
+                        "temp_nozzle": 22,
+                        "target_nozzle": 0,
+                        "temp_bed": 22,
+                        "target_bed": 0,
+                    }
+                })
+            if url.endswith("/api/v1/job"):
+                return self.response({}, status=204)
+            if url.endswith("/api/v1/info"):
+                return self.response({"printer_type": "MK4S", "firmware": "6.2.0"})
+            raise AssertionError(url)
+
+        get_mock.side_effect = side_effect
+        snapshot = poll_prusalink("prusa.local", {"api_key": "prusa-key"})
+
+        self.assertEqual(snapshot["state"], "idle")
+        self.assertTrue(all(call.kwargs["headers"]["X-Api-Key"] == "prusa-key" for call in get_mock.call_args_list))
+
     @patch("core.printer_connectivity.requests.get")
     def test_octoprint_normalises_live_snapshot(self, get_mock):
         def side_effect(url, **kwargs):
@@ -237,8 +377,10 @@ class PrinterConnectivityAdapterTests(TestCase):
         self.assertTrue(rows["creality_local"]["supported"])
         self.assertTrue(rows["creality_local"]["experimental"])
         self.assertTrue(rows["creality_local"]["local_first"])
-        self.assertFalse(rows["bambu_local"]["supported"])
+        self.assertTrue(rows["bambu_local"]["supported"])
         self.assertTrue(rows["bambu_local"]["experimental"])
+        self.assertTrue(rows["prusa"]["supported"])
+        self.assertTrue(rows["prusa"]["experimental"])
         self.assertTrue(rows["voron"]["experimental"])
 
 
@@ -435,6 +577,49 @@ class PrinterConnectivityApiTests(TestCase):
         self.assertTrue(item["experimental"])
         self.assertTrue(item["capabilities"]["materials"])
 
+    def test_bambu_connection_reuses_host_and_serial_but_redacts_access_code(self):
+        self.printer.connection_host = "192.168.1.55"
+        self.printer.serial_number = "01P00TESTSERIAL"
+        self.printer.save(update_fields=["connection_host", "serial_number", "updated_at"])
+
+        response = self.client.post(
+            f"/api/printing/printers/{self.printer.id}/connections/",
+            data={
+                "adapter": "bambu_local",
+                "access_code": "12345678",
+                "poll_interval_seconds": 20,
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        item = response.json()["item"]
+        self.assertEqual(item["endpoint_url"], "mqtts://192.168.1.55:8883")
+        self.assertEqual(item["config"]["serial"], "01P00TESTSERIAL")
+        self.assertTrue(item["config"]["access_code_configured"])
+        self.assertNotIn("access_code", item["config"])
+        connection = PrinterConnection.objects.get(printer=self.printer, adapter="bambu_local")
+        self.assertEqual(connection.config["access_code"], "12345678")
+
+    def test_prusalink_connection_reuses_host_and_redacts_digest_password(self):
+        self.printer.connection_host = "prusa.local"
+        self.printer.save(update_fields=["connection_host", "updated_at"])
+
+        response = self.client.post(
+            f"/api/printing/printers/{self.printer.id}/connections/",
+            data={
+                "adapter": "prusa",
+                "username": "maker",
+                "password": "local-secret",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        item = response.json()["item"]
+        self.assertEqual(item["endpoint_url"], "http://prusa.local")
+        self.assertEqual(item["config"]["username"], "maker")
+        self.assertTrue(item["config"]["password_configured"])
+        self.assertNotIn("password", item["config"])
+
     def test_one_physical_printer_can_have_multiple_live_sources_without_duplication(self):
         for adapter, endpoint in [
             ("moonraker", "http://printer.local:7125"),
@@ -571,8 +756,8 @@ class PrinterConnectivityApiTests(TestCase):
     def test_unimplemented_adapter_fails_closed(self):
         connection = PrinterConnection.objects.create(
             printer=self.printer,
-            adapter="bambu_local",
-            endpoint_url="http://bambu.local",
+            adapter="anycubic",
+            endpoint_url="http://anycubic.local",
             status="experimental",
         )
         with self.assertRaises(PrinterConnectionError):
@@ -599,8 +784,8 @@ class PrinterConnectivityApiTests(TestCase):
         )
         PrinterConnection.objects.create(
             printer=self.printer,
-            adapter="bambu_local",
-            endpoint_url="http://bambu.local",
+            adapter="anycubic",
+            endpoint_url="http://anycubic.local",
             poll_interval_seconds=10,
             status="experimental",
         )
