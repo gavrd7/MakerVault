@@ -3745,6 +3745,13 @@ def _serialise_printer_slot(slot):
 
 def _serialise_printer_connection(connection):
     definition = PRINTER_ADAPTERS.get(connection.adapter)
+    stale_after_seconds = max(60, int(connection.poll_interval_seconds or 30) * 3)
+    stale = bool(
+        connection.enabled
+        and connection.status == "connected"
+        and connection.last_seen_at
+        and connection.last_seen_at < timezone.now() - timedelta(seconds=stale_after_seconds)
+    )
     safe_config = {
         key: value
         for key, value in (connection.config or {}).items()
@@ -3760,7 +3767,9 @@ def _serialise_printer_connection(connection):
         "endpoint_url": connection.endpoint_url,
         "poll_interval_seconds": connection.poll_interval_seconds,
         "status": connection.status,
-        "status_label": connection.get_status_display(),
+        "status_label": "Stale" if stale else connection.get_status_display(),
+        "stale": stale,
+        "stale_after_seconds": stale_after_seconds,
         "supported": bool(definition and definition.supported),
         "experimental": bool(definition and definition.experimental),
         "local_first": bool(definition and definition.local_first),
@@ -3776,6 +3785,20 @@ def _serialise_printer_connection(connection):
 def _serialise_printer(printer):
     maker = printer.printer_manufacturer or printer.manufacturer
     catalogue = printer.catalog_model
+    live_connections = [
+        _serialise_printer_connection(connection)
+        for connection in printer.live_connections.all()
+    ]
+    live_status = next(
+        (
+            connection
+            for connection in live_connections
+            if connection["enabled"]
+            and connection["status"] == "connected"
+            and not connection["stale"]
+        ),
+        None,
+    )
     return {
         "id": str(printer.id),
         "name": printer.name,
@@ -3818,15 +3841,8 @@ def _serialise_printer(printer):
             for link in printer.external_links.all()
         ],
         "simplyprint": (printer.profile_data or {}).get("simplyprint") or {},
-        "live_connections": [_serialise_printer_connection(connection) for connection in printer.live_connections.all()],
-        "live_status": next(
-            (
-                _serialise_printer_connection(connection)
-                for connection in printer.live_connections.all()
-                if connection.enabled and connection.status == "connected"
-            ),
-            None,
-        ),
+        "live_connections": live_connections,
+        "live_status": live_status,
         "updated_at": printer.updated_at.isoformat(),
     }
 
