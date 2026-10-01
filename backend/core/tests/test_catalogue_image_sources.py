@@ -145,6 +145,19 @@ class CatalogueImageSourceTests(unittest.TestCase):
         self.assertIn("https://vendor.example/img/board-lazy.webp", urls)
         self.assertIn("https://vendor.example/img/board-large.webp", urls)
 
+    def test_page_image_candidates_reject_obvious_brand_placeholder_assets(self):
+        soup = BeautifulSoup(
+            """
+            <html><head><meta property="og:image" content="/assets/site-logo.png"></head>
+            <body><img src="/images/bpi-m5-board.jpg" alt="BPI-M5 board"></body></html>
+            """,
+            "html.parser",
+        )
+        candidates = _page_image_candidates(soup, "https://docs.banana-pi.org/en/BPI-M5/")
+        urls = [url for url, _method in candidates]
+        self.assertNotIn("https://docs.banana-pi.org/assets/site-logo.png", urls)
+        self.assertIn("https://docs.banana-pi.org/images/bpi-m5-board.jpg", urls)
+
     def test_page_image_candidates_support_css_background_images(self):
         soup = BeautifulSoup(
             '<div class="product-photo" style="background-image:url(\'/assets/board.png\')"></div>',
@@ -320,6 +333,34 @@ class CatalogueImageSourceTests(unittest.TestCase):
             _normalise_catalogue_identity("Orange Pi 5 Plus [base]"),
             _normalise_catalogue_identity("OrangePi 5 Plus"),
         )
+
+    def test_curated_adfruit_and_banana_pi_sources_use_current_documentation(self):
+        mcu_cases = [
+            ("Adafruit", "Feather ESP32-S3", "https://learn.adafruit.com/adafruit-esp32-s3-feather"),
+            ("Adafruit", "Feather RP2040", "https://learn.adafruit.com/adafruit-feather-rp2040-pico"),
+            ("Adafruit", "QT Py ESP32-C3", "https://learn.adafruit.com/adafruit-qt-py-esp32-c3-wifi-dev-board/pinouts"),
+        ]
+        for manufacturer_name, board_name, expected in mcu_cases:
+            with self.subTest(board=board_name):
+                board = SimpleNamespace(
+                    name=board_name,
+                    manufacturer=SimpleNamespace(name=manufacturer_name),
+                    specifications={"board_type": "microcontroller"},
+                )
+                self.assertEqual(_curated_board_source_pages(board), [expected])
+
+        sbc_cases = [
+            ("BPI-M5", "https://docs.banana-pi.org/en/BPI-M5/Photo_BPI-M5"),
+            ("BPI-M7", "https://docs.banana-pi.org/en/BPI-M7/BananaPi_BPI-M7"),
+        ]
+        for board_name, expected in sbc_cases:
+            with self.subTest(board=board_name):
+                board = SimpleNamespace(
+                    name=board_name,
+                    manufacturer=SimpleNamespace(name="Banana Pi"),
+                    specifications={"board_type": "sbc"},
+                )
+                self.assertEqual(_curated_sbc_source_page(board), expected)
 
     def test_curated_mcu_sources_cover_vendor_failure_cluster(self):
         cases = [
