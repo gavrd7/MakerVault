@@ -146,7 +146,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
       if (kind && item.kind !== kind) return false;
       if (!term) return true;
       const haystack = [
-        item.label, item.code, item.kind_label, item.status_label,
+        item.label, item.code, item.kind_label, item.status_label, item.technology_label,
         item.target?.label, item.target?.subtitle, item.target?.type_label,
       ].filter(Boolean).join(" ").toLowerCase();
       return haystack.includes(term);
@@ -239,7 +239,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
               {tag.status === "retired" && <Badge>Retired</Badge>}
             </div>
             <code>{tag.code}</code>
-            <small>{tag.target?.type_label || tag.target_type} · {targetLabel(tag)}</small>
+            <small>{tag.target?.type_label || tag.target_type} · {targetLabel(tag)}{tag.technology ? " · " + tag.technology_label : ""}</small>
           </div>
           <div className="tagRowActions">
             <button onClick={async () => {
