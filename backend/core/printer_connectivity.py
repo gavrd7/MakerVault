@@ -475,6 +475,80 @@ def _creality_state(payload: dict) -> str:
     return "idle"
 
 
+def _normalise_creality_colour(value) -> str:
+    text = str(value or "").strip().lstrip("#")
+    if len(text) == 7 and text.startswith("0"):
+        text = text[1:]
+    if len(text) >= 8:
+        text = text[:6]
+    if len(text) == 6 and all(char in "0123456789abcdefABCDEF" for char in text):
+        return "#" + text.lower()
+    return ""
+
+
+def _creality_boxs_info(payload) -> dict | None:
+    if not isinstance(payload, dict):
+        return None
+    if isinstance(payload.get("boxsInfo"), dict):
+        return payload["boxsInfo"]
+    params = payload.get("params")
+    if isinstance(params, dict) and isinstance(params.get("boxsInfo"), dict):
+        return params["boxsInfo"]
+    return None
+
+
+def _creality_materials(boxs_info) -> list[dict]:
+    if not isinstance(boxs_info, dict):
+        return []
+    boxes = boxs_info.get("materialBoxs")
+    if not isinstance(boxes, list):
+        return []
+
+    result = []
+    for box in boxes:
+        if not isinstance(box, dict):
+            continue
+        try:
+            box_type = int(box.get("type") or 0)
+            box_id = int(box.get("id") or 0)
+        except (TypeError, ValueError):
+            continue
+        if box_type != 0:
+            continue
+        materials = box.get("materials")
+        if not isinstance(materials, list):
+            continue
+        for raw in materials:
+            if not isinstance(raw, dict):
+                continue
+            try:
+                slot_id = int(raw.get("id"))
+                material_state = int(raw.get("state") or 0)
+            except (TypeError, ValueError):
+                continue
+            if material_state <= 0:
+                continue
+            percent = _finite_number(raw.get("percent"))
+            result.append({
+                "system": "creality_cfs",
+                "unit_index": max(box_id - 1, 0),
+                "slot_index": slot_id,
+                "vendor": str(raw.get("vendor") or ""),
+                "material": str(raw.get("type") or ""),
+                "product_name": str(raw.get("name") or ""),
+                "color_hex": _normalise_creality_colour(raw.get("color")),
+                "remaining_percent": max(0.0, min(100.0, percent)) if percent is not None else None,
+                "selected": _flag(raw.get("selected")),
+                "rfid_detected": material_state == 2,
+                "material_code": str(raw.get("rfid") or ""),
+                "min_temp_c": _finite_number(raw.get("minTemp")),
+                "max_temp_c": _finite_number(raw.get("maxTemp")),
+                "box_temperature_c": _finite_number(box.get("temp")),
+                "box_humidity_percent": _finite_number(box.get("humidity")),
+            })
+    return result
+
+
 def normalise_creality_snapshot(payload: dict) -> dict:
     """Convert Creality's proprietary LAN telemetry into MakerVault's contract."""
     if not isinstance(payload, dict):
@@ -502,6 +576,9 @@ def normalise_creality_snapshot(payload: dict) -> dict:
             + (f" (key {key})" if key not in (None, "") else "")
         )
 
+    cfs_info = payload.get("boxsInfo")
+    materials = _creality_materials(cfs_info)
+
     snapshot = _blank_snapshot("creality_local")
     snapshot.update({
         "online": _flag(payload.get("connect"), default=True),
@@ -526,13 +603,15 @@ def normalise_creality_snapshot(payload: dict) -> dict:
             "chamber": _temperature(payload.get("boxTemp"), payload.get("targetBoxTemp")),
         },
         "warnings": warnings,
+        "materials": materials,
         "source_metadata": {
             "hostname": str(payload.get("hostname") or ""),
             "model": str(payload.get("model") or ""),
             "model_version": str(payload.get("modelVersion") or ""),
             "raw_state": payload.get("state"),
             "device_state": payload.get("deviceState"),
-            "cfs_connected": _flag(payload.get("cfsConnect")),
+            "cfs_connected": _flag(payload.get("cfsConnect")) or bool(materials),
+            "cfs_loaded_slots": len(materials),
             "webrtc_support": _flag(payload.get("webrtcSupport")),
             "video_available": _flag(payload.get("video")) or _flag(payload.get("video1")),
             "feedrate_percent": _finite_number(payload.get("curFeedratePct")),
@@ -580,6 +659,10 @@ async def _fetch_creality_status(endpoint_url: str) -> dict:
                 {"method": "get", "params": {"ReqPrinterPara": 1}},
                 separators=(",", ":"),
             ))
+            await ws.send(json.dumps(
+                {"method": "get", "params": {"boxsInfo": 1}},
+                separators=(",", ":"),
+            ))
             deadline = asyncio.get_running_loop().time() + 7
             while asyncio.get_running_loop().time() < deadline:
                 timeout = max(0.1, deadline - asyncio.get_running_loop().time())
@@ -595,17 +678,25 @@ async def _fetch_creality_status(endpoint_url: str) -> dict:
                 if isinstance(payload, dict) and payload.get("ModeCode") == "heart_beat":
                     await ws.send("ok")
                     continue
+                boxs_info = _creality_boxs_info(payload)
+                if boxs_info is not None:
+                    merged["boxsInfo"] = boxs_info
+
                 data = _creality_payload_data(payload)
-                if not data:
-                    continue
-                merged.update(data)
+                if data:
+                    # Do not flatten the nested CFS payload over the telemetry
+                    # namespace; it has its own normaliser above.
+                    data.pop("boxsInfo", None)
+                    merged.update(data)
+
                 enough = (
                     "state" in merged
                     and ("printProgress" in merged or "dProgress" in merged)
                     and "nozzleTemp" in merged
                     and "bedTemp0" in merged
                 )
-                if enough:
+                cfs_expected = _flag(merged.get("cfsConnect"))
+                if enough and (not cfs_expected or "boxsInfo" in merged):
                     return merged
     except (OSError, asyncio.TimeoutError, WebSocketException) as exc:
         raise PrinterConnectionError("MakerVault could not reach the Creality LAN WebSocket service on port 9999.") from exc
@@ -667,7 +758,9 @@ def poll_connection(connection) -> dict:
         capabilities["camera"] = bool(
             metadata.get("video_available") or metadata.get("webrtc_support")
         )
-        capabilities["materials"] = bool(metadata.get("cfs_connected"))
+        capabilities["materials"] = bool(
+            metadata.get("cfs_connected") or snapshot.get("materials")
+        )
     connection.capabilities = capabilities
     connection.last_snapshot = snapshot
     connection.save(update_fields=[
