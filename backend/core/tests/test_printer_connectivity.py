@@ -5,9 +5,10 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
-from core.models import PrintJob, Printer, PrinterConnection
+from core.models import PrintJob, Printer, PrinterConnection, PrinterFilamentSlot
 from core.tasks import live_printer_connections_tick
 from core.live_print_jobs import sync_print_job_from_snapshot
+from core.live_material_slots import sync_live_material_slots
 from core.manufacturer_printer_adapters import (
     normalise_bambu_endpoint,
     normalise_bambu_snapshot,
@@ -382,6 +383,90 @@ class PrinterConnectivityAdapterTests(TestCase):
         self.assertTrue(rows["prusa"]["supported"])
         self.assertTrue(rows["prusa"]["experimental"])
         self.assertTrue(rows["voron"]["experimental"])
+
+
+class LiveMaterialSlotTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username="live-material-owner",
+            email="live-material@example.com",
+            password="test-password",
+        )
+        self.printer = Printer.objects.create(
+            owner=self.user,
+            name="Bambu test",
+            model="P1S",
+        )
+        self.connection = PrinterConnection.objects.create(
+            printer=self.printer,
+            adapter="bambu_local",
+            endpoint_url="mqtts://192.168.1.55:8883",
+            status="connected",
+        )
+
+    def test_provider_neutral_material_contract_persists_ams_slot(self):
+        result = sync_live_material_slots(self.connection, {
+            "materials": [{
+                "system": "bambu_ams",
+                "unit_index": 0,
+                "slot_index": 1,
+                "vendor": "Bambu Lab",
+                "material": "PLA",
+                "product_name": "PLA Basic",
+                "color_hex": "#ff6600",
+                "remaining_percent": 73,
+                "selected": True,
+                "rfid_detected": True,
+                "rfid_uid": "AABBCCDDEEFF0011",
+                "material_code": "GFA00",
+                "box_temperature_c": 24.5,
+                "box_humidity_percent": 32,
+            }],
+            "source_metadata": {"ams_connected": True},
+        })
+
+        self.assertEqual(result["systems"], ["bambu_ams"])
+        self.assertEqual(result["loaded_slots"], 1)
+        slot = PrinterFilamentSlot.objects.get(
+            printer=self.printer,
+            system="bambu_ams",
+            unit_index=0,
+            slot_index=1,
+        )
+        self.assertTrue(slot.is_loaded)
+        self.assertEqual(slot.material, "PLA")
+        self.assertEqual(slot.color_hex, "#ff6600")
+        self.assertEqual(slot.rfid_uid, "AABBCCDDEEFF0011")
+        self.assertEqual(slot.metadata["remaining_percent"], 73.0)
+        self.assertTrue(slot.metadata["selected"])
+        self.assertEqual(slot.metadata["adapter"], "bambu_local")
+
+    def test_empty_connected_ams_marks_previous_slot_unloaded(self):
+        PrinterFilamentSlot.objects.create(
+            printer=self.printer,
+            system="bambu_ams",
+            unit_index=0,
+            slot_index=0,
+            material="PETG",
+            is_loaded=True,
+        )
+
+        result = sync_live_material_slots(self.connection, {
+            "materials": [],
+            "source_metadata": {"ams_connected": True},
+        })
+
+        self.assertEqual(result["loaded_slots"], 0)
+        slot = PrinterFilamentSlot.objects.get(
+            printer=self.printer,
+            system="bambu_ams",
+            unit_index=0,
+            slot_index=0,
+        )
+        self.assertFalse(slot.is_loaded)
+        self.assertIsNone(slot.spool_id)
+
 
 
 class LivePrintJobMappingTests(TestCase):
