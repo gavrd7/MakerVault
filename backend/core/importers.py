@@ -32,6 +32,14 @@ CATALOGUE_SOURCE_HOST_SUFFIXES = {
     "qidi3d.com",
     "sovol3d.com",
     "snapmaker.com",
+    "adafruit.com",
+    "arduino.cc",
+    "dfrobot.com",
+    "elecrow.com",
+    "espressif.com",
+    "sparkfun.com",
+    "seeedstudio.com",
+    "waveshare.com",
 }
 
 
