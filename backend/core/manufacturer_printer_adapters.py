@@ -1,14 +1,21 @@
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import math
+import secrets
 import ssl
+import string
 import threading
 import time
-from urllib.parse import urlparse
+import uuid
+from urllib.parse import urlencode, urlparse
 
 import paho.mqtt.client as mqtt
 import requests
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.padding import PKCS7
 from django.utils import timezone
 from requests.auth import HTTPDigestAuth
 
@@ -80,6 +87,27 @@ def _host_url(raw_url, *, scheme, default_port=None):
 
 def normalise_bambu_endpoint(raw_url: str) -> str:
     return _host_url(raw_url, scheme="mqtts", default_port=8883)
+
+
+def normalise_anycubic_endpoint(raw_url: str) -> str:
+    value = str(raw_url or "").strip().rstrip("/")
+    if not value:
+        raise ManufacturerAdapterError("Enter the Anycubic printer host or URL.")
+    if "://" not in value:
+        parsed = urlparse("//" + value)
+        scheme = "http"
+    else:
+        parsed = urlparse(value)
+        if parsed.scheme not in {"http", "https"}:
+            raise ManufacturerAdapterError("Anycubic LAN endpoints must use HTTP or HTTPS.")
+        scheme = parsed.scheme
+    if not parsed.hostname or parsed.username or parsed.password:
+        raise ManufacturerAdapterError("Anycubic endpoint must contain a host and must not embed credentials.")
+    host = parsed.hostname
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"
+    port = parsed.port or 18910
+    return f"{scheme}://{host}:{port}"
 
 
 def normalise_flashforge_endpoint(raw_url: str) -> str:
@@ -332,6 +360,363 @@ def poll_bambu_local(endpoint_url: str, config: dict | None = None) -> dict:
         return normalise_bambu_snapshot(received, serial=serial)
     except (OSError, mqtt.MQTTException) as exc:
         raise ManufacturerAdapterError("MakerVault could not reach the Bambu LAN MQTT service on port 8883.") from exc
+    finally:
+        try:
+            client.disconnect()
+        except Exception:
+            pass
+        client.loop_stop()
+
+
+def _anycubic_sign(token: str, timestamp_ms: int, nonce: str) -> str:
+    first = hashlib.md5(token[:16].encode(), usedforsecurity=False).hexdigest()
+    return hashlib.md5(
+        (first + str(timestamp_ms) + nonce).encode(),
+        usedforsecurity=False,
+    ).hexdigest()
+
+
+def _anycubic_decrypt_ctrl(info_b64: str, token: str, local_token: str) -> dict:
+    try:
+        key = token[16:32].encode()
+        iv = local_token.encode()[:16].ljust(16, b"\0")
+        decryptor = Cipher(algorithms.AES(key), modes.CBC(iv)).decryptor()
+        padded = decryptor.update(base64.b64decode(info_b64)) + decryptor.finalize()
+        unpadder = PKCS7(128).unpadder()
+        plaintext = unpadder.update(padded) + unpadder.finalize()
+        payload = json.loads(plaintext.decode())
+    except Exception as exc:
+        raise ManufacturerAdapterError("Anycubic LAN handshake data could not be decrypted.") from exc
+    if not isinstance(payload, dict):
+        raise ManufacturerAdapterError("Anycubic LAN handshake returned unexpected broker data.")
+    return payload
+
+
+def _anycubic_handshake(endpoint_url: str) -> dict:
+    base = normalise_anycubic_endpoint(endpoint_url)
+    try:
+        info_response = requests.get(
+            base + "/info",
+            headers={"Accept": "application/json", "User-Agent": "MakerVault/0.7.3 (+Anycubic LAN adapter)"},
+            timeout=(3, 8),
+            allow_redirects=False,
+        )
+    except requests.RequestException as exc:
+        raise ManufacturerAdapterError("MakerVault could not reach the Anycubic LAN service on port 18910.") from exc
+    if info_response.status_code >= 400:
+        raise ManufacturerAdapterError(f"Anycubic LAN /info returned HTTP {info_response.status_code}.")
+    try:
+        info = info_response.json()
+    except ValueError as exc:
+        raise ManufacturerAdapterError("Anycubic LAN /info returned invalid JSON.") from exc
+    if not isinstance(info, dict):
+        raise ManufacturerAdapterError("Anycubic LAN /info returned an unexpected response.")
+    if str(info.get("ctrlType") or "").lower() == "cloud":
+        raise ManufacturerAdapterError("Anycubic printer is in cloud mode. Enable LAN mode on the printer first.")
+
+    token = str(info.get("token") or "")
+    ctrl_url = str(info.get("ctrlInfoUrl") or "")
+    model_id = str(info.get("modelId") or "")
+    if len(token) < 32 or not ctrl_url or not model_id:
+        raise ManufacturerAdapterError(
+            "This Anycubic printer does not expose the signed Kobra 3/S1-generation LAN handshake."
+        )
+
+    timestamp_ms = int(time.time() * 1000)
+    nonce = "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(6))
+    did = "".join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(32))
+    query = urlencode({
+        "ts": timestamp_ms,
+        "nonce": nonce,
+        "sign": _anycubic_sign(token, timestamp_ms, nonce),
+        "did": did,
+    })
+    separator = "&" if "?" in ctrl_url else "?"
+    try:
+        ctrl_response = requests.post(
+            ctrl_url + separator + query,
+            headers={"Accept": "application/json", "User-Agent": "MakerVault/0.7.3 (+Anycubic LAN adapter)"},
+            timeout=(3, 8),
+            allow_redirects=False,
+        )
+    except requests.RequestException as exc:
+        raise ManufacturerAdapterError("MakerVault could not complete the Anycubic LAN handshake.") from exc
+    if ctrl_response.status_code >= 400:
+        raise ManufacturerAdapterError(f"Anycubic LAN /ctrl returned HTTP {ctrl_response.status_code}.")
+    try:
+        ctrl = ctrl_response.json()
+    except ValueError as exc:
+        raise ManufacturerAdapterError("Anycubic LAN /ctrl returned invalid JSON.") from exc
+    if not isinstance(ctrl, dict) or ctrl.get("code") != 200:
+        raise ManufacturerAdapterError(
+            "Anycubic LAN handshake failed"
+            + (f": {ctrl.get('message')}" if isinstance(ctrl, dict) and ctrl.get("message") else ".")
+        )
+    data = ctrl.get("data") or {}
+    decrypted = _anycubic_decrypt_ctrl(
+        str(data.get("info") or ""),
+        token,
+        str(data.get("token") or ""),
+    )
+    broker = urlparse(str(decrypted.get("broker") or ""))
+    if broker.scheme not in {"mqtt", "mqtts"} or not broker.hostname:
+        raise ManufacturerAdapterError("Anycubic LAN handshake returned an invalid MQTT broker.")
+    return {
+        "broker_host": broker.hostname,
+        "broker_port": broker.port or (9883 if broker.scheme == "mqtts" else 1883),
+        "username": str(decrypted.get("username") or ""),
+        "password": str(decrypted.get("password") or ""),
+        "device_id": str(decrypted.get("deviceId") or ""),
+        "model_id": model_id,
+        "serial": str(info.get("cn") or ""),
+        "model_name": str(info.get("modelName") or ""),
+        "device_type": str(info.get("deviceType") or ""),
+        "broker_tls": broker.scheme == "mqtts",
+    }
+
+
+def _anycubic_state(raw_state, project: dict) -> str:
+    raw = str(raw_state or "").strip().lower()
+    project_state = str(project.get("state") or "").strip().lower()
+    pause = _number(project.get("pause"))
+    if pause == 1 or project_state == "paused":
+        return "paused"
+    if project_state in {"pausing", "resuming", "resumed", "preheating", "auto_leveling", "vibrating", "flow_calibrating"}:
+        return "processing"
+    if project_state == "printing":
+        return "printing"
+    if project_state in {"stopping", "stoped", "stopped"}:
+        return "cancelled"
+    if project_state in {"finished", "complete", "completed"}:
+        return "complete"
+    if project_state in {"error", "failed"}:
+        return "error"
+    if raw == "free":
+        return "idle"
+    if raw == "busy":
+        return "processing"
+    return project_state or raw or "unknown"
+
+
+def _anycubic_colour(value) -> str:
+    if not isinstance(value, (list, tuple)) or len(value) < 3:
+        return ""
+    try:
+        red, green, blue = (max(0, min(255, int(value[index]))) for index in range(3))
+    except (TypeError, ValueError):
+        return ""
+    return f"#{red:02x}{green:02x}{blue:02x}"
+
+
+def _anycubic_materials(box_data: dict) -> list[dict]:
+    boxes = box_data.get("multi_color_box") if isinstance(box_data, dict) else []
+    if not isinstance(boxes, list):
+        return []
+    rows = []
+    for box in boxes:
+        if not isinstance(box, dict):
+            continue
+        box_id = int(_number(box.get("id")) or 0)
+        loaded_slot = _number(box.get("loaded_slot"))
+        loaded_slot = int(loaded_slot) if loaded_slot is not None else None
+        dry = box.get("drying_status") if isinstance(box.get("drying_status"), dict) else {}
+        humidity = box.get("humidity")
+        if humidity is None:
+            humidity = dry.get("humidity")
+        slots = box.get("slots")
+        if not isinstance(slots, list):
+            continue
+        for slot in slots:
+            if not isinstance(slot, dict):
+                continue
+            slot_index = _number(slot.get("index"))
+            if slot_index is None:
+                continue
+            slot_index = int(slot_index)
+            material = str(slot.get("type") or "").strip()
+            if not material:
+                continue
+            remaining = _number(slot.get("consumables_percent"))
+            rows.append({
+                "system": "anycubic_ace",
+                "unit_index": max(box_id, 0),
+                "slot_index": max(slot_index, 0),
+                "vendor": "Anycubic",
+                "material": material,
+                "product_name": material,
+                "color_hex": _anycubic_colour(slot.get("color")),
+                "remaining_percent": max(0.0, min(100.0, remaining)) if remaining is not None else None,
+                "selected": loaded_slot == slot_index,
+                "rfid_detected": False,
+                "material_code": str(slot.get("sku") or ""),
+                "rfid_uid": "",
+                "min_temp_c": None,
+                "max_temp_c": None,
+                "box_temperature_c": _number(box.get("temp")),
+                "box_humidity_percent": _number(humidity),
+                "drying_active": _number(dry.get("status")) == 1,
+                "drying_target_c": _number(dry.get("target_temp")),
+                "drying_remaining_minutes": _number(dry.get("remain_time")),
+            })
+    return rows
+
+
+def normalise_anycubic_snapshot(info_data: dict, box_data: dict | None = None, *, identity: dict | None = None) -> dict:
+    if not isinstance(info_data, dict):
+        raise ManufacturerAdapterError("Anycubic printer returned an unexpected info payload.")
+    identity = identity or {}
+    project = info_data.get("project")
+    if not isinstance(project, dict) or not project:
+        project = info_data.get("last_project") if isinstance(info_data.get("last_project"), dict) else {}
+    state = _anycubic_state(info_data.get("state"), project)
+    progress = _number(project.get("progress"))
+    if progress is not None:
+        progress = max(0.0, min(100.0, progress))
+    temp = info_data.get("temp") if isinstance(info_data.get("temp"), dict) else {}
+    filename = str(project.get("filename") or "").replace("\\", "/").rsplit("/", 1)[-1]
+    materials = _anycubic_materials(box_data or {})
+    urls = info_data.get("urls") if isinstance(info_data.get("urls"), dict) else {}
+    camera_url = str(urls.get("rtspUrl") or "").strip()
+
+    snapshot = _blank_snapshot("anycubic")
+    snapshot.update({
+        "online": True,
+        "state": state,
+        "state_label": state.replace("_", " ").title(),
+        "job": {
+            "file_name": filename,
+            "progress": round(progress, 2) if progress is not None else None,
+            "elapsed_seconds": _seconds(project.get("print_time")),
+            "remaining_seconds": (
+                int(round(_number(project.get("remain_time")) * 60))
+                if _number(project.get("remain_time")) is not None
+                else None
+            ),
+            "current_layer": int(_number(project.get("curr_layer"))) if _number(project.get("curr_layer")) is not None else None,
+            "total_layers": int(_number(project.get("total_layers"))) if _number(project.get("total_layers")) is not None else None,
+        },
+        "temperatures": {
+            "tool0": _temperature(temp.get("curr_nozzle_temp"), temp.get("target_nozzle_temp")),
+            "bed": _temperature(temp.get("curr_hotbed_temp"), temp.get("target_hotbed_temp")),
+            "chamber": _temperature(temp.get("curr_chamber_temp"), temp.get("target_chamber_temp")),
+        },
+        "camera_url": camera_url if camera_url.startswith(("http://", "https://", "rtsp://")) else "",
+        "materials": materials,
+        "source_metadata": {
+            "serial": str(identity.get("serial") or ""),
+            "model_id": str(identity.get("model_id") or ""),
+            "device_id": str(identity.get("device_id") or ""),
+            "model": str(info_data.get("model") or identity.get("model_name") or ""),
+            "firmware": str(info_data.get("version") or ""),
+            "raw_state": str(info_data.get("state") or ""),
+            "project_state": str(project.get("state") or ""),
+            "pause_code": project.get("pause"),
+            "camera_available": bool(camera_url),
+            "ace_connected": bool(materials or box_data),
+            "ace_units": len((box_data or {}).get("multi_color_box") or []) if isinstance(box_data, dict) else 0,
+            "fan_percent": _number(info_data.get("fan_speed_pct")),
+            "aux_fan_percent": _number(info_data.get("aux_fan_speed_pct")),
+            "print_speed_mode": _number(info_data.get("print_speed_mode")),
+            "protocol": "Anycubic LAN signed HTTP + MQTT/TLS",
+        },
+        "captured_at": timezone.now().isoformat(),
+    })
+    return snapshot
+
+
+def poll_anycubic_local(endpoint_url: str, config: dict | None = None) -> dict:
+    del config
+    identity = _anycubic_handshake(endpoint_url)
+    if not all((identity["username"], identity["password"], identity["device_id"])):
+        raise ManufacturerAdapterError("Anycubic LAN handshake did not return usable MQTT credentials.")
+
+    info_data = {}
+    box_data = {}
+    info_ready = threading.Event()
+    box_ready = threading.Event()
+    error = {"message": ""}
+    report_prefix = f"anycubic/anycubicCloud/v1/printer/public/{identity['model_id']}/{identity['device_id']}"
+    request_prefix = f"anycubic/anycubicCloud/v1/web/printer/{identity['model_id']}/{identity['device_id']}"
+
+    client = mqtt.Client(
+        callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
+        client_id=f"makervault-{uuid.uuid4().hex[:8]}",
+        protocol=mqtt.MQTTv311,
+    )
+    client.username_pw_set(identity["username"], identity["password"])
+    if identity["broker_tls"]:
+        client.tls_set(cert_reqs=ssl.CERT_NONE)  # nosec B504
+        client.tls_insecure_set(True)
+
+    def publish_query(message_type, action="query"):
+        payload = json.dumps({
+            "type": message_type,
+            "action": action,
+            "timestamp": int(time.time() * 1000),
+            "msgid": uuid.uuid4().hex,
+            "data": None,
+        }, separators=(",", ":"))
+        result = client.publish(f"{request_prefix}/{message_type}", payload)
+        if getattr(result, "rc", mqtt.MQTT_ERR_SUCCESS) != mqtt.MQTT_ERR_SUCCESS:
+            error["message"] = f"Anycubic MQTT could not publish the {message_type} query."
+
+    def on_connect(client_obj, _userdata, _flags, reason_code, _properties):
+        if getattr(reason_code, "is_failure", False):
+            error["message"] = f"Anycubic MQTT rejected the connection ({reason_code})."
+            info_ready.set()
+            return
+        client_obj.subscribe(f"{report_prefix}/#", qos=0)
+        publish_query("info")
+        publish_query("tempature")
+        publish_query("fan")
+        publish_query("multiColorBox", action="getInfo")
+
+    def on_message(_client_obj, _userdata, message):
+        try:
+            payload = json.loads(message.payload.decode("utf-8", "replace"))
+        except (ValueError, UnicodeDecodeError):
+            return
+        if not isinstance(payload, dict):
+            return
+        message_type = str(payload.get("type") or "")
+        if not message_type:
+            parts = message.topic.split("/")
+            message_type = parts[-2] if len(parts) >= 2 and parts[-1] == "report" else ""
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            return
+        if message_type == "info":
+            info_data.update(data)
+            info_ready.set()
+        elif message_type == "tempature":
+            temp = info_data.setdefault("temp", {})
+            if isinstance(temp, dict):
+                temp.update({key: value for key, value in data.items() if value is not None})
+        elif message_type == "fan":
+            for key in ("fan_speed_pct", "aux_fan_speed_pct", "box_fan_level"):
+                if data.get(key) is not None:
+                    info_data[key] = data[key]
+        elif message_type == "multiColorBox":
+            box_data.update(data)
+            box_ready.set()
+
+    client.on_connect = on_connect
+    client.on_message = on_message
+    try:
+        client.connect(identity["broker_host"], identity["broker_port"], keepalive=20)
+        client.loop_start()
+        if not info_ready.wait(8):
+            raise ManufacturerAdapterError("Anycubic printer connected but did not return an info report.")
+        if error["message"]:
+            raise ManufacturerAdapterError(error["message"])
+        # ACE getInfo is activity-dependent on some firmware. Give it a short
+        # opportunity without delaying every ordinary printer status poll.
+        box_ready.wait(1.5)
+        if not info_data:
+            raise ManufacturerAdapterError("Anycubic printer returned no usable live telemetry.")
+        return normalise_anycubic_snapshot(info_data, box_data, identity=identity)
+    except (OSError, mqtt.MQTTException) as exc:
+        raise ManufacturerAdapterError("MakerVault could not reach the Anycubic local MQTT broker.") from exc
     finally:
         try:
             client.disconnect()
