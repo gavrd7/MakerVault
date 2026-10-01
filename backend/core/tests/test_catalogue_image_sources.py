@@ -252,6 +252,24 @@ class CatalogueImageSourceTests(unittest.TestCase):
             ["https://docs.arduino.cc/hardware/nano-esp32"],
         )
 
+    def test_catalogue_identity_ignores_trademarks_and_marketing_suffixes(self):
+        self.assertEqual(
+            _normalise_catalogue_identity(
+                "Seeed Studio® XIAO RP2040 Supports Arduino, MicroPython and CircuitPython"
+            ),
+            _normalise_catalogue_identity("Seeed Studio XIAO RP2040"),
+        )
+        self.assertEqual(
+            _normalise_catalogue_identity("OrangePi"),
+            _normalise_catalogue_identity("Orange Pi"),
+        )
+        self.assertEqual(
+            _normalise_search_label(
+                "XIAO RP2040 Supports Arduino, MicroPython and CircuitPython"
+            ),
+            "XIAO RP2040",
+        )
+
     def test_curated_mcu_source_pages_cover_known_board_failures(self):
         cases = [
             ("Adafruit", "Feather RP2040", "https://www.adafruit.com/product/4884"),
