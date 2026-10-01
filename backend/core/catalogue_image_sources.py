@@ -30,7 +30,7 @@ from .importers import ImporterError, fetch_catalogue_source_html, fetch_import_
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 OPENVERSE_API = "https://api.openverse.org/v1/images/"
-IMAGE_SEED_VERSION = "0.7.2-authoritative-images-6"
+IMAGE_SEED_VERSION = "0.7.2-authoritative-images-7"
 USER_AGENT = f"MakerVault/{getattr(settings, 'MAKERVAULT_VERSION', 'dev')} (+self-hosted catalogue image seeder)"
 def _commons_license_allowed(license_name: str) -> bool:
     """Allow only licences suitable for normal open redistribution."""
@@ -923,8 +923,11 @@ def _page_image_candidates(soup: BeautifulSoup, base_url: str) -> list[tuple[str
             tag.get("data-large_image")
             or tag.get("data-zoom-image")
             or tag.get("data-lazy-src")
+            or tag.get("data-lazy")
             or tag.get("data-src")
             or tag.get("data-original")
+            or tag.get("data-url")
+            or tag.get("data-image")
             or tag.get("src")
             or ""
         )
@@ -935,6 +938,28 @@ def _page_image_candidates(soup: BeautifulSoup, base_url: str) -> list[tuple[str
                 if entries:
                     value = entries[-1].split(" ", 1)[0]
         add(value, "page-image")
+
+    # Modern documentation/product sites sometimes render imagery through
+    # <source> elements or inline CSS rather than a conventional <img src>.
+    for tag in soup.find_all("source", limit=120):
+        value = str(tag.get("src") or tag.get("data-src") or "").strip()
+        srcset = str(tag.get("srcset") or tag.get("data-srcset") or "").strip()
+        if not value and srcset:
+            entries = [entry.strip() for entry in srcset.split(",") if entry.strip()]
+            if entries:
+                value = entries[-1].split(" ", 1)[0]
+        add(value, "picture-source")
+
+    css_url = re.compile(r"""url\(\s*['"]?([^'")]+)['"]?\s*\)""", re.I)
+    for tag in soup.find_all(style=True, limit=160):
+        classes = " ".join(str(part) for part in (tag.get("class") or [])).lower()
+        ident = str(tag.get("id") or "").lower()
+        label = str(tag.get("aria-label") or "").lower()
+        context = " ".join((classes, ident, label))
+        if any(word in context for word in ("logo", "icon", "avatar", "banner", "spinner")):
+            continue
+        for match in css_url.finditer(str(tag.get("style") or "")):
+            add(match.group(1), "css-background")
 
     # Some product galleries expose the full-size photograph only on the
     # surrounding anchor while the <img> itself is a tiny placeholder.
