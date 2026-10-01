@@ -10,6 +10,9 @@ from core.tasks import live_printer_connections_tick
 from core.live_print_jobs import sync_print_job_from_snapshot
 from core.live_material_slots import sync_live_material_slots
 from core.manufacturer_printer_adapters import (
+    _anycubic_sign,
+    normalise_anycubic_endpoint,
+    normalise_anycubic_snapshot,
     normalise_bambu_endpoint,
     normalise_bambu_snapshot,
     normalise_flashforge_endpoint,
@@ -203,6 +206,89 @@ class PrinterConnectivityAdapterTests(TestCase):
         self.assertEqual(errored["state"], "error")
         self.assertEqual(errored["source_metadata"]["activity_state"], "printing")
         self.assertEqual(errored["warnings"], ["Creality error 500 (key 121)"])
+
+    def test_anycubic_sign_matches_validated_lan_protocol(self):
+        self.assertEqual(
+            _anycubic_sign(
+                "0123456789abcdefABCDEF0123456789",
+                1781548658398,
+                "abc123",
+            ),
+            "3dc9739a6e5de8f075c6999fe3c3aaef",
+        )
+
+    def test_anycubic_snapshot_normalises_kobra_and_ace_telemetry(self):
+        self.assertEqual(
+            normalise_anycubic_endpoint("192.168.1.70"),
+            "http://192.168.1.70:18910",
+        )
+        snapshot = normalise_anycubic_snapshot(
+            {
+                "model": "Anycubic Kobra S1 Max",
+                "version": "2.6.9.6",
+                "state": "busy",
+                "temp": {
+                    "curr_nozzle_temp": 220,
+                    "target_nozzle_temp": 220,
+                    "curr_hotbed_temp": 60,
+                    "target_hotbed_temp": 60,
+                    "curr_chamber_temp": 38,
+                    "target_chamber_temp": 40,
+                },
+                "project": {
+                    "state": "printing",
+                    "progress": 55,
+                    "curr_layer": 44,
+                    "total_layers": 120,
+                    "remain_time": 18,
+                    "print_time": 900,
+                    "filename": "/useremain/app/gk/gcodes/part.gcode",
+                    "pause": 0,
+                },
+                "urls": {"rtspUrl": "http://192.168.1.70:18088/flv"},
+                "fan_speed_pct": 70,
+                "aux_fan_speed_pct": 20,
+                "print_speed_mode": 2,
+            },
+            {
+                "multi_color_box": [{
+                    "id": 0,
+                    "loaded_slot": 1,
+                    "temp": 35,
+                    "humidity": 24,
+                    "drying_status": {"status": 1, "target_temp": 45, "remain_time": 90},
+                    "slots": [{
+                        "index": 1,
+                        "type": "PETG",
+                        "color": [255, 102, 0],
+                        "consumables_percent": 82,
+                        "status": 5,
+                        "sku": "AHPEFG-102",
+                    }],
+                }],
+            },
+            identity={
+                "serial": "AC-TEST",
+                "model_id": "20029",
+                "device_id": "DEV-TEST",
+                "model_name": "Anycubic Kobra S1 Max",
+            },
+        )
+
+        self.assertEqual(snapshot["state"], "printing")
+        self.assertEqual(snapshot["job"]["file_name"], "part.gcode")
+        self.assertEqual(snapshot["job"]["progress"], 55.0)
+        self.assertEqual(snapshot["job"]["remaining_seconds"], 1080)
+        self.assertEqual(snapshot["job"]["current_layer"], 44)
+        self.assertEqual(snapshot["temperatures"]["chamber"]["actual_c"], 38.0)
+        self.assertEqual(snapshot["camera_url"], "http://192.168.1.70:18088/flv")
+        self.assertEqual(snapshot["materials"][0]["system"], "anycubic_ace")
+        self.assertEqual(snapshot["materials"][0]["material"], "PETG")
+        self.assertEqual(snapshot["materials"][0]["color_hex"], "#ff6600")
+        self.assertEqual(snapshot["materials"][0]["remaining_percent"], 82.0)
+        self.assertTrue(snapshot["materials"][0]["selected"])
+        self.assertTrue(snapshot["materials"][0]["drying_active"])
+        self.assertEqual(snapshot["source_metadata"]["protocol"], "Anycubic LAN signed HTTP + MQTT/TLS")
 
     def test_bambu_endpoint_and_snapshot_normalise_local_mqtt_and_ams(self):
         self.assertEqual(
@@ -451,6 +537,8 @@ class PrinterConnectivityAdapterTests(TestCase):
         self.assertTrue(rows["prusa"]["experimental"])
         self.assertTrue(rows["flashforge"]["supported"])
         self.assertTrue(rows["flashforge"]["experimental"])
+        self.assertTrue(rows["anycubic"]["supported"])
+        self.assertTrue(rows["anycubic"]["experimental"])
         self.assertTrue(rows["voron"]["experimental"])
 
 
@@ -797,6 +885,26 @@ class PrinterConnectivityApiTests(TestCase):
         connection = PrinterConnection.objects.get(printer=self.printer, adapter="flashforge")
         self.assertEqual(connection.config["check_code"], "local-check-code")
 
+    def test_anycubic_connection_reuses_host_without_cloud_credentials(self):
+        self.printer.connection_host = "192.168.1.70"
+        self.printer.save(update_fields=["connection_host", "updated_at"])
+
+        response = self.client.post(
+            f"/api/printing/printers/{self.printer.id}/connections/",
+            data={
+                "adapter": "anycubic",
+                "poll_interval_seconds": 30,
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        item = response.json()["item"]
+        self.assertEqual(item["endpoint_url"], "http://192.168.1.70:18910")
+        self.assertTrue(item["supported"])
+        self.assertTrue(item["experimental"])
+        connection = PrinterConnection.objects.get(printer=self.printer, adapter="anycubic")
+        self.assertEqual(connection.config, {})
+
     def test_one_physical_printer_can_have_multiple_live_sources_without_duplication(self):
         for adapter, endpoint in [
             ("moonraker", "http://printer.local:7125"),
@@ -933,8 +1041,8 @@ class PrinterConnectivityApiTests(TestCase):
     def test_unimplemented_adapter_fails_closed(self):
         connection = PrinterConnection.objects.create(
             printer=self.printer,
-            adapter="anycubic",
-            endpoint_url="http://anycubic.local",
+            adapter="snapmaker",
+            endpoint_url="http://snapmaker.local",
             status="experimental",
         )
         with self.assertRaises(PrinterConnectionError):
@@ -961,8 +1069,8 @@ class PrinterConnectivityApiTests(TestCase):
         )
         PrinterConnection.objects.create(
             printer=self.printer,
-            adapter="anycubic",
-            endpoint_url="http://anycubic.local",
+            adapter="snapmaker",
+            endpoint_url="http://snapmaker.local",
             poll_interval_seconds=10,
             status="experimental",
         )
