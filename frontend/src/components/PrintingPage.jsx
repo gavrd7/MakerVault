@@ -29,6 +29,68 @@ function formatDurationMinutes(value) {
   return hours ? hours + "h " + remainder + "m" : remainder + " min";
 }
 
+function liveStateKey(snapshot, connection = null) {
+  if (connection?.stale) return "stale";
+  if (connection && ["error", "disconnected"].includes(connection.status)) return "error";
+  const state = String(snapshot?.state || "unknown").toLowerCase();
+  if (["printing", "processing", "self-testing"].includes(state)) return "printing";
+  if (state === "paused") return "paused";
+  if (["complete", "completed", "success"].includes(state)) return "complete";
+  if (["error", "failed"].includes(state)) return "error";
+  if (["cancelled", "canceled", "stopped"].includes(state)) return "stopped";
+  if (state === "idle") return "idle";
+  return "unknown";
+}
+
+function liveProgress(snapshot) {
+  const value = snapshot?.job?.progress;
+  if (value == null || Number.isNaN(Number(value))) return null;
+  return Math.max(0, Math.min(100, Number(value)));
+}
+
+function liveTemperature(temp) {
+  if (temp?.actual_c == null) return "—";
+  const actual = Number(temp.actual_c).toFixed(1).replace(".0", "");
+  if (temp.target_c == null || Number(temp.target_c) <= 0) return actual + "°";
+  const target = Number(temp.target_c).toFixed(0);
+  return actual + "° / " + target + "°";
+}
+
+function PrinterLiveSummary({ printer, onOpen }) {
+  const connection = printer.live_status || (printer.live_connections || []).find(item => item.enabled);
+  if (!connection) return null;
+  const snapshot = connection.snapshot || {};
+  const stateKey = liveStateKey(snapshot, connection);
+  const pct = liveProgress(snapshot);
+  const job = snapshot.job || {};
+  const temps = snapshot.temperatures || {};
+  const connected = connection.status === "connected" && !connection.stale;
+
+  return <div className={"printerLiveSummary printerLiveSummary-" + stateKey}>
+    <div className="printerLiveSummaryHead">
+      <div className="printerLiveState">
+        <span className="printerLiveStateDot" aria-hidden="true" />
+        <div>
+          <strong>{connected ? (snapshot.state_label || "Connected") : (connection.status_label || "Unavailable")}</strong>
+          <small>{job.file_name || connection.adapter_label || "Live printer source"}</small>
+        </div>
+      </div>
+      <button type="button" className="printerLiveOpen" onClick={onOpen}>Open live</button>
+    </div>
+    {pct != null && <div className="printerLiveProgressLine">
+      <div className="printerLiveProgressTrack"><span style={{ width: pct + "%" }} /></div>
+      <strong>{pct.toFixed(pct % 1 ? 1 : 0)}%</strong>
+    </div>}
+    <div className="printerLiveQuickStats">
+      {temps.tool0?.actual_c != null && <span><small>Nozzle</small><strong>{liveTemperature(temps.tool0)}</strong></span>}
+      {temps.bed?.actual_c != null && <span><small>Bed</small><strong>{liveTemperature(temps.bed)}</strong></span>}
+      {temps.chamber?.actual_c != null && <span><small>Chamber</small><strong>{liveTemperature(temps.chamber)}</strong></span>}
+      {(job.current_layer != null || job.total_layers != null) && <span><small>Layer</small><strong>{job.current_layer ?? "—"} / {job.total_layers ?? "—"}</strong></span>}
+      {job.remaining_seconds != null && Number(job.remaining_seconds) > 0 && <span><small>Remaining</small><strong>{Math.max(1, Math.round(Number(job.remaining_seconds) / 60))} min</strong></span>}
+    </div>
+  </div>;
+}
+
 function newestFirst(rows) {
   const activityTime = row => Math.max(
     new Date(row.updated_at || row.created_at || 0).getTime() || 0,
@@ -76,6 +138,12 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
   }
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    if (workspaceView !== "overview") return undefined;
+    const timer = window.setInterval(load, 15000);
+    return () => window.clearInterval(timer);
+  }, [workspaceView]);
 
   useEffect(() => {
     if (!searchTarget?.type) return;
@@ -270,6 +338,7 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
               </small>}
             </div>
           </div>
+          <PrinterLiveSummary printer={printer} onOpen={() => setLivePrinter(printer)} />
           <div className="printingSlotGrid">
             {printer.slots.filter(slot => slot.is_loaded).map(slot => <div className="printingSlot" key={slot.id}>
               <span className="printingSwatch" style={slot.color_hex ? { background: slot.color_hex } : undefined} />
@@ -842,29 +911,43 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
           {(snapshot.source_metadata?.hostname || snapshot.source_metadata?.model) && <small>
             {[snapshot.source_metadata?.hostname, snapshot.source_metadata?.model].filter(Boolean).join(" · ")}
           </small>}
-          <div className="settingsCallout integrationAuthorityCallout">
-            <strong>{snapshot.state_label || "No live snapshot yet"}</strong>
-            <p>{snapshot.job?.file_name || (connection.status === "connected" ? "Printer reachable; no active filename reported." : "Refresh this source to test the connection.")}</p>
-            {pct != null && <>
-              <div className="printingLiveProgress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={pct}><span style={{ width: pct + "%" }} /></div>
-              <p>{pct.toFixed(1)}% · {snapshot.job?.elapsed_seconds != null ? Math.round(snapshot.job.elapsed_seconds / 60) + " min elapsed" : ""}{snapshot.job?.remaining_seconds != null ? " · " + Math.round(snapshot.job.remaining_seconds / 60) + " min remaining" : ""}</p>
-            </>}
-            {(snapshot.temperatures?.tool0?.actual_c != null || snapshot.temperatures?.bed?.actual_c != null || snapshot.temperatures?.chamber?.actual_c != null) && <p>
-              {snapshot.temperatures?.tool0?.actual_c != null ? "Tool " + snapshot.temperatures.tool0.actual_c + "°C" + (snapshot.temperatures.tool0.target_c != null ? "/" + snapshot.temperatures.tool0.target_c + "°C" : "") : ""}
-              {snapshot.temperatures?.bed?.actual_c != null ? " · Bed " + snapshot.temperatures.bed.actual_c + "°C" + (snapshot.temperatures.bed.target_c != null ? "/" + snapshot.temperatures.bed.target_c + "°C" : "") : ""}
-              {snapshot.temperatures?.chamber?.actual_c != null ? " · Chamber " + snapshot.temperatures.chamber.actual_c + "°C" + (snapshot.temperatures.chamber.target_c != null ? "/" + snapshot.temperatures.chamber.target_c + "°C" : "") : ""}
-            </p>}
-            {(snapshot.job?.current_layer != null || snapshot.job?.total_layers != null) && <p>
-              Layer {snapshot.job?.current_layer ?? "?"}{snapshot.job?.total_layers != null ? " / " + snapshot.job.total_layers : ""}
-            </p>}
-            {connection.adapter === "creality_local" && snapshot.source_metadata?.cfs_connected && <p>CFS detected on the printer LAN connection.</p>}
+          <div className={"printingLivePanel printingLivePanel-" + liveStateKey(snapshot, connection)}>
+            <div className="printingLivePanelHead">
+              <div className="printingLivePanelState">
+                <span className="printingLiveStateDot" aria-hidden="true" />
+                <div>
+                  <strong>{snapshot.state_label || "No live snapshot yet"}</strong>
+                  <small>{snapshot.job?.file_name || (connection.status === "connected" ? "Printer reachable · no active file" : "Refresh this source to test the connection")}</small>
+                </div>
+              </div>
+              {pct != null && <strong className="printingLivePercent">{pct.toFixed(pct % 1 ? 1 : 0)}%</strong>}
+            </div>
+            {pct != null && <div className="printingLiveProgress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={pct}><span style={{ width: pct + "%" }} /></div>}
+            <div className="printingLiveMetrics">
+              {snapshot.temperatures?.tool0?.actual_c != null && <div><span>Nozzle</span><strong>{liveTemperature(snapshot.temperatures.tool0)}</strong></div>}
+              {snapshot.temperatures?.bed?.actual_c != null && <div><span>Bed</span><strong>{liveTemperature(snapshot.temperatures.bed)}</strong></div>}
+              {snapshot.temperatures?.chamber?.actual_c != null && <div><span>Chamber</span><strong>{liveTemperature(snapshot.temperatures.chamber)}</strong></div>}
+              {snapshot.job?.elapsed_seconds != null && <div><span>Elapsed</span><strong>{Math.round(snapshot.job.elapsed_seconds / 60)} min</strong></div>}
+              {snapshot.job?.remaining_seconds != null && <div><span>Remaining</span><strong>{Math.round(snapshot.job.remaining_seconds / 60)} min</strong></div>}
+              {(snapshot.job?.current_layer != null || snapshot.job?.total_layers != null) && <div><span>Layer</span><strong>{snapshot.job?.current_layer ?? "—"} / {snapshot.job?.total_layers ?? "—"}</strong></div>}
+            </div>
+            {connection.adapter === "creality_local" && snapshot.source_metadata?.cfs_connected && <div className="printingLiveSectionTitle"><span>CFS live slots</span><small>{snapshot.materials?.length || 0} detected</small></div>}
             {connection.adapter === "creality_local" && snapshot.materials?.length > 0 && <div className="printingLiveMaterials">
-              {snapshot.materials.slice(0, 8).map((material, index) => <div className="printingLiveMaterial" key={(material.unit_index ?? 0) + "-" + material.slot_index + "-" + index}>
-                <span className="printingSwatch" style={material.color_hex ? { background: material.color_hex } : undefined} />
-                <span>CFS {Number(material.unit_index || 0) + 1} · slot {Number(material.slot_index || 0) + 1}</span>
-                <strong>{material.product_name || material.material || "Filament"}</strong>
-                <small>{[material.vendor, material.material].filter(Boolean).join(" · ")}{material.remaining_percent != null ? " · " + Math.round(material.remaining_percent) + "%" : ""}{material.selected ? " · loaded" : ""}</small>
-              </div>)}
+              {snapshot.materials.slice(0, 8).map((material, index) => {
+                const remaining = material.remaining_percent == null ? null : Math.max(0, Math.min(100, Number(material.remaining_percent)));
+                return <div className={"printingLiveMaterial" + (material.selected ? " selected" : "")} key={(material.unit_index ?? 0) + "-" + material.slot_index + "-" + index}>
+                  <span className="printingSwatch" style={material.color_hex ? { background: material.color_hex } : undefined} />
+                  <div className="printingLiveMaterialMain">
+                    <span>CFS {Number(material.unit_index || 0) + 1} · slot {Number(material.slot_index || 0) + 1}{material.selected ? " · loaded" : ""}</span>
+                    <strong>{material.product_name || material.material || "Filament"}</strong>
+                    <small>{[material.vendor, material.material].filter(Boolean).join(" · ") || "Material details unavailable"}</small>
+                  </div>
+                  {remaining != null && <div className="printingMaterialRemaining">
+                    <strong>{Math.round(remaining)}%</strong>
+                    <div className="printingMaterialTrack"><span style={{ width: remaining + "%", background: material.color_hex || undefined }} /></div>
+                  </div>}
+                </div>;
+              })}
             </div>}
           </div>
           {snapshot.warnings?.map((warning, index) => <small className="integrationError" key={"warning-" + index}>{warning}</small>)}
