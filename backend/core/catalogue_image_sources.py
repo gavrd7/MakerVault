@@ -519,8 +519,8 @@ CURATED_SBC_SOURCE_PAGES = {
     ("Radxa", "ROCK 5B"): "https://docs.radxa.com/en/rock5/rock5b/getting-started/introduction",
     ("Radxa", "ROCK 5C"): "https://docs.radxa.com/en/rock5/rock5c",
     ("Radxa", "CM5"): "https://docs.radxa.com/en/compute-module/cm5",
-    ("Orange Pi", "Orange Pi 5 Plus"): "https://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_5_Plus",
-    ("Orange Pi", "Orange Pi 5 Pro"): "https://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_5_Pro",
+    ("Orange Pi", "Orange Pi 5 Plus"): "https://www.orangepi.org/html/hardWare/computerAndMicrocontrollers/details/Orange-Pi-5-plus.html",
+    ("Orange Pi", "Orange Pi 5 Pro"): "https://www.orangepi.org/html/hardWare/computerAndMicrocontrollers/details/Orange-Pi-5-Pro.html",
 }
 
 
@@ -533,7 +533,13 @@ CURATED_MCU_SOURCE_PAGES = {
     ("DFRobot", "FireBeetle 2 ESP32-E"): "https://www.dfrobot.com/product-2195.html",
     ("Elecrow", "CrowPanel ESP32 2.8in HMI"): "https://www.elecrow.com/wiki/esp32-display-282727-intelligent-touch-screen-wi-fi26ble-240320-hmi-display.html",
     ("Elecrow", "CrowPanel ESP32 3.5in HMI"): "https://elecrow.com/wiki/esp32-display-352727-intelligent-touch-screen-wi-fi26ble-320480-hmi-display.html",
-    ("Espressif", "ESP32-P4-Function-EV-Board"): "https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32p4/esp32-p4-function-ev-board/index.html",
+    ("Espressif", "ESP32-P4-Function-EV-Board"): "https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32p4/esp32-p4-function-ev-board/user_guide.html",
+    ("Heltec", "WiFi LoRa 32 V3"): "https://wiki.heltec.org/docs/devices/open-source-hardware/esp32-series/lora-32/wifi-lora-32/",
+    ("Heltec", "Wireless Stick Lite V3"): "https://wiki.heltec.org/docs/devices/open-source-hardware/esp32-series/lora-32/wireless-stick-lite/",
+    ("LilyGo", "T-Deck"): "https://wiki.lilygo.cc/products/t-deck/t-deck/",
+    ("LilyGo", "T-Display-S3"): "https://wiki.lilygo.cc/products/t-display-s3/t-display-s3/",
+    ("M5Stack", "Atom Lite"): "https://docs.m5stack.com/en/core/atom_lite",
+    ("M5Stack", "CoreS3"): "https://docs.m5stack.com/en/core/CoreS3",
 }
 
 
@@ -542,11 +548,11 @@ CURATED_SBC_SOURCE_FALLBACKS = {
         "https://www.beagleboard.org/boards/beagleplay",
     ),
     ("Orange Pi", "Orange Pi 5 Plus"): (
-        "https://www.orangepi.org/html/hardWare/computerAndMicrocontrollers/details/Orange-Pi-5-plus.html",
+        "https://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_5_Plus",
         "https://www.orangepi.org/",
     ),
     ("Orange Pi", "Orange Pi 5 Pro"): (
-        "https://www.orangepi.org/html/hardWare/computerAndMicrocontrollers/details/Orange-Pi-5-Pro.html",
+        "https://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_5_Pro",
         "https://www.orangepi.org/",
     ),
 }
