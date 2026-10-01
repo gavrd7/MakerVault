@@ -37,6 +37,7 @@ from .model_analysis import ModelAnalysisError, analyse_file_asset
 from .printing_integrations import PrintingIntegrationError, probe_simplyprint, probe_spoolman
 from .printer_connectivity import (
     ADAPTERS as PRINTER_ADAPTERS,
+    ADAPTER_VALIDATION as PRINTER_ADAPTER_VALIDATION,
     PrinterConnectionError,
     adapter_catalogue,
     normalise_connection_endpoint,
@@ -3800,6 +3801,7 @@ def _serialise_printer_slot(slot):
 
 def _serialise_printer_connection(connection):
     definition = PRINTER_ADAPTERS.get(connection.adapter)
+    validation = PRINTER_ADAPTER_VALIDATION.get(connection.adapter, {})
     stale_after_seconds = max(60, int(connection.poll_interval_seconds or 30) * 3)
     stale = bool(
         connection.enabled
@@ -3831,6 +3833,10 @@ def _serialise_printer_connection(connection):
         "supported": bool(definition and definition.supported),
         "experimental": bool(definition and definition.experimental),
         "local_first": bool(definition and definition.local_first),
+        "validation": validation.get("validation", ""),
+        "validation_label": validation.get("validation_label", ""),
+        "protocol": validation.get("protocol", ""),
+        "compatibility_hint": validation.get("compatibility_hint", ""),
         "capabilities": connection.capabilities or (dict(definition.capabilities) if definition else {}),
         "snapshot": connection.last_snapshot or {},
         "last_checked_at": connection.last_checked_at.isoformat() if connection.last_checked_at else None,
