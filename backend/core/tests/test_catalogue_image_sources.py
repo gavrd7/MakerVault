@@ -324,12 +324,15 @@ class CatalogueImageSourceTests(unittest.TestCase):
     def test_curated_mcu_sources_cover_vendor_failure_cluster(self):
         cases = [
             ("Espressif", "ESP32-P4-Function-EV-Board", "docs.espressif.com"),
-            ("Heltec", "WiFi LoRa 32 V3", "wiki.heltec.org"),
+            ("Heltec", "WiFi LoRa 32 V3", "heltec.org"),
             ("Heltec", "Wireless Stick Lite V3", "wiki.heltec.org"),
             ("LilyGo", "T-Deck", "wiki.lilygo.cc"),
             ("LilyGo", "T-Display-S3", "wiki.lilygo.cc"),
             ("M5Stack", "Atom Lite", "docs.m5stack.com"),
             ("M5Stack", "CoreS3", "docs.m5stack.com"),
+            ("Seeed Studio", "XIAO RP2040", "wiki.seeedstudio.com"),
+            ("Seeed Studio", "XIAO RP2350", "wiki.seeedstudio.com"),
+            ("Generic", "ESP32-2432S028R CYD", "github.com"),
         ]
         for manufacturer_name, board_name, expected_host in cases:
             with self.subTest(board=board_name):
@@ -347,7 +350,9 @@ class CatalogueImageSourceTests(unittest.TestCase):
             ("Adafruit", "Feather RP2040", "https://www.adafruit.com/product/4884"),
             ("Arduino", "Nano ESP32", "https://docs.arduino.cc/hardware/nano-esp32"),
             ("DFRobot", "FireBeetle 2 ESP32-E", "https://www.dfrobot.com/product-2195.html"),
-            ("Espressif", "ESP32-P4-Function-EV-Board", "https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32p4/esp32-p4-function-ev-board/index.html"),
+            ("Espressif", "ESP32-P4-Function-EV-Board", "https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32p4/esp32-p4-function-ev-board/user_guide.html"),
+            ("Seeed Studio", "XIAO RP2040", "https://wiki.seeedstudio.com/XIAO-RP2040/"),
+            ("Seeed Studio", "XIAO RP2350", "https://wiki.seeedstudio.com/xiao_rp2350_arduino/"),
         ]
         for manufacturer_name, board_name, expected in cases:
             with self.subTest(board=board_name):
@@ -357,6 +362,27 @@ class CatalogueImageSourceTests(unittest.TestCase):
                     specifications={"board_type": "microcontroller"},
                 )
                 self.assertEqual(_curated_board_source_pages(board), [expected])
+
+    def test_cyd_curated_source_is_community_not_manufacturer(self):
+        board = SimpleNamespace(
+            name="ESP32-2432S028R CYD",
+            manufacturer=SimpleNamespace(name="Generic"),
+            specifications={"board_type": "microcontroller"},
+            features={},
+            source_url="",
+            source=None,
+        )
+
+        pages = _candidate_source_pages(board)
+
+        self.assertEqual(
+            pages[0]["url"],
+            "https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display",
+        )
+        self.assertEqual(pages[0]["source_type"], "github")
+        self.assertEqual(pages[0]["provider"], "Community / ecosystem")
+        self.assertEqual(pages[0]["tier"], "community")
+        self.assertEqual(pages[0]["priority"], 40)
 
     def test_orange_pi_5_plus_prefers_official_wiki_source(self):
         board = SimpleNamespace(
