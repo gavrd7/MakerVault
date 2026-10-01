@@ -3939,6 +3939,8 @@ def _serialise_print_job(job):
     total_waste = sum((usage.waste_g or Decimal("0") for usage in usages), Decimal("0"))
     costs = [usage.material_cost for usage in usages if usage.material_cost is not None]
     total_cost = sum(costs, Decimal("0")) if costs else None
+    settings_payload = job.settings if isinstance(job.settings, dict) else {}
+    live_meta = settings_payload.get("live_monitor") if isinstance(settings_payload.get("live_monitor"), dict) else {}
     return {
         "id": str(job.id),
         "status": job.status,
@@ -3951,6 +3953,8 @@ def _serialise_print_job(job):
         "model_revision_id": str(job.model_revision_id) if job.model_revision_id else None,
         "model": job.model_revision.model.name if job.model_revision else "",
         "revision": job.model_revision.version if job.model_revision else "",
+        "filename": str(live_meta.get("filename") or ""),
+        "history_source": "live_printer" if live_meta.get("source") == "live_printer" else "manual",
         "material_usages": [_serialise_print_material_usage(usage) for usage in usages],
         "filament_used_g": _float(total_used),
         "waste_g": _float(total_waste),
