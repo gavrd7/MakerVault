@@ -14,14 +14,18 @@ You can configure up to eight sources per printer integration. Only one camera i
 
 ## Creality K1
 
-For K1 systems exposing the usual HTTP camera service, start with:
+The shared K1 troubleshooting session confirmed the direct port-8080 MJPEG route worked after starting `mjpg_streamer`, and then appeared in Fluidd. MakerVault uses the integration host rather than a hard-coded address. This confirms the external feed route; MakerVault playback still needs testing.
 
-- Snapshot: `http://PRINTER_HOST:8080/?action=snapshot`
-- MJPEG: `http://PRINTER_HOST:8080/?action=stream`
+For K1 systems exposing the local HTTP camera service, start with:
+
+- MJPEG (the route confirmed in the shared troubleshooting session): `http://PRINTER_HOST:8080/?action=stream`
+- Snapshot alternative: `http://PRINTER_HOST:8080/?action=snapshot`
 
 **K1 / Helper Script presets** provides both snapshot and MJPEG choices for direct port 8080, Fluidd port 4408 and Mainsail port 4409. This also works in the Moonraker integration without requiring successful webcam discovery. No presets are probed or saved automatically.
 
 Helper Script installations can alternatively expose `/webcam/?action=snapshot` or `/webcam/?action=stream` on Fluidd/Mainsail ports 4408/4409. Use the route working in your own installation. Moonraker discovery can pick up the configured camera URL and orientation. Printer monitoring having passed on K1 does not yet validate MakerVault camera playback.
+
+If Creality Cloud works but these local URLs fail, the local `mjpg_streamer` service may be stopped even though `cam_app` is working. Starting it restored the feed in the shared troubleshooting session; reboot persistence was a separate follow-up. MakerVault does not install or restart printer services. Validate the feed again after reboot/firmware updates.
 
 HTTP snapshot and MJPEG sources are shown as **refreshed live images**, approximately one image per second after each request completes. MJPEG sources yield one bounded JPEG frame per request. This first pass does not relay a continuous high-frame-rate MJPEG stream. It avoids holding a web worker for the lifetime of an open viewer.
 

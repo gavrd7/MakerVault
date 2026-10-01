@@ -92,7 +92,7 @@ def summary(connection):
 PROVIDERS = {
     **{key: ("moonraker", "Read cameras configured in Moonraker. Klipper itself does not serve camera images.") for key in MOONRAKER},
     "octoprint": ("octoprint", "Read the default webcam settings. The API key needs Settings Read permission."),
-    "creality_local": ("creality", "Choose the K1 route that works in your installation, or experimental K2 WebRTC. Presets do not verify playback."),
+    "creality_local": ("creality", "Choose the K1 route that works in your installation, or experimental K2 WebRTC. Presets do not verify playback. If Creality Cloud works but K1 HTTP does not, check that the printer's local mjpg_streamer service is running."),
     "prusa": ("prusalink", "Read local PrusaLink cameras where its camera API is available. Requires an API key; Prusa Connect cloud cameras are not imported."),
     "anycubic": ("reported", "Use a supported camera URL reported by the printer. RTSP needs a media relay, which is not included yet."),
     "flashforge": ("reported", "Use a supported camera URL reported by the printer. Opaque or unsupported stream formats require manual setup or a future relay."),
@@ -111,7 +111,7 @@ def k1_presets(connection):
     base = endpoint(connection)
     host = f"[{base.hostname}]" if ":" in base.hostname else base.hostname
     routes = [("K1 direct", 8080, "/"), ("K1 Helper Script / Fluidd", 4408, "/webcam/"), ("K1 Helper Script / Mainsail", 4409, "/webcam/")]
-    return [normalise_source(connection, {"name": name + " · " + mode, "mode": mode, "url": f"http://{host}:{port}{path}?action={action}"}, f"preset-k1-{port}-{mode}") for name, port, path in routes for mode, action in (("snapshot", "snapshot"), ("mjpeg", "stream"))]
+    return [normalise_source(connection, {"name": name + " · " + mode, "mode": mode, "url": f"http://{host}:{port}{path}?action={action}"}, f"preset-k1-{port}-{mode}") for name, port, path in routes for mode, action in (("mjpeg", "stream"), ("snapshot", "snapshot"))]
 
 
 def setup_presets(connection):
