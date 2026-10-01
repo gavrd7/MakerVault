@@ -315,8 +315,8 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
       <div className="printingList">
         {data.recent_prints.map(job => <article className="printingListRow printingRecentPrintRow" key={job.id}>
           <div>
-            <strong>{job.model || "Unlinked print"}{job.revision ? ` · ${job.revision}` : ""}</strong>
-            <small>{job.printer} · {formatDate(job.created_at)}{job.actual_minutes ? " · " + formatDurationMinutes(job.actual_minutes) : ""}</small>
+            <strong>{job.model || job.filename || "Unlinked print"}{job.revision ? ` · ${job.revision}` : ""}</strong>
+            <small>{job.printer} · {formatDate(job.created_at)}{job.actual_minutes ? " · " + formatDurationMinutes(job.actual_minutes) : ""}{job.history_source === "live_printer" ? " · Auto-tracked" : ""}</small>
           </div>
           <div className="printingRecentPrintStats">
             {job.filament_used_g > 0 && <span>{grams(job.filament_used_g)} used{job.waste_g > 0 ? " · " + grams(job.waste_g) + " waste" : ""}</span>}
