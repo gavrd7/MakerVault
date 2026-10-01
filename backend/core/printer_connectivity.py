@@ -209,18 +209,113 @@ ADAPTERS = {
 }
 
 
+ADAPTER_VALIDATION = {
+    "moonraker": {
+        "validation": "established_protocol",
+        "validation_label": "Established protocol",
+        "protocol": "Moonraker / Klipper HTTP",
+        "compatibility_hint": "Any printer exposing a compatible Moonraker HTTP API.",
+    },
+    "octoprint": {
+        "validation": "established_protocol",
+        "validation_label": "Established protocol",
+        "protocol": "OctoPrint HTTP API",
+        "compatibility_hint": "Any printer managed through a compatible OctoPrint server.",
+    },
+    "creality_local": {
+        "validation": "hardware_validated",
+        "validation_label": "Hardware validated",
+        "protocol": "Creality LAN WebSocket",
+        "compatibility_hint": "Validated on MakerVault development hardware with a Creality K2; other K-series firmware remains experimental.",
+    },
+    "bambu_local": {
+        "validation": "community_validation",
+        "validation_label": "Community validation required",
+        "protocol": "Bambu LAN MQTT/TLS",
+        "compatibility_hint": "Bambu Lab printers that expose LAN MQTT with a serial number and LAN access code.",
+    },
+    "prusa": {
+        "validation": "community_validation",
+        "validation_label": "Community validation required",
+        "protocol": "PrusaLink local HTTP API",
+        "compatibility_hint": "Printers running a compatible PrusaLink local API.",
+    },
+    "anycubic": {
+        "validation": "community_validation",
+        "validation_label": "Community validation required",
+        "protocol": "Anycubic signed LAN HTTP + MQTT",
+        "compatibility_hint": "Targets Kobra 3 / Kobra S1-generation LAN mode and ACE/ACE Pro telemetry where exposed.",
+    },
+    "flashforge": {
+        "validation": "community_validation",
+        "validation_label": "Community validation required",
+        "protocol": "FlashForge local HTTP",
+        "compatibility_hint": "Targets newer FlashForge local APIs exposing port 8898 detail telemetry and optional material-station data.",
+    },
+    "elegoo": {
+        "validation": "community_validation",
+        "validation_label": "Community validation required",
+        "protocol": "Moonraker / Klipper HTTP",
+        "compatibility_hint": "Neptune 4 family and OrangeStorm models that expose Moonraker; not a generic Centauri profile.",
+    },
+    "qidi": {
+        "validation": "community_validation",
+        "validation_label": "Community validation required",
+        "protocol": "Moonraker / Klipper HTTP",
+        "compatibility_hint": "Klipper-based QIDI models such as Plus4, Q1 Pro, X-Max 3, X-Plus 3, X-Smart 3 and Q2.",
+    },
+    "sovol": {
+        "validation": "community_validation",
+        "validation_label": "Community validation required",
+        "protocol": "Moonraker / Klipper HTTP",
+        "compatibility_hint": "SV08-family printers and other Sovol models that actually expose Moonraker.",
+    },
+    "snapmaker": {
+        "validation": "community_validation",
+        "validation_label": "Community validation required",
+        "protocol": "Moonraker / Klipper HTTP",
+        "compatibility_hint": "Snapmaker U1. Older Snapmaker product families are not assumed to use this protocol.",
+    },
+    "voron": {
+        "validation": "community_validation",
+        "validation_label": "Community validation required",
+        "protocol": "Moonraker / Klipper HTTP",
+        "compatibility_hint": "Voron/community Klipper installations with Moonraker enabled.",
+    },
+    "simplyprint": {
+        "validation": "planned",
+        "validation_label": "Service integration",
+        "protocol": "SimplyPrint API",
+        "compatibility_hint": "Optional cloud/service source; not required for local printer monitoring.",
+    },
+    "other": {
+        "validation": "planned",
+        "validation_label": "Not implemented",
+        "protocol": "",
+        "compatibility_hint": "Reserved for future/custom adapters.",
+    },
+}
+
+
 def adapter_catalogue() -> list[dict]:
-    return [
-        {
+    rows = []
+    for item in ADAPTERS.values():
+        validation = ADAPTER_VALIDATION.get(item.key, {
+            "validation": "community_validation" if item.experimental else "planned",
+            "validation_label": "Community validation required" if item.experimental else "Planned",
+            "protocol": "",
+            "compatibility_hint": "",
+        })
+        rows.append({
             "key": item.key,
             "label": item.label,
             "supported": item.supported,
             "experimental": item.experimental,
             "local_first": item.local_first,
             "capabilities": item.capabilities,
-        }
-        for item in ADAPTERS.values()
-    ]
+            **validation,
+        })
+    return rows
 
 
 def normalise_printer_endpoint(raw_url: str) -> str:
