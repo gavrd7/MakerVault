@@ -1068,6 +1068,16 @@ class MakerTag(TimeStampedModel):
         ]
 
     @staticmethod
+    def is_uid_like(value):
+        text = str(value or "").strip()
+        compact = re.sub(r"[:\-\s]", "", text)
+        return bool(
+            len(compact) >= 4
+            and len(compact) % 2 == 0
+            and re.fullmatch(r"[0-9A-Fa-f]+", compact)
+        )
+
+    @staticmethod
     def normalise_code(kind, value):
         """Normalise only identifiers whose representation is safely case-insensitive.
 
@@ -1080,9 +1090,8 @@ class MakerTag(TimeStampedModel):
         text = str(value or "").strip()
         if str(kind or "").lower() not in {"nfc", "rfid"}:
             return text
-        compact = re.sub(r"[:\-\s]", "", text)
-        if len(compact) >= 4 and len(compact) % 2 == 0 and re.fullmatch(r"[0-9A-Fa-f]+", compact):
-            return compact.upper()
+        if MakerTag.is_uid_like(text):
+            return re.sub(r"[:\-\s]", "", text).upper()
         return text
 
     def clean(self):
