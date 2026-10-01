@@ -75,6 +75,8 @@ nav:
       - Creality local & CFS: integrations/creality.md
       - Bambu Lab local & AMS: integrations/bambu.md
       - PrusaLink: integrations/prusalink.md
+      - Anycubic LAN & ACE: integrations/anycubic.md
+      - FlashForge local: integrations/flashforge.md
       - SimplyPrint: integrations/simplyprint.md
   - Running your installation:
       - Accounts and storage: administration/accounts.md
