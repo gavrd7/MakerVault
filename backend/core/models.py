@@ -806,6 +806,73 @@ class Printer(TimeStampedModel):
         return self.name
 
 
+class PrinterConnection(TimeStampedModel):
+    """Provider-neutral live connection attached to one physical printer."""
+
+    ADAPTERS = [
+        ("moonraker", "Moonraker / Klipper"),
+        ("octoprint", "OctoPrint"),
+        ("creality_local", "Creality local"),
+        ("simplyprint", "SimplyPrint"),
+        ("bambu_local", "Bambu Lab local"),
+        ("anycubic", "Anycubic"),
+        ("flashforge", "FlashForge"),
+        ("prusa", "Prusa"),
+        ("elegoo", "Elegoo"),
+        ("qidi", "QIDI"),
+        ("sovol", "Sovol"),
+        ("snapmaker", "Snapmaker"),
+        ("voron", "Voron"),
+        ("other", "Other / custom"),
+    ]
+    STATUSES = [
+        ("not_configured", "Not configured"),
+        ("disabled", "Disabled"),
+        ("connecting", "Connecting"),
+        ("connected", "Connected"),
+        ("disconnected", "Disconnected"),
+        ("error", "Error"),
+        ("experimental", "Experimental"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    printer = models.ForeignKey(
+        Printer,
+        on_delete=models.CASCADE,
+        related_name="live_connections",
+    )
+    adapter = models.CharField(max_length=40, choices=ADAPTERS)
+    enabled = models.BooleanField(default=True)
+    endpoint_url = models.CharField(max_length=500, blank=True)
+    poll_interval_seconds = models.PositiveSmallIntegerField(default=30)
+    status = models.CharField(max_length=24, choices=STATUSES, default="not_configured")
+    capabilities = models.JSONField(default=dict, blank=True)
+    last_snapshot = models.JSONField(default=dict, blank=True)
+    last_checked_at = models.DateTimeField(blank=True, null=True)
+    last_seen_at = models.DateTimeField(blank=True, null=True)
+    last_error = models.TextField(blank=True)
+    config = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["printer__name", "adapter"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["printer", "adapter"],
+                name="unique_printer_live_adapter",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.poll_interval_seconds < 10 or self.poll_interval_seconds > 3600:
+            raise ValidationError({
+                "poll_interval_seconds": "Polling interval must be between 10 and 3600 seconds."
+            })
+
+    def __str__(self):
+        return f"{self.printer} · {self.get_adapter_display()}"
+
+
 class PrinterFilamentSlot(TimeStampedModel):
     SYSTEMS = [
         ("creality_cfs", "Creality CFS"),
