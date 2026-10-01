@@ -744,9 +744,17 @@
 .printingSection{overflow:hidden}
 .printingCards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:16px}
 .printingCard{border:1px solid #29313c;border-radius:12px;padding:14px;background:#0d131a}
-.printingCardHead{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.printingCardHead{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}
 .printingCardHead strong,.printingCardHead small{display:block}
 .printingCardHead small{color:#7f8a9c;margin-top:3px}
+.printingPrinterIdentity{min-width:0;flex:1}
+.printingPrinterControls{display:grid;justify-items:end;gap:9px;min-width:240px}
+.printingPrinterStatus{display:flex;justify-content:flex-end;align-items:center;gap:6px;flex-wrap:wrap}
+.printingPrinterStatus .badge{min-height:28px;padding:5px 10px;font-size:10px;font-weight:700;letter-spacing:.01em;cursor:default}
+.printingPrinterActions{display:flex;justify-content:flex-end;gap:8px;width:100%}
+.printingPrinterAction{min-height:36px;padding:8px 13px;border-radius:9px;font-size:12px;font-weight:750}
+.printingPrinterActionLive{border-color:#51488b;background:#201d3a;color:#d5ceff}
+.printingPrinterActionLive:hover{border-color:#7258e8;background:#2a2550;color:#fff}
 .printingPrinterHeader{display:grid;grid-template-columns:96px minmax(0,1fr);gap:14px;align-items:center}
 .printingPrinterHeaderMain{min-width:0}
 .printingPrinterImage{display:flex;align-items:center;justify-content:center;width:96px;height:82px;overflow:hidden;border:1px solid #2b3644;border-radius:10px;background:#111821}
@@ -756,6 +764,11 @@
 @media(max-width:620px){
   .printingPrinterHeader{grid-template-columns:70px minmax(0,1fr)}
   .printingPrinterImage{width:70px;height:66px}
+  .printingCardHead{display:grid;gap:10px}
+  .printingPrinterControls{justify-items:stretch;min-width:0}
+  .printingPrinterStatus{justify-content:flex-start}
+  .printingPrinterActions{display:grid;grid-template-columns:1fr 1fr}
+  .printingPrinterAction{width:100%}
 }
 .printingSlotGrid{display:grid;gap:8px;margin-top:12px}
 .printingSlot{display:grid;grid-template-columns:18px minmax(0,1fr);gap:9px;align-items:start;padding:9px;border:1px solid #252f3b;border-radius:9px;background:#101821}
