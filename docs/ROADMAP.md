@@ -135,7 +135,7 @@ This file tracks completed MakerVault milestones and the planned path toward a s
 - Add automatic creation/update/completion of MakerVault PrintJob records from live printer activity where confidence is sufficient.
 - Implemented explicit plain-G-code gram estimates and Moonraker extrusion-length/metadata estimates with source labels and manual-row precedence. TODO: additional manufacturer-reported weights, binary/archived G-code and explicit per-tool/spool allocation. Missing metadata remains unrecorded; duration and CFS percentages are not converted to grams.
 - Keep polling/subscription frequency configurable and avoid making the core app dependent on any single manufacturer ecosystem.
-- TODO: implement and hardware-test viewable camera streams per adapter, including Creality/K2. A camera capability or WebRTC flag alone does not provide a browser feed; the live UI must explicitly identify unavailable feeds until stream support is implemented.
+- Planned for v0.9.0: implement and hardware-test viewable camera streams per adapter, beginning with Creality K1/K2. A camera capability or WebRTC flag alone does not provide a browser feed; the live UI must explicitly identify unavailable feeds until stream support is implemented.
 
 #### Core printer adapters
 
@@ -190,9 +190,23 @@ This file tracks completed MakerVault milestones and the planned path toward a s
 
 ---
 
-### v0.9.0 — Skipped
+### v0.9.0 — Printer camera feeds & live viewing
 
-The owner removed printer maintenance and workshop operations from the planned scope on 1 October 2026. Maintenance logs, service schedules, wear-part tracking and maintenance reminders will not be implemented as a milestone. The next planned milestone after v0.8.0 is v1.0 release hardening and documentation; outstanding camera feeds and printer-adapter validation remain separately tracked.
+**Goal:** show usable printer camera feeds inside MakerVault, with local-first connections and accurate per-adapter support reporting.
+
+Revised by the owner on 1 October 2026. Camera-feed development replaces the former printer maintenance/workshop milestone; maintenance logs, schedules and reminders remain outside planned scope.
+
+- Begin hardware validation with the available **Creality K1 and K2**, including K1 access through Creality and Moonraker. Validate each stream route independently; working printer monitoring does not establish camera support.
+- Add a provider-neutral camera-source contract separating reported camera metadata, configured sources, browser-viewable feeds and connection errors.
+- Discover camera sources where adapters expose usable metadata and allow explicit configuration where discovery is unavailable. Support choosing a camera when multiple sources are available.
+- Implement supported snapshot/MJPEG routes first; assess WebRTC, HLS and other transports per adapter instead of assuming a reported flag provides a working stream.
+- Add a responsive viewer to **Open live**, with clear loading, unavailable/error and reconnect states, plus fullscreen viewing. Add compact dashboard and 3D Printing entry points without starting streams automatically on every card.
+- Keep playback user-initiated by default and stop stream connections when the viewer closes or the selected camera changes.
+- Handle authenticated/local feeds through owner-scoped access where needed, keeping printer credentials out of browser URLs, diagnostics and logs.
+- Validate configured endpoints and redirects against existing remote-access protections; bound proxy connections, response sizes and timeouts, and support HTTPS/reverse-proxy deployments without mixed-content failures.
+- Extend Moonraker/OctoPrint and manufacturer adapters where documented camera interfaces are available. Unsupported or untested transports stay explicitly unavailable/experimental.
+- Add protocol fixtures and automated permission/error/cleanup tests, plus a hardware checklist covering desktop/mobile playback, authentication, reconnects and bandwidth.
+- Document source setup, transport limitations and the tested model/firmware/adapter matrix. Promote support only after real playback validation.
 
 ---
 
