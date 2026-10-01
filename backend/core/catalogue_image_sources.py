@@ -30,7 +30,7 @@ from .importers import ImporterError, fetch_catalogue_source_html, fetch_import_
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 OPENVERSE_API = "https://api.openverse.org/v1/images/"
-IMAGE_SEED_VERSION = "0.7.2-authoritative-images-9"
+IMAGE_SEED_VERSION = "0.7.2-authoritative-images-10"
 USER_AGENT = f"MakerVault/{getattr(settings, 'MAKERVAULT_VERSION', 'dev')} (+self-hosted catalogue image seeder)"
 def _commons_license_allowed(license_name: str) -> bool:
     """Allow only licences suitable for normal open redistribution."""
@@ -525,6 +525,7 @@ CURATED_SBC_SOURCE_PAGES = {
 
 
 CURATED_MCU_SOURCE_PAGES = {
+    ("Generic", "ESP32-2432S028R CYD"): "https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display",
     ("Adafruit", "Feather ESP32-S3"): "https://www.adafruit.com/product/5885",
     ("Adafruit", "Feather RP2040"): "https://www.adafruit.com/product/4884",
     ("Adafruit", "QT Py ESP32-C3"): "https://www.adafruit.com/product/5405",
