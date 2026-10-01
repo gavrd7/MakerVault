@@ -825,6 +825,9 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
   const available = selectableAdapters
     .filter(item => !configured.has(item.key))
     .sort((left, right) => Number(right.key === preferredAdapter) - Number(left.key === preferredAdapter));
+  const selectedAdapterInfo = available.find(item => item.key === form.adapter)
+    || selectableAdapters.find(item => item.key === form.adapter)
+    || null;
 
   useEffect(() => {
     if (!available.length) return;
@@ -1034,6 +1037,11 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
       <label>Adapter<select value={form.adapter} onChange={e => adapterChanged(e.target.value)}>
         {available.map(item => <option key={item.key} value={item.key}>{item.label}{item.experimental ? " · experimental" : ""}</option>)}
       </select></label>
+      {selectedAdapterInfo && <div className="settingsCallout">
+        <strong>{selectedAdapterInfo.validation_label || (selectedAdapterInfo.experimental ? "Experimental" : "Supported")}</strong>
+        <p>{selectedAdapterInfo.compatibility_hint || selectedAdapterInfo.protocol || "MakerVault will use this provider as a read-only live source."}</p>
+        {selectedAdapterInfo.protocol && <small>Protocol: {selectedAdapterInfo.protocol}</small>}
+      </div>}
       <label>{["creality_local", "bambu_local", "prusa", "flashforge", "anycubic", "elegoo", "qidi", "sovol", "snapmaker", "voron"].includes(form.adapter) ? "Printer host / IP" : "Service URL"}<input required value={form.endpoint_url} onChange={e => setForm(current => ({ ...current, endpoint_url: e.target.value }))} placeholder={form.adapter === "creality_local" ? "192.168.1.34" : form.adapter === "bambu_local" ? "192.168.1.45" : form.adapter === "prusa" ? "prusa.local" : form.adapter === "flashforge" ? "192.168.1.60" : form.adapter === "anycubic" ? "192.168.1.70" : ["moonraker", "elegoo", "qidi", "sovol", "snapmaker", "voron"].includes(form.adapter) ? "printer.local or http://printer.local:7125" : "http://octoprint.local"} /></label>
       {!["creality_local", "bambu_local"].includes(form.adapter) && <label>API key (optional)<input type="password" value={form.api_key} onChange={e => setForm(current => ({ ...current, api_key: e.target.value }))} autoComplete="new-password" placeholder={form.adapter === "prusa" ? "Legacy / API-key PrusaLink setups" : "Only when your service requires one"} /></label>}
       {form.adapter === "creality_local" && <div className="settingsCallout">
