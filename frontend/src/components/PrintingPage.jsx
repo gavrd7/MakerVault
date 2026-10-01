@@ -852,6 +852,14 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
               Layer {snapshot.job?.current_layer ?? "?"}{snapshot.job?.total_layers != null ? " / " + snapshot.job.total_layers : ""}
             </p>}
             {connection.adapter === "creality_local" && snapshot.source_metadata?.cfs_connected && <p>CFS detected on the printer LAN connection.</p>}
+            {connection.adapter === "creality_local" && snapshot.materials?.length > 0 && <div className="printingLiveMaterials">
+              {snapshot.materials.slice(0, 8).map((material, index) => <div className="printingLiveMaterial" key={(material.unit_index ?? 0) + "-" + material.slot_index + "-" + index}>
+                <span className="printingSwatch" style={material.color_hex ? { background: material.color_hex } : undefined} />
+                <span>CFS {Number(material.unit_index || 0) + 1} · slot {Number(material.slot_index || 0) + 1}</span>
+                <strong>{material.product_name || material.material || "Filament"}</strong>
+                <small>{[material.vendor, material.material].filter(Boolean).join(" · ")}{material.remaining_percent != null ? " · " + Math.round(material.remaining_percent) + "%" : ""}{material.selected ? " · loaded" : ""}</small>
+              </div>)}
+            </div>}
           </div>
           <small>Capabilities: {Object.entries(connection.capabilities || {}).filter(([, enabled]) => enabled).map(([key]) => key.replaceAll("_", " ")).join(", ") || "Not reported yet"}</small>
           <small>Last seen: {connection.last_seen_at ? formatDate(connection.last_seen_at) : "Never"}</small>
