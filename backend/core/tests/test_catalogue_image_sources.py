@@ -580,6 +580,40 @@ class CatalogueImagePriorityTests(TestCase):
     )
     @patch("core.catalogue_image_sources.cache.delete")
     @patch("core.catalogue_image_sources.cache.add", return_value=True)
+    @patch("core.catalogue_image_sources.find_source_page_image", return_value=None)
+    @patch("core.catalogue_image_sources.resolve_catalogue_image", return_value=None)
+    def test_component_without_exact_image_uses_generic_artwork(
+        self,
+        resolve_image,
+        source_image,
+        cache_add,
+        cache_delete,
+    ):
+        result = run_catalogue_image_seed(
+            limit=1,
+            force_retry=True,
+            kinds=["components"],
+        )
+
+        self.assertEqual(result["failed"], 0)
+        self.assertEqual(result["artwork"], 1)
+        self.assertEqual(result["by_kind"]["components"]["artwork"], 1)
+        self.component.refresh_from_db()
+        self.assertEqual(
+            self.component.specifications["auto_image_last_result"],
+            "generic-artwork",
+        )
+        cache_add.assert_called_once()
+        cache_delete.assert_called_once()
+
+    @override_settings(
+        CATALOGUE_IMAGE_MAX_PER_RUN=1,
+        CATALOGUE_IMAGE_RETRY_DAYS=1,
+        CATALOGUE_IMAGE_WIKIMEDIA=True,
+        CATALOGUE_IMAGE_OPENVERSE=True,
+    )
+    @patch("core.catalogue_image_sources.cache.delete")
+    @patch("core.catalogue_image_sources.cache.add", return_value=True)
     @patch("core.catalogue_image_sources.cache_candidate")
     @patch("core.catalogue_image_sources._search_open_media_with_diagnostics")
     def test_targeted_printer_pass_does_not_spend_limit_on_other_catalogues(
