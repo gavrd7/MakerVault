@@ -77,6 +77,7 @@ nav:
       - PrusaLink: integrations/prusalink.md
       - Anycubic LAN & ACE: integrations/anycubic.md
       - FlashForge local: integrations/flashforge.md
+      - Moonraker manufacturer profiles: integrations/moonraker-manufacturers.md
       - SimplyPrint: integrations/simplyprint.md
   - Running your installation:
       - Accounts and storage: administration/accounts.md
