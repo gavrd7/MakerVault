@@ -165,17 +165,45 @@ ADAPTERS = {
         True,
         {**COMMON_MONITORING, "camera": True, "pause": True, "resume": True, "cancel": True},
     ),
-    "elegoo": AdapterDefinition("elegoo", "Elegoo", False, True, True, dict(COMMON_MONITORING)),
-    "qidi": AdapterDefinition("qidi", "QIDI", False, True, True, dict(COMMON_MONITORING)),
-    "sovol": AdapterDefinition("sovol", "Sovol", False, True, True, dict(COMMON_MONITORING)),
-    "snapmaker": AdapterDefinition("snapmaker", "Snapmaker", False, True, True, dict(COMMON_MONITORING)),
+    "elegoo": AdapterDefinition(
+        "elegoo",
+        "Elegoo · Moonraker",
+        True,
+        True,
+        True,
+        {**COMMON_MONITORING, "pause": True, "resume": True, "cancel": True},
+    ),
+    "qidi": AdapterDefinition(
+        "qidi",
+        "QIDI · Moonraker",
+        True,
+        True,
+        True,
+        {**COMMON_MONITORING, "camera": True, "pause": True, "resume": True, "cancel": True},
+    ),
+    "sovol": AdapterDefinition(
+        "sovol",
+        "Sovol · Moonraker",
+        True,
+        True,
+        True,
+        {**COMMON_MONITORING, "camera": True, "pause": True, "resume": True, "cancel": True},
+    ),
+    "snapmaker": AdapterDefinition(
+        "snapmaker",
+        "Snapmaker U1 · Moonraker",
+        True,
+        True,
+        True,
+        {**COMMON_MONITORING, "camera": True, "pause": True, "resume": True, "cancel": True},
+    ),
     "voron": AdapterDefinition(
         "voron",
-        "Voron metadata / community layer",
-        False,
+        "Voron · Moonraker",
         True,
         True,
-        {**COMMON_MONITORING, "printer_state": False, "job": False, "temperatures": False},
+        True,
+        {**COMMON_MONITORING, "camera": True, "pause": True, "resume": True, "cancel": True, "macros": True},
     ),
     "other": AdapterDefinition("other", "Other / custom", False, True, True, dict(COMMON_MONITORING)),
 }
@@ -207,6 +235,36 @@ def normalise_printer_endpoint(raw_url: str) -> str:
     if parsed.username or parsed.password:
         raise PrinterConnectionError("Do not embed credentials in the printer service URL.")
     return value
+
+
+def normalise_moonraker_endpoint(raw_url: str) -> str:
+    """Normalise a Moonraker HTTP endpoint while preserving route prefixes."""
+    value = str(raw_url or "").strip().rstrip("/")
+    if not value:
+        raise PrinterConnectionError("Enter the Moonraker printer host or URL.")
+    if "://" not in value:
+        parsed = urlparse("//" + value)
+        scheme = "http"
+    else:
+        parsed = urlparse(value)
+        if parsed.scheme not in {"http", "https"}:
+            raise PrinterConnectionError("Moonraker endpoints must use HTTP or HTTPS.")
+        scheme = parsed.scheme
+    if not parsed.hostname:
+        raise PrinterConnectionError("Moonraker endpoint must include a host.")
+    if parsed.username or parsed.password:
+        raise PrinterConnectionError("Do not embed credentials in the Moonraker endpoint.")
+
+    host = parsed.hostname
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"
+    # Preserve explicit reverse-proxy URLs and route prefixes. Bare hosts use
+    # Moonraker's conventional 7125 port.
+    explicit_url = "://" in value
+    port = parsed.port if parsed.port else (None if explicit_url and parsed.path not in {"", "/"} else 7125)
+    suffix = f":{port}" if port else ""
+    path = (parsed.path or "").rstrip("/")
+    return f"{scheme}://{host}{suffix}{path}"
 
 
 def normalise_creality_endpoint(raw_url: str) -> str:
@@ -246,6 +304,8 @@ def normalise_creality_endpoint(raw_url: str) -> str:
 
 
 def normalise_connection_endpoint(adapter: str, raw_url: str) -> str:
+    if adapter in {"moonraker", "elegoo", "qidi", "sovol", "snapmaker", "voron"}:
+        return normalise_moonraker_endpoint(raw_url)
     if adapter == "creality_local":
         return normalise_creality_endpoint(raw_url)
     if adapter == "bambu_local":
@@ -793,6 +853,11 @@ def poll_creality_local(endpoint_url: str, config: dict | None = None) -> dict:
 
 POLLERS: dict[str, Callable[[str, dict | None], dict]] = {
     "moonraker": poll_moonraker,
+    "elegoo": poll_moonraker,
+    "qidi": poll_moonraker,
+    "sovol": poll_moonraker,
+    "snapmaker": poll_moonraker,
+    "voron": poll_moonraker,
     "octoprint": poll_octoprint,
     "creality_local": poll_creality_local,
     "bambu_local": poll_bambu_local,
@@ -827,6 +892,16 @@ def poll_connection(connection) -> dict:
         connection.last_checked_at = timezone.now()
         connection.save(update_fields=["status", "last_error", "last_checked_at", "updated_at"])
         raise
+
+    if connection.adapter in {"elegoo", "qidi", "sovol", "snapmaker", "voron"}:
+        source_metadata = dict(snapshot.get("source_metadata") or {})
+        source_metadata["protocol"] = "Moonraker / Klipper"
+        source_metadata["manufacturer_profile"] = connection.adapter
+        snapshot = {
+            **snapshot,
+            "adapter": connection.adapter,
+            "source_metadata": source_metadata,
+        }
 
     job_result = sync_print_job_from_snapshot(connection, snapshot)
     material_result = sync_live_material_slots(connection, snapshot)
