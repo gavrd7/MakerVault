@@ -116,6 +116,27 @@ class PrinterConnectivityAdapterTests(TestCase):
             "auxiliaryFanPct": 50,
             "usedMaterialLength": 1234.5,
             "materialStatus": 0,
+            "boxsInfo": {
+                "materialBoxs": [{
+                    "id": 1,
+                    "type": 0,
+                    "temp": 31,
+                    "humidity": 34,
+                    "materials": [{
+                        "id": 2,
+                        "vendor": "Creality",
+                        "type": "PETG",
+                        "name": "CR-PETG",
+                        "rfid": "06001",
+                        "color": "#0fa7c0c",
+                        "minTemp": 220,
+                        "maxTemp": 270,
+                        "percent": 63,
+                        "state": 2,
+                        "selected": 1,
+                    }],
+                }],
+            },
             "err": {"errcode": 0, "key": 0},
         })
 
@@ -132,6 +153,16 @@ class PrinterConnectivityAdapterTests(TestCase):
         self.assertEqual(snapshot["temperatures"]["chamber"]["actual_c"], 36.0)
         self.assertTrue(snapshot["source_metadata"]["cfs_connected"])
         self.assertTrue(snapshot["source_metadata"]["webrtc_support"])
+        self.assertEqual(snapshot["source_metadata"]["cfs_loaded_slots"], 1)
+        self.assertEqual(snapshot["materials"][0]["system"], "creality_cfs")
+        self.assertEqual(snapshot["materials"][0]["slot_index"], 2)
+        self.assertEqual(snapshot["materials"][0]["material"], "PETG")
+        self.assertEqual(snapshot["materials"][0]["color_hex"], "#fa7c0c")
+        self.assertEqual(snapshot["materials"][0]["remaining_percent"], 63.0)
+        self.assertTrue(snapshot["materials"][0]["selected"])
+        self.assertTrue(snapshot["materials"][0]["rfid_detected"])
+        self.assertEqual(snapshot["materials"][0]["box_temperature_c"], 31.0)
+        self.assertEqual(snapshot["materials"][0]["box_humidity_percent"], 34.0)
         self.assertEqual(snapshot["source_metadata"]["protocol"], "Creality LAN WebSocket :9999")
 
     def test_creality_snapshot_handles_pause_completion_stop_and_error(self):
