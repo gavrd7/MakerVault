@@ -2,6 +2,8 @@
 
 ## v0.7.3.2 — in development
 
+- Print Analytics and recent prints distinguish missing material usage from recorded zero, show usage coverage for partial totals, and preserve small fractional gram values.
+
 - Equalised loaded-filament card heights across rows and stabilised model-library title, badge and action placement at narrow panel widths.
 
 - Fixed narrow printer headers and live-source modal overflow; single printer cards now fill the available width and loaded filament slots use responsive columns.

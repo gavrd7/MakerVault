@@ -3958,6 +3958,7 @@ def _printing_analytics(owner):
     usage_totals = PrintMaterialUsage.objects.filter(print_job__owner=owner).aggregate(
         used_g=Sum("used_g"),
         waste_g=Sum("waste_g"),
+        jobs_with_usage=Count("print_job_id", distinct=True),
     )
     default_currency = settings.MAKERVAULT_CURRENCY
     material_cost = (
@@ -4003,8 +4004,10 @@ def _printing_analytics(owner):
         "success_rate": round((successful / completed) * 100, 1) if completed else None,
         "actual_minutes": int(job_totals["actual_minutes"] or 0),
         "estimated_minutes": int(job_totals["estimated_minutes"] or 0),
-        "filament_used_g": _float(usage_totals["used_g"] or Decimal("0")),
-        "waste_g": _float(usage_totals["waste_g"] or Decimal("0")),
+        "filament_used_g": _float(usage_totals["used_g"]),
+        "waste_g": _float(usage_totals["waste_g"]),
+        "jobs_with_material_usage": int(usage_totals["jobs_with_usage"]),
+        "jobs_without_material_usage": total_jobs - int(usage_totals["jobs_with_usage"]),
         "material_cost": _float(material_cost),
         "currency": default_currency,
         "foreign_cost_rows_excluded": foreign_cost_rows,
@@ -4035,8 +4038,8 @@ def _serialise_print_job(job):
         "filename": str(live_meta.get("filename") or ""),
         "history_source": "live_printer" if live_meta.get("source") == "live_printer" else "manual",
         "material_usages": [_serialise_print_material_usage(usage) for usage in usages],
-        "filament_used_g": _float(total_used),
-        "waste_g": _float(total_waste),
+        "filament_used_g": _float(total_used) if usages else None,
+        "waste_g": _float(total_waste) if usages else None,
         "material_cost": _float(total_cost),
         "actual_minutes": job.actual_minutes,
         "created_at": job.created_at.isoformat(),

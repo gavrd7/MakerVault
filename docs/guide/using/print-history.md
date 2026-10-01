@@ -31,3 +31,9 @@ These figures represent recorded material cost. They do not automatically includ
 The overview summarises recorded print time, material consumed, waste, material cost and per-printer results. Success rates depend on the jobs and statuses recorded; missing or incomplete history makes them incomplete. Duration and usage supplied by a service can also be missing or approximate.
 
 A history entry is not a command to start a printer. Check spool remaining weight after changes or synchronisation; do not assume a manually entered usage figure guarantees live physical weight measurement.
+
+## Missing filament usage
+
+Live printer monitoring can record duration, progress and the outcome without knowing the filament weight. The current K2/Creality monitoring flow does not populate print material usage. MakerVault shows **Not recorded** for missing filament/waste totals and missing material cost. A recorded zero remains **0 g**; fractional gram values are preserved.
+
+When only some print records contain material usage, the overview shows how many prints contribute to the total. The total covers recorded usage, not an estimate for the missing prints. CFS remaining percentages and print duration are not converted into consumed grams. Enter material usage through print history when you have a known figure; automatic printer-reported consumption or labelled slicer estimates are planned separately.
