@@ -1,5 +1,24 @@
 import React from "react";
 import StorageSummary from "./StorageSummary";
+import { Badge } from "./Common";
+
+function liveStateTone(row) {
+  if (row?.stale || ["error", "disconnected"].includes(row?.connection_status) || ["error", "failed"].includes(row?.state)) return "danger";
+  if (["printing", "processing", "self-testing", "paused"].includes(row?.state)) return "accent";
+  if (["idle", "complete", "completed", "success"].includes(row?.state)) return "good";
+  return "neutral";
+}
+
+function liveProgress(row) {
+  const value = row?.job?.progress;
+  if (value == null || Number.isNaN(Number(value))) return null;
+  return Math.max(0, Math.min(100, Number(value)));
+}
+
+function liveTemp(temp) {
+  if (temp?.actual_c == null) return null;
+  return Math.round(Number(temp.actual_c)) + "°";
+}
 
 export default function Dashboard({ dashboard, inventory, onNavigate }) {
   const cards = dashboard ? [
@@ -25,6 +44,42 @@ export default function Dashboard({ dashboard, inventory, onNavigate }) {
         <span>{label}</span><strong>{value}</strong><small>{sub}</small>
       </button>)}
     </section>
+    {!!dashboard?.live_printers?.length && <section className="panel dashboardLivePanel">
+      <div className="panelHead">
+        <div><h3>Live printers</h3><p>Current printer telemetry from configured local/provider sources.</p></div>
+        <button onClick={() => onNavigate("3D Printing")}>Open 3D Printing →</button>
+      </div>
+      <div className="dashboardLiveGrid">
+        {dashboard.live_printers.map(printer => {
+          const pct = liveProgress(printer);
+          const tone = liveStateTone(printer);
+          return <button className={"dashboardLivePrinter dashboardLivePrinter-" + (printer.state || "unknown")} key={printer.id} onClick={() => onNavigate("3D Printing")}>
+            <div className="dashboardLivePrinterImage">
+              {printer.image ? <img src={printer.image} alt="" loading="lazy" /> : <span>3D</span>}
+            </div>
+            <div className="dashboardLivePrinterMain">
+              <div className="dashboardLivePrinterHead">
+                <div>
+                  <strong>{printer.name}</strong>
+                  <small>{[printer.manufacturer, printer.model, printer.location].filter(Boolean).join(" · ")}</small>
+                </div>
+                <Badge tone={tone}>{printer.stale ? "Stale" : (printer.state_label || printer.connection_status_label)}</Badge>
+              </div>
+              <div className="dashboardLivePrinterMeta">
+                <span>{printer.job?.file_name || printer.adapter_label}</span>
+                <span>{[
+                  liveTemp(printer.temperatures?.tool0) ? "Nozzle " + liveTemp(printer.temperatures?.tool0) : "",
+                  liveTemp(printer.temperatures?.bed) ? "Bed " + liveTemp(printer.temperatures?.bed) : "",
+                  liveTemp(printer.temperatures?.chamber) ? "Chamber " + liveTemp(printer.temperatures?.chamber) : "",
+                ].filter(Boolean).join(" · ")}</span>
+              </div>
+              {pct != null && <div className="dashboardLiveProgress"><span style={{ width: pct + "%" }} /></div>}
+              {pct != null && <small className="dashboardLiveProgressLabel">{pct.toFixed(pct % 1 ? 1 : 0)}%</small>}
+            </div>
+          </button>;
+        })}
+      </div>
+    </section>}
     <StorageSummary />
     <section className="panel">
       <div className="panelHead"><div><h3>Inventory snapshot</h3><p>Most recently loaded records</p></div><button onClick={() => onNavigate("Inventory")}>Open inventory →</button></div>
