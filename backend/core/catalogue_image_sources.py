@@ -120,12 +120,15 @@ def _normalise_tokens(value: str) -> set[str]:
 
 
 def _strip_catalogue_marketing_suffix(value: str) -> str:
-    """Remove common upstream marketing tails without changing stored display text."""
+    """Remove lookup-only catalogue/marketing noise without changing display text."""
     value = str(value or "").strip()
-    # Product feeds often append compatibility/marketing copy to the real model
-    # name.  Those words reduce exact-source and image-search quality.
+    # Internal/importer qualifiers are useful as provenance but are not part of
+    # the manufacturer's product identity and make external matching worse.
+    value = re.sub(r"\s*[\[(]\s*base\s*[\])]\s*$", "", value, flags=re.I)
+    # Product feeds often append compatibility/SEO copy to the real model name.
+    # Keep meaningful variants (Sense, Plus, Pro, Zero, etc.) intact.
     value = re.sub(
-        r"\s+(?:supports?|compatible\s+with|works\s+with)\s+"
+        r"\s*[-|,:;]?\s+(?:supports?|compatible\s+with|works\s+with)\s+"
         r"(?:arduino|micropython|circuitpython|platformio|esphome)"
         r".*$",
         "",
@@ -343,8 +346,8 @@ def search_openverse(query: str, *, minimum_score: float = 0.18) -> ImageCandida
 
 
 def _board_image_queries(board) -> list[str]:
-    maker = board.manufacturer.name if board.manufacturer else ""
-    name = re.sub(r"\s+", " ", (board.name or "").replace(" style", "")).strip()
+    maker = _normalise_search_label(board.manufacturer.name) if board.manufacturer else ""
+    name = _normalise_search_label((board.name or "").replace(" style", ""))
     queries = []
     if maker and maker.lower() != "generic":
         queries.append(f"{maker} {name}")
@@ -429,8 +432,8 @@ def _search_open_media(queries: list[str], *, minimum_score: float = 0.16) -> Im
 
 
 def _espboards_slug_candidates(board) -> list[str]:
-    name = board.name
-    manufacturer = board.manufacturer.name if board.manufacturer else ""
+    name = _normalise_search_label(board.name)
+    manufacturer = _normalise_search_label(board.manufacturer.name) if board.manufacturer else ""
     variants = [name]
     if manufacturer and name.lower().startswith(manufacturer.lower() + " "):
         variants.append(name[len(manufacturer):].strip())
