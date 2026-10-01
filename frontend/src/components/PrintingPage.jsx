@@ -149,6 +149,7 @@ function newestGeometryAnalysis(model) {
 export default function PrintingPage({ config, projects, searchTarget = null }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
+  const [sourceNotice, setSourceNotice] = useState("");
   const [modal, setModal] = useState("");
   const [manageModel, setManageModel] = useState(null);
   const [managePrinter, setManagePrinter] = useState(null);
@@ -290,6 +291,7 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
     </section>
 
     {error && <div className="error">{error}</div>}
+    {sourceNotice && <div className="notice printingSourceNotice" role="status"><span>{sourceNotice}</span><button type="button" aria-label="Dismiss confirmation" onClick={() => setSourceNotice("")}>×</button></div>}
 
     <div className="printingMetrics">
       <article><span>Models</span><strong>{summary.models || 0}</strong></article>
@@ -470,6 +472,11 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
     {livePrinter && <PrinterConnectionsModal
       printer={livePrinter}
       onClose={() => setLivePrinter(null)}
+      onAdded={async connection => {
+        setSourceNotice(`${connection.adapter_label} successfully added for ${livePrinter.name}. Open live to check the connection status.`);
+        setLivePrinter(null);
+        await load();
+      }}
       onChanged={async () => {
         const fresh = await load();
         const updated = fresh?.printers?.find(item => item.id === livePrinter.id);
@@ -789,7 +796,7 @@ function LocationModal({ onClose, onSaved }) {
   </Modal>;
 }
 
-function PrinterConnectionsModal({ printer, onClose, onChanged }) {
+function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
   const [data, setData] = useState({ rows: [], adapters: [] });
   const [form, setForm] = useState({
     adapter: "moonraker",
@@ -874,27 +881,16 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
 
   async function addConnection(event) {
     event.preventDefault();
+    if (busy) return;
     setBusy("add"); setError(""); setNotice("");
     try {
-      await apiFetch("/api/printing/printers/" + printer.id + "/connections/", {
+      const result = await apiFetch("/api/printing/printers/" + printer.id + "/connections/", {
         method: "POST",
         body: form,
       });
-      setForm(current => ({
-        ...current,
-        endpoint_url: "",
-        api_key: "",
-        access_code: "",
-        username: "",
-        password: "",
-        check_code: "",
-        serial: printer.serial_number || "",
-      }));
-      await loadConnections();
-      await onChanged();
-      setNotice("Live printer source added. Use Refresh to test and capture the first snapshot.");
+      await onAdded(result.item);
     } catch (err) {
-      setError(err.message);
+      setError("Could not add the live source: " + err.message);
     } finally {
       setBusy("");
     }
@@ -1033,7 +1029,7 @@ function PrinterConnectionsModal({ printer, onClose, onChanged }) {
     onClose={onClose}
     wide
   >
-    {error && <div className="formError">{error}</div>}
+    {error && <div className="formError" role="alert">{error}</div>}
     {notice && <div className="notice">{notice}</div>}
 
     <div className="printingIntegrationGrid printerLiveSources">

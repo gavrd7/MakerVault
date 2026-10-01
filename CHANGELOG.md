@@ -2,6 +2,8 @@
 
 ## v0.7.3.2 — in development
 
+- Live-source setup now closes after saving and confirms the source/printer on the overview. Save failures retain setup values and display the reason in the dialog.
+
 - Print Analytics and recent prints distinguish missing material usage from recorded zero, show usage coverage for partial totals, and preserve small fractional gram values.
 
 - Equalised loaded-filament card heights across rows and stabilised model-library title, badge and action placement at narrow panel widths.
