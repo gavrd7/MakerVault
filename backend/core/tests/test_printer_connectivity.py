@@ -357,9 +357,9 @@ class PrinterConnectivityApiTests(TestCase):
             printer=self.printer,
             adapter="octoprint",
             endpoint_url="http://printer.local",
-            poll_interval_seconds=60,
-            status="connected",
-            last_checked_at=timezone.now() - timedelta(seconds=5),
+            poll_interval_seconds=10,
+            status="connecting",
+            last_checked_at=timezone.now() - timedelta(seconds=45),
         )
         PrinterConnection.objects.create(
             printer=self.printer,
