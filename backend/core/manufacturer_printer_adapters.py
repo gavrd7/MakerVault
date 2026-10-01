@@ -24,6 +24,27 @@ class ManufacturerAdapterError(RuntimeError):
     pass
 
 
+def _mqtt_identifier(value, label: str) -> str:
+    text = str(value or "").strip()
+    if not text or len(text) > 128 or any(char in text for char in ("#", "+", "/", "\\", "\x00")):
+        raise ManufacturerAdapterError(f"{label} contains characters that are not valid for a printer MQTT identity.")
+    return text
+
+
+def _same_network_origin(candidate_url: str, base_url: str, label: str) -> str:
+    candidate = urlparse(str(candidate_url or "").strip())
+    base = urlparse(base_url)
+    if candidate.scheme not in {"http", "https"} or not candidate.hostname:
+        raise ManufacturerAdapterError(f"Anycubic LAN handshake returned an invalid {label} URL.")
+    if candidate.username or candidate.password:
+        raise ManufacturerAdapterError(f"Anycubic LAN handshake returned credentials inside the {label} URL.")
+    if candidate.hostname.casefold() != (base.hostname or "").casefold():
+        raise ManufacturerAdapterError(
+            f"Anycubic LAN handshake tried to redirect {label} to a different host; MakerVault refused it."
+        )
+    return candidate.geturl()
+
+
 def _number(value):
     try:
         number = float(value)
@@ -293,6 +314,7 @@ def poll_bambu_local(endpoint_url: str, config: dict | None = None) -> dict:
     access_code = str(config.get("access_code") or "").strip()
     if not serial:
         raise ManufacturerAdapterError("Bambu local monitoring requires the printer serial number.")
+    serial = _mqtt_identifier(serial, "Bambu printer serial")
     if not access_code:
         raise ManufacturerAdapterError("Bambu local monitoring requires the printer LAN access code.")
 
@@ -422,6 +444,9 @@ def _anycubic_handshake(endpoint_url: str) -> dict:
             "This Anycubic printer does not expose the signed Kobra 3/S1-generation LAN handshake."
         )
 
+    ctrl_url = _same_network_origin(ctrl_url, base, "control")
+    model_id = _mqtt_identifier(model_id, "Anycubic model ID")
+
     timestamp_ms = int(time.time() * 1000)
     nonce = "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(6))
     did = "".join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(32))
@@ -461,12 +486,18 @@ def _anycubic_handshake(endpoint_url: str) -> dict:
     broker = urlparse(str(decrypted.get("broker") or ""))
     if broker.scheme not in {"mqtt", "mqtts"} or not broker.hostname:
         raise ManufacturerAdapterError("Anycubic LAN handshake returned an invalid MQTT broker.")
+    base_host = (urlparse(base).hostname or "").casefold()
+    if broker.hostname.casefold() != base_host:
+        raise ManufacturerAdapterError(
+            "Anycubic LAN handshake returned an MQTT broker on a different host; MakerVault refused it."
+        )
+    device_id = _mqtt_identifier(decrypted.get("deviceId"), "Anycubic device ID")
     return {
         "broker_host": broker.hostname,
         "broker_port": broker.port or (9883 if broker.scheme == "mqtts" else 1883),
         "username": str(decrypted.get("username") or ""),
         "password": str(decrypted.get("password") or ""),
-        "device_id": str(decrypted.get("deviceId") or ""),
+        "device_id": device_id,
         "model_id": model_id,
         "serial": str(info.get("cn") or ""),
         "model_name": str(info.get("modelName") or ""),
