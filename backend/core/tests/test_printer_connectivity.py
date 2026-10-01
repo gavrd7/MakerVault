@@ -11,6 +11,8 @@ from core.live_print_jobs import sync_print_job_from_snapshot
 from core.printer_connectivity import (
     PrinterConnectionError,
     adapter_catalogue,
+    normalise_creality_endpoint,
+    normalise_creality_snapshot,
     poll_connection,
     poll_moonraker,
     poll_octoprint,
@@ -70,6 +72,96 @@ class PrinterConnectivityAdapterTests(TestCase):
         self.assertEqual(snapshot["source_metadata"]["klippy_state"], "ready")
         self.assertTrue(all(call.kwargs["headers"]["X-Api-Key"] == "secret" for call in get_mock.call_args_list))
 
+    def test_creality_endpoint_accepts_existing_host_field(self):
+        self.assertEqual(
+            normalise_creality_endpoint("192.168.1.34"),
+            "ws://192.168.1.34:9999",
+        )
+        self.assertEqual(
+            normalise_creality_endpoint("http://k2.local"),
+            "ws://k2.local:9999",
+        )
+        self.assertEqual(
+            normalise_creality_endpoint("ws://k2.local:19999"),
+            "ws://k2.local:19999",
+        )
+
+    def test_creality_snapshot_normalises_k2_live_telemetry(self):
+        snapshot = normalise_creality_snapshot({
+            "connect": 1,
+            "hostname": "K2-TEST",
+            "model": "F012",
+            "modelVersion": "printer sw ver:1.1.test;",
+            "state": 1,
+            "deviceState": 0,
+            "printFileName": "/usr/data/printer_data/gcodes/Benchy.gcode",
+            "printProgress": 37.5,
+            "printJobTime": 600,
+            "printLeftTime": 900,
+            "layer": 42,
+            "TotalLayer": 168,
+            "nozzleTemp": "214.2",
+            "targetNozzleTemp": 220,
+            "bedTemp0": "59.8",
+            "targetBedTemp0": 60,
+            "boxTemp": 36,
+            "targetBoxTemp": 40,
+            "cfsConnect": 1,
+            "webrtcSupport": 1,
+            "video": 1,
+            "curFeedratePct": 100,
+            "curFlowratePct": 98,
+            "modelFanPct": 40,
+            "caseFanPct": 30,
+            "auxiliaryFanPct": 50,
+            "usedMaterialLength": 1234.5,
+            "materialStatus": 0,
+            "err": {"errcode": 0, "key": 0},
+        })
+
+        self.assertTrue(snapshot["online"])
+        self.assertEqual(snapshot["state"], "printing")
+        self.assertEqual(snapshot["job"]["file_name"], "Benchy.gcode")
+        self.assertEqual(snapshot["job"]["progress"], 37.5)
+        self.assertEqual(snapshot["job"]["elapsed_seconds"], 600)
+        self.assertEqual(snapshot["job"]["remaining_seconds"], 900)
+        self.assertEqual(snapshot["job"]["current_layer"], 42)
+        self.assertEqual(snapshot["job"]["total_layers"], 168)
+        self.assertEqual(snapshot["temperatures"]["tool0"]["actual_c"], 214.2)
+        self.assertEqual(snapshot["temperatures"]["bed"]["target_c"], 60.0)
+        self.assertEqual(snapshot["temperatures"]["chamber"]["actual_c"], 36.0)
+        self.assertTrue(snapshot["source_metadata"]["cfs_connected"])
+        self.assertTrue(snapshot["source_metadata"]["webrtc_support"])
+        self.assertEqual(snapshot["source_metadata"]["protocol"], "Creality LAN WebSocket :9999")
+
+    def test_creality_snapshot_handles_pause_completion_stop_and_error(self):
+        base = {
+            "connect": 1,
+            "printFileName": "part.gcode",
+            "printProgress": 25,
+            "nozzleTemp": 30,
+            "err": {"errcode": 0},
+        }
+        self.assertEqual(
+            normalise_creality_snapshot({**base, "state": 5})["state"],
+            "paused",
+        )
+        self.assertEqual(
+            normalise_creality_snapshot({**base, "state": 1, "printProgress": 100})["state"],
+            "complete",
+        )
+        self.assertEqual(
+            normalise_creality_snapshot({**base, "state": 4})["state"],
+            "cancelled",
+        )
+        errored = normalise_creality_snapshot({
+            **base,
+            "state": 1,
+            "err": {"errcode": 500, "key": 121},
+        })
+        self.assertEqual(errored["state"], "error")
+        self.assertEqual(errored["warnings"], ["Creality error 500 (key 121)"])
+
     @patch("core.printer_connectivity.requests.get")
     def test_octoprint_normalises_live_snapshot(self, get_mock):
         def side_effect(url, **kwargs):
@@ -110,6 +202,9 @@ class PrinterConnectivityAdapterTests(TestCase):
         rows = {row["key"]: row for row in adapter_catalogue()}
         self.assertTrue(rows["moonraker"]["supported"])
         self.assertTrue(rows["octoprint"]["supported"])
+        self.assertTrue(rows["creality_local"]["supported"])
+        self.assertTrue(rows["creality_local"]["experimental"])
+        self.assertTrue(rows["creality_local"]["local_first"])
         self.assertFalse(rows["bambu_local"]["supported"])
         self.assertTrue(rows["bambu_local"]["experimental"])
         self.assertTrue(rows["voron"]["experimental"])
@@ -269,6 +364,29 @@ class PrinterConnectivityApiTests(TestCase):
 
         connection = PrinterConnection.objects.get(printer=self.printer, adapter="moonraker")
         self.assertEqual(connection.config["api_key"], "moon-secret")
+
+    def test_creality_connection_reuses_plain_printer_host_format(self):
+        self.printer.printer_manufacturer = None
+        self.printer.connection_host = "192.168.1.34"
+        self.printer.save(update_fields=["connection_host", "updated_at"])
+
+        response = self.client.post(
+            f"/api/printing/printers/{self.printer.id}/connections/",
+            data={
+                "adapter": "creality_local",
+                "endpoint_url": self.printer.connection_host,
+                "poll_interval_seconds": 15,
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        item = response.json()["item"]
+        self.assertEqual(item["adapter"], "creality_local")
+        self.assertEqual(item["endpoint_url"], "ws://192.168.1.34:9999")
+        self.assertEqual(item["status"], "disconnected")
+        self.assertTrue(item["supported"])
+        self.assertTrue(item["experimental"])
+        self.assertTrue(item["capabilities"]["materials"])
 
     def test_one_physical_printer_can_have_multiple_live_sources_without_duplication(self):
         for adapter, endpoint in [
