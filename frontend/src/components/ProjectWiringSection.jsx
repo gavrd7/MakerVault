@@ -280,8 +280,9 @@ export function WiringEditor({ project = null, diagram, boards, components, inve
   }, [refs, nodeSearch]);
   useEffect(() => {
     if (nodeType === "custom") return;
-    if (!referenceId || !refs.some(row => row.id === referenceId)) setReferenceId(refs[0]?.id || "");
-  }, [nodeType, refs.length]);
+    const choices = nodeSearch.trim() ? visibleRefs : refs;
+    if (!referenceId || !choices.some(row => row.id === referenceId)) setReferenceId(choices[0]?.id || "");
+  }, [nodeType, refs.length, visibleRefs.length, nodeSearch]);
 
   function mutate(updater) {
     setDraft(current => updater(current));
@@ -430,6 +431,16 @@ export function WiringEditor({ project = null, diagram, boards, components, inve
     if (!dirty) return draft.diagnostic_summary?.counts || {};
     return liveDiagnostics.reduce((counts, item) => ({ ...counts, [item.severity]: (counts[item.severity] || 0) + 1 }), {});
   }, [dirty, liveDiagnostics, draft.diagnostic_summary]);
+  const pendingDiagnostics = useMemo(() => {
+    if (!connection.from_node || !connection.to_node || !connection.from_pin.trim() || !connection.to_pin.trim()) return [];
+    return obviousConnectionDiagnostics(draft.nodes, [{
+      id: "pending-connection",
+      from_node: connection.from_node,
+      from_pin: connection.from_pin.trim(),
+      to_node: connection.to_node,
+      to_pin: connection.to_pin.trim(),
+    }]);
+  }, [draft.nodes, connection.from_node, connection.from_pin, connection.to_node, connection.to_pin]);
   const nodeHeight = node => 84 + Math.ceil(Math.min(node.reference?.pins?.length || 0, 18) / 3) * 22;
   const canvasWidth = Math.max(960, ...draft.nodes.map(node => Number(node.x || 0) + 240));
   const canvasHeight = Math.max(560, ...draft.nodes.map(node => Number(node.y || 0) + nodeHeight(node) + 50));
@@ -540,6 +551,10 @@ export function WiringEditor({ project = null, diagram, boards, components, inve
               <PinInput label="To pin" node={nodeById[connection.to_node]} value={connection.to_pin} disabled={!canChange} onChange={value => setConnection(current => ({ ...current, to_pin: value }))} listId="wiring-to-pins" />
               <label>Label<input value={connection.label} disabled={!canChange} onChange={e => setConnection(current => ({ ...current, label: e.target.value }))} placeholder="I²C SDA, 5V power…" /></label>
               <label>Wire colour<input type="color" value={connection.color} disabled={!canChange} onChange={e => setConnection(current => ({ ...current, color: e.target.value }))} /></label>
+              {pendingDiagnostics.map((item, index) => <div className={"wiringDiagnostic wiringDiagnostic-" + item.severity} key={item.code + "-" + index}>
+                <strong>{item.severity === "error" ? "Error" : "Warning"}</strong>
+                <span>{item.message}</span>
+              </div>)}
               <div className="wiringConnectionFormActions">
                 {editingConnectionId && <button type="button" onClick={cancelConnectionEdit}>Cancel</button>}
                 <button className="primary" disabled={!canChange || !connection.from_node || !connection.to_node || !connection.from_pin.trim() || !connection.to_pin.trim()}>{editingConnectionId ? "Save connection" : "＋ Connect"}</button>
