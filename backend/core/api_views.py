@@ -39,7 +39,7 @@ from .printer_connectivity import (
     ADAPTERS as PRINTER_ADAPTERS,
     PrinterConnectionError,
     adapter_catalogue,
-    normalise_printer_endpoint,
+    normalise_connection_endpoint,
     poll_connection,
 )
 from .printing_sync import PrintingSyncError, next_spool_id, resolve_spoolman_review, sync_printing_integration
@@ -4646,7 +4646,7 @@ def printing_printer_connections(request, printer_id):
 
         endpoint_url = str(payload.get("endpoint_url") or "").strip()
         if endpoint_url:
-            endpoint_url = normalise_printer_endpoint(endpoint_url)
+            endpoint_url = normalise_connection_endpoint(adapter, endpoint_url)
         interval = int(payload.get("poll_interval_seconds") or 30)
         config = dict(payload.get("config") or {})
         if "api_key" in payload and str(payload.get("api_key") or "").strip():
@@ -4708,7 +4708,7 @@ def printing_printer_connection_detail(request, printer_id, connection_id):
             item.enabled = bool(payload.get("enabled"))
         if "endpoint_url" in payload:
             raw_url = str(payload.get("endpoint_url") or "").strip()
-            item.endpoint_url = normalise_printer_endpoint(raw_url) if raw_url else ""
+            item.endpoint_url = normalise_connection_endpoint(item.adapter, raw_url) if raw_url else ""
         if "poll_interval_seconds" in payload:
             item.poll_interval_seconds = int(payload.get("poll_interval_seconds"))
         config = dict(item.config or {})
