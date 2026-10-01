@@ -78,6 +78,7 @@ nav:
       - Anycubic LAN & ACE: integrations/anycubic.md
       - FlashForge local: integrations/flashforge.md
       - Moonraker manufacturer profiles: integrations/moonraker-manufacturers.md
+      - Printer adapter validation: integrations/printer-adapter-validation.md
       - SimplyPrint: integrations/simplyprint.md
   - Running your installation:
       - Accounts and storage: administration/accounts.md
