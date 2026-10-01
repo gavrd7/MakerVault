@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../api";
 import { Badge, BoardImage, ImageViewer, LoadingBlock, Modal } from "./Common";
+import PrintedPartsSection from "./PrintedPartsSection";
 import ProjectBomSection from "./ProjectBomSection";
 import ProjectWiringSection from "./ProjectWiringSection";
 import FileVersionModal from "./FileVersionModal";
@@ -226,6 +227,8 @@ function ProjectDetail({ project, loading, canEdit, config, boards, components, 
         onRefresh={onRefresh}
         refreshInventory={refreshInventory}
       />
+
+      <PrintedPartsSection config={config} projectId={project.id} projects={[project]} />
 
       <ProjectWiringSection
         project={project}
@@ -503,3 +506,4 @@ function ProjectRepositoryModal({ project, onClose, onSaved }) {
     </form>
   </Modal>;
 }
+

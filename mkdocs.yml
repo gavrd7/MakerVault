@@ -70,6 +70,7 @@ nav:
       - Printers, filament and spools: using/printing.md
       - Models and the 3D viewer: using/models.md
       - Print history and costs: using/print-history.md
+      - Printed parts: using/printed-parts.md
   - Optional integrations:
       - Spoolman: integrations/spoolman.md
       - Creality local & CFS: integrations/creality.md
@@ -97,3 +98,4 @@ nav:
       - Configuration: reference/configuration.md
       - Glossary: reference/glossary.md
       - About this guide: reference/about.md
+

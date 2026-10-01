@@ -7,6 +7,7 @@ from .models import (
     InventoryItem,
     Model3D,
     PrintJob,
+    PrintedPart,
     Printer,
     PrintingIntegrationSetting,
     PrintingLocation,
@@ -48,6 +49,7 @@ def admin_user_summary(user) -> dict:
             "spools": Spool.objects.filter(owner=user).count(),
             "models": Model3D.objects.filter(owner=user).count(),
             "print_jobs": PrintJob.objects.filter(owner=user).count(),
+            "printed_parts": PrintedPart.objects.filter(owner=user).count(),
             "integrations": PrintingIntegrationSetting.objects.filter(owner=user).count(),
         },
     }
@@ -87,6 +89,7 @@ def purge_user_private_data(user) -> dict:
     # relation or another database constraint fails, all live file records remain
     # intact and their blobs are not removed.
     with transaction.atomic():
+        PrintedPart.objects.filter(owner=user).delete()
         PrintJob.objects.filter(owner=user).delete()
         Model3D.objects.filter(owner=user).delete()
         FileAsset.objects.filter(owner=user).delete()
@@ -103,3 +106,4 @@ def purge_user_private_data(user) -> dict:
         "storage_bytes_removed": int(before["storage"]["used_bytes"]),
         "counts_removed": before["counts"],
     }
+

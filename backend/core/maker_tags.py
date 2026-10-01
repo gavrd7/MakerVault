@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from django.core.exceptions import ValidationError
 
 from .models import (
+    PrintedPart,
     InventoryItem,
     MakerTag,
     Printer,
@@ -35,6 +36,7 @@ TAG_TECHNOLOGIES = [
 
 
 TARGETS = {
+    "printed_part": TagTargetDefinition("printed_part", "Printed part", PrintedPart),
     "inventory": TagTargetDefinition("inventory", "Inventory item", InventoryItem),
     "spool": TagTargetDefinition("spool", "Spool", Spool),
     "printer": TagTargetDefinition("printer", "Printer", Printer),
@@ -158,3 +160,4 @@ def serialise_tag(tag: MakerTag, *, include_events: bool = False) -> dict:
             for event in tag.events.select_related("changed_by").all()[:100]
         ]
     return payload
+

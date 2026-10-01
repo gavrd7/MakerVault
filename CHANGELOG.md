@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.0 — Printed parts (in development)
+
+- Explicitly retain physical parts from successful prints, or record existing parts without a saved model or print link. No automatic creation.
+- Track quantities, project installation, location, physical status, replacements and change history; reuse Maker Tags for printed parts.
+- Keep filament analytics independent of saved models and retained parts. Whole-job usage/cost context is never duplicated into consumption totals.
+
 ## v0.7.3.2 — in development
 
 - Added bounded plain-G-code gram parsing, unambiguous owner-scoped live-job matching and a print-history G-code selector. Full-file weights count only for successful prints and are labelled estimated.
@@ -561,3 +567,4 @@
 ## v0.1.0
 
 - Initial MakerVault Docker/Django/PostgreSQL/Redis foundation.
+

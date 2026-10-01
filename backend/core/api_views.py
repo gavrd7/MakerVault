@@ -6081,6 +6081,8 @@ def public_config(request):
             "change_model3d": request.user.has_perm("core.change_model3d"),
             "delete_model3d": request.user.has_perm("core.delete_model3d"),
             "add_printjob": request.user.has_perm("core.add_printjob"),
+            "add_printedpart": request.user.has_perm("core.add_printedpart"),
+            "change_printedpart": request.user.has_perm("core.change_printedpart"),
             "change_printjob": request.user.has_perm("core.change_printjob"),
             "add_maker_tag": request.user.has_perm("core.add_makertag"),
             "change_maker_tag": request.user.has_perm("core.change_makertag"),
@@ -6090,3 +6092,4 @@ def public_config(request):
         },
         "importers": ["ESPBoards.dev"],
     })
+

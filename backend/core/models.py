@@ -1108,6 +1108,51 @@ class PrintMaterialUsage(TimeStampedModel):
         return f"{self.print_job} · {material}"
 
 
+class PrintedPart(TimeStampedModel):
+    """An explicitly retained physical part or batch; never created by telemetry."""
+    STATUSES = [("available", "Available"), ("installed", "Installed / in use"), ("spare", "Spare"), ("failed", "Failed"), ("scrapped", "Scrapped"), ("retired", "Retired")]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="makervault_printed_parts")
+    name = models.CharField(max_length=200)
+    quantity = models.PositiveIntegerField(default=1)
+    status = models.CharField(max_length=20, choices=STATUSES, default="available")
+    print_job = models.ForeignKey(PrintJob, on_delete=models.SET_NULL, null=True, blank=True, related_name="printed_parts")
+    model_revision = models.ForeignKey(ModelRevision, on_delete=models.SET_NULL, null=True, blank=True, related_name="printed_parts")
+    project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True, related_name="printed_parts")
+    location = models.ForeignKey(PrintingLocation, on_delete=models.SET_NULL, null=True, blank=True, related_name="printed_parts")
+    replaces = models.ForeignKey("self", on_delete=models.SET_NULL, null=True, blank=True, related_name="replacements")
+    production = models.JSONField(default=dict, blank=True)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [models.CheckConstraint(condition=models.Q(quantity__gte=1), name="printed_part_quantity_positive")]
+
+    def clean(self):
+        super().clean()
+        for field in ("print_job", "model_revision", "project", "location", "replaces"):
+            obj = getattr(self, field, None)
+            owner_id = obj.model.owner_id if field == "model_revision" and obj else getattr(obj, "owner_id", None)
+            if obj and owner_id != self.owner_id:
+                raise ValidationError({field: "Selected record belongs to a different user."})
+        if self.replaces_id and self.replaces_id == self.id:
+            raise ValidationError({"replaces": "A part cannot replace itself."})
+        if self.status == "installed" and not self.project_id:
+            raise ValidationError({"project": "Choose the project where this part is installed."})
+
+    def __str__(self):
+        return self.name
+
+
+class PrintedPartEvent(TimeStampedModel):
+    part = models.ForeignKey(PrintedPart, on_delete=models.CASCADE, related_name="events")
+    changed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    changes = models.JSONField(default=dict)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+
 class MakerTag(TimeStampedModel):
     """Physical QR/NFC/RFID identity attached to one owner-scoped MakerVault record."""
 
@@ -1121,6 +1166,7 @@ class MakerTag(TimeStampedModel):
         ("retired", "Retired"),
     ]
     TARGET_TYPES = [
+        ("printed_part", "Printed part"),
         ("inventory", "Inventory item"),
         ("spool", "Spool"),
         ("printer", "Printer"),
@@ -1283,3 +1329,4 @@ class WiringDiagram(TimeStampedModel):
 
     def __str__(self):
         return f"{self.project} — {self.name}" if self.project_id else f"Wiring Lab — {self.name}"
+
