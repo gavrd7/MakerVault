@@ -1,9 +1,12 @@
+from datetime import timedelta
 from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.utils import timezone
 
 from core.models import Printer, PrinterConnection
+from core.tasks import live_printer_connections_tick
 from core.printer_connectivity import (
     PrinterConnectionError,
     adapter_catalogue,
@@ -228,3 +231,39 @@ class PrinterConnectivityApiTests(TestCase):
         )
         with self.assertRaises(PrinterConnectionError):
             poll_connection(connection)
+
+
+    @patch("core.tasks.live_printer_connection_poll_task.delay")
+    def test_scheduler_queues_only_due_supported_connections(self, delay_mock):
+        due = PrinterConnection.objects.create(
+            printer=self.printer,
+            adapter="moonraker",
+            endpoint_url="http://printer.local:7125",
+            poll_interval_seconds=30,
+            status="connected",
+            last_checked_at=timezone.now() - timedelta(seconds=45),
+        )
+        PrinterConnection.objects.create(
+            printer=self.printer,
+            adapter="octoprint",
+            endpoint_url="http://printer.local",
+            poll_interval_seconds=60,
+            status="connected",
+            last_checked_at=timezone.now() - timedelta(seconds=5),
+        )
+        PrinterConnection.objects.create(
+            printer=self.printer,
+            adapter="bambu_local",
+            endpoint_url="http://bambu.local",
+            poll_interval_seconds=10,
+            status="experimental",
+        )
+
+        result = live_printer_connections_tick()
+
+        self.assertEqual(result["count"], 1)
+        self.assertEqual(result["queued"], ["moonraker"])
+        delay_mock.assert_called_once_with(due.id)
+        due.refresh_from_db()
+        self.assertEqual(due.status, "connecting")
+        self.assertIsNotNone(due.last_checked_at)
