@@ -86,7 +86,7 @@ function TagCaptureControls({ kind, value, onCapture, autoFocus = false, compact
       onKeyDown={e => { if (!compact && e.key === "Enter") e.preventDefault(); }}
       placeholder={kind === "qr" ? "QR identity code…" : "Scan/paste reader identity, UID or EPC…"}
       autoComplete="off"
-      autoCapitalize="characters"
+      autoCapitalize="none"
       spellCheck={false}
     />
     {(kind === "nfc" || kind === "rfid" || kind === "auto") && <small>
