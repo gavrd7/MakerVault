@@ -64,6 +64,11 @@ class PrinterConnectivityAdapterTests(TestCase):
                 self.assertTrue(rows[key]["supported"])
                 self.assertTrue(rows[key]["experimental"])
                 self.assertTrue(rows[key]["local_first"])
+                self.assertEqual(rows[key]["protocol"], "Moonraker / Klipper HTTP")
+                self.assertEqual(rows[key]["validation"], "community_validation")
+                self.assertTrue(rows[key]["compatibility_hint"])
+        self.assertEqual(rows["creality_local"]["validation"], "hardware_validated")
+        self.assertEqual(rows["moonraker"]["validation"], "established_protocol")
 
     @patch("core.printer_connectivity.requests.get")
     def test_moonraker_normalises_live_snapshot(self, get_mock):
