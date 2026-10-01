@@ -135,7 +135,10 @@ def serialise_tag(tag: MakerTag, *, include_events: bool = False) -> dict:
         "notes": tag.notes,
         "metadata": tag.metadata or {},
         "technology": str((tag.metadata or {}).get("technology") or ""),
-        "technology_label": dict(TAG_TECHNOLOGIES).get(str((tag.metadata or {}).get("technology") or ""), "Auto / unspecified"),
+        "technology_label": dict(TAG_TECHNOLOGIES).get(
+            str((tag.metadata or {}).get("technology") or ""),
+            str((tag.metadata or {}).get("technology") or "Auto / unspecified"),
+        ),
         "retired_at": tag.retired_at.isoformat() if tag.retired_at else None,
         "created_at": tag.created_at.isoformat(),
         "updated_at": tag.updated_at.isoformat(),
