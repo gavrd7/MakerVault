@@ -119,15 +119,33 @@ def _normalise_tokens(value: str) -> set[str]:
     return {word for word in words if len(word) > 1 and word not in stop}
 
 
+def _strip_catalogue_marketing_suffix(value: str) -> str:
+    """Remove common upstream marketing tails without changing stored display text."""
+    value = str(value or "").strip()
+    # Product feeds often append compatibility/marketing copy to the real model
+    # name.  Those words reduce exact-source and image-search quality.
+    value = re.sub(
+        r"\s+(?:supports?|compatible\s+with|works\s+with)\s+"
+        r"(?:arduino|micropython|circuitpython|platformio|esphome)"
+        r".*$",
+        "",
+        value,
+        flags=re.I,
+    )
+    return value.strip(" -|,:;")
+
+
 def _normalise_catalogue_identity(value: str) -> str:
     """Normalise manufacturer/model labels for exact curated-source matching."""
-    value = str(value or "").replace("®", "").replace("™", "").replace("©", "")
+    value = _strip_catalogue_marketing_suffix(value)
+    value = value.replace("®", "").replace("™", "").replace("©", "")
     return re.sub(r"[^a-z0-9]+", "", value.casefold())
 
 
 def _normalise_search_label(value: str) -> str:
-    """Remove trademark noise while preserving readable search spacing."""
-    value = str(value or "").replace("®", "").replace("™", "").replace("©", "")
+    """Remove trademark and marketing noise while preserving readable spacing."""
+    value = _strip_catalogue_marketing_suffix(value)
+    value = value.replace("®", "").replace("™", "").replace("©", "")
     return re.sub(r"\s+", " ", value).strip()
 
 
@@ -151,13 +169,14 @@ def _commons_query_for_component(component) -> str:
 
 def _commons_query_for_board(board) -> str:
     maker = _normalise_search_label(board.manufacturer.name) if board.manufacturer else ""
+    model = _normalise_search_label(board.name)
     board_type = str((board.specifications or {}).get("board_type") or "microcontroller")
     suffix = {
         "sbc": "single board computer",
         "compute_module": "compute module",
         "microcontroller": "microcontroller board",
     }.get(board_type, "development board")
-    return f"{maker} {board.name} {suffix}".strip()
+    return f"{maker} {model} {suffix}".strip()
 
 
 def _printer_image_queries(printer_model) -> list[str]:
