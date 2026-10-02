@@ -23,7 +23,6 @@ services:
       CELERY_CONCURRENCY: ${CELERY_CONCURRENCY:-2}
       WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
       GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-120}
-      MAKERVAULT_BACKUP_AGENT_URL: http://backup-agent:9784
       MAKERVAULT_BACKUP_ROOT: /app/backups
     ports:
       - "${MAKERVAULT_BIND_ADDRESS:-0.0.0.0}:${MAKERVAULT_PORT:-8765}:8000"
@@ -64,83 +63,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-
-  backup-agent:
-    build:
-      context: .
-      dockerfile: docker/backup-agent.Dockerfile
-    container_name: makervault-backup
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      TZ: ${TZ:-Europe/London}
-      DATABASE_HOST: postgres
-      DATABASE_PORT: 5432
-      POSTGRES_DB: ${POSTGRES_DB:-makervault}
-      POSTGRES_USER: ${POSTGRES_USER:-makervault}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-      MAKERVAULT_BACKUP_TOKEN: ${DJANGO_SECRET_KEY:?Set DJANGO_SECRET_KEY in .env}
-      MAKERVAULT_VERSION: ${MAKERVAULT_VERSION:-}
-    user: "${PUID:-1000}:${PGID:-1000}"
-    volumes:
-      - ${MEDIA_STORAGE:-makervault_media}:/source/media:ro
-      - ${KEY_STORAGE:-makervault_keys}:/source/keys:ro
-      - ${BACKUP_STORAGE:-makervault_backups}:/backups
-      - ./:/source/config:ro
-    depends_on:
-      makervault:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-    networks:
-      - makervault_backend
-    read_only: true
-    tmpfs:
-      - /tmp
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9784/healthz', timeout=2).read()"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-
-  # Restore is deliberately a separate, normally inactive profile. The running
-  # backup service has read-only media/key mounts; only the host-side guarded
-  # restore helper invokes this service with writable recovery mounts.
-  restore-agent:
-    profiles: ["restore"]
-    build:
-      context: .
-      dockerfile: docker/backup-agent.Dockerfile
-    env_file:
-      - .env
-    environment:
-      TZ: ${TZ:-Europe/London}
-      DATABASE_HOST: postgres
-      DATABASE_PORT: 5432
-      POSTGRES_DB: ${POSTGRES_DB:-makervault}
-      POSTGRES_USER: ${POSTGRES_USER:-makervault}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-    user: "0:0"
-    volumes:
-      - ${MEDIA_STORAGE:-makervault_media}:/source/media
-      - ${KEY_STORAGE:-makervault_keys}:/source/keys
-      - ${BACKUP_STORAGE:-makervault_backups}:/backups
-      - ./:/source/config:ro
-    networks:
-      - makervault_backend
-    read_only: true
-    tmpfs:
-      - /tmp
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
 
   redis:
     image: redis:8.10.1-alpine
