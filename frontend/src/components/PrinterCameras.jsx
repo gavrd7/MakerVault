@@ -23,7 +23,7 @@ export function PrinterCameraPreview({ printer, suspended = false }) {
   if (!selected) return null;
   const url = `/api/printing/printers/${printer.id}/connections/${selected.connectionId}/cameras/${selected.camera.id}/media/`;
   return <section ref={container} className="printerCameraCard cameraGlanceCard" aria-label={printer.name + " live camera"}>
-    {visible && pageVisible && !suspended ? <CameraPlayback key={selected.connectionId + ":" + selected.camera.id} camera={selected.camera} url={url} compact /> : <div className="printerCameraPlaceholder">Camera paused</div>}
+    {visible && pageVisible && !suspended ? <CameraPlayback key={selected.connectionId + ":" + selected.camera.id} camera={selected.camera} url={url} compact queueKey={selected.connectionId} /> : <div className="printerCameraPlaceholder">Camera paused</div>}
   </section>;
 }
 
