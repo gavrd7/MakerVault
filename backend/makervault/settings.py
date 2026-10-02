@@ -225,7 +225,7 @@ MAKERVAULT_STORAGE_KEY_FILE = Path(_storage_key_file) if _storage_key_file else 
 
 # First-class backup management uses an isolated internal sidecar. The web
 # process can request/list/download backups but never receives Docker control.
-MAKERVAULT_BACKUP_ROOT = Path(os.getenv("MAKERVAULT_BACKUP_ROOT", "/app/backups"))
+MAKERVAULT_BACKUP_ROOT = Path(os.getenv("MAKERVAULT_BACKUP_ROOT", str(BASE_DIR.parent / "backups")))
 MAKERVAULT_BACKUP_AGENT_URL = os.getenv(
     "MAKERVAULT_BACKUP_AGENT_URL", "http://backup-agent:9784"
 ).rstrip("/")
