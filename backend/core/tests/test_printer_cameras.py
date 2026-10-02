@@ -332,7 +332,20 @@ class CameraApiTests(TestCase):
             get.assert_not_called()
 
     @patch("core.camera_views.frame")
-    def test_overlapping_owner_requests_are_limited(self, get):
-        cache.add(f"camera-request:{self.owner.pk}", "busy", timeout=20)
+    def test_overlapping_requests_on_same_printer_are_limited(self, get):
+        cache.add(f"camera-request:{self.owner.pk}:{self.connection.pk}", "busy", timeout=20)
         self.assertEqual(self.client.get(self.root + "cam1/media/").status_code, 502)
         get.assert_not_called()
+
+    @patch("core.camera_views.frame", return_value=(b"jpeg", "image/jpeg"))
+    def test_request_on_other_printer_does_not_block_camera(self, get):
+        other_printer = Printer.objects.create(owner=self.owner, name="K2")
+        other_connection = PrinterConnection.objects.create(
+            printer=other_printer,
+            adapter="creality_local",
+            endpoint_url="ws://other-printer.lan:9999",
+        )
+        cache.add(f"camera-request:{self.owner.pk}:{other_connection.pk}", "busy", timeout=20)
+        result = self.client.get(self.root + "cam1/media/")
+        self.assertEqual(result.status_code, 200)
+        get.assert_called_once()
