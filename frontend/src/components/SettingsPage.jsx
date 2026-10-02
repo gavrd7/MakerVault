@@ -12,7 +12,7 @@ function formatWhen(value) {
   return date.toLocaleString();
 }
 
-export default function SettingsPage({ config }) {
+export default function SettingsPage({ config, onBackupStarted }) {
   const [settings, setSettings] = useState(null);
   const [form, setForm] = useState(null);
   const [integrations, setIntegrations] = useState([]);
@@ -450,7 +450,7 @@ export default function SettingsPage({ config }) {
 
     </>}
 
-    {activeTab === "backups" && config?.is_superuser && <BackupRestorePanel />}
+    {activeTab === "backups" && config?.is_superuser && <BackupRestorePanel onBackupStarted={onBackupStarted} />}
     {activeTab === "users" && <AdminUsersPanel config={config} />}
 
     {activeTab === "library" && <section className="panel settingsInfo">
