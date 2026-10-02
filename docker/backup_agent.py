@@ -271,6 +271,8 @@ def _bundle_members(bundle: Path) -> dict[str, tarfile.TarInfo]:
             path = PurePosixPath(member.name)
             if path.is_absolute() or ".." in path.parts:
                 raise BackupError("Unsafe path in recovery bundle.")
+            if not (member.isfile() or member.isdir()):
+                raise BackupError("Recovery bundle contains an unsupported archive entry.")
             members[member.name] = member
         return members
 
@@ -286,7 +288,7 @@ def validate_bundle(bundle: Path) -> dict:
                 path = PurePosixPath(member.name)
                 if path.is_absolute() or ".." in path.parts:
                     raise BackupError("Unsafe path in recovery bundle.")
-            archive.extractall(root, filter="data")
+            archive.extractall(root)
         backup = root / "makervault-backup"
         sums = backup / "SHA256SUMS"
         if not sums.is_file():
@@ -310,6 +312,25 @@ def validate_bundle(bundle: Path) -> dict:
         }
 
 
+def register_bundle(backup_id: str, *, label="Imported recovery bundle") -> dict:
+    result = validate_bundle(bundle_path(backup_id))
+    return write_metadata(
+        backup_id,
+        id=backup_id,
+        label=label,
+        filename=bundle_path(backup_id).name,
+        status="complete",
+        verified=True,
+        created_at=result.get("created_utc") or utc_stamp(),
+        finished_at=utc_stamp(),
+        size_bytes=result.get("size_bytes") or 0,
+        sha256=result.get("sha256") or "",
+        error="",
+        format_version=result.get("format_version") or FORMAT_VERSION,
+        application_version=result.get("application_version") or "",
+    )
+
+
 def clear_directory(path: Path):
     path.mkdir(parents=True, exist_ok=True)
     for child in list(path.iterdir()):
@@ -325,7 +346,9 @@ def safe_extract_tar(path: Path, destination: Path):
             item = PurePosixPath(member.name)
             if item.is_absolute() or ".." in item.parts:
                 raise BackupError(f"Unsafe path in {path.name}.")
-        archive.extractall(destination, filter="data")
+            if not (member.isfile() or member.isdir()):
+                raise BackupError(f"Unsupported archive entry in {path.name}.")
+        archive.extractall(destination)
 
 
 def restore_bundle(bundle: Path):
@@ -420,10 +443,48 @@ class Handler(http.server.BaseHTTPRequestHandler):
             )
         except Exception:
             traceback.print_exc()
+        finally:
+            global _running_id
+            with _state_lock:
+                if _running_id == backup_id:
+                    _running_id = ""
+            try:
+                LOCK_FILE.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
+def recover_stale_state():
+    """A restarted agent cannot still own an old job; release any persisted lock."""
+    BACKUP_ROOT.mkdir(parents=True, exist_ok=True)
+    interrupted = ""
+    if LOCK_FILE.is_file():
+        try:
+            interrupted = str(json.loads(LOCK_FILE.read_text(encoding="utf-8")).get("id") or "")
+        except (OSError, json.JSONDecodeError):
+            interrupted = ""
+    for path in BACKUP_ROOT.glob("*.json"):
+        try:
+            item = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if item.get("status") != "running":
+            continue
+        backup_id = str(item.get("id") or "")
+        if not backup_id:
+            continue
+        write_metadata(
+            backup_id,
+            status="failed",
+            verified=False,
+            finished_at=utc_stamp(),
+            error="Backup agent restarted before this backup completed.",
+        )
+    LOCK_FILE.unlink(missing_ok=True)
 
 
 def serve():
-    BACKUP_ROOT.mkdir(parents=True, exist_ok=True)
+    recover_stale_state()
     server = http.server.ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"MakerVault backup agent listening on {HOST}:{PORT}", flush=True)
     server.serve_forever()
@@ -438,6 +499,8 @@ def main():
     backup_cmd.add_argument("--label", default="manual")
     validate_cmd = sub.add_parser("validate")
     validate_cmd.add_argument("--id", required=True)
+    register_cmd = sub.add_parser("register")
+    register_cmd.add_argument("--id", required=True)
     restore_cmd = sub.add_parser("restore")
     restore_cmd.add_argument("--id", required=True)
     args = parser.parse_args()
@@ -451,6 +514,9 @@ def main():
         return 0
     if args.command == "validate":
         print(json.dumps(validate_bundle(bundle_path(args.id))))
+        return 0
+    if args.command == "register":
+        print(json.dumps(register_bundle(args.id)))
         return 0
     if args.command == "restore":
         restore_bundle(bundle_path(args.id))
