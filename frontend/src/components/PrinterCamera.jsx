@@ -24,6 +24,8 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
   const [presets, setPresets] = useState([]);
   const [warnings, setWarnings] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [testingId, setTestingId] = useState("");
+  const [diagnostics, setDiagnostics] = useState({});
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [form, setForm] = useState({ name: "Camera", url: "", mode: "snapshot", rotation: 0, flip_horizontal: false, flip_vertical: false });
@@ -71,6 +73,28 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
     } catch (err) { setError(err.message); }
     finally { setBusy(false); }
   }
+  async function testSource(cameraId) {
+    const item = rows.find(row => row.id === cameraId);
+    if (!item) return;
+    setTestingId(cameraId); setError("");
+    setDiagnostics(current => ({ ...current, [cameraId]: { status: "running", message: "Testing source…" } }));
+    try {
+      const result = await apiFetch(root + cameraId + "/test/", { method: "POST", body: {} });
+      const message = (result.checks || []).map(check => check.detail).join(" ");
+      setDiagnostics(current => ({
+        ...current,
+        [cameraId]: { status: "ok", message: message || "Camera source is reachable." },
+      }));
+    } catch (err) {
+      setDiagnostics(current => ({
+        ...current,
+        [cameraId]: { status: "error", message: err.message },
+      }));
+    } finally {
+      setTestingId("");
+    }
+  }
+
   async function remove(cameraId = camera?.id) {
     const item = rows.find(row => row.id === cameraId);
     if (!item || !window.confirm(`Remove camera source “${item.name}” (${endpointLabel(item.url)})?`)) return;
@@ -107,9 +131,11 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
             <code>{endpointLabel(item.url)}</code>
           </div>
           <div className="cameraSourceActions">
+            <button type="button" disabled={busy || testingId === item.id} onClick={() => testSource(item.id)}>{testingId === item.id ? "Testing…" : "Test"}</button>
             <button type="button" disabled={busy} onClick={() => usePreview(item.id)}>Use for previews</button>
             <button type="button" className="dangerButton" disabled={busy} onClick={() => remove(item.id)}>Remove</button>
           </div>
+          {diagnostics[item.id] && <div className={"cameraSourceDiagnostic cameraSourceDiagnostic-" + diagnostics[item.id].status}>{diagnostics[item.id].message}</div>}
         </div>)}
       </div>}
       {!!candidates.length && <label className="full">Discovered sources / presets<select value="" onChange={e => { const item = candidates[Number(e.target.value)]; if (item) setForm(item); }}><option value="" disabled>Choose a source to configure</option>{candidates.map((item, index) => <option key={item.id} value={index}>{item.name} · {LABELS[item.mode]} · {endpointLabel(item.url)}</option>)}</select><small>Presets are candidates; saving does not confirm playback.</small></label>}
