@@ -20,7 +20,7 @@ def ping_worker():
     return {"status": "ok", "worker": "makervault"}
 
 
-@shared_task(bind=True, acks_late=True)
+@shared_task(bind=True, acks_late=True, reject_on_worker_lost=True)
 def create_managed_backup_task(self, backup_id):
     """Create a prepared recovery bundle inside the existing MakerVault worker."""
     try:
