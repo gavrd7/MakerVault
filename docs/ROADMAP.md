@@ -59,15 +59,15 @@ The focus is a dependable first stable release of the existing feature set. The 
 
 | Order | Workstream | Completion evidence |
 | --- | --- | --- |
-| 1 — next | Backup and recovery | Restore a consistent database/media/key/configuration set into an isolated installation; verify login, private-file decryption, projects, models and relationships. Exercise documented named-volume and bind-mount paths and missing-key failures. |
+| 1 — in progress | Backup and recovery | First-class backup creation/validation/download and guarded restore are implemented on the v1.0 branch, with synthetic sidecar and encrypted-file recovery rehearsals in CI. Remaining gate: restore a representative real installation on a separate host and complete the manual application checks. |
 | 2 | Installation and upgrades | Rehearse the beginner installation and representative upgrades; verify migrations, ownership, encryption and existing data. Document supported upgrade and recovery paths without promising arbitrary downgrades. |
 | 3 | Reliability and security | Review authentication/permissions, uploads and quotas, integrations, network failure/reconnect handling, duplicate-history prevention, diagnostics and destructive actions. Record fixes and regression evidence. |
 | 4 | UI, accessibility and documentation | Review mobile/desktop layouts, keyboard/focus behaviour, error/empty states and consistent wording. Complete current feature chapters, screenshots, configuration guidance and support matrices. |
 | 5 | Release candidate and stable release | Run the acceptance checklist, resolve release blockers, verify Docker/dependency/security and guide builds, record tested deployment assumptions, then define/tag the stable release and upgrade policy. |
 
-Recovery verification work now includes a read-only private-file audit and a synthetic Docker dump/archive/restore rehearsal for named volumes and bind mounts, exercised by PR CI. A representative real-installation restore, deployment configuration review and manual UI acceptance remain release gates.
+Recovery verification now includes the read-only private-file audit, synthetic Docker dump/archive/restore rehearsal for named volumes and bind mounts, and the isolated backup-agent path used by the administrator UI. The standard workflow creates one managed `.mvbackup` bundle, re-validates it before recovery and provides a guarded restore helper for both same-server rollback and off-server disaster recovery. The web process never receives the Docker socket.
 
-Backup/recovery documentation and an initial guide already exist. The next pass verifies them end-to-end and improves them from the results; it is not a claim that recovery has already been rehearsed.
+A representative real-installation restore on a separate host, deployment-configuration review and manual UI acceptance remain v1.0 release gates. Automated recovery evidence is intentionally not treated as proof that every real deployment layout has been recovered.
 
 Supported deployment guidance centres on the supplied Linux Docker Compose stack: application/worker, PostgreSQL and Redis. Broader NAS/ARM/desktop compatibility and minimum resource claims need evidence before being advertised.
 
