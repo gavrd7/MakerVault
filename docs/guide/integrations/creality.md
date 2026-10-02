@@ -18,7 +18,7 @@ Neither path requires a Creality Cloud login. Compatibility still depends on the
 5. Once connected, MakerVault can display the fields the printer reports, including print state, filename, progress, elapsed/remaining time, layer counts, nozzle/bed/chamber temperatures, errors and whether CFS is present.
 6. Scheduled polling then follows the connection's configured interval.
 
-The current adapter uses the local Creality WebSocket service on port 9999. Monitoring has been validated on the development K2; other models and firmware remain experimental. Optional Pause, Resume and confirmed Cancel are available from v0.7.3.2 and require a per-source opt-in. Controls still need K2 hardware testing. See [Optional printer controls](printer-controls.md). Heater, movement and raw G-code controls are not exposed.
+The current adapter uses the local Creality WebSocket service on port 9999. Monitoring has owner confirmation on K2 and K1; K1 monitoring was also tested through Moonraker. Other models and firmware remain experimental. Optional Pause, Resume and confirmed Cancel are available from v0.7.3.2 and require a per-source opt-in. Controls still need K2 hardware testing. See [Optional printer controls](printer-controls.md). Heater, movement and raw G-code controls are not exposed.
 
 ## CFS set up
 
@@ -42,3 +42,7 @@ This confirmation avoids producing duplicate inventory whenever a printer report
 Confirm that the printer is on, the host/IP has not changed, and MakerVault can reach the printer across your network/VLAN rules. For live monitoring, port 9999 must be reachable. For CFS, confirm the CFS is physically connected and enabled on the owned-printer record.
 
 Review the specific live-source or integration error. A printer catalogue entry alone does not establish compatibility, and firmware updates may change undocumented local telemetry behaviour.
+
+## Camera feeds
+
+K1 and K2 camera playback have owner confirmation. Camera setup is a separate action on the printer card; the configured preview appears automatically on visible dashboard and 3D Printing cards. K1 uses supported HTTP image/MJPEG routes, while K2 can use experimental Creality WebRTC. See [camera setup and network requirements](printer-cameras.md); playback confirmation does not establish every route, firmware or browser combination.

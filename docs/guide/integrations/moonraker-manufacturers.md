@@ -44,7 +44,7 @@ Where the printer's Moonraker build exposes it, MakerVault reads:
 - the active nozzle when Klipper identifies it
 - Moonraker/Klipper warnings
 
-The v0.7.3 live layer remains read-only even when Moonraker advertises pause/resume/cancel or macro capabilities.
+Monitoring is read-only by default. Per-source opt-in enables Pause, Resume and confirmed Cancel where supported; macros, motion, heating and raw G-code are not exposed. See [optional controls](printer-controls.md). Hardware validation is separate from the shared protocol implementation.
 
 ## Model limitations
 

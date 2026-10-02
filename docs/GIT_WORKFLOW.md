@@ -6,7 +6,7 @@ MakerVault is designed to live in a Git repository. The recommended workflow is 
 - Use a short-lived feature branch for substantial work, e.g. `feature/espboards-importer`.
 - Open a pull request for review/CI and merge completed work back to `main`.
 - Delete merged feature branches so the branch list reflects active work.
-- Tag notable stable releases (for example `v0.6.3`).
+- Tag notable stable releases after validation; do not label a pre-v1 build as v1.0.
 - Never commit `.env`, uploaded media, database data, Redis data, secrets, or local build output.
 
 ## Initial repository setup
@@ -36,7 +36,7 @@ For a normal source update, explicitly return the deployment checkout to `main`:
 git fetch --prune origin
 git switch main
 git pull --ff-only origin main
-docker compose up -d --build
+sudo docker compose up -d --build
 ```
 
 or use:
@@ -45,7 +45,7 @@ or use:
 make update
 ```
 
-PostgreSQL, Redis and media live in persistent storage and are not removed by an application rebuild.
+PostgreSQL, Redis, media and encryption keys live in persistent storage and are not removed by an application rebuild.
 
 Docker's layer cache means dependency-install layers are reused unless `requirements.txt`, `frontend/package.json`, the Dockerfile, or another earlier build layer changes.
 
@@ -54,7 +54,7 @@ Docker's layer cache means dependency-install layers are reused unless `requirem
 For backend or frontend source-only changes, use:
 
 ```bash
-docker compose up -d --build --no-deps makervault
+sudo docker compose up -d --build --no-deps makervault
 ```
 
 The build still runs because the production image intentionally contains its application code and compiled frontend rather than bind-mounting mutable source. With cached Python and Node dependency layers this is normally much faster than a clean rebuild.
@@ -86,4 +86,4 @@ git push origin --delete feature/example-change
 git fetch --prune origin
 ```
 
-For non-fast-forward work, use a normal reviewed merge or rebase rather than forcing `main`.
+For squash-merged branches, ancestry alone may show divergence. Confirm the merged PR and content equivalence before deleting them; do not re-merge an obsolete branch simply because Git reports commits ahead. For actual unmerged work, use a reviewed merge or rebase rather than forcing `main`.

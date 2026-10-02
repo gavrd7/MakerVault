@@ -4,13 +4,13 @@ MakerVault v0.7.3.2 adds optional **Pause**, **Resume** and **Cancel print** act
 
 ## Supported sources
 
-| Source | Controls in this pass | Hardware validation |
+| Source | Current controls | Hardware validation |
 | --- | --- | --- |
-| Creality local | Pause, Resume, Cancel over the local WebSocket | K2 monitoring validated; controls awaiting K2 testing |
+| Creality local | Pause, Resume, Cancel over the local WebSocket | K1/K2 monitoring confirmed; controls awaiting hardware testing |
 | Moonraker / Klipper | Pause, Resume, Cancel through job API endpoints | Protocol tests; representative hardware testing required |
 | Elegoo, QIDI, Sovol, Snapmaker U1, Voron profiles | Same controls where a compatible Moonraker API is exposed | Experimental by model/firmware |
 | OctoPrint | Explicit Pause, Resume and Cancel through its job API | Protocol tests; hardware testing required |
-| Bambu, PrusaLink, Anycubic, FlashForge, SimplyPrint | Monitoring only in this pass | See the adapter validation guide |
+| Bambu, PrusaLink, Anycubic, FlashForge, SimplyPrint | Monitoring only | See the adapter validation guide |
 
 Upstream capability labels do not guarantee that MakerVault implements a control. Only the sources listed above expose the opt-in.
 
@@ -26,7 +26,7 @@ You must own the printer and have permission to edit printers. Viewer accounts c
 
 After enabling a source, compact controls also appear beside the progress summary on the dashboard and 3D Printing page: two bars pause, the play triangle resumes a paused print, and the square cancels after confirmation. Unavailable actions are disabled. **Open live** on the dashboard opens that printer's live monitor directly.
 
-Camera detection is separate from streaming support. A camera or WebRTC flag in telemetry does not supply a viewable feed. Sources with camera metadata show an explicit feed-unavailable note until camera streaming is implemented and tested.
+Camera detection is separate from configured playback. Supported feeds appear automatically in dashboard/printer cards after separate camera setup; camera availability metadata alone is insufficient. See [camera feeds](printer-cameras.md).
 
 ## How state checks work
 

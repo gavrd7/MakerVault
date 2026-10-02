@@ -50,7 +50,7 @@ Diagnostics may contain the printer model/serial and active print filename, so r
 
 ## Current validation state
 
-- **Creality local:** hardware validated against the development Creality K2; other firmware/models remain experimental.
+- **Creality local:** K1/K2 connection and monitoring owner-confirmed. K1 also passed Moonraker monitoring. Controls and other firmware/models remain separate checks.
 - **Moonraker / Klipper:** protocol implementation is established; manufacturer profiles still need representative model testing.
 - **OctoPrint:** established API implementation.
 - **Bambu Lab local:** fixture/contract tested; community hardware validation required.
@@ -62,3 +62,7 @@ Diagnostics may contain the printer model/serial and active print filename, so r
 An adapter should only lose its experimental/community-validation label after successful real-hardware testing on representative firmware.
 
 Hardware testing still to do is tracked in [TODO #37](https://github.com/gavrd7/MakerVault/issues/37). K2 monitoring confirmation does not validate the new control commands. Validate control behaviour separately and record failures or firmware differences before promoting that capability.
+
+## Camera and layout confirmations
+
+On 2 October 2026 the owner confirmed K1 and K2 cameras streaming well, then accepted the v0.9.0.2 compact automatic feeds on the dashboard and 3D Printing page. This confirms those observed workflows, not every camera route, firmware/browser combination or lifecycle/security check. Remaining checks stay in [issue #37](https://github.com/gavrd7/MakerVault/issues/37).

@@ -2,7 +2,7 @@
 
 ## Version and scope
 
-This is the user-guide foundation for **MakerVault v0.7.0.1**, reviewed on **29 September 2026** against source commit `59d12f81a2941178bca4e6fb1cea68f2081c60b4`. It documents current implemented features, not the entire roadmap or a completed v1 release.
+This guide describes **MakerVault v0.9.0.2**. Its overview and integration status were reconciled on **2 October 2026** with merged source commit `a4c12274b645ebb7f568f7b19b4d1e467d51c222`. It describes implemented features, not a completed v1 release or proof of every deployment/hardware scenario.
 
 The primary deployment route is Linux with the supplied Docker Compose configuration. Platform-specific NAS/Portainer and Windows/macOS installation walkthroughs are outside this edition's verified scope. No measured minimum hardware specification is claimed.
 
@@ -16,7 +16,7 @@ The Nginx configuration is a same-host example, and OIDC uses provider-neutral i
 
 Chapters are Markdown files under `docs/guide`. Navigation and theme live in `mkdocs.yml`. The maintainer workflow is described in `docs/GUIDE_MAINTENANCE.md` in the repository. Update the affected chapter with each feature change, then check the guide version and release checklist.
 
-Before v1, complete a clean installation and restore rehearsal on supported targets, capture sanitised screenshots from the release UI, and check each integration with supported hardware/accounts. Screenshots should complement complete written steps so a small UI change does not make the manual unusable.
+K1/K2 monitoring and camera playback have owner confirmation, including acceptance of the compact camera layout. Other hardware and route/lifecycle checks remain tracked separately. Before v1, complete clean-install, restore and upgrade rehearsals, capture sanitised screenshots, and publish accurate integration support boundaries. Screenshots should complement complete written steps so a small UI change does not make the manual unusable.
 
 ## Sources
 
