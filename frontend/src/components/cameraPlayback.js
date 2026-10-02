@@ -49,15 +49,21 @@ export function startFrameLoop({ request, onFrame, onError, interval = 1000 }) {
   return () => { stopped = true; clearTimeout(timer); controller.abort(); };
 }
 
-// Serialise frame/signalling requests across visible feeds in this tab. The
-// server keeps its per-user request guard; parallel previews must not fight it.
-let cameraQueue = Promise.resolve();
-export function cameraRequest(task, signal) {
-  const result = cameraQueue.then(() => {
+// Serialise requests per printer connection. An offline/retrying printer must
+// not starve a healthy camera on another printer in the same tab.
+const cameraQueues = new Map();
+export function cameraRequest(task, signal, queueKey = "default") {
+  const key = String(queueKey || "default");
+  const previous = cameraQueues.get(key) || Promise.resolve();
+  const result = previous.then(() => {
     if (signal?.aborted) throw new DOMException("Cancelled", "AbortError");
     return task();
   });
-  cameraQueue = result.catch(() => {});
+  const tail = result.catch(() => {});
+  cameraQueues.set(key, tail);
+  tail.then(() => {
+    if (cameraQueues.get(key) === tail) cameraQueues.delete(key);
+  });
   return result;
 }
 
