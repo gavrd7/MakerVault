@@ -13,7 +13,7 @@ from django.test import SimpleTestCase, TestCase, Client, override_settings
 
 from core.api_views import _serialise_printer_connection
 from core.models import Printer, PrinterConnection
-from core.printer_cameras import CameraError, camera_url, diagnose_source, discover, frame, negotiate, resolve_address, upstream, creality_session, read_bounded
+from core.printer_cameras import CameraError, camera_url, diagnose_source, discover, fix_creality_answer_sdp, frame, negotiate, resolve_address, upstream, creality_session, read_bounded
 
 
 def jpeg():
@@ -226,6 +226,42 @@ class CameraProtocolTests(SimpleTestCase):
                 {"mode": "creality_webrtc", "url": "http://printer.lan:8000/call/webrtc_local"},
             )
 
+    def test_creality_answer_sdp_drops_bogus_first_video_payload(self):
+        answer = (
+            "v=0\r\n"
+            "o=- 0 0 IN IP4 0.0.0.0\r\n"
+            "s=-\r\n"
+            "t=0 0\r\n"
+            "m=video 9 UDP/TLS/RTP/SAVPF 0 96\r\n"
+            "c=IN IP4 192.168.1.34\r\n"
+            "a=rtpmap:0 PCMU/8000\r\n"
+            "a=fmtp:0 bogus=1\r\n"
+            "a=rtpmap:96 H264/90000\r\n"
+            "a=fmtp:96 profile-level-id=42e01f;packetization-mode=1\r\n"
+            "a=fmtp:96 x-google-start-bitrate=1000\r\n"
+        )
+        fixed = fix_creality_answer_sdp(answer)
+        self.assertIn("m=video 9 UDP/TLS/RTP/SAVPF 96\r\n", fixed)
+        self.assertNotIn("a=rtpmap:0 ", fixed)
+        self.assertNotIn("a=fmtp:0 ", fixed)
+        self.assertNotIn("x-google", fixed)
+        self.assertIn("a=rtpmap:96 H264/90000", fixed)
+
+    def test_webrtc_endpoint_cannot_be_saved_as_mjpeg(self):
+        self.connection.adapter = "creality_local"
+        self.connection.endpoint_url = "ws://printer.lan:9999"
+        from core.printer_cameras import normalise_source
+        with self.assertRaisesRegex(CameraError, "must use the Creality WebRTC feed type"):
+            normalise_source(
+                self.connection,
+                {
+                    "mode": "mjpeg",
+                    "url": "http://printer.lan:8000/call/webrtc_local",
+                    "name": "Wrong mode",
+                },
+                "bad",
+            )
+
     @patch("core.printer_cameras.creality_session")
     @patch("core.printer_cameras.upstream")
     def test_legacy_and_protected_webrtc_encodings_hide_token(self, get, session):
@@ -383,6 +419,26 @@ class CameraApiTests(TestCase):
             and row["url"] == "http://printer.lan:8000/call/webrtc_local"
         ]
         self.assertEqual(len(matches), 1)
+
+    def test_remove_cleans_invalid_legacy_webrtc_mode_rows(self):
+        config = dict(self.connection.config or {})
+        config["cameras"] = [
+            {
+                "id": "legacy-bad",
+                "name": "K2 Creality WebRTC (experimental)",
+                "url": "http://printer.lan:8000/call/webrtc_local",
+                "mode": "mjpeg",
+            },
+            *config["cameras"],
+        ]
+        self.connection.config = config
+        self.connection.save(update_fields=["config", "updated_at"])
+
+        removed = self.client.post(self.root + "cam1/remove/", {}, content_type="application/json")
+        self.assertEqual(removed.status_code, 200, removed.content)
+        self.assertEqual(removed.json()["rows"], [])
+        self.connection.refresh_from_db()
+        self.assertEqual(self.connection.config.get("cameras"), [])
 
     def test_camera_specific_delete_removes_source_and_repairs_preview(self):
         result = self.client.post(
