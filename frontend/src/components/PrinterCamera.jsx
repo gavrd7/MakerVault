@@ -174,14 +174,16 @@ export function CameraPlayback({ camera, url, compact = false, queueKey = "" }) 
   const [status, setStatus] = useState("Connecting…");
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
+  const [playbackBlocked, setPlaybackBlocked] = useState(false);
   useEffect(() => {
     let cancelled = false;
     let objectUrl = "";
     let peer;
     let videoTimeout;
+    let disconnectTimeout;
     let stopFrames;
     const controller = new AbortController();
-    setImage(""); setError(""); setStatus("Connecting…");
+    setImage(""); setError(""); setStatus("Connecting…"); setPlaybackBlocked(false);
     const closePeer = () => {
       if (peer) {
         peer.ontrack = null; peer.onconnectionstatechange = null;
@@ -190,7 +192,14 @@ export function CameraPlayback({ camera, url, compact = false, queueKey = "" }) 
       }
       if (video.current) video.current.srcObject = null;
     };
-    const failed = message => { if (!cancelled) { setError(message); setStatus("Disconnected"); closePeer(); } };
+    const failed = message => {
+      if (!cancelled) {
+        setPlaybackBlocked(false);
+        setError(message);
+        setStatus("Disconnected");
+        closePeer();
+      }
+    };
     if (camera.mode !== "creality_webrtc") {
       stopFrames = startFrameLoop({
         request: signal => cameraRequest(async () => {
@@ -218,12 +227,41 @@ export function CameraPlayback({ camera, url, compact = false, queueKey = "" }) 
           peer.ontrack = event => {
             if (cancelled || event.track.kind !== "video" || !video.current) return;
             video.current.srcObject = event.streams[0] || new MediaStream([event.track]);
-            video.current.play().catch(() => failed("Playback was blocked. Use the video play control or reconnect."));
+            setStatus("Video track received…");
+            video.current.play().then(() => {
+              if (cancelled) return;
+              setPlaybackBlocked(false);
+              setError("");
+              setStatus("Live video · experimental");
+            }).catch(() => {
+              if (cancelled) return;
+              // Autoplay policy is a browser/UI concern, not a failed WebRTC
+              // session. Keep the peer alive so the user can start playback.
+              setPlaybackBlocked(true);
+              setError("");
+              setStatus("Video ready · press Play");
+            });
           };
           peer.onconnectionstatechange = () => {
             if (cancelled) return;
-            if (peer.connectionState === "connected") setStatus("Connected · waiting for video");
-            if (["failed", "disconnected"].includes(peer.connectionState)) failed("Camera connection lost. Check LAN/VPN access, then reconnect.");
+            if (peer.connectionState === "connected") {
+              clearTimeout(disconnectTimeout);
+              setStatus(current => current === "Live video · experimental" ? current : "Connected · waiting for video");
+              return;
+            }
+            if (peer.connectionState === "disconnected") {
+              setStatus("Media connection interrupted · retrying…");
+              clearTimeout(disconnectTimeout);
+              disconnectTimeout = setTimeout(() => {
+                if (!cancelled && peer?.connectionState === "disconnected") {
+                  failed("Camera media connection was interrupted. Check LAN/VPN access, then reconnect.");
+                }
+              }, 8000);
+              return;
+            }
+            if (peer.connectionState === "failed") {
+              failed("Camera connection failed. Check LAN/VPN access, then reconnect.");
+            }
           };
           setStatus("Preparing browser video route…");
           await peer.setLocalDescription(await peer.createOffer());
@@ -264,7 +302,7 @@ export function CameraPlayback({ camera, url, compact = false, queueKey = "" }) 
         } catch (err) { if (err.name !== "AbortError") failed(err.message); }
       })();
     }
-    return () => { cancelled = true; controller.abort(); clearTimeout(videoTimeout); stopFrames?.(); closePeer(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
+    return () => { cancelled = true; controller.abort(); clearTimeout(videoTimeout); clearTimeout(disconnectTimeout); stopFrames?.(); closePeer(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [camera.id, url, attempt]);
   useEffect(() => {
     if (!expanded) return;
@@ -274,6 +312,18 @@ export function CameraPlayback({ camera, url, compact = false, queueKey = "" }) 
     document.addEventListener("keydown", escape);
     return () => { document.body.style.overflow = oldOverflow; document.removeEventListener("keydown", escape); };
   }, [expanded]);
+  const startVideoPlayback = async () => {
+    if (!video.current) return;
+    try {
+      await video.current.play();
+      setPlaybackBlocked(false);
+      setError("");
+      setStatus("Live video · experimental");
+    } catch {
+      setPlaybackBlocked(true);
+      setError("Your browser is still blocking playback. Click the video area or allow autoplay for MakerVault.");
+    }
+  };
   const fullscreen = () => {
     if (expanded) { setExpanded(false); return; }
     const target = container.current;
@@ -291,8 +341,18 @@ export function CameraPlayback({ camera, url, compact = false, queueKey = "" }) 
     </div>
     <div className="printerCameraViewport">
       {camera.mode === "creality_webrtc" ? <>
-        <video ref={video} style={{ transform }} autoPlay muted playsInline controls={!compact} onPlaying={() => setStatus("Live video · experimental")} />
+        <video
+          ref={video}
+          style={{ transform }}
+          autoPlay
+          muted
+          playsInline
+          controls={!compact || playbackBlocked}
+          onClick={playbackBlocked ? startVideoPlayback : undefined}
+          onPlaying={() => { setPlaybackBlocked(false); setError(""); setStatus("Live video · experimental"); }}
+        />
         {compact && status !== "Live video · experimental" && <span className="cameraStatusOverlay" role="status">{status}</span>}
+        {playbackBlocked && <button type="button" className="cameraPlayOverlay" onClick={startVideoPlayback}>Play video</button>}
       </> : image ? <img src={image} alt={camera.name + " live camera view"} style={{ transform }} /> : <span role="status">{status}</span>}
     </div>
     {error && <p className="integrationError" role="alert">{error}</p>}
