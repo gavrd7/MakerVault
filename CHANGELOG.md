@@ -3,7 +3,7 @@
 ## Unreleased — v1.0 recovery verification
 
 - Add a superuser **Backup & restore** workspace for one-click managed backups, verification, download, deletion and recovery guidance.
-- Add an isolated internal backup-agent service with no published port or Docker socket; writes become briefly read-only while database/media/key/configuration are captured into one `.mvbackup` bundle.
+- Add an isolated internal backup-agent service with no published port or Docker socket; web writes become briefly read-only and scheduled background mutations defer while database/media/key/configuration are captured into one `.mvbackup` bundle.
 - Add guarded restore tooling with automatic pre-restore safety backups, plus verified off-server bundle recovery for replacement hosts.
 - Persist managed backups independently through `BACKUP_STORAGE`; record bundle format/application version and revalidate checksums/archives before restore.
 - Add backend/API/UI regression coverage, a dedicated backup-agent recovery rehearsal and vulnerability scanning for the backup image.
