@@ -74,6 +74,10 @@ def read_metadata(path: Path) -> dict | None:
     if not isinstance(data, dict) or not SAFE_ID.fullmatch(str(data.get("id") or "")):
         return None
     bundle = bundle_path(data["id"])
+    if data.get("status") == "running" and not maintenance_lock_path().is_file():
+        data["status"] = "interrupted"
+        data["verified"] = False
+        data["error"] = data.get("error") or "Backup stopped before completion. It is not a usable recovery bundle."
     data["download_available"] = bundle.is_file() and data.get("status") == "complete"
     data["restore_command"] = (
         f"python3 scripts/restore.py --sudo --backup-id {data['id']}"
