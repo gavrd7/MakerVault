@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from django.conf import settings
@@ -109,6 +110,18 @@ def delete_backup(backup_id: str):
 
 def call_agent(path: str, *, method="POST", timeout=8) -> dict:
     base = str(settings.MAKERVAULT_BACKUP_AGENT_URL).rstrip("/")
+    parsed = urllib.parse.urlsplit(base)
+    if (
+        parsed.scheme != "http"
+        or parsed.hostname not in {"backup-agent", "127.0.0.1", "localhost"}
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise BackupServiceError(
+            "MakerVault backup service URL must use plain HTTP to the internal backup-agent service."
+        )
     request = urllib.request.Request(
         base + path,
         method=method,
@@ -119,7 +132,8 @@ def call_agent(path: str, *, method="POST", timeout=8) -> dict:
         },
     )
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        # URL scheme/host are constrained above; file/custom schemes cannot reach this call.
+        with urllib.request.urlopen(request, timeout=timeout) as response:  # nosec B310
             payload = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         try:
