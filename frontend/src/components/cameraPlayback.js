@@ -17,10 +17,13 @@ export function waitForIce(peer, signal, timeoutMs = 8000) {
 }
 
 export function prepareCrealityOffer(sdp) {
-  // Preserve the browser's gathered ICE candidates. Rewriting mDNS host
-  // candidates to a TEST-NET address (192.0.2.1) lets signaling succeed but can
-  // leave the printer with no valid media destination.
-  return sdp;
+  // Older firmware expects numeric ICE addresses; peer-reflexive ICE learns the LAN route.
+  return sdp.split("\r\n").map(line => {
+    if (!line.startsWith("a=candidate:")) return line;
+    const fields = line.split(" ");
+    if (fields[4]?.endsWith(".local")) fields[4] = "192.0.2.1";
+    return fields.join(" ");
+  }).join("\r\n");
 }
 
 export function startFrameLoop({ request, onFrame, onError, interval = 1000 }) {
@@ -46,21 +49,15 @@ export function startFrameLoop({ request, onFrame, onError, interval = 1000 }) {
   return () => { stopped = true; clearTimeout(timer); controller.abort(); };
 }
 
-// Serialise requests per printer connection. An offline/retrying printer must
-// not starve a healthy camera on another printer in the same tab.
-const cameraQueues = new Map();
-export function cameraRequest(task, signal, queueKey = "default") {
-  const key = String(queueKey || "default");
-  const previous = cameraQueues.get(key) || Promise.resolve();
-  const result = previous.then(() => {
+// Serialise frame/signalling requests across visible feeds in this tab. The
+// server keeps its per-user request guard; parallel previews must not fight it.
+let cameraQueue = Promise.resolve();
+export function cameraRequest(task, signal) {
+  const result = cameraQueue.then(() => {
     if (signal?.aborted) throw new DOMException("Cancelled", "AbortError");
     return task();
   });
-  const tail = result.catch(() => {});
-  cameraQueues.set(key, tail);
-  tail.then(() => {
-    if (cameraQueues.get(key) === tail) cameraQueues.delete(key);
-  });
+  cameraQueue = result.catch(() => {});
   return result;
 }
 
