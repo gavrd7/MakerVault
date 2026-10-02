@@ -17,6 +17,25 @@ class BackupServiceError(RuntimeError):
     pass
 
 
+def managed_backup_capability() -> tuple[bool, str]:
+    database = settings.DATABASES.get("default", {})
+    host = str(database.get("HOST") or "").strip()
+    port = str(database.get("PORT") or "5432").strip()
+    if host not in {"postgres", "makervault-postgres"} or port not in {"", "5432"}:
+        return False, "Managed backups require MakerVault's supplied local PostgreSQL service. Use the advanced backup procedure for an external database."
+
+    if not settings.MAKERVAULT_STORAGE_KEY:
+        key_path = settings.MAKERVAULT_STORAGE_KEY_FILE
+        if not key_path:
+            return False, "MakerVault has no configured private-storage key source."
+        try:
+            Path(key_path).resolve().relative_to(Path("/app/keys"))
+        except ValueError:
+            return False, "Managed backups require the private-storage key to be inline in .env or stored under /app/keys. Use the advanced procedure for a custom key mount."
+
+    return True, ""
+
+
 def backup_root() -> Path:
     root = Path(settings.MAKERVAULT_BACKUP_ROOT)
     root.mkdir(parents=True, exist_ok=True)
