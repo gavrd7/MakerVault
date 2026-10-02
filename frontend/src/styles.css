@@ -2366,4 +2366,8 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
 .cameraSourceIdentity small{color:#8995a7}
 .cameraSourceIdentity code{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#aeb9ca;font-size:11px}
 .cameraSourceActions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.cameraSourceDiagnostic{grid-column:1/-1;padding:8px 10px;border-radius:8px;background:#111923;color:#aeb9ca;font-size:12px;line-height:1.45}
+.cameraSourceDiagnostic-ok{border:1px solid #345e4c;color:#bde8cb;background:#10291e}
+.cameraSourceDiagnostic-error{border:1px solid #75414a;color:#ffd0d6;background:#2a171c}
+.cameraSourceDiagnostic-running{border:1px solid #3c4b61;color:#c8d2e0;background:#111b28}
 @media(max-width:720px){.cameraSourceRow{grid-template-columns:1fr}.cameraSourceActions{justify-content:stretch}.cameraSourceActions button{flex:1 1 140px}}
