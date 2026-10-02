@@ -302,9 +302,29 @@ class CameraApiTests(TestCase):
         self.assertEqual(selected.status_code, 200)
         self.connection.refresh_from_db()
         self.assertEqual(summary(self.connection)["preview"]["id"], "cam1")
-        self.client.delete(self.root, {"id": "cam1"}, content_type="application/json")
+        removed = self.client.post(self.root + "cam1/remove/", {}, content_type="application/json")
+        self.assertEqual(removed.status_code, 200, removed.content)
         self.connection.refresh_from_db()
         self.assertEqual(summary(self.connection)["preview"]["name"], "New")
+
+    def test_saving_same_camera_source_updates_instead_of_duplicating(self):
+        payload = {
+            "mode": "snapshot",
+            "url": "http://printer.lan:8080/?action=snapshot&token=private",
+            "name": "Updated Camera",
+        }
+        result = self.client.post(self.root, payload, content_type="application/json")
+        self.assertEqual(result.status_code, 200, result.content)
+        rows = self.client.get(self.root).json()["rows"]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["name"], "Updated Camera")
+
+    def test_remove_action_rejects_other_owner(self):
+        self.client.force_login(self.other)
+        self.assertEqual(
+            self.client.post(self.root + "cam1/remove/", {}, content_type="application/json").status_code,
+            404,
+        )
 
     def test_preview_selection_rejects_missing_camera_and_other_owner(self):
         self.assertEqual(self.client.patch(self.root, {"id": "missing"}, content_type="application/json").status_code, 404)
@@ -327,7 +347,8 @@ class CameraApiTests(TestCase):
             result = self.client.post(self.root, {"mode": "snapshot", "url": "http://printer.lan:8080/image", "name": "Second"}, content_type="application/json")
             self.assertEqual(result.status_code, 200, result.content)
             self.assertEqual(len(self.client.get(self.root).json()["rows"]), 2)
-            self.client.delete(self.root, {"id": "cam1"}, content_type="application/json")
+            removed = self.client.post(self.root + "cam1/remove/", {}, content_type="application/json")
+            self.assertEqual(removed.status_code, 200, removed.content)
             self.assertEqual(len(self.client.get(self.root).json()["rows"]), 1)
             get.assert_not_called()
 

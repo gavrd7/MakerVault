@@ -4,6 +4,16 @@ import { startFrameLoop, waitForIce, prepareCrealityOffer, cameraRequest } from 
 
 const LABELS = { snapshot: "Live images", mjpeg: "MJPEG live images", creality_webrtc: "Creality WebRTC · experimental" };
 
+function endpointLabel(url) {
+  try {
+    const parsed = new URL(url);
+    const action = parsed.searchParams.get("action");
+    return `${parsed.host}${parsed.pathname}${action ? `?action=${action}` : ""}`;
+  } catch {
+    return "Configured endpoint";
+  }
+}
+
 export default function PrinterCamera({ printerId, connection, canEdit, activeCamera, setActiveCamera, onChanged, setupOnly = false, autoStart = false }) {
   const root = `/api/printing/printers/${printerId}/connections/${connection.id}/cameras/`;
   const [rows, setRows] = useState([]);
@@ -15,6 +25,7 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
   const [presets, setPresets] = useState([]);
   const [warnings, setWarnings] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [removeArmedId, setRemoveArmedId] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [form, setForm] = useState({ name: "Camera", url: "", mode: "snapshot", rotation: 0, flip_horizontal: false, flip_vertical: false });
@@ -48,30 +59,45 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
     event.preventDefault(); setBusy(true); setError(""); setNotice("");
     try {
       await apiFetch(root, { method: "POST", body: form });
-      await load(); await onChanged(); setNotice("Camera source saved. Open the printer camera preview to watch."); setSettings(setupOnly);
+      await load(); await onChanged(); setNotice("Camera source saved or updated. Open the printer camera preview to watch."); setSettings(setupOnly);
     } catch (err) { setError(err.message); }
     finally { setBusy(false); }
   }
-  async function usePreview() {
-    if (!camera) return;
+  async function usePreview(cameraId = camera?.id) {
+    if (!cameraId) return;
     setBusy(true); setError("");
     try {
-      await apiFetch(root, { method: "PATCH", body: { id: camera.id } });
+      await apiFetch(root, { method: "PATCH", body: { id: cameraId } });
+      setSelected(cameraId);
       await onChanged(); setNotice("Preview camera updated on the dashboard and 3D Printing page.");
     } catch (err) { setError(err.message); }
     finally { setBusy(false); }
   }
-  async function remove() {
-    if (!camera || !window.confirm(`Remove camera source “${camera.name}”?`)) return;
-    setBusy(true); setError(""); setActiveCamera("");
-    try { await apiFetch(root, { method: "DELETE", body: { id: camera.id } }); await load(); await onChanged(); }
+  async function remove(cameraId = camera?.id) {
+    const item = rows.find(row => row.id === cameraId);
+    if (!item) return;
+    if (removeArmedId !== cameraId) {
+      setRemoveArmedId(cameraId);
+      setNotice(`Click Confirm remove to delete “${item.name}” (${endpointLabel(item.url)}).`);
+      return;
+    }
+    setBusy(true); setError(""); setNotice("");
+    if (activeCamera === `${connection.id}:${cameraId}`) setActiveCamera("");
+    try {
+      const result = await apiFetch(root + cameraId + "/remove/", { method: "POST", body: {} });
+      setRows(result.rows || []);
+      setRemoveArmedId("");
+      if (selected === cameraId) setSelected((result.rows || [])[0]?.id || "");
+      await onChanged();
+      setNotice(`Camera source “${item.name}” removed.`);
+    }
     catch (err) { setError(err.message); }
     finally { setBusy(false); }
   }
   return <section className="printerCamera">
     <div className="printerCameraToolbar">
       <strong>Camera</strong>
-      {!!rows.length && <label className="printerCameraSelect"><span className="printerCameraLabel">Camera source</span><select value={selected} onChange={e => { setActiveCamera(""); setSelected(e.target.value); }}>{rows.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
+      {!!rows.length && <label className="printerCameraSelect"><span className="printerCameraLabel">Camera source</span><select value={selected} onChange={e => { setActiveCamera(""); setSelected(e.target.value); }}>{rows.map(item => <option key={item.id} value={item.id}>{item.name} · {LABELS[item.mode] || item.mode} · {endpointLabel(item.url)}</option>)}</select></label>}
       {!setupOnly && camera && <button type="button" disabled={!connection.enabled} onClick={() => setActiveCamera(playing ? "" : `${connection.id}:${camera.id}`)}>{playing ? "Stop camera" : "Watch camera"}</button>}
       {canEdit && !setupOnly && <button type="button" onClick={() => setSettings(!settings)}>{settings ? "Close setup" : "Camera setup"}</button>}
     </div>
@@ -81,8 +107,28 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
     {settings && canEdit && <form className="formGrid printerCameraForm" onSubmit={save}>
       <div className="full"><small>{provider?.guidance} If this printer exposes Moonraker or OctoPrint, you can also add that integration and configure its camera.</small></div>
       {warnings.map(message => <p className="full" role="status" key={message}>{message}</p>)}
-      <div className="full settingsActions">{!!presets.length && <button type="button" disabled={busy} onClick={() => { setCandidates(presets); setWarnings([]); setNotice("K1 presets loaded. Choose the route that works in your printer installation."); }}>K1 / Helper Script presets</button>}<button type="button" disabled={busy || !connection.enabled} onClick={discover}>{busy ? "Working…" : "Find camera sources"}</button>{camera && <button type="button" disabled={busy} onClick={usePreview}>Use selected camera for previews</button>}{camera && <button type="button" disabled={busy} onClick={remove}>Remove selected source</button>}</div>
-      {!!candidates.length && <label className="full">Discovered sources / presets<select value="" onChange={e => { const item = candidates[Number(e.target.value)]; if (item) setForm(item); }}><option value="" disabled>Choose a source to configure</option>{candidates.map((item, index) => <option key={item.id} value={index}>{item.name} · {LABELS[item.mode]}</option>)}</select><small>Presets are candidates; saving does not confirm playback.</small></label>}
+      <div className="full settingsActions">{!!presets.length && <button type="button" disabled={busy} onClick={() => { setCandidates(presets); setWarnings([]); setNotice("K1 presets loaded. Choose the route that works in your printer installation."); }}>K1 / Helper Script presets</button>}<button type="button" disabled={busy || !connection.enabled} onClick={discover}>{busy ? "Working…" : "Find camera sources"}</button></div>
+      {!!rows.length && <div className="full cameraSavedSources">
+        <strong>Saved camera sources</strong>
+        {rows.map(item => <div className="cameraSourceRow" key={item.id}>
+          <div className="cameraSourceIdentity">
+            <div><strong>{item.name}</strong>{connection.camera?.preview?.id === item.id && <span className="badge badge-good">Preview</span>}</div>
+            <small>{LABELS[item.mode] || item.mode}</small>
+            <code>{endpointLabel(item.url)}</code>
+          </div>
+          <div className="cameraSourceActions">
+            <button type="button" disabled={busy} onClick={() => usePreview(item.id)}>Use for previews</button>
+            <button
+              type="button"
+              className="dangerButton"
+              disabled={busy}
+              onClick={() => remove(item.id)}
+            >{removeArmedId === item.id ? "Confirm remove" : "Remove"}</button>
+            {removeArmedId === item.id && <button type="button" disabled={busy} onClick={() => { setRemoveArmedId(""); setNotice(""); }}>Cancel</button>}
+          </div>
+        </div>)}
+      </div>}
+      {!!candidates.length && <label className="full">Discovered sources / presets<select value="" onChange={e => { const item = candidates[Number(e.target.value)]; if (item) setForm(item); }}><option value="" disabled>Choose a source to configure</option>{candidates.map((item, index) => <option key={item.id} value={index}>{item.name} · {LABELS[item.mode]} · {endpointLabel(item.url)}</option>)}</select><small>Presets are candidates; saving does not confirm playback.</small></label>}
       <label>Name<input required maxLength={100} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></label>
       <label>Feed type<select value={form.mode} onChange={e => setForm({ ...form, mode: e.target.value })}><option value="snapshot">JPEG / PNG snapshot</option><option value="mjpeg">MJPEG (refreshed images)</option>{connection.adapter === "creality_local" && <option value="creality_webrtc">Creality WebRTC (experimental)</option>}</select></label>
       <label className="full">Camera URL<input required type="url" value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} placeholder="http://printer-address:8080/?action=snapshot" /><small>Use the same host as this printer source. Include the camera port and path. Embedded usernames and passwords are unsupported.</small></label>

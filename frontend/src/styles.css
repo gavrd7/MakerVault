@@ -2355,3 +2355,14 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
 .globalToastClose{flex:0 0 auto;border:0;background:transparent;color:inherit;padding:0 4px;font-size:20px;line-height:1}
 .globalToastClose:hover{border:0;background:transparent}
 @media(max-width:620px){.globalToast{right:16px;bottom:16px;left:16px;width:auto}}
+
+
+.cameraSavedSources{display:grid;gap:10px;margin-top:4px}
+.cameraSavedSources>strong{font-size:13px}
+.cameraSourceRow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center;padding:11px 12px;border:1px solid #29313c;border-radius:10px;background:#0d131a}
+.cameraSourceIdentity{display:grid;gap:4px;min-width:0}
+.cameraSourceIdentity>div{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.cameraSourceIdentity small{color:#8995a7}
+.cameraSourceIdentity code{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#aeb9ca;font-size:11px}
+.cameraSourceActions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+@media(max-width:720px){.cameraSourceRow{grid-template-columns:1fr}.cameraSourceActions{justify-content:stretch}.cameraSourceActions button{flex:1 1 140px}}
