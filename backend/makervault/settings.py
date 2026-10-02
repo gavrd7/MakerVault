@@ -223,12 +223,9 @@ MAKERVAULT_STORAGE_KEY = os.getenv("MAKERVAULT_STORAGE_KEY", "").strip()
 _storage_key_file = os.getenv("MAKERVAULT_STORAGE_KEY_FILE", "/app/keys/private_storage.key").strip()
 MAKERVAULT_STORAGE_KEY_FILE = Path(_storage_key_file) if _storage_key_file else None
 
-# First-class backup management uses an isolated internal sidecar. The web
-# process can request/list/download backups but never receives Docker control.
+# First-class backup management runs inside the existing MakerVault worker.
+# Restore remains a guarded host-side action; the web process never receives Docker control.
 MAKERVAULT_BACKUP_ROOT = Path(os.getenv("MAKERVAULT_BACKUP_ROOT", str(BASE_DIR.parent / "backups")))
-MAKERVAULT_BACKUP_AGENT_URL = os.getenv(
-    "MAKERVAULT_BACKUP_AGENT_URL", "http://backup-agent:9784"
-).rstrip("/")
 
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
