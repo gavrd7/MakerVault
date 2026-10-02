@@ -58,9 +58,12 @@ def normalise_source(connection, data, source_id):
         raise CameraError("Choose JPEG snapshot, MJPEG or Creality WebRTC.")
     mode = data["mode"]
     url = camera_url(connection, data.get("url"))
+    parsed_url = urlsplit(url)
     if mode == "creality_webrtc":
-        if connection.adapter != "creality_local" or urlsplit(url).path != "/call/webrtc_local" or urlsplit(url).query:
+        if connection.adapter != "creality_local" or parsed_url.path != "/call/webrtc_local" or parsed_url.query:
             raise CameraError("Creality WebRTC requires the Creality integration and /call/webrtc_local.")
+    elif parsed_url.path == "/call/webrtc_local":
+        raise CameraError("The /call/webrtc_local endpoint must use the Creality WebRTC feed type.")
     rotation = int(data.get("rotation") or 0)
     if rotation not in {0, 90, 180, 270}:
         raise CameraError("Camera rotation must be 0, 90, 180 or 270 degrees.")
@@ -429,6 +432,42 @@ def diagnose_source(connection, source):
     }
 
 
+def fix_creality_answer_sdp(value):
+    """Repair the K2/K2 Pro/K2 Plus SDP quirk handled by go2rtc #format=creality.
+
+    Creality answers can list a bogus first video payload while RTP arrives on
+    the following codec. Browsers accept the SDP but never surface usable video.
+    """
+    if not isinstance(value, str) or not value.startswith("v=0"):
+        raise CameraError("Printer did not return a valid WebRTC answer.")
+
+    lines = value.replace("\r\n", "\n").split("\n")
+    video_index = next((i for i, line in enumerate(lines) if line.startswith("m=video ")), None)
+    if video_index is None:
+        raise CameraError("Printer WebRTC answer did not include a video stream.")
+
+    parts = lines[video_index].split()
+    if len(parts) < 5:
+        return value
+
+    skipped = parts[3]
+    parts = parts[:3] + parts[4:]
+    lines[video_index] = " ".join(parts)
+
+    end = next((i for i in range(video_index + 1, len(lines)) if lines[i].startswith("m=")), len(lines))
+    repaired = lines[:video_index + 1]
+    for line in lines[video_index + 1:end]:
+        if line.startswith(f"a=rtpmap:{skipped} ") or line.startswith(f"a=fmtp:{skipped} "):
+            continue
+        if line.startswith("a=fmtp:") and "x-google" in line:
+            continue
+        repaired.append(line)
+    repaired.extend(lines[end:])
+
+    result = "\r\n".join(line for line in repaired if line != "") + "\r\n"
+    return result
+
+
 def negotiate(connection, source, offer):
     if source["mode"] != "creality_webrtc":
         raise CameraError("This camera does not use Creality WebRTC.")
@@ -448,7 +487,7 @@ def negotiate(connection, source, offer):
         answer = json.loads(base64.b64decode(read_bounded(response, MAX_JSON).strip(), validate=True))
         if not isinstance(answer, dict) or answer.get("type") != "answer" or not isinstance(answer.get("sdp"), str) or len(answer["sdp"]) > 65536 or not answer["sdp"].startswith("v=0"):
             raise CameraError("Printer did not return a valid WebRTC answer.")
-        return {"type": "answer", "sdp": answer["sdp"]}
+        return {"type": "answer", "sdp": fix_creality_answer_sdp(answer["sdp"])}
     except CameraError:
         raise
     except (ValueError, urllib3.exceptions.HTTPError, OSError) as exc:
