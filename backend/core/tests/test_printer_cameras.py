@@ -294,7 +294,11 @@ class CameraProtocolTests(SimpleTestCase):
             pool, reply = MagicMock(), response(base64.b64encode(json.dumps(answer).encode()), "text/plain")
             get.return_value = pool, reply
             result = negotiate(self.connection, source, answer["sdp"])
-            self.assertEqual(result, answer)
+            self.assertEqual(result["type"], "answer")
+            self.assertEqual(
+                result["sdp"],
+                "v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\na=rtpmap:96 H264/90000\r\n",
+            )
             sent = json.loads(base64.b64decode(get.call_args.kwargs["body"]))
             self.assertEqual("token" in sent, protected)
             self.assertEqual(get.call_args.args[1], source["url"])
