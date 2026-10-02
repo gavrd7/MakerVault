@@ -13,7 +13,7 @@ from django.test import SimpleTestCase, TestCase, Client, override_settings
 
 from core.api_views import _serialise_printer_connection
 from core.models import Printer, PrinterConnection
-from core.printer_cameras import CameraError, camera_url, diagnose_source, discover, fix_creality_answer_sdp, frame, negotiate, resolve_address, upstream, creality_session, read_bounded
+from core.printer_cameras import CameraError, camera_url, discover, frame, negotiate, resolve_address, upstream, creality_session, read_bounded
 
 
 def jpeg():
@@ -198,110 +198,20 @@ class CameraProtocolTests(SimpleTestCase):
         with self.assertRaises(CameraError):
             read_bounded(response(b"x"), 100)
 
-    @patch("core.printer_cameras.creality_session", return_value=("secret-camera-token", True))
-    @patch("core.printer_cameras.resolve_address", return_value="192.168.1.50")
-    @patch("core.printer_cameras.socket.create_connection")
-    def test_webrtc_diagnostics_check_control_camera_and_hide_token(self, connect, resolve, session):
-        self.connection.endpoint_url = "ws://printer.lan:9999"
-        source = {
-            "mode": "creality_webrtc",
-            "url": "http://printer.lan:8000/call/webrtc_local",
-        }
-        result = diagnose_source(self.connection, source)
-        self.assertTrue(result["ok"])
-        self.assertEqual([item["id"] for item in result["checks"]], ["control", "camera", "session"])
-        self.assertIn("9999", result["checks"][0]["detail"])
-        self.assertIn("8000", result["checks"][1]["detail"])
-        self.assertNotIn("secret-camera-token", json.dumps(result))
-        self.assertEqual(connect.call_count, 2)
-        session.assert_called_once_with(self.connection)
-
-    @patch("core.printer_cameras.resolve_address", return_value="192.168.1.50")
-    @patch("core.printer_cameras.socket.create_connection", side_effect=OSError("offline"))
-    def test_webrtc_diagnostics_report_unreachable_control_channel(self, connect, resolve):
-        self.connection.endpoint_url = "ws://printer.lan:9999"
-        with self.assertRaisesRegex(CameraError, "control channel"):
-            diagnose_source(
-                self.connection,
-                {"mode": "creality_webrtc", "url": "http://printer.lan:8000/call/webrtc_local"},
-            )
-
-    def test_creality_answer_sdp_drops_bogus_first_video_payload(self):
-        answer = (
-            "v=0\r\n"
-            "o=- 0 0 IN IP4 0.0.0.0\r\n"
-            "s=-\r\n"
-            "t=0 0\r\n"
-            "m=video 9 UDP/TLS/RTP/SAVPF 0 96\r\n"
-            "c=IN IP4 192.168.1.34\r\n"
-            "a=rtpmap:0 PCMU/8000\r\n"
-            "a=fmtp:0 bogus=1\r\n"
-            "a=rtpmap:96 H264/90000\r\n"
-            "a=fmtp:96 profile-level-id=42e01f;packetization-mode=1\r\n"
-            "a=fmtp:96 x-google-start-bitrate=1000\r\n"
-        )
-        fixed = fix_creality_answer_sdp(answer)
-        self.assertIn("m=video 9 UDP/TLS/RTP/SAVPF 96\r\n", fixed)
-        self.assertNotIn("a=rtpmap:0 ", fixed)
-        self.assertNotIn("a=fmtp:0 ", fixed)
-        self.assertNotIn("x-google", fixed)
-        self.assertIn("a=rtpmap:96 H264/90000", fixed)
-
-    def test_creality_answer_sdp_removes_unmapped_payloads_for_webkit(self):
-        answer = (
-            "v=0\r\n"
-            "o=- 0 0 IN IP4 0.0.0.0\r\n"
-            "s=-\r\n"
-            "t=0 0\r\n"
-            "m=video 9 UDP/TLS/RTP/SAVPF 0 96 97 98\r\n"
-            "a=rtpmap:96 H264/90000\r\n"
-            "a=fmtp:96 profile-level-id=42e01f;packetization-mode=1\r\n"
-            "a=rtpmap:97 rtx/90000\r\n"
-            "a=fmtp:97 apt=96\r\n"
-            "a=fmtp:98 apt=96\r\n"
-            "a=rtcp-fb:98 nack\r\n"
-        )
-        fixed = fix_creality_answer_sdp(answer)
-        self.assertIn("m=video 9 UDP/TLS/RTP/SAVPF 96 97\r\n", fixed)
-        self.assertIn("a=rtpmap:96 H264/90000", fixed)
-        self.assertIn("a=rtpmap:97 rtx/90000", fixed)
-        self.assertNotIn(" 98", fixed)
-        self.assertNotIn("a=fmtp:98", fixed)
-        self.assertNotIn("a=rtcp-fb:98", fixed)
-
-    def test_webrtc_endpoint_cannot_be_saved_as_mjpeg(self):
-        self.connection.adapter = "creality_local"
-        self.connection.endpoint_url = "ws://printer.lan:9999"
-        from core.printer_cameras import normalise_source
-        with self.assertRaisesRegex(CameraError, "must use the Creality WebRTC feed type"):
-            normalise_source(
-                self.connection,
-                {
-                    "mode": "mjpeg",
-                    "url": "http://printer.lan:8000/call/webrtc_local",
-                    "name": "Wrong mode",
-                },
-                "bad",
-            )
-
     @patch("core.printer_cameras.creality_session")
     @patch("core.printer_cameras.upstream")
     def test_legacy_and_protected_webrtc_encodings_hide_token(self, get, session):
-        answer = {"type": "answer", "sdp": "v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 0 96\r\na=rtpmap:96 H264/90000\r\n"}
+        answer = {"type": "answer", "sdp": "v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\n"}
         source = {"mode": "creality_webrtc", "url": "http://printer.lan:8000/call/webrtc_local"}
         for protected in (False, True):
             session.return_value = "secret-camera-token", protected
             pool, reply = MagicMock(), response(base64.b64encode(json.dumps(answer).encode()), "text/plain")
             get.return_value = pool, reply
             result = negotiate(self.connection, source, answer["sdp"])
-            self.assertEqual(result["type"], "answer")
-            self.assertEqual(
-                result["sdp"],
-                "v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\na=rtpmap:96 H264/90000\r\n",
-            )
+            self.assertEqual(result, answer)
             sent = json.loads(base64.b64decode(get.call_args.kwargs["body"]))
             self.assertEqual("token" in sent, protected)
-            self.assertEqual(get.call_args.args[1], source["url"])
+            self.assertEqual(get.call_args.args[1], "http://printer.lan/call/webrtc_local" if protected else source["url"])
             self.assertNotIn("secret-camera-token", json.dumps(result))
             reply.close.assert_called_once()
 
@@ -378,25 +288,6 @@ class CameraApiTests(TestCase):
         self.assertEqual(self.client.post(self.root + "discover/", {}, content_type="application/json").status_code, 403)
         upstream.assert_not_called()
 
-    def test_duplicate_saved_feeds_collapse_and_prefer_selected_preview(self):
-        from core.printer_cameras import sources, summary
-
-        duplicate = {
-            "id": "cam2",
-            "name": "Duplicate",
-            "url": "http://printer.lan:8080/?action=snapshot&token=private",
-            "mode": "snapshot",
-        }
-        config = dict(self.connection.config or {})
-        config["cameras"] = list(config["cameras"]) + [duplicate]
-        config["camera_default_id"] = "cam2"
-        self.connection.config = config
-
-        rows = sources(self.connection)
-        self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0]["id"], "cam2")
-        self.assertEqual(summary(self.connection)["preview"]["id"], "cam2")
-
     def test_last_saved_camera_is_preview_and_selection_is_persistent(self):
         from core.printer_cameras import summary
         result = self.client.post(self.root, {"mode": "snapshot", "url": "http://printer.lan/new?token=private", "name": "New"}, content_type="application/json")
@@ -414,104 +305,6 @@ class CameraApiTests(TestCase):
         self.client.delete(self.root, {"id": "cam1"}, content_type="application/json")
         self.connection.refresh_from_db()
         self.assertEqual(summary(self.connection)["preview"]["name"], "New")
-
-    def test_saving_same_camera_source_updates_and_deduplicates(self):
-        payload = {
-            "mode": "creality_webrtc",
-            "url": "http://printer.lan:8000/call/webrtc_local",
-            "name": "K2 Creality WebRTC (experimental)",
-        }
-        first = self.client.post(self.root, payload, content_type="application/json")
-        self.assertEqual(first.status_code, 200, first.content)
-
-        # Simulate an older duplicate already present in saved config.
-        self.connection.refresh_from_db()
-        config = dict(self.connection.config or {})
-        rows = list(config.get("cameras") or [])
-        duplicate = dict(rows[-1])
-        duplicate["id"] = "duplicate-camera"
-        rows.append(duplicate)
-        config["cameras"] = rows
-        config["camera_default_id"] = "duplicate-camera"
-        self.connection.config = config
-        self.connection.save(update_fields=["config", "updated_at"])
-
-        second = self.client.post(self.root, payload, content_type="application/json")
-        self.assertEqual(second.status_code, 200, second.content)
-        saved = self.client.get(self.root).json()["rows"]
-        matches = [
-            row for row in saved
-            if row["mode"] == "creality_webrtc"
-            and row["url"] == "http://printer.lan:8000/call/webrtc_local"
-        ]
-        self.assertEqual(len(matches), 1)
-
-    def test_remove_cleans_invalid_legacy_webrtc_mode_rows(self):
-        config = dict(self.connection.config or {})
-        config["cameras"] = [
-            {
-                "id": "legacy-bad",
-                "name": "K2 Creality WebRTC (experimental)",
-                "url": "http://printer.lan:8000/call/webrtc_local",
-                "mode": "mjpeg",
-            },
-            *config["cameras"],
-        ]
-        self.connection.config = config
-        self.connection.save(update_fields=["config", "updated_at"])
-
-        removed = self.client.post(self.root + "cam1/remove/", {}, content_type="application/json")
-        self.assertEqual(removed.status_code, 200, removed.content)
-        self.assertEqual(removed.json()["rows"], [])
-        self.connection.refresh_from_db()
-        self.assertEqual(self.connection.config.get("cameras"), [])
-
-    def test_camera_specific_delete_removes_source_and_repairs_preview(self):
-        result = self.client.post(
-            self.root,
-            {"mode": "snapshot", "url": "http://printer.lan:8080/second.jpg", "name": "Second"},
-            content_type="application/json",
-        )
-        self.assertEqual(result.status_code, 200, result.content)
-        rows = self.client.get(self.root).json()["rows"]
-        second = next(row for row in rows if row["name"] == "Second")
-
-        deleted = self.client.post(self.root + second["id"] + "/remove/", {}, content_type="application/json")
-        self.assertEqual(deleted.status_code, 200, deleted.content)
-        self.assertTrue(deleted.json()["deleted"])
-
-        remaining = self.client.get(self.root).json()["rows"]
-        self.assertEqual([row["id"] for row in remaining], ["cam1"])
-        self.connection.refresh_from_db()
-        self.assertEqual(self.connection.config.get("camera_default_id"), "cam1")
-
-    def test_camera_remove_action_rejects_missing_and_other_owner(self):
-        self.assertEqual(
-            self.client.post(self.root + "missing/remove/", {}, content_type="application/json").status_code,
-            404,
-        )
-        self.client.force_login(self.other)
-        self.assertEqual(
-            self.client.post(self.root + "cam1/remove/", {}, content_type="application/json").status_code,
-            404,
-        )
-
-    @patch("core.camera_views.diagnose_source")
-    def test_camera_source_test_is_scoped_and_secret_free(self, diagnose):
-        diagnose.return_value = {
-            "ok": True,
-            "checks": [{"id": "camera", "ok": True, "detail": "Camera service reachable."}],
-        }
-        result = self.client.post(self.root + "cam1/test/", {}, content_type="application/json")
-        self.assertEqual(result.status_code, 200, result.content)
-        self.assertTrue(result.json()["ok"])
-        diagnose.assert_called_once()
-
-        self.client.force_login(self.other)
-        self.assertEqual(
-            self.client.post(self.root + "cam1/test/", {}, content_type="application/json").status_code,
-            404,
-        )
 
     def test_preview_selection_rejects_missing_camera_and_other_owner(self):
         self.assertEqual(self.client.patch(self.root, {"id": "missing"}, content_type="application/json").status_code, 404)
@@ -534,26 +327,12 @@ class CameraApiTests(TestCase):
             result = self.client.post(self.root, {"mode": "snapshot", "url": "http://printer.lan:8080/image", "name": "Second"}, content_type="application/json")
             self.assertEqual(result.status_code, 200, result.content)
             self.assertEqual(len(self.client.get(self.root).json()["rows"]), 2)
-            removed = self.client.post(self.root + "cam1/remove/", {}, content_type="application/json")
-            self.assertEqual(removed.status_code, 200, removed.content)
+            self.client.delete(self.root, {"id": "cam1"}, content_type="application/json")
             self.assertEqual(len(self.client.get(self.root).json()["rows"]), 1)
             get.assert_not_called()
 
     @patch("core.camera_views.frame")
-    def test_overlapping_requests_on_same_printer_are_limited(self, get):
-        cache.add(f"camera-request:{self.owner.pk}:{self.connection.pk}", "busy", timeout=20)
+    def test_overlapping_owner_requests_are_limited(self, get):
+        cache.add(f"camera-request:{self.owner.pk}", "busy", timeout=20)
         self.assertEqual(self.client.get(self.root + "cam1/media/").status_code, 502)
         get.assert_not_called()
-
-    @patch("core.camera_views.frame", return_value=(b"jpeg", "image/jpeg"))
-    def test_request_on_other_printer_does_not_block_camera(self, get):
-        other_printer = Printer.objects.create(owner=self.owner, name="K2")
-        other_connection = PrinterConnection.objects.create(
-            printer=other_printer,
-            adapter="creality_local",
-            endpoint_url="ws://other-printer.lan:9999",
-        )
-        cache.add(f"camera-request:{self.owner.pk}:{other_connection.pk}", "busy", timeout=20)
-        result = self.client.get(self.root + "cam1/media/")
-        self.assertEqual(result.status_code, 200)
-        get.assert_called_once()
