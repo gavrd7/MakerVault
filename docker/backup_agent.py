@@ -128,6 +128,8 @@ def check_tar(path: Path):
             member_path = PurePosixPath(member.name)
             if member_path.is_absolute() or ".." in member_path.parts:
                 raise BackupError(f"Unsafe archive path in {path.name}.")
+            if not (member.isfile() or member.isdir()):
+                raise BackupError(f"Unsupported archive entry in {path.name}.")
             if member.isfile():
                 handle = archive.extractfile(member)
                 if handle:
@@ -450,8 +452,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 label="MakerVault UI",
                 application_version=application_version,
             )
-        except Exception:
+        except Exception as exc:
             traceback.print_exc()
+            try:
+                path = metadata_path(backup_id)
+                if path.is_file():
+                    write_metadata(
+                        backup_id,
+                        status="failed",
+                        verified=False,
+                        finished_at=utc_stamp(),
+                        error=str(exc)[:1000],
+                    )
+            except Exception:
+                traceback.print_exc()
         finally:
             global _running_id
             with _state_lock:
