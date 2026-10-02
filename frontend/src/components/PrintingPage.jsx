@@ -383,6 +383,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
                   </div>
                   {canChangePrinter && <div className="printingPrinterActions" aria-label={"Actions for " + printer.name}>
                     <button className="printingPrinterAction printingPrinterActionLive" type="button" onClick={() => setLivePrinter(printer)}>Live monitor</button>
+                    <button className="printingPrinterAction" type="button" onClick={() => setCameraSetup({ printerId: printer.id })}>Camera setup</button>
                     <button className="printingPrinterAction" type="button" onClick={() => setManagePrinter(printer)}>Manage printer</button>
                   </div>}
                 </div>
@@ -394,7 +395,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
             </div>
           </div>
           <PrinterLiveSummary printer={printer} onOpen={() => setLivePrinter(printer)} canControl={canChangePrinter} onChanged={load} />
-          <PrinterCameraPreview printer={printer} expanded={previewPrinter === printer.id} onWatch={() => setPreviewPrinter(printer.id)} onStop={() => setPreviewPrinter("")} onSetup={() => { setPreviewPrinter(""); setCameraSetup({ printerId: printer.id }); }} canEdit={canChangePrinter} onChanged={load} />
+          <PrinterCameraPreview printer={printer} suspended={Boolean(cameraSetup || livePrinter || cameraOffer)} />
           <div className="printingSlotGrid">
             {printer.slots.filter(slot => slot.is_loaded).map(slot => <div className="printingSlot" key={slot.id}>
               <span className="printingSwatch" style={slot.color_hex ? { background: slot.color_hex } : undefined} />

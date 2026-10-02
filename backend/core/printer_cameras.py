@@ -84,7 +84,9 @@ def sources(connection):
 
 def summary(connection):
     configured = sources(connection)
-    return {"configured": len(configured), "viewable": bool(connection.enabled and configured), "hardware_validated": False}
+    selected = next((row for row in configured if row["id"] == (connection.config or {}).get("camera_default_id")), configured[-1] if configured else None)
+    preview = {key: value for key, value in selected.items() if key != "url"} if selected else None
+    return {"configured": len(configured), "viewable": bool(connection.enabled and configured), "hardware_validated": False, "preview": preview, "configured_at": (connection.config or {}).get("camera_configured_at", "")}
 
 
 # Discovery is independent of playback: new providers return the same validated

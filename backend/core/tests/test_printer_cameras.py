@@ -288,6 +288,32 @@ class CameraApiTests(TestCase):
         self.assertEqual(self.client.post(self.root + "discover/", {}, content_type="application/json").status_code, 403)
         upstream.assert_not_called()
 
+    def test_last_saved_camera_is_preview_and_selection_is_persistent(self):
+        from core.printer_cameras import summary
+        result = self.client.post(self.root, {"mode": "snapshot", "url": "http://printer.lan/new?token=private", "name": "New"}, content_type="application/json")
+        self.assertEqual(result.status_code, 200)
+        self.connection.refresh_from_db()
+        latest = summary(self.connection)
+        self.assertEqual(latest["preview"]["name"], "New")
+        self.assertNotIn("url", latest["preview"])
+        self.assertNotIn("private", json.dumps(latest))
+        self.assertTrue(latest["configured_at"])
+        selected = self.client.patch(self.root, {"id": "cam1"}, content_type="application/json")
+        self.assertEqual(selected.status_code, 200)
+        self.connection.refresh_from_db()
+        self.assertEqual(summary(self.connection)["preview"]["id"], "cam1")
+        self.client.delete(self.root, {"id": "cam1"}, content_type="application/json")
+        self.connection.refresh_from_db()
+        self.assertEqual(summary(self.connection)["preview"]["name"], "New")
+
+    def test_preview_selection_rejects_missing_camera_and_other_owner(self):
+        self.assertEqual(self.client.patch(self.root, {"id": "missing"}, content_type="application/json").status_code, 404)
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.patch(self.root, {"id": "cam1"}, content_type="application/json").status_code, 404)
+        self.client.force_login(self.owner)
+        self.owner.user_permissions.clear()
+        self.assertEqual(self.client.patch(self.root, {"id": "cam1"}, content_type="application/json").status_code, 403)
+
     def test_setup_permission_csrf_and_host_validation(self):
         self.assertEqual(self.client.post(self.root, {"mode": "snapshot", "url": "http://other.lan/image"}, content_type="application/json").status_code, 400)
         csrf_client = Client(enforce_csrf_checks=True)

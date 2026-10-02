@@ -2286,3 +2286,16 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
 .printerCameraCard .printerCameraViewport{max-height:420px}
 .printerCameraCard .printerCameraPlayback:fullscreen .printerCameraViewport{max-height:none}
 @media(max-width:620px){.printerCameraCard{padding:10px}.printerCameraPlaceholder{aspect-ratio:4/3}.printerCameraCard .printerCameraToolbar button{flex:1 1 auto}}
+
+.cameraGlanceCard{border:0;padding:0;margin:12px 0 0;min-width:0}
+.cameraGlance{position:relative;padding:0;background:#05080c;overflow:hidden}
+.cameraGlance>.printerCameraToolbar{position:absolute;right:8px;top:8px;z-index:2;margin:0;gap:6px}
+.cameraGlance .cameraFullscreen{background:#101721dd;color:#fff;border:1px solid #667181;padding:6px 10px;min-height:34px;width:auto;flex:none;font-size:12px}
+.cameraGlance .printerCameraViewport{max-height:none;aspect-ratio:16/9}
+.cameraGlance .printerCameraViewport video,.cameraGlance .printerCameraViewport img{display:block;max-height:none}
+.cameraGlance>.integrationError{padding:10px;margin:0}
+.cameraExpanded{position:fixed!important;inset:0;z-index:10000;border-radius:0;display:flex;align-items:center;justify-content:center}
+.cameraExpanded .printerCameraViewport{height:100%;max-height:100vh;aspect-ratio:auto}
+.cameraExpanded .printerCameraViewport img,.cameraExpanded .printerCameraViewport video{height:100%;object-fit:contain}
+.cameraExpanded>.printerCameraToolbar{top:16px;right:16px}
+.cameraExpanded>.integrationError{position:absolute;bottom:0;background:#101721}

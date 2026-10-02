@@ -1465,6 +1465,7 @@ def dashboard(request):
             "model": printer.model,
             "location": printer.printing_location.name if printer.printing_location else printer.location,
             "image": image,
+            "camera_connections": [{"id": item["id"], "enabled": item["enabled"], "camera": item["camera"]} for item in connections],
             "connection_id": connection["id"],
             "controls": connection["controls"],
             "can_control": request.user.has_perm("core.change_printer"),

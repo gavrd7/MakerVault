@@ -5,6 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.utils import timezone
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_http_methods
 
@@ -45,7 +46,7 @@ def camera_slot(user_id):
 
 
 @login_required
-@require_http_methods(["GET", "POST", "DELETE"])
+@require_http_methods(["GET", "POST", "PATCH", "DELETE"])
 def camera_sources(request, printer_id, connection_id):
     connection = connection_for(request, printer_id, connection_id)
     if not connection:
@@ -64,10 +65,17 @@ def camera_sources(request, printer_id, connection_id):
             rows = sources(connection)
             if request.method == "DELETE":
                 rows = [item for item in rows if item["id"] != str(payload.get("id") or "")]
+            elif request.method == "PATCH":
+                selected_id = str(payload.get("id") or "")
+                if not any(row["id"] == selected_id for row in rows):
+                    return _error("Camera source not found.", 404)
+                config["camera_default_id"] = selected_id
             else:
                 if len(rows) >= 8:
                     return _error("A printer source can have up to eight cameras.")
                 rows.append(normalise_source(connection, payload, uuid.uuid4().hex))
+                config["camera_default_id"] = rows[-1]["id"]
+            config["camera_configured_at"] = timezone.now().isoformat()
             config["cameras"] = rows
             connection.config = config
             connection.save(update_fields=["config", "updated_at"])

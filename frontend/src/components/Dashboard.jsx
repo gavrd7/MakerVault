@@ -1,3 +1,4 @@
+import { PrinterCameraPreview } from "./PrinterCameras";
 import React from "react";
 import PrinterJobControls from "./PrinterJobControls";
 import StorageSummary from "./StorageSummary";
@@ -89,9 +90,9 @@ export default function Dashboard({ dashboard, inventory, onNavigate, onOpenLive
               {showProgress && <small className="dashboardLiveProgressLabel">{pct.toFixed(pct % 1 ? 1 : 0)}%</small>}
               <div className="printerLiveActions">
                 <PrinterJobControls printer={printer} connection={{ id: printer.connection_id, controls: printer.controls, snapshot: { job: printer.job } }} canControl={printer.can_control} onChanged={onChanged} />
-                <button type="button" onClick={() => onOpenCamera(printer)}>Camera feed</button>
                 <button type="button" className="printerLiveOpen" onClick={() => onOpenLive(printer)}>Open live</button>
               </div>
+              <PrinterCameraPreview printer={printer} />
             </div>
           </article>;
         })}

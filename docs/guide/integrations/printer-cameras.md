@@ -1,18 +1,20 @@
 # Printer camera feeds
 
-Camera playback is optional and starts only when you select **Watch camera**. Printer monitoring, print history and filament accounting continue independently of the viewer.
+Configured camera feeds start automatically when their printer card is visible on the dashboard or 3D Printing page. Printer monitoring, print history and filament accounting continue independently of the viewer.
 
 ## Set up a feed
 
 1. Open **3D Printing** and find the printer card.
-2. Choose **Camera setup** in its camera preview area. Setup is separate from **Open live**, which shows printer telemetry, and requires edit permission. Select the integration whose camera you want to configure.
+2. Choose **Camera setup** alongside Manage printer. Setup is separate from **Open live**, which shows printer telemetry, and requires edit permission. Select the integration whose camera you want to configure.
 3. Select **Find camera sources**. Moonraker reads its webcam configuration; OctoPrint reads its classic webcam settings (the integration API key needs Settings Read). Creality offers K1 and K2 presets; PrusaLink reads its local camera API where supported. Anycubic/FlashForge can reuse recognised HTTP camera URLs from their latest status. All still need playback testing.
 4. Choose a discovered source or enter its name, feed type and full URL manually. Use the same host as the live integration, including any required camera port/path.
-5. Save and choose **Done**. In the printer card, choose **Watch camera** to open the preview. The dashboard **Camera feed** link opens that printer’s preview directly. A saved source is not proof of a working feed.
+5. Save and choose **Done**. The last camera saved becomes the automatic preview on both pages. To use an existing camera instead, select it inside Camera setup and choose **Use selected camera for previews**. A saved source is not proof of a working feed.
+
+The embedded viewer shows the feed and a **Fullscreen** button, with no setup, integration or feed selectors. On browsers without native image fullscreen, Fullscreen opens a page-filling viewer with a Close control. Setup remains a separate printer action.
 
 After adding a live source, an optional second step offers **Add camera** or **Not now**. Choosing Not now leaves monitoring configured and closes the prompt. Camera setup remains available on the printer card.
 
-You can configure up to eight sources per printer integration. Only one printer preview is open on the 3D Printing page. Switching cameras, disabling its integration, stopping playback or closing the preview or leaving the page closes playback resources. Opening dashboard cards, the 3D Printing page, camera setup or Open live alone does not fetch camera images. Select Watch camera or the dashboard Camera feed link to start viewing. Camera discovery runs only when requested.
+You can configure up to eight sources per printer integration. Multiple visible printer cards can show their own feeds. Changing the configured preview, disabling its integration, scrolling the card off-screen, hiding the browser tab or leaving the page releases playback resources. Visible dashboard and 3D Printing cards fetch camera media automatically. Camera setup and Open live telemetry are separate; the printing-page previews pause while those dialogs are open. Camera discovery runs only when requested.
 
 ## Creality K1
 
@@ -66,7 +68,7 @@ HTTP images use authenticated, owner-scoped MakerVault routes, so HTTP printer c
 
 Camera requests stay on the configured printer host. Loopback, link-local, unspecified, multicast and reserved IP targets are rejected; DNS is resolved and pinned before connecting. Redirects are rejected. HTTPS certificates are verified. Existing API keys accompany only requests to the original API origin, never a different camera port. Embedded URL credentials and separate camera Basic/Digest login are not supported in this first pass.
 
-Responses have byte, image-dimension and network timeout limits. A per-user request guard prevents overlapping camera proxy work. Failed image requests retry twice and then stop until Reconnect is selected. Responses are private and not cached. Changing a camera hostname may require updating its integration hostname first.
+Responses have byte, image-dimension and network timeout limits. A per-user request guard prevents overlapping camera proxy work; media requests from multiple visible feeds are queued in the browser tab. Failed image requests retry twice and then stop until Reconnect is selected. Responses are private and not cached. Changing a camera hostname may require updating its integration hostname first.
 
 If discovery is empty, configure the exact snapshot/MJPEG URL manually. Unsupported HLS, RTSP and generic WebRTC sources are not treated as MJPEG. Separate camera hosts, cloud feeds and media relay/transcoding remain follow-up work. Unsupported camera interfaces remain unavailable even if telemetry reports camera hardware.
 
@@ -74,7 +76,7 @@ If discovery is empty, configure the exact snapshot/MJPEG URL manually. Unsuppor
 
 - Test all three K1 direct/Fluidd/Mainsail routes through Creality and Moonraker; test K2 WebRTC independently and record firmware/browser.
 - Confirm an image or video actually appears, and verify orientation and fullscreen at desktop and mobile sizes.
-- Stop, reopen, switch sources and close the preview; verify playback is released and printer monitoring continues.
+- Scroll previews off-screen/on-screen, hide/show the tab, change the configured camera and leave the page; verify playback is released and printer monitoring continues.
 - Test printer offline/reconnect and camera authentication errors.
 - Test HTTP feeds through the HTTPS reverse proxy. Test K2 on LAN/VPN; do not claim remote media relay support.
 - Test PrusaLink API-key snapshot access and freshness; Anycubic/FlashForge reported HTTP sources and unsupported-format guidance; each Moonraker profile and OctoPrint orientation/fallback. Record model, firmware, route and browser.

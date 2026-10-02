@@ -1,6 +1,9 @@
 # Changelog
 
-## v0.9.0.1 — Camera feeds (in development)
+## v0.9.0.2 — Camera feeds (in development)
+
+- Dashboard and printer cards automatically show the last configured enabled camera, with a compact fullscreen control and no feed-selection/setup controls in the viewer.
+- Preview selection persists on the server; camera setup is a separate printer action. Off-screen/hidden-page feeds pause, and per-tab media requests are queued to support multiple visible previews.
 
 - Separated camera configuration from live telemetry; live-source creation now offers an optional camera step.
 - Added on-demand camera previews to printer cards and dedicated dashboard camera links. Fixed retained navigation actions reopening a previous printer monitor.

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { apiFetch } from "../api";
-import { startFrameLoop, waitForIce, prepareCrealityOffer } from "./cameraPlayback";
+import { startFrameLoop, waitForIce, prepareCrealityOffer, cameraRequest } from "./cameraPlayback";
 
 const LABELS = { snapshot: "Live images", mjpeg: "MJPEG live images", creality_webrtc: "Creality WebRTC · experimental" };
 
@@ -52,6 +52,15 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
     } catch (err) { setError(err.message); }
     finally { setBusy(false); }
   }
+  async function usePreview() {
+    if (!camera) return;
+    setBusy(true); setError("");
+    try {
+      await apiFetch(root, { method: "PATCH", body: { id: camera.id } });
+      await onChanged(); setNotice("Preview camera updated on the dashboard and 3D Printing page.");
+    } catch (err) { setError(err.message); }
+    finally { setBusy(false); }
+  }
   async function remove() {
     if (!camera || !window.confirm(`Remove camera source “${camera.name}”?`)) return;
     setBusy(true); setError(""); setActiveCamera("");
@@ -72,7 +81,7 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
     {settings && canEdit && <form className="formGrid printerCameraForm" onSubmit={save}>
       <div className="full"><small>{provider?.guidance} If this printer exposes Moonraker or OctoPrint, you can also add that integration and configure its camera.</small></div>
       {warnings.map(message => <p className="full" role="status" key={message}>{message}</p>)}
-      <div className="full settingsActions">{!!presets.length && <button type="button" disabled={busy} onClick={() => { setCandidates(presets); setWarnings([]); setNotice("K1 presets loaded. Choose the route that works in your printer installation."); }}>K1 / Helper Script presets</button>}<button type="button" disabled={busy || !connection.enabled} onClick={discover}>{busy ? "Working…" : "Find camera sources"}</button>{camera && <button type="button" disabled={busy} onClick={remove}>Remove selected source</button>}</div>
+      <div className="full settingsActions">{!!presets.length && <button type="button" disabled={busy} onClick={() => { setCandidates(presets); setWarnings([]); setNotice("K1 presets loaded. Choose the route that works in your printer installation."); }}>K1 / Helper Script presets</button>}<button type="button" disabled={busy || !connection.enabled} onClick={discover}>{busy ? "Working…" : "Find camera sources"}</button>{camera && <button type="button" disabled={busy} onClick={usePreview}>Use selected camera for previews</button>}{camera && <button type="button" disabled={busy} onClick={remove}>Remove selected source</button>}</div>
       {!!candidates.length && <label className="full">Discovered sources / presets<select value="" onChange={e => { const item = candidates[Number(e.target.value)]; if (item) setForm(item); }}><option value="" disabled>Choose a source to configure</option>{candidates.map((item, index) => <option key={item.id} value={index}>{item.name} · {LABELS[item.mode]}</option>)}</select><small>Presets are candidates; saving does not confirm playback.</small></label>}
       <label>Name<input required maxLength={100} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></label>
       <label>Feed type<select value={form.mode} onChange={e => setForm({ ...form, mode: e.target.value })}><option value="snapshot">JPEG / PNG snapshot</option><option value="mjpeg">MJPEG (refreshed images)</option>{connection.adapter === "creality_local" && <option value="creality_webrtc">Creality WebRTC (experimental)</option>}</select></label>
@@ -85,7 +94,8 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
   </section>;
 }
 
-function CameraPlayback({ camera, url }) {
+export function CameraPlayback({ camera, url, compact = false }) {
+  const [expanded, setExpanded] = useState(false);
   const container = useRef(null);
   const video = useRef(null);
   const [image, setImage] = useState("");
@@ -111,12 +121,12 @@ function CameraPlayback({ camera, url }) {
     const failed = message => { if (!cancelled) { setError(message); setStatus("Disconnected"); closePeer(); } };
     if (camera.mode !== "creality_webrtc") {
       stopFrames = startFrameLoop({
-        request: async signal => {
+        request: signal => cameraRequest(async () => {
           const response = await fetch(url, { credentials: "same-origin", cache: "no-store", signal });
           if (!response.ok) { const result = await response.json().catch(() => ({})); throw new Error(result.error || "Camera unavailable. Check the source URL and printer connection."); }
           if (!/^image\/(jpeg|png)/.test(response.headers.get("Content-Type") || "")) throw new Error("Camera response was not an image. Sign in again if your session expired.");
           return response.blob();
-        },
+        }, signal),
         onFrame: blob => {
           const next = URL.createObjectURL(blob);
           if (objectUrl) URL.revokeObjectURL(objectUrl);
@@ -146,7 +156,7 @@ function CameraPlayback({ camera, url }) {
           await peer.setLocalDescription(await peer.createOffer());
           await waitForIce(peer, controller.signal);
           if (cancelled) return;
-          const answer = await apiFetch(url, { method: "POST", signal: controller.signal, body: { sdp: prepareCrealityOffer(peer.localDescription.sdp) } });
+          const answer = await cameraRequest(() => apiFetch(url, { method: "POST", signal: controller.signal, body: { sdp: prepareCrealityOffer(peer.localDescription.sdp) } }), controller.signal);
           if (cancelled) return;
           await peer.setRemoteDescription(answer);
           videoTimeout = setTimeout(() => { if (!cancelled && (video.current?.readyState || 0) < 2) failed("No camera video arrived. Your browser must reach the printer over LAN/VPN; HTTPS access to MakerVault alone does not relay WebRTC video."); }, 20000);
@@ -155,14 +165,33 @@ function CameraPlayback({ camera, url }) {
     }
     return () => { cancelled = true; controller.abort(); clearTimeout(videoTimeout); stopFrames?.(); closePeer(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [camera.id, url, attempt]);
+  useEffect(() => {
+    if (!expanded) return;
+    const oldOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const escape = event => { if (event.key === "Escape") setExpanded(false); };
+    document.addEventListener("keydown", escape);
+    return () => { document.body.style.overflow = oldOverflow; document.removeEventListener("keydown", escape); };
+  }, [expanded]);
+  const fullscreen = () => {
+    if (expanded) { setExpanded(false); return; }
+    const target = container.current;
+    if (target?.requestFullscreen) target.requestFullscreen().catch(() => setExpanded(true));
+    else if (video.current?.webkitEnterFullscreen) { try { video.current.webkitEnterFullscreen(); } catch { setExpanded(true); } }
+    else setExpanded(true);
+  };
   const fit = Number(camera.rotation || 0) % 180 ? 9 / 16 : 1;
   const transform = `rotate(${camera.rotation || 0}deg) scale(${(camera.flip_horizontal ? -1 : 1) * fit}, ${(camera.flip_vertical ? -1 : 1) * fit})`;
-  return <div className="printerCameraPlayback" ref={container}>
-    <div className="printerCameraToolbar"><small role="status">{status}</small><button type="button" onClick={() => setAttempt(value => value + 1)}>Reconnect</button><button type="button" onClick={() => { const target = container.current; if (target?.requestFullscreen) target.requestFullscreen().catch(() => setError("Fullscreen is unavailable in this browser.")); else if (video.current?.webkitEnterFullscreen) video.current.webkitEnterFullscreen(); else setError("Fullscreen is unavailable in this browser."); }}>Fullscreen</button></div>
+  return <div className={"printerCameraPlayback" + (compact ? " cameraGlance" : "") + (expanded ? " cameraExpanded" : "")} ref={container}>
+    <div className="printerCameraToolbar">
+      {!compact && <small role="status">{status}</small>}
+      {(!compact || error) && <button type="button" onClick={() => setAttempt(value => value + 1)}>Reconnect</button>}
+      <button type="button" className="cameraFullscreen" aria-label={expanded ? "Close fullscreen camera" : "Open fullscreen camera"} onClick={fullscreen}>{expanded ? "Close" : "Fullscreen"}</button>
+    </div>
     <div className="printerCameraViewport">
-      {camera.mode === "creality_webrtc" ? <video ref={video} style={{ transform }} autoPlay muted playsInline controls onPlaying={() => setStatus("Live video · experimental")} /> : image ? <img src={image} alt={camera.name + " live camera view"} style={{ transform }} /> : <span>{status}</span>}
+      {camera.mode === "creality_webrtc" ? <video ref={video} style={{ transform }} autoPlay muted playsInline controls={!compact} onPlaying={() => setStatus("Live video · experimental")} /> : image ? <img src={image} alt={camera.name + " live camera view"} style={{ transform }} /> : <span role="status">{status}</span>}
     </div>
     {error && <p className="integrationError" role="alert">{error}</p>}
-    <small>{LABELS[camera.mode]}{camera.mode === "creality_webrtc" ? " · Browser needs LAN/VPN access to the printer." : " · Images are relayed securely through your MakerVault session."}</small>
+    {!compact && <small>{LABELS[camera.mode]}{camera.mode === "creality_webrtc" ? " · Browser needs LAN/VPN access to the printer." : " · Images are relayed securely through your MakerVault session."}</small>}
   </div>;
 }

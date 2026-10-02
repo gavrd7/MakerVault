@@ -45,3 +45,32 @@ test("Creality numeric candidate compatibility keeps SDP and IP candidates", () 
   const offer = "v=0\r\na=candidate:1 1 UDP 123 browser.local 5000 typ host\r\na=candidate:2 1 UDP 123 192.168.1.2 5001 typ host\r\n";
   assert.equal(prepareCrealityOffer(offer), offer.replace("browser.local", "192.0.2.1"));
 });
+
+test('multiple visible feeds serialise media work and cancelled queued work never starts', async () => {
+  const { cameraRequest } = await import('../src/components/cameraPlayback.js');
+  const events = [];
+  let release;
+  const first = cameraRequest(async () => { events.push('first'); await new Promise(resolve => { release = resolve; }); events.push('done'); });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  const controller = new AbortController();
+  const skipped = cameraRequest(() => events.push('cancelled task ran'), controller.signal);
+  const rejection = assert.rejects(skipped, { name: 'AbortError' });
+  const second = cameraRequest(() => events.push('second'));
+  controller.abort();
+  assert.deepEqual(events, ['first']);
+  release();
+  await Promise.all([first, rejection, second]);
+  assert.deepEqual(events, ['first', 'done', 'second']);
+});
+
+test('preview chooses most recently configured enabled camera across integrations', async () => {
+  const { defaultCamera } = await import('../src/components/cameraPlayback.js');
+  const rows = [
+    { id: 'older', enabled: true, camera: { configured_at: '2026-10-01T10:00:00', preview: { id: 'a' } } },
+    { id: 'newer', enabled: true, camera: { configured_at: '2026-10-02T10:00:00', preview: { id: 'b' } } },
+    { id: 'disabled', enabled: false, camera: { configured_at: '2026-10-03T10:00:00', preview: { id: 'c' } } },
+  ];
+  assert.deepEqual(defaultCamera(rows), { connectionId: 'newer', camera: { id: 'b' } });
+  assert.equal(rows[0].id, 'older');
+  assert.equal(defaultCamera([]), null);
+});
