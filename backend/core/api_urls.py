@@ -4,9 +4,7 @@ from . import api_views, printed_parts, camera_views
 urlpatterns = [
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/cameras/", camera_views.camera_sources),
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/cameras/discover/", camera_views.camera_discover),
-    path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/cameras/<str:camera_id>/", camera_views.camera_source_detail),
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/cameras/<str:camera_id>/remove/", camera_views.camera_source_remove),
-    path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/cameras/<str:camera_id>/test/", camera_views.camera_source_test),
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/cameras/<str:camera_id>/media/", camera_views.camera_media),
     path("printing/parts/", printed_parts.printed_parts, name="api-printed-parts"),
     path("printing/parts/<uuid:part_id>/", printed_parts.printed_part_detail, name="api-printed-part-detail"),
