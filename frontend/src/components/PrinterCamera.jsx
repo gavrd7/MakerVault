@@ -7,9 +7,10 @@ const LABELS = { snapshot: "Live images", mjpeg: "MJPEG live images", creality_w
 function endpointLabel(url) {
   try {
     const parsed = new URL(url);
-    return `${parsed.host}${parsed.pathname}${parsed.search || ""}`;
+    const action = parsed.searchParams.get("action");
+    return `${parsed.host}${parsed.pathname}${action ? `?action=${action}` : ""}`;
   } catch {
-    return url || "Unknown endpoint";
+    return "Configured endpoint";
   }
 }
 
