@@ -177,7 +177,7 @@ def main() -> int:
         backup_id = "imported-" + digest_file(bundle)[:16]
         try:
             print("2/8 Preparing the backup service and database...", flush=True)
-            run([*base, "build", "backup-agent"])
+            run([*base, "build", "backup-agent", "restore-agent"])
             run([*base, "up", "-d", "--wait", "postgres", "redis"])
             puid, pgid = env_ids(env_file)
             stage = [
@@ -208,6 +208,13 @@ def main() -> int:
     if not backup_id or any(ch not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_" for ch in backup_id):
         print("Restore not started: invalid backup identifier.", file=sys.stderr)
         return 2
+
+    if not bundle:
+        try:
+            run([*base, "build", "restore-agent"])
+        except RestoreError as exc:
+            print(f"Restore not started: could not prepare the isolated restore image: {exc}", file=sys.stderr)
+            return 2
 
     print(f"{1 + step_offset}/{total_steps} Checking that no backup is currently running...", flush=True)
     lock = run(
@@ -278,7 +285,7 @@ def main() -> int:
 
     print(f"{5 + step_offset}/{total_steps} Restoring database, media and encryption keys...", flush=True)
     restored = run(
-        [*base, "run", "--rm", "--no-deps", "--user", "0:0", "backup-agent", "restore", "--id", backup_id],
+        [*base, "--profile", "restore", "run", "--rm", "--no-deps", "restore-agent", "restore", "--id", backup_id],
         capture=True,
         check=False,
     )
@@ -288,7 +295,7 @@ def main() -> int:
             print(f"MakerVault has been left stopped to avoid starting against a partial restore. Safety backup: {pre_restore_id}", file=sys.stderr)
             print(
                 "Recovery command: "
-                + " ".join([*base, "run", "--rm", "--no-deps", "--user", "0:0", "backup-agent", "restore", "--id", pre_restore_id]),
+                + " ".join([*base, "--profile", "restore", "run", "--rm", "--no-deps", "restore-agent", "restore", "--id", pre_restore_id]),
                 file=sys.stderr,
             )
         detail = (restored.stderr or restored.stdout or "").strip()
