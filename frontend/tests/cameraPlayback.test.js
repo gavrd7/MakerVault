@@ -63,6 +63,26 @@ test('multiple visible feeds serialise media work and cancelled queued work neve
   assert.deepEqual(events, ['first', 'done', 'second']);
 });
 
+test('different printer queues do not block each other', async () => {
+  const { cameraRequest } = await import('../src/components/cameraPlayback.js');
+  const events = [];
+  let releaseK1;
+  const k1 = cameraRequest(async () => {
+    events.push('k1-start');
+    await new Promise(resolve => { releaseK1 = resolve; });
+    events.push('k1-done');
+  }, undefined, 'k1-connection');
+  await new Promise(resolve => setTimeout(resolve, 0));
+
+  const k2 = cameraRequest(() => events.push('k2'), undefined, 'k2-connection');
+  await k2;
+  assert.deepEqual(events, ['k1-start', 'k2']);
+
+  releaseK1();
+  await k1;
+  assert.deepEqual(events, ['k1-start', 'k2', 'k1-done']);
+});
+
 test('preview chooses most recently configured enabled camera across integrations', async () => {
   const { defaultCamera } = await import('../src/components/cameraPlayback.js');
   const rows = [
