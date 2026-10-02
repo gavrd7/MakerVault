@@ -18,45 +18,96 @@
 
 Keep the set together in a protected backup destination, with another copy on a different device. A folder on the same failing disk is not disaster recovery. Protect the entire set: it contains credentials, personal data and the key needed to read the uploads.
 
-## Recommended: one-command backup
+## Recommended: use MakerVault's Backup & restore page
 
-For the standard Linux Docker Compose installation, run this from your MakerVault checkout (Python 3.9 or newer is required):
+For the standard Docker Compose installation, a superuser should normally use **Settings → Backup & restore**. You do not need to stop containers, run `pg_dump`, find Docker volumes or manually copy the encryption key.
+
+### Create a backup
+
+1. Open **Settings → Backup & restore**.
+2. Select **Create backup**.
+3. MakerVault briefly makes normal writes read-only while it captures a consistent recovery set. You can continue viewing the application.
+4. Wait for the backup to show **Verified**.
+5. Select **Download** and keep a copy on another device or protected backup destination.
+
+MakerVault stores managed backups in `BACKUP_STORAGE`, which defaults to the `makervault_backups` Docker volume. You can use an absolute bind-mount path instead, for example:
+
+```dotenv
+BACKUP_STORAGE=/mnt/Server/MakerVault/backups
+```
+
+The Backup & restore page shows completed bundles, total stored size, validation state and creation time. Old backups are retained until an administrator deletes them; MakerVault does not silently remove recovery copies.
+
+!!! warning "A .mvbackup file contains secrets"
+    A managed `.mvbackup` bundle contains the PostgreSQL dump, media, private-storage key and deployment configuration. File permissions and authenticated MakerVault access protect the server-side copy, but the bundle itself is **not encrypted**. Store downloaded copies only on storage you trust.
+
+### What happens behind the button
+
+The web application does **not** receive access to the Docker socket. Instead, the supplied Compose stack runs a small internal `backup-agent` service with no published port and no Docker control. During backup it can read the normal media/key mounts, connect to PostgreSQL and write only to the dedicated backup storage.
+
+MakerVault creates a maintenance lock before capturing data. Normal read-only viewing continues, while web/API writes are rejected briefly so uploads, database references and archived media cannot be changed underneath the backup. The bundle is not marked complete until PostgreSQL's dump catalogue, the media/key archives and recorded SHA-256 checks have all been read successfully.
+
+Redis queue/cache data is deliberately excluded from normal recovery. Core MakerVault records are in PostgreSQL.
+
+### Validate a backup again
+
+On the Backup & restore page select **Validate / restore** beside a completed bundle. MakerVault re-reads its checksum manifest, PostgreSQL dump and media/key archives before showing the restore action.
+
+Validation detects accidental corruption and malformed archives. It does not prove that an off-server copy can survive a total machine failure; periodically test recovery on a separate host.
+
+## Restore a managed backup on the same server
+
+A running web application cannot safely replace its own database and storage, and MakerVault deliberately does not expose host-level Docker control to the web process. After **Validate / restore**, the page therefore gives you one guarded command to run from the MakerVault checkout:
+
+```bash
+python3 scripts/restore.py --sudo --backup-id BACKUP_ID
+```
+
+Replace `BACKUP_ID` with the value shown by MakerVault. The helper:
+
+1. confirms that no backup is still running;
+2. validates the selected bundle again;
+3. asks you to type the backup ID;
+4. stops MakerVault;
+5. creates a fresh **pre-restore safety backup** of the current installation;
+6. restores PostgreSQL, media and the encryption key together; and
+7. rebuilds/starts MakerVault and the backup service.
+
+If the safety backup fails, the destructive restore is not started. If restoring fails after data replacement has begun, MakerVault is left stopped and the helper prints the safety-backup recovery command rather than starting against a partial restore.
+
+Afterwards, sign in and check a known project, inventory item and private file before deleting either the original or the automatic pre-restore backup.
+
+## Recover after total server loss
+
+Keep at least one downloaded `.mvbackup` away from the MakerVault server. On a replacement Linux host:
+
+1. Install Docker Engine, Docker Compose and Git.
+2. Clone the MakerVault repository. Prefer the release recorded in the backup; the bundle records the MakerVault version that created it.
+3. **Do not create a replacement `.env` if the original server is gone.** The restore helper can recover the saved one from a verified bundle.
+4. Copy the `.mvbackup` file to the new host.
+5. From the MakerVault checkout run:
+
+```bash
+python3 scripts/restore.py --sudo --bundle /path/to/your-backup.mvbackup
+```
+
+Before it trusts any configuration from the file, the helper checks the bundle structure and every recorded inner SHA-256 value. If the checkout has no `.env`, it restores the verified saved configuration with owner-only permissions, prepares PostgreSQL/Redis and the backup service, imports the bundle, validates it again through the recovery tooling, restores database/media/key storage and starts MakerVault.
+
+If a `.env` already exists, the helper **does not overwrite it silently**. This is intentional: deployment-specific hostnames, storage paths or credentials may need human review. For a genuine full-machine replacement, starting from a clean checkout avoids accidentally mixing a new installation's secrets with the recovery set.
+
+Bind-mount paths saved in the old `.env` may not exist on the replacement host. Create or adjust those paths deliberately before the final start if the new server layout differs.
+
+## Legacy one-command host backup
+
+The earlier host-side helper remains available for troubleshooting and specialised deployments:
 
 ```bash
 python3 scripts/backup.py --sudo
 ```
 
-On the existing development server, first run `cd /mnt/Server/MakerVault/app`. The command asks for your normal sudo password if needed. It shows five progress steps, briefly stops MakerVault so files and database records stay consistent, saves the database/media/key/configuration set, checks the inner archives, restarts MakerVault and prints the path to **one recovery bundle**.
+It creates a protected `.tar.gz` recovery set outside the managed Backup & restore page and briefly stops the application. It remains useful when the backup-agent service itself cannot run, but it is no longer the normal administrator workflow.
 
-By default it saves under `~/makervault-backups/`. Choose another destination with:
-
-```bash
-python3 scripts/backup.py --sudo --destination /mnt/Backups/MakerVault
-```
-
-Use a destination outside MakerVault's data folders, with enough space for the intermediate files and final bundle. Copy the completed `.tar.gz` to another device. Open MakerVault afterwards to confirm it is healthy again.
-
-**Keep the bundle private.** It includes database records, uploads, your encryption key and secrets. The tool gives it owner-only file permissions; the bundle itself is not encrypted. Use protected off-server storage. Redis's old job queue is deliberately excluded from normal recovery.
-
-If a backup fails, the command exits with an error, attempts to restart MakerVault and retains an explicitly labelled incomplete folder. It does not publish a complete bundle. Power loss or a forced process kill can prevent automatic restart; in that case run `sudo docker start makervault`. Never restore an incomplete set.
-
-This helper supports the supplied local app/PostgreSQL containers and their standard media/key mounts, whether they use named volumes or bind mounts. It rejects mismatched database hosts/projects and key files outside the normal key mount. External databases, custom secret/configuration mounts and specialised deployments need the advanced procedure below. It does not install a schedule or delete older backups.
-
-The bundle records the checkout commit and deployed image IDs. Make backups from the checkout corresponding to the running version; do not switch branches between deployment and backup. It also captures the actual runtime environment, which can differ from `.env`; retain those settings for recovery, especially an inline storage key.
-
-## Open a recovery bundle
-
-You only need to extract it when preparing a restore on a separate machine:
-
-```bash
-mkdir -m 700 recovery
-# Replace /path/to/makervault-backup.tar.gz with the completed bundle's path.
-tar -xzf /path/to/makervault-backup.tar.gz -C recovery
-backup_dir="$(pwd)/recovery/makervault-backup"
-(cd "$backup_dir" && sha256sum --check SHA256SUMS)
-```
-
-Stop if a checksum fails. Extract only your own trusted bundles. The files inside use the same layout as the manual procedure, plus `runtime-environment.json` and `recovery-info.json`. Review the runtime settings privately when reconstructing configuration; do not upload them to an issue or support chat. An inline `MAKERVAULT_STORAGE_KEY` must be preserved exactly if it was used instead of a key file.
+By default it saves under `~/makervault-backups/`; choose another destination with `--destination`. Its bundle is also not encrypted. Keep it private and off-server.
 
 ## Advanced manual backup
 
