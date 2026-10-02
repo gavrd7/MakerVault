@@ -41,9 +41,9 @@ test("frame reconnect stops after three failures", { timeout: 1000 }, async () =
   assert.deepEqual(errors, [true, true, false]);
 });
 
-test("Creality numeric candidate compatibility keeps SDP and IP candidates", () => {
+test("Creality offer preserves gathered ICE candidates", () => {
   const offer = "v=0\r\na=candidate:1 1 UDP 123 browser.local 5000 typ host\r\na=candidate:2 1 UDP 123 192.168.1.2 5001 typ host\r\n";
-  assert.equal(prepareCrealityOffer(offer), offer.replace("browser.local", "192.0.2.1"));
+  assert.equal(prepareCrealityOffer(offer), offer);
 });
 
 test('multiple visible feeds serialise media work and cancelled queued work never starts', async () => {
