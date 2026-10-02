@@ -26,6 +26,7 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
   const [warnings, setWarnings] = useState([]);
   const [busy, setBusy] = useState(false);
   const [testingId, setTestingId] = useState("");
+  const [removeArmedId, setRemoveArmedId] = useState("");
   const [diagnostics, setDiagnostics] = useState({});
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -98,13 +99,21 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
 
   async function remove(cameraId = camera?.id) {
     const item = rows.find(row => row.id === cameraId);
-    if (!item || !window.confirm(`Remove camera source “${item.name}” (${endpointLabel(item.url)})?`)) return;
-    setBusy(true); setError("");
+    if (!item) return;
+    if (removeArmedId !== cameraId) {
+      setRemoveArmedId(cameraId);
+      setNotice(`Click Confirm remove to delete “${item.name}” (${endpointLabel(item.url)}).`);
+      return;
+    }
+    setBusy(true); setError(""); setNotice("");
     if (activeCamera === `${connection.id}:${cameraId}`) setActiveCamera("");
     try {
-      await apiFetch(root + cameraId + "/remove/", { method: "POST", body: {} });
-      if (selected === cameraId) setSelected("");
-      await load(); await onChanged(); setNotice(`Camera source “${item.name}” removed.`);
+      const result = await apiFetch(root + cameraId + "/remove/", { method: "POST", body: {} });
+      setRows(result.rows || []);
+      setRemoveArmedId("");
+      if (selected === cameraId) setSelected((result.rows || [])[0]?.id || "");
+      await onChanged();
+      setNotice(`Camera source “${item.name}” removed.`);
     }
     catch (err) { setError(err.message); }
     finally { setBusy(false); }
@@ -134,7 +143,13 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
           <div className="cameraSourceActions">
             <button type="button" disabled={busy || testingId === item.id} onClick={() => testSource(item.id)}>{testingId === item.id ? "Testing…" : "Test"}</button>
             <button type="button" disabled={busy} onClick={() => usePreview(item.id)}>Use for previews</button>
-            <button type="button" className="dangerButton" disabled={busy} onClick={() => remove(item.id)}>Remove</button>
+            <button
+              type="button"
+              className="dangerButton"
+              disabled={busy}
+              onClick={() => remove(item.id)}
+            >{removeArmedId === item.id ? "Confirm remove" : "Remove"}</button>
+            {removeArmedId === item.id && <button type="button" disabled={busy} onClick={() => { setRemoveArmedId(""); setNotice(""); }}>Cancel</button>}
           </div>
           {diagnostics[item.id] && <div className={"cameraSourceDiagnostic cameraSourceDiagnostic-" + diagnostics[item.id].status}>{diagnostics[item.id].message}</div>}
         </div>)}
