@@ -4,11 +4,12 @@ import { startFrameLoop, waitForIce, prepareCrealityOffer } from "./cameraPlayba
 
 const LABELS = { snapshot: "Live images", mjpeg: "MJPEG live images", creality_webrtc: "Creality WebRTC · experimental" };
 
-export default function PrinterCamera({ printerId, connection, canEdit, activeCamera, setActiveCamera, onChanged }) {
+export default function PrinterCamera({ printerId, connection, canEdit, activeCamera, setActiveCamera, onChanged, setupOnly = false, autoStart = false }) {
   const root = `/api/printing/printers/${printerId}/connections/${connection.id}/cameras/`;
   const [rows, setRows] = useState([]);
   const [selected, setSelected] = useState("");
-  const [settings, setSettings] = useState(false);
+  const [settings, setSettings] = useState(setupOnly);
+  const started = useRef(false);
   const [candidates, setCandidates] = useState([]);
   const [provider, setProvider] = useState(null);
   const [presets, setPresets] = useState([]);
@@ -29,6 +30,11 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
   }
   useEffect(() => { load(); }, [connection.id]);
   useEffect(() => { if (!connection.enabled && activeCamera?.startsWith(connection.id + ":")) setActiveCamera(""); }, [connection.enabled]);
+  useEffect(() => {
+    if (autoStart && !started.current && camera && connection.enabled) {
+      started.current = true; setActiveCamera(`${connection.id}:${camera.id}`);
+    }
+  }, [autoStart, camera?.id, connection.enabled]);
   async function discover() {
     setBusy(true); setError(""); setNotice(""); setWarnings([]);
     try {
@@ -42,7 +48,7 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
     event.preventDefault(); setBusy(true); setError(""); setNotice("");
     try {
       await apiFetch(root, { method: "POST", body: form });
-      await load(); await onChanged(); setNotice("Camera source saved. Choose Watch camera to test playback."); setSettings(false);
+      await load(); await onChanged(); setNotice("Camera source saved. Open the printer camera preview to watch."); setSettings(setupOnly);
     } catch (err) { setError(err.message); }
     finally { setBusy(false); }
   }
@@ -57,8 +63,8 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
     <div className="printerCameraToolbar">
       <strong>Camera</strong>
       {!!rows.length && <label className="printerCameraSelect"><span className="printerCameraLabel">Camera source</span><select value={selected} onChange={e => { setActiveCamera(""); setSelected(e.target.value); }}>{rows.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
-      {camera && <button type="button" disabled={!connection.enabled} onClick={() => setActiveCamera(playing ? "" : `${connection.id}:${camera.id}`)}>{playing ? "Stop camera" : "Watch camera"}</button>}
-      {canEdit && <button type="button" onClick={() => setSettings(!settings)}>{settings ? "Close setup" : "Camera setup"}</button>}
+      {!setupOnly && camera && <button type="button" disabled={!connection.enabled} onClick={() => setActiveCamera(playing ? "" : `${connection.id}:${camera.id}`)}>{playing ? "Stop camera" : "Watch camera"}</button>}
+      {canEdit && !setupOnly && <button type="button" onClick={() => setSettings(!settings)}>{settings ? "Close setup" : "Camera setup"}</button>}
     </div>
     {!rows.length && <small>{connection.camera?.reported ? "The printer reports a camera. Configure a source to view it." : "Configure a camera source to view this printer."}</small>}
     {notice && <p role="status">{notice}</p>}
@@ -75,7 +81,7 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
       <div className="printerCameraFlips"><label><input type="checkbox" checked={form.flip_horizontal} onChange={e => setForm({ ...form, flip_horizontal: e.target.checked })} /> Flip horizontally</label><label><input type="checkbox" checked={form.flip_vertical} onChange={e => setForm({ ...form, flip_vertical: e.target.checked })} /> Flip vertically</label></div>
       <div className="full settingsActions"><button className="primary" disabled={busy}>Save camera source</button></div>
     </form>}
-    {playing && <CameraPlayback key={camera.id} camera={camera} url={root + camera.id + "/media/"} />}
+    {!setupOnly && playing && <CameraPlayback key={camera.id} camera={camera} url={root + camera.id + "/media/"} />}
   </section>;
 }
 

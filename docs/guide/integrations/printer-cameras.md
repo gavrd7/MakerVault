@@ -4,17 +4,19 @@ Camera playback is optional and starts only when you select **Watch camera**. Pr
 
 ## Set up a feed
 
-1. From the dashboard or **3D Printing**, choose **Open live** for the printer.
-2. Under a live source, open **Camera setup**. Setup requires edit permission.
+1. Open **3D Printing** and find the printer card.
+2. Choose **Camera setup** in its camera preview area. Setup is separate from **Open live**, which shows printer telemetry, and requires edit permission. Select the integration whose camera you want to configure.
 3. Select **Find camera sources**. Moonraker reads its webcam configuration; OctoPrint reads its classic webcam settings (the integration API key needs Settings Read). Creality offers K1 and K2 presets; PrusaLink reads its local camera API where supported. Anycubic/FlashForge can reuse recognised HTTP camera URLs from their latest status. All still need playback testing.
 4. Choose a discovered source or enter its name, feed type and full URL manually. Use the same host as the live integration, including any required camera port/path.
-5. Save, select the camera and choose **Watch camera**. A saved source is not proof of a working feed.
+5. Save and choose **Done**. In the printer card, choose **Watch camera** to open the preview. The dashboard **Camera feed** link opens that printer’s preview directly. A saved source is not proof of a working feed.
 
-You can configure up to eight sources per printer integration. Only one camera is active in an Open live dialog. Switching cameras, disabling its integration, stopping playback or closing the dialog closes playback resources. Opening dashboard cards or Open live alone does not fetch camera images. Camera discovery runs only when requested.
+After adding a live source, an optional second step offers **Add camera** or **Not now**. Choosing Not now leaves monitoring configured and closes the prompt. Camera setup remains available on the printer card.
+
+You can configure up to eight sources per printer integration. Only one printer preview is open on the 3D Printing page. Switching cameras, disabling its integration, stopping playback or closing the preview or leaving the page closes playback resources. Opening dashboard cards, the 3D Printing page, camera setup or Open live alone does not fetch camera images. Select Watch camera or the dashboard Camera feed link to start viewing. Camera discovery runs only when requested.
 
 ## Creality K1
 
-The shared K1 troubleshooting session confirmed the direct port-8080 MJPEG route worked after starting `mjpg_streamer`, and then appeared in Fluidd. MakerVault uses the integration host rather than a hard-coded address. This confirms the external feed route; MakerVault playback still needs testing.
+The shared K1 troubleshooting session confirmed the direct port-8080 MJPEG route worked after starting `mjpg_streamer`, and then appeared in Fluidd. MakerVault uses the integration host rather than a hard-coded address. The owner subsequently confirmed K1 and K2 playback in MakerVault; route-specific regression checks remain on the hardware checklist.
 
 For K1 systems exposing the local HTTP camera service, start with:
 
@@ -23,7 +25,7 @@ For K1 systems exposing the local HTTP camera service, start with:
 
 **K1 / Helper Script presets** provides both snapshot and MJPEG choices for direct port 8080, Fluidd port 4408 and Mainsail port 4409. This also works in the Moonraker integration without requiring successful webcam discovery. No presets are probed or saved automatically.
 
-Helper Script installations can alternatively expose `/webcam/?action=snapshot` or `/webcam/?action=stream` on Fluidd/Mainsail ports 4408/4409. Use the route working in your own installation. Moonraker discovery can pick up the configured camera URL and orientation. Printer monitoring having passed on K1 does not yet validate MakerVault camera playback.
+Helper Script installations can alternatively expose `/webcam/?action=snapshot` or `/webcam/?action=stream` on Fluidd/Mainsail ports 4408/4409. Use the route working in your own installation. Moonraker discovery can pick up the configured camera URL and orientation. Camera playback was confirmed separately from printer monitoring.
 
 If Creality Cloud works but these local URLs fail, the local `mjpg_streamer` service may be stopped even though `cam_app` is working. Starting it restored the feed in the shared troubleshooting session; reboot persistence was a separate follow-up. MakerVault does not install or restart printer services. Validate the feed again after reboot/firmware updates.
 
@@ -56,7 +58,7 @@ Discovery providers produce the same validated source contract: name, playback m
 | SimplyPrint | Manual local feed; alternative local integration where supported | Cloud camera access not implemented |
 | Other | Manual HTTP source | No guessed manufacturer endpoints |
 
-For printers exposing Moonraker or OctoPrint alongside a manufacturer interface, add that live integration to the same printer and set up its camera there. Camera viewing does not require enabling printer controls. All native/manufacturer and standard-interface playback remains hardware-unverified until independently tested.
+For printers exposing Moonraker or OctoPrint alongside a manufacturer interface, add that live integration to the same printer and set up its camera there. Camera viewing does not require enabling printer controls. The owner confirmed K1 and K2 camera playback working on 2 October 2026. Exact source route, firmware and browser were not supplied with that confirmation. Other manufacturers and remaining lifecycle/security checks remain pending in issue #37.
 
 ## Security and troubleshooting
 
@@ -72,7 +74,7 @@ If discovery is empty, configure the exact snapshot/MJPEG URL manually. Unsuppor
 
 - Test all three K1 direct/Fluidd/Mainsail routes through Creality and Moonraker; test K2 WebRTC independently and record firmware/browser.
 - Confirm an image or video actually appears, and verify orientation and fullscreen at desktop and mobile sizes.
-- Stop, reopen, switch sources and close Open live; verify playback is released and printer monitoring continues.
+- Stop, reopen, switch sources and close the preview; verify playback is released and printer monitoring continues.
 - Test printer offline/reconnect and camera authentication errors.
 - Test HTTP feeds through the HTTPS reverse proxy. Test K2 on LAN/VPN; do not claim remote media relay support.
 - Test PrusaLink API-key snapshot access and freshness; Anycubic/FlashForge reported HTTP sources and unsupported-format guidance; each Moonraker profile and OctoPrint orientation/fallback. Record model, firmware, route and browser.

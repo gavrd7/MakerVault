@@ -1,6 +1,10 @@
 # Changelog
 
-## v0.9.0 — Camera feeds (in development)
+## v0.9.0.1 — Camera feeds (in development)
+
+- Separated camera configuration from live telemetry; live-source creation now offers an optional camera step.
+- Added on-demand camera previews to printer cards and dedicated dashboard camera links. Fixed retained navigation actions reopening a previous printer monitor.
+- Owner confirmed successful K1 and K2 camera playback on 2 October 2026; specific routes/firmware and remaining lifecycle checks are still pending.
 
 - Added shared camera-provider discovery/guidance across all adapters, K1 direct/Fluidd/Mainsail presets, experimental PrusaLink snapshots and recognised Anycubic/FlashForge HTTP sources. Unsupported native/cloud transports stay explicit.
 - Added on-demand camera setup, discovery, source selection, stop/reconnect, orientation and fullscreen inside Open live.

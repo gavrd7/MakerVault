@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { apiFetch } from "../api";
 import PrintedPartsSection from "./PrintedPartsSection";
-import PrinterCamera from "./PrinterCamera";
+import { printerIntent } from "./printerNavigation";
+import { PrinterCameraPreview, PrinterCameraSetupModal } from "./PrinterCameras";
 import PrinterJobControls from "./PrinterJobControls";
 import { Badge, LoadingBlock, Modal } from "./Common";
 import ModelViewerModal, { isViewableModelFile } from "./ModelViewer";
@@ -148,7 +149,7 @@ function newestGeometryAnalysis(model) {
   return null;
 }
 
-export default function PrintingPage({ config, projects, searchTarget = null }) {
+export default function PrintingPage({ config, projects, searchTarget = null, onOpenConsumed }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [sourceNotice, setSourceNotice] = useState("");
@@ -157,6 +158,9 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
   const [manageModel, setManageModel] = useState(null);
   const [managePrinter, setManagePrinter] = useState(null);
   const [livePrinter, setLivePrinter] = useState(null);
+  const [cameraSetup, setCameraSetup] = useState(null);
+  const [cameraOffer, setCameraOffer] = useState(null);
+  const [previewPrinter, setPreviewPrinter] = useState("");
   const [claimSlot, setClaimSlot] = useState(null);
   const [workspaceView, setWorkspaceView] = useState("overview");
 
@@ -202,10 +206,17 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
 
   const [openedLiveTarget, setOpenedLiveTarget] = useState(null);
   useEffect(() => {
-    if (!data || !searchTarget?.openLive || searchTarget.type !== "printers" || openedLiveTarget === searchTarget.token) return;
-    const printer = data.printers?.find(item => item.id === searchTarget.id);
-    if (printer) { setLivePrinter(printer); setOpenedLiveTarget(searchTarget.token); }
+    const intent = printerIntent(searchTarget, data?.printers, openedLiveTarget);
+    if (!intent) return;
+    if (intent.camera) setPreviewPrinter(intent.printer.id);
+    else { setPreviewPrinter(""); setLivePrinter(intent.printer); }
+    setOpenedLiveTarget(intent.token);
+    onOpenConsumed?.(intent.token);
   }, [data, searchTarget, openedLiveTarget]);
+
+  useEffect(() => {
+    if (previewPrinter) document.getElementById("printer-search-target-" + previewPrinter)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [previewPrinter]);
 
   async function saved() {
     setModal("");
@@ -383,6 +394,7 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
             </div>
           </div>
           <PrinterLiveSummary printer={printer} onOpen={() => setLivePrinter(printer)} canControl={canChangePrinter} onChanged={load} />
+          <PrinterCameraPreview printer={printer} expanded={previewPrinter === printer.id} onWatch={() => setPreviewPrinter(printer.id)} onStop={() => setPreviewPrinter("")} onSetup={() => { setPreviewPrinter(""); setCameraSetup({ printerId: printer.id }); }} canEdit={canChangePrinter} onChanged={load} />
           <div className="printingSlotGrid">
             {printer.slots.filter(slot => slot.is_loaded).map(slot => <div className="printingSlot" key={slot.id}>
               <span className="printingSwatch" style={slot.color_hex ? { background: slot.color_hex } : undefined} />
@@ -485,6 +497,7 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
       onClose={() => setLivePrinter(null)}
       onAdded={async connection => {
         setSourceNotice(`${connection.adapter_label} successfully added for ${livePrinter.name}. Open live to check the connection status.`);
+        setCameraOffer({ printerId: livePrinter.id, connectionId: connection.id, name: livePrinter.name });
         setLivePrinter(null);
         await load();
       }}
@@ -495,6 +508,11 @@ export default function PrintingPage({ config, projects, searchTarget = null }) 
         return fresh;
       }}
     />}
+    {cameraOffer && <Modal title="Live source added" subtitle={"Step 2 · Optional camera for " + cameraOffer.name} onClose={() => setCameraOffer(null)}>
+      <p>Your live monitor is ready. Would you like to add a camera now? You can also do this later using Camera setup on the printer card.</p>
+      <div className="settingsActions"><button type="button" onClick={() => setCameraOffer(null)}>Not now</button><button type="button" className="primary" onClick={() => { setCameraSetup(cameraOffer); setCameraOffer(null); }}>Add camera</button></div>
+    </Modal>}
+    {cameraSetup && <PrinterCameraSetupModal printer={data.printers.find(item => item.id === cameraSetup.printerId) || { id: cameraSetup.printerId, name: "Printer", live_connections: [] }} initialConnectionId={cameraSetup.connectionId} onClose={() => setCameraSetup(null)} onChanged={load} />}
     {managePrinter && <PrinterManageModal
       printer={managePrinter}
       manufacturers={data?.printer_manufacturers || []}
@@ -808,7 +826,6 @@ function LocationModal({ onClose, onSaved }) {
 }
 
 function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
-  const [activeCamera, setActiveCamera] = useState("");
   const [data, setData] = useState({ rows: [], adapters: [] });
   const [form, setForm] = useState({
     adapter: "moonraker",
@@ -1109,7 +1126,6 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
           <div className="printerLiveFeatures" aria-label="Live data features">
             {[["job", "Job"], ["progress", "Progress"], ["temperatures", "Temperatures"], ["materials", "Loaded filament"]].filter(([key]) => connection.capabilities?.[key]).map(([key, label]) => <Badge key={key}>{label}</Badge>)}
           </div>
-          <PrinterCamera printerId={printer.id} connection={connection} canEdit={data.can_control} activeCamera={activeCamera} setActiveCamera={setActiveCamera} onChanged={loadConnections} />
           <small>Last seen: {connection.last_seen_at ? formatDate(connection.last_seen_at) : "Never"}</small>
           {connection.last_error && <small className="integrationError">{connection.last_error}</small>}
           {connection.controls?.supported && data.can_control && <div className="settingsCallout printerControlsSettings">
