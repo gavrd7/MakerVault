@@ -283,11 +283,12 @@ def validate_bundle(bundle: Path) -> dict:
     with tempfile.TemporaryDirectory(prefix="makervault-validate-") as directory:
         root = Path(directory)
         with tarfile.open(bundle, "r:gz") as archive:
-            members = archive.getmembers()
-            for member in members:
+            for member in archive.getmembers():
                 path = PurePosixPath(member.name)
                 if path.is_absolute() or ".." in path.parts:
                     raise BackupError("Unsafe path in recovery bundle.")
+                if not (member.isfile() or member.isdir()):
+                    raise BackupError("Recovery bundle contains an unsupported archive entry.")
             archive.extractall(root)
         backup = root / "makervault-backup"
         sums = backup / "SHA256SUMS"
@@ -295,8 +296,10 @@ def validate_bundle(bundle: Path) -> dict:
             raise BackupError("Recovery bundle has no checksum manifest.")
         for raw in sums.read_text(encoding="utf-8").splitlines():
             expected, sep, name = raw.partition("  ")
+            if not sep or "/" in name or "\\" in name or name in {"", ".", ".."}:
+                raise BackupError("Recovery checksum manifest contains an invalid filename.")
             target = backup / name
-            if not sep or not target.is_file() or digest(target) != expected:
+            if not target.is_file() or digest(target) != expected:
                 raise BackupError(f"Checksum failed for {name or 'bundle member'}.")
         run(["pg_restore", "--list", str(backup / "database.dump")], capture=True)
         check_tar(backup / "media.tar.gz")
@@ -356,7 +359,13 @@ def restore_bundle(bundle: Path):
     with tempfile.TemporaryDirectory(prefix="makervault-restore-") as directory:
         root = Path(directory)
         with tarfile.open(bundle, "r:gz") as archive:
-            archive.extractall(root, filter="data")
+            for member in archive.getmembers():
+                item = PurePosixPath(member.name)
+                if item.is_absolute() or ".." in item.parts:
+                    raise BackupError("Unsafe path in recovery bundle.")
+                if not (member.isfile() or member.isdir()):
+                    raise BackupError("Recovery bundle contains an unsupported archive entry.")
+            archive.extractall(root)
         backup = root / "makervault-backup"
 
         run([
@@ -457,12 +466,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
 def recover_stale_state():
     """A restarted agent cannot still own an old job; release any persisted lock."""
     BACKUP_ROOT.mkdir(parents=True, exist_ok=True)
-    interrupted = ""
-    if LOCK_FILE.is_file():
-        try:
-            interrupted = str(json.loads(LOCK_FILE.read_text(encoding="utf-8")).get("id") or "")
-        except (OSError, json.JSONDecodeError):
-            interrupted = ""
     for path in BACKUP_ROOT.glob("*.json"):
         try:
             item = json.loads(path.read_text(encoding="utf-8"))
