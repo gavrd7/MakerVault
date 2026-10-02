@@ -189,7 +189,10 @@ export function CameraPlayback({ camera, url, compact = false, queueKey = "" }) 
       <button type="button" className="cameraFullscreen" aria-label={expanded ? "Close fullscreen camera" : "Open fullscreen camera"} onClick={fullscreen}>{expanded ? "Close" : "Fullscreen"}</button>
     </div>
     <div className="printerCameraViewport">
-      {camera.mode === "creality_webrtc" ? <video ref={video} style={{ transform }} autoPlay muted playsInline controls={!compact} onPlaying={() => setStatus("Live video · experimental")} /> : image ? <img src={image} alt={camera.name + " live camera view"} style={{ transform }} /> : <span role="status">{status}</span>}
+      {camera.mode === "creality_webrtc" ? <>
+        <video ref={video} style={{ transform }} autoPlay muted playsInline controls={!compact} onPlaying={() => setStatus("Live video · experimental")} />
+        {compact && status !== "Live video · experimental" && <span className="cameraStatusOverlay" role="status">{status}</span>}
+      </> : image ? <img src={image} alt={camera.name + " live camera view"} style={{ transform }} /> : <span role="status">{status}</span>}
     </div>
     {error && <p className="integrationError" role="alert">{error}</p>}
     {!compact && <small>{LABELS[camera.mode]}{camera.mode === "creality_webrtc" ? " · Browser needs LAN/VPN access to the printer." : " · Images are relayed securely through your MakerVault session."}</small>}
