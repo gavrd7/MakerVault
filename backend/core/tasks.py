@@ -5,6 +5,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
+from .backup_bundle import BackupBundleError, create_prepared_bundle
 from .backups import backup_in_progress
 from .catalogue_image_sources import run_catalogue_image_seed
 from .catalogue_enrichment import run_board_catalogue_enrichment
@@ -17,6 +18,15 @@ from .printer_connectivity import POLLERS, PrinterConnectionError, poll_connecti
 @shared_task
 def ping_worker():
     return {"status": "ok", "worker": "makervault"}
+
+
+@shared_task(bind=True, acks_late=True)
+def create_managed_backup_task(self, backup_id):
+    """Create a prepared recovery bundle inside the existing MakerVault worker."""
+    try:
+        return create_prepared_bundle(str(backup_id))
+    except BackupBundleError as exc:
+        return {"status": "failed", "backup_id": str(backup_id), "error": str(exc)}
 
 
 @shared_task(bind=True, acks_late=True)
