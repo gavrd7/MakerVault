@@ -43,7 +43,7 @@ The Backup & restore page shows completed bundles, total stored size, validation
 
 ### What happens behind the button
 
-The web application does **not** receive access to the Docker socket. Instead, the supplied Compose stack runs a small internal `backup-agent` service with no published port and no Docker control. During backup it can read the normal media/key mounts, connect to PostgreSQL and write only to the dedicated backup storage.
+The web application does **not** receive access to the Docker socket. Managed backup creation runs through MakerVault's existing Celery worker inside the normal `makervault` container. That worker already has the application database connection and the media/key/backup mounts required to create a recovery bundle, so no fourth long-running service is needed.
 
 MakerVault creates a maintenance lock before capturing data. Normal read-only viewing continues, while web/API writes are rejected briefly and MakerVault's scheduled catalogue, integration and printer-poll jobs defer until the lock clears. This prevents new application-side mutations from starting underneath the capture. The bundle is not marked complete until PostgreSQL's dump catalogue, the media/key archives and recorded SHA-256 checks have all been read successfully.
 
@@ -105,7 +105,7 @@ The earlier host-side helper remains available for troubleshooting and specialis
 python3 scripts/backup.py --sudo
 ```
 
-It creates a protected `.tar.gz` recovery set outside the managed Backup & restore page and briefly stops the application. It remains useful when the backup-agent service itself cannot run, but it is no longer the normal administrator workflow.
+It creates a protected `.tar.gz` recovery set outside the managed Backup & restore page and briefly stops the application. It remains useful when the managed in-app backup path cannot run, but it is no longer the normal administrator workflow.
 
 By default it saves under `~/makervault-backups/`; choose another destination with `--destination`. Its bundle is also not encrypted. Keep it private and off-server.
 
