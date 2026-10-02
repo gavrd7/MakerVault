@@ -76,6 +76,21 @@ class BackupApiTests(TestCase):
         self.assertFalse((Path(self.directory.name) / f"{item['id']}.mvbackup").exists())
         self.assertFalse((Path(self.directory.name) / f"{item['id']}.json").exists())
 
+
+    def test_stale_running_metadata_is_reported_as_interrupted(self):
+        self.write_backup(backup_id="stale-backup", status="running", verified=False)
+        self.client.force_login(self.superuser)
+
+        response = self.client.get("/api/settings/backups/")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload["running"])
+        row = next(item for item in payload["rows"] if item["id"] == "stale-backup")
+        self.assertEqual(row["status"], "interrupted")
+        self.assertFalse(row["verified"])
+        self.assertFalse(row["download_available"])
+        self.assertIn("not a usable recovery bundle", row["error"])
+
     def test_maintenance_lock_blocks_writes_but_not_reads(self):
         self.client.force_login(self.superuser)
         (Path(self.directory.name) / ".maintenance-lock").write_text("{}", encoding="utf-8")
