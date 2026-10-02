@@ -46,7 +46,9 @@ def key_root() -> Path:
             resolved.relative_to(Path("/app/keys"))
             return Path("/app/keys")
         except ValueError:
-            pass
+            # The normal GUI path rejects custom key mounts, but keeping the
+            # engine path-aware makes advanced/manual recovery explicit.
+            return resolved.parent
     return Path("/app/keys")
 
 
