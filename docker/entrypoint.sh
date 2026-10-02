@@ -78,6 +78,9 @@ echo "Applying database migrations..."
 gosu makervault python manage.py migrate --noinput
 gosu makervault python manage.py seed_roles
 
+echo "Recovering interrupted backup state..."
+gosu makervault python manage.py backup_bundle recover-stale
+
 echo "Encrypting any legacy user-private media..."
 if ! gosu makervault python manage.py migrate_private_storage; then
   echo "WARNING: Some legacy private media could not be encrypted. MakerVault will continue and retry on the next start." >&2
