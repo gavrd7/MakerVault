@@ -2,6 +2,12 @@
 
 ## Unreleased — v1.0 recovery verification
 
+- Add a superuser **Backup & restore** workspace for one-click managed backups, verification, download, deletion and recovery guidance.
+- Add an isolated internal backup-agent service with no published port or Docker socket; writes become briefly read-only while database/media/key/configuration are captured into one `.mvbackup` bundle.
+- Add guarded restore tooling with automatic pre-restore safety backups, plus verified off-server bundle recovery for replacement hosts.
+- Persist managed backups independently through `BACKUP_STORAGE`; record bundle format/application version and revalidate checksums/archives before restore.
+- Add backend/API/UI regression coverage, a dedicated backup-agent recovery rehearsal and vulnerability scanning for the backup image.
+
 - Provide a one-command backup helper with progress, a single protected recovery bundle, checksums and app restart on ordinary failures; exercise its output in the Docker restore rehearsal.
 - Normalize application-code permissions in the Docker image so a checkout under `umask 077` cannot make commands unreadable by the app user; build CI under those restrictive permissions.
 
