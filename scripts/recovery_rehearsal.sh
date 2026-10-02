@@ -27,6 +27,7 @@ for mode in volume bind; do
     db="$token-$mode-$side"
     containers+=("$db")
     docker run -d --name "$db" --network "$token" \
+      --label "com.docker.compose.project=$token" \
       -e POSTGRES_USER=makervault -e POSTGRES_DB=makervault \
       -e POSTGRES_PASSWORD=synthetic-recovery-only postgres:18.6 >/dev/null
     ready=false
@@ -65,14 +66,32 @@ for mode in volume bind; do
   app source -c 'import base64,os; open("/app/keys/private_storage.key","wb").write(base64.urlsafe_b64encode(os.urandom(32)))'
   app source manage.py migrate --noinput >/dev/null
   app source manage.py shell -c 'exec(open("/fixture.py").read())'
-  # No worker/web service is started: the source is quiescent and the network is internal.
-  docker exec "$token-$mode-source" pg_dump -U makervault -d makervault -Fc > "$work/database.dump"
+  # Exercise the user-facing backup command on a harmless sleeping app container.
+  # No worker/web service is started and the network is internal.
+  source_app="$token-$mode-app"
+  containers+=("$source_app")
+  docker run -d --name "$source_app" --network "$token" \
+    --label "com.docker.compose.project=$token" \
+    -e DATABASE_HOST="$token-$mode-source" -e POSTGRES_PASSWORD=synthetic-recovery-only \
+    -e MAKERVAULT_STORAGE_KEY_FILE=/app/keys/private_storage.key \
+    -v "$source_media:/app/media" -v "$source_keys:/app/keys" \
+    --entrypoint sleep "$image" infinity >/dev/null
+  config="$work/config-$mode"
+  mkdir -p "$config"
+  printf 'SYNTHETIC_RECOVERY_ONLY=true\n' > "$config/.env"
+  printf 'services: {}\n' > "$config/compose.yaml"
+  git -C "$config" init -q
+  git -C "$config" -c user.name=Recovery -c user.email=recovery@example.invalid commit --allow-empty -qm synthetic
+  python3 "$root/scripts/backup.py" --source-dir "$config" --destination "$work/bundles-$mode" \
+    --app-container "$source_app" --database-container "$token-$mode-source"
+  test "$(docker inspect -f '{{.State.Running}}' "$source_app")" = true
+  tar -xzf "$work/bundles-$mode/"*.tar.gz -C "$work"
+  (cd "$work/makervault-backup" && sha256sum --check SHA256SUMS)
   for kind in media keys; do
-    source_var="source_$kind"; target_var="target_$kind"
-    docker run --rm --network none -v "${!source_var}:/data:ro" --entrypoint tar "$image" -C /data -czf - . > "$work/$kind.tar.gz"
-    docker run --rm -i --network none -v "${!target_var}:/data" --entrypoint tar "$image" -C /data -xzf - < "$work/$kind.tar.gz"
+    target_var="target_$kind"
+    docker run --rm -i --network none -v "${!target_var}:/data" --entrypoint tar "$image" -C /data -xzf - < "$work/makervault-backup/$kind.tar.gz"
   done
-  docker exec -i "$token-$mode-target" pg_restore --exit-on-error --no-owner --no-privileges -U makervault -d makervault < "$work/database.dump"
+  docker exec -i "$token-$mode-target" pg_restore --exit-on-error --no-owner --no-privileges -U makervault -d makervault < "$work/makervault-backup/database.dump"
   docker run --rm --network none -v "$target_media:/app/media" -v "$target_keys:/app/keys" \
     --entrypoint chown "$image" -R 911:911 /app/media /app/keys
   phase=verify

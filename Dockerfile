@@ -47,7 +47,8 @@ COPY LICENSE THIRD_PARTY_NOTICES.md /app/
 COPY --from=frontend-builder /frontend/dist/ /app/backend/core/static/app/
 COPY docker/entrypoint.sh /usr/local/bin/makervault-entrypoint
 COPY docker/supervisord.conf /etc/supervisor/conf.d/makervault.conf
-RUN chmod +x /usr/local/bin/makervault-entrypoint
+RUN chmod -R a+rX /app/backend \
+    && chmod +x /usr/local/bin/makervault-entrypoint
 
 WORKDIR /app/backend
 EXPOSE 8000

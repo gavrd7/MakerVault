@@ -2,6 +2,9 @@
 
 ## Unreleased — v1.0 recovery verification
 
+- Provide a one-command backup helper with progress, a single protected recovery bundle, checksums and app restart on ordinary failures; exercise its output in the Docker restore rehearsal.
+- Normalize application-code permissions in the Docker image so a checkout under `umask 077` cannot make commands unreadable by the app user; build CI under those restrictive permissions.
+
 - Add read-only private-file authentication and recorded-checksum verification.
 - Exercise synthetic PostgreSQL/media/key recovery on named volumes and bind mounts in Docker CI, including file revisions, owner isolation and missing/wrong-key failures.
 - Expand backup transfer checks and distinguish automated recovery evidence from real-installation acceptance.

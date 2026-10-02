@@ -53,6 +53,8 @@ jobs:
         run: pip-audit -r requirements.txt
       - name: Static security scan
         run: bandit -q -r backend -x backend/core/migrations -ll
+      - name: Backup failure-recovery tests
+        run: python -m unittest discover -s scripts -p 'test_backup.py' -v
       - name: Compile Python
         run: python -m compileall -q backend
       - name: Check Django model migrations
@@ -115,6 +117,8 @@ jobs:
             python:3.13-bookworm \
             chown -R 1001:1001 /workspace
       - uses: actions/checkout@v4
+      - name: Simulate a checkout created under umask 077
+        run: chmod -R go-rwx backend
       - name: Build MakerVault image
         run: docker build --pull -t makervault-ci .
       - name: Verify secured Python runtime versions in image
