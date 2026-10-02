@@ -38,8 +38,11 @@ def _remove_camera_source(connection, camera_id):
         if not (isinstance(item, dict) and item.get("id") == camera_id)
     ]
     config["cameras"] = raw
-    if config.get("camera_default_id") == camera_id:
-        remaining = sources(type("ConnectionView", (), {"config": config, "adapter": connection.adapter, "endpoint_url": connection.endpoint_url})())
+    connection.config = config
+    remaining = sources(connection)
+    if config.get("camera_default_id") == camera_id or not any(
+        item["id"] == config.get("camera_default_id") for item in remaining
+    ):
         if remaining:
             config["camera_default_id"] = remaining[-1]["id"]
         else:
