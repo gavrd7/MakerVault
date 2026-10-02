@@ -98,17 +98,18 @@ Open `http://SERVER-IP:8765`. The host port is configurable through `MAKERVAULT_
 
 ## Deployment and data
 
-The default Compose stack has three containers:
+The default Compose stack has four containers:
 
 - **makervault:** Django/Gunicorn, the compiled React frontend and Celery worker/beat.
 - **postgres:** PostgreSQL application data.
 - **redis:** queue/cache and background-work state.
+- **backup-agent:** isolated backup/recovery helper with no published port and no Docker socket.
 
-PostgreSQL and Redis do not publish host ports by default. Application code is built into the image. Named volumes and absolute-path bind mounts are supported for media, encryption keys, PostgreSQL and Redis.
+PostgreSQL, Redis and the backup agent do not publish host ports by default. Application code is built into the image. Named volumes and absolute-path bind mounts are supported for media, encryption keys, PostgreSQL, Redis and managed backups.
 
 Private uploaded files use authenticated AES-256-GCM encryption at rest with opaque object names. The default key is stored separately from media. This does not mean the database, deployment configuration or every secret is encrypted by the private-file storage feature.
 
-**Back up the database, media, matching encryption key, deployment configuration and source revision together.** Media without its key cannot recover encrypted uploads. Backup instructions exist; a complete recovery rehearsal and broader upgrade validation are the next v1.0 work items.
+**Back up the database, media, matching encryption key and deployment configuration together.** Media without its key cannot recover encrypted uploads. Superusers can create, verify, download and manage a single recovery bundle from **Settings → Backup & restore**. A guarded restore helper handles same-server recovery and downloaded bundles on a replacement host without giving the web process Docker control. Synthetic recovery is exercised in CI; a representative real-installation restore remains a v1.0 acceptance gate.
 
 [Backup and recovery](docs/guide/administration/backup.md) · [Accounts and quotas](docs/guide/administration/accounts.md)
 
