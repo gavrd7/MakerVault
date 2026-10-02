@@ -2,7 +2,7 @@
 
 ## Unreleased — v1.0 recovery verification
 
-- Add a superuser **Backup & restore** workspace for one-click managed backups, verification, download, deletion and recovery guidance.
+- Add a superuser **Backup & restore** workspace for one-click managed backups, verification, download, deletion and recovery guidance, with automatic completion/failure feedback on the page and a global toast that survives navigation.
 - Add managed backup creation inside the existing MakerVault worker with no Docker socket; web writes become briefly read-only and scheduled background mutations defer while database/media/key/configuration are captured into one `.mvbackup` bundle.
 - Add guarded restore tooling with automatic pre-restore safety backups, plus verified off-server bundle recovery for replacement hosts.
 - Persist managed backups independently through `BACKUP_STORAGE`; record bundle format/application version and revalidate checksums/archives before restore.
