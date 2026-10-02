@@ -13,7 +13,7 @@ from django.test import SimpleTestCase, TestCase, Client, override_settings
 
 from core.api_views import _serialise_printer_connection
 from core.models import Printer, PrinterConnection
-from core.printer_cameras import CameraError, camera_url, discover, frame, negotiate, resolve_address, upstream, creality_session, read_bounded
+from core.printer_cameras import CameraError, camera_url, diagnose_source, discover, frame, negotiate, resolve_address, upstream, creality_session, read_bounded
 
 
 def jpeg():
@@ -197,6 +197,34 @@ class CameraProtocolTests(SimpleTestCase):
     def test_response_deadline(self, clock):
         with self.assertRaises(CameraError):
             read_bounded(response(b"x"), 100)
+
+    @patch("core.printer_cameras.creality_session", return_value=("secret-camera-token", True))
+    @patch("core.printer_cameras.resolve_address", return_value="192.168.1.50")
+    @patch("core.printer_cameras.socket.create_connection")
+    def test_webrtc_diagnostics_check_control_camera_and_hide_token(self, connect, resolve, session):
+        self.connection.endpoint_url = "ws://printer.lan:9999"
+        source = {
+            "mode": "creality_webrtc",
+            "url": "http://printer.lan:8000/call/webrtc_local",
+        }
+        result = diagnose_source(self.connection, source)
+        self.assertTrue(result["ok"])
+        self.assertEqual([item["id"] for item in result["checks"]], ["control", "camera", "session"])
+        self.assertIn("9999", result["checks"][0]["detail"])
+        self.assertIn("8000", result["checks"][1]["detail"])
+        self.assertNotIn("secret-camera-token", json.dumps(result))
+        self.assertEqual(connect.call_count, 2)
+        session.assert_called_once_with(self.connection)
+
+    @patch("core.printer_cameras.resolve_address", return_value="192.168.1.50")
+    @patch("core.printer_cameras.socket.create_connection", side_effect=OSError("offline"))
+    def test_webrtc_diagnostics_report_unreachable_control_channel(self, connect, resolve):
+        self.connection.endpoint_url = "ws://printer.lan:9999"
+        with self.assertRaisesRegex(CameraError, "control channel"):
+            diagnose_source(
+                self.connection,
+                {"mode": "creality_webrtc", "url": "http://printer.lan:8000/call/webrtc_local"},
+            )
 
     @patch("core.printer_cameras.creality_session")
     @patch("core.printer_cameras.upstream")
@@ -383,6 +411,23 @@ class CameraApiTests(TestCase):
         self.client.force_login(self.other)
         self.assertEqual(
             self.client.post(self.root + "cam1/remove/", {}, content_type="application/json").status_code,
+            404,
+        )
+
+    @patch("core.camera_views.diagnose_source")
+    def test_camera_source_test_is_scoped_and_secret_free(self, diagnose):
+        diagnose.return_value = {
+            "ok": True,
+            "checks": [{"id": "camera", "ok": True, "detail": "Camera service reachable."}],
+        }
+        result = self.client.post(self.root + "cam1/test/", {}, content_type="application/json")
+        self.assertEqual(result.status_code, 200, result.content)
+        self.assertTrue(result.json()["ok"])
+        diagnose.assert_called_once()
+
+        self.client.force_login(self.other)
+        self.assertEqual(
+            self.client.post(self.root + "cam1/test/", {}, content_type="application/json").status_code,
             404,
         )
 
