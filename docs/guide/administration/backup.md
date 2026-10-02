@@ -12,7 +12,7 @@
 | PostgreSQL dump | Accounts, projects, catalogue records, file references and other structured data |
 | Media archive | Uploaded files and cached images |
 | Key archive | The key that decrypts private uploads |
-| `.env` and Compose configuration | Secrets, storage paths and deployment settings |
+| Recovery `.env` / deployment settings | Secrets, storage paths and supported deployment settings |
 | Source revision | The matching version of MakerVault for the first restore |
 | Redis data (optional for core records) | Queue/cache state; not a substitute for the database |
 
