@@ -368,6 +368,67 @@ def creality_session(connection):
     return "", False
 
 
+def diagnose_source(connection, source):
+    """Run bounded, secret-free connectivity checks for one configured camera source."""
+    mode = source.get("mode")
+    if mode in {"snapshot", "mjpeg"}:
+        data, content_type = frame(connection, source)
+        return {
+            "ok": True,
+            "mode": mode,
+            "checks": [
+                {
+                    "id": "camera",
+                    "ok": True,
+                    "detail": f"Camera returned {content_type} ({len(data)} bytes).",
+                }
+            ],
+        }
+
+    if mode != "creality_webrtc":
+        raise CameraError("This camera source type does not have a diagnostic check.")
+
+    base = endpoint(connection)
+    control_port = base.port or 9999
+    control_address = resolve_address(base.hostname, control_port)
+    control_socket = None
+    try:
+        control_socket = socket.create_connection((control_address, control_port), timeout=2)
+    except (OSError, TimeoutError) as exc:
+        raise CameraError(f"Creality control channel on port {control_port} could not be reached.") from exc
+    finally:
+        if control_socket:
+            control_socket.close()
+
+    parsed = urlsplit(source["url"])
+    camera_port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    camera_address = resolve_address(parsed.hostname, camera_port)
+    camera_socket = None
+    try:
+        camera_socket = socket.create_connection((camera_address, camera_port), timeout=2)
+    except (OSError, TimeoutError) as exc:
+        raise CameraError(f"Creality camera service on port {camera_port} could not be reached.") from exc
+    finally:
+        if camera_socket:
+            camera_socket.close()
+
+    token, protected = creality_session(connection)
+    session_detail = (
+        "Protected video session token received."
+        if protected and token
+        else "Camera session is reachable and does not require a protected video token."
+    )
+    return {
+        "ok": True,
+        "mode": mode,
+        "checks": [
+            {"id": "control", "ok": True, "detail": f"Creality control channel is reachable on port {control_port}."},
+            {"id": "camera", "ok": True, "detail": f"Creality camera service is reachable on port {camera_port}."},
+            {"id": "session", "ok": True, "detail": session_detail},
+        ],
+    }
+
+
 def negotiate(connection, source, offer):
     if source["mode"] != "creality_webrtc":
         raise CameraError("This camera does not use Creality WebRTC.")
