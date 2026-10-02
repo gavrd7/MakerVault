@@ -71,7 +71,7 @@ Replace `BACKUP_ID` with the value shown by MakerVault. The helper:
 4. stops MakerVault;
 5. creates a fresh **pre-restore safety backup** of the current installation;
 6. restores PostgreSQL, media and the encryption key together; and
-7. rebuilds/starts MakerVault and the backup service.
+7. rebuilds/starts MakerVault.
 
 If the safety backup fails, the destructive restore is not started. If restoring fails after data replacement has begun, MakerVault is left stopped and the helper prints the safety-backup recovery command rather than starting against a partial restore.
 
