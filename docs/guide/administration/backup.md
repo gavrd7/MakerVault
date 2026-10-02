@@ -45,7 +45,7 @@ The Backup & restore page shows completed bundles, total stored size, validation
 
 The web application does **not** receive access to the Docker socket. Instead, the supplied Compose stack runs a small internal `backup-agent` service with no published port and no Docker control. During backup it can read the normal media/key mounts, connect to PostgreSQL and write only to the dedicated backup storage.
 
-MakerVault creates a maintenance lock before capturing data. Normal read-only viewing continues, while web/API writes are rejected briefly so uploads, database references and archived media cannot be changed underneath the backup. The bundle is not marked complete until PostgreSQL's dump catalogue, the media/key archives and recorded SHA-256 checks have all been read successfully.
+MakerVault creates a maintenance lock before capturing data. Normal read-only viewing continues, while web/API writes are rejected briefly and MakerVault's scheduled catalogue, integration and printer-poll jobs defer until the lock clears. This prevents new application-side mutations from starting underneath the capture. The bundle is not marked complete until PostgreSQL's dump catalogue, the media/key archives and recorded SHA-256 checks have all been read successfully.
 
 Redis queue/cache data is deliberately excluded from normal recovery. Core MakerVault records are in PostgreSQL.
 
