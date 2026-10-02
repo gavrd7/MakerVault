@@ -27,8 +27,8 @@ For the standard Docker Compose installation, a superuser should normally use **
 1. Open **Settings → Backup & restore**.
 2. Select **Create backup**.
 3. MakerVault briefly makes normal writes read-only while it captures a consistent recovery set. You can continue viewing the application.
-4. Wait for the backup to show **Verified**.
-5. Select **Download** and keep a copy on another device or protected backup destination.
+4. Wait for the backup to finish. The page changes the start banner to **Backup complete** when the bundle has been created and verified; if you navigate elsewhere in MakerVault, a global notification reports completion or failure.
+5. Confirm the backup shows **Verified**, then select **Download** and keep a copy on another device or protected backup destination.
 
 MakerVault stores managed backups in `BACKUP_STORAGE`, which defaults to the `makervault_backups` Docker volume. You can use an absolute bind-mount path instead, for example:
 
