@@ -23,7 +23,7 @@ Where the firmware reports the data, MakerVault can display:
 - active ACE slot
 - ACE temperature/humidity and drying state when the firmware reports them
 
-The adapter is read-only in v0.7.3. MakerVault sends only the signed local handshake and read/query messages; it does not expose print, movement, heating, drying or other control commands.
+The adapter is read-only. MakerVault sends only the signed local handshake and read/query messages; it does not expose print, movement, heating, drying or other control commands.
 
 ## Before you start
 

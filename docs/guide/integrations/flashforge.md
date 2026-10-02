@@ -22,7 +22,7 @@ Depending on the printer model and firmware, MakerVault can display:
 - camera availability
 - material-station slots where the firmware exposes them
 
-The adapter is read-only in v0.7.3. MakerVault does not expose FlashForge job control, movement, heater or raw command interfaces.
+The adapter is read-only. MakerVault does not expose FlashForge job control, movement, heater or raw command interfaces.
 
 ## Before you start
 

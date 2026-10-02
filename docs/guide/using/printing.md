@@ -42,6 +42,12 @@ Use **Add to inventory** / **Identify detected physical spool** to choose whethe
 
 ## Optional connections
 
-Spoolman, compatible Creality CFS printers and SimplyPrint have implemented adapters. Bambu AMS, Elegoo, QIDI and Snapmaker entries are placeholders in this edition, not usable integrations. A provider-neutral slot model does not mean every brand is integrated.
+Live monitoring is implemented for Creality, Moonraker/Klipper, OctoPrint, Bambu Lab local, PrusaLink, Anycubic LAN and FlashForge local. Compatible Elegoo, QIDI, Sovol, Snapmaker U1 and Voron profiles reuse Moonraker. Spoolman, Creality CFS and SimplyPrint provide complementary inventory/service integrations. Most manufacturer hardware remains experimental pending testing; these are implemented adapters, not blanket promises for every model.
+
+K1/K2 monitoring and camera playback have owner confirmation. Add a live source through **Live monitor**; the optional second step offers camera setup. Later, use the separate **Camera setup** printer action. Visible printer/dashboard cards automatically show the last configured enabled camera, with a Fullscreen control and no setup selectors. [Camera instructions](../integrations/printer-cameras.md) explain the transport limits.
+
+Pause, Resume and confirmed Cancel are optional per-source controls for Creality, Moonraker and OctoPrint. Hardware control validation remains separate. See [controls](../integrations/printer-controls.md) and [adapter validation](../integrations/printer-adapter-validation.md).
+
+[Printed parts](printed-parts.md) are created explicitly. Filament tracking does not require saving a model or retaining a part.
 
 [Spoolman setup →](../integrations/spoolman.md) · [Creality CFS →](../integrations/creality.md) · [SimplyPrint →](../integrations/simplyprint.md)

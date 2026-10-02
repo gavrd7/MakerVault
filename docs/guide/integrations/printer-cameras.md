@@ -6,7 +6,7 @@ Configured camera feeds start automatically when their printer card is visible o
 
 1. Open **3D Printing** and find the printer card.
 2. Choose **Camera setup** alongside Manage printer. Setup is separate from **Open live**, which shows printer telemetry, and requires edit permission. Select the integration whose camera you want to configure.
-3. Select **Find camera sources**. Moonraker reads its webcam configuration; OctoPrint reads its classic webcam settings (the integration API key needs Settings Read). Creality offers K1 and K2 presets; PrusaLink reads its local camera API where supported. Anycubic/FlashForge can reuse recognised HTTP camera URLs from their latest status. All still need playback testing.
+3. Select **Find camera sources**. Moonraker reads its webcam configuration; OctoPrint reads its classic webcam settings (the integration API key needs Settings Read). Creality offers K1 and K2 presets; PrusaLink reads its local camera API where supported. Anycubic/FlashForge can reuse recognised HTTP camera URLs from their latest status. K1/K2 playback is owner-confirmed; other hardware and specific route combinations still need testing.
 4. Choose a discovered source or enter its name, feed type and full URL manually. Use the same host as the live integration, including any required camera port/path.
 5. Save and choose **Done**. The last camera saved becomes the automatic preview on both pages. To use an existing camera instead, select it inside Camera setup and choose **Use selected camera for previews**. A saved source is not proof of a working feed.
 
@@ -60,7 +60,7 @@ Discovery providers produce the same validated source contract: name, playback m
 | SimplyPrint | Manual local feed; alternative local integration where supported | Cloud camera access not implemented |
 | Other | Manual HTTP source | No guessed manufacturer endpoints |
 
-For printers exposing Moonraker or OctoPrint alongside a manufacturer interface, add that live integration to the same printer and set up its camera there. Camera viewing does not require enabling printer controls. The owner confirmed K1 and K2 camera playback working on 2 October 2026. Exact source route, firmware and browser were not supplied with that confirmation. Other manufacturers and remaining lifecycle/security checks remain pending in issue #37.
+For printers exposing Moonraker or OctoPrint alongside a manufacturer interface, add that live integration to the same printer and set up its camera there. Camera viewing does not require enabling printer controls. The owner confirmed K1 and K2 camera playback and accepted the compact automatic preview layout on 2 October 2026. Exact source route, firmware and browser were not supplied with that confirmation. Other manufacturers and remaining lifecycle/security checks remain pending in issue #37.
 
 ## Security and troubleshooting
 

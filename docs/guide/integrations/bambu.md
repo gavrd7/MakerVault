@@ -22,7 +22,7 @@ Where the printer reports the data, MakerVault can display:
 - AMS tray selection and RFID/tag presence
 - camera availability metadata
 
-The integration is read-only in v0.7.3. MakerVault does not expose start print, motion, heating, raw G-code or other high-impact controls.
+The integration is read-only. MakerVault does not expose start print, motion, heating, raw G-code or other high-impact controls.
 
 ## Before you start
 

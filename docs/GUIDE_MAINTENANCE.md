@@ -1,6 +1,6 @@
 # Maintaining and publishing the user guide
 
-The user guide is a documentation-only addition. It uses Markdown under `docs/guide`, Material for MkDocs and a separate `mkdocs.yml`. Existing engineering notes under `docs/` are not included in the public build. No application settings, volumes or runtime services are changed.
+The user guide documents the current release. It uses Markdown under `docs/guide`, Material for MkDocs and a separate `mkdocs.yml`. Existing engineering notes under `docs/` are not included in the public build. No application settings, volumes or runtime services are changed.
 
 ## Local preview and validation
 
@@ -66,7 +66,7 @@ For a task page, use: goal; prerequisites/permissions; numbered procedure; expec
 - Test enabled integration directions with representative services/hardware and record limitations.
 - Verify proxy/OIDC instructions with the chosen supported example providers.
 - Add sanitised screenshots for initial setup, inventory, BOM allocation, versions, printing and account storage. Use consistent viewport/data, descriptive alt text and no credentials.
-- Decide whether to archive v0.7 docs or introduce versioned documentation; avoid multiple divergent copies before needed.
+- Decide whether to archive pre-v1 docs or introduce versioned documentation; avoid multiple divergent copies before needed.
 - Verify published Pages URLs, search and accessibility. Never publish `.env`, backups or real users' private screenshots.
 
 The initial edition is source-reviewed and build-validated; live deployment and hardware integration acceptance remain separate checks. Record completed acceptance evidence in release notes rather than implying the documentation build exercised the application.

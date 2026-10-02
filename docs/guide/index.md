@@ -9,8 +9,8 @@ Learn to install MakerVault, record what you own and bring your projects, files 
 [Follow a first project](getting-started/first-project.md){ .md-button }
 </div>
 
-!!! info "Edition: v0.7.0.1 · Before v1"
-    This guide describes the current implementation, checked against source commit `59d12f81a2941178bca4e6fb1cea68f2081c60b4` on 29 September 2026. It is the foundation for the v1 guide, not a promise that development builds will never change. See [scope and verification](reference/about.md).
+!!! info "Current release: v0.9.0.2 · Before v1"
+    The guide overview and integration status were reconciled with the merged v0.9.0.2 implementation on 2 October 2026. K1/K2 monitoring and camera playback have owner confirmation. Clean-install, recovery, upgrade and broader hardware acceptance remain separate v1 work. See [scope and verification](reference/about.md).
 
 <div class="guide-grid" markdown>
 <div class="guide-card" markdown>
@@ -27,7 +27,7 @@ Find a board, add the units you own, plan a build and keep its files together.
 </div>
 <div class="guide-card" markdown>
 ### Organise 3D printing
-Keep track of printers, physical spools, model revisions and the material cost of your prints.
+Keep track of printers, camera feeds, physical spools, models, print history and explicitly retained printed parts.
 
 [3D printing →](using/printing.md)
 </div>
@@ -49,7 +49,9 @@ MakerVault is a self-hosted workshop management application. You open it in a we
 | What you actually own | Inventory | Three boards in drawer A2 |
 | What you are building | Projects | A voice-assistant speaker and its bill of materials |
 | Digital assets | Files | Firmware, wiring diagram, CAD and instructions |
-| What you design and print | 3D Printing | Enclosure revisions, spools and print history |
+| What you design and print | 3D Printing | Enclosure revisions, spools, live cameras and retained parts |
+| Physical identification | Maker Tags | A QR/NFC/RFID identity linked to a spool or project |
+| Connections in a build | Interactive Wiring | A diagram of boards, pins and wires |
 
 Catalogue records are shared reference information. Personal workspaces are separated by account. A project is not currently a shared team folder. [Read about accounts](administration/accounts.md) before setting up a multi-user installation.
 

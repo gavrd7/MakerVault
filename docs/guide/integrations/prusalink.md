@@ -17,7 +17,7 @@ MakerVault uses PrusaLink's documented local API endpoints for status, job and p
 - printer/firmware information
 - PrusaLink status warnings
 
-The integration is read-only in v0.7.3 even though the upstream API also defines print-control operations.
+The integration is read-only even though the upstream API also defines print-control operations.
 
 ## Authentication
 

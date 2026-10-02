@@ -34,7 +34,7 @@ cd MakerVault
 
 For private repository access, use GitHub's [HTTPS authentication guidance](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/about-authentication-to-github). Your ordinary GitHub password is not a Git credential. Do not put a token in the clone URL or paste one into a support message. An existing SSH setup may also be used.
 
-The `main` branch is the project's deployable branch. This guide was checked at v0.7.0.1; future `main` changes may need a newer guide.
+The `main` branch is the project's deployable branch. The current release is v0.9.0.2. Read the guide and changelog from the revision you install; broader clean-install and upgrade acceptance is part of v1 hardening.
 
 ## 3. Create your configuration
 
