@@ -148,14 +148,16 @@ export function CameraPlayback({ camera, url, compact = false }) {
   const [status, setStatus] = useState("Connecting…");
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
+  const [playbackBlocked, setPlaybackBlocked] = useState(false);
   useEffect(() => {
     let cancelled = false;
     let objectUrl = "";
     let peer;
     let videoTimeout;
+    let trackReceived = false;
     let stopFrames;
     const controller = new AbortController();
-    setImage(""); setError(""); setStatus("Connecting…");
+    setImage(""); setError(""); setStatus("Connecting…"); setPlaybackBlocked(false);
     const closePeer = () => {
       if (peer) {
         peer.ontrack = null; peer.onconnectionstatechange = null;
@@ -191,8 +193,20 @@ export function CameraPlayback({ camera, url, compact = false }) {
           if (transceiver.setCodecPreferences) transceiver.setCodecPreferences(codecs.slice(0, 1));
           peer.ontrack = event => {
             if (cancelled || event.track.kind !== "video" || !video.current) return;
+            trackReceived = true;
+            clearTimeout(videoTimeout);
             video.current.srcObject = event.streams[0] || new MediaStream([event.track]);
-            video.current.play().catch(() => failed("Playback was blocked. Use the video play control or reconnect."));
+            video.current.play().then(() => {
+              if (cancelled) return;
+              setPlaybackBlocked(false);
+              setError("");
+              setStatus("Live video · experimental");
+            }).catch(() => {
+              if (cancelled) return;
+              setPlaybackBlocked(true);
+              setError("Automatic playback was blocked by this browser. Select Play video.");
+              setStatus("Video ready");
+            });
           };
           peer.onconnectionstatechange = () => {
             if (cancelled) return;
@@ -205,7 +219,11 @@ export function CameraPlayback({ camera, url, compact = false }) {
           const answer = await cameraRequest(() => apiFetch(url, { method: "POST", signal: controller.signal, body: { sdp: prepareCrealityOffer(peer.localDescription.sdp) } }), controller.signal);
           if (cancelled) return;
           await peer.setRemoteDescription(answer);
-          videoTimeout = setTimeout(() => { if (!cancelled && (video.current?.readyState || 0) < 2) failed("No camera video arrived. Your browser must reach the printer over LAN/VPN; HTTPS access to MakerVault alone does not relay WebRTC video."); }, 20000);
+          if (!trackReceived) {
+            videoTimeout = setTimeout(() => {
+              if (!cancelled && !trackReceived) failed("No camera video track arrived. Your browser must reach the printer over LAN/VPN; HTTPS access to MakerVault alone does not relay WebRTC video.");
+            }, 20000);
+          }
         } catch (err) { if (err.name !== "AbortError") failed(err.message); }
       })();
     }
@@ -219,6 +237,20 @@ export function CameraPlayback({ camera, url, compact = false }) {
     document.addEventListener("keydown", escape);
     return () => { document.body.style.overflow = oldOverflow; document.removeEventListener("keydown", escape); };
   }, [expanded]);
+  const playVideo = async () => {
+    if (!video.current) return;
+    try {
+      await video.current.play();
+      setPlaybackBlocked(false);
+      setError("");
+      setStatus("Live video · experimental");
+    } catch (err) {
+      const detail = err?.message ? ` ${err.message}` : "";
+      setPlaybackBlocked(true);
+      setError(`${err?.name || "PlaybackError"}:${detail || " The browser rejected video playback."}`);
+      setStatus("Video ready");
+    }
+  };
   const fullscreen = () => {
     if (expanded) { setExpanded(false); return; }
     const target = container.current;
@@ -231,11 +263,12 @@ export function CameraPlayback({ camera, url, compact = false }) {
   return <div className={"printerCameraPlayback" + (compact ? " cameraGlance" : "") + (expanded ? " cameraExpanded" : "")} ref={container}>
     <div className="printerCameraToolbar">
       {!compact && <small role="status">{status}</small>}
+      {playbackBlocked && <button type="button" onClick={playVideo}>Play video</button>}
       {(!compact || error) && <button type="button" onClick={() => setAttempt(value => value + 1)}>Reconnect</button>}
       <button type="button" className="cameraFullscreen" aria-label={expanded ? "Close fullscreen camera" : "Open fullscreen camera"} onClick={fullscreen}>{expanded ? "Close" : "Fullscreen"}</button>
     </div>
     <div className="printerCameraViewport">
-      {camera.mode === "creality_webrtc" ? <video ref={video} style={{ transform }} autoPlay muted playsInline controls={!compact} onPlaying={() => setStatus("Live video · experimental")} /> : image ? <img src={image} alt={camera.name + " live camera view"} style={{ transform }} /> : <span role="status">{status}</span>}
+      {camera.mode === "creality_webrtc" ? <video ref={video} style={{ transform }} autoPlay muted playsInline controls={!compact || playbackBlocked} onPlaying={() => { setPlaybackBlocked(false); setError(""); setStatus("Live video · experimental"); }} /> : image ? <img src={image} alt={camera.name + " live camera view"} style={{ transform }} /> : <span role="status">{status}</span>}
     </div>
     {error && <p className="integrationError" role="alert">{error}</p>}
     {!compact && <small>{LABELS[camera.mode]}{camera.mode === "creality_webrtc" ? " · Browser needs LAN/VPN access to the printer." : " · Images are relayed securely through your MakerVault session."}</small>}
