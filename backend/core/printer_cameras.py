@@ -69,14 +69,27 @@ def normalise_source(connection, data, source_id):
 
 def sources(connection):
     result = []
-    raw = (connection.config or {}).get("cameras", [])
+    positions = {}
+    config = connection.config or {}
+    raw = config.get("cameras", [])
+    selected_id = str(config.get("camera_default_id") or "")
     if not isinstance(raw, list):
         return result
     for item in raw[:8]:
         try:
             if not isinstance(item, dict) or not isinstance(item.get("id"), str):
                 continue
-            result.append(normalise_source(connection, item, item["id"]))
+            normalised = normalise_source(connection, item, item["id"])
+            signature = (normalised["mode"], normalised["url"])
+            if signature in positions:
+                # Old builds could append the same discovered feed repeatedly.
+                # Prefer the duplicate already selected for previews, otherwise
+                # retain the first stable camera ID.
+                if normalised["id"] == selected_id:
+                    result[positions[signature]] = normalised
+                continue
+            positions[signature] = len(result)
+            result.append(normalised)
         except (CameraError, ValueError, TypeError):
             continue
     return result
