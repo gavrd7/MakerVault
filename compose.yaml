@@ -23,11 +23,14 @@ services:
       CELERY_CONCURRENCY: ${CELERY_CONCURRENCY:-2}
       WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
       GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-120}
+      MAKERVAULT_BACKUP_AGENT_URL: http://backup-agent:9784
+      MAKERVAULT_BACKUP_ROOT: /app/backups
     ports:
       - "${MAKERVAULT_BIND_ADDRESS:-0.0.0.0}:${MAKERVAULT_PORT:-8765}:8000"
     volumes:
       - ${MEDIA_STORAGE:-makervault_media}:/app/media
       - ${KEY_STORAGE:-makervault_keys}:/app/keys
+      - ${BACKUP_STORAGE:-makervault_backups}:/app/backups
     depends_on:
       postgres:
         condition: service_healthy
@@ -62,6 +65,51 @@ services:
       timeout: 5s
       retries: 10
 
+  backup-agent:
+    build:
+      context: .
+      dockerfile: docker/backup-agent.Dockerfile
+    container_name: makervault-backup
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      TZ: ${TZ:-Europe/London}
+      DATABASE_HOST: ${DATABASE_HOST:-postgres}
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-makervault}
+      POSTGRES_USER: ${POSTGRES_USER:-makervault}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      MAKERVAULT_BACKUP_TOKEN: ${DJANGO_SECRET_KEY:?Set DJANGO_SECRET_KEY in .env}
+      MAKERVAULT_VERSION: ${MAKERVAULT_VERSION:-}
+    user: "${PUID:-1000}:${PGID:-1000}"
+    volumes:
+      - ${MEDIA_STORAGE:-makervault_media}:/source/media:ro
+      - ${KEY_STORAGE:-makervault_keys}:/source/keys:ro
+      - ${BACKUP_STORAGE:-makervault_backups}:/backups
+      - ./.env:/source/config/.env:ro
+      - ./compose.yaml:/source/config/compose.yaml:ro
+    depends_on:
+      makervault:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - makervault_backend
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9784/healthz', timeout=2).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
   redis:
     image: redis:8.10.1-alpine
     container_name: makervault-redis
@@ -90,3 +138,4 @@ volumes:
   makervault_keys:
   makervault_postgres:
   makervault_redis:
+  makervault_backups:
