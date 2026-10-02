@@ -90,7 +90,9 @@ class BackupAgentTests(unittest.TestCase):
     def test_failed_backup_clears_lock_and_records_failure(self):
         def fail_dump(command, **kwargs):
             if command[0] == "pg_dump":
-                return agent.subprocess.CompletedProcess(command, 1, stderr=b"synthetic dump failure")
+                raise agent.subprocess.CalledProcessError(
+                    1, command, stderr=b"synthetic dump failure"
+                )
             return agent.subprocess.CompletedProcess(command, 0, stdout=b"", stderr=b"")
 
         with patch.object(agent.subprocess, "run", side_effect=fail_dump):
