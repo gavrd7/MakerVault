@@ -11,7 +11,7 @@ from django.views.decorators.http import require_http_methods
 
 from .api_views import _error, _read_json, _require_permission
 from .models import PrinterConnection
-from .printer_cameras import CameraError, discover_result, frame, negotiate, normalise_source, sources, provider_info, setup_presets
+from .printer_cameras import CameraError, diagnose_source, discover_result, frame, negotiate, normalise_source, sources, provider_info, setup_presets
 
 
 def connection_for(request, printer_id, connection_id):
@@ -158,6 +158,25 @@ def camera_source_remove(request, printer_id, connection_id, camera_id):
         return private_response(JsonResponse({"deleted": True, "id": camera_id}))
     except CameraError as exc:
         return _error(str(exc), 404)
+
+
+@login_required
+@require_http_methods(["POST"])
+def camera_source_test(request, printer_id, connection_id, camera_id):
+    connection = connection_for(request, printer_id, connection_id)
+    if not connection:
+        return _error("Printer source not found.", 404)
+    denied = _require_permission(request, "core.change_printer")
+    if denied:
+        return denied
+    source = next((item for item in sources(connection) if item["id"] == camera_id), None)
+    if not source:
+        return _error("Camera source not found.", 404)
+    try:
+        result = diagnose_source(connection, source)
+        return private_response(JsonResponse(result))
+    except (CameraError, ValidationError, TypeError, ValueError) as exc:
+        return private_response(_error(str(exc) if isinstance(exc, CameraError) else "Camera diagnostics failed.", 502))
 
 
 @login_required
