@@ -12,7 +12,7 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Q, Sum
 from django.db.models.deletion import ProtectedError
-from django.http import JsonResponse
+from django.http import FileResponse, JsonResponse
 from django.utils import timezone
 from django.utils.text import slugify
 from django.views.decorators.http import require_http_methods
@@ -51,6 +51,17 @@ from .tasks import queue_catalogue_maintenance_now
 from .storage_usage import StorageQuotaExceeded, ensure_storage_capacity, storage_settings, storage_summary
 from .user_admin import admin_user_summary, purge_user_private_data
 from .private_storage import private_storage_key_status
+from .backups import (
+    BackupServiceError,
+    backup_in_progress,
+    bundle_path,
+    create_backup,
+    delete_backup,
+    get_backup,
+    list_backups,
+    managed_backup_capability,
+    validate_backup,
+)
 from .search_service import run_search
 from .wiring import normalise_wiring, serialise_wiring_diagram
 from .maker_tags import (
@@ -1284,6 +1295,89 @@ def _quota_bytes(value, field_name="quota_bytes"):
     if result < 0:
         raise ValidationError({field_name: "Storage quota cannot be negative."})
     return result
+
+
+@login_required
+@require_http_methods(["GET"])
+def admin_backups(request):
+    denied = _superuser_required(request)
+    if denied:
+        return denied
+    rows = list_backups()
+    supported, unsupported_reason = managed_backup_capability()
+    return JsonResponse({
+        "rows": rows,
+        "supported": supported,
+        "unsupported_reason": unsupported_reason,
+        "running": backup_in_progress() or any(item.get("status") == "running" for item in rows),
+        "total_bytes": sum(int(item.get("size_bytes") or 0) for item in rows if item.get("status") == "complete"),
+    })
+
+
+@login_required
+@require_http_methods(["POST"])
+def admin_backup_create(request):
+    denied = _superuser_required(request)
+    if denied:
+        return denied
+    supported, reason = managed_backup_capability()
+    if not supported:
+        return _error(reason, status=409)
+    try:
+        result = create_backup()
+        return JsonResponse({"backup": result}, status=202)
+    except BackupServiceError as exc:
+        return _error(str(exc), status=503)
+
+
+@login_required
+@require_http_methods(["POST"])
+def admin_backup_validate(request, backup_id):
+    denied = _superuser_required(request)
+    if denied:
+        return denied
+    try:
+        get_backup(backup_id)
+        result = validate_backup(backup_id)
+        return JsonResponse({"validation": result, "item": get_backup(backup_id)})
+    except BackupServiceError as exc:
+        return _error(str(exc))
+
+
+@login_required
+@require_http_methods(["GET"])
+def admin_backup_download(request, backup_id):
+    denied = _superuser_required(request)
+    if denied:
+        return denied
+    try:
+        item = get_backup(backup_id)
+        if item.get("status") != "complete" or not item.get("download_available"):
+            return _error("Backup is not ready to download.", status=409)
+        path = bundle_path(backup_id)
+        response = FileResponse(
+            path.open("rb"),
+            as_attachment=True,
+            filename=path.name,
+            content_type="application/gzip",
+        )
+        response["Cache-Control"] = "no-store"
+        return response
+    except (BackupServiceError, OSError) as exc:
+        return _error(str(exc), status=404)
+
+
+@login_required
+@require_http_methods(["DELETE"])
+def admin_backup_delete(request, backup_id):
+    denied = _superuser_required(request)
+    if denied:
+        return denied
+    try:
+        delete_backup(backup_id)
+        return JsonResponse({"deleted": True, "id": backup_id})
+    except BackupServiceError as exc:
+        return _error(str(exc), status=409)
 
 
 @login_required

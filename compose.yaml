@@ -23,11 +23,13 @@ services:
       CELERY_CONCURRENCY: ${CELERY_CONCURRENCY:-2}
       WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
       GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-120}
+      MAKERVAULT_BACKUP_ROOT: /app/backups
     ports:
       - "${MAKERVAULT_BIND_ADDRESS:-0.0.0.0}:${MAKERVAULT_PORT:-8765}:8000"
     volumes:
       - ${MEDIA_STORAGE:-makervault_media}:/app/media
       - ${KEY_STORAGE:-makervault_keys}:/app/keys
+      - ${BACKUP_STORAGE:-makervault_backups}:/app/backups
     depends_on:
       postgres:
         condition: service_healthy
@@ -90,3 +92,4 @@ volumes:
   makervault_keys:
   makervault_postgres:
   makervault_redis:
+  makervault_backups:

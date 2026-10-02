@@ -20,10 +20,18 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     GUNICORN_TIMEOUT=120
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates \
+      curl \
       gosu \
       libmagic1 \
       supervisor \
       tzdata \
+    && install -d /usr/share/postgresql-common/pgdg \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+    && . /etc/os-release \
+    && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-client-18 \
     && apt-get upgrade -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
@@ -43,7 +51,7 @@ RUN groupadd --gid 911 makervault \
     && chown -R makervault:makervault /app/media /app/staticfiles /app/run
 
 COPY backend/ /app/backend/
-COPY LICENSE THIRD_PARTY_NOTICES.md /app/
+COPY LICENSE THIRD_PARTY_NOTICES.md .env.example /app/
 COPY --from=frontend-builder /frontend/dist/ /app/backend/core/static/app/
 COPY docker/entrypoint.sh /usr/local/bin/makervault-entrypoint
 COPY docker/supervisord.conf /etc/supervisor/conf.d/makervault.conf

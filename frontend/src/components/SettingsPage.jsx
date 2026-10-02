@@ -3,6 +3,7 @@ import { apiFetch } from "../api";
 import { Badge, LoadingBlock, Modal } from "./Common";
 import AdminUsersPanel from "./AdminUsersPanel";
 import CatalogueCoveragePanel from "./CatalogueCoveragePanel";
+import BackupRestorePanel from "./BackupRestorePanel";
 
 function formatWhen(value) {
   if (!value) return "Not yet";
@@ -11,7 +12,7 @@ function formatWhen(value) {
   return date.toLocaleString();
 }
 
-export default function SettingsPage({ config }) {
+export default function SettingsPage({ config, onBackupStarted }) {
   const [settings, setSettings] = useState(null);
   const [form, setForm] = useState(null);
   const [integrations, setIntegrations] = useState([]);
@@ -266,7 +267,9 @@ export default function SettingsPage({ config }) {
           ? <span className={settings.enabled ? "status-pill status-on" : "status-pill"}>{settings.enabled ? "Updates enabled" : "Updates disabled"}</span>
           : activeTab === "printing"
             ? <span className={enabledIntegrations ? "status-pill status-on" : "status-pill"}>{enabledIntegrations} integration{enabledIntegrations === 1 ? "" : "s"} enabled</span>
-            : <span className="status-pill status-on">Account administration</span>}
+            : activeTab === "backups"
+              ? <span className="status-pill status-on">Recovery protection</span>
+              : <span className="status-pill status-on">Account administration</span>}
       </div>
     </section>
 
@@ -291,6 +294,17 @@ export default function SettingsPage({ config }) {
         <strong>3D Printing</strong>
         <small>Spool, printer and multi-material integrations</small>
       </button>
+
+      {config?.is_superuser && <button
+        type="button"
+        role="tab"
+        aria-selected={activeTab === "backups"}
+        className={activeTab === "backups" ? "active" : ""}
+        onClick={() => setActiveTab("backups")}
+      >
+        <strong>Backup &amp; restore</strong>
+        <small>Create, verify, download and recover MakerVault</small>
+      </button>}
 
       {config?.is_superuser && <button
         type="button"
@@ -436,6 +450,7 @@ export default function SettingsPage({ config }) {
 
     </>}
 
+    {activeTab === "backups" && config?.is_superuser && <BackupRestorePanel onBackupStarted={onBackupStarted} />}
     {activeTab === "users" && <AdminUsersPanel config={config} />}
 
     {activeTab === "library" && <section className="panel settingsInfo">

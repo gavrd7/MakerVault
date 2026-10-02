@@ -29,11 +29,11 @@ fi
 groupmod -o -g "$PGID" makervault
 usermod -o -u "$PUID" -g "$PGID" makervault
 
-mkdir -p /app/media /app/keys /app/staticfiles /app/run /home/makervault
+mkdir -p /app/media /app/keys /app/backups /app/staticfiles /app/run /home/makervault
 if [ "$FIX_PERMISSIONS_VALUE" = "true" ] || [ "$FIX_PERMISSIONS_VALUE" = "1" ]; then
-  chown -R "$PUID:$PGID" /app/media /app/keys /app/staticfiles /app/run /home/makervault
+  chown -R "$PUID:$PGID" /app/media /app/keys /app/backups /app/staticfiles /app/run /home/makervault
 else
-  chown "$PUID:$PGID" /app/media /app/keys /app/staticfiles /app/run 2>/dev/null || true
+  chown "$PUID:$PGID" /app/media /app/keys /app/backups /app/staticfiles /app/run 2>/dev/null || true
 fi
 
 # Keep the private-file encryption key outside the media volume. The default
@@ -77,6 +77,9 @@ cd /app/backend
 echo "Applying database migrations..."
 gosu makervault python manage.py migrate --noinput
 gosu makervault python manage.py seed_roles
+
+echo "Recovering interrupted backup state..."
+gosu makervault python manage.py backup_bundle recover-stale
 
 echo "Encrypting any legacy user-private media..."
 if ! gosu makervault python manage.py migrate_private_storage; then

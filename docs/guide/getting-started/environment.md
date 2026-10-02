@@ -52,7 +52,7 @@ For a new, direct-LAN installation:
 | **Replace before starting** | `DJANGO_SECRET_KEY`, `POSTGRES_PASSWORD` | Generate two different random values below |
 | **Match your address** | `DJANGO_ALLOWED_HOSTS`, `DJANGO_CSRF_TRUSTED_ORIGINS` | Add your real server IP/hostname in the correct format |
 | **Match direct access** | `TRUST_PROXY_HEADERS`, `ALLAUTH_TRUSTED_PROXY_COUNT` | Use `false` and `0` respectively |
-| **Choose before first start** | The four `*_STORAGE` entries | Keep named-volume defaults or choose [bind mounts](storage.md) |
+| **Choose before first start** | The five `*_STORAGE` entries | Keep named-volume defaults or choose [bind mounts](storage.md) |
 | **Review your preferences** | Timezone, language, currency and measurements | Change if the supplied UK/metric defaults do not suit you |
 | **Usually leave alone** | Database/Redis internal addresses, concurrency and catalogue limits | Keep defaults for the standard deployment |
 | **Optional later** | OIDC, SMTP email, administrator bootstrap | Leave disabled/blank until you need them |
@@ -108,7 +108,7 @@ MAKERVAULT_STORAGE_KEY_FILE=/app/keys/private_storage.key
 
 If using bind mounts, change `KEY_STORAGE` to your chosen host key folder, but keep the `/app/keys/private_storage.key` value: that path is **inside the container**.
 
-Leave `MAKERVAULT_STORAGE_KEY` commented out. Startup generates a correctly formatted random key once and keeps it in the key storage. Back it up along with media and the database. It is not a file you need to create manually for normal setup.
+Leave `MAKERVAULT_STORAGE_KEY` commented out. Startup generates a correctly formatted random key once and keeps it in the key storage. Back it up along with media and the database. Managed backups keep all three together. It is not a file you need to create manually for normal setup.
 
 !!! warning "Existing installations: do not regenerate secrets as an update step"
     Replacing the file-encryption key makes existing private uploads unreadable. Changing only `POSTGRES_PASSWORD` does not change the password already held by an existing PostgreSQL database and can prevent the app connecting. Changing the Django key can invalidate signed data such as sessions or reset links. Preserve the existing values during upgrades; deliberate credential rotation is a separate task.
@@ -150,7 +150,7 @@ The HTTPS settings are not “extra protection” switches to turn on before you
 | --- | --- |
 | Locale/time | `TZ` is the container timezone; `DJANGO_TIME_ZONE` is the app timezone. Normally keep them the same, e.g. `Europe/London`. `DJANGO_LANGUAGE_CODE=en-gb` selects British English. Currency/measurement settings express preferences; they do not convert existing money amounts. |
 | Container permissions | `PUID` and `PGID` identify the Linux user/group for app storage, especially bind mounts. `UMASK=0022` controls permissions on newly created files/directories; it is not a user ID. Keep it and `FIX_PERMISSIONS=true` unless you deliberately manage ownership yourself. See [storage choices](storage.md). |
-| Storage | Four separate locations hold media, keys, database and Redis data. Set these before entering real data. They do not identify the source-code folder. |
+| Storage | Five separate locations hold media, keys, database, Redis data and managed recovery bundles. Set these before entering real data. They do not identify the source-code folder. |
 | Registration/admin | Keep `ALLOW_LOCAL_REGISTRATION=false` for accounts created by an administrator. Leave `MAKERVAULT_ADMIN_PASSWORD` empty when using interactive `createsuperuser`. A non-empty bootstrap password is applied at startup, so it can override later password changes. |
 | Legacy owner | Leave `MAKERVAULT_LEGACY_OWNER_USERNAME` blank on a new installation. It is for ambiguous ownership during upgrades from before v0.7. |
 | OIDC | External single sign-on. Leave `OIDC_ENABLED=false` and credentials empty until following [OIDC setup](../advanced/oidc.md). Client credentials come from your provider, not the Python generator above. |

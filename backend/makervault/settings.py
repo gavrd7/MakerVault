@@ -98,6 +98,7 @@ SITE_ID = 1
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    "core.backups.BackupMaintenanceMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -221,6 +222,10 @@ STATIC_ROOT = Path("/app/staticfiles")
 MAKERVAULT_STORAGE_KEY = os.getenv("MAKERVAULT_STORAGE_KEY", "").strip()
 _storage_key_file = os.getenv("MAKERVAULT_STORAGE_KEY_FILE", "/app/keys/private_storage.key").strip()
 MAKERVAULT_STORAGE_KEY_FILE = Path(_storage_key_file) if _storage_key_file else None
+
+# First-class backup management runs inside the existing MakerVault worker.
+# Restore remains a guarded host-side action; the web process never receives Docker control.
+MAKERVAULT_BACKUP_ROOT = Path(os.getenv("MAKERVAULT_BACKUP_ROOT", str(BASE_DIR.parent / "backups")))
 
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
