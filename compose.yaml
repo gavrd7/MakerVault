@@ -109,6 +109,39 @@ services:
       retries: 3
       start_period: 10s
 
+  # Restore is deliberately a separate, normally inactive profile. The running
+  # backup service has read-only media/key mounts; only the host-side guarded
+  # restore helper invokes this service with writable recovery mounts.
+  restore-agent:
+    profiles: ["restore"]
+    build:
+      context: .
+      dockerfile: docker/backup-agent.Dockerfile
+    env_file:
+      - .env
+    environment:
+      TZ: ${TZ:-Europe/London}
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-makervault}
+      POSTGRES_USER: ${POSTGRES_USER:-makervault}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    user: "0:0"
+    volumes:
+      - ${MEDIA_STORAGE:-makervault_media}:/source/media
+      - ${KEY_STORAGE:-makervault_keys}:/source/keys
+      - ${BACKUP_STORAGE:-makervault_backups}:/backups
+      - ./:/source/config:ro
+    networks:
+      - makervault_backend
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
   redis:
     image: redis:8.10.1-alpine
     container_name: makervault-redis
