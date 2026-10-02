@@ -176,19 +176,19 @@ def main() -> int:
 
         backup_id = "imported-" + digest_file(bundle)[:16]
         try:
-            print("2/8 Preparing the backup service and database...", flush=True)
-            run([*base, "build", "backup-agent", "restore-agent"])
+            print("2/8 Preparing the MakerVault image and database...", flush=True)
+            run([*base, "build", "makervault"])
             run([*base, "up", "-d", "--wait", "postgres", "redis"])
-            puid, pgid = env_ids(env_file)
             stage = [
-                *base, "run", "--rm", "--no-deps", "-T", "--user", "0:0",
-                "--entrypoint", "sh", "backup-agent", "-c",
-                'umask 077; cat > "/backups/$1.mvbackup"; chown "$2:$3" /backups "/backups/$1.mvbackup"; chmod 700 /backups; chmod 600 "/backups/$1.mvbackup"',
-                "sh", backup_id, str(puid), str(pgid),
+                *base, "run", "--rm", "--no-deps", "-T",
+                "--entrypoint", "sh", "makervault", "-c",
+                'umask 077; mkdir -p /app/backups; cat > "/app/backups/$1.mvbackup"; chmod 600 "/app/backups/$1.mvbackup"',
+                "sh", backup_id,
             ]
             stream_file(stage, bundle)
             registered = run(
-                [*base, "run", "--rm", "--no-deps", "backup-agent", "register", "--id", backup_id],
+                [*base, "run", "--rm", "--no-deps", "--entrypoint", "python", "makervault",
+                 "manage.py", "backup_bundle", "register", "--id", backup_id],
                 capture=True,
                 check=False,
             )
@@ -211,15 +211,15 @@ def main() -> int:
 
     if not bundle:
         try:
-            run([*base, "build", "restore-agent"])
+            run([*base, "build", "makervault"])
         except RestoreError as exc:
-            print(f"Restore not started: could not prepare the isolated restore image: {exc}", file=sys.stderr)
+            print(f"Restore not started: could not prepare the MakerVault image: {exc}", file=sys.stderr)
             return 2
 
     print(f"{1 + step_offset}/{total_steps} Checking that no backup is currently running...", flush=True)
     lock = run(
-        [*base, "run", "--rm", "--no-deps", "--entrypoint", "sh", "backup-agent", "-c",
-         "test ! -f /backups/.maintenance-lock"],
+        [*base, "run", "--rm", "--no-deps", "--entrypoint", "sh", "makervault", "-c",
+         "test ! -f /app/backups/.maintenance-lock"],
         capture=True,
         check=False,
     )
@@ -229,7 +229,8 @@ def main() -> int:
 
     print(f"{2 + step_offset}/{total_steps} Validating the selected recovery bundle...", flush=True)
     validated = run(
-        [*base, "run", "--rm", "--no-deps", "backup-agent", "validate", "--id", backup_id],
+        [*base, "run", "--rm", "--no-deps", "--entrypoint", "python", "makervault",
+         "manage.py", "backup_bundle", "validate", "--id", backup_id],
         capture=True,
         check=False,
     )
@@ -260,15 +261,17 @@ def main() -> int:
             print("Restore cancelled; nothing was changed.")
             return 0
 
-    print(f"{3 + step_offset}/{total_steps} Stopping the backup service and MakerVault...", flush=True)
-    run([*base, "stop", "backup-agent", "makervault"], check=False)
+    print(f"{3 + step_offset}/{total_steps} Stopping MakerVault...", flush=True)
+    run([*base, "stop", "makervault"], check=False)
 
     pre_restore_id = ""
     if replacing_existing:
         pre_restore_id = "pre-restore-" + time.strftime("%Y%m%d-%H%M%S", time.gmtime())
         print(f"{4 + step_offset}/{total_steps} Creating a pre-restore safety backup...", flush=True)
         safety = run(
-            [*base, "run", "--rm", "--no-deps", "backup-agent", "backup", "--id", pre_restore_id, "--label", "Automatic pre-restore safety backup"],
+            [*base, "run", "--rm", "--no-deps", "--entrypoint", "python", "makervault",
+             "manage.py", "backup_bundle", "create", "--id", pre_restore_id,
+             "--label", "Automatic pre-restore safety backup"],
             capture=True,
             check=False,
         )
@@ -277,7 +280,7 @@ def main() -> int:
             detail = (safety.stderr or safety.stdout or "").strip()
             if detail:
                 print(detail, file=sys.stderr)
-            run([*base, "up", "-d", "makervault", "backup-agent"], check=False)
+            run([*base, "up", "-d", "makervault"], check=False)
             return 3
         print(f"Safety backup created: {pre_restore_id}", flush=True)
     else:
@@ -285,7 +288,8 @@ def main() -> int:
 
     print(f"{5 + step_offset}/{total_steps} Restoring database, media and encryption keys...", flush=True)
     restored = run(
-        [*base, "--profile", "restore", "run", "--rm", "--no-deps", "restore-agent", "restore", "--id", backup_id],
+        [*base, "run", "--rm", "--no-deps", "--entrypoint", "python", "makervault",
+         "manage.py", "backup_bundle", "restore", "--id", backup_id],
         capture=True,
         check=False,
     )
@@ -295,7 +299,8 @@ def main() -> int:
             print(f"MakerVault has been left stopped to avoid starting against a partial restore. Safety backup: {pre_restore_id}", file=sys.stderr)
             print(
                 "Recovery command: "
-                + " ".join([*base, "--profile", "restore", "run", "--rm", "--no-deps", "restore-agent", "restore", "--id", pre_restore_id]),
+                + " ".join([*base, "run", "--rm", "--no-deps", "--entrypoint", "python", "makervault",
+                            "manage.py", "backup_bundle", "restore", "--id", pre_restore_id]),
                 file=sys.stderr,
             )
         detail = (restored.stderr or restored.stdout or "").strip()
@@ -303,8 +308,8 @@ def main() -> int:
             print(detail, file=sys.stderr)
         return 4
 
-    print(f"{6 + step_offset}/{total_steps} Starting MakerVault and its backup service...", flush=True)
-    run([*base, "up", "-d", "--build", "makervault", "backup-agent"])
+    print(f"{6 + step_offset}/{total_steps} Starting MakerVault...", flush=True)
+    run([*base, "up", "-d", "--build", "makervault"])
     run([*base, "ps"], check=False)
     print()
     print(f"Restore complete from {backup_id}.")
