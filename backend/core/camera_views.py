@@ -64,17 +64,39 @@ def camera_sources(request, printer_id, connection_id):
             config = dict(connection.config or {})
             rows = sources(connection)
             if request.method == "DELETE":
-                rows = [item for item in rows if item["id"] != str(payload.get("id") or "")]
+                selected_id = str(payload.get("id") or "")
+                rows = [item for item in rows if item["id"] != selected_id]
+                if config.get("camera_default_id") == selected_id:
+                    if rows:
+                        config["camera_default_id"] = rows[-1]["id"]
+                    else:
+                        config.pop("camera_default_id", None)
             elif request.method == "PATCH":
                 selected_id = str(payload.get("id") or "")
                 if not any(row["id"] == selected_id for row in rows):
                     return _error("Camera source not found.", 404)
                 config["camera_default_id"] = selected_id
             else:
-                if len(rows) >= 8:
-                    return _error("A printer source can have up to eight cameras.")
-                rows.append(normalise_source(connection, payload, uuid.uuid4().hex))
-                config["camera_default_id"] = rows[-1]["id"]
+                candidate = normalise_source(connection, payload, uuid.uuid4().hex)
+                matches = [
+                    item for item in rows
+                    if item["mode"] == candidate["mode"] and item["url"] == candidate["url"]
+                ]
+                if matches:
+                    keep_id = matches[0]["id"]
+                    candidate = normalise_source(connection, payload, keep_id)
+                    rows = [
+                        candidate if item["id"] == keep_id else item
+                        for item in rows
+                        if item["id"] == keep_id
+                        or not (item["mode"] == candidate["mode"] and item["url"] == candidate["url"])
+                    ]
+                    config["camera_default_id"] = keep_id
+                else:
+                    if len(rows) >= 8:
+                        return _error("A printer source can have up to eight cameras.")
+                    rows.append(candidate)
+                    config["camera_default_id"] = candidate["id"]
             config["camera_configured_at"] = timezone.now().isoformat()
             config["cameras"] = rows
             connection.config = config
@@ -82,6 +104,34 @@ def camera_sources(request, printer_id, connection_id):
         return private_response(JsonResponse({"saved": True}))
     except (CameraError, TypeError, ValueError, ValidationError) as exc:
         return _error(str(exc) if isinstance(exc, CameraError) else "Invalid camera configuration.")
+
+
+@login_required
+@require_http_methods(["DELETE"])
+def camera_source_detail(request, printer_id, connection_id, camera_id):
+    connection = connection_for(request, printer_id, connection_id)
+    if not connection:
+        return _error("Printer source not found.", 404)
+    denied = _require_permission(request, "core.change_printer")
+    if denied:
+        return denied
+    with transaction.atomic():
+        connection = PrinterConnection.objects.select_for_update().get(pk=connection.pk)
+        config = dict(connection.config or {})
+        rows = sources(connection)
+        if not any(item["id"] == camera_id for item in rows):
+            return _error("Camera source not found.", 404)
+        rows = [item for item in rows if item["id"] != camera_id]
+        if config.get("camera_default_id") == camera_id:
+            if rows:
+                config["camera_default_id"] = rows[-1]["id"]
+            else:
+                config.pop("camera_default_id", None)
+        config["camera_configured_at"] = timezone.now().isoformat()
+        config["cameras"] = rows
+        connection.config = config
+        connection.save(update_fields=["config", "updated_at"])
+    return private_response(JsonResponse({"deleted": True, "id": camera_id}))
 
 
 @login_required
