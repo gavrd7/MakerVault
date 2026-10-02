@@ -59,6 +59,7 @@ from .backups import (
     delete_backup,
     get_backup,
     list_backups,
+    managed_backup_capability,
     validate_backup,
 )
 from .search_service import run_search
@@ -1303,8 +1304,11 @@ def admin_backups(request):
     if denied:
         return denied
     rows = list_backups()
+    supported, unsupported_reason = managed_backup_capability()
     return JsonResponse({
         "rows": rows,
+        "supported": supported,
+        "unsupported_reason": unsupported_reason,
         "running": backup_in_progress() or any(item.get("status") == "running" for item in rows),
         "total_bytes": sum(int(item.get("size_bytes") or 0) for item in rows if item.get("status") == "complete"),
     })
@@ -1316,6 +1320,9 @@ def admin_backup_create(request):
     denied = _superuser_required(request)
     if denied:
         return denied
+    supported, reason = managed_backup_capability()
+    if not supported:
+        return _error(reason, status=409)
     try:
         result = create_backup()
         return JsonResponse({"backup": result}, status=202)
