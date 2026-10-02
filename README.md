@@ -98,14 +98,14 @@ Open `http://SERVER-IP:8765`. The host port is configurable through `MAKERVAULT_
 
 ## Deployment and data
 
-The default Compose stack has four containers:
+The default Compose stack has three persistent containers:
 
 - **makervault:** Django/Gunicorn, the compiled React frontend and Celery worker/beat.
 - **postgres:** PostgreSQL application data.
 - **redis:** queue/cache and background-work state.
 - **backup-agent:** isolated backup/recovery helper with no published port and no Docker socket.
 
-PostgreSQL, Redis and the backup agent do not publish host ports by default. Application code is built into the image. Named volumes and absolute-path bind mounts are supported for media, encryption keys, PostgreSQL, Redis and managed backups.
+PostgreSQL and Redis do not publish host ports by default. Managed backup creation runs inside the existing MakerVault worker; restore uses guarded one-off commands from the same MakerVault image. Application code is built into the image. Named volumes and absolute-path bind mounts are supported for media, encryption keys, PostgreSQL, Redis and managed backups.
 
 Private uploaded files use authenticated AES-256-GCM encryption at rest with opaque object names. The default key is stored separately from media. This does not mean the database, deployment configuration or every secret is encrypted by the private-file storage feature.
 
