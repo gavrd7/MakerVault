@@ -366,7 +366,7 @@ class CameraApiTests(TestCase):
         rows = self.client.get(self.root).json()["rows"]
         second = next(row for row in rows if row["name"] == "Second")
 
-        deleted = self.client.delete(self.root + second["id"] + "/")
+        deleted = self.client.post(self.root + second["id"] + "/remove/", {}, content_type="application/json")
         self.assertEqual(deleted.status_code, 200, deleted.content)
         self.assertTrue(deleted.json()["deleted"])
 
@@ -374,6 +374,17 @@ class CameraApiTests(TestCase):
         self.assertEqual([row["id"] for row in remaining], ["cam1"])
         self.connection.refresh_from_db()
         self.assertEqual(self.connection.config.get("camera_default_id"), "cam1")
+
+    def test_camera_remove_action_rejects_missing_and_other_owner(self):
+        self.assertEqual(
+            self.client.post(self.root + "missing/remove/", {}, content_type="application/json").status_code,
+            404,
+        )
+        self.client.force_login(self.other)
+        self.assertEqual(
+            self.client.post(self.root + "cam1/remove/", {}, content_type="application/json").status_code,
+            404,
+        )
 
     def test_preview_selection_rejects_missing_camera_and_other_owner(self):
         self.assertEqual(self.client.patch(self.root, {"id": "missing"}, content_type="application/json").status_code, 404)
@@ -396,7 +407,8 @@ class CameraApiTests(TestCase):
             result = self.client.post(self.root, {"mode": "snapshot", "url": "http://printer.lan:8080/image", "name": "Second"}, content_type="application/json")
             self.assertEqual(result.status_code, 200, result.content)
             self.assertEqual(len(self.client.get(self.root).json()["rows"]), 2)
-            self.client.delete(self.root, {"id": "cam1"}, content_type="application/json")
+            removed = self.client.post(self.root + "cam1/remove/", {}, content_type="application/json")
+            self.assertEqual(removed.status_code, 200, removed.content)
             self.assertEqual(len(self.client.get(self.root).json()["rows"]), 1)
             get.assert_not_called()
 
