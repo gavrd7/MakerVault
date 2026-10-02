@@ -477,9 +477,8 @@ def negotiate(connection, source, offer):
     url = source["url"]
     body = {"type": "offer", "sdp": offer}
     if protected:
-        parsed = urlsplit(url)
-        host = f"[{parsed.hostname}]" if ":" in parsed.hostname else parsed.hostname
-        url = urlunsplit((parsed.scheme, host, "/call/webrtc_local", "", ""))
+        # Keep signaling on the exact validated camera origin (normally :8000).
+        # Older code rebuilt the URL from hostname only and silently dropped the port.
         body["token"] = token
     encoded = base64.b64encode(json.dumps(body).encode("utf-8"))
     pool, response = upstream(connection, url, method="POST", body=encoded, content_type="plain/text")
