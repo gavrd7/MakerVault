@@ -422,25 +422,25 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     if _running_id:
                         return self._json(409, {"error": "Another backup is already running.", "backup_id": _running_id})
                     backup_id = time.strftime("%Y%m%d-%H%M%S", time.gmtime()) + "-" + uuid.uuid4().hex[:8]
+                    application_version = self.headers.get("X-MakerVault-Version", "").strip()
+                    created = utc_stamp()
+                    write_metadata(
+                        backup_id,
+                        id=backup_id,
+                        label="MakerVault UI",
+                        filename=bundle_path(backup_id).name,
+                        status="running",
+                        verified=False,
+                        created_at=created,
+                        finished_at="",
+                        size_bytes=0,
+                        error="",
+                        format_version=FORMAT_VERSION,
+                        application_version=application_version,
+                    )
+                    LOCK_FILE.write_text(json.dumps({"id": backup_id, "created_at": created}), encoding="utf-8")
+                    os.chmod(LOCK_FILE, 0o600)
                     _running_id = backup_id
-                application_version = self.headers.get("X-MakerVault-Version", "").strip()
-                created = utc_stamp()
-                write_metadata(
-                    backup_id,
-                    id=backup_id,
-                    label="MakerVault UI",
-                    filename=bundle_path(backup_id).name,
-                    status="running",
-                    verified=False,
-                    created_at=created,
-                    finished_at="",
-                    size_bytes=0,
-                    error="",
-                    format_version=FORMAT_VERSION,
-                    application_version=application_version,
-                )
-                LOCK_FILE.write_text(json.dumps({"id": backup_id, "created_at": created}), encoding="utf-8")
-                os.chmod(LOCK_FILE, 0o600)
                 thread = threading.Thread(
                     target=self._background_backup,
                     kwargs={
