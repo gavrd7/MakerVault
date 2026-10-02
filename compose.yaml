@@ -75,8 +75,8 @@ services:
       - .env
     environment:
       TZ: ${TZ:-Europe/London}
-      DATABASE_HOST: ${DATABASE_HOST:-postgres}
-      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-makervault}
       POSTGRES_USER: ${POSTGRES_USER:-makervault}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
@@ -87,8 +87,7 @@ services:
       - ${MEDIA_STORAGE:-makervault_media}:/source/media:ro
       - ${KEY_STORAGE:-makervault_keys}:/source/keys:ro
       - ${BACKUP_STORAGE:-makervault_backups}:/backups
-      - ./.env:/source/config/.env:ro
-      - ./compose.yaml:/source/config/compose.yaml:ro
+      - ./:/source/config:ro
     depends_on:
       makervault:
         condition: service_healthy
