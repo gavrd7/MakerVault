@@ -91,7 +91,7 @@ Keep at least one downloaded `.mvbackup` away from the MakerVault server. On a r
 python3 scripts/restore.py --sudo --bundle /path/to/your-backup.mvbackup
 ```
 
-Before it trusts any configuration from the file, the helper checks the bundle structure and every recorded inner SHA-256 value. If the checkout has no `.env`, it restores the verified saved configuration with owner-only permissions, prepares PostgreSQL/Redis and the backup service, imports the bundle, validates it again through the recovery tooling, restores database/media/key storage and starts MakerVault.
+Before it trusts any configuration from the file, the helper checks the bundle structure and every recorded inner SHA-256 value. If the checkout has no `.env`, it restores the verified saved configuration with owner-only permissions, prepares PostgreSQL/Redis and the MakerVault image, imports the bundle, validates it again through the recovery tooling, restores database/media/key storage and starts MakerVault.
 
 If a `.env` already exists, the helper **does not overwrite it silently**. This is intentional: deployment-specific hostnames, storage paths or credentials may need human review. For a genuine full-machine replacement, starting from a clean checkout avoids accidentally mixing a new installation's secrets with the recovery set.
 
