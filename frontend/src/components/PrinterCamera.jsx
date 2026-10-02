@@ -48,7 +48,7 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
     event.preventDefault(); setBusy(true); setError(""); setNotice("");
     try {
       await apiFetch(root, { method: "POST", body: form });
-      await load(); await onChanged(); setNotice("Camera source saved. Open the printer camera preview to watch."); setSettings(setupOnly);
+      await load(); await onChanged(); setNotice("Camera source saved or updated. Open the printer camera preview to watch."); setSettings(setupOnly);
     } catch (err) { setError(err.message); }
     finally { setBusy(false); }
   }
@@ -64,7 +64,7 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
   async function remove() {
     if (!camera || !window.confirm(`Remove camera source “${camera.name}”?`)) return;
     setBusy(true); setError(""); setActiveCamera("");
-    try { await apiFetch(root, { method: "DELETE", body: { id: camera.id } }); await load(); await onChanged(); }
+    try { await apiFetch(root + camera.id + "/", { method: "DELETE" }); await load(); await onChanged(); setNotice("Camera source removed."); }
     catch (err) { setError(err.message); }
     finally { setBusy(false); }
   }
