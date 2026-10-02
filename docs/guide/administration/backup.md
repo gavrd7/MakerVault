@@ -47,7 +47,7 @@ The web application does **not** receive access to the Docker socket. Managed ba
 
 MakerVault creates a maintenance lock before capturing data. Normal read-only viewing continues, while web/API writes are rejected briefly and MakerVault's scheduled catalogue, integration and printer-poll jobs defer until the lock clears. This prevents new application-side mutations from starting underneath the capture. The bundle is not marked complete until PostgreSQL's dump catalogue, the media/key archives and recorded SHA-256 checks have all been read successfully.
 
-Redis queue/cache data is deliberately excluded from normal recovery. Core MakerVault records are in PostgreSQL.
+Redis queue/cache data is deliberately excluded from normal recovery. Core MakerVault records are in PostgreSQL.\n\nFor the standard deployment, MakerVault reconstructs the recovery `.env` from the supported settings listed in `.env.example` and the values currently supplied to the container. Custom Compose override files, shell-only variables that are not part of the supported environment template, and external secret files remain advanced deployment responsibility and should be preserved separately.
 
 ### Validate a backup again
 
