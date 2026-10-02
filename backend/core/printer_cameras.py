@@ -58,12 +58,9 @@ def normalise_source(connection, data, source_id):
         raise CameraError("Choose JPEG snapshot, MJPEG or Creality WebRTC.")
     mode = data["mode"]
     url = camera_url(connection, data.get("url"))
-    parsed_url = urlsplit(url)
     if mode == "creality_webrtc":
-        if connection.adapter != "creality_local" or parsed_url.path != "/call/webrtc_local" or parsed_url.query:
+        if connection.adapter != "creality_local" or urlsplit(url).path != "/call/webrtc_local" or urlsplit(url).query:
             raise CameraError("Creality WebRTC requires the Creality integration and /call/webrtc_local.")
-    elif parsed_url.path == "/call/webrtc_local":
-        raise CameraError("The /call/webrtc_local endpoint must use the Creality WebRTC feed type.")
     rotation = int(data.get("rotation") or 0)
     if rotation not in {0, 90, 180, 270}:
         raise CameraError("Camera rotation must be 0, 90, 180 or 270 degrees.")
@@ -72,27 +69,14 @@ def normalise_source(connection, data, source_id):
 
 def sources(connection):
     result = []
-    positions = {}
-    config = connection.config or {}
-    raw = config.get("cameras", [])
-    selected_id = str(config.get("camera_default_id") or "")
+    raw = (connection.config or {}).get("cameras", [])
     if not isinstance(raw, list):
         return result
     for item in raw[:8]:
         try:
             if not isinstance(item, dict) or not isinstance(item.get("id"), str):
                 continue
-            normalised = normalise_source(connection, item, item["id"])
-            signature = (normalised["mode"], normalised["url"])
-            if signature in positions:
-                # Old builds could append the same discovered feed repeatedly.
-                # Prefer the duplicate already selected for previews, otherwise
-                # retain the first stable camera ID.
-                if normalised["id"] == selected_id:
-                    result[positions[signature]] = normalised
-                continue
-            positions[signature] = len(result)
-            result.append(normalised)
+            result.append(normalise_source(connection, item, item["id"]))
         except (CameraError, ValueError, TypeError):
             continue
     return result
@@ -371,141 +355,6 @@ def creality_session(connection):
     return "", False
 
 
-def diagnose_source(connection, source):
-    """Run bounded, secret-free connectivity checks for one configured camera source."""
-    mode = source.get("mode")
-    if mode in {"snapshot", "mjpeg"}:
-        data, content_type = frame(connection, source)
-        return {
-            "ok": True,
-            "mode": mode,
-            "checks": [
-                {
-                    "id": "camera",
-                    "ok": True,
-                    "detail": f"Camera returned {content_type} ({len(data)} bytes).",
-                }
-            ],
-        }
-
-    if mode != "creality_webrtc":
-        raise CameraError("This camera source type does not have a diagnostic check.")
-
-    base = endpoint(connection)
-    control_port = base.port or 9999
-    control_address = resolve_address(base.hostname, control_port)
-    control_socket = None
-    try:
-        control_socket = socket.create_connection((control_address, control_port), timeout=2)
-    except (OSError, TimeoutError) as exc:
-        raise CameraError(f"Creality control channel on port {control_port} could not be reached.") from exc
-    finally:
-        if control_socket:
-            control_socket.close()
-
-    parsed = urlsplit(source["url"])
-    camera_port = parsed.port or (443 if parsed.scheme == "https" else 80)
-    camera_address = resolve_address(parsed.hostname, camera_port)
-    camera_socket = None
-    try:
-        camera_socket = socket.create_connection((camera_address, camera_port), timeout=2)
-    except (OSError, TimeoutError) as exc:
-        raise CameraError(f"Creality camera service on port {camera_port} could not be reached.") from exc
-    finally:
-        if camera_socket:
-            camera_socket.close()
-
-    token, protected = creality_session(connection)
-    session_detail = (
-        "Protected video session token received."
-        if protected and token
-        else "Camera session is reachable and does not require a protected video token."
-    )
-    return {
-        "ok": True,
-        "mode": mode,
-        "checks": [
-            {"id": "control", "ok": True, "detail": f"Creality control channel is reachable on port {control_port}."},
-            {"id": "camera", "ok": True, "detail": f"Creality camera service is reachable on port {camera_port}."},
-            {"id": "session", "ok": True, "detail": session_detail},
-        ],
-    }
-
-
-def fix_creality_answer_sdp(value):
-    """Repair malformed Creality K2-family WebRTC answer SDP.
-
-    Creality answers can advertise a bogus first video payload and may retain
-    payload IDs without matching rtpmap entries. Chromium is often permissive,
-    while WebKit rejects the whole answer with "Failed to parse codecs
-    correctly."  Keep only valid mapped payloads after the Creality first-codec
-    quirk and remove attributes for discarded payload IDs.
-    """
-    if not isinstance(value, str) or not value.startswith("v=0"):
-        raise CameraError("Printer did not return a valid WebRTC answer.")
-
-    lines = value.replace("\r\n", "\n").split("\n")
-    video_index = next((i for i, line in enumerate(lines) if line.startswith("m=video ")), None)
-    if video_index is None:
-        raise CameraError("Printer WebRTC answer did not include a video stream.")
-
-    parts = lines[video_index].split()
-    if len(parts) < 5:
-        raise CameraError("Printer WebRTC answer did not include a usable video codec.")
-
-    end = next(
-        (i for i in range(video_index + 1, len(lines)) if lines[i].startswith("m=")),
-        len(lines),
-    )
-    section = lines[video_index + 1:end]
-
-    # Creality's first advertised video payload is not the payload actually
-    # used for the stream (same quirk handled by go2rtc #format=creality).
-    skipped = parts[3]
-    candidates = parts[4:]
-
-    mapped = {}
-    for line in section:
-        match = re.match(r"^a=rtpmap:(\d+)\s+([^/\s]+)/", line, re.IGNORECASE)
-        if match:
-            mapped[match.group(1)] = match.group(2).lower()
-
-    valid = [payload for payload in candidates if payload in mapped]
-    if not valid:
-        raise CameraError("Printer WebRTC answer did not include a parsable video codec.")
-
-    # Prefer actual H.264 payloads, but preserve valid auxiliary payloads (for
-    # example RTX) only when they reference a retained H.264 payload.
-    h264 = [payload for payload in valid if mapped.get(payload) == "h264"]
-    if h264:
-        retained = list(h264)
-        for payload in valid:
-            if mapped.get(payload) != "rtx":
-                continue
-            if any(
-                re.search(rf"^a=fmtp:{re.escape(payload)}\s+.*\bapt={re.escape(base)}\b", line)
-                for base in h264
-                for line in section
-            ):
-                retained.append(payload)
-        valid = retained
-
-    keep = set(valid)
-    lines[video_index] = " ".join(parts[:3] + valid)
-
-    repaired_section = []
-    for line in section:
-        match = re.match(r"^a=(?:rtpmap|fmtp|rtcp-fb):(\d+)\b", line, re.IGNORECASE)
-        if match and match.group(1) not in keep:
-            continue
-        if line.startswith("a=fmtp:") and "x-google" in line:
-            continue
-        repaired_section.append(line)
-
-    repaired = lines[:video_index + 1] + repaired_section + lines[end:]
-    return "\r\n".join(line for line in repaired if line != "") + "\r\n"
-
-
 def negotiate(connection, source, offer):
     if source["mode"] != "creality_webrtc":
         raise CameraError("This camera does not use Creality WebRTC.")
@@ -515,8 +364,9 @@ def negotiate(connection, source, offer):
     url = source["url"]
     body = {"type": "offer", "sdp": offer}
     if protected:
-        # Keep signaling on the exact validated camera origin (normally :8000).
-        # Older code rebuilt the URL from hostname only and silently dropped the port.
+        parsed = urlsplit(url)
+        host = f"[{parsed.hostname}]" if ":" in parsed.hostname else parsed.hostname
+        url = urlunsplit((parsed.scheme, host, "/call/webrtc_local", "", ""))
         body["token"] = token
     encoded = base64.b64encode(json.dumps(body).encode("utf-8"))
     pool, response = upstream(connection, url, method="POST", body=encoded, content_type="plain/text")
@@ -524,10 +374,8 @@ def negotiate(connection, source, offer):
         answer = json.loads(base64.b64decode(read_bounded(response, MAX_JSON).strip(), validate=True))
         if not isinstance(answer, dict) or answer.get("type") != "answer" or not isinstance(answer.get("sdp"), str) or len(answer["sdp"]) > 65536 or not answer["sdp"].startswith("v=0"):
             raise CameraError("Printer did not return a valid WebRTC answer.")
-        return {"type": "answer", "sdp": fix_creality_answer_sdp(answer["sdp"])}
-    except CameraError:
-        raise
-    except (ValueError, urllib3.exceptions.HTTPError, OSError) as exc:
+        return {"type": "answer", "sdp": answer["sdp"]}
+    except (ValueError, urllib3.exceptions.HTTPError) as exc:
         raise CameraError("Printer returned an unsupported camera response. Check its firmware and camera availability.") from exc
     finally:
         response.close()
