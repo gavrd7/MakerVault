@@ -433,10 +433,13 @@ def diagnose_source(connection, source):
 
 
 def fix_creality_answer_sdp(value):
-    """Repair the K2/K2 Pro/K2 Plus SDP quirk handled by go2rtc #format=creality.
+    """Repair malformed Creality K2-family WebRTC answer SDP.
 
-    Creality answers can list a bogus first video payload while RTP arrives on
-    the following codec. Browsers accept the SDP but never surface usable video.
+    Creality answers can advertise a bogus first video payload and may retain
+    payload IDs without matching rtpmap entries. Chromium is often permissive,
+    while WebKit rejects the whole answer with "Failed to parse codecs
+    correctly."  Keep only valid mapped payloads after the Creality first-codec
+    quirk and remove attributes for discarded payload IDs.
     """
     if not isinstance(value, str) or not value.startswith("v=0"):
         raise CameraError("Printer did not return a valid WebRTC answer.")
@@ -448,24 +451,59 @@ def fix_creality_answer_sdp(value):
 
     parts = lines[video_index].split()
     if len(parts) < 5:
-        return value
+        raise CameraError("Printer WebRTC answer did not include a usable video codec.")
 
+    end = next(
+        (i for i in range(video_index + 1, len(lines)) if lines[i].startswith("m=")),
+        len(lines),
+    )
+    section = lines[video_index + 1:end]
+
+    # Creality's first advertised video payload is not the payload actually
+    # used for the stream (same quirk handled by go2rtc #format=creality).
     skipped = parts[3]
-    parts = parts[:3] + parts[4:]
-    lines[video_index] = " ".join(parts)
+    candidates = parts[4:]
 
-    end = next((i for i in range(video_index + 1, len(lines)) if lines[i].startswith("m=")), len(lines))
-    repaired = lines[:video_index + 1]
-    for line in lines[video_index + 1:end]:
-        if line.startswith(f"a=rtpmap:{skipped} ") or line.startswith(f"a=fmtp:{skipped} "):
+    mapped = {}
+    for line in section:
+        match = re.match(r"^a=rtpmap:(\d+)\s+([^/\s]+)/", line, re.IGNORECASE)
+        if match:
+            mapped[match.group(1)] = match.group(2).lower()
+
+    valid = [payload for payload in candidates if payload in mapped]
+    if not valid:
+        raise CameraError("Printer WebRTC answer did not include a parsable video codec.")
+
+    # Prefer actual H.264 payloads, but preserve valid auxiliary payloads (for
+    # example RTX) only when they reference a retained H.264 payload.
+    h264 = [payload for payload in valid if mapped.get(payload) == "h264"]
+    if h264:
+        retained = list(h264)
+        for payload in valid:
+            if mapped.get(payload) != "rtx":
+                continue
+            if any(
+                re.search(rf"^a=fmtp:{re.escape(payload)}\s+.*\bapt={re.escape(base)}\b", line)
+                for base in h264
+                for line in section
+            ):
+                retained.append(payload)
+        valid = retained
+
+    keep = set(valid)
+    lines[video_index] = " ".join(parts[:3] + valid)
+
+    repaired_section = []
+    for line in section:
+        match = re.match(r"^a=(?:rtpmap|fmtp|rtcp-fb):(\d+)\b", line, re.IGNORECASE)
+        if match and match.group(1) not in keep:
             continue
         if line.startswith("a=fmtp:") and "x-google" in line:
             continue
-        repaired.append(line)
-    repaired.extend(lines[end:])
+        repaired_section.append(line)
 
-    result = "\r\n".join(line for line in repaired if line != "") + "\r\n"
-    return result
+    repaired = lines[:video_index + 1] + repaired_section + lines[end:]
+    return "\r\n".join(line for line in repaired if line != "") + "\r\n"
 
 
 def negotiate(connection, source, offer):
