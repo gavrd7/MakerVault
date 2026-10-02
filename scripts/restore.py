@@ -183,7 +183,7 @@ def main() -> int:
             stage = [
                 *base, "run", "--rm", "--no-deps", "-T", "--user", "0:0",
                 "--entrypoint", "sh", "backup-agent", "-c",
-                'umask 077; cat > "/backups/$1.mvbackup"; chown "$2:$3" "/backups/$1.mvbackup"; chmod 600 "/backups/$1.mvbackup"',
+                'umask 077; cat > "/backups/$1.mvbackup"; chown "$2:$3" /backups "/backups/$1.mvbackup"; chmod 700 /backups; chmod 600 "/backups/$1.mvbackup"',
                 "sh", backup_id, str(puid), str(pgid),
             ]
             stream_file(stage, bundle)
