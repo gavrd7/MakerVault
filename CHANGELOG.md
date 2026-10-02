@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — v1.0 recovery verification
+
+- Add read-only private-file authentication and recorded-checksum verification.
+- Exercise synthetic PostgreSQL/media/key recovery on named volumes and bind mounts in Docker CI, including file revisions, owner isolation and missing/wrong-key failures.
+- Expand backup transfer checks and distinguish automated recovery evidence from real-installation acceptance.
+
+
 ## v0.9.0.2 — Camera feeds (released 2 October 2026)
 
 - Owner confirmed K1/K2 playback and accepted the compact automatic camera layout. Remaining hardware/route checks stay in issue #37.

@@ -31,7 +31,7 @@ for mode in volume bind; do
       -e POSTGRES_PASSWORD=synthetic-recovery-only postgres:18.6 >/dev/null
     ready=false
     for attempt in $(seq 1 60); do
-      if docker exec "$db" pg_isready -U makervault -d makervault >/dev/null 2>&1; then ready=true; break; fi
+      if docker exec "$db" pg_isready -h 127.0.0.1 -U makervault -d makervault >/dev/null 2>&1; then ready=true; break; fi
       sleep 1
     done
     "$ready" || { echo "Database did not become ready" >&2; exit 1; }

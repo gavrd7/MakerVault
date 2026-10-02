@@ -7,7 +7,7 @@ from django.core.files.base import ContentFile
 from django.core.management import call_command
 from django.test import Client, override_settings
 
-from core.models import FileAsset, Model3D, ModelRevision, ModelRevisionAsset, Project
+from core.models import FileAsset, InventoryItem, Model3D, ModelRevision, ModelRevisionAsset, Project
 
 if os.environ.get("MAKERVAULT_RECOVERY_REHEARSAL") != "synthetic-only":
     raise RuntimeError("This fixture is only for disposable recovery rehearsals")
@@ -21,6 +21,7 @@ if os.environ["RECOVERY_PHASE"] == "seed":
     owner = User.objects.create_user(username="recovery-owner", password=password)
     User.objects.create_user(username="recovery-other", password=password)
     project = Project.objects.create(owner=owner, name="Recovery project")
+    InventoryItem.objects.create(owner=owner, project=project, inventory_id="RECOVERY-001", item_type="other", quantity=3)
     model = Model3D.objects.create(owner=owner, project=project, name="Recovery model")
     previous = None
     for index, payload in enumerate(payloads, 1):
@@ -36,6 +37,8 @@ else:
     owner = User.objects.get(username="recovery-owner")
     assert owner.check_password(password)
     project = Project.objects.get(owner=owner, name="Recovery project")
+    assert InventoryItem.objects.get(owner=owner, inventory_id="RECOVERY-001").project_id == project.pk
+    assert InventoryItem.objects.get(owner=owner, inventory_id="RECOVERY-001").quantity == 3
     model = Model3D.objects.get(owner=owner, project=project, name="Recovery model")
     assert model.revisions.count() == 2
     previous = None

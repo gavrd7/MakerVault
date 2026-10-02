@@ -65,6 +65,8 @@ The focus is a dependable first stable release of the existing feature set. The 
 | 4 | UI, accessibility and documentation | Review mobile/desktop layouts, keyboard/focus behaviour, error/empty states and consistent wording. Complete current feature chapters, screenshots, configuration guidance and support matrices. |
 | 5 | Release candidate and stable release | Run the acceptance checklist, resolve release blockers, verify Docker/dependency/security and guide builds, record tested deployment assumptions, then define/tag the stable release and upgrade policy. |
 
+Recovery verification work now includes a read-only private-file audit and a synthetic Docker dump/archive/restore rehearsal for named volumes and bind mounts, exercised by PR CI. A representative real-installation restore, deployment configuration review and manual UI acceptance remain release gates.
+
 Backup/recovery documentation and an initial guide already exist. The next pass verifies them end-to-end and improves them from the results; it is not a claim that recovery has already been rehearsed.
 
 Supported deployment guidance centres on the supplied Linux Docker Compose stack: application/worker, PostgreSQL and Redis. Broader NAS/ARM/desktop compatibility and minimum resource claims need evidence before being advertised.
