@@ -190,7 +190,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
           const transceiver = peer.addTransceiver("video", { direction: "recvonly" });
           const codecs = RTCRtpReceiver.getCapabilities("video")?.codecs.filter(codec => codec.mimeType.toLowerCase() === "video/h264") || [];
           if (!codecs.length) throw new Error("This browser has no H.264 WebRTC decoder.");
-          if (transceiver.setCodecPreferences) transceiver.setCodecPreferences(codecs.slice(0, 1));
+          if (transceiver.setCodecPreferences) transceiver.setCodecPreferences(codecs);
           peer.ontrack = event => {
             if (cancelled || event.track.kind !== "video" || !video.current) return;
             trackReceived = true;
