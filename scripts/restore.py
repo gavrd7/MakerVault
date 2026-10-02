@@ -187,6 +187,14 @@ def main() -> int:
                 "sh", backup_id, str(puid), str(pgid),
             ]
             stream_file(stage, bundle)
+            registered = run(
+                [*base, "run", "--rm", "--no-deps", "backup-agent", "register", "--id", backup_id],
+                capture=True,
+                check=False,
+            )
+            if registered.returncode:
+                detail = (registered.stderr or registered.stdout or "").strip()
+                raise RestoreError(detail or "Could not register the imported recovery bundle.")
         except RestoreError as exc:
             print(f"Restore not started: {exc}", file=sys.stderr)
             return 2
