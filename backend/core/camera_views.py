@@ -26,15 +26,15 @@ def private_response(response):
 
 
 @contextmanager
-def camera_slot(user_id):
-    key = f"camera-request:{user_id}"
+def camera_slot(user_id, connection_id):
+    key = f"camera-request:{user_id}:{connection_id}"
     token = uuid.uuid4().hex
     try:
         acquired = cache.add(key, token, timeout=20)
     except Exception as exc:
         raise CameraError("Camera request limiter is unavailable. Try again shortly.") from exc
     if not acquired:
-        raise CameraError("Another camera request is active. Try again shortly.")
+        raise CameraError("Another camera request for this printer is active. Try again shortly.")
     try:
         yield
     finally:
@@ -96,7 +96,7 @@ def camera_discover(request, printer_id, connection_id):
     if not connection.enabled:
         return _error("Enable this printer source before camera discovery.")
     try:
-        with camera_slot(request.user.pk):
+        with camera_slot(request.user.pk, connection.pk):
             result = discover_result(connection)
         return private_response(JsonResponse(result))
     except (CameraError, TypeError, ValueError, AttributeError) as exc:
@@ -115,7 +115,7 @@ def camera_media(request, printer_id, connection_id, camera_id):
     if not source:
         return _error("Camera source not found.", 404)
     try:
-        with camera_slot(request.user.pk):
+        with camera_slot(request.user.pk, connection.pk):
             if request.method == "POST":
                 if request.META.get("CONTENT_LENGTH", "0").isdigit() and int(request.META.get("CONTENT_LENGTH", "0")) > 70000:
                     return _error("Camera offer is too large.", 413)
