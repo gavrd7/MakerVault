@@ -44,7 +44,7 @@ for db in "$source_db" "$target_db"; do
   wait_db "$db"
 done
 
-for kind in source-media source-keys target-media target-keys backups; do
+for kind in source-media source-keys target-media target-keys backups import-backups; do
   volume="$token-$kind"
   docker volume create "$volume" >/dev/null
   volumes+=("$volume")
@@ -55,9 +55,9 @@ docker exec "$source_db" psql -U makervault -d makervault -v ON_ERROR_STOP=1 -c 
   "CREATE TABLE recovery_marker (id integer primary key, value text not null); INSERT INTO recovery_marker VALUES (1, 'backup-agent-ok');" >/dev/null
 
 docker run --rm --network none \
-  -v "$source_media:/source/media" -v "$source_keys:/source/keys" \
+  -v "$source_media:/source/media" -v "$source_keys:/source/keys" -v "$backups:/backups" \
   --entrypoint sh "$image" -c \
-  "printf 'media-ok\n' > /source/media/example.txt; printf 'key-ok\n' > /source/keys/private_storage.key" >/dev/null
+  "printf 'media-ok\n' > /source/media/example.txt; printf 'key-ok\n' > /source/keys/private_storage.key; chown -R 1000:1000 /source/media /source/keys /backups" >/dev/null
 
 mkdir -p "$work/config"
 printf 'SYNTHETIC_BACKUP_AGENT=true\n' > "$work/config/.env"
@@ -70,7 +70,7 @@ common_env=(
   -e POSTGRES_PASSWORD=synthetic-agent-password
 )
 
-docker run --rm --network "$network" \
+docker run --rm --user 1000:1000 --network "$network" \
   "${common_env[@]}" -e DATABASE_HOST="$source_db" \
   -v "$source_media:/source/media:ro" \
   -v "$source_keys:/source/keys:ro" \
@@ -78,10 +78,27 @@ docker run --rm --network "$network" \
   -v "$work/config:/source/config:ro" \
   "$image" backup --id synthetic-sidecar --label "CI sidecar rehearsal"
 
-docker run --rm --network "$network" \
+docker run --rm --user 1000:1000 --network "$network" \
   "${common_env[@]}" -e DATABASE_HOST="$source_db" \
   -v "$backups:/backups:ro" \
   "$image" validate --id synthetic-sidecar
+
+# Rehearse the clean-host ownership handoff used when importing an off-server
+# bundle before MakerVault has ever started and chowned the backup volume.
+docker run --rm --network none \
+  -v "$backups:/from:ro" -v "$import_backups:/to" \
+  --entrypoint sh "$image" -c \
+  'cp /from/synthetic-sidecar.mvbackup /to/imported-sidecar.mvbackup; chown 1000:1000 /to /to/imported-sidecar.mvbackup; chmod 700 /to; chmod 600 /to/imported-sidecar.mvbackup'
+
+docker run --rm --user 1000:1000 --network "$network" \
+  "${common_env[@]}" -e DATABASE_HOST="$source_db" \
+  -v "$import_backups:/backups" \
+  "$image" register --id imported-sidecar
+
+docker run --rm --user 1000:1000 --network "$network" \
+  "${common_env[@]}" -e DATABASE_HOST="$source_db" \
+  -v "$import_backups:/backups:ro" \
+  "$image" validate --id imported-sidecar
 
 docker run --rm --network "$network" \
   "${common_env[@]}" -e DATABASE_HOST="$target_db" \
