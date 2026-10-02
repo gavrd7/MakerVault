@@ -288,6 +288,25 @@ class CameraApiTests(TestCase):
         self.assertEqual(self.client.post(self.root + "discover/", {}, content_type="application/json").status_code, 403)
         upstream.assert_not_called()
 
+    def test_duplicate_saved_feeds_collapse_and_prefer_selected_preview(self):
+        from core.printer_cameras import sources, summary
+
+        duplicate = {
+            "id": "cam2",
+            "name": "Duplicate",
+            "url": "http://printer.lan:8080/?action=snapshot&token=private",
+            "mode": "snapshot",
+        }
+        config = dict(self.connection.config or {})
+        config["cameras"] = list(config["cameras"]) + [duplicate]
+        config["camera_default_id"] = "cam2"
+        self.connection.config = config
+
+        rows = sources(self.connection)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["id"], "cam2")
+        self.assertEqual(summary(self.connection)["preview"]["id"], "cam2")
+
     def test_last_saved_camera_is_preview_and_selection_is_persistent(self):
         from core.printer_cameras import summary
         result = self.client.post(self.root, {"mode": "snapshot", "url": "http://printer.lan/new?token=private", "name": "New"}, content_type="application/json")
