@@ -142,10 +142,14 @@ def config_files(work: Path):
             shutil.copyfile(source, work / name)
 
 
-def create_bundle(*, backup_id=None, label="manual") -> dict:
+def create_bundle(*, backup_id=None, label="manual", application_version=None) -> dict:
     global _running_id
     BACKUP_ROOT.mkdir(parents=True, exist_ok=True)
     backup_id = safe_id(backup_id or time.strftime("%Y%m%d-%H%M%S", time.gmtime()) + "-" + uuid.uuid4().hex[:8])
+    application_version = str(
+        application_version if application_version is not None
+        else os.environ.get("MAKERVAULT_VERSION", "")
+    ).strip()
 
     with _state_lock:
         if _running_id and _running_id != backup_id:
@@ -167,6 +171,7 @@ def create_bundle(*, backup_id=None, label="manual") -> dict:
         size_bytes=0,
         error="",
         format_version=FORMAT_VERSION,
+        application_version=application_version,
     )
     LOCK_FILE.write_text(json.dumps({"id": backup_id, "created_at": created}), encoding="utf-8")
     os.chmod(LOCK_FILE, 0o600)
@@ -201,7 +206,7 @@ def create_bundle(*, backup_id=None, label="manual") -> dict:
             "format_version": FORMAT_VERSION,
             "created_utc": created,
             "label": label,
-            "application_version": os.environ.get("MAKERVAULT_VERSION", ""),
+            "application_version": application_version,
             "database": {
                 "name": os.environ.get("POSTGRES_DB", "makervault"),
                 "user": os.environ.get("POSTGRES_USER", "makervault"),
@@ -386,7 +391,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     _running_id = backup_id
                 thread = threading.Thread(
                     target=self._background_backup,
-                    kwargs={"backup_id": backup_id},
+                    kwargs={
+                        "backup_id": backup_id,
+                        "application_version": self.headers.get("X-MakerVault-Version", ""),
+                    },
                     daemon=True,
                 )
                 thread.start()
@@ -403,9 +411,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return self._json(404, {"error": "Not found."})
 
     @staticmethod
-    def _background_backup(backup_id):
+    def _background_backup(backup_id, application_version=""):
         try:
-            create_bundle(backup_id=backup_id, label="MakerVault UI")
+            create_bundle(
+                backup_id=backup_id,
+                label="MakerVault UI",
+                application_version=application_version,
+            )
         except Exception:
             traceback.print_exc()
 
