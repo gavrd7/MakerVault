@@ -28,19 +28,21 @@ function statusTone(item) {
   return "neutral";
 }
 
-export default function BackupRestorePanel() {
+export default function BackupRestorePanel({ onBackupStarted }) {
   const [state, setState] = useState(null);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [validation, setValidation] = useState(null);
   const [restoreTarget, setRestoreTarget] = useState(null);
+  const [watchedBackupId, setWatchedBackupId] = useState("");
 
   async function load({ quiet = false } = {}) {
     if (!quiet) setError("");
     try {
       const result = await apiFetch("/api/settings/backups/");
       setState(result);
+      setWatchedBackupId(current => current || (result.rows || []).find(item => item.status === "running")?.id || "");
     } catch (err) {
       if (!quiet) setError(err.message);
     }
@@ -59,10 +61,34 @@ export default function BackupRestorePanel() {
     [state]
   );
 
+  useEffect(() => {
+    if (!watchedBackupId || !state) return;
+    const item = (state.rows || []).find(row => row.id === watchedBackupId);
+    if (!item) return;
+
+    if (item.status === "complete" && item.verified) {
+      setError("");
+      setNotice(
+        `Backup complete ✓ Recovery bundle created and verified successfully. ${formatBytes(item.size_bytes)} · ${formatWhen(item.finished_at || item.created_at)}`
+      );
+      setWatchedBackupId("");
+      return;
+    }
+
+    if (["failed", "interrupted"].includes(item.status)) {
+      setNotice("");
+      setError(`Backup failed: ${item.error || "MakerVault could not create a verified recovery bundle."}`);
+      setWatchedBackupId("");
+    }
+  }, [state, watchedBackupId]);
+
   async function createBackup() {
     setBusy("create"); setError(""); setNotice(""); setValidation(null); setRestoreTarget(null);
     try {
-      await apiFetch("/api/settings/backups/create/", { method: "POST" });
+      const result = await apiFetch("/api/settings/backups/create/", { method: "POST" });
+      const backupId = result.backup?.backup_id || "";
+      setWatchedBackupId(backupId);
+      if (backupId) onBackupStarted?.(backupId);
       setNotice("Backup started. MakerVault is temporarily read-only while the recovery bundle is captured.");
       await load({ quiet: true });
     } catch (err) {
