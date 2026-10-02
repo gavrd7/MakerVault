@@ -87,7 +87,7 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
   return <section className="printerCamera">
     <div className="printerCameraToolbar">
       <strong>Camera</strong>
-      {!!rows.length && <label className="printerCameraSelect"><span className="printerCameraLabel">Camera source</span><select value={selected} onChange={e => { setActiveCamera(""); setSelected(e.target.value); }}>{rows.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
+      {!!rows.length && <label className="printerCameraSelect"><span className="printerCameraLabel">Camera source</span><select value={selected} onChange={e => { setActiveCamera(""); setSelected(e.target.value); }}>{rows.map(item => <option key={item.id} value={item.id}>{item.name} · {LABELS[item.mode] || item.mode} · {endpointLabel(item.url)}</option>)}</select></label>}
       {!setupOnly && camera && <button type="button" disabled={!connection.enabled} onClick={() => setActiveCamera(playing ? "" : `${connection.id}:${camera.id}`)}>{playing ? "Stop camera" : "Watch camera"}</button>}
       {canEdit && !setupOnly && <button type="button" onClick={() => setSettings(!settings)}>{settings ? "Close setup" : "Camera setup"}</button>}
     </div>
