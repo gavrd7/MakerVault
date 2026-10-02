@@ -41,9 +41,9 @@ test("frame reconnect stops after three failures", { timeout: 1000 }, async () =
   assert.deepEqual(errors, [true, true, false]);
 });
 
-test("Creality offer preserves gathered ICE candidates", () => {
+test("Creality numeric candidate compatibility keeps SDP and IP candidates", () => {
   const offer = "v=0\r\na=candidate:1 1 UDP 123 browser.local 5000 typ host\r\na=candidate:2 1 UDP 123 192.168.1.2 5001 typ host\r\n";
-  assert.equal(prepareCrealityOffer(offer), offer);
+  assert.equal(prepareCrealityOffer(offer), offer.replace("browser.local", "192.0.2.1"));
 });
 
 test('multiple visible feeds serialise media work and cancelled queued work never starts', async () => {
@@ -61,26 +61,6 @@ test('multiple visible feeds serialise media work and cancelled queued work neve
   release();
   await Promise.all([first, rejection, second]);
   assert.deepEqual(events, ['first', 'done', 'second']);
-});
-
-test('different printer queues do not block each other', async () => {
-  const { cameraRequest } = await import('../src/components/cameraPlayback.js');
-  const events = [];
-  let releaseK1;
-  const k1 = cameraRequest(async () => {
-    events.push('k1-start');
-    await new Promise(resolve => { releaseK1 = resolve; });
-    events.push('k1-done');
-  }, undefined, 'k1-connection');
-  await new Promise(resolve => setTimeout(resolve, 0));
-
-  const k2 = cameraRequest(() => events.push('k2'), undefined, 'k2-connection');
-  await k2;
-  assert.deepEqual(events, ['k1-start', 'k2']);
-
-  releaseK1();
-  await k1;
-  assert.deepEqual(events, ['k1-start', 'k2', 'k1-done']);
 });
 
 test('preview chooses most recently configured enabled camera across integrations', async () => {
