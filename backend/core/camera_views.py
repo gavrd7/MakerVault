@@ -108,19 +108,50 @@ def camera_sources(request, printer_id, connection_id):
 
 def _remove_camera_source(connection, camera_id):
     config = dict(connection.config or {})
-    rows = sources(connection)
-    if not any(item["id"] == camera_id for item in rows):
+    raw = config.get("cameras", [])
+    if not isinstance(raw, list):
+        raw = []
+
+    # Delete against the persisted IDs, not the normalised view. This matters
+    # for legacy/bad rows that may be hidden or collapsed by sources().
+    if not any(isinstance(item, dict) and item.get("id") == camera_id for item in raw):
         raise CameraError("Camera source not found.")
-    rows = [item for item in rows if item["id"] != camera_id]
-    if config.get("camera_default_id") == camera_id:
-        if rows:
-            config["camera_default_id"] = rows[-1]["id"]
+
+    raw = [
+        item for item in raw
+        if not (isinstance(item, dict) and item.get("id") == camera_id)
+    ]
+
+    # Re-normalise the remaining raw rows to clean old duplicates and invalid
+    # mode/URL combinations as part of the same destructive action.
+    cleaned = []
+    signatures = set()
+    for item in raw[:8]:
+        try:
+            if not isinstance(item, dict) or not isinstance(item.get("id"), str):
+                continue
+            row = normalise_source(connection, item, item["id"])
+            signature = (row["mode"], row["url"])
+            if signature in signatures:
+                continue
+            signatures.add(signature)
+            cleaned.append(row)
+        except (CameraError, TypeError, ValueError):
+            continue
+
+    if config.get("camera_default_id") == camera_id or not any(
+        row["id"] == config.get("camera_default_id") for row in cleaned
+    ):
+        if cleaned:
+            config["camera_default_id"] = cleaned[-1]["id"]
         else:
             config.pop("camera_default_id", None)
+
     config["camera_configured_at"] = timezone.now().isoformat()
-    config["cameras"] = rows
+    config["cameras"] = cleaned
     connection.config = config
     connection.save(update_fields=["config", "updated_at"])
+    return cleaned
 
 
 @login_required
@@ -135,8 +166,8 @@ def camera_source_detail(request, printer_id, connection_id, camera_id):
     try:
         with transaction.atomic():
             connection = PrinterConnection.objects.select_for_update().get(pk=connection.pk)
-            _remove_camera_source(connection, camera_id)
-        return private_response(JsonResponse({"deleted": True, "id": camera_id}))
+            rows = _remove_camera_source(connection, camera_id)
+        return private_response(JsonResponse({"deleted": True, "id": camera_id, "rows": rows}))
     except CameraError as exc:
         return _error(str(exc), 404)
 
@@ -154,8 +185,8 @@ def camera_source_remove(request, printer_id, connection_id, camera_id):
     try:
         with transaction.atomic():
             connection = PrinterConnection.objects.select_for_update().get(pk=connection.pk)
-            _remove_camera_source(connection, camera_id)
-        return private_response(JsonResponse({"deleted": True, "id": camera_id}))
+            rows = _remove_camera_source(connection, camera_id)
+        return private_response(JsonResponse({"deleted": True, "id": camera_id, "rows": rows}))
     except CameraError as exc:
         return _error(str(exc), 404)
 
