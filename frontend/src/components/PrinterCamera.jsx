@@ -153,12 +153,41 @@ export function CameraPlayback({ camera, url, compact = false, queueKey = "" }) 
             if (peer.connectionState === "connected") setStatus("Connected · waiting for video");
             if (["failed", "disconnected"].includes(peer.connectionState)) failed("Camera connection lost. Check LAN/VPN access, then reconnect.");
           };
+          setStatus("Preparing browser video route…");
           await peer.setLocalDescription(await peer.createOffer());
           await waitForIce(peer, controller.signal);
           if (cancelled) return;
-          const answer = await cameraRequest(() => apiFetch(url, { method: "POST", signal: controller.signal, body: { sdp: prepareCrealityOffer(peer.localDescription.sdp) } }), controller.signal, queueKey || url);
+
+          setStatus("Negotiating with printer…");
+          const negotiationController = new AbortController();
+          const negotiationTimeout = setTimeout(() => negotiationController.abort(), 12000);
+          const abortNegotiation = () => negotiationController.abort();
+          controller.signal.addEventListener("abort", abortNegotiation, { once: true });
+          let answer;
+          try {
+            answer = await cameraRequest(
+              () => apiFetch(url, {
+                method: "POST",
+                signal: negotiationController.signal,
+                body: { sdp: prepareCrealityOffer(peer.localDescription.sdp) },
+              }),
+              negotiationController.signal,
+              queueKey || url
+            );
+          } catch (err) {
+            if (negotiationController.signal.aborted && !controller.signal.aborted) {
+              throw new Error("Camera negotiation timed out. MakerVault could not get a WebRTC answer from the printer.");
+            }
+            throw err;
+          } finally {
+            clearTimeout(negotiationTimeout);
+            controller.signal.removeEventListener("abort", abortNegotiation);
+          }
+
           if (cancelled) return;
+          setStatus("Applying printer video answer…");
           await peer.setRemoteDescription(answer);
+          setStatus("Waiting for video…");
           videoTimeout = setTimeout(() => { if (!cancelled && (video.current?.readyState || 0) < 2) failed("No camera video arrived. Your browser must reach the printer over LAN/VPN; HTTPS access to MakerVault alone does not relay WebRTC video."); }, 20000);
         } catch (err) { if (err.name !== "AbortError") failed(err.message); }
       })();
