@@ -53,10 +53,10 @@ jobs:
         run: pip-audit -r requirements.txt
       - name: Static security scan
         run: bandit -q -r backend -x backend/core/migrations -ll
-      - name: Backup failure-recovery tests
-        run: python -m unittest discover -s scripts -p 'test_backup.py' -v
+      - name: Backup and recovery helper tests
+        run: python -m unittest discover -s scripts -p 'test_backup*.py' -v
       - name: Compile Python
-        run: python -m compileall -q backend
+        run: python -m compileall -q backend docker scripts
       - name: Check Django model migrations
         env:
           DJANGO_SECRET_KEY: ci-only-secret-key-for-makervault-tests-0123456789
@@ -119,8 +119,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Simulate a checkout created under umask 077
         run: chmod -R go-rwx backend
+      - name: Validate Compose configuration
+        run: docker compose --env-file .env.example config --quiet
       - name: Build MakerVault image
         run: docker build --pull -t makervault-ci .
+      - name: Build backup agent image
+        run: docker build --pull -f docker/backup-agent.Dockerfile -t makervault-backup-ci .
       - name: Verify secured Python runtime versions in image
         run: |
           docker run --rm --entrypoint python makervault-ci -c \
@@ -138,4 +142,15 @@ jobs:
             --severity HIGH,CRITICAL \
             --exit-code 1 \
             makervault-ci
+      - name: Scan backup agent OS packages for high/critical vulnerabilities
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:0.74.0 image \
+            --scanners vuln \
+            --pkg-types os \
+            --ignore-unfixed \
+            --severity HIGH,CRITICAL \
+            --exit-code 1 \
+            makervault-backup-ci
 
