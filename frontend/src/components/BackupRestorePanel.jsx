@@ -123,7 +123,7 @@ export default function BackupRestorePanel() {
       <div className="panelHead backupPanelHead">
         <div>
           <h3>Backup &amp; restore</h3>
-          <p>Create one recovery bundle containing the PostgreSQL database, media, encryption keys and deployment configuration. No Docker socket is exposed to the web app.</p>
+          <p>Create one recovery bundle containing the PostgreSQL database, media, encryption keys and deployment configuration. Backup creation runs in MakerVault's existing worker; no extra persistent container or Docker socket is required.</p>
         </div>
         <button
           className="primary"
