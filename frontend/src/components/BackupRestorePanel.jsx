@@ -129,11 +129,16 @@ export default function BackupRestorePanel() {
           className="primary"
           type="button"
           onClick={createBackup}
-          disabled={busy === "create" || state.running}
+          disabled={busy === "create" || state.running || state.supported === false}
         >
           {state.running ? "Backup in progress…" : busy === "create" ? "Starting…" : "Create backup"}
         </button>
       </div>
+
+      {state.supported === false && <div className="settingsCallout restoreWarning">
+        <strong>Managed backup is unavailable for this deployment</strong>
+        <p>{state.unsupported_reason} Existing managed bundles can still be downloaded and validated.</p>
+      </div>}
 
       <div className="backupSummaryGrid">
         <div><span>Stored backups</span><strong>{complete.length}</strong><small>{formatBytes(state.total_bytes)} total</small></div>
