@@ -25,9 +25,7 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
   const [presets, setPresets] = useState([]);
   const [warnings, setWarnings] = useState([]);
   const [busy, setBusy] = useState(false);
-  const [testingId, setTestingId] = useState("");
   const [removeArmedId, setRemoveArmedId] = useState("");
-  const [diagnostics, setDiagnostics] = useState({});
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [form, setForm] = useState({ name: "Camera", url: "", mode: "snapshot", rotation: 0, flip_horizontal: false, flip_vertical: false });
@@ -75,28 +73,6 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
     } catch (err) { setError(err.message); }
     finally { setBusy(false); }
   }
-  async function testSource(cameraId) {
-    const item = rows.find(row => row.id === cameraId);
-    if (!item) return;
-    setTestingId(cameraId); setError("");
-    setDiagnostics(current => ({ ...current, [cameraId]: { status: "running", message: "Testing source…" } }));
-    try {
-      const result = await apiFetch(root + cameraId + "/test/", { method: "POST", body: {} });
-      const message = (result.checks || []).map(check => check.detail).join(" ");
-      setDiagnostics(current => ({
-        ...current,
-        [cameraId]: { status: "ok", message: message || "Camera source is reachable." },
-      }));
-    } catch (err) {
-      setDiagnostics(current => ({
-        ...current,
-        [cameraId]: { status: "error", message: err.message },
-      }));
-    } finally {
-      setTestingId("");
-    }
-  }
-
   async function remove(cameraId = camera?.id) {
     const item = rows.find(row => row.id === cameraId);
     if (!item) return;
@@ -141,7 +117,6 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
             <code>{endpointLabel(item.url)}</code>
           </div>
           <div className="cameraSourceActions">
-            <button type="button" disabled={busy || testingId === item.id} onClick={() => testSource(item.id)}>{testingId === item.id ? "Testing…" : "Test"}</button>
             <button type="button" disabled={busy} onClick={() => usePreview(item.id)}>Use for previews</button>
             <button
               type="button"
@@ -151,7 +126,6 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
             >{removeArmedId === item.id ? "Confirm remove" : "Remove"}</button>
             {removeArmedId === item.id && <button type="button" disabled={busy} onClick={() => { setRemoveArmedId(""); setNotice(""); }}>Cancel</button>}
           </div>
-          {diagnostics[item.id] && <div className={"cameraSourceDiagnostic cameraSourceDiagnostic-" + diagnostics[item.id].status}>{diagnostics[item.id].message}</div>}
         </div>)}
       </div>}
       {!!candidates.length && <label className="full">Discovered sources / presets<select value="" onChange={e => { const item = candidates[Number(e.target.value)]; if (item) setForm(item); }}><option value="" disabled>Choose a source to configure</option>{candidates.map((item, index) => <option key={item.id} value={index}>{item.name} · {LABELS[item.mode]} · {endpointLabel(item.url)}</option>)}</select><small>Presets are candidates; saving does not confirm playback.</small></label>}
@@ -162,93 +136,35 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
       <div className="printerCameraFlips"><label><input type="checkbox" checked={form.flip_horizontal} onChange={e => setForm({ ...form, flip_horizontal: e.target.checked })} /> Flip horizontally</label><label><input type="checkbox" checked={form.flip_vertical} onChange={e => setForm({ ...form, flip_vertical: e.target.checked })} /> Flip vertically</label></div>
       <div className="full settingsActions"><button className="primary" disabled={busy}>Save camera source</button></div>
     </form>}
-    {!setupOnly && playing && <CameraPlayback key={camera.id} camera={camera} url={root + camera.id + "/media/"} queueKey={connection.id} />}
+    {!setupOnly && playing && <CameraPlayback key={camera.id} camera={camera} url={root + camera.id + "/media/"} />}
   </section>;
 }
 
-export function CameraPlayback({ camera, url, compact = false, queueKey = "" }) {
+export function CameraPlayback({ camera, url, compact = false }) {
   const [expanded, setExpanded] = useState(false);
   const container = useRef(null);
   const video = useRef(null);
-  const peerRef = useRef(null);
   const [image, setImage] = useState("");
   const [status, setStatus] = useState("Connecting…");
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
-  const [playbackBlocked, setPlaybackBlocked] = useState(false);
   useEffect(() => {
     let cancelled = false;
     let objectUrl = "";
     let peer;
     let videoTimeout;
-    let disconnectTimeout;
     let stopFrames;
     const controller = new AbortController();
-    setImage(""); setError(""); setStatus("Connecting…"); setPlaybackBlocked(false);
+    setImage(""); setError(""); setStatus("Connecting…");
     const closePeer = () => {
       if (peer) {
         peer.ontrack = null; peer.onconnectionstatechange = null;
         peer.getReceivers().forEach(receiver => receiver.track?.stop());
         peer.close();
       }
-      if (peerRef.current === peer) peerRef.current = null;
       if (video.current) video.current.srcObject = null;
     };
-    const failed = message => {
-      if (!cancelled) {
-        setPlaybackBlocked(false);
-        setError(message);
-        setStatus("Disconnected");
-        closePeer();
-      }
-    };
-    const inspectPeer = async activePeer => {
-      if (!activePeer || activePeer.connectionState === "closed") return "No active WebRTC peer.";
-      const receiver = activePeer.getReceivers().find(item => item.track?.kind === "video");
-      if (!receiver) return "No active video receiver.";
-
-      let packets = null;
-      let bytes = null;
-      let codecText = "";
-      try {
-        const stats = await receiver.getStats?.();
-        let inbound;
-        const reports = new Map();
-        stats?.forEach(report => {
-          reports.set(report.id, report);
-          if (report.type === "inbound-rtp" && report.kind === "video" && !report.isRemote) inbound = report;
-        });
-        if (inbound) {
-          packets = Number(inbound.packetsReceived ?? 0);
-          bytes = Number(inbound.bytesReceived ?? 0);
-          const codec = inbound.codecId ? reports.get(inbound.codecId) : null;
-          if (codec) {
-            const fmtp = codec.sdpFmtpLine ? `; ${codec.sdpFmtpLine}` : "";
-            codecText = `${codec.mimeType || "video"} PT${codec.payloadType ?? "?"}${fmtp}`;
-          }
-        }
-      } catch {
-        // Diagnostic-only.
-      }
-
-      if (!codecText) {
-        const params = receiver.getParameters?.() || {};
-        codecText = (params.codecs || [])
-          .filter(codec => (codec.mimeType || "").toLowerCase().startsWith("video/"))
-          .map(codec => {
-            const fmtp = codec.sdpFmtpLine ? `; ${codec.sdpFmtpLine}` : "";
-            return `${codec.mimeType || "video"} PT${codec.payloadType ?? "?"}${fmtp}`;
-          })
-          .join(" | ");
-      }
-
-      const pieces = [];
-      if (codecText) pieces.push(`Codec: ${codecText}`);
-      if (packets !== null) pieces.push(`RTP: ${packets} packets / ${bytes ?? 0} bytes`);
-      pieces.push(`Peer: ${activePeer.connectionState || "unknown"}`);
-      return pieces.join(". ");
-    };
-
+    const failed = message => { if (!cancelled) { setError(message); setStatus("Disconnected"); closePeer(); } };
     if (camera.mode !== "creality_webrtc") {
       stopFrames = startFrameLoop({
         request: signal => cameraRequest(async () => {
@@ -256,7 +172,7 @@ export function CameraPlayback({ camera, url, compact = false, queueKey = "" }) 
           if (!response.ok) { const result = await response.json().catch(() => ({})); throw new Error(result.error || "Camera unavailable. Check the source URL and printer connection."); }
           if (!/^image\/(jpeg|png)/.test(response.headers.get("Content-Type") || "")) throw new Error("Camera response was not an image. Sign in again if your session expired.");
           return response.blob();
-        }, signal, queueKey || url),
+        }, signal),
         onFrame: blob => {
           const next = URL.createObjectURL(blob);
           if (objectUrl) URL.revokeObjectURL(objectUrl);
@@ -269,99 +185,31 @@ export function CameraPlayback({ camera, url, compact = false, queueKey = "" }) 
         try {
           if (!globalThis.RTCPeerConnection) throw new Error("This browser does not support WebRTC camera playback.");
           peer = new RTCPeerConnection({ iceServers: [] });
-          peerRef.current = peer;
           const transceiver = peer.addTransceiver("video", { direction: "recvonly" });
           const codecs = RTCRtpReceiver.getCapabilities("video")?.codecs.filter(codec => codec.mimeType.toLowerCase() === "video/h264") || [];
           if (!codecs.length) throw new Error("This browser has no H.264 WebRTC decoder.");
-          if (transceiver.setCodecPreferences) transceiver.setCodecPreferences(codecs);
+          if (transceiver.setCodecPreferences) transceiver.setCodecPreferences(codecs.slice(0, 1));
           peer.ontrack = event => {
             if (cancelled || event.track.kind !== "video" || !video.current) return;
-            clearTimeout(videoTimeout);
-            videoTimeout = undefined;
             video.current.srcObject = event.streams[0] || new MediaStream([event.track]);
-            setStatus("Video track received…");
-            video.current.play().then(() => {
-              if (cancelled) return;
-              setPlaybackBlocked(false);
-              setError("");
-              setStatus("Live video · experimental");
-            }).catch(() => {
-              if (cancelled) return;
-              // Keep the peer alive. The explicit Play action will report the
-              // browser's real failure and receiver codec/RTP diagnostics.
-              setPlaybackBlocked(true);
-              setError("");
-              setStatus("Video ready · press Play");
-            });
+            video.current.play().catch(() => failed("Playback was blocked. Use the video play control or reconnect."));
           };
           peer.onconnectionstatechange = () => {
             if (cancelled) return;
-            if (peer.connectionState === "connected") {
-              clearTimeout(disconnectTimeout);
-              setStatus(current => current === "Live video · experimental" ? current : "Connected · waiting for video");
-              return;
-            }
-            if (peer.connectionState === "disconnected") {
-              setStatus("Media connection interrupted · retrying…");
-              clearTimeout(disconnectTimeout);
-              disconnectTimeout = setTimeout(() => {
-                if (!cancelled && peer?.connectionState === "disconnected") {
-                  failed("Camera media connection was interrupted. Check LAN/VPN access, then reconnect.");
-                }
-              }, 8000);
-              return;
-            }
-            if (peer.connectionState === "failed") {
-              failed("Camera connection failed. Check LAN/VPN access, then reconnect.");
-            }
+            if (peer.connectionState === "connected") setStatus("Connected · waiting for video");
+            if (["failed", "disconnected"].includes(peer.connectionState)) failed("Camera connection lost. Check LAN/VPN access, then reconnect.");
           };
-          setStatus("Preparing browser video route…");
           await peer.setLocalDescription(await peer.createOffer());
           await waitForIce(peer, controller.signal);
           if (cancelled) return;
-
-          setStatus("Negotiating with printer…");
-          const negotiationController = new AbortController();
-          const negotiationTimeout = setTimeout(() => negotiationController.abort(), 12000);
-          const abortNegotiation = () => negotiationController.abort();
-          controller.signal.addEventListener("abort", abortNegotiation, { once: true });
-          let answer;
-          try {
-            answer = await cameraRequest(
-              () => apiFetch(url, {
-                method: "POST",
-                signal: negotiationController.signal,
-                body: { sdp: prepareCrealityOffer(peer.localDescription.sdp) },
-              }),
-              negotiationController.signal,
-              queueKey || url
-            );
-          } catch (err) {
-            if (negotiationController.signal.aborted && !controller.signal.aborted) {
-              throw new Error("Camera negotiation timed out. MakerVault could not get a WebRTC answer from the printer.");
-            }
-            throw err;
-          } finally {
-            clearTimeout(negotiationTimeout);
-            controller.signal.removeEventListener("abort", abortNegotiation);
-          }
-
+          const answer = await cameraRequest(() => apiFetch(url, { method: "POST", signal: controller.signal, body: { sdp: prepareCrealityOffer(peer.localDescription.sdp) } }), controller.signal);
           if (cancelled) return;
-          setStatus("Applying printer video answer…");
           await peer.setRemoteDescription(answer);
-          setStatus("Waiting for video…");
-          videoTimeout = setTimeout(async () => {
-            if (cancelled || (video.current?.readyState || 0) >= 2) return;
-            const diagnostic = await inspectPeer(peer);
-            if (cancelled) return;
-            setPlaybackBlocked(true);
-            setStatus("WebRTC connected · no decoded frame yet");
-            setError(`No decoded camera frame arrived yet. ${diagnostic}`);
-          }, 20000);
+          videoTimeout = setTimeout(() => { if (!cancelled && (video.current?.readyState || 0) < 2) failed("No camera video arrived. Your browser must reach the printer over LAN/VPN; HTTPS access to MakerVault alone does not relay WebRTC video."); }, 20000);
         } catch (err) { if (err.name !== "AbortError") failed(err.message); }
       })();
     }
-    return () => { cancelled = true; controller.abort(); clearTimeout(videoTimeout); clearTimeout(disconnectTimeout); stopFrames?.(); closePeer(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
+    return () => { cancelled = true; controller.abort(); clearTimeout(videoTimeout); stopFrames?.(); closePeer(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [camera.id, url, attempt]);
   useEffect(() => {
     if (!expanded) return;
@@ -371,70 +219,6 @@ export function CameraPlayback({ camera, url, compact = false, queueKey = "" }) 
     document.addEventListener("keydown", escape);
     return () => { document.body.style.overflow = oldOverflow; document.removeEventListener("keydown", escape); };
   }, [expanded]);
-  const inspectWebRtcReceiver = async () => {
-    const peer = peerRef.current;
-    if (!peer || peer.connectionState === "closed") return "No active WebRTC peer.";
-    const receiver = peer.getReceivers().find(item => item.track?.kind === "video");
-    if (!receiver) return "No active video receiver.";
-
-    let packets = null;
-    let bytes = null;
-    let codecText = "";
-    try {
-      const stats = await receiver.getStats?.();
-      let inbound;
-      const reports = new Map();
-      stats?.forEach(report => {
-        reports.set(report.id, report);
-        if (report.type === "inbound-rtp" && report.kind === "video" && !report.isRemote) inbound = report;
-      });
-      if (inbound) {
-        packets = Number(inbound.packetsReceived ?? 0);
-        bytes = Number(inbound.bytesReceived ?? 0);
-        const codec = inbound.codecId ? reports.get(inbound.codecId) : null;
-        if (codec) {
-          const fmtp = codec.sdpFmtpLine ? `; ${codec.sdpFmtpLine}` : "";
-          codecText = `${codec.mimeType || "video"} PT${codec.payloadType ?? "?"}${fmtp}`;
-        }
-      }
-    } catch {
-      // Stats are diagnostic-only.
-    }
-
-    if (!codecText) {
-      const params = receiver.getParameters?.() || {};
-      codecText = (params.codecs || [])
-        .filter(codec => (codec.mimeType || "").toLowerCase().startsWith("video/"))
-        .map(codec => {
-          const fmtp = codec.sdpFmtpLine ? `; ${codec.sdpFmtpLine}` : "";
-          return `${codec.mimeType || "video"} PT${codec.payloadType ?? "?"}${fmtp}`;
-        })
-        .join(" | ");
-    }
-
-    const pieces = [];
-    if (codecText) pieces.push(`Codec: ${codecText}`);
-    if (packets !== null) pieces.push(`RTP: ${packets} packets / ${bytes ?? 0} bytes`);
-    pieces.push(`Peer: ${peer.connectionState || "unknown"}`);
-    return pieces.join(". ");
-  };
-
-  const startVideoPlayback = async () => {
-    if (!video.current) return;
-    try {
-      await video.current.play();
-      setPlaybackBlocked(false);
-      setError("");
-      setStatus("Live video · experimental");
-    } catch (err) {
-      setPlaybackBlocked(true);
-      const diagnostic = await inspectWebRtcReceiver();
-      const name = err?.name || "PlaybackError";
-      const message = err?.message || "The browser rejected video playback.";
-      setError(`${name}: ${message}${diagnostic ? ` · ${diagnostic}` : ""}`);
-      setStatus("Video track received · playback failed");
-    }
-  };
   const fullscreen = () => {
     if (expanded) { setExpanded(false); return; }
     const target = container.current;
@@ -451,20 +235,7 @@ export function CameraPlayback({ camera, url, compact = false, queueKey = "" }) 
       <button type="button" className="cameraFullscreen" aria-label={expanded ? "Close fullscreen camera" : "Open fullscreen camera"} onClick={fullscreen}>{expanded ? "Close" : "Fullscreen"}</button>
     </div>
     <div className="printerCameraViewport">
-      {camera.mode === "creality_webrtc" ? <>
-        <video
-          ref={video}
-          style={{ transform }}
-          autoPlay
-          muted
-          playsInline
-          controls={!compact || playbackBlocked}
-          onClick={playbackBlocked ? startVideoPlayback : undefined}
-          onPlaying={() => { setPlaybackBlocked(false); setError(""); setStatus("Live video · experimental"); }}
-        />
-        {compact && status !== "Live video · experimental" && <span className="cameraStatusOverlay" role="status">{status}</span>}
-        {playbackBlocked && <button type="button" className="cameraPlayOverlay" onClick={startVideoPlayback}>Play video</button>}
-      </> : image ? <img src={image} alt={camera.name + " live camera view"} style={{ transform }} /> : <span role="status">{status}</span>}
+      {camera.mode === "creality_webrtc" ? <video ref={video} style={{ transform }} autoPlay muted playsInline controls={!compact} onPlaying={() => setStatus("Live video · experimental")} /> : image ? <img src={image} alt={camera.name + " live camera view"} style={{ transform }} /> : <span role="status">{status}</span>}
     </div>
     {error && <p className="integrationError" role="alert">{error}</p>}
     {!compact && <small>{LABELS[camera.mode]}{camera.mode === "creality_webrtc" ? " · Browser needs LAN/VPN access to the printer." : " · Images are relayed securely through your MakerVault session."}</small>}
