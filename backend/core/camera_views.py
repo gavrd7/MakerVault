@@ -25,6 +25,31 @@ def private_response(response):
     return response
 
 
+def _remove_camera_source(connection, camera_id):
+    config = dict(connection.config or {})
+    raw = config.get("cameras", [])
+    if not isinstance(raw, list):
+        raw = []
+    if not any(isinstance(item, dict) and item.get("id") == camera_id for item in raw):
+        raise CameraError("Camera source not found.")
+
+    raw = [
+        item for item in raw
+        if not (isinstance(item, dict) and item.get("id") == camera_id)
+    ]
+    config["cameras"] = raw
+    if config.get("camera_default_id") == camera_id:
+        remaining = sources(type("ConnectionView", (), {"config": config, "adapter": connection.adapter, "endpoint_url": connection.endpoint_url})())
+        if remaining:
+            config["camera_default_id"] = remaining[-1]["id"]
+        else:
+            config.pop("camera_default_id", None)
+    config["camera_configured_at"] = timezone.now().isoformat()
+    connection.config = config
+    connection.save(update_fields=["config", "updated_at"])
+    return sources(connection)
+
+
 @contextmanager
 def camera_slot(user_id):
     key = f"camera-request:{user_id}"
@@ -71,10 +96,25 @@ def camera_sources(request, printer_id, connection_id):
                     return _error("Camera source not found.", 404)
                 config["camera_default_id"] = selected_id
             else:
-                if len(rows) >= 8:
-                    return _error("A printer source can have up to eight cameras.")
-                rows.append(normalise_source(connection, payload, uuid.uuid4().hex))
-                config["camera_default_id"] = rows[-1]["id"]
+                candidate = normalise_source(connection, payload, uuid.uuid4().hex)
+                existing = next(
+                    (item for item in rows if item["mode"] == candidate["mode"] and item["url"] == candidate["url"]),
+                    None,
+                )
+                if existing:
+                    candidate = normalise_source(connection, payload, existing["id"])
+                    rows = [
+                        candidate if item["id"] == existing["id"] else item
+                        for item in rows
+                        if item["id"] == existing["id"]
+                        or not (item["mode"] == candidate["mode"] and item["url"] == candidate["url"])
+                    ]
+                    config["camera_default_id"] = existing["id"]
+                else:
+                    if len(rows) >= 8:
+                        return _error("A printer source can have up to eight cameras.")
+                    rows.append(candidate)
+                    config["camera_default_id"] = candidate["id"]
             config["camera_configured_at"] = timezone.now().isoformat()
             config["cameras"] = rows
             connection.config = config
@@ -82,6 +122,24 @@ def camera_sources(request, printer_id, connection_id):
         return private_response(JsonResponse({"saved": True}))
     except (CameraError, TypeError, ValueError, ValidationError) as exc:
         return _error(str(exc) if isinstance(exc, CameraError) else "Invalid camera configuration.")
+
+
+@login_required
+@require_http_methods(["POST"])
+def camera_source_remove(request, printer_id, connection_id, camera_id):
+    connection = connection_for(request, printer_id, connection_id)
+    if not connection:
+        return _error("Printer source not found.", 404)
+    denied = _require_permission(request, "core.change_printer")
+    if denied:
+        return denied
+    try:
+        with transaction.atomic():
+            connection = PrinterConnection.objects.select_for_update().get(pk=connection.pk)
+            rows = _remove_camera_source(connection, camera_id)
+        return private_response(JsonResponse({"deleted": True, "id": camera_id, "rows": rows}))
+    except CameraError as exc:
+        return _error(str(exc), 404)
 
 
 @login_required
