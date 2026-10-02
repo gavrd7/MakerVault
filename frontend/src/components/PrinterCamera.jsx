@@ -90,11 +90,11 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
       <div className="printerCameraFlips"><label><input type="checkbox" checked={form.flip_horizontal} onChange={e => setForm({ ...form, flip_horizontal: e.target.checked })} /> Flip horizontally</label><label><input type="checkbox" checked={form.flip_vertical} onChange={e => setForm({ ...form, flip_vertical: e.target.checked })} /> Flip vertically</label></div>
       <div className="full settingsActions"><button className="primary" disabled={busy}>Save camera source</button></div>
     </form>}
-    {!setupOnly && playing && <CameraPlayback key={camera.id} camera={camera} url={root + camera.id + "/media/"} />}
+    {!setupOnly && playing && <CameraPlayback key={camera.id} camera={camera} url={root + camera.id + "/media/"} queueKey={connection.id} />}
   </section>;
 }
 
-export function CameraPlayback({ camera, url, compact = false }) {
+export function CameraPlayback({ camera, url, compact = false, queueKey = "" }) {
   const [expanded, setExpanded] = useState(false);
   const container = useRef(null);
   const video = useRef(null);
@@ -126,7 +126,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
           if (!response.ok) { const result = await response.json().catch(() => ({})); throw new Error(result.error || "Camera unavailable. Check the source URL and printer connection."); }
           if (!/^image\/(jpeg|png)/.test(response.headers.get("Content-Type") || "")) throw new Error("Camera response was not an image. Sign in again if your session expired.");
           return response.blob();
-        }, signal),
+        }, signal, queueKey || url),
         onFrame: blob => {
           const next = URL.createObjectURL(blob);
           if (objectUrl) URL.revokeObjectURL(objectUrl);
@@ -156,7 +156,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
           await peer.setLocalDescription(await peer.createOffer());
           await waitForIce(peer, controller.signal);
           if (cancelled) return;
-          const answer = await cameraRequest(() => apiFetch(url, { method: "POST", signal: controller.signal, body: { sdp: prepareCrealityOffer(peer.localDescription.sdp) } }), controller.signal);
+          const answer = await cameraRequest(() => apiFetch(url, { method: "POST", signal: controller.signal, body: { sdp: prepareCrealityOffer(peer.localDescription.sdp) } }), controller.signal, queueKey || url);
           if (cancelled) return;
           await peer.setRemoteDescription(answer);
           videoTimeout = setTimeout(() => { if (!cancelled && (video.current?.readyState || 0) < 2) failed("No camera video arrived. Your browser must reach the printer over LAN/VPN; HTTPS access to MakerVault alone does not relay WebRTC video."); }, 20000);
