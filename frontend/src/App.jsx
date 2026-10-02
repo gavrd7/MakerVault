@@ -20,6 +20,19 @@ ModuleRegistry.registerModules([AllCommunityModule]);
 
 const NAV = ["Dashboard", "Search", "Board Catalogue", "Components", "Projects", "Inventory", "3D Printing", "Files", "Interactive Wiring", "Maker Tags", "Settings", "About"];
 
+function formatBackupBytes(value) {
+  const bytes = Number(value || 0);
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let amount = bytes;
+  let unit = 0;
+  while (amount >= 1024 && unit < units.length - 1) {
+    amount /= 1024;
+    unit += 1;
+  }
+  return `${amount >= 10 || unit === 0 ? amount.toFixed(0) : amount.toFixed(1)} ${units[unit]}`;
+}
+
 export default function App() {
   const [section, setSection] = useState("Dashboard");
   const [dashboard, setDashboard] = useState(null);
@@ -35,6 +48,16 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchTarget, setSearchTarget] = useState(null);
   const [tagResolveToken, setTagResolveToken] = useState("");
+  const [backupWatchId, setBackupWatchId] = useState("");
+  const [toast, setToast] = useState(null);
+
+  const showToast = useCallback((tone, title, message) => {
+    setToast({ id: Date.now(), tone, title, message });
+  }, []);
+
+  const watchBackup = useCallback((backupId) => {
+    if (backupId) setBackupWatchId(String(backupId));
+  }, []);
 
   const refreshDashboard = useCallback(async () => {
     const result = await apiFetch("/api/dashboard/");
@@ -77,6 +100,68 @@ export default function App() {
       setSection("Maker Tags");
     }
   }, []);
+
+
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timer = window.setTimeout(() => setToast(current => current?.id === toast.id ? null : current), 9000);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  useEffect(() => {
+    if (!config?.is_superuser || backupWatchId) return undefined;
+    let cancelled = false;
+    apiFetch("/api/settings/backups/")
+      .then(result => {
+        if (cancelled) return;
+        const running = (result.rows || []).find(item => item.status === "running");
+        if (running?.id) setBackupWatchId(running.id);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [config?.is_superuser, backupWatchId]);
+
+  useEffect(() => {
+    if (!backupWatchId) return undefined;
+    let cancelled = false;
+
+    async function checkBackup() {
+      try {
+        const result = await apiFetch("/api/settings/backups/");
+        if (cancelled) return;
+        const item = (result.rows || []).find(row => row.id === backupWatchId);
+        if (!item) return;
+
+        if (item.status === "complete" && item.verified) {
+          showToast(
+            "success",
+            "Backup complete",
+            `Recovery bundle created and verified successfully · ${formatBackupBytes(item.size_bytes)}`
+          );
+          setBackupWatchId("");
+          return;
+        }
+
+        if (["failed", "interrupted"].includes(item.status)) {
+          showToast(
+            "danger",
+            "Backup failed",
+            item.error || "MakerVault could not create a verified recovery bundle."
+          );
+          setBackupWatchId("");
+        }
+      } catch {
+        // Keep watching; a transient request error should not discard completion notification.
+      }
+    }
+
+    checkBackup();
+    const timer = window.setInterval(checkBackup, 2500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [backupWatchId, showToast]);
 
   function openSearchResult(result) {
     if (!result) return;
@@ -143,7 +228,7 @@ export default function App() {
     if (section === "Projects") return <ProjectsPage projects={projects} setProjects={setProjects} config={config} refreshDashboard={refreshDashboard} refreshInventory={refreshInventory} boards={boards} components={components} inventory={inventory} openProjectId={projectTarget} onOpenConsumed={() => setProjectTarget("")} />;
     if (section === "3D Printing") return <PrintingPage config={config} projects={projects} searchTarget={searchTarget} onOpenConsumed={token => setSearchTarget(current => consumePrinterIntent(current, token))} />;
     if (section === "Files") return <FilesPage projects={projects} config={config} searchTarget={searchTarget?.type === "files" ? searchTarget : null} onOpenProject={projectId => { setProjectTarget(projectId); setSection("Projects"); }} />;
-    if (section === "Settings") return <SettingsPage config={config} />;
+    if (section === "Settings") return <SettingsPage config={config} onBackupStarted={watchBackup} />;
     return <AboutPage config={config} />;
   }
 
@@ -159,6 +244,10 @@ export default function App() {
       {error && <div className="error">{error}</div>}{notice && <div className="notice">{notice}<button onClick={() => setNotice("")}>×</button></div>}
       {page()}
     </main>
+    {toast && <div className={`globalToast globalToast-${toast.tone || "success"}`} role={toast.tone === "danger" ? "alert" : "status"} aria-live="polite">
+      <div className="globalToastBody"><strong>{toast.title}</strong><span>{toast.message}</span></div>
+      <button className="globalToastClose" type="button" aria-label="Dismiss notification" onClick={() => setToast(null)}>×</button>
+    </div>}
     {importOpen && <ImportBoardModal onClose={() => setImportOpen(false)} onImported={async (board, created) => {
       setBoards(rows => {
         const filtered = rows.filter(existing => existing.id !== board.id);
