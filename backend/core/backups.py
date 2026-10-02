@@ -96,6 +96,7 @@ def call_agent(path: str, *, method="POST", timeout=8) -> dict:
         headers={
             "Authorization": f"Bearer {settings.SECRET_KEY}",
             "Accept": "application/json",
+            "X-MakerVault-Version": str(settings.MAKERVAULT_VERSION),
         },
     )
     try:
