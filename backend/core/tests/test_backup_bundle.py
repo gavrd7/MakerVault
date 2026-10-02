@@ -44,7 +44,8 @@ class ManagedBackupBundleTests(TestCase):
         self.assertTrue((self.backups / "integrated-test.mvbackup").is_file())
         self.assertFalse(backup_bundle.maintenance_lock_path().exists())
 
-        validation = backup_bundle.validate_backup_id("integrated-test")
+        with patch.object(backup_bundle.subprocess, "run", side_effect=self.fake_subprocess):
+            validation = backup_bundle.validate_backup_id("integrated-test")
         self.assertTrue(validation["valid"])
         self.assertEqual(validation["format_version"], backup_bundle.FORMAT_VERSION)
 
