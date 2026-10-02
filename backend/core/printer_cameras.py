@@ -388,7 +388,9 @@ def negotiate(connection, source, offer):
         if not isinstance(answer, dict) or answer.get("type") != "answer" or not isinstance(answer.get("sdp"), str) or len(answer["sdp"]) > 65536 or not answer["sdp"].startswith("v=0"):
             raise CameraError("Printer did not return a valid WebRTC answer.")
         return {"type": "answer", "sdp": answer["sdp"]}
-    except (ValueError, urllib3.exceptions.HTTPError) as exc:
+    except CameraError:
+        raise
+    except (ValueError, urllib3.exceptions.HTTPError, OSError) as exc:
         raise CameraError("Printer returned an unsupported camera response. Check its firmware and camera availability.") from exc
     finally:
         response.close()
