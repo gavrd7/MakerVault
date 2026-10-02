@@ -1,3 +1,4 @@
+import { PrinterCameraPreview } from "./PrinterCameras";
 import React from "react";
 import PrinterJobControls from "./PrinterJobControls";
 import StorageSummary from "./StorageSummary";
@@ -31,7 +32,7 @@ function liveTemp(temp) {
   return Math.round(Number(temp.actual_c)) + "°";
 }
 
-export default function Dashboard({ dashboard, inventory, onNavigate, onOpenLive, onChanged }) {
+export default function Dashboard({ dashboard, inventory, onNavigate, onOpenLive, onOpenCamera, onChanged }) {
   const cards = dashboard ? [
     ["Inventory", dashboard.inventory_total, `${dashboard.inventory_available} available · ${dashboard.inventory_in_use} in use`, "Inventory"],
     ["Projects", dashboard.projects_total, `${dashboard.projects_active} active`, "Projects"],
@@ -91,6 +92,7 @@ export default function Dashboard({ dashboard, inventory, onNavigate, onOpenLive
                 <PrinterJobControls printer={printer} connection={{ id: printer.connection_id, controls: printer.controls, snapshot: { job: printer.job } }} canControl={printer.can_control} onChanged={onChanged} />
                 <button type="button" className="printerLiveOpen" onClick={() => onOpenLive(printer)}>Open live</button>
               </div>
+              <PrinterCameraPreview printer={printer} />
             </div>
           </article>;
         })}

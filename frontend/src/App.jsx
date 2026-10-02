@@ -3,6 +3,7 @@ import { AllCommunityModule, ModuleRegistry } from "ag-grid-community";
 import { apiFetch } from "./api";
 import BoardsPage, { ImportBoardModal } from "./components/BoardsPage";
 import ComponentsPage from "./components/ComponentsPage";
+import { consumePrinterIntent } from "./components/printerNavigation";
 import Dashboard from "./components/Dashboard";
 import InventoryPage from "./components/InventoryPage";
 import ProjectsPage from "./components/ProjectsPage";
@@ -126,8 +127,13 @@ export default function App() {
     }
   }
 
+  function navigateSection(next) {
+    setSearchTarget(null);
+    setSection(next);
+  }
+
   function page() {
-    if (section === "Dashboard") return <Dashboard dashboard={dashboard} inventory={inventory} onNavigate={setSection} onChanged={refreshDashboard} onOpenLive={printer => { setSearchTarget({ type: "printers", id: printer.id, openLive: true, token: Date.now() }); setSection("3D Printing"); }} />;
+    if (section === "Dashboard") return <Dashboard dashboard={dashboard} inventory={inventory} onNavigate={navigateSection} onOpenCamera={printer => { setSearchTarget({ type: "printers", id: printer.id, openCamera: true, token: Date.now() }); setSection("3D Printing"); }} onChanged={refreshDashboard} onOpenLive={printer => { setSearchTarget({ type: "printers", id: printer.id, openLive: true, token: Date.now() }); setSection("3D Printing"); }} />;
     if (section === "Search") return <SearchPage initialQuery={searchQuery} projects={projects} onOpenResult={openSearchResult} />;
     if (section === "Maker Tags") return <MakerTagsPage config={config} resolveToken={tagResolveToken} onResolveConsumed={() => { setTagResolveToken(""); const params = new URLSearchParams(window.location.search); params.delete("tag"); const query = params.toString(); window.history.replaceState({}, "", window.location.pathname + (query ? "?" + query : "") + window.location.hash); }} onChanged={refreshDashboard} onOpenTarget={openTagTarget} />;
     if (section === "Interactive Wiring") return <WiringPage boards={boards} components={components} inventory={inventory} projects={projects} config={config} onOpenProject={projectId => { setProjectTarget(projectId); setSection("Projects"); }} />;
@@ -135,7 +141,7 @@ export default function App() {
     if (section === "Board Catalogue") return <BoardsPage boards={boards} setBoards={setBoards} components={components} projects={projects} config={config} onOpenImport={() => setImportOpen(true)} refreshDashboard={refreshDashboard} openBoardId={searchTarget?.type === "boards" ? searchTarget.id : ""} openToken={searchTarget?.token} onInventoryCreated={async (item, items = [item]) => { setInventory(rows => { const ids = new Set(items.map(entry => entry.id)); return [...rows.filter(row => !ids.has(row.id)), ...items].sort((a,b) => a.inventory_id.localeCompare(b.inventory_id)); }); await refreshDashboard(); }} />;
     if (section === "Components") return <ComponentsPage components={components} setComponents={setComponents} boards={boards} projects={projects} config={config} refreshDashboard={refreshDashboard} openComponentId={searchTarget?.type === "components" ? searchTarget.id : ""} openToken={searchTarget?.token} onInventoryCreated={async (item, items = [item]) => { setInventory(rows => { const ids = new Set(items.map(entry => entry.id)); return [...rows.filter(row => !ids.has(row.id)), ...items].sort((a,b) => a.inventory_id.localeCompare(b.inventory_id)); }); await refreshDashboard(); }} />;
     if (section === "Projects") return <ProjectsPage projects={projects} setProjects={setProjects} config={config} refreshDashboard={refreshDashboard} refreshInventory={refreshInventory} boards={boards} components={components} inventory={inventory} openProjectId={projectTarget} onOpenConsumed={() => setProjectTarget("")} />;
-    if (section === "3D Printing") return <PrintingPage config={config} projects={projects} searchTarget={searchTarget} />;
+    if (section === "3D Printing") return <PrintingPage config={config} projects={projects} searchTarget={searchTarget} onOpenConsumed={token => setSearchTarget(current => consumePrinterIntent(current, token))} />;
     if (section === "Files") return <FilesPage projects={projects} config={config} searchTarget={searchTarget?.type === "files" ? searchTarget : null} onOpenProject={projectId => { setProjectTarget(projectId); setSection("Projects"); }} />;
     if (section === "Settings") return <SettingsPage config={config} />;
     return <AboutPage config={config} />;
@@ -145,7 +151,7 @@ export default function App() {
     <aside>
       <div className="brand"><img className="brandLogo" src="/static/core/makervault-logo.jpg" alt="MakerVault" /><small className="brandVersion">{config?.version ? "v" + config.version : "version loading…"} · AGPL</small></div>
       <GlobalSearch onOpenResult={openSearchResult} onOpenAdvanced={openAdvancedSearch} />
-      <nav>{NAV.filter(n => n !== "Settings" || config?.is_staff).map(n => <button key={n} className={section === n ? "active" : ""} onClick={() => setSection(n)}>{n}</button>)}</nav>
+      <nav>{NAV.filter(n => n !== "Settings" || config?.is_staff).map(n => <button key={n} className={section === n ? "active" : ""} onClick={() => navigateSection(n)}>{n}</button>)}</nav>
       <div className="asideBottom"><a href="/admin/">Administration</a><a href="/accounts/2fa/">Account &amp; Security</a><a href="/accounts/logout/">Sign out</a></div>
     </aside>
     <main>

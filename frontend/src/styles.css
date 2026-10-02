@@ -2259,3 +2259,43 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
 .printingSourceNotice{position:sticky;top:12px;z-index:10;margin-bottom:0;align-items:flex-start}
 .printingSourceNotice>span{min-width:0;overflow-wrap:anywhere}
 .printingSourceNotice>button{flex-shrink:0}
+
+
+/* On-demand printer camera viewing. */
+.printerCamera{border-top:1px solid #29313c;padding-top:14px;min-width:0}
+.printerCameraToolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.printerCameraToolbar>strong{margin-right:auto}
+.printerCameraSelect{flex:1 1 160px;min-width:0;max-width:100%}
+.printerCameraSelect select{width:100%;min-width:0}
+.printerCameraForm{margin-top:12px}
+.printerCameraFlips{display:grid;gap:8px;align-content:center}
+.printerCameraFlips label{display:flex;align-items:center;gap:8px}
+.printerCameraFlips input{width:auto}
+.printerCameraViewport{display:grid;place-items:center;aspect-ratio:16/9;overflow:hidden;background:#05080c;border-radius:10px;width:100%;min-width:0}
+.printerCameraViewport img,.printerCameraViewport video{width:100%;height:100%;object-fit:contain;max-height:65vh}
+.printerCameraPlayback{min-width:0;background:#0b1017;padding:10px;border-radius:12px}
+.printerCameraPlayback:fullscreen{display:flex;flex-direction:column;justify-content:center;padding:16px}
+.printerCameraPlayback:fullscreen .printerCameraViewport{flex:1;min-height:0;aspect-ratio:auto}
+.printerCameraPlayback:fullscreen img,.printerCameraPlayback:fullscreen video{max-height:85vh}
+@media(max-width:620px){.printerCameraToolbar>*{max-width:100%}.printerCameraToolbar button{flex:1 1 auto}.printerCameraSelect{flex-basis:100%}}
+
+/* Camera viewing and configuration are separate from printer telemetry. */
+.printerCameraCard{min-width:0;border:1px solid var(--border,#29313c);border-radius:12px;padding:12px;margin:12px 0}
+.printerCameraPlaceholder{aspect-ratio:16/9;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:#080d13;border-radius:10px;color:#a6b0bd;min-width:0;text-align:center;padding:16px}
+.printerCameraCard select{width:100%;min-width:0;max-width:100%}
+.printerCameraCard .printerCameraViewport{max-height:420px}
+.printerCameraCard .printerCameraPlayback:fullscreen .printerCameraViewport{max-height:none}
+@media(max-width:620px){.printerCameraCard{padding:10px}.printerCameraPlaceholder{aspect-ratio:4/3}.printerCameraCard .printerCameraToolbar button{flex:1 1 auto}}
+
+.cameraGlanceCard{border:0;padding:0;margin:12px 0 0;min-width:0}
+.cameraGlance{position:relative;padding:0;background:#05080c;overflow:hidden}
+.cameraGlance>.printerCameraToolbar{position:absolute;right:8px;top:8px;z-index:2;margin:0;gap:6px}
+.cameraGlance .cameraFullscreen{background:#101721dd;color:#fff;border:1px solid #667181;padding:6px 10px;min-height:34px;width:auto;flex:none;font-size:12px}
+.cameraGlance .printerCameraViewport{max-height:none;aspect-ratio:16/9}
+.cameraGlance .printerCameraViewport video,.cameraGlance .printerCameraViewport img{display:block;max-height:none}
+.cameraGlance>.integrationError{padding:10px;margin:0}
+.cameraExpanded{position:fixed!important;inset:0;z-index:10000;border-radius:0;display:flex;align-items:center;justify-content:center}
+.cameraExpanded .printerCameraViewport{height:100%;max-height:100vh;aspect-ratio:auto}
+.cameraExpanded .printerCameraViewport img,.cameraExpanded .printerCameraViewport video{height:100%;object-fit:contain}
+.cameraExpanded>.printerCameraToolbar{top:16px;right:16px}
+.cameraExpanded>.integrationError{position:absolute;bottom:0;background:#101721}

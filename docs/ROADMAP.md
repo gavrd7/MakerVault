@@ -192,6 +192,8 @@ This file tracks completed MakerVault milestones and the planned path toward a s
 
 ### v0.9.0 — Printer camera feeds & live viewing
 
+**In development:** shared provider contracts and per-adapter guidance, K1 direct/Helper Script presets, experimental PrusaLink snapshot discovery and manufacturer-reported Anycubic/FlashForge HTTP candidates; on-demand JPEG/PNG and MJPEG-derived live images, Moonraker/OctoPrint discovery, manual same-host sources and experimental Creality legacy/token-protected WebRTC. HTTP viewing is approximately 1 fps; WebRTC media requires browser LAN/VPN access. Full-rate proxy streaming, generic HLS/RTSP/WebRTC, separate camera hosts and media relaying remain follow-up work. Owner confirmed K1/K2 playback on 2 October 2026; per-route, firmware/browser and lifecycle checks remain pending. Camera setup is separate from telemetry, with automatic compact feeds on printer cards and the dashboard, fullscreen viewing and an optional camera step after adding a live source. The last configured camera is the default; hidden/off-screen feeds pause.
+
 **Goal:** show usable printer camera feeds inside MakerVault, with local-first connections and accurate per-adapter support reporting.
 
 Revised by the owner on 1 October 2026. Camera-feed development replaces the former printer maintenance/workshop milestone; maintenance logs, schedules and reminders remain outside planned scope.
@@ -257,4 +259,5 @@ The following remain cross-cutting rather than tied to only one milestone:
 - performance and database/indexing work as real-world data sets grow.
 
 Version scope may still be adjusted as implementation teaches us more, but the sequence above represents the current intended path to v1.
+
 

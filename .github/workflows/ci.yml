@@ -95,6 +95,9 @@ jobs:
       - name: Audit frontend dependencies
         working-directory: frontend
         run: npm audit --audit-level=high
+      - name: Frontend playback tests
+        working-directory: frontend
+        run: npm test
       - name: Build frontend
         working-directory: frontend
         run: npm run build
@@ -129,3 +132,4 @@ jobs:
             --severity HIGH,CRITICAL \
             --exit-code 1 \
             makervault-ci
+

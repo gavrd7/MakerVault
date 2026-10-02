@@ -1,6 +1,21 @@
 # Changelog
 
-## v0.8.0 — Printed parts (in development)
+## v0.9.0.2 — Camera feeds (in development)
+
+- Dashboard and printer cards automatically show the last configured enabled camera, with a compact fullscreen control and no feed-selection/setup controls in the viewer.
+- Preview selection persists on the server; camera setup is a separate printer action. Off-screen/hidden-page feeds pause, and per-tab media requests are queued to support multiple visible previews.
+
+- Separated camera configuration from live telemetry; live-source creation now offers an optional camera step.
+- Added on-demand camera previews to printer cards and dedicated dashboard camera links. Fixed retained navigation actions reopening a previous printer monitor.
+- Owner confirmed successful K1 and K2 camera playback on 2 October 2026; specific routes/firmware and remaining lifecycle checks are still pending.
+
+- Added shared camera-provider discovery/guidance across all adapters, K1 direct/Fluidd/Mainsail presets, experimental PrusaLink snapshots and recognised Anycubic/FlashForge HTTP sources. Unsupported native/cloud transports stay explicit.
+- Added on-demand camera setup, discovery, source selection, stop/reconnect, orientation and fullscreen inside Open live.
+- Added owner-scoped refreshed HTTP camera images and experimental Creality K2 legacy/token-protected WebRTC signalling. No automatic playback.
+- Added same-host target validation, DNS pinning, strict TLS, redirect rejection, bounded image responses and camera credential redaction.
+- Added protocol/access regression tests and browser playback lifecycle tests. Hardware playback validation remains pending.
+
+## v0.8.0 — Printed parts
 
 - Explicitly retain physical parts from successful prints, or record existing parts without a saved model or print link. No automatic creation.
 - Track quantities, project installation, location, physical status, replacements and change history; reuse Maker Tags for printed parts.
@@ -567,4 +582,5 @@
 ## v0.1.0
 
 - Initial MakerVault Docker/Django/PostgreSQL/Redis foundation.
+
 
