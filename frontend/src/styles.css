@@ -2342,3 +2342,16 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
   .backupActions>*{width:100%;text-align:center}
   .restoreCommand{grid-template-columns:1fr}
 }
+
+
+/* Global application notifications */
+.globalToast{position:fixed;right:24px;bottom:24px;z-index:12000;width:min(410px,calc(100vw - 32px));display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:15px 16px;border:1px solid #345e4c;border-radius:12px;background:#10291e;color:#d7f7e3;box-shadow:0 18px 55px rgba(0,0,0,.42)}
+.globalToast-success{border-color:#345e4c;background:#10291e}
+.globalToast-danger{border-color:#75414a;background:#2a171c;color:#ffd0d6}
+.globalToastBody{display:grid;gap:4px;min-width:0}
+.globalToastBody strong{font-size:14px}
+.globalToastBody span{font-size:13px;line-height:1.45;color:#a9cdb8;overflow-wrap:anywhere}
+.globalToast-danger .globalToastBody span{color:#e6aab2}
+.globalToastClose{flex:0 0 auto;border:0;background:transparent;color:inherit;padding:0 4px;font-size:20px;line-height:1}
+.globalToastClose:hover{border:0;background:transparent}
+@media(max-width:620px){.globalToast{right:16px;bottom:16px;left:16px;width:auto}}
