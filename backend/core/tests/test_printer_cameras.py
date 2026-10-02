@@ -306,6 +306,56 @@ class CameraApiTests(TestCase):
         self.connection.refresh_from_db()
         self.assertEqual(summary(self.connection)["preview"]["name"], "New")
 
+    def test_saving_same_camera_source_updates_and_deduplicates(self):
+        payload = {
+            "mode": "creality_webrtc",
+            "url": "http://printer.lan:8000/call/webrtc_local",
+            "name": "K2 Creality WebRTC (experimental)",
+        }
+        first = self.client.post(self.root, payload, content_type="application/json")
+        self.assertEqual(first.status_code, 200, first.content)
+
+        # Simulate an older duplicate already present in saved config.
+        self.connection.refresh_from_db()
+        config = dict(self.connection.config or {})
+        rows = list(config.get("cameras") or [])
+        duplicate = dict(rows[-1])
+        duplicate["id"] = "duplicate-camera"
+        rows.append(duplicate)
+        config["cameras"] = rows
+        config["camera_default_id"] = "duplicate-camera"
+        self.connection.config = config
+        self.connection.save(update_fields=["config", "updated_at"])
+
+        second = self.client.post(self.root, payload, content_type="application/json")
+        self.assertEqual(second.status_code, 200, second.content)
+        saved = self.client.get(self.root).json()["rows"]
+        matches = [
+            row for row in saved
+            if row["mode"] == "creality_webrtc"
+            and row["url"] == "http://printer.lan:8000/call/webrtc_local"
+        ]
+        self.assertEqual(len(matches), 1)
+
+    def test_camera_specific_delete_removes_source_and_repairs_preview(self):
+        result = self.client.post(
+            self.root,
+            {"mode": "snapshot", "url": "http://printer.lan:8080/second.jpg", "name": "Second"},
+            content_type="application/json",
+        )
+        self.assertEqual(result.status_code, 200, result.content)
+        rows = self.client.get(self.root).json()["rows"]
+        second = next(row for row in rows if row["name"] == "Second")
+
+        deleted = self.client.delete(self.root + second["id"] + "/")
+        self.assertEqual(deleted.status_code, 200, deleted.content)
+        self.assertTrue(deleted.json()["deleted"])
+
+        remaining = self.client.get(self.root).json()["rows"]
+        self.assertEqual([row["id"] for row in remaining], ["cam1"])
+        self.connection.refresh_from_db()
+        self.assertEqual(self.connection.config.get("camera_default_id"), "cam1")
+
     def test_preview_selection_rejects_missing_camera_and_other_owner(self):
         self.assertEqual(self.client.patch(self.root, {"id": "missing"}, content_type="application/json").status_code, 404)
         self.client.force_login(self.other)
