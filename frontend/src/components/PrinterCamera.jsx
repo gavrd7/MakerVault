@@ -202,6 +202,53 @@ export function CameraPlayback({ camera, url, compact = false, queueKey = "" }) 
         closePeer();
       }
     };
+    const inspectPeer = async activePeer => {
+      if (!activePeer || activePeer.connectionState === "closed") return "No active WebRTC peer.";
+      const receiver = activePeer.getReceivers().find(item => item.track?.kind === "video");
+      if (!receiver) return "No active video receiver.";
+
+      let packets = null;
+      let bytes = null;
+      let codecText = "";
+      try {
+        const stats = await receiver.getStats?.();
+        let inbound;
+        const reports = new Map();
+        stats?.forEach(report => {
+          reports.set(report.id, report);
+          if (report.type === "inbound-rtp" && report.kind === "video" && !report.isRemote) inbound = report;
+        });
+        if (inbound) {
+          packets = Number(inbound.packetsReceived ?? 0);
+          bytes = Number(inbound.bytesReceived ?? 0);
+          const codec = inbound.codecId ? reports.get(inbound.codecId) : null;
+          if (codec) {
+            const fmtp = codec.sdpFmtpLine ? `; ${codec.sdpFmtpLine}` : "";
+            codecText = `${codec.mimeType || "video"} PT${codec.payloadType ?? "?"}${fmtp}`;
+          }
+        }
+      } catch {
+        // Diagnostic-only.
+      }
+
+      if (!codecText) {
+        const params = receiver.getParameters?.() || {};
+        codecText = (params.codecs || [])
+          .filter(codec => (codec.mimeType || "").toLowerCase().startsWith("video/"))
+          .map(codec => {
+            const fmtp = codec.sdpFmtpLine ? `; ${codec.sdpFmtpLine}` : "";
+            return `${codec.mimeType || "video"} PT${codec.payloadType ?? "?"}${fmtp}`;
+          })
+          .join(" | ");
+      }
+
+      const pieces = [];
+      if (codecText) pieces.push(`Codec: ${codecText}`);
+      if (packets !== null) pieces.push(`RTP: ${packets} packets / ${bytes ?? 0} bytes`);
+      pieces.push(`Peer: ${activePeer.connectionState || "unknown"}`);
+      return pieces.join(". ");
+    };
+
     if (camera.mode !== "creality_webrtc") {
       stopFrames = startFrameLoop({
         request: signal => cameraRequest(async () => {
@@ -229,6 +276,8 @@ export function CameraPlayback({ camera, url, compact = false, queueKey = "" }) 
           if (transceiver.setCodecPreferences) transceiver.setCodecPreferences(codecs);
           peer.ontrack = event => {
             if (cancelled || event.track.kind !== "video" || !video.current) return;
+            clearTimeout(videoTimeout);
+            videoTimeout = undefined;
             video.current.srcObject = event.streams[0] || new MediaStream([event.track]);
             setStatus("Video track received…");
             video.current.play().then(() => {
@@ -301,7 +350,14 @@ export function CameraPlayback({ camera, url, compact = false, queueKey = "" }) 
           setStatus("Applying printer video answer…");
           await peer.setRemoteDescription(answer);
           setStatus("Waiting for video…");
-          videoTimeout = setTimeout(() => { if (!cancelled && (video.current?.readyState || 0) < 2) failed("No camera video arrived. Your browser must reach the printer over LAN/VPN; HTTPS access to MakerVault alone does not relay WebRTC video."); }, 20000);
+          videoTimeout = setTimeout(async () => {
+            if (cancelled || (video.current?.readyState || 0) >= 2) return;
+            const diagnostic = await inspectPeer(peer);
+            if (cancelled) return;
+            setPlaybackBlocked(true);
+            setStatus("WebRTC connected · no decoded frame yet");
+            setError(`No decoded camera frame arrived yet. ${diagnostic}`);
+          }, 20000);
         } catch (err) { if (err.name !== "AbortError") failed(err.message); }
       })();
     }
@@ -317,36 +373,50 @@ export function CameraPlayback({ camera, url, compact = false, queueKey = "" }) 
   }, [expanded]);
   const inspectWebRtcReceiver = async () => {
     const peer = peerRef.current;
-    if (!peer) return "No active WebRTC peer.";
+    if (!peer || peer.connectionState === "closed") return "No active WebRTC peer.";
     const receiver = peer.getReceivers().find(item => item.track?.kind === "video");
     if (!receiver) return "No active video receiver.";
 
-    const params = receiver.getParameters?.() || {};
-    const codecs = (params.codecs || [])
-      .filter(codec => (codec.mimeType || "").toLowerCase().startsWith("video/"))
-      .map(codec => {
-        const fmtp = codec.sdpFmtpLine ? `; ${codec.sdpFmtpLine}` : "";
-        return `${codec.mimeType || "video"} PT${codec.payloadType ?? "?"}${fmtp}`;
-      });
-
     let packets = null;
     let bytes = null;
+    let codecText = "";
     try {
       const stats = await receiver.getStats?.();
+      let inbound;
+      const reports = new Map();
       stats?.forEach(report => {
-        if (report.type === "inbound-rtp" && report.kind === "video" && !report.isRemote) {
-          packets = Number(report.packetsReceived ?? 0);
-          bytes = Number(report.bytesReceived ?? 0);
-        }
+        reports.set(report.id, report);
+        if (report.type === "inbound-rtp" && report.kind === "video" && !report.isRemote) inbound = report;
       });
+      if (inbound) {
+        packets = Number(inbound.packetsReceived ?? 0);
+        bytes = Number(inbound.bytesReceived ?? 0);
+        const codec = inbound.codecId ? reports.get(inbound.codecId) : null;
+        if (codec) {
+          const fmtp = codec.sdpFmtpLine ? `; ${codec.sdpFmtpLine}` : "";
+          codecText = `${codec.mimeType || "video"} PT${codec.payloadType ?? "?"}${fmtp}`;
+        }
+      }
     } catch {
-      // Stats are diagnostic-only; playback handling must not depend on them.
+      // Stats are diagnostic-only.
+    }
+
+    if (!codecText) {
+      const params = receiver.getParameters?.() || {};
+      codecText = (params.codecs || [])
+        .filter(codec => (codec.mimeType || "").toLowerCase().startsWith("video/"))
+        .map(codec => {
+          const fmtp = codec.sdpFmtpLine ? `; ${codec.sdpFmtpLine}` : "";
+          return `${codec.mimeType || "video"} PT${codec.payloadType ?? "?"}${fmtp}`;
+        })
+        .join(" | ");
     }
 
     const pieces = [];
-    if (codecs.length) pieces.push(`Codec: ${codecs.join(" | ")}`);
+    if (codecText) pieces.push(`Codec: ${codecText}`);
     if (packets !== null) pieces.push(`RTP: ${packets} packets / ${bytes ?? 0} bytes`);
-    return pieces.join(". ") || "WebRTC receiver is active but exposed no codec/stats details.";
+    pieces.push(`Peer: ${peer.connectionState || "unknown"}`);
+    return pieces.join(". ");
   };
 
   const startVideoPlayback = async () => {
