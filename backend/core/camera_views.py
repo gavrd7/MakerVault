@@ -106,6 +106,23 @@ def camera_sources(request, printer_id, connection_id):
         return _error(str(exc) if isinstance(exc, CameraError) else "Invalid camera configuration.")
 
 
+def _remove_camera_source(connection, camera_id):
+    config = dict(connection.config or {})
+    rows = sources(connection)
+    if not any(item["id"] == camera_id for item in rows):
+        raise CameraError("Camera source not found.")
+    rows = [item for item in rows if item["id"] != camera_id]
+    if config.get("camera_default_id") == camera_id:
+        if rows:
+            config["camera_default_id"] = rows[-1]["id"]
+        else:
+            config.pop("camera_default_id", None)
+    config["camera_configured_at"] = timezone.now().isoformat()
+    config["cameras"] = rows
+    connection.config = config
+    connection.save(update_fields=["config", "updated_at"])
+
+
 @login_required
 @require_http_methods(["DELETE"])
 def camera_source_detail(request, printer_id, connection_id, camera_id):
@@ -115,23 +132,32 @@ def camera_source_detail(request, printer_id, connection_id, camera_id):
     denied = _require_permission(request, "core.change_printer")
     if denied:
         return denied
-    with transaction.atomic():
-        connection = PrinterConnection.objects.select_for_update().get(pk=connection.pk)
-        config = dict(connection.config or {})
-        rows = sources(connection)
-        if not any(item["id"] == camera_id for item in rows):
-            return _error("Camera source not found.", 404)
-        rows = [item for item in rows if item["id"] != camera_id]
-        if config.get("camera_default_id") == camera_id:
-            if rows:
-                config["camera_default_id"] = rows[-1]["id"]
-            else:
-                config.pop("camera_default_id", None)
-        config["camera_configured_at"] = timezone.now().isoformat()
-        config["cameras"] = rows
-        connection.config = config
-        connection.save(update_fields=["config", "updated_at"])
-    return private_response(JsonResponse({"deleted": True, "id": camera_id}))
+    try:
+        with transaction.atomic():
+            connection = PrinterConnection.objects.select_for_update().get(pk=connection.pk)
+            _remove_camera_source(connection, camera_id)
+        return private_response(JsonResponse({"deleted": True, "id": camera_id}))
+    except CameraError as exc:
+        return _error(str(exc), 404)
+
+
+@login_required
+@require_http_methods(["POST"])
+def camera_source_remove(request, printer_id, connection_id, camera_id):
+    """Proxy-friendly camera removal action for the browser setup UI."""
+    connection = connection_for(request, printer_id, connection_id)
+    if not connection:
+        return _error("Printer source not found.", 404)
+    denied = _require_permission(request, "core.change_printer")
+    if denied:
+        return denied
+    try:
+        with transaction.atomic():
+            connection = PrinterConnection.objects.select_for_update().get(pk=connection.pk)
+            _remove_camera_source(connection, camera_id)
+        return private_response(JsonResponse({"deleted": True, "id": camera_id}))
+    except CameraError as exc:
+        return _error(str(exc), 404)
 
 
 @login_required
