@@ -17,13 +17,10 @@ export function waitForIce(peer, signal, timeoutMs = 8000) {
 }
 
 export function prepareCrealityOffer(sdp) {
-  // Older firmware expects numeric ICE addresses; peer-reflexive ICE learns the LAN route.
-  return sdp.split("\r\n").map(line => {
-    if (!line.startsWith("a=candidate:")) return line;
-    const fields = line.split(" ");
-    if (fields[4]?.endsWith(".local")) fields[4] = "192.0.2.1";
-    return fields.join(" ");
-  }).join("\r\n");
+  // Preserve the browser's gathered ICE candidates. Rewriting mDNS host
+  // candidates to a TEST-NET address (192.0.2.1) lets signaling succeed but can
+  // leave the printer with no valid media destination.
+  return sdp;
 }
 
 export function startFrameLoop({ request, onFrame, onError, interval = 1000 }) {
