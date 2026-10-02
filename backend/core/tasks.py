@@ -97,8 +97,8 @@ def catalogue_maintenance_tick():
 
 def queue_catalogue_maintenance_now(triggered_by="manual"):
     if backup_in_progress():
-        config, _ = CatalogueMaintenanceSettings.objects.get_or_create(singleton_key=1)
-        return config, []
+        config = CatalogueMaintenanceSettings.objects.filter(singleton_key=1).first()
+        return (config or CatalogueMaintenanceSettings(singleton_key=1)), []
     now = timezone.now()
     with transaction.atomic():
         config, _ = CatalogueMaintenanceSettings.objects.select_for_update().get_or_create(singleton_key=1)
