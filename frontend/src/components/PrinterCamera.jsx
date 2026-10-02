@@ -170,6 +170,7 @@ export function CameraPlayback({ camera, url, compact = false, queueKey = "" }) 
   const [expanded, setExpanded] = useState(false);
   const container = useRef(null);
   const video = useRef(null);
+  const peerRef = useRef(null);
   const [image, setImage] = useState("");
   const [status, setStatus] = useState("Connecting…");
   const [error, setError] = useState("");
@@ -190,6 +191,7 @@ export function CameraPlayback({ camera, url, compact = false, queueKey = "" }) 
         peer.getReceivers().forEach(receiver => receiver.track?.stop());
         peer.close();
       }
+      if (peerRef.current === peer) peerRef.current = null;
       if (video.current) video.current.srcObject = null;
     };
     const failed = message => {
@@ -220,6 +222,7 @@ export function CameraPlayback({ camera, url, compact = false, queueKey = "" }) 
         try {
           if (!globalThis.RTCPeerConnection) throw new Error("This browser does not support WebRTC camera playback.");
           peer = new RTCPeerConnection({ iceServers: [] });
+          peerRef.current = peer;
           const transceiver = peer.addTransceiver("video", { direction: "recvonly" });
           const codecs = RTCRtpReceiver.getCapabilities("video")?.codecs.filter(codec => codec.mimeType.toLowerCase() === "video/h264") || [];
           if (!codecs.length) throw new Error("This browser has no H.264 WebRTC decoder.");
@@ -235,8 +238,8 @@ export function CameraPlayback({ camera, url, compact = false, queueKey = "" }) 
               setStatus("Live video · experimental");
             }).catch(() => {
               if (cancelled) return;
-              // Autoplay policy is a browser/UI concern, not a failed WebRTC
-              // session. Keep the peer alive so the user can start playback.
+              // Keep the peer alive. The explicit Play action will report the
+              // browser's real failure and receiver codec/RTP diagnostics.
               setPlaybackBlocked(true);
               setError("");
               setStatus("Video ready · press Play");
@@ -312,6 +315,40 @@ export function CameraPlayback({ camera, url, compact = false, queueKey = "" }) 
     document.addEventListener("keydown", escape);
     return () => { document.body.style.overflow = oldOverflow; document.removeEventListener("keydown", escape); };
   }, [expanded]);
+  const inspectWebRtcReceiver = async () => {
+    const peer = peerRef.current;
+    if (!peer) return "No active WebRTC peer.";
+    const receiver = peer.getReceivers().find(item => item.track?.kind === "video");
+    if (!receiver) return "No active video receiver.";
+
+    const params = receiver.getParameters?.() || {};
+    const codecs = (params.codecs || [])
+      .filter(codec => (codec.mimeType || "").toLowerCase().startsWith("video/"))
+      .map(codec => {
+        const fmtp = codec.sdpFmtpLine ? `; ${codec.sdpFmtpLine}` : "";
+        return `${codec.mimeType || "video"} PT${codec.payloadType ?? "?"}${fmtp}`;
+      });
+
+    let packets = null;
+    let bytes = null;
+    try {
+      const stats = await receiver.getStats?.();
+      stats?.forEach(report => {
+        if (report.type === "inbound-rtp" && report.kind === "video" && !report.isRemote) {
+          packets = Number(report.packetsReceived ?? 0);
+          bytes = Number(report.bytesReceived ?? 0);
+        }
+      });
+    } catch {
+      // Stats are diagnostic-only; playback handling must not depend on them.
+    }
+
+    const pieces = [];
+    if (codecs.length) pieces.push(`Codec: ${codecs.join(" | ")}`);
+    if (packets !== null) pieces.push(`RTP: ${packets} packets / ${bytes ?? 0} bytes`);
+    return pieces.join(". ") || "WebRTC receiver is active but exposed no codec/stats details.";
+  };
+
   const startVideoPlayback = async () => {
     if (!video.current) return;
     try {
@@ -319,9 +356,13 @@ export function CameraPlayback({ camera, url, compact = false, queueKey = "" }) 
       setPlaybackBlocked(false);
       setError("");
       setStatus("Live video · experimental");
-    } catch {
+    } catch (err) {
       setPlaybackBlocked(true);
-      setError("Your browser is still blocking playback. Click the video area or allow autoplay for MakerVault.");
+      const diagnostic = await inspectWebRtcReceiver();
+      const name = err?.name || "PlaybackError";
+      const message = err?.message || "The browser rejected video playback.";
+      setError(`${name}: ${message}${diagnostic ? ` · ${diagnostic}` : ""}`);
+      setStatus("Video track received · playback failed");
     }
   };
   const fullscreen = () => {
