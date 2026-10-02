@@ -5,6 +5,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
+from .backups import backup_in_progress
 from .catalogue_image_sources import run_catalogue_image_seed
 from .catalogue_enrichment import run_board_catalogue_enrichment
 from .models import CatalogueMaintenanceSettings, PrinterConnection, PrintingIntegrationSetting
@@ -20,6 +21,8 @@ def ping_worker():
 
 @shared_task(bind=True, acks_late=True)
 def seed_catalogue_images_task(self, limit=None, force_retry=False, kinds=None):
+    if backup_in_progress():
+        return {"status": "backup-in-progress"}
     result = run_catalogue_image_seed(limit=limit, force_retry=force_retry, kinds=kinds)
     if result.get("status") == "limit-reached":
         self.apply_async(
@@ -31,11 +34,15 @@ def seed_catalogue_images_task(self, limit=None, force_retry=False, kinds=None):
 
 @shared_task(bind=True, acks_late=True)
 def enrich_board_catalogue_task(self, limit=None, force_retry=False):
+    if backup_in_progress():
+        return {"status": "backup-in-progress"}
     return run_board_catalogue_enrichment(limit=limit, force_retry=force_retry)
 
 
 @shared_task(bind=True, acks_late=True)
 def sync_orcaslicer_printer_catalogue_task(self):
+    if backup_in_progress():
+        return {"status": "backup-in-progress"}
     try:
         return sync_orcaslicer_printer_catalogue()
     except OrcaCatalogueError as exc:
@@ -43,6 +50,8 @@ def sync_orcaslicer_printer_catalogue_task(self):
 
 
 def _queue_catalogue_maintenance(config):
+    if backup_in_progress():
+        return []
     queued = []
     if config.check_board_data and getattr(settings, "ENRICH_BOARD_CATALOGUE", True):
         enrich_board_catalogue_task.delay(force_retry=True)
@@ -59,6 +68,8 @@ def _queue_catalogue_maintenance(config):
 @shared_task
 def catalogue_maintenance_tick():
     """Lightweight periodic scheduler; the persistent interval lives in PostgreSQL."""
+    if backup_in_progress():
+        return {"status": "backup-in-progress", "queued": []}
     now = timezone.now()
     with transaction.atomic():
         config, _ = CatalogueMaintenanceSettings.objects.select_for_update().get_or_create(singleton_key=1)
@@ -85,6 +96,9 @@ def catalogue_maintenance_tick():
 
 
 def queue_catalogue_maintenance_now(triggered_by="manual"):
+    if backup_in_progress():
+        config, _ = CatalogueMaintenanceSettings.objects.get_or_create(singleton_key=1)
+        return config, []
     now = timezone.now()
     with transaction.atomic():
         config, _ = CatalogueMaintenanceSettings.objects.select_for_update().get_or_create(singleton_key=1)
@@ -99,6 +113,8 @@ def queue_catalogue_maintenance_now(triggered_by="manual"):
 
 @shared_task
 def printing_integration_sync_task(setting_id, triggered_by="schedule"):
+    if backup_in_progress():
+        return {"status": "backup-in-progress", "setting_id": str(setting_id)}
     try:
         setting = PrintingIntegrationSetting.objects.filter(pk=setting_id).first()
         if not setting:
@@ -125,6 +141,8 @@ def printing_integration_sync_task(setting_id, triggered_by="schedule"):
 @shared_task
 def printing_integrations_tick():
     """Queue due user-enabled printing integrations; schedule lives in PostgreSQL."""
+    if backup_in_progress():
+        return {"status": "backup-in-progress", "queued": []}
     now = timezone.now()
     due = []
     with transaction.atomic():
@@ -148,6 +166,8 @@ def printing_integrations_tick():
 @shared_task
 def live_printer_connection_poll_task(connection_id):
     """Poll one configured live source and persist its normalised snapshot."""
+    if backup_in_progress():
+        return {"status": "backup-in-progress", "connection_id": str(connection_id)}
     item = PrinterConnection.objects.select_related("printer").filter(pk=connection_id).first()
     if not item:
         return {"status": "missing", "connection_id": str(connection_id)}
@@ -175,6 +195,8 @@ def live_printer_connection_poll_task(connection_id):
 @shared_task
 def live_printer_connections_tick():
     """Queue live printer polls when each connection's own interval is due."""
+    if backup_in_progress():
+        return {"status": "backup-in-progress", "queued": [], "count": 0}
     now = timezone.now()
     due = []
     supported = set(POLLERS)
