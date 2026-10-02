@@ -121,6 +121,8 @@ jobs:
         run: |
           docker run --rm --entrypoint python makervault-ci -c \
             "import importlib.metadata as m; print('msgpack', m.version('msgpack')); print('setuptools', m.version('setuptools')); assert tuple(map(int, m.version('msgpack').split('.'))) >= (1,2,1); assert tuple(map(int, m.version('setuptools').split('.'))) >= (78,1,1)"
+      - name: Rehearse isolated backup and recovery
+        run: bash scripts/recovery_rehearsal.sh makervault-ci
       - name: Scan container OS packages for high/critical vulnerabilities
         run: |
           docker run --rm \
