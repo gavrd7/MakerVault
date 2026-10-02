@@ -247,6 +247,28 @@ class CameraProtocolTests(SimpleTestCase):
         self.assertNotIn("x-google", fixed)
         self.assertIn("a=rtpmap:96 H264/90000", fixed)
 
+    def test_creality_answer_sdp_removes_unmapped_payloads_for_webkit(self):
+        answer = (
+            "v=0\r\n"
+            "o=- 0 0 IN IP4 0.0.0.0\r\n"
+            "s=-\r\n"
+            "t=0 0\r\n"
+            "m=video 9 UDP/TLS/RTP/SAVPF 0 96 97 98\r\n"
+            "a=rtpmap:96 H264/90000\r\n"
+            "a=fmtp:96 profile-level-id=42e01f;packetization-mode=1\r\n"
+            "a=rtpmap:97 rtx/90000\r\n"
+            "a=fmtp:97 apt=96\r\n"
+            "a=fmtp:98 apt=96\r\n"
+            "a=rtcp-fb:98 nack\r\n"
+        )
+        fixed = fix_creality_answer_sdp(answer)
+        self.assertIn("m=video 9 UDP/TLS/RTP/SAVPF 96 97\r\n", fixed)
+        self.assertIn("a=rtpmap:96 H264/90000", fixed)
+        self.assertIn("a=rtpmap:97 rtx/90000", fixed)
+        self.assertNotIn(" 98", fixed)
+        self.assertNotIn("a=fmtp:98", fixed)
+        self.assertNotIn("a=rtcp-fb:98", fixed)
+
     def test_webrtc_endpoint_cannot_be_saved_as_mjpeg(self):
         self.connection.adapter = "creality_local"
         self.connection.endpoint_url = "ws://printer.lan:9999"
@@ -265,7 +287,7 @@ class CameraProtocolTests(SimpleTestCase):
     @patch("core.printer_cameras.creality_session")
     @patch("core.printer_cameras.upstream")
     def test_legacy_and_protected_webrtc_encodings_hide_token(self, get, session):
-        answer = {"type": "answer", "sdp": "v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\n"}
+        answer = {"type": "answer", "sdp": "v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 0 96\r\na=rtpmap:96 H264/90000\r\n"}
         source = {"mode": "creality_webrtc", "url": "http://printer.lan:8000/call/webrtc_local"}
         for protected in (False, True):
             session.return_value = "secret-camera-token", protected
