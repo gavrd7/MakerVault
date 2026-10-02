@@ -148,7 +148,7 @@ def create_bundle(*, backup_id=None, label="manual") -> dict:
     backup_id = safe_id(backup_id or time.strftime("%Y%m%d-%H%M%S", time.gmtime()) + "-" + uuid.uuid4().hex[:8])
 
     with _state_lock:
-        if _running_id:
+        if _running_id and _running_id != backup_id:
             raise BackupError("Another backup is already running.")
         _running_id = backup_id
 
@@ -378,10 +378,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._json(403, {"error": "Forbidden."})
         if self.path == "/backup":
             try:
+                global _running_id
                 with _state_lock:
                     if _running_id:
                         return self._json(409, {"error": "Another backup is already running.", "backup_id": _running_id})
-                backup_id = time.strftime("%Y%m%d-%H%M%S", time.gmtime()) + "-" + uuid.uuid4().hex[:8]
+                    backup_id = time.strftime("%Y%m%d-%H%M%S", time.gmtime()) + "-" + uuid.uuid4().hex[:8]
+                    _running_id = backup_id
                 thread = threading.Thread(
                     target=self._background_backup,
                     kwargs={"backup_id": backup_id},
