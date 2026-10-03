@@ -22,7 +22,7 @@ Named volumes still consume space on the Docker host's disk. They are not cloud 
 
 Docker's [volumes guide](https://docs.docker.com/engine/storage/volumes/) and [bind mounts guide](https://docs.docker.com/engine/storage/bind-mounts/) describe the underlying storage options.
 
-## MakerVault's six storage locations
+## MakerVault's five storage locations
 
 | `.env` setting | What it stores | Path seen inside the container |
 | --- | --- | --- |
@@ -31,7 +31,6 @@ Docker's [volumes guide](https://docs.docker.com/engine/storage/volumes/) and [b
 | `POSTGRES_STORAGE` | Database records, accounts and settings | `/var/lib/postgresql` |
 | `REDIS_STORAGE` | Background queue/cache state | `/data` |
 | `BACKUP_STORAGE` | Managed `.mvbackup` recovery bundles and validation metadata | `/app/backups` |
-| `TLS_STORAGE` | Optional native HTTPS certificate/private key | `/app/tls` |
 
 Your source folder, containing `compose.yaml` and `.env`, is separate. Keeping a copy of the source folder alone does not back up these persistent data locations.
 
@@ -45,7 +44,6 @@ KEY_STORAGE=makervault_keys
 POSTGRES_STORAGE=makervault_postgres
 REDIS_STORAGE=makervault_redis
 BACKUP_STORAGE=makervault_backups
-TLS_STORAGE=makervault_tls
 ```
 
 You do not need to make directories named `makervault_media` beside your Compose file. Compose creates its declared named volumes when you start the stack. Their actual Docker names may include the project-name prefix.
@@ -66,17 +64,16 @@ For a **new Linux installation**, you might choose this layout:
 | `/srv/makervault/postgres` | Live database files |
 | `/srv/makervault/redis` | Live queue/cache data |
 | `/srv/makervault/backups` | Managed recovery bundles |
-| `/srv/makervault/tls` | Optional native HTTPS certificate/private key |
 
 The source can also remain in `~/apps/MakerVault` as in the installation guide; you do not have to move it to use these data folders. A path such as `/mnt/Server/MakerVault/media` is equally valid if that is where you organise your server's storage. Choose a reliable local filesystem; external/network mounts need additional care to ensure availability before startup.
 
 Create the data folders:
 
 ```bash
-sudo mkdir -p /srv/makervault/media /srv/makervault/keys /srv/makervault/postgres /srv/makervault/redis /srv/makervault/backups /srv/makervault/tls
+sudo mkdir -p /srv/makervault/media /srv/makervault/keys /srv/makervault/postgres /srv/makervault/redis /srv/makervault/backups
 ```
 
-Replace the **six existing storage entries** in `.env` with:
+Replace the **five existing storage entries** in `.env` with:
 
 ```dotenv
 MEDIA_STORAGE=/srv/makervault/media
@@ -84,7 +81,6 @@ KEY_STORAGE=/srv/makervault/keys
 POSTGRES_STORAGE=/srv/makervault/postgres
 REDIS_STORAGE=/srv/makervault/redis
 BACKUP_STORAGE=/srv/makervault/backups
-TLS_STORAGE=/srv/makervault/tls
 ```
 
 Use full absolute paths beginning with `/`. Avoid `~`, relative paths and spaces for this beginner setup. If using the commented examples in `.env.example`, remove their `#` and remove/replace the old active entries so there is only one active entry per setting.
@@ -93,7 +89,7 @@ Use full absolute paths beginning with `/`. Avoid `~`, relative paths and spaces
 
 With `MEDIA_STORAGE=/srv/makervault/media`, Docker makes that host folder available **inside the app container as `/app/media`**. These are two views of the same data. Files do not need to be manually copied between them.
 
-Likewise, the host's `/srv/makervault/keys/private_storage.key` is seen by the app as `/app/keys/private_storage.key`. Leave:
+Likewise, the host's `/srv/makervault/keys/private_storage.key` is seen by the app as `/app/keys/private_storage.key`. Native HTTPS material is kept alongside it under `/srv/makervault/keys/tls/` (seen as `/app/keys/tls/`), so it automatically follows the same named-volume or bind-mount choice. Leave:
 
 ```dotenv
 MAKERVAULT_STORAGE_KEY_FILE=/app/keys/private_storage.key
