@@ -42,7 +42,7 @@ class CameraRelayHelperTests(SimpleTestCase):
         self.assertEqual(kwargs["params"]["name"], name)
         self.assertIn("#format=creality", kwargs["params"]["src"])
 
-    @patch.dict(os.environ, {"MAKERVAULT_CAMERA_RELAY_CANDIDATE": "192.168.1.125"}, clear=False)
+    @patch.dict(os.environ, {"MAKERVAULT_CAMERA_RELAY_CANDIDATE": "192.168.1.50"}, clear=False)
     def test_loopback_ice_candidate_is_rewritten_for_browser(self):
         request = SimpleNamespace(get_host=lambda: "maker.example:8765")
         answer = (
@@ -50,10 +50,10 @@ class CameraRelayHelperTests(SimpleTestCase):
             "a=candidate:1 1 udp 2130706431 127.0.0.1 8555 typ host\r\n"
         )
         rewritten = rewrite_answer_candidates(answer, request)
-        self.assertIn("192.168.1.125 8555 typ host", rewritten)
+        self.assertIn("192.168.1.50 8555 typ host", rewritten)
         self.assertNotIn("127.0.0.1 8555", rewritten)
 
-    @patch.dict(os.environ, {"MAKERVAULT_CAMERA_RELAY_CANDIDATE": "192.168.1.125"}, clear=False)
+    @patch.dict(os.environ, {"MAKERVAULT_CAMERA_RELAY_CANDIDATE": "192.168.1.50"}, clear=False)
     @patch("core.camera_relay._SESSION.post")
     @patch("core.camera_relay.ensure_stream", return_value="makervault_test")
     def test_relay_offer_returns_browser_reachable_answer(self, ensure, request_post):
@@ -63,7 +63,7 @@ class CameraRelayHelperTests(SimpleTestCase):
             "sdp": "v=0\r\na=candidate:1 1 udp 1 127.0.0.1 8555 typ host\r\n",
         }
         request_post.return_value = response
-        request = SimpleNamespace(get_host=lambda: "192.168.1.125:8765")
+        request = SimpleNamespace(get_host=lambda: "192.168.1.50:8765")
         result = relay_offer(
             request,
             uuid.uuid4(),
@@ -71,7 +71,7 @@ class CameraRelayHelperTests(SimpleTestCase):
             "v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\n",
         )
         self.assertEqual(result["type"], "answer")
-        self.assertIn("192.168.1.125 8555", result["sdp"])
+        self.assertIn("192.168.1.50 8555", result["sdp"])
         self.assertEqual(request_post.call_args.kwargs["json"]["type"], "offer")
 
 
