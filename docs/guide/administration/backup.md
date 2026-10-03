@@ -83,7 +83,7 @@ Keep at least one downloaded `.mvbackup` away from the MakerVault server. On a r
 
 1. Install Docker Engine, Docker Compose and Git.
 2. Clone the MakerVault repository. Prefer the release recorded in the backup; the bundle records the MakerVault version that created it.
-3. **Do not create a replacement `.env` if the original server is gone.** The restore helper can recover the saved one from a verified bundle.
+3. **Do not create a replacement `.env` if the original server is gone.** The restore helper can recover the saved one from a verified bundle. On a clean off-server restore it also detects the replacement host's routable IPv4 address and appends that address to `DJANGO_ALLOWED_HOSTS` and its direct HTTP origin to `DJANGO_CSRF_TRUSTED_ORIGINS`, preserving all restored values.
 4. Copy the `.mvbackup` file to the new host.
 5. From the MakerVault checkout run:
 
@@ -92,6 +92,8 @@ python3 scripts/restore.py --sudo --bundle /path/to/your-backup.mvbackup
 ```
 
 Before it trusts any configuration from the file, the helper checks the bundle structure and every recorded inner SHA-256 value. If the checkout has no `.env`, it restores the verified saved configuration with owner-only permissions, prepares PostgreSQL/Redis and the MakerVault image, imports the bundle, validates it again through the recovery tooling, restores database/media/key storage and starts MakerVault.
+
+If automatic address detection is unsuitable (for example, a multi-homed host), pass the intended direct-access IPv4 address explicitly with `--recovery-host ADDRESS`; the option may be repeated. Reverse-proxy hostnames and HTTPS origins are not guessed and still require deliberate configuration review.
 
 If a `.env` already exists, the helper **does not overwrite it silently**. This is intentional: deployment-specific hostnames, storage paths or credentials may need human review. For a genuine full-machine replacement, starting from a clean checkout avoids accidentally mixing a new installation's secrets with the recovery set.
 
