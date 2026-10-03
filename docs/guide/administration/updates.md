@@ -16,6 +16,7 @@ git pull --ff-only origin main
 sudo docker compose up -d --build
 sudo docker compose ps
 sudo docker compose logs --tail=100 makervault
+sudo docker compose exec -T makervault python manage.py v1_release_preflight
 ```
 
 If `git status --short` shows your own changes, stop before switching/pulling and preserve them. Do not use a hard reset to discard unknown local work. A failed fast-forward means the checkout needs review, not a force pull.
@@ -23,6 +24,8 @@ If `git status --short` shows your own changes, stop before switching/pulling an
 Startup applies migrations and catalogue maintenance/seed steps. Keep `.env`; do not replace it with the example file. Compare `.env.example` for new settings and add only the ones needed for your deployment.
 
 ## Check the result
+
+The `v1_release_preflight` command performs a read-only deployment check for the database, migrations, Redis, encryption key, media/backup storage and production configuration. Fix a failed preflight before treating the update as complete.
 
 Sign in, confirm the version, open a project, download a private file and inspect integrations. Missing records after an update may mean the wrong account or storage path was used; do not immediately initialise new data.
 
