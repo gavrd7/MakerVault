@@ -2,6 +2,7 @@
 
 ## Unreleased — v1.0 recovery verification
 
+- Reclassify implemented but unvalidated printer integrations as **Experimental** instead of **Planned**. Bambu/AMS, PrusaLink, Anycubic/ACE, FlashForge/material-station and compatible Elegoo/QIDI/Sovol/Snapmaker/Voron Moonraker profiles are selectable today; vendor-specific material systems not exposed by those adapters remain outside the claim.
 - Add account onboarding visibility for local sign-up and SMTP-backed password recovery, including sign-up/reset links in the account shell and a superuser SMTP test action under Users & storage.
 - Add a Firefox compatibility relay for Creality K2 WebRTC cameras using a pinned, restricted go2rtc process inside the existing MakerVault container; Chromium/WebKit keep the direct camera path and Docker remains a three-service deployment.
 - Project cover/gallery uploads now accept JPEG/JPG variants (including MPO-style phone JPEGs), PNG, WebP, HEIF and HEIC; images are orientation-corrected and normalised to WebP for safe browser display.

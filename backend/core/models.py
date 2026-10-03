@@ -506,10 +506,15 @@ class PrintingIntegrationSetting(TimeStampedModel):
         ("spoolman", "Spoolman"),
         ("simplyprint", "SimplyPrint"),
         ("creality_cfs", "Creality CFS"),
-        ("bambu_ams", "Bambu Lab AMS"),
-        ("elegoo", "Elegoo multi-material"),
-        ("qidi", "QIDI multi-material"),
-        ("snapmaker", "Snapmaker multi-material"),
+        ("bambu_ams", "Bambu Lab / AMS"),
+        ("prusalink", "PrusaLink"),
+        ("anycubic_ace", "Anycubic LAN / ACE"),
+        ("flashforge_station", "FlashForge local / material station"),
+        ("elegoo", "Elegoo / Moonraker"),
+        ("qidi", "QIDI / Moonraker"),
+        ("sovol", "Sovol / Moonraker"),
+        ("snapmaker", "Snapmaker U1 / Moonraker"),
+        ("voron", "Voron / Moonraker"),
     ]
     SYNC_DIRECTIONS = [
         ("import", "External → MakerVault"),
@@ -523,6 +528,7 @@ class PrintingIntegrationSetting(TimeStampedModel):
         ("connected", "Connected"),
         ("disconnected", "Disconnected"),
         ("error", "Error"),
+        ("experimental", "Experimental"),
         ("planned", "Planned"),
     ]
 

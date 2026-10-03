@@ -3250,10 +3250,15 @@ PRINTING_INTEGRATION_DEFAULTS = {
     "spoolman": {"status": "not_configured", "sync_direction": "bidirectional"},
     "simplyprint": {"status": "not_configured", "sync_direction": "import", "endpoint_url": "https://api.simplyprint.io"},
     "creality_cfs": {"status": "ready", "sync_direction": "import"},
-    "bambu_ams": {"status": "planned", "sync_direction": "import"},
-    "elegoo": {"status": "planned", "sync_direction": "import"},
-    "qidi": {"status": "planned", "sync_direction": "import"},
-    "snapmaker": {"status": "planned", "sync_direction": "import"},
+    "bambu_ams": {"status": "experimental", "sync_direction": "import"},
+    "prusalink": {"status": "experimental", "sync_direction": "import"},
+    "anycubic_ace": {"status": "experimental", "sync_direction": "import"},
+    "flashforge_station": {"status": "experimental", "sync_direction": "import"},
+    "elegoo": {"status": "experimental", "sync_direction": "import"},
+    "qidi": {"status": "experimental", "sync_direction": "import"},
+    "sovol": {"status": "experimental", "sync_direction": "import"},
+    "snapmaker": {"status": "experimental", "sync_direction": "import"},
+    "voron": {"status": "experimental", "sync_direction": "import"},
 }
 
 
@@ -3265,8 +3270,11 @@ def _ensure_printing_integrations(owner):
             provider=provider,
             defaults=defaults,
         )
+        changed = []
+        if provider in {"bambu_ams", "prusalink", "anycubic_ace", "flashforge_station", "elegoo", "qidi", "sovol", "snapmaker", "voron"} and row.status == "planned":
+            row.status = "experimental"
+            changed.append("status")
         if provider == "simplyprint":
-            changed = []
             if not row.endpoint_url:
                 row.endpoint_url = "https://api.simplyprint.io"
                 changed.append("endpoint_url")
@@ -3276,8 +3284,8 @@ def _ensure_printing_integrations(owner):
             if row.sync_direction != "import":
                 row.sync_direction = "import"
                 changed.append("sync_direction")
-            if changed:
-                row.save(update_fields=[*changed, "updated_at"])
+        if changed:
+            row.save(update_fields=[*changed, "updated_at"])
         rows.append(row)
     return rows
 
@@ -3458,8 +3466,8 @@ def printing_integration_detail(request, provider):
                 item.next_sync_at = None
             elif item.status in {"disabled", "not_configured", "ready", "planned"}:
                 item.status = "disconnected"
-        elif item.provider in {"bambu_ams", "elegoo", "qidi", "snapmaker"}:
-            item.status = "planned"
+        elif item.provider in {"bambu_ams", "prusalink", "anycubic_ace", "flashforge_station", "elegoo", "qidi", "sovol", "snapmaker", "voron"}:
+            item.status = "experimental"
             item.auto_sync = False
             item.next_sync_at = None
         elif item.status in {"disabled", "not_configured", "ready"}:
@@ -3524,7 +3532,7 @@ def printing_integration_test(request, provider):
             )
         else:
             item.last_checked_at = timezone.now()
-            item.status = "planned"
+            item.status = "experimental"
             item.last_error = ""
             item.save()
         return JsonResponse({"item": _serialise_printing_integration(item)})
