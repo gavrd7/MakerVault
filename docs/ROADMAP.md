@@ -2,7 +2,7 @@
 
 _Last reconciled: 3 October 2026_
 
-**Current release: v0.9.0.2, merged into main. Next milestone: v1.0 release hardening and documentation.**
+**Release candidate: v1.0.0-rc.1. Remaining stable-release gate: clean-install smoke test.**
 
 This roadmap separates delivered functionality, outstanding validation and future implementation. The [README](../README.md) describes the current application; [CHANGELOG.md](../CHANGELOG.md) records changes.
 
@@ -55,19 +55,19 @@ The owner confirmed K1/K2 playback and accepted the compact layout on 2 October 
 
 ## Next milestone — v1.0
 
-The focus is a dependable first stable release of the existing feature set. The following work is planned, not yet verified complete.
+The v1.0 release candidate consolidates the existing feature set. Most release gates are complete; the clean-install smoke test remains before the stable tag.
 
 | Order | Workstream | Completion evidence |
 | --- | --- | --- |
-| 1 — in progress | Backup and recovery | First-class backup creation/validation/download and guarded restore are implemented on the v1.0 branch, with synthetic managed-backup and encrypted-file recovery rehearsals in CI. Remaining gate: restore a representative real installation on a separate host and complete the manual application checks. |
-| 2 — hardening | Installation and upgrades | A deployment preflight now checks database connectivity, pending migrations, Redis, encryption key, persistent write paths and production settings. Remaining acceptance is a clean beginner install plus a representative real upgrade. |
-| 3 | Reliability and security | Review authentication/permissions, uploads and quotas, integrations, network failure/reconnect handling, duplicate-history prevention, diagnostics and destructive actions. Record fixes and regression evidence. |
-| 4 — in progress | UI, accessibility and documentation | Review mobile/desktop layouts, keyboard/focus behaviour, error/empty states and consistent wording. Complete current feature chapters, screenshots, configuration guidance and support matrices. |
+| 1 — complete | Backup and recovery | Managed backup creation/validation/download, guarded restore, CI recovery rehearsals and a representative real-installation restore on a separate host have passed. |
+| 2 — final gate | Installation and upgrades | Deployment preflight and representative real upgrade have passed. Remaining acceptance is a clean beginner install smoke test. |
+| 3 — complete | Reliability and security | Authentication/permissions, uploads/quotas, diagnostics, destructive actions, dependency audits, static security checks and container scanning are covered by the v1 hardening pass and CI. |
+| 4 — complete | UI, accessibility and documentation | Mobile/desktop consistency, keyboard focus handling, reduced-motion support, auth branding and current documentation have received the final v1 pass. |
 | 5 | Release candidate and stable release | Run [the v1 acceptance checklist](V1_ACCEPTANCE.md), resolve release blockers, verify Docker/dependency/security and guide builds, record tested deployment assumptions, then define/tag the stable release and upgrade policy. |
 
 Recovery verification now includes the read-only private-file audit, synthetic Docker dump/archive/restore rehearsal for named volumes and bind mounts, and the managed backup path that runs inside the existing MakerVault worker. The standard workflow creates one managed `.mvbackup` bundle, re-validates it before recovery and provides a guarded restore helper for both same-server rollback and off-server disaster recovery. The web process never receives the Docker socket.
 
-A representative real-installation restore on a separate host, deployment-configuration review and manual UI acceptance remain v1.0 release gates. Automated recovery evidence is intentionally not treated as proof that every real deployment layout has been recovered.
+A representative real-installation restore on a separate host passed on 3 October 2026, including deployment-configuration review and private-storage/ownership audits. The clean-install smoke test remains the last owner-run v1.0 gate.
 
 Supported deployment guidance centres on the supplied Linux Docker Compose stack: application/worker, PostgreSQL and Redis. Broader NAS/ARM/desktop compatibility and minimum resource claims need evidence before being advertised.
 

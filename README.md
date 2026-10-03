@@ -4,7 +4,7 @@
 
 MakerVault is a self-hosted application for electronics inventory, projects, files and 3D printing. Keep track of what you own, what a build needs, which revision you printed and where the finished parts belong.
 
-**Current release: v0.9.0.2 · Next milestone: v1.0 release hardening**
+**Release candidate: v1.0.0-rc.1 · Final gate: clean-install smoke test**
 
 [User guide](docs/guide/index.md) · [Installation](docs/guide/getting-started/install.md) · [Roadmap](docs/ROADMAP.md) · [Changelog](CHANGELOG.md)
 
@@ -105,11 +105,11 @@ The default Compose stack has three persistent containers:
 - **redis:** queue/cache and background-work state.
 
 
-PostgreSQL and Redis do not publish host ports by default. Managed backup creation runs inside the existing MakerVault worker; restore uses guarded one-off commands from the same MakerVault image. Application code is built into the image. Named volumes and absolute-path bind mounts are supported for media, encryption keys, PostgreSQL, Redis and managed backups.
+PostgreSQL and Redis do not publish host ports by default. MakerVault serves HTTP on the configured app port and can optionally expose a separate native HTTPS listener (default 8443) with a supplied or MakerVault-managed self-signed certificate; reverse-proxy HTTPS remains the recommended domain/public deployment. Managed backup creation runs inside the existing MakerVault worker; restore uses guarded one-off commands from the same MakerVault image. Application code is built into the image. Named volumes and absolute-path bind mounts are supported for media, encryption keys, PostgreSQL, Redis, managed backups and optional native-TLS identity.
 
 Private uploaded files use authenticated AES-256-GCM encryption at rest with opaque object names. The default key is stored separately from media. This does not mean the database, deployment configuration or every secret is encrypted by the private-file storage feature.
 
-**Back up the database, media, matching encryption key and deployment configuration together.** Media without its key cannot recover encrypted uploads. Superusers can create, verify, download and manage a single recovery bundle from **Settings → Backup & restore**. A guarded restore helper handles same-server recovery and downloaded bundles on a replacement host without giving the web process Docker control. Synthetic recovery is exercised in CI; a representative real-installation restore remains a v1.0 acceptance gate.
+**Back up the database, media, matching encryption key and deployment configuration together.** Media without its key cannot recover encrypted uploads. Superusers can create, verify, download and manage a single recovery bundle from **Settings → Backup & restore**. A guarded restore helper handles same-server recovery and downloaded bundles on a replacement host without giving the web process Docker control. Synthetic recovery is exercised in CI, and a representative real-installation backup was restored successfully on a separate clean host during the v1.0 release rehearsal.
 
 [Backup and recovery](docs/guide/administration/backup.md) · [Accounts and quotas](docs/guide/administration/accounts.md)
 
@@ -139,7 +139,7 @@ Catalogue media can be locally cached or retained as external references where r
 
 ## Project status and development
 
-The feature milestones through **v0.9.0.2** are merged into `main`. The project remains pre-v1: the next milestone focuses on recovery, clean installation and upgrades, reliability/security, documentation and final UI/accessibility checks. Unowned printer hardware remains experimental until tested.
+**v1.0.0-rc.1** is the first stable-release candidate. Real backup/restore recovery, upgrade preflight, security/reliability checks and the final UI/accessibility pass are complete; the remaining owner-run release gate is a clean-install smoke test. Unvalidated printer hardware remains explicitly experimental.
 
 Pull-request CI checks backend tests, frontend tests/build, migrations, dependency/static security and the production Docker image. The guide has its own strict build/link checks. CI passing does not substitute for hardware, deployment or restore testing.
 

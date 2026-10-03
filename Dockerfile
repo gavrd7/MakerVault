@@ -27,6 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       curl \
       gosu \
       libmagic1 \
+      openssl \
       supervisor \
       tzdata \
     && install -d /usr/share/postgresql-common/pgdg \
@@ -70,13 +71,14 @@ COPY backend/ /app/backend/
 COPY LICENSE THIRD_PARTY_NOTICES.md .env.example /app/
 COPY --from=frontend-builder /frontend/dist/ /app/backend/core/static/app/
 COPY docker/entrypoint.sh /usr/local/bin/makervault-entrypoint
+COPY docker/run-https.sh /usr/local/bin/makervault-https
 COPY docker/supervisord.conf /etc/supervisor/conf.d/makervault.conf
 COPY docker/go2rtc.yaml /etc/go2rtc.yaml
 COPY docker/licenses/go2rtc-LICENSE /app/licenses/go2rtc-LICENSE
 RUN chmod -R a+rX /app/backend \
-    && chmod +x /usr/local/bin/makervault-entrypoint
+    && chmod +x /usr/local/bin/makervault-entrypoint /usr/local/bin/makervault-https
 
 WORKDIR /app/backend
-EXPOSE 8000 8555/tcp 8555/udp
+EXPOSE 8000 8443 8555/tcp 8555/udp
 ENTRYPOINT ["/usr/local/bin/makervault-entrypoint"]
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/makervault.conf"]
