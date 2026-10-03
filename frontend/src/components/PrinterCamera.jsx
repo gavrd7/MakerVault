@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { apiFetch } from "../api";
-import { startFrameLoop, waitForIce, prepareCrealityOffer, cameraRequest } from "./cameraPlayback";
+import { startFrameLoop, waitForIce, prepareCrealityOffer, cameraRequest, needsCrealityRelay } from "./cameraPlayback";
 
 const LABELS = { snapshot: "Live images", mjpeg: "MJPEG live images", creality_webrtc: "Creality WebRTC · experimental" };
 
@@ -141,6 +141,7 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
 }
 
 export function CameraPlayback({ camera, url, compact = false }) {
+  const compatibilityRelay = camera.mode === "creality_webrtc" && needsCrealityRelay(globalThis.navigator?.userAgent || "");
   const [expanded, setExpanded] = useState(false);
   const container = useRef(null);
   const video = useRef(null);
@@ -188,7 +189,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
           const transceiver = peer.addTransceiver("video", { direction: "recvonly" });
           const codecs = RTCRtpReceiver.getCapabilities("video")?.codecs.filter(codec => codec.mimeType.toLowerCase() === "video/h264") || [];
           if (!codecs.length) throw new Error("This browser has no H.264 WebRTC decoder.");
-          if (transceiver.setCodecPreferences) transceiver.setCodecPreferences(codecs.slice(0, 1));
+          if (transceiver.setCodecPreferences) transceiver.setCodecPreferences(compatibilityRelay ? codecs : codecs.slice(0, 1));
           peer.ontrack = event => {
             if (cancelled || event.track.kind !== "video" || !video.current) return;
             video.current.srcObject = event.streams[0] || new MediaStream([event.track]);
@@ -202,7 +203,9 @@ export function CameraPlayback({ camera, url, compact = false }) {
           await peer.setLocalDescription(await peer.createOffer());
           await waitForIce(peer, controller.signal);
           if (cancelled) return;
-          const answer = await cameraRequest(() => apiFetch(url, { method: "POST", signal: controller.signal, body: { sdp: prepareCrealityOffer(peer.localDescription.sdp) } }), controller.signal);
+          const signalUrl = compatibilityRelay ? url.replace(/media\/$/, "relay/") : url;
+          const signalSdp = compatibilityRelay ? peer.localDescription.sdp : prepareCrealityOffer(peer.localDescription.sdp);
+          const answer = await cameraRequest(() => apiFetch(signalUrl, { method: "POST", signal: controller.signal, body: { sdp: signalSdp } }), controller.signal);
           if (cancelled) return;
           await peer.setRemoteDescription(answer);
           videoTimeout = setTimeout(() => { if (!cancelled && (video.current?.readyState || 0) < 2) failed("No camera video arrived. Your browser must reach the printer over LAN/VPN; HTTPS access to MakerVault alone does not relay WebRTC video."); }, 20000);
@@ -210,7 +213,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
       })();
     }
     return () => { cancelled = true; controller.abort(); clearTimeout(videoTimeout); stopFrames?.(); closePeer(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [camera.id, url, attempt]);
+  }, [camera.id, url, attempt, compatibilityRelay]);
   useEffect(() => {
     if (!expanded) return;
     const oldOverflow = document.body.style.overflow;
@@ -238,6 +241,6 @@ export function CameraPlayback({ camera, url, compact = false }) {
       {camera.mode === "creality_webrtc" ? <video ref={video} style={{ transform }} autoPlay muted playsInline controls={!compact} onPlaying={() => setStatus("Live video · experimental")} /> : image ? <img src={image} alt={camera.name + " live camera view"} style={{ transform }} /> : <span role="status">{status}</span>}
     </div>
     {error && <p className="integrationError" role="alert">{error}</p>}
-    {!compact && <small>{LABELS[camera.mode]}{camera.mode === "creality_webrtc" ? " · Browser needs LAN/VPN access to the printer." : " · Images are relayed securely through your MakerVault session."}</small>}
+    {!compact && <small>{LABELS[camera.mode]}{camera.mode === "creality_webrtc" ? (compatibilityRelay ? " · Firefox compatibility relay through MakerVault." : " · Browser needs LAN/VPN access to the printer.") : " · Images are relayed securely through your MakerVault session."}</small>}
   </div>;
 }

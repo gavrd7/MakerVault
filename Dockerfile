@@ -9,6 +9,9 @@ RUN npm run build
 
 FROM python:3.13-slim AS runtime
 
+ARG TARGETARCH
+ARG GO2RTC_VERSION=1.9.14
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
@@ -35,6 +38,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get upgrade -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
+RUN set -eux; \
+    GO2RTC_ARCH="${TARGETARCH:-$(dpkg --print-architecture)}"; \
+    case "$GO2RTC_ARCH" in \
+      amd64) GO2RTC_ASSET="amd64"; GO2RTC_SHA256="32d616af226bd731678ffde328b94cfb94e30339bfefc469cfb76323144615a6" ;; \
+      arm64) GO2RTC_ASSET="arm64"; GO2RTC_SHA256="359fabade8a7a51e81a55fe6df6b0ef81764a5e1d63179577534eaaa71904b50" ;; \
+      arm) GO2RTC_ASSET="arm"; GO2RTC_SHA256="4d7e1639af5a2722a28e864468fd8099b3c1682565446c798bf9e3b38fde12e4" ;; \
+      *) echo "Unsupported architecture for go2rtc: $GO2RTC_ARCH" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL "https://github.com/AlexxIT/go2rtc/releases/download/v$GO2RTC_VERSION/go2rtc_linux_$GO2RTC_ASSET" -o /usr/local/bin/go2rtc; \
+    echo "$GO2RTC_SHA256  /usr/local/bin/go2rtc" | sha256sum -c -; \
+    chmod 0755 /usr/local/bin/go2rtc; \
+    /usr/local/bin/go2rtc -version
+
 WORKDIR /app
 COPY requirements.txt ./requirements.txt
 # The Python base image can carry preinstalled packaging libraries. Remove them
@@ -55,10 +71,12 @@ COPY LICENSE THIRD_PARTY_NOTICES.md .env.example /app/
 COPY --from=frontend-builder /frontend/dist/ /app/backend/core/static/app/
 COPY docker/entrypoint.sh /usr/local/bin/makervault-entrypoint
 COPY docker/supervisord.conf /etc/supervisor/conf.d/makervault.conf
+COPY docker/go2rtc.yaml /etc/go2rtc.yaml
+COPY docker/licenses/go2rtc-LICENSE /app/licenses/go2rtc-LICENSE
 RUN chmod -R a+rX /app/backend \
     && chmod +x /usr/local/bin/makervault-entrypoint
 
 WORKDIR /app/backend
-EXPOSE 8000
+EXPOSE 8000 8555/tcp 8555/udp
 ENTRYPOINT ["/usr/local/bin/makervault-entrypoint"]
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/makervault.conf"]

@@ -10,6 +10,7 @@ from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_http_methods
 
 from .api_views import _error, _read_json, _require_permission
+from .camera_relay import CameraRelayError, relay_offer
 from .models import PrinterConnection
 from .printer_cameras import CameraError, discover_result, frame, negotiate, normalise_source, sources, provider_info, setup_presets
 
@@ -162,6 +163,30 @@ def camera_discover(request, printer_id, connection_id):
         return private_response(JsonResponse(result))
     except (CameraError, TypeError, ValueError, AttributeError) as exc:
         return _error(str(exc) if isinstance(exc, CameraError) else "Camera discovery returned an unsupported response.", 502)
+
+
+@login_required
+@require_http_methods(["POST"])
+def camera_relay(request, printer_id, connection_id, camera_id):
+    connection = connection_for(request, printer_id, connection_id)
+    if not connection:
+        return _error("Printer source not found.", 404)
+    if not connection.enabled:
+        return _error("This printer source is disabled.", 409)
+    source = next((item for item in sources(connection) if item["id"] == camera_id), None)
+    if not source:
+        return _error("Camera source not found.", 404)
+    if source.get("mode") != "creality_webrtc":
+        return _error("This camera source does not use the compatibility relay.", 400)
+    if request.META.get("CONTENT_LENGTH", "0").isdigit() and int(request.META.get("CONTENT_LENGTH", "0")) > 70000:
+        return _error("Camera offer is too large.", 413)
+    try:
+        with camera_slot(request.user.pk):
+            answer = relay_offer(request, connection.pk, camera_id, _read_json(request).get("sdp"))
+        return private_response(JsonResponse(answer))
+    except (CameraRelayError, CameraError, ValidationError, TypeError, ValueError) as exc:
+        message = str(exc) if isinstance(exc, (CameraRelayError, CameraError)) else "Invalid camera relay request."
+        return private_response(_error(message, 502))
 
 
 @login_required

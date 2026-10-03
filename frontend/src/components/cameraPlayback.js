@@ -1,3 +1,10 @@
+export function needsCrealityRelay(userAgent = "") {
+  // Firefox desktop currently fails to consume the K2's proprietary WebRTC
+  // stream directly on both Linux and Windows. iOS browsers use WebKit and do
+  // not expose the desktop Firefox UA token.
+  return /Firefox\//i.test(String(userAgent || ""));
+}
+
 export function waitForIce(peer, signal, timeoutMs = 8000) {
   if (signal.aborted) return Promise.reject(new DOMException("Cancelled", "AbortError"));
   if (peer.iceGatheringState === "complete") return Promise.resolve();
