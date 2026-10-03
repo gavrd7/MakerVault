@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.0.0 — released 3 October 2026
+
+- Promoted the v1 release candidate to the first stable MakerVault release after completing the clean-install acceptance gate on a separate Debian/Docker host.
+- Verified a fresh configuration, first-run migrations and catalogue setup, new superuser sign-in, inventory/project creation, encrypted private-file use, stack restart/persistence and a final successful `v1_release_preflight`.
+- Verified native HTTPS on the fresh host using the MakerVault Local CA/server-certificate workflow on the separate HTTPS port.
+- Confirmed the application and public user-guide repositories are green and the public documentation has been updated for the v1 HTTPS, storage and recovery workflows.
+- Experimental printer adapters remain explicitly labelled experimental where representative hardware validation is still outstanding; issue #37 continues to track that post-release validation.
+
 ## v1.0.0-rc.1 — release candidate (3 October 2026)
 - HTTPS certificate settings now guide Local CA setup as Generate → Download CA → Trust on this device → Open HTTPS, with expandable iPhone/iPad, Windows, macOS, Android and Linux trust instructions.
 - TLS identity now follows `KEY_STORAGE` (`/app/keys/tls`) instead of creating a separate Docker volume, while managed backup v3 compatibility is retained.
