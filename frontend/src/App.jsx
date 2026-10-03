@@ -50,6 +50,7 @@ export default function App() {
   const [tagResolveToken, setTagResolveToken] = useState("");
   const [backupWatchId, setBackupWatchId] = useState("");
   const [toast, setToast] = useState(null);
+  const [brandImageFailed, setBrandImageFailed] = useState(false);
 
   const showToast = useCallback((tone, title, message) => {
     setToast({ id: Date.now(), tone, title, message });
@@ -234,7 +235,13 @@ export default function App() {
 
   return <div className="shell">
     <aside>
-      <div className="brand"><img className="brandLogo" src="/static/core/makervault-logo.jpg" alt="MakerVault" /><small className="brandVersion">{config?.version ? "v" + config.version : "version loading…"} · AGPL</small></div>
+      <div className="brand">
+        {!brandImageFailed ? <img className="brandLogo" src="/static/core/makervault-logo.jpg" alt="MakerVault" onError={() => setBrandImageFailed(true)} /> : <div className="brandFallback" role="img" aria-label="MakerVault">
+          <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="16" /><path d="M16 45V19h8l8 12 8-12h8v26h-8V31l-8 11-8-11v14z" /></svg>
+          <span>MakerVault</span>
+        </div>}
+        <small className="brandVersion">{config?.version ? "v" + config.version : "version loading…"} · AGPL</small>
+      </div>
       <GlobalSearch onOpenResult={openSearchResult} onOpenAdvanced={openAdvancedSearch} />
       <nav>{NAV.filter(n => n !== "Settings" || config?.is_staff).map(n => <button key={n} className={section === n ? "active" : ""} onClick={() => navigateSection(n)}>{n}</button>)}</nav>
       <div className="asideBottom"><a href="/admin/">Administration</a><a href="/accounts/2fa/">Account &amp; Security</a><a href="/accounts/logout/">Sign out</a></div>
