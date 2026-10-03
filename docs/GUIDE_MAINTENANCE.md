@@ -19,7 +19,7 @@ Open the local address printed by MkDocs (normally `http://127.0.0.1:8000`). Dep
 
 ## Publishing with GitHub Pages
 
-GitHub Pages is appropriate for a static manual; it does not run MakerVault itself. The repository is private at the time this guide was prepared. Pages from private repositories requires an eligible GitHub plan. Pages sites are ordinarily public even when the source repository is private; check your intended visibility before publishing.
+GitHub Pages is appropriate for a static manual; it does not run MakerVault itself. MakerVault's application source and public documentation are both intended to be publicly accessible, with the documentation published separately through `MakerVault-docs`.
 
 The included `guide.yml` workflow builds documentation for documentation PRs/main changes and uploads a preview artifact. Deployment happens only when explicitly run with `publish=true` from `main`. It does not automatically publish on merge.
 
@@ -30,7 +30,7 @@ The included `guide.yml` workflow builds documentation for documentation PRs/mai
 5. Open the URL reported by the deploy job. For this repository the expected project-site URL is `https://gavrd7.github.io/MakerVault/` unless Pages/custom-domain settings change it.
 6. Test navigation, search, code copying and a narrow/mobile viewport on the published site.
 
-If Pages is unavailable for the private repository, a separate public documentation repository is an alternative. Copy only the documentation source/build assets, update `repo_url`, `edit_uri` and `site_url`, and review before making that repository public. Do not change the application repository's visibility just to host the guide.
+MakerVault uses the separate public `gavrd7/MakerVault-docs` repository for the published guide. Keep source/build assets, `repo_url`, `edit_uri` and `site_url` aligned with that repository when updating the documentation.
 
 Official reference: https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages
 
