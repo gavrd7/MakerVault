@@ -105,7 +105,7 @@ The default Compose stack has three persistent containers:
 - **redis:** queue/cache and background-work state.
 
 
-PostgreSQL and Redis do not publish host ports by default. Managed backup creation runs inside the existing MakerVault worker; restore uses guarded one-off commands from the same MakerVault image. Application code is built into the image. Named volumes and absolute-path bind mounts are supported for media, encryption keys, PostgreSQL, Redis and managed backups.
+PostgreSQL and Redis do not publish host ports by default. MakerVault serves HTTP on the configured app port and can optionally expose a separate native HTTPS listener (default 8443) with a supplied or MakerVault-managed self-signed certificate; reverse-proxy HTTPS remains the recommended domain/public deployment. Managed backup creation runs inside the existing MakerVault worker; restore uses guarded one-off commands from the same MakerVault image. Application code is built into the image. Named volumes and absolute-path bind mounts are supported for media, encryption keys, PostgreSQL, Redis, managed backups and optional native-TLS identity.
 
 Private uploaded files use authenticated AES-256-GCM encryption at rest with opaque object names. The default key is stored separately from media. This does not mean the database, deployment configuration or every secret is encrypted by the private-file storage feature.
 

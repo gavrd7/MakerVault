@@ -1,5 +1,17 @@
 # HTTPS and reverse proxies
 
+## HTTPS certificate wizard
+
+Superusers can open **Settings → HTTPS & certificates** to see the current browser host, native HTTPS status and certificate details.
+
+The wizard presents three deployment paths:
+
+- **Reverse proxy** — recommended for public/domain deployments. Your proxy manages its own publicly trusted ACME/Let's Encrypt certificate and forwards to MakerVault's ordinary HTTP port.
+- **Public ACME / Let's Encrypt** — MakerVault explains the public challenge requirements. MakerVault deliberately does not give its web process host/Docker privileges to open public ports or manipulate DNS, so use the reverse proxy or another host-level ACME client when public validation is required.
+- **MakerVault Local CA** — designed for private LAN addresses such as `192.168.x.x`. Enter the IP/DNS names, select **Generate local HTTPS certificate**, then download **MakerVault Local CA** and trust that public CA certificate on each client. The CA private key never has a GUI download route.
+
+With `MAKERVAULT_HTTPS_ENABLED=auto` (the default), the native HTTPS process waits until a valid certificate appears in TLS storage. Generating a local certificate from Settings therefore brings the separate HTTPS listener online without disabling the normal HTTP/reverse-proxy listener.
+
 **Advanced · Optional for local use**
 
 A reverse proxy accepts requests at your domain, handles HTTPS and forwards them to MakerVault. A certificate makes the browser's connection encrypted. DNS maps the domain to the address serving it.
@@ -64,3 +76,52 @@ A containerised proxy cannot reach the host's loopback port using its own `127.0
 The trusted proxy count must reflect the actual trusted chain. Do not copy `1` when another CDN/proxy sits in front without analysing its header behaviour.
 
 Always forward private file requests through MakerVault. Do not expose `/app/media` as an unauthenticated Nginx alias or static file share. A proxy does not turn MakerVault into a public anonymous download service.
+
+
+## Optional native HTTPS listener
+
+MakerVault can also serve HTTPS directly on a separate port without adding another container. This is optional; a reverse proxy remains the recommended setup for a stable domain name, public certificate automation and normal ports 80/443.
+
+For direct HTTPS on a trusted LAN, add for example:
+
+```dotenv
+MAKERVAULT_HTTPS_ENABLED=true
+MAKERVAULT_HTTPS_BIND_ADDRESS=0.0.0.0
+MAKERVAULT_HTTPS_PORT=8443
+DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,192.168.1.50
+DJANGO_CSRF_TRUSTED_ORIGINS=http://192.168.1.50:8765,https://192.168.1.50:8443
+```
+
+The normal HTTP listener remains available on `MAKERVAULT_PORT`, so a reverse proxy can still use it as its backend. Do not enable `DJANGO_SECURE_SSL_REDIRECT` merely because the separate native HTTPS port is enabled: Django's generic redirect does not know that HTTPS is on a different external port, and the HTTP listener may intentionally be serving a trusted reverse proxy.
+
+### Use your own certificate
+
+Put a PEM certificate and matching private key in `TLS_STORAGE` as `cert.pem` and `key.pem`, or change the two in-container paths deliberately:
+
+```dotenv
+TLS_STORAGE=/mnt/Server/MakerVault/tls
+MAKERVAULT_TLS_CERT_FILE=/app/tls/cert.pem
+MAKERVAULT_TLS_KEY_FILE=/app/tls/key.pem
+MAKERVAULT_HTTPS_SELF_SIGNED=false
+```
+
+The pair may be CA-issued or self-signed. MakerVault validates that both files are readable and match before starting the HTTPS listener.
+
+### Generate a persistent self-signed certificate
+
+For a local/test deployment, MakerVault can generate a certificate once and keep it in `TLS_STORAGE`:
+
+```dotenv
+MAKERVAULT_HTTPS_ENABLED=true
+MAKERVAULT_HTTPS_BIND_ADDRESS=0.0.0.0
+MAKERVAULT_HTTPS_PORT=8443
+MAKERVAULT_HTTPS_SELF_SIGNED=true
+MAKERVAULT_HTTPS_SELF_SIGNED_NAMES=192.168.1.50,makervault.local
+DJANGO_CSRF_TRUSTED_ORIGINS=https://192.168.1.50:8443
+```
+
+Open `https://192.168.1.50:8443` (substituting your address). A self-signed certificate is encrypted TLS, but browsers do not trust it automatically. Import/trust the certificate or its issuing CA on each client if you want to remove the browser warning. MakerVault deliberately does not disable browser certificate verification.
+
+The generated certificate/key are persistent and are included in new managed `.mvbackup` bundles. Existing v2 recovery bundles remain supported; because they predate native TLS, restoring one does not erase TLS storage already present on the target.
+
+If every browser-facing route is HTTPS, set `DJANGO_SECURE_COOKIES=true`. If you still intentionally use direct HTTP for interactive browser access, secure-only session cookies will prevent sign-in over that HTTP route.

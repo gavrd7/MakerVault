@@ -26,14 +26,22 @@ services:
       MAKERVAULT_BACKUP_ROOT: /app/backups
       MAKERVAULT_CAMERA_RELAY_PORT: ${MAKERVAULT_CAMERA_RELAY_PORT:-8555}
       MAKERVAULT_CAMERA_RELAY_CANDIDATE: ${MAKERVAULT_CAMERA_RELAY_CANDIDATE:-}
+      MAKERVAULT_HTTPS_ENABLED: ${MAKERVAULT_HTTPS_ENABLED:-auto}
+      MAKERVAULT_HTTPS_SELF_SIGNED: ${MAKERVAULT_HTTPS_SELF_SIGNED:-false}
+      MAKERVAULT_HTTPS_SELF_SIGNED_NAMES: ${MAKERVAULT_HTTPS_SELF_SIGNED_NAMES:-}
+      MAKERVAULT_TLS_CERT_FILE: ${MAKERVAULT_TLS_CERT_FILE:-/app/tls/cert.pem}
+      MAKERVAULT_TLS_KEY_FILE: ${MAKERVAULT_TLS_KEY_FILE:-/app/tls/key.pem}
+      HTTPS_WEB_CONCURRENCY: ${HTTPS_WEB_CONCURRENCY:-1}
     ports:
       - "${MAKERVAULT_BIND_ADDRESS:-0.0.0.0}:${MAKERVAULT_PORT:-8765}:8000"
+      - "${MAKERVAULT_HTTPS_BIND_ADDRESS:-0.0.0.0}:${MAKERVAULT_HTTPS_PORT:-8443}:8443"
       - "${MAKERVAULT_BIND_ADDRESS:-0.0.0.0}:${MAKERVAULT_CAMERA_RELAY_PORT:-8555}:8555/tcp"
       - "${MAKERVAULT_BIND_ADDRESS:-0.0.0.0}:${MAKERVAULT_CAMERA_RELAY_PORT:-8555}:8555/udp"
     volumes:
       - ${MEDIA_STORAGE:-makervault_media}:/app/media
       - ${KEY_STORAGE:-makervault_keys}:/app/keys
       - ${BACKUP_STORAGE:-makervault_backups}:/app/backups
+      - ${TLS_STORAGE:-makervault_tls}:/app/tls
     depends_on:
       postgres:
         condition: service_healthy
@@ -97,3 +105,4 @@ volumes:
   makervault_postgres:
   makervault_redis:
   makervault_backups:
+  makervault_tls:

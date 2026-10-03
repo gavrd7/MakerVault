@@ -12,6 +12,7 @@
 | PostgreSQL dump | Accounts, projects, catalogue records, file references and other structured data |
 | Media archive | Uploaded files and cached images |
 | Key archive | The key that decrypts private uploads |
+| TLS archive (v3+) | MakerVault-owned native HTTPS certificate/private key, when used |
 | Recovery `.env` / deployment settings | Secrets, storage paths and supported deployment settings |
 | Source revision | The matching version of MakerVault for the first restore |
 | Redis data (optional for core records) | Queue/cache state; not a substitute for the database |
@@ -39,13 +40,13 @@ BACKUP_STORAGE=/mnt/Server/MakerVault/backups
 The Backup & restore page shows completed bundles, total stored size, validation state and creation time. Old backups are retained until an administrator deletes them; MakerVault does not silently remove recovery copies.
 
 !!! warning "A .mvbackup file contains secrets"
-    A managed `.mvbackup` bundle contains the PostgreSQL dump, media, private-storage key and deployment configuration. File permissions and authenticated MakerVault access protect the server-side copy, but the bundle itself is **not encrypted**. Store downloaded copies only on storage you trust.
+    A managed `.mvbackup` bundle contains the PostgreSQL dump, media, private-storage key, deployment configuration and, for v3+ bundles, MakerVault-owned TLS storage. File permissions and authenticated MakerVault access protect the server-side copy, but the bundle itself is **not encrypted**. Store downloaded copies only on storage you trust.
 
 ### What happens behind the button
 
-The web application does **not** receive access to the Docker socket. Managed backup creation runs through MakerVault's existing Celery worker inside the normal `makervault` container. That worker already has the application database connection and the media/key/backup mounts required to create a recovery bundle, so no fourth long-running service is needed.
+The web application does **not** receive access to the Docker socket. Managed backup creation runs through MakerVault's existing Celery worker inside the normal `makervault` container. That worker already has the application database connection and the media/key/TLS/backup mounts required to create a recovery bundle, so no fourth long-running service is needed.
 
-MakerVault creates a maintenance lock before capturing data. Normal read-only viewing continues, while web/API writes are rejected briefly and MakerVault's scheduled catalogue, integration and printer-poll jobs defer until the lock clears. This prevents new application-side mutations from starting underneath the capture. The bundle is not marked complete until PostgreSQL's dump catalogue, the media/key archives and recorded SHA-256 checks have all been read successfully.
+MakerVault creates a maintenance lock before capturing data. Normal read-only viewing continues, while web/API writes are rejected briefly and MakerVault's scheduled catalogue, integration and printer-poll jobs defer until the lock clears. This prevents new application-side mutations from starting underneath the capture. The bundle is not marked complete until PostgreSQL's dump catalogue, the media/key/TLS archives and recorded SHA-256 checks have all been read successfully.
 
 Redis queue/cache data is deliberately excluded from normal recovery. Core MakerVault records are in PostgreSQL.\n\nFor the standard deployment, MakerVault reconstructs the recovery `.env` from the supported settings listed in `.env.example` and the values currently supplied to the container. Custom Compose override files, shell-only variables that are not part of the supported environment template, and external secret files remain advanced deployment responsibility and should be preserved separately.
 
@@ -70,7 +71,7 @@ Replace `BACKUP_ID` with the value shown by MakerVault. The helper:
 3. asks you to type the backup ID;
 4. stops MakerVault;
 5. creates a fresh **pre-restore safety backup** of the current installation;
-6. restores PostgreSQL, media and the encryption key together; and
+6. restores PostgreSQL, media, the encryption key and v3+ TLS storage together; and
 7. rebuilds/starts MakerVault.
 
 If the safety backup fails, the destructive restore is not started. If restoring fails after data replacement has begun, MakerVault is left stopped and the helper prints the safety-backup recovery command rather than starting against a partial restore.
@@ -83,7 +84,7 @@ Keep at least one downloaded `.mvbackup` away from the MakerVault server. On a r
 
 1. Install Docker Engine, Docker Compose and Git.
 2. Clone the MakerVault repository. Prefer the release recorded in the backup; the bundle records the MakerVault version that created it.
-3. **Do not create a replacement `.env` if the original server is gone.** The restore helper can recover the saved one from a verified bundle. On a clean off-server restore it also detects the replacement host's routable IPv4 address and appends that address to `DJANGO_ALLOWED_HOSTS` and its direct HTTP origin to `DJANGO_CSRF_TRUSTED_ORIGINS`, preserving all restored values.
+3. **Do not create a replacement `.env` if the original server is gone.** The restore helper can recover the saved one from a verified bundle. On a clean off-server restore it also detects the replacement host's routable IPv4 address and appends that address to `DJANGO_ALLOWED_HOSTS` and the applicable direct HTTP/HTTPS origins to `DJANGO_CSRF_TRUSTED_ORIGINS`, preserving all restored values.
 4. Copy the `.mvbackup` file to the new host.
 5. From the MakerVault checkout run:
 
@@ -91,7 +92,7 @@ Keep at least one downloaded `.mvbackup` away from the MakerVault server. On a r
 python3 scripts/restore.py --sudo --bundle /path/to/your-backup.mvbackup
 ```
 
-Before it trusts any configuration from the file, the helper checks the bundle structure and every recorded inner SHA-256 value. If the checkout has no `.env`, it restores the verified saved configuration with owner-only permissions, prepares PostgreSQL/Redis and the MakerVault image, imports the bundle, validates it again through the recovery tooling, restores database/media/key storage and starts MakerVault.
+Before it trusts any configuration from the file, the helper checks the bundle structure and every recorded inner SHA-256 value. If the checkout has no `.env`, it restores the verified saved configuration with owner-only permissions, prepares PostgreSQL/Redis and the MakerVault image, imports the bundle, validates it again through the recovery tooling, restores database/media/key storage plus v3+ TLS storage and starts MakerVault. If MakerVault-managed self-signed HTTPS is enabled, the replacement host receives a fresh self-signed certificate for its recovered address rather than reusing a certificate whose SANs belong to the old host.
 
 If automatic address detection is unsuitable (for example, a multi-homed host), pass the intended direct-access IPv4 address explicitly with `--recovery-host ADDRESS`; the option may be repeated. Reverse-proxy hostnames and HTTPS origins are not guessed and still require deliberate configuration review.
 
@@ -136,6 +137,7 @@ The database remains running for its logical dump. Stop if any step below fails;
 sudo docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "$backup_dir/database.dump"
 sudo docker compose run --rm -T --no-deps --entrypoint tar makervault -C /app/media -czf - . > "$backup_dir/media.tar.gz"
 sudo docker compose run --rm -T --no-deps --entrypoint tar makervault -C /app/keys -czf - . > "$backup_dir/keys.tar.gz"
+sudo docker compose run --rm -T --no-deps --entrypoint tar makervault -C /app/tls -czf - . > "$backup_dir/tls.tar.gz"
 ```
 
 These one-off commands mount the normal storage but bypass the application's normal startup; they do not start another web server or migrate the database. If you use an external `MAKERVAULT_STORAGE_KEY` or a custom key-file location, back up that actual key source as well: the default `/app/keys` archive may not contain it.
@@ -154,6 +156,7 @@ Check the main backup files:
 test -s "$backup_dir/database.dump"
 tar -tzf "$backup_dir/media.tar.gz" > /dev/null
 tar -tzf "$backup_dir/keys.tar.gz" > /dev/null
+tar -tzf "$backup_dir/tls.tar.gz" > /dev/null
 sudo docker compose exec -T postgres pg_restore --list < "$backup_dir/database.dump" > "$backup_dir/database-contents.txt"
 sudo docker compose start makervault
 sudo docker compose ps
@@ -164,7 +167,7 @@ If a dump or archive step fails, restart any services you stopped with `sudo doc
 After every backup file is final, record checksums:
 
 ```bash
-(cd "$backup_dir" && sha256sum database.dump media.tar.gz keys.tar.gz .env compose.yaml source-commit.txt > SHA256SUMS)
+(cd "$backup_dir" && sha256sum database.dump media.tar.gz keys.tar.gz tls.tar.gz .env compose.yaml source-commit.txt > SHA256SUMS)
 ```
 
 Include additional configuration/key files and optional Redis archives in your checksum list too. Checksums detect accidental corruption, not malicious replacement of both files and manifest.
@@ -207,13 +210,14 @@ Wait for PostgreSQL to become healthy. Restore its records into the empty databa
 sudo docker compose exec -T postgres sh -c 'pg_restore --exit-on-error --no-owner --no-privileges -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "$backup_dir/database.dump"
 sudo docker compose run --rm -T --no-deps --entrypoint tar makervault -C /app/media -xzf - < "$backup_dir/media.tar.gz"
 sudo docker compose run --rm -T --no-deps --entrypoint tar makervault -C /app/keys -xzf - < "$backup_dir/keys.tar.gz"
+sudo docker compose run --rm -T --no-deps --entrypoint tar makervault -C /app/tls -xzf - < "$backup_dir/tls.tar.gz"
 ```
 
 Stop on any error. Do not use these extraction commands to mix a backup with existing live files. The default startup repairs application storage ownership; deployments with `FIX_PERMISSIONS=false` must arrange correct ownership themselves.
 
 For the normal recovery test, a fresh Redis queue avoids replaying old queued work. If preserving Redis is intentional, stop Redis and restore its archive to empty `/data` through a one-off container before restarting it.
 
-Start MakerVault only after database, media and the correct key are restored:
+Start MakerVault only after database, media, the correct private-storage key and any native-TLS identity are restored:
 
 ```bash
 sudo docker compose up -d makervault

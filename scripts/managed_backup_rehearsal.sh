@@ -43,7 +43,7 @@ for db in "$source_db" "$target_db"; do
   wait_db "$db"
 done
 
-for kind in source-media source-keys target-media target-keys backups import-backups; do
+for kind in source-media source-keys source-tls target-media target-keys target-tls backups import-backups; do
   volume="$token-$kind"
   docker volume create "$volume" >/dev/null
   volumes+=("$volume")
@@ -55,9 +55,9 @@ docker exec "$source_db" psql -U makervault -d makervault -v ON_ERROR_STOP=1 -c 
 
 # Match the image's built-in application UID for this direct, entrypoint-free rehearsal.
 docker run --rm --network none \
-  -v "$source_media:/app/media" -v "$source_keys:/app/keys" -v "$backups:/app/backups" \
+  -v "$source_media:/app/media" -v "$source_keys:/app/keys" -v "$source_tls:/app/tls" -v "$backups:/app/backups" \
   --entrypoint sh "$image" -c \
-  "printf 'media-ok\n' > /app/media/example.txt; printf 'key-ok\n' > /app/keys/private_storage.key; chown -R 911:911 /app/media /app/keys /app/backups" >/dev/null
+  "printf 'media-ok\n' > /app/media/example.txt; printf 'key-ok\n' > /app/keys/private_storage.key; printf 'cert-ok\n' > /app/tls/cert.pem; printf 'tls-key-ok\n' > /app/tls/key.pem; chown -R 911:911 /app/media /app/keys /app/tls /app/backups" >/dev/null
 
 common_env=(
   -e DJANGO_SECRET_KEY=ci-only-secret-key-for-managed-backup-0123456789
@@ -73,6 +73,7 @@ docker run --rm --user 911:911 --network "$network" \
   "${common_env[@]}" -e DATABASE_HOST="$source_db" \
   -v "$source_media:/app/media:ro" \
   -v "$source_keys:/app/keys:ro" \
+  -v "$source_tls:/app/tls:ro" \
   -v "$backups:/app/backups" \
   --entrypoint python "$image" \
   manage.py backup_bundle create --id synthetic-integrated --label "CI integrated backup"
@@ -81,6 +82,7 @@ docker run --rm --user 911:911 --network "$network" \
   "${common_env[@]}" -e DATABASE_HOST="$source_db" \
   -v "$source_media:/app/media:ro" \
   -v "$source_keys:/app/keys:ro" \
+  -v "$source_tls:/app/tls:ro" \
   -v "$backups:/app/backups:ro" \
   --entrypoint python "$image" \
   manage.py backup_bundle validate --id synthetic-integrated
@@ -96,6 +98,7 @@ docker run --rm --user 911:911 --network "$network" \
   "${common_env[@]}" -e DATABASE_HOST="$source_db" \
   -v "$source_media:/app/media:ro" \
   -v "$source_keys:/app/keys:ro" \
+  -v "$source_tls:/app/tls:ro" \
   -v "$import_backups:/app/backups" \
   --entrypoint python "$image" \
   manage.py backup_bundle register --id imported-integrated
@@ -104,6 +107,7 @@ docker run --rm --user 0:0 --network "$network" \
   "${common_env[@]}" -e DATABASE_HOST="$target_db" \
   -v "$target_media:/app/media" \
   -v "$target_keys:/app/keys" \
+  -v "$target_tls:/app/tls" \
   -v "$backups:/app/backups:ro" \
   --entrypoint python "$image" \
   manage.py backup_bundle restore --id synthetic-integrated
@@ -112,8 +116,8 @@ value="$(docker exec "$target_db" psql -U makervault -d makervault -Atc "SELECT 
 test "$value" = "integrated-backup-ok"
 
 docker run --rm --network none \
-  -v "$target_media:/app/media:ro" -v "$target_keys:/app/keys:ro" \
+  -v "$target_media:/app/media:ro" -v "$target_keys:/app/keys:ro" -v "$target_tls:/app/tls:ro" \
   --entrypoint sh "$image" -c \
-  'test "$(cat /app/media/example.txt)" = media-ok && test "$(cat /app/keys/private_storage.key)" = key-ok'
+  'test "$(cat /app/media/example.txt)" = media-ok && test "$(cat /app/keys/private_storage.key)" = key-ok && test "$(cat /app/tls/cert.pem)" = cert-ok && test "$(cat /app/tls/key.pem)" = tls-key-ok'
 
-echo "PASS: three-container managed backup database/media/key recovery rehearsal"
+echo "PASS: three-container managed backup database/media/key/TLS recovery rehearsal"

@@ -17,10 +17,13 @@ class ManagedBackupBundleTests(TestCase):
         self.backups = root / "backups"
         self.media = root / "media"
         self.keys = root / "keys"
-        for path in (self.backups, self.media, self.keys):
+        self.tls = root / "tls"
+        for path in (self.backups, self.media, self.keys, self.tls):
             path.mkdir()
         (self.media / "example.txt").write_text("media-original", encoding="utf-8")
         (self.keys / "private_storage.key").write_text("synthetic-key", encoding="utf-8")
+        (self.tls / "cert.pem").write_text("synthetic-cert", encoding="utf-8")
+        (self.tls / "key.pem").write_text("synthetic-tls-key", encoding="utf-8")
 
         self.override = override_settings(
             MAKERVAULT_BACKUP_ROOT=self.backups,
@@ -29,6 +32,9 @@ class ManagedBackupBundleTests(TestCase):
         )
         self.override.enable()
         self.addCleanup(self.override.disable)
+        self.env_patch = patch.dict("os.environ", {"MAKERVAULT_TLS_ROOT": str(self.tls)}, clear=False)
+        self.env_patch.start()
+        self.addCleanup(self.env_patch.stop)
 
     def fake_subprocess(self, command, **kwargs):
         if command[0] == "pg_dump":
@@ -74,13 +80,15 @@ class ManagedBackupBundleTests(TestCase):
         self.assertEqual(saved["status"], "failed")
         self.assertFalse(saved["verified"])
 
-    def test_restore_replaces_media_and_key_from_bundle(self):
+    def test_restore_replaces_media_key_and_tls_from_bundle(self):
         with patch.object(backup_bundle.subprocess, "run", side_effect=self.fake_subprocess):
             backup_bundle.create_bundle(backup_id="restore-test")
 
         (self.media / "example.txt").write_text("changed-media", encoding="utf-8")
         (self.keys / "private_storage.key").write_text("changed-key", encoding="utf-8")
         (self.media / "newer.txt").write_text("newer", encoding="utf-8")
+        (self.tls / "cert.pem").write_text("changed-cert", encoding="utf-8")
+        (self.tls / "key.pem").write_text("changed-tls-key", encoding="utf-8")
 
         with patch.object(backup_bundle.subprocess, "run", side_effect=self.fake_subprocess):
             backup_bundle.restore_bundle("restore-test")
@@ -94,6 +102,8 @@ class ManagedBackupBundleTests(TestCase):
             "synthetic-key",
         )
         self.assertFalse((self.media / "newer.txt").exists())
+        self.assertEqual((self.tls / "cert.pem").read_text(encoding="utf-8"), "synthetic-cert")
+        self.assertEqual((self.tls / "key.pem").read_text(encoding="utf-8"), "synthetic-tls-key")
 
     def test_startup_recovery_clears_interrupted_job(self):
         backup_bundle.prepare_backup(backup_id="interrupted")

@@ -196,10 +196,23 @@ def adapt_recovered_env_for_hosts(path: Path, hosts: list[str]) -> list[str]:
     if not 1 <= port <= 65535:
         raise RestoreError("MAKERVAULT_PORT in the recovered .env is outside 1-65535.")
 
+    origins = [f"http://{host}:{port}" for host in clean_hosts]
+    https_enabled = values.get("MAKERVAULT_HTTPS_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+    if https_enabled:
+        try:
+            https_port = int(values.get("MAKERVAULT_HTTPS_PORT", "8443"))
+        except ValueError as exc:
+            raise RestoreError("MAKERVAULT_HTTPS_PORT in the recovered .env must be numeric.") from exc
+        if not 1 <= https_port <= 65535:
+            raise RestoreError("MAKERVAULT_HTTPS_PORT in the recovered .env is outside 1-65535.")
+        origins.extend(f"https://{host}:{https_port}" for host in clean_hosts)
+
     additions = {
         "DJANGO_ALLOWED_HOSTS": clean_hosts,
-        "DJANGO_CSRF_TRUSTED_ORIGINS": [f"http://{host}:{port}" for host in clean_hosts],
+        "DJANGO_CSRF_TRUSTED_ORIGINS": origins,
     }
+    if values.get("MAKERVAULT_HTTPS_SELF_SIGNED", "false").strip().lower() in {"1", "true", "yes", "on"}:
+        additions["MAKERVAULT_HTTPS_SELF_SIGNED_NAMES"] = clean_hosts
 
     lines = text.splitlines()
     for key, new_values in additions.items():
@@ -267,6 +280,7 @@ def main() -> int:
     env_file = source / ".env"
 
     bundle = Path(args.bundle).expanduser().resolve() if args.bundle else None
+    recovered_env = False
     if bundle:
         print("1/8 Verifying the off-server recovery bundle...", flush=True)
         try:
@@ -276,6 +290,7 @@ def main() -> int:
             return 2
 
         if not env_file.exists():
+            recovered_env = True
             if not bundled_env:
                 print("Restore not started: the clean checkout has no .env and the bundle does not contain one.", file=sys.stderr)
                 return 2
@@ -437,6 +452,32 @@ def main() -> int:
         if detail:
             print(detail, file=sys.stderr)
         return 4
+
+    if bundle and recovered_env:
+        values = _env_values(env_file.read_text(encoding="utf-8"))
+        self_signed = values.get("MAKERVAULT_HTTPS_SELF_SIGNED", "false").strip().lower() in {"1", "true", "yes", "on"}
+        https_enabled = values.get("MAKERVAULT_HTTPS_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+        if self_signed and https_enabled:
+            print("Refreshing MakerVault-managed self-signed certificate for the replacement host...", flush=True)
+            cleared = run(
+                [
+                    *base, "run", "--rm", "--no-deps", "-T",
+                    "--entrypoint", "sh", "makervault", "-c",
+                    'rm -f "$MAKERVAULT_TLS_CERT_FILE" "$MAKERVAULT_TLS_KEY_FILE"',
+                ],
+                capture=True,
+                check=False,
+            )
+            if cleared.returncode:
+                detail = (cleared.stderr or cleared.stdout or "").strip()
+                print(
+                    "Restore completed but the replacement-host self-signed certificate could not be refreshed. "
+                    "MakerVault has been left stopped; review TLS storage before starting it.",
+                    file=sys.stderr,
+                )
+                if detail:
+                    print(detail, file=sys.stderr)
+                return 5
 
     print(f"{6 + step_offset}/{total_steps} Starting MakerVault...", flush=True)
     run([*base, "up", "-d", "--build", "makervault"])
