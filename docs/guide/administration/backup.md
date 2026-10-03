@@ -40,7 +40,7 @@ BACKUP_STORAGE=/mnt/Server/MakerVault/backups
 The Backup & restore page shows completed bundles, total stored size, validation state and creation time. Old backups are retained until an administrator deletes them; MakerVault does not silently remove recovery copies.
 
 !!! warning "A .mvbackup file contains secrets"
-    A managed `.mvbackup` bundle contains the PostgreSQL dump, media, private-storage key, deployment configuration and, for v3+ bundles, MakerVault-owned TLS storage. File permissions and authenticated MakerVault access protect the server-side copy, but the bundle itself is **not encrypted**. Store downloaded copies only on storage you trust.
+    A managed `.mvbackup` bundle contains the PostgreSQL dump, media, private-storage key, deployment configuration and, for v3+ bundles, MakerVault-owned TLS identity. File permissions and authenticated MakerVault access protect the server-side copy, but the bundle itself is **not encrypted**. Store downloaded copies only on storage you trust.
 
 ### What happens behind the button
 
@@ -71,7 +71,7 @@ Replace `BACKUP_ID` with the value shown by MakerVault. The helper:
 3. asks you to type the backup ID;
 4. stops MakerVault;
 5. creates a fresh **pre-restore safety backup** of the current installation;
-6. restores PostgreSQL, media, the encryption key and v3+ TLS storage together; and
+6. restores PostgreSQL, media, the encryption key and the v3+ TLS identity together; and
 7. rebuilds/starts MakerVault.
 
 If the safety backup fails, the destructive restore is not started. If restoring fails after data replacement has begun, MakerVault is left stopped and the helper prints the safety-backup recovery command rather than starting against a partial restore.
@@ -136,7 +136,7 @@ The database remains running for its logical dump. Stop if any step below fails;
 ```bash
 sudo docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "$backup_dir/database.dump"
 sudo docker compose run --rm -T --no-deps --entrypoint tar makervault -C /app/media -czf - . > "$backup_dir/media.tar.gz"
-sudo docker compose run --rm -T --no-deps --entrypoint tar makervault -C /app/keys -czf - . > "$backup_dir/keys.tar.gz"
+sudo docker compose run --rm -T --no-deps --entrypoint tar makervault -C /app/keys --exclude=./tls -czf - . > "$backup_dir/keys.tar.gz"
 sudo docker compose run --rm -T --no-deps --entrypoint tar makervault -C /app/keys/tls -czf - . > "$backup_dir/tls.tar.gz"
 ```
 
