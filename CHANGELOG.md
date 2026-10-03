@@ -1,6 +1,13 @@
 # Changelog
 
-## Unreleased — v1.0 recovery verification
+## v1.0.0-rc.1 — release candidate (3 October 2026)
+
+- Completed a representative off-server disaster-recovery rehearsal using a real managed `.mvbackup`; database, media, AES-256 private-storage key and deployment configuration restored successfully on a separate clean host.
+- Added the v1 release preflight command and acceptance checklist, and passed private-storage authentication plus owner-isolation audits on the restored installation.
+- Clarified account linking as additional sign-in methods for the same MakerVault account and prevent removal of the final usable sign-in method.
+- Added shared modal keyboard focus trapping/restoration, visible focus treatment and reduced-motion support.
+- Fixed duplicate account-page branding by keeping the fallback logo hidden while the real MakerVault logo loads.
+
 
 - Reclassify implemented but unvalidated printer integrations as **Experimental** instead of **Planned**. Bambu/AMS, PrusaLink, Anycubic/ACE, FlashForge/material-station and compatible Elegoo/QIDI/Sovol/Snapmaker/Voron Moonraker profiles are selectable today; vendor-specific material systems not exposed by those adapters remain outside the claim.
 - Add account onboarding visibility for local sign-up and SMTP-backed password recovery, including sign-up/reset links in the account shell and a superuser SMTP test action under Users & storage.
