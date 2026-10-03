@@ -210,13 +210,14 @@ Wait for PostgreSQL to become healthy. Restore its records into the empty databa
 sudo docker compose exec -T postgres sh -c 'pg_restore --exit-on-error --no-owner --no-privileges -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "$backup_dir/database.dump"
 sudo docker compose run --rm -T --no-deps --entrypoint tar makervault -C /app/media -xzf - < "$backup_dir/media.tar.gz"
 sudo docker compose run --rm -T --no-deps --entrypoint tar makervault -C /app/keys -xzf - < "$backup_dir/keys.tar.gz"
+sudo docker compose run --rm -T --no-deps --entrypoint tar makervault -C /app/tls -xzf - < "$backup_dir/tls.tar.gz"
 ```
 
 Stop on any error. Do not use these extraction commands to mix a backup with existing live files. The default startup repairs application storage ownership; deployments with `FIX_PERMISSIONS=false` must arrange correct ownership themselves.
 
 For the normal recovery test, a fresh Redis queue avoids replaying old queued work. If preserving Redis is intentional, stop Redis and restore its archive to empty `/data` through a one-off container before restarting it.
 
-Start MakerVault only after database, media and the correct key are restored:
+Start MakerVault only after database, media, the correct private-storage key and any native-TLS identity are restored:
 
 ```bash
 sudo docker compose up -d makervault
