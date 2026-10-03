@@ -4,6 +4,7 @@ import { Badge, LoadingBlock, Modal } from "./Common";
 import AdminUsersPanel from "./AdminUsersPanel";
 import CatalogueCoveragePanel from "./CatalogueCoveragePanel";
 import BackupRestorePanel from "./BackupRestorePanel";
+import HttpsCertificatePanel from "./HttpsCertificatePanel";
 
 const EXPERIMENTAL_PRINTER_CAPABILITIES = {
   bambu_ams: {
@@ -317,7 +318,9 @@ export default function SettingsPage({ config, onBackupStarted }) {
             ? <span className={enabledIntegrations ? "status-pill status-on" : "status-pill"}>{enabledIntegrations} integration{enabledIntegrations === 1 ? "" : "s"} enabled</span>
             : activeTab === "backups"
               ? <span className="status-pill status-on">Recovery protection</span>
-              : <span className="status-pill status-on">Account administration</span>}
+              : activeTab === "https"
+                ? <span className="status-pill status-on">Transport security</span>
+                : <span className="status-pill status-on">Account administration</span>}
       </div>
     </section>
 
@@ -353,6 +356,18 @@ export default function SettingsPage({ config, onBackupStarted }) {
         <strong>Backup &amp; restore</strong>
         <small>Create, verify, download and recover MakerVault</small>
       </button>}
+
+      {config?.is_superuser && <button
+        type="button"
+        role="tab"
+        aria-selected={activeTab === "https"}
+        className={activeTab === "https" ? "active" : ""}
+        onClick={() => setActiveTab("https")}
+      >
+        <strong>HTTPS &amp; certificates</strong>
+        <small>Reverse proxy, local CA and native TLS</small>
+      </button>}
+
 
       {config?.is_superuser && <button
         type="button"
@@ -503,6 +518,7 @@ export default function SettingsPage({ config, onBackupStarted }) {
     </>}
 
     {activeTab === "backups" && config?.is_superuser && <BackupRestorePanel onBackupStarted={onBackupStarted} />}
+    {activeTab === "https" && config?.is_superuser && <HttpsCertificatePanel />}
     {activeTab === "users" && <AdminUsersPanel config={config} />}
 
     {activeTab === "library" && <section className="panel settingsInfo">
