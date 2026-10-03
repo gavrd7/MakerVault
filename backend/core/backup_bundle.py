@@ -39,7 +39,7 @@ def media_root() -> Path:
 
 
 def tls_root() -> Path:
-    return Path(os.getenv("MAKERVAULT_TLS_ROOT", "/app/tls"))
+    return Path(os.getenv("MAKERVAULT_TLS_ROOT", "/app/keys/tls"))
 
 
 def key_root() -> Path:
@@ -211,10 +211,13 @@ def _run(command: list[str], *, capture=False):
         raise BackupBundleError(detail or f"Command failed: {command[0]}") from exc
 
 
-def _archive_directory(source: Path, target: Path):
+def _archive_directory(source: Path, target: Path, *, exclude_names: set[str] | None = None):
+    excluded = exclude_names or set()
     with tarfile.open(target, "w:gz") as archive:
         if source.exists():
             for child in sorted(source.iterdir()):
+                if child.name in excluded:
+                    continue
                 archive.add(child, arcname=child.name, recursive=True)
 
 
@@ -297,8 +300,11 @@ def create_prepared_bundle(backup_id: str) -> dict:
         key_archive = work / "keys.tar.gz"
         tls_archive = work / "tls.tar.gz"
         _archive_directory(media_root(), media_archive)
-        _archive_directory(key_root(), key_archive)
-        _archive_directory(tls_root(), tls_archive)
+        tls = tls_root()
+        keys = key_root()
+        exclude_key_names = {"tls"} if tls.parent == keys else set()
+        _archive_directory(keys, key_archive, exclude_names=exclude_key_names)
+        _archive_directory(tls, tls_archive)
         (work / ".env").write_text(recovery_env_text(), encoding="utf-8")
 
         recovery = {
@@ -426,9 +432,12 @@ def register_bundle(backup_id: str, *, label: str = "Imported recovery bundle") 
     )
 
 
-def _clear_directory(path: Path):
+def _clear_directory(path: Path, *, preserve_names: set[str] | None = None):
+    preserved = preserve_names or set()
     path.mkdir(parents=True, exist_ok=True)
     for child in list(path.iterdir()):
+        if child.name in preserved:
+            continue
         if child.is_dir() and not child.is_symlink():
             shutil.rmtree(child)
         else:
@@ -463,17 +472,22 @@ def restore_bundle(backup_id: str):
             str(backup / "database.dump"),
         ])
 
-        _clear_directory(media_root())
-        _clear_directory(key_root())
-        _safe_extract_tar(backup / "media.tar.gz", media_root())
-        _safe_extract_tar(backup / "keys.tar.gz", key_root())
-
-        # Format v3+ carries MakerVault-owned TLS identity. Older bundles do not,
-        # so preserve any existing TLS storage when restoring a legacy bundle.
         tls_archive = backup / "tls.tar.gz"
+        tls = tls_root()
+        keys = key_root()
+
+        _clear_directory(media_root())
+        preserve_key_names = {"tls"} if not tls_archive.is_file() and tls.parent == keys else set()
+        _clear_directory(keys, preserve_names=preserve_key_names)
+        _safe_extract_tar(backup / "media.tar.gz", media_root())
+        _safe_extract_tar(backup / "keys.tar.gz", keys)
+
+        # Format v3+ carries MakerVault-owned TLS identity separately even though
+        # its live files now sit under KEY_STORAGE/tls. Older bundles do not, so
+        # preserve an existing local TLS identity when restoring a legacy bundle.
         if tls_archive.is_file():
-            _clear_directory(tls_root())
-            _safe_extract_tar(tls_archive, tls_root())
+            _clear_directory(tls)
+            _safe_extract_tar(tls_archive, tls)
 
 
 def recover_interrupted_backups() -> int:

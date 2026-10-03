@@ -74,8 +74,8 @@ class Command(BaseCommand):
             enabled = os.getenv("MAKERVAULT_HTTPS_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
             if not enabled:
                 return "disabled"
-            cert = Path(os.getenv("MAKERVAULT_TLS_CERT_FILE", "/app/tls/cert.pem"))
-            key = Path(os.getenv("MAKERVAULT_TLS_KEY_FILE", "/app/tls/key.pem"))
+            cert = Path(os.getenv("MAKERVAULT_TLS_CERT_FILE", "/app/keys/tls/cert.pem"))
+            key = Path(os.getenv("MAKERVAULT_TLS_KEY_FILE", "/app/keys/tls/key.pem"))
             if not cert.is_file() or not key.is_file():
                 raise RuntimeError("enabled but certificate/key are missing")
             context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
