@@ -19,7 +19,7 @@ git add .
 git commit -m "Initial MakerVault import"
 ```
 
-Then create an empty private repository on your preferred Git host and add it as `origin`:
+Then create an empty repository on your preferred Git host with the visibility that suits your deployment and add it as `origin`:
 
 ```bash
 git remote add origin <YOUR-REPOSITORY-URL>
