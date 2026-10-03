@@ -14,7 +14,7 @@ The command checks PostgreSQL, pending migrations, Redis, the private-file encry
 
 The release candidate must also have green backend/frontend tests, migration checks, dependency audits, static security checks, production Docker build, container vulnerability scan, managed-backup rehearsal, encrypted-file recovery rehearsal and guide build/link checks.
 
-## Clean-install acceptance
+## Clean-install acceptance — remaining owner-run gate
 
 On a clean Linux/Docker host:
 
@@ -41,9 +41,13 @@ Using a protected copy of a representative pre-v1 installation:
 
 Do not treat switching application code backwards as a database rollback.
 
-## Real backup/restore acceptance — release blocker
+## Real backup/restore acceptance — passed 3 October 2026
 
-This is the remaining owner-run v1 gate.
+A managed backup from a representative real MakerVault installation was downloaded and restored on a separate clean Debian host using the guarded off-server recovery helper. The restored deployment passed `v1_release_preflight`, `verify_private_storage` and `audit_private_ownership --fail-on-issues`; the restored application was opened successfully after adjusting the recovered allowed-host/origin values for the replacement host.
+
+Recovery preserved the database, media and AES-256 private-storage key together. The private-file audit reported 3 referenced private files checked, 0 legacy files and 0 failures. The ownership audit reported no unowned records and no relationship ownership mismatches.
+
+Rehearsal procedure retained below for future releases:
 
 1. From the real MakerVault installation, create a managed backup from **Settings → Backup & restore** and verify it.
 2. Download/copy that bundle to a **separate isolated host** with empty target storage.
@@ -66,5 +70,7 @@ Do not delete the original backup after the rehearsal. A successful synthetic CI
 Check desktop and mobile layouts, keyboard-only navigation, visible focus, modal close/cancel behaviour, form labels, empty/error states, destructive confirmations and reduced-motion behaviour. Authentication pages and the main React application should use consistent MakerVault wording and branding.
 
 ## Release decision
+
+The real-install restore gate is complete. Stable v1.0 still requires the clean-install smoke test above plus green final release-candidate CI.
 
 A v1.0 release candidate may retain printer adapters explicitly labelled **Experimental** where hardware validation is unavailable. Experimental status must describe validation uncertainty, not hide already implemented functionality. Open issue #37 continues to track representative hardware testing after the release candidate.
