@@ -9,6 +9,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
+from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Q, Sum
 from django.db.models.deletion import ProtectedError
@@ -1406,6 +1407,64 @@ def admin_storage_policy(request):
             "default_quota_bytes": int(policy.default_quota_bytes),
             "encryption": private_storage_key_status(),
         }
+    })
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def admin_account_onboarding(request):
+    denied = _superuser_required(request)
+    if denied:
+        return denied
+
+    smtp_configured = bool(getattr(settings, "EMAIL_HOST", ""))
+    payload = {
+        "local_registration_enabled": bool(settings.ALLOW_LOCAL_REGISTRATION),
+        "signup_url": "/accounts/signup/",
+        "smtp_configured": smtp_configured,
+        "password_reset_url": "/accounts/password/reset/",
+        "password_reset_available": smtp_configured,
+        "smtp": {
+            "host": getattr(settings, "EMAIL_HOST", ""),
+            "port": getattr(settings, "EMAIL_PORT", None),
+            "transport": (
+                "SSL"
+                if getattr(settings, "EMAIL_USE_SSL", False)
+                else "STARTTLS"
+                if getattr(settings, "EMAIL_USE_TLS", False)
+                else "Plain"
+            ) if smtp_configured else "Disabled",
+            "from_email": getattr(settings, "DEFAULT_FROM_EMAIL", ""),
+        },
+        "test_recipient": request.user.email or "",
+    }
+    if request.method == "GET":
+        return JsonResponse({"settings": payload})
+
+    if not smtp_configured:
+        return _error("SMTP is not configured. Set EMAIL_HOST and related email settings first.", status=409)
+    if not request.user.email:
+        return _error("Add an email address to your administrator account before sending a test email.")
+
+    try:
+        send_mail(
+            subject="MakerVault email test",
+            message=(
+                "This is a MakerVault SMTP test. If you received this message, "
+                "password-reset email delivery is configured correctly."
+            ),
+            from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+            recipient_list=[request.user.email],
+            fail_silently=False,
+        )
+    except Exception:
+        return _error("MakerVault could not send the test email. Check the SMTP host, port, credentials and TLS/SSL settings.", status=502)
+
+    return JsonResponse({
+        "sent": True,
+        "recipient": request.user.email,
+        "message": "Test email sent. Check the administrator account inbox.",
+        "settings": payload,
     })
 
 

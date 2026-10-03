@@ -2,6 +2,7 @@
 
 ## Unreleased — v1.0 recovery verification
 
+- Add account onboarding visibility for local sign-up and SMTP-backed password recovery, including sign-up/reset links in the account shell and a superuser SMTP test action under Users & storage.
 - Add a Firefox compatibility relay for Creality K2 WebRTC cameras using a pinned, restricted go2rtc process inside the existing MakerVault container; Chromium/WebKit keep the direct camera path and Docker remains a three-service deployment.
 - Project cover/gallery uploads now accept JPEG/JPG variants (including MPO-style phone JPEGs), PNG, WebP, HEIF and HEIC; images are orientation-corrected and normalised to WebP for safe browser display.
 - Improve camera source management: saved sources are disambiguated by feed type/endpoint, identical saves update instead of duplicating, and removal uses a dedicated source action.

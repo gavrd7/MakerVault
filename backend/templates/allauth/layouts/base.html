@@ -15,9 +15,12 @@
 {% block body %}
   <div class="account-shell">
     <aside class="account-sidebar">
-      <a class="account-brand" href="/">
-        <span class="account-brandmark">M</span>
-        <span><strong>MakerVault</strong><small>Account &amp; security</small></span>
+      <a class="account-brand" href="/" aria-label="MakerVault home">
+        <img class="account-brand-logo" src="{% static 'core/makervault-logo.jpg' %}" alt="MakerVault" onerror="this.hidden=true;this.nextElementSibling.hidden=false;">
+        <span class="account-brand-fallback" hidden>
+          <span class="account-brandmark">M</span>
+          <span><strong>MakerVault</strong><small>Account &amp; security</small></span>
+        </span>
       </a>
 
       {% if user.is_authenticated %}
@@ -42,10 +45,18 @@
         {% if logout_url_ %}<a href="{{ logout_url_ }}">Sign out</a>{% endif %}
       </div>
       {% else %}
-      <nav class="account-nav">
+      <nav class="account-nav" aria-label="Account access">
         <a href="/" class="account-back">← MakerVault</a>
         {% url 'account_login' as login_url_ %}
         {% if login_url_ %}<a href="{{ login_url_ }}">Sign in</a>{% endif %}
+        {% if makervault_local_registration %}
+          {% url 'account_signup' as signup_url_ %}
+          {% if signup_url_ %}<a href="{{ signup_url_ }}">Create account</a>{% endif %}
+        {% endif %}
+        {% if makervault_email_enabled %}
+          {% url 'account_reset_password' as reset_url_ %}
+          {% if reset_url_ %}<a href="{{ reset_url_ }}">Forgot password?</a>{% endif %}
+        {% endif %}
       </nav>
       {% endif %}
     </aside>

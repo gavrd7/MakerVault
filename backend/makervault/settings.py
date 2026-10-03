@@ -121,6 +121,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "core.context_processors.account_capabilities",
             ]
         },
     }
@@ -160,7 +161,7 @@ AUTHENTICATION_BACKENDS = [
 ACCOUNT_ADAPTER = "core.adapters.MakerVaultAccountAdapter"
 SOCIALACCOUNT_ADAPTER = "core.adapters.MakerVaultSocialAccountAdapter"
 ACCOUNT_LOGIN_METHODS = {"username", "email"}
-ACCOUNT_SIGNUP_FIELDS = ["username*", "email", "password1*", "password2*"]
+ACCOUNT_SIGNUP_FIELDS = ["username*", "email*", "password1*", "password2*"]
 ACCOUNT_EMAIL_VERIFICATION = "optional"
 ACCOUNT_LOGOUT_ON_GET = False
 ACCOUNT_PREVENT_ENUMERATION = True
@@ -208,7 +209,11 @@ if EMAIL_HOST:
     EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
     EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
     EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
-    EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
+    EMAIL_USE_SSL = env_bool("EMAIL_USE_SSL", False)
+    EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", not EMAIL_USE_SSL)
+    if EMAIL_USE_SSL and EMAIL_USE_TLS:
+        raise ImproperlyConfigured("EMAIL_USE_SSL and EMAIL_USE_TLS cannot both be true.")
+    EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "15"))
 else:
     EMAIL_BACKEND = "django.core.mail.backends.dummy.EmailBackend"
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "MakerVault <makervault@localhost>")
