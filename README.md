@@ -1,12 +1,59 @@
-# MakerVault
+<p align="center">
+  <img src="docs/guide/assets/makervault-logo.jpg" alt="MakerVault logo" width="180">
+</p>
 
-**Your workshop, organised.**
+<h1 align="center">MakerVault</h1>
 
-MakerVault is a self-hosted application for electronics inventory, projects, files and 3D printing. Keep track of what you own, what a build needs, which revision you printed and where the finished parts belong.
+<p align="center"><strong>Your workshop, organised.</strong></p>
 
-**Current stable release: v1.0.0**
+<p align="center">
+  A self-hosted workspace for electronics inventory, projects, files and 3D printing.
+</p>
 
-[User guide](docs/guide/index.md) · [Installation](docs/guide/getting-started/install.md) · [Roadmap](docs/ROADMAP.md) · [Changelog](CHANGELOG.md)
+<p align="center">
+  <strong>Current stable release: v1.0.0</strong>
+</p>
+
+<p align="center">
+  <a href="docs/guide/index.md">User guide</a> ·
+  <a href="docs/guide/getting-started/install.md">Installation</a> ·
+  <a href="docs/ROADMAP.md">Roadmap</a> ·
+  <a href="CHANGELOG.md">Changelog</a>
+</p>
+
+MakerVault keeps the practical parts of a workshop connected: what you own, what a build needs, which files and wiring belong to it, which model revision you printed, and where the finished parts ended up.
+
+## A look at MakerVault
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/gavrd7/MakerVault-docs/main/docs/guide/assets/screenshots/dashboard-overview.png" alt="MakerVault dashboard" width="92%">
+</p>
+
+<p align="center"><em>Dashboard overview — projects, inventory, printing and workshop activity in one place.</em></p>
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="https://raw.githubusercontent.com/gavrd7/MakerVault-docs/main/docs/guide/assets/screenshots/printing-overview.png" alt="MakerVault 3D printing overview">
+      <br><strong>3D printing</strong><br>
+      Printers, spools, models, live integrations and print history.
+    </td>
+    <td width="50%" valign="top">
+      <img src="https://raw.githubusercontent.com/gavrd7/MakerVault-docs/main/docs/guide/assets/screenshots/interactive-wiring.png" alt="MakerVault Interactive Wiring">
+      <br><strong>Interactive Wiring</strong><br>
+      Build diagrams with catalogue-aware pins and electrical checks.
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center">
+      <img src="https://raw.githubusercontent.com/gavrd7/MakerVault-docs/main/docs/guide/assets/screenshots/settings-https-certificates.png" alt="MakerVault HTTPS and certificate settings" width="92%">
+      <br><strong>Self-hosting without hiding the hard parts</strong><br>
+      Native HTTPS, Local CA guidance, backups, recovery and security settings are built into the application.
+    </td>
+  </tr>
+</table>
+
+> The screenshots above come from the public, sanitised MakerVault user guide. See the [full guide](https://gavrd7.github.io/MakerVault-docs/) for walkthroughs and more screenshots.
 
 ## What you can do
 
