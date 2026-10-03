@@ -32,19 +32,19 @@ class LocalHttpsCertificateTests(TestCase):
         self.addCleanup(self.env.stop)
 
     def test_generate_local_ca_and_server_certificate(self):
-        result = generate_local_certificate(["192.168.1.125", "makervault.local"])
-        self.assertIn("192.168.1.125", result["hosts"])
+        result = generate_local_certificate(["192.168.1.50", "makervault.local"])
+        self.assertIn("192.168.1.50", result["hosts"])
         self.assertTrue(paths()["ca_cert"].is_file())
         self.assertTrue(paths()["ca_key"].is_file())
         self.assertTrue(paths()["server_cert"].is_file())
         self.assertTrue(paths()["server_key"].is_file())
         server = x509.load_pem_x509_certificate(paths()["server_cert"].read_bytes())
         sans = server.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
-        self.assertIn("192.168.1.125", [str(value) for value in sans.get_values_for_type(x509.IPAddress)])
+        self.assertIn("192.168.1.50", [str(value) for value in sans.get_values_for_type(x509.IPAddress)])
         self.assertIn("makervault.local", sans.get_values_for_type(x509.DNSName))
 
     def test_reissue_reuses_existing_ca(self):
-        generate_local_certificate(["192.168.1.125"])
+        generate_local_certificate(["192.168.1.50"])
         first_ca = paths()["ca_cert"].read_bytes()
         first_server = paths()["server_cert"].read_bytes()
         generate_local_certificate(["192.168.1.126"])
@@ -52,11 +52,11 @@ class LocalHttpsCertificateTests(TestCase):
         self.assertNotEqual(paths()["server_cert"].read_bytes(), first_server)
 
     def test_status_reports_native_url(self):
-        generate_local_certificate(["192.168.1.125"])
-        status = certificate_status("192.168.1.125:8765")
+        generate_local_certificate(["192.168.1.50"])
+        status = certificate_status("192.168.1.50:8765")
         self.assertTrue(status["local_ca_available"])
         self.assertTrue(status["server_certificate_available"])
-        self.assertEqual(status["native_url"], "https://192.168.1.125:8443")
+        self.assertEqual(status["native_url"], "https://192.168.1.50:8443")
         self.assertTrue(status["current_host_private"])
 
 
@@ -88,7 +88,7 @@ class HttpsCertificateApiTests(TestCase):
         self.client.force_login(self.admin)
         response = self.client.post(
             "/api/settings/https/generate-local/",
-            data='{"hosts":["192.168.1.125"]}',
+            data='{"hosts":["192.168.1.50"]}',
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 200)
@@ -107,7 +107,7 @@ class HttpsCertificateApiTests(TestCase):
             self.assertEqual(response.status_code, 403)
         response = self.client.post(
             "/api/settings/https/generate-local/",
-            data='{"hosts":["192.168.1.125"]}',
+            data='{"hosts":["192.168.1.50"]}',
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 403)
