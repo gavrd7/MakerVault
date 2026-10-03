@@ -386,7 +386,7 @@ function ProjectCoverModal({ project, onClose, onSaved }) {
   return <Modal title="Project cover" onClose={onClose}>
     {error && <div className="formError">{error}</div>}
     {project.cover_image && <img className="projectCoverPreview" src={project.cover_image} alt="" />}
-    <form onSubmit={upload} className="imageSourceBox"><input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => setFile(e.target.files?.[0] || null)} /><button className="primary" disabled={!file || busy}>Upload cover</button></form>
+    <form onSubmit={upload} className="imageSourceBox"><input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.JPG,.JPEG,.png,.PNG,.webp,.WEBP,.heic,.HEIC,.heif,.HEIF" onChange={e => setFile(e.target.files?.[0] || null)} /><small>JPEG/JPG, PNG, WebP, HEIF and HEIC are supported. MakerVault converts uploads to WebP for display.</small><button className="primary" disabled={!file || busy}>Upload cover</button></form>
     {project.cover_image && <button className="dangerButton" disabled={busy} onClick={remove}>Remove cover</button>}
   </Modal>;
 }
@@ -410,7 +410,7 @@ function ProjectGalleryModal({ project, onClose, onSaved }) {
   return <Modal title="Add project photo" onClose={onClose}>
     <form onSubmit={upload} className="formGrid">
       {error && <div className="formError full">{error}</div>}
-      <label className="full">Image<input type="file" required accept="image/jpeg,image/png,image/webp" onChange={e => setFile(e.target.files?.[0] || null)} /></label>
+      <label className="full">Image<input type="file" required accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.JPG,.JPEG,.png,.PNG,.webp,.WEBP,.heic,.HEIC,.heif,.HEIF" onChange={e => setFile(e.target.files?.[0] || null)} /><small>JPEG/JPG, PNG, WebP, HEIF and HEIC are supported. MakerVault converts uploads to WebP for display.</small></label>
       <label className="full">Name<input value={name} onChange={e => setName(e.target.value)} /></label>
       <label className="full">Description<textarea rows="3" value={description} onChange={e => setDescription(e.target.value)} /></label>
       <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={!file || busy}>{busy ? "Uploading…" : "Add photo"}</button></div>

@@ -1,4 +1,5 @@
 import hashlib
+import io
 import shutil
 import tempfile
 from pathlib import Path
@@ -6,6 +7,8 @@ from pathlib import Path
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
+from PIL import Image
+from pillow_heif import register_heif_opener
 
 from core.models import FileAsset, Project, RepositoryLink
 
@@ -25,6 +28,54 @@ class ProjectAssetApiTests(TestCase):
         )
         self.client.force_login(self.user)
         self.project = Project.objects.create(owner=self.user, name="Desk speaker", created_by=self.user)
+
+    def test_project_cover_accepts_uppercase_jpg_and_stores_webp(self):
+        source = io.BytesIO()
+        Image.new("RGB", (96, 64), (30, 60, 90)).save(source, format="JPEG", quality=90)
+        response = self.client.post(
+            f"/api/projects/{self.project.id}/cover/",
+            {
+                "image": SimpleUploadedFile(
+                    "IMG_0290.JPG",
+                    source.getvalue(),
+                    content_type="image/jpeg",
+                )
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.project.refresh_from_db()
+        self.project.cover_image.open("rb")
+        try:
+            stored = Image.open(io.BytesIO(self.project.cover_image.read()))
+            self.assertEqual(stored.format, "WEBP")
+        finally:
+            self.project.cover_image.close()
+
+    def test_project_gallery_accepts_heic_and_stores_webp(self):
+        register_heif_opener()
+        source = io.BytesIO()
+        Image.new("RGB", (80, 60), (90, 60, 30)).save(source, format="HEIF", quality=85)
+        response = self.client.post(
+            f"/api/projects/{self.project.id}/gallery/",
+            {
+                "image": SimpleUploadedFile(
+                    "workbench.HEIC",
+                    source.getvalue(),
+                    content_type="image/heic",
+                ),
+                "name": "Workbench",
+                "description": "HEIC project photo",
+            },
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        asset = FileAsset.objects.get(project=self.project, category="image")
+        asset.file.open("rb")
+        try:
+            stored = Image.open(io.BytesIO(asset.file.read()))
+            self.assertEqual(stored.format, "WEBP")
+        finally:
+            asset.file.close()
+        self.assertEqual(asset.name, "Workbench")
 
     def test_project_file_upload_is_classified_hashed_and_returned_in_detail(self):
         payload = b"void setup() {}\nvoid loop() {}\n"
