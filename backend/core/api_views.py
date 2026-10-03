@@ -52,6 +52,12 @@ from .tasks import queue_catalogue_maintenance_now
 from .storage_usage import StorageQuotaExceeded, ensure_storage_capacity, storage_settings, storage_summary
 from .user_admin import admin_user_summary, purge_user_private_data
 from .private_storage import private_storage_key_status
+from .https_certificates import (
+    CertificateError,
+    certificate_status,
+    generate_local_certificate,
+    paths as https_certificate_paths,
+)
 from .backups import (
     BackupServiceError,
     backup_in_progress,
@@ -1467,6 +1473,77 @@ def admin_account_onboarding(request):
         "settings": payload,
     })
 
+
+
+
+@login_required
+@require_http_methods(["GET"])
+def admin_https_settings(request):
+    denied = _superuser_required(request)
+    if denied:
+        return denied
+    return JsonResponse({"https": certificate_status(request.get_host())})
+
+
+@login_required
+@require_http_methods(["POST"])
+def admin_https_generate_local(request):
+    denied = _superuser_required(request)
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        requested = payload.get("hosts")
+        if requested is None:
+            requested = [request.get_host()]
+        if not isinstance(requested, list):
+            return _error("hosts must be a list of host names or IPv4 addresses.")
+        result = generate_local_certificate([str(item) for item in requested])
+        return JsonResponse({
+            "generated": True,
+            "certificate": result,
+            "https": certificate_status(request.get_host()),
+        })
+    except (CertificateError, ValueError) as exc:
+        return _error(str(exc))
+
+
+@login_required
+@require_http_methods(["GET"])
+def admin_https_download_ca(request):
+    denied = _superuser_required(request)
+    if denied:
+        return denied
+    path = https_certificate_paths()["ca_cert"]
+    if not path.is_file():
+        return _error("No MakerVault local CA certificate has been generated.", status=404)
+    response = FileResponse(
+        path.open("rb"),
+        as_attachment=True,
+        filename="MakerVault-Local-CA.crt",
+        content_type="application/x-x509-ca-cert",
+    )
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+@login_required
+@require_http_methods(["GET"])
+def admin_https_download_server_cert(request):
+    denied = _superuser_required(request)
+    if denied:
+        return denied
+    path = https_certificate_paths()["server_cert"]
+    if not path.is_file():
+        return _error("No MakerVault server certificate is available.", status=404)
+    response = FileResponse(
+        path.open("rb"),
+        as_attachment=True,
+        filename="MakerVault-server-certificate.pem",
+        content_type="application/x-pem-file",
+    )
+    response["Cache-Control"] = "no-store"
+    return response
 
 @login_required
 @require_http_methods(["GET"])
