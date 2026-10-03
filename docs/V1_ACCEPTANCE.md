@@ -45,7 +45,7 @@ Do not treat switching application code backwards as a database rollback.
 
 A managed backup from a representative real MakerVault installation was downloaded and restored on a separate clean Debian host using the guarded off-server recovery helper. The restored deployment passed `v1_release_preflight`, `verify_private_storage` and `audit_private_ownership --fail-on-issues`; the restored application was opened successfully after adjusting the recovered allowed-host/origin values for the replacement host.
 
-Recovery preserved the database, media and AES-256 private-storage key together. The private-file audit reported 3 referenced private files checked, 0 legacy files and 0 failures. The ownership audit reported no unowned records and no relationship ownership mismatches.
+Recovery preserved the database, media and AES-256 private-storage key together. The private-file audit reported 3 referenced private files checked, 0 legacy files and 0 failures. The ownership audit reported no unowned records and no relationship ownership mismatches. The rehearsal also identified that a replacement host needs its new address in Django's allowed-host/origin configuration; the release-candidate restore helper now adapts a recovered `.env` automatically for the detected replacement-host IPv4 address while retaining the original values.
 
 Rehearsal procedure retained below for future releases:
 
