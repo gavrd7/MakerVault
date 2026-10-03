@@ -18,7 +18,7 @@ Read logs before sharing them. Redact credentials, tokens, sensitive hostnames a
 
 | Symptom | Check first | Next action |
 | --- | --- | --- |
-| Repository not found / 404 | Private repository access and correct URL | Authenticate an authorised GitHub account; request access from the maintainer |
+| Repository not found / 404 | Repository URL, network access and Git availability | Confirm `https://github.com/gavrd7/MakerVault` is reachable and retry the clone with the documented public URL |
 | `docker compose` not found | Compose plugin installation | Follow the official Docker instructions for your OS |
 | Cannot connect to Docker | Docker service and permissions | Try the documented `sudo docker` commands; check Docker is running |
 | Port already allocated | Another program/container uses the host port | Choose another `MAKERVAULT_PORT`, update origins and browser URL, then recreate |
