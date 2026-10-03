@@ -92,6 +92,7 @@ urlpatterns = [
     path("settings/backups/<str:backup_id>/download/", api_views.admin_backup_download, name="api-admin-backup-download"),
     path("settings/backups/<str:backup_id>/", api_views.admin_backup_delete, name="api-admin-backup-delete"),
     path("settings/storage-policy/", api_views.admin_storage_policy, name="api-admin-storage-policy"),
+    path("settings/account-onboarding/", api_views.admin_account_onboarding, name="api-admin-account-onboarding"),
     path("settings/users/", api_views.admin_users, name="api-admin-users"),
     path("settings/users/<int:user_id>/", api_views.admin_user_detail, name="api-admin-user-detail"),
     path("settings/users/<int:user_id>/purge/", api_views.admin_user_purge, name="api-admin-user-purge"),

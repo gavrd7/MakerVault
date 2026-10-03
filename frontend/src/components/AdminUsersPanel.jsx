@@ -28,6 +28,7 @@ function quotaLabel(user) {
 export default function AdminUsersPanel({ config }) {
   const [users, setUsers] = useState(null);
   const [policy, setPolicy] = useState(null);
+  const [onboarding, setOnboarding] = useState(null);
   const [defaultQuotaGiB, setDefaultQuotaGiB] = useState("10");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -36,12 +37,14 @@ export default function AdminUsersPanel({ config }) {
 
   async function load() {
     setError("");
-    const [userResult, policyResult] = await Promise.all([
+    const [userResult, policyResult, onboardingResult] = await Promise.all([
       apiFetch("/api/settings/users/"),
       apiFetch("/api/settings/storage-policy/"),
+      apiFetch("/api/settings/account-onboarding/"),
     ]);
     setUsers(userResult.rows || []);
     setPolicy(policyResult.policy);
+    setOnboarding(onboardingResult.settings);
     setDefaultQuotaGiB(String(Number(policyResult.policy.default_quota_bytes || 0) / GIB));
   }
 
@@ -57,6 +60,19 @@ export default function AdminUsersPanel({ config }) {
       used: rows.reduce((sum, row) => sum + Number(row.storage?.used_bytes || 0), 0),
     };
   }, [users]);
+
+  async function sendTestEmail() {
+    setBusy("smtp-test"); setError(""); setNotice("");
+    try {
+      const result = await apiFetch("/api/settings/account-onboarding/", { method: "POST", body: {} });
+      setOnboarding(result.settings);
+      setNotice(result.message || "Test email sent.");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy("");
+    }
+  }
 
   async function savePolicy(event) {
     event.preventDefault();
@@ -148,11 +164,47 @@ export default function AdminUsersPanel({ config }) {
   if (!config?.is_superuser) {
     return <section className="empty"><div className="emptyIcon">◇</div><h2>Superuser access required</h2><p>Account and storage administration is restricted to MakerVault superusers.</p></section>;
   }
-  if (!users || !policy) return <LoadingBlock label="Loading users and storage…" />;
+  if (!users || !policy || !onboarding) return <LoadingBlock label="Loading users and storage…" />;
 
   return <>
     {error && <div className="error">{error}</div>}
     {notice && <div className="notice">{notice}<button onClick={() => setNotice("")}>×</button></div>}
+
+    <section className="panel settingsPanel adminAccountOnboarding">
+      <div className="panelHead">
+        <div>
+          <h3>Account onboarding</h3>
+          <p>Check whether local sign-up and password recovery are ready before publishing access instructions.</p>
+        </div>
+        <div className="adminUserBadges">
+          <Badge tone={onboarding.local_registration_enabled ? "good" : "neutral"}>{onboarding.local_registration_enabled ? "Local sign-up enabled" : "Local sign-up disabled"}</Badge>
+          <Badge tone={onboarding.password_reset_available ? "good" : "neutral"}>{onboarding.password_reset_available ? "Password reset ready" : "SMTP not configured"}</Badge>
+        </div>
+      </div>
+      <div className="settingsForm">
+        <div className="settingsTimes">
+          <div>
+            <span>Self-service sign-up</span>
+            <strong>{onboarding.local_registration_enabled ? "Available" : "Disabled"}</strong>
+            <small>{onboarding.local_registration_enabled ? "New users can create a local MakerVault account." : "Set ALLOW_LOCAL_REGISTRATION=true in .env to enable it."}</small>
+          </div>
+          <div>
+            <span>Email recovery</span>
+            <strong>{onboarding.password_reset_available ? "Available" : "Disabled"}</strong>
+            <small>{onboarding.smtp_configured ? (onboarding.smtp.host + ":" + onboarding.smtp.port + " · " + onboarding.smtp.transport) : "Configure EMAIL_HOST and the SMTP settings in .env."}</small>
+          </div>
+        </div>
+        {onboarding.smtp_configured && <div className="settingsCallout">
+          <strong>SMTP sender</strong>
+          <p>{onboarding.smtp.from_email || "Default sender"}{onboarding.test_recipient ? " · Test recipient " + onboarding.test_recipient : " · Add an email address to this administrator account before testing."}</p>
+        </div>}
+        <div className="settingsActions">
+          {onboarding.local_registration_enabled && <a className="buttonLink" href={onboarding.signup_url} target="_blank" rel="noreferrer">Open sign-up page</a>}
+          {onboarding.password_reset_available && <a className="buttonLink" href={onboarding.password_reset_url} target="_blank" rel="noreferrer">Open password reset</a>}
+          <button type="button" disabled={!onboarding.smtp_configured || !onboarding.test_recipient || busy === "smtp-test"} onClick={sendTestEmail}>{busy === "smtp-test" ? "Sending…" : "Send test email"}</button>
+        </div>
+      </div>
+    </section>
 
     <section className="panel settingsPanel adminStoragePolicy">
       <div className="panelHead">

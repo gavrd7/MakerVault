@@ -14,8 +14,10 @@ button,input,select,textarea{font:inherit}
   border-right:1px solid #242b35;background:#10161e;
   display:flex;flex-direction:column;gap:26px
 }
-.account-brand{display:flex;align-items:center;gap:12px;padding:0 8px;color:#eef3fb}
+.account-brand{display:flex;align-items:center;padding:0 8px;color:#eef3fb}
 .account-brand:hover{color:#fff}
+.account-brand-logo{display:block;width:min(190px,100%);height:auto;border-radius:10px;background:#fff}
+.account-brand-fallback{display:flex;align-items:center;gap:12px}
 .account-brandmark{
   width:40px;height:40px;border-radius:12px;display:grid;place-items:center;
   background:#7c5cff;color:#fff;font-weight:800
@@ -101,7 +103,8 @@ button,input,select,textarea{font:inherit}
     position:static;height:auto;border-right:0;border-bottom:1px solid #242b35;
     padding:14px 16px;gap:12px
   }
-  .account-brand{display:none}
+  .account-brand{display:flex;justify-content:center;padding:0}
+  .account-brand-logo{width:min(180px,70vw)}
   .account-nav{display:flex;overflow:auto;gap:6px;padding-bottom:2px}
   .account-nav a{white-space:nowrap}
   .account-sidebar-footer{display:none}
