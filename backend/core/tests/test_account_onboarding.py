@@ -83,7 +83,14 @@ class AccountOnboardingApiTests(TestCase):
         send_mail.assert_not_called()
 
 
-    @override_settings(ALLOW_LOCAL_REGISTRATION=True, EMAIL_HOST="smtp.example.test")
+    @override_settings(
+        ALLOW_LOCAL_REGISTRATION=True,
+        EMAIL_HOST="smtp.example.test",
+        STORAGES={
+            "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+            "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+        },
+    )
     def test_account_entry_pages_use_makervault_logo(self):
         self.client.logout()
         for url in (
