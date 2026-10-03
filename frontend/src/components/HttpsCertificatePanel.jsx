@@ -20,6 +20,58 @@ function CertSummary({ title, cert }) {
   </div>;
 }
 
+function TrustInstructions() {
+  return <div className="httpsTrustHelp">
+    <div className="httpsTrustHelpIntro">
+      <strong>Trust the MakerVault Local CA on this device</strong>
+      <p>The downloaded CA certificate is public and safe to install on devices you control. Never copy or export the Local CA private key from the MakerVault server.</p>
+    </div>
+    <div className="httpsTrustPlatforms">
+      <details>
+        <summary>iPhone / iPad</summary>
+        <ol>
+          <li>Download <strong>MakerVault Local CA</strong> from this page and open the downloaded certificate.</li>
+          <li>Install the downloaded configuration profile when iOS/iPadOS prompts you.</li>
+          <li>Open <strong>Settings → General → About → Certificate Trust Settings</strong>.</li>
+          <li>Enable full trust for <strong>MakerVault Local CA</strong>, then return to the HTTPS address and reload it.</li>
+        </ol>
+      </details>
+      <details>
+        <summary>Windows</summary>
+        <ol>
+          <li>Download the CA certificate and open it.</li>
+          <li>Choose <strong>Install Certificate</strong> and place it in <strong>Trusted Root Certification Authorities</strong> for the intended user or computer.</li>
+          <li>Close and reopen the browser, then open MakerVault's HTTPS address again.</li>
+        </ol>
+      </details>
+      <details>
+        <summary>macOS</summary>
+        <ol>
+          <li>Download the CA certificate and add it to Keychain Access.</li>
+          <li>Open the imported <strong>MakerVault Local CA</strong> certificate and set its trust to <strong>Always Trust</strong>.</li>
+          <li>Authenticate the change when macOS asks, then reopen the browser.</li>
+        </ol>
+      </details>
+      <details>
+        <summary>Android</summary>
+        <ol>
+          <li>Download the CA certificate to the device.</li>
+          <li>Use Android's security/credentials settings to install a <strong>CA certificate</strong>. Menu wording varies by manufacturer and Android version.</li>
+          <li>Return to the browser and reload MakerVault's HTTPS address.</li>
+        </ol>
+      </details>
+      <details>
+        <summary>Linux</summary>
+        <ol>
+          <li>Download the CA certificate.</li>
+          <li>On Debian/Ubuntu-family systems, copy it to <code>/usr/local/share/ca-certificates/MakerVault-Local-CA.crt</code> and run <code>sudo update-ca-certificates</code>.</li>
+          <li>Restart the browser. If a browser uses its own certificate store, import the CA there as a trusted authority too.</li>
+        </ol>
+      </details>
+    </div>
+  </div>;
+}
+
 export default function HttpsCertificatePanel() {
   const [state, setState] = useState(null);
   const [hosts, setHosts] = useState("");
@@ -50,7 +102,7 @@ export default function HttpsCertificatePanel() {
         body: { hosts: hostList },
       });
       setState(result.https);
-      setNotice("Local HTTPS certificate generated. The native HTTPS listener will start automatically when its certificate becomes available.");
+      setNotice("Local HTTPS certificate generated. Next, download and trust the MakerVault Local CA on this device before opening native HTTPS.");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -113,16 +165,56 @@ export default function HttpsCertificatePanel() {
 
     <div className="settingsCallout">
       <strong>Before generating</strong>
-      <p>The local CA private key stays inside MakerVault TLS storage and is included in managed v3+ backups. Only the public CA certificate and server certificate can be downloaded from the GUI. Browsers must trust the CA certificate before they will show the local HTTPS connection as trusted.</p>
+      <p>The Local CA private key stays inside MakerVault key storage and is included in managed v3+ backups. Only public certificates can be downloaded from the GUI. Generating a certificate enables encrypted HTTPS; trusting the Local CA on each client removes the browser's untrusted-certificate warning.</p>
     </div>
 
-    <div className="settingsActions">
-      <button className="primary" type="button" onClick={generateLocal} disabled={busy || hostList.length === 0}>
-        {busy ? "Generating…" : state.local_ca_available ? "Reissue local certificate" : "Generate local HTTPS certificate"}
-      </button>
-      {state.local_ca_available && <a className="account-button" href="/api/settings/https/download-ca/">Download CA certificate</a>}
+    <div className="httpsSetupFlow" aria-label="Local HTTPS setup steps">
+      <article className={state.server_certificate_available ? "httpsSetupStep complete" : "httpsSetupStep current"}>
+        <span className="httpsStepNumber">1</span>
+        <div>
+          <h4>Generate</h4>
+          <p>Create or reissue a server certificate for the addresses you use to reach MakerVault.</p>
+          <button className="primary" type="button" onClick={generateLocal} disabled={busy || hostList.length === 0}>
+            {busy ? "Generating…" : state.local_ca_available ? "Reissue local certificate" : "Generate local HTTPS certificate"}
+          </button>
+        </div>
+      </article>
+
+      <article className={state.local_ca_available ? "httpsSetupStep current" : "httpsSetupStep"}>
+        <span className="httpsStepNumber">2</span>
+        <div>
+          <h4>Download the Local CA</h4>
+          <p>This is the public trust certificate for devices that should recognise your MakerVault HTTPS identity.</p>
+          {state.local_ca_available
+            ? <a className="account-button" href="/api/settings/https/download-ca/">Download MakerVault Local CA</a>
+            : <small>Generate the local certificate first.</small>}
+        </div>
+      </article>
+
+      <article className={state.local_ca_available ? "httpsSetupStep current" : "httpsSetupStep"}>
+        <span className="httpsStepNumber">3</span>
+        <div>
+          <h4>Trust it on this device</h4>
+          <p>Install the downloaded CA into this device's trusted root store. This is the step that removes the browser warning.</p>
+        </div>
+      </article>
+
+      <article className={state.server_certificate_available ? "httpsSetupStep current" : "httpsSetupStep"}>
+        <span className="httpsStepNumber">4</span>
+        <div>
+          <h4>Open HTTPS</h4>
+          <p>After trusting the CA, open MakerVault on its native HTTPS port and confirm the browser shows a trusted connection.</p>
+          {state.native_url && state.server_certificate_available
+            ? <a className="account-button" href={state.native_url} target="_blank" rel="noreferrer">Open native HTTPS</a>
+            : <small>The HTTPS link appears after a server certificate is available.</small>}
+        </div>
+      </article>
+    </div>
+
+    {state.local_ca_available && <TrustInstructions />}
+
+    <div className="settingsActions httpsSecondaryActions">
       {state.server_certificate_available && <a className="account-button" href="/api/settings/https/download-server-cert/">Download server certificate</a>}
-      {state.native_url && state.server_certificate_available && <a className="account-button" href={state.native_url} target="_blank" rel="noreferrer">Open native HTTPS</a>}
     </div>
 
     <div className="httpsCertGrid">
