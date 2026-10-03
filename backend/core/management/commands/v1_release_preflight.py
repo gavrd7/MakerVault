@@ -1,4 +1,5 @@
 import os
+import ssl
 import tempfile
 from pathlib import Path
 
@@ -68,6 +69,20 @@ class Command(BaseCommand):
         record("Private storage key", key_check)
         record("Media storage", lambda: writable_directory(settings.MEDIA_ROOT, "media"))
         record("Backup storage", lambda: writable_directory(settings.MAKERVAULT_BACKUP_ROOT, "backup"))
+
+        def native_https_check():
+            enabled = os.getenv("MAKERVAULT_HTTPS_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+            if not enabled:
+                return "disabled"
+            cert = Path(os.getenv("MAKERVAULT_TLS_CERT_FILE", "/app/tls/cert.pem"))
+            key = Path(os.getenv("MAKERVAULT_TLS_KEY_FILE", "/app/tls/key.pem"))
+            if not cert.is_file() or not key.is_file():
+                raise RuntimeError("enabled but certificate/key are missing")
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            context.load_cert_chain(certfile=cert, keyfile=key)
+            return f"certificate/key load successfully ({cert})"
+
+        record("Native HTTPS", native_https_check)
 
         if not settings.DEBUG and len(settings.SECRET_KEY) < 32:
             failures.append("Django secret")
