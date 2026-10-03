@@ -12,6 +12,25 @@ The wizard presents three deployment paths:
 
 With `MAKERVAULT_HTTPS_ENABLED=auto` (the default), the native HTTPS process waits until a valid certificate appears in key storage. Generating a local certificate from Settings therefore brings the separate HTTPS listener online without disabling the normal HTTP/reverse-proxy listener.
 
+
+### Trust the MakerVault Local CA on client devices
+
+The Local CA download is a **public certificate**. Install it only on devices you control and that should trust this MakerVault instance. The Local CA private key remains inside MakerVault key storage and is never offered for download.
+
+The HTTPS wizard now presents the local flow as four explicit steps: **Generate → Download Local CA → Trust it on this device → Open HTTPS**.
+
+For iPhone and iPad:
+
+1. Tap **Download MakerVault Local CA** in **Settings → HTTPS & certificates** and open the downloaded certificate/profile.
+2. Install the downloaded profile when iOS/iPadOS prompts you. If needed, find it under **Settings → General → VPN & Device Management**.
+3. Open **Settings → General → About → Certificate Trust Settings**.
+4. Under **Enable Full Trust for Root Certificates**, enable **MakerVault Local CA** and confirm.
+5. Reopen the browser and load MakerVault's HTTPS address again.
+
+For Windows, install the downloaded CA into **Trusted Root Certification Authorities** for the intended user/computer. On macOS, add it to Keychain Access and mark it trusted. On Android, use the device's security/credentials settings to install it as a CA certificate; menu wording varies by vendor/version. On Debian/Ubuntu-family Linux systems, copy it to `/usr/local/share/ca-certificates/MakerVault-Local-CA.crt` and run `sudo update-ca-certificates`; browsers with their own certificate store may also require an import.
+
+You do **not** need to install the downloadable server certificate on each client. Trusting the Local CA is what lets clients trust future MakerVault server certificates issued by that same CA.
+
 **Advanced · Optional for local use**
 
 A reverse proxy accepts requests at your domain, handles HTTPS and forwards them to MakerVault. A certificate makes the browser's connection encrypted. DNS maps the domain to the address serving it.
