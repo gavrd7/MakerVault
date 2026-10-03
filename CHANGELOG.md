@@ -2,6 +2,7 @@
 
 ## Unreleased — v1.0 recovery verification
 
+- Project cover/gallery uploads now accept JPEG/JPG variants (including MPO-style phone JPEGs), PNG, WebP, HEIF and HEIC; images are orientation-corrected and normalised to WebP for safe browser display.
 - Improve camera source management: saved sources are disambiguated by feed type/endpoint, identical saves update instead of duplicating, and removal uses a dedicated source action.
 - Add a superuser **Backup & restore** workspace for one-click managed backups, verification, download, deletion and recovery guidance, with automatic completion/failure feedback on the page and a global toast that survives navigation.
 - Add managed backup creation inside the existing MakerVault worker with no Docker socket; web writes become briefly read-only and scheduled background mutations defer while database/media/key/configuration are captured into one `.mvbackup` bundle.

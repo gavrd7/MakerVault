@@ -11,14 +11,17 @@ from urllib.parse import urljoin, urlparse
 import requests
 from django.core.files.base import ContentFile
 from django.utils import timezone
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
+from pillow_heif import register_heif_opener
 
+
+register_heif_opener()
 
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 MAX_IMAGE_PIXELS = 25_000_000
 MAX_IMAGE_DIMENSION = 1800
-ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
-ALLOWED_PIL_FORMATS = {"JPEG", "PNG", "WEBP"}
+ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"}
+ALLOWED_PIL_FORMATS = {"JPEG", "MPO", "PNG", "WEBP", "HEIF", "HEIC"}
 
 
 class CatalogueImageError(ValueError):
@@ -73,7 +76,7 @@ def _sanitise_image(data: bytes, stem: str = "catalogue-image") -> tuple[Content
     if not data:
         raise CatalogueImageError("The image was empty.")
     if len(data) > MAX_IMAGE_BYTES:
-        raise CatalogueImageError("The image exceeds MakerVault's 8 MiB catalogue-image limit.")
+        raise CatalogueImageError("The image exceeds MakerVault's 8 MiB image limit.")
 
     try:
         with warnings.catch_warnings():
@@ -83,10 +86,11 @@ def _sanitise_image(data: bytes, stem: str = "catalogue-image") -> tuple[Content
             probe.verify()
             fmt = (probe.format or "").upper()
             if fmt not in ALLOWED_PIL_FORMATS:
-                raise CatalogueImageError("Only JPEG, PNG and WebP catalogue images are supported.")
+                raise CatalogueImageError("Only JPEG/JPG, PNG, WebP, HEIF and HEIC images are supported.")
 
             image = Image.open(io.BytesIO(data))
             image.load()
+            image = ImageOps.exif_transpose(image)
     except (UnidentifiedImageError, OSError, Image.DecompressionBombError, Image.DecompressionBombWarning) as exc:
         raise CatalogueImageError("The supplied file is not a safe supported image.") from exc
 
@@ -110,10 +114,10 @@ def _sanitise_image(data: bytes, stem: str = "catalogue-image") -> tuple[Content
 
 def sanitise_uploaded_image(uploaded_file, stem: str) -> tuple[ContentFile, str]:
     if getattr(uploaded_file, "size", 0) > MAX_IMAGE_BYTES:
-        raise CatalogueImageError("The image exceeds MakerVault's 8 MiB catalogue-image limit.")
+        raise CatalogueImageError("The image exceeds MakerVault's 8 MiB image limit.")
     data = uploaded_file.read(MAX_IMAGE_BYTES + 1)
     if len(data) > MAX_IMAGE_BYTES:
-        raise CatalogueImageError("The image exceeds MakerVault's 8 MiB catalogue-image limit.")
+        raise CatalogueImageError("The image exceeds MakerVault's 8 MiB image limit.")
     return _sanitise_image(data, stem)
 
 
@@ -152,12 +156,12 @@ def fetch_public_image(raw_url: str, stem: str) -> tuple[ContentFile, str, str]:
         content_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
         if content_type not in ALLOWED_CONTENT_TYPES:
             response.close()
-            raise CatalogueImageError("The URL did not return a supported JPEG, PNG or WebP image.")
+            raise CatalogueImageError("The URL did not return a supported JPEG/JPG, PNG, WebP, HEIF or HEIC image.")
 
         declared = response.headers.get("Content-Length")
         if declared and declared.isdigit() and int(declared) > MAX_IMAGE_BYTES:
             response.close()
-            raise CatalogueImageError("The image exceeds MakerVault's 8 MiB catalogue-image limit.")
+            raise CatalogueImageError("The image exceeds MakerVault's 8 MiB image limit.")
 
         chunks = []
         total = 0
@@ -167,7 +171,7 @@ def fetch_public_image(raw_url: str, stem: str) -> tuple[ContentFile, str, str]:
             total += len(chunk)
             if total > MAX_IMAGE_BYTES:
                 response.close()
-                raise CatalogueImageError("The image exceeds MakerVault's 8 MiB catalogue-image limit.")
+                raise CatalogueImageError("The image exceeds MakerVault's 8 MiB image limit.")
             chunks.append(chunk)
         response.close()
         content, filename = _sanitise_image(b"".join(chunks), stem)
