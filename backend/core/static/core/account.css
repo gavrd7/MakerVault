@@ -18,6 +18,7 @@ button,input,select,textarea{font:inherit}
 .account-brand:hover{color:#fff}
 .account-brand-logo{display:block;width:min(190px,100%);height:auto;border-radius:10px;background:#fff}
 .account-brand-fallback{display:flex;align-items:center;gap:12px}
+.account-brand-fallback[hidden]{display:none}
 .account-brandmark{
   width:40px;height:40px;border-radius:12px;display:grid;place-items:center;
   background:#7c5cff;color:#fff;font-weight:800
