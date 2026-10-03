@@ -9,8 +9,8 @@ TZ_VALUE="${TZ:-Europe/London}"
 STORAGE_KEY_FILE="${MAKERVAULT_STORAGE_KEY_FILE:-/app/keys/private_storage.key}"
 HTTPS_ENABLED="${MAKERVAULT_HTTPS_ENABLED:-false}"
 HTTPS_SELF_SIGNED="${MAKERVAULT_HTTPS_SELF_SIGNED:-false}"
-TLS_CERT_FILE="${MAKERVAULT_TLS_CERT_FILE:-/app/tls/cert.pem}"
-TLS_KEY_FILE="${MAKERVAULT_TLS_KEY_FILE:-/app/tls/key.pem}"
+TLS_CERT_FILE="${MAKERVAULT_TLS_CERT_FILE:-/app/keys/tls/cert.pem}"
+TLS_KEY_FILE="${MAKERVAULT_TLS_KEY_FILE:-/app/keys/tls/key.pem}"
 
 if ! [[ "$PUID" =~ ^[0-9]+$ && "$PGID" =~ ^[0-9]+$ ]]; then
   echo "ERROR: PUID and PGID must be numeric." >&2
@@ -33,11 +33,11 @@ fi
 groupmod -o -g "$PGID" makervault
 usermod -o -u "$PUID" -g "$PGID" makervault
 
-mkdir -p /app/media /app/keys /app/backups /app/tls /app/staticfiles /app/run /home/makervault
+mkdir -p /app/media /app/keys /app/keys/tls /app/backups /app/staticfiles /app/run /home/makervault
 if [ "$FIX_PERMISSIONS_VALUE" = "true" ] || [ "$FIX_PERMISSIONS_VALUE" = "1" ]; then
-  chown -R "$PUID:$PGID" /app/media /app/keys /app/backups /app/tls /app/staticfiles /app/run /home/makervault
+  chown -R "$PUID:$PGID" /app/media /app/keys /app/backups /app/staticfiles /app/run /home/makervault
 else
-  chown "$PUID:$PGID" /app/media /app/keys /app/backups /app/tls /app/staticfiles /app/run 2>/dev/null || true
+  chown "$PUID:$PGID" /app/media /app/keys /app/backups /app/staticfiles /app/run 2>/dev/null || true
 fi
 
 
@@ -108,7 +108,7 @@ PY
 
   if [ ! -s "$TLS_CERT_FILE" ] || [ ! -s "$TLS_KEY_FILE" ]; then
     echo "ERROR: MAKERVAULT_HTTPS_ENABLED=true requires a certificate and private key." >&2
-    echo "Provide them in TLS_STORAGE or enable MAKERVAULT_HTTPS_SELF_SIGNED=true." >&2
+    echo "Provide them under KEY_STORAGE/tls or enable MAKERVAULT_HTTPS_SELF_SIGNED=true." >&2
     exit 1
   fi
 
