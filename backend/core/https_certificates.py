@@ -18,7 +18,7 @@ class CertificateError(RuntimeError):
 
 
 def tls_root() -> Path:
-    root = Path(os.getenv("MAKERVAULT_TLS_ROOT", "/app/tls"))
+    root = Path(os.getenv("MAKERVAULT_TLS_ROOT", "/app/keys/tls"))
     root.mkdir(parents=True, exist_ok=True)
     return root
 
