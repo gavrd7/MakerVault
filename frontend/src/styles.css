@@ -2370,3 +2370,22 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
 .cameraSourceIdentity code{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#aeb9ca;font-size:11px}
 .cameraSourceActions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 @media(max-width:720px){.cameraSourceRow{grid-template-columns:1fr}.cameraSourceActions{justify-content:stretch}.cameraSourceActions button{flex:1 1 140px}}
+
+/* v1 accessibility baseline */
+button:focus-visible,
+.buttonLink:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid #8fbaff;
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
