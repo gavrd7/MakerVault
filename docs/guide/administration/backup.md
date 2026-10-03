@@ -92,7 +92,7 @@ Keep at least one downloaded `.mvbackup` away from the MakerVault server. On a r
 python3 scripts/restore.py --sudo --bundle /path/to/your-backup.mvbackup
 ```
 
-Before it trusts any configuration from the file, the helper checks the bundle structure and every recorded inner SHA-256 value. If the checkout has no `.env`, it restores the verified saved configuration with owner-only permissions, prepares PostgreSQL/Redis and the MakerVault image, imports the bundle, validates it again through the recovery tooling, restores database/media/key storage plus v3+ TLS storage and starts MakerVault. If MakerVault-managed self-signed HTTPS is enabled, the replacement host receives a fresh self-signed certificate for its recovered address rather than reusing a certificate whose SANs belong to the old host.
+Before it trusts any configuration from the file, the helper checks the bundle structure and every recorded inner SHA-256 value. If the checkout has no `.env`, it restores the verified saved configuration with owner-only permissions, prepares PostgreSQL/Redis and the MakerVault image, imports the bundle, validates it again through the recovery tooling, restores database/media/key storage plus the v3+ TLS identity stored under key storage and starts MakerVault. If MakerVault-managed self-signed HTTPS is enabled, the replacement host receives a fresh self-signed certificate for its recovered address rather than reusing a certificate whose SANs belong to the old host.
 
 If automatic address detection is unsuitable (for example, a multi-homed host), pass the intended direct-access IPv4 address explicitly with `--recovery-host ADDRESS`; the option may be repeated. Reverse-proxy hostnames and HTTPS origins are not guessed and still require deliberate configuration review.
 
@@ -137,7 +137,7 @@ The database remains running for its logical dump. Stop if any step below fails;
 sudo docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "$backup_dir/database.dump"
 sudo docker compose run --rm -T --no-deps --entrypoint tar makervault -C /app/media -czf - . > "$backup_dir/media.tar.gz"
 sudo docker compose run --rm -T --no-deps --entrypoint tar makervault -C /app/keys -czf - . > "$backup_dir/keys.tar.gz"
-sudo docker compose run --rm -T --no-deps --entrypoint tar makervault -C /app/tls -czf - . > "$backup_dir/tls.tar.gz"
+sudo docker compose run --rm -T --no-deps --entrypoint tar makervault -C /app/keys/tls -czf - . > "$backup_dir/tls.tar.gz"
 ```
 
 These one-off commands mount the normal storage but bypass the application's normal startup; they do not start another web server or migrate the database. If you use an external `MAKERVAULT_STORAGE_KEY` or a custom key-file location, back up that actual key source as well: the default `/app/keys` archive may not contain it.
@@ -210,7 +210,7 @@ Wait for PostgreSQL to become healthy. Restore its records into the empty databa
 sudo docker compose exec -T postgres sh -c 'pg_restore --exit-on-error --no-owner --no-privileges -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "$backup_dir/database.dump"
 sudo docker compose run --rm -T --no-deps --entrypoint tar makervault -C /app/media -xzf - < "$backup_dir/media.tar.gz"
 sudo docker compose run --rm -T --no-deps --entrypoint tar makervault -C /app/keys -xzf - < "$backup_dir/keys.tar.gz"
-sudo docker compose run --rm -T --no-deps --entrypoint tar makervault -C /app/tls -xzf - < "$backup_dir/tls.tar.gz"
+sudo docker compose run --rm -T --no-deps --entrypoint tar makervault -C /app/keys/tls -xzf - < "$backup_dir/tls.tar.gz"
 ```
 
 Stop on any error. Do not use these extraction commands to mix a backup with existing live files. The default startup repairs application storage ownership; deployments with `FIX_PERMISSIONS=false` must arrange correct ownership themselves.
