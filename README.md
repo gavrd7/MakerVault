@@ -4,7 +4,7 @@
 
 MakerVault is a self-hosted application for electronics inventory, projects, files and 3D printing. Keep track of what you own, what a build needs, which revision you printed and where the finished parts belong.
 
-**Release candidate: v1.0.0-rc.1 · Final gate: clean-install smoke test**
+**Current stable release: v1.0.0**
 
 [User guide](docs/guide/index.md) · [Installation](docs/guide/getting-started/install.md) · [Roadmap](docs/ROADMAP.md) · [Changelog](CHANGELOG.md)
 
@@ -139,7 +139,7 @@ Catalogue media can be locally cached or retained as external references where r
 
 ## Project status and development
 
-**v1.0.0-rc.1** is the first stable-release candidate. Real backup/restore recovery, upgrade preflight, security/reliability checks and the final UI/accessibility pass are complete; the remaining owner-run release gate is a clean-install smoke test. Unvalidated printer hardware remains explicitly experimental.
+**v1.0.0** is the first stable MakerVault release. The v1 release gates were completed on 3 October 2026, including representative off-server managed-backup recovery, a clean Linux/Docker installation, restart/persistence checks, native HTTPS/Local CA validation, deployment preflight, security/reliability checks and the final UI/accessibility pass. Unvalidated printer hardware remains explicitly experimental.
 
 Pull-request CI checks backend tests, frontend tests/build, migrations, dependency/static security and the production Docker image. The guide has its own strict build/link checks. CI passing does not substitute for hardware, deployment or restore testing.
 

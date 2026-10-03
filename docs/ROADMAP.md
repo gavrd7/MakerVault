@@ -2,7 +2,7 @@
 
 _Last reconciled: 3 October 2026_
 
-**Release candidate: v1.0.0-rc.1. Remaining stable-release gate: clean-install smoke test.**
+**Current stable release: v1.0.0. All mandatory v1 release gates are complete.**
 
 This roadmap separates delivered functionality, outstanding validation and future implementation. The [README](../README.md) describes the current application; [CHANGELOG.md](../CHANGELOG.md) records changes.
 
@@ -53,21 +53,21 @@ Creality, Moonraker and OctoPrint expose optional Pause, Resume and confirmed Ca
 
 The owner confirmed K1/K2 playback and accepted the compact layout on 2 October 2026. This does not close every firmware, route, reconnect, security or browser check. Those remain in [hardware validation issue #37](https://github.com/gavrd7/MakerVault/issues/37).
 
-## Next milestone — v1.0
+## v1.0 — released
 
-The v1.0 release candidate consolidates the existing feature set. Most release gates are complete; the clean-install smoke test remains before the stable tag.
+v1.0 consolidates the existing feature set. The release gates were completed on 3 October 2026, including representative off-server recovery and a clean install on a separate Debian/Docker host.
 
 | Order | Workstream | Completion evidence |
 | --- | --- | --- |
 | 1 — complete | Backup and recovery | Managed backup creation/validation/download, guarded restore, CI recovery rehearsals and a representative real-installation restore on a separate host have passed. |
-| 2 — final gate | Installation and upgrades | Deployment preflight and representative real upgrade have passed. Remaining acceptance is a clean beginner install smoke test. |
+| 2 — complete | Installation and upgrades | Deployment preflight, representative real upgrade and clean beginner install smoke test have passed. |
 | 3 — complete | Reliability and security | Authentication/permissions, uploads/quotas, diagnostics, destructive actions, dependency audits, static security checks and container scanning are covered by the v1 hardening pass and CI. |
 | 4 — complete | UI, accessibility and documentation | Mobile/desktop consistency, keyboard focus handling, reduced-motion support, auth branding and current documentation have received the final v1 pass. |
-| 5 | Release candidate and stable release | Run [the v1 acceptance checklist](V1_ACCEPTANCE.md), resolve release blockers, verify Docker/dependency/security and guide builds, record tested deployment assumptions, then define/tag the stable release and upgrade policy. |
+| 5 — complete | Stable release | [The v1 acceptance checklist](V1_ACCEPTANCE.md) is complete; Docker/dependency/security and guide builds are green and the stable release is ready to tag/publish. |
 
 Recovery verification now includes the read-only private-file audit, synthetic Docker dump/archive/restore rehearsal for named volumes and bind mounts, and the managed backup path that runs inside the existing MakerVault worker. The standard workflow creates one managed `.mvbackup` bundle, re-validates it before recovery and provides a guarded restore helper for both same-server rollback and off-server disaster recovery. The web process never receives the Docker socket.
 
-A representative real-installation restore on a separate host passed on 3 October 2026, including deployment-configuration review and private-storage/ownership audits. The clean-install smoke test remains the last owner-run v1.0 gate.
+A representative real-installation restore on a separate host passed on 3 October 2026, including deployment-configuration review and private-storage/ownership audits. The clean-install smoke test passed on 3 October 2026 and completed the final owner-run v1.0 gate.
 
 Supported deployment guidance centres on the supplied Linux Docker Compose stack: application/worker, PostgreSQL and Redis. Broader NAS/ARM/desktop compatibility and minimum resource claims need evidence before being advertised.
 
