@@ -26,6 +26,12 @@ MakerVault reads OrcaSlicer's vendor and machine-model manifest names and stores
 
 The upstream project is available from the OrcaSlicer/OrcaSlicer repository on GitHub. MakerVault remains usable when this source is unavailable or disabled.
 
+## go2rtc camera compatibility relay
+
+MakerVault bundles the go2rtc media relay (v1.9.14) for browser compatibility with Creality K2 WebRTC camera streams. go2rtc is an independent project distributed under the MIT License, Copyright (c) 2022 Alexey Khit. Its licence text is included in `/app/licenses/go2rtc-LICENSE` in the MakerVault container.
+
+MakerVault uses a restricted go2rtc configuration: only the local stream/WebRTC API is enabled, the management API listens on loopback only, and the relay is used only for MakerVault-managed camera compatibility.
+
 ## User-provided media
 
 Images and files uploaded by users remain subject to the rights and licences applicable to those files. Users are responsible for ensuring they have permission to upload, store and redistribute such material.

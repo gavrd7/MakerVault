@@ -1,0 +1,14 @@
+app:
+  modules: [api, webrtc]
+
+api:
+  listen: "127.0.0.1:1984"
+  allow_paths:
+    - "/api/streams"
+    - "/api/webrtc"
+
+webrtc:
+  listen: ":8555"
+  candidates:
+    - "127.0.0.1:8555"
+  ice_servers: []

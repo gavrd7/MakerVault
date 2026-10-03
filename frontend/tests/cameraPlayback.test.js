@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { waitForIce, startFrameLoop, prepareCrealityOffer } from "../src/components/cameraPlayback.js";
+import { waitForIce, startFrameLoop, prepareCrealityOffer, needsCrealityRelay } from "../src/components/cameraPlayback.js";
 
 test("ICE gathering is cancelled and listeners released", async () => {
   class Peer extends EventTarget {
@@ -39,6 +39,13 @@ test("frame reconnect stops after three failures", { timeout: 1000 }, async () =
   stop();
   assert.equal(calls, 3);
   assert.deepEqual(errors, [true, true, false]);
+});
+
+test("Firefox desktop uses the Creality compatibility relay", () => {
+  assert.equal(needsCrealityRelay("Mozilla/5.0 (X11; Linux x86_64; rv:156.0) Gecko/20100101 Firefox/156.0"), true);
+  assert.equal(needsCrealityRelay("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:156.0) Gecko/20100101 Firefox/156.0"), true);
+  assert.equal(needsCrealityRelay("Mozilla/5.0 Chrome/156.0.0.0 Safari/537.36"), false);
+  assert.equal(needsCrealityRelay("Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 CriOS/156 Mobile/15E148 Safari/604.1"), false);
 });
 
 test("Creality numeric candidate compatibility keeps SDP and IP candidates", () => {
