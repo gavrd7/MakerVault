@@ -16,6 +16,12 @@ class AccountLinkingTests(TestCase):
             password="a-strong-test-password-123",
         )
 
+    @__import__("django.test").test.override_settings(
+        STORAGES={
+            "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+            "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+        },
+    )
     def test_connections_page_explains_sign_in_methods(self):
         self.client.force_login(self.user)
         response = self.client.get(reverse("socialaccount_connections"))
