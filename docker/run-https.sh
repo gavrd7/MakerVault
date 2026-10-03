@@ -2,8 +2,8 @@
 set -euo pipefail
 
 mode="${MAKERVAULT_HTTPS_ENABLED:-auto}"
-cert="${MAKERVAULT_TLS_CERT_FILE:-/app/tls/cert.pem}"
-key="${MAKERVAULT_TLS_KEY_FILE:-/app/tls/key.pem}"
+cert="${MAKERVAULT_TLS_CERT_FILE:-/app/keys/tls/cert.pem}"
+key="${MAKERVAULT_TLS_KEY_FILE:-/app/keys/tls/key.pem}"
 workers="${HTTPS_WEB_CONCURRENCY:-1}"
 timeout="${GUNICORN_TIMEOUT:-120}"
 
@@ -13,7 +13,7 @@ case "${mode,,}" in
     exec sleep infinity
     ;;
   auto)
-    echo "Native HTTPS auto mode: waiting for a certificate in TLS storage."
+    echo "Native HTTPS auto mode: waiting for a certificate in key storage."
     while [ ! -r "$cert" ] || [ ! -r "$key" ]; do sleep 3; done
     ;;
   1|true|yes|on)
