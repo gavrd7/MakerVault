@@ -3,10 +3,49 @@ import { createPortal } from "react-dom";
 import { apiFetch } from "../api";
 
 export function Modal({ title, subtitle, onClose, children, wide = false, className = "" }) {
+  const dialogRef = useRef(null);
+
+  useEffect(() => {
+    const previous = document.activeElement;
+    const dialog = dialogRef.current;
+    const focusable = dialog?.querySelector(
+      'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    focusable?.focus();
+
+    function keydown(event) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose?.();
+        return;
+      }
+      if (event.key !== "Tab" || !dialog) return;
+      const items = [...dialog.querySelectorAll(
+        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )].filter(element => element.offsetParent !== null);
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", keydown);
+    return () => {
+      document.removeEventListener("keydown", keydown);
+      if (previous instanceof HTMLElement) previous.focus();
+    };
+  }, [onClose]);
+
   const modal = <div className="modalBackdrop" role="presentation" onMouseDown={e => {
     if (e.target === e.currentTarget) onClose();
   }}>
-    <section className={`modal ${wide ? "modalWide" : ""} ${className}`.trim()} role="dialog" aria-modal="true" aria-label={title}>
+    <section ref={dialogRef} className={`modal ${wide ? "modalWide" : ""} ${className}`.trim()} role="dialog" aria-modal="true" aria-label={title}>
       <div className="modalHead">
         <div><h2>{title}</h2>{subtitle && <p>{subtitle}</p>}</div>
         <button type="button" className="iconButton" onClick={onClose} aria-label="Close">×</button>
