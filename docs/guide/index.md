@@ -9,8 +9,8 @@ Learn to install MakerVault, record what you own and bring your projects, files 
 [Follow a first project](getting-started/first-project.md){ .md-button }
 </div>
 
-!!! info "Current release: v0.9.0.2 · Before v1"
-    The guide overview and integration status were reconciled with the merged v0.9.0.2 implementation on 2 October 2026. K1/K2 monitoring and camera playback have owner confirmation. Clean-install, recovery, upgrade and broader hardware acceptance remain separate v1 work. See [scope and verification](reference/about.md).
+!!! info "Current release: v1.0.0"
+    MakerVault v1.0.0 is the first stable release. The v1 release gates include representative off-server recovery, clean-install and restart/persistence checks, native HTTPS/Local CA validation, deployment preflight and green CI. Experimental printer adapters remain labelled according to their hardware-validation status. See [scope and verification](reference/about.md).
 
 <div class="guide-grid" markdown>
 <div class="guide-card" markdown>
