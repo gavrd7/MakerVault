@@ -14,7 +14,9 @@ class LocalHttpsCertificateTests(TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
-        self.tls = Path(self.directory.name)
+        self.keys = Path(self.directory.name) / "keys"
+        self.tls = self.keys / "tls"
+        self.tls.mkdir(parents=True)
         self.env = patch.dict(
             os.environ,
             {
@@ -62,7 +64,9 @@ class HttpsCertificateApiTests(TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
-        self.tls = Path(self.directory.name)
+        self.keys = Path(self.directory.name) / "keys"
+        self.tls = self.keys / "tls"
+        self.tls.mkdir(parents=True)
         self.env = patch.dict(
             os.environ,
             {
