@@ -5,6 +5,54 @@ import AdminUsersPanel from "./AdminUsersPanel";
 import CatalogueCoveragePanel from "./CatalogueCoveragePanel";
 import BackupRestorePanel from "./BackupRestorePanel";
 
+const EXPERIMENTAL_PRINTER_CAPABILITIES = {
+  bambu_ams: {
+    title: "Bambu Lab local + AMS / AMS Lite",
+    detail: "Local MQTT/TLS monitoring is implemented, including AMS tray/material observations where the printer reports them.",
+    adapter: "Bambu Lab local",
+  },
+  prusalink: {
+    title: "PrusaLink local monitoring",
+    detail: "Local printer/job telemetry is implemented with Digest or API-key authentication. Prusa MMU slot telemetry is not claimed unless the API exposes reliable slot data.",
+    adapter: "PrusaLink",
+  },
+  anycubic_ace: {
+    title: "Anycubic LAN + ACE / ACE Pro",
+    detail: "Signed LAN-mode monitoring is implemented for the Kobra 3 / S1 generation, including ACE material observations where firmware exposes them.",
+    adapter: "Anycubic LAN",
+  },
+  flashforge_station: {
+    title: "FlashForge local + material station",
+    detail: "Local port-8898 monitoring is implemented for newer compatible models, including material-station observations where firmware exposes them.",
+    adapter: "FlashForge local",
+  },
+  elegoo: {
+    title: "Elegoo Moonraker profile",
+    detail: "Experimental monitoring is implemented for compatible Neptune 4 / OrangeStorm Moonraker models. This does not imply Centauri support or vendor-specific material-system telemetry.",
+    adapter: "Elegoo · Moonraker",
+  },
+  qidi: {
+    title: "QIDI Moonraker profile",
+    detail: "Experimental monitoring is implemented for compatible Klipper/Moonraker models such as Plus4, Q1 Pro and X-3 families.",
+    adapter: "QIDI · Moonraker",
+  },
+  sovol: {
+    title: "Sovol Moonraker profile",
+    detail: "Experimental monitoring is implemented for SV08-family and other Sovol printers that expose a compatible Moonraker API.",
+    adapter: "Sovol · Moonraker",
+  },
+  snapmaker: {
+    title: "Snapmaker U1 Moonraker profile",
+    detail: "Experimental U1 monitoring is implemented, including standard numbered extruder telemetry. Older Snapmaker families are not included automatically.",
+    adapter: "Snapmaker U1 · Moonraker",
+  },
+  voron: {
+    title: "Voron / community Moonraker",
+    detail: "Experimental monitoring is implemented for compatible community Klipper/Moonraker systems, including numbered extruders and active-tool reporting.",
+    adapter: "Voron · Moonraker",
+  },
+};
+
 function formatWhen(value) {
   if (!value) return "Not yet";
   const date = new Date(value);
@@ -380,8 +428,9 @@ export default function SettingsPage({ config, onBackupStarted }) {
       </div>
       <div className="printingIntegrationGrid settingsIntegrationGrid">
         {integrations.map(item => {
-          const statusTone = item.status === "connected" ? "good" : item.status === "error" || item.status === "disconnected" ? "danger" : item.status === "planned" ? "accent" : "neutral";
+          const statusTone = item.status === "connected" ? "good" : item.status === "error" || item.status === "disconnected" ? "danger" : ["planned", "experimental"].includes(item.status) ? "accent" : "neutral";
           const supported = item.can_sync;
+          const experimentalCapability = EXPERIMENTAL_PRINTER_CAPABILITIES[item.provider];
           const isBusy = integrationBusy === item.provider;
           return <article key={item.provider}>
             <div className="settingsIntegrationHead"><strong>{item.name}</strong><Badge tone={statusTone}>{item.status_label}</Badge></div>
@@ -420,10 +469,13 @@ export default function SettingsPage({ config, onBackupStarted }) {
               <small>{item.compatible_printers || 0} compatible printer{item.compatible_printers === 1 ? "" : "s"} · {item.installed_printers || 0} with CFS installed · {item.configured_printers || 0} installed printer{item.configured_printers === 1 ? "" : "s"} with local host/IP.</small>
             </>}
 
-            {!supported && item.provider === "bambu_ams" && <><span>Bambu Lab AMS / AMS Lite integration.</span><small>Adapter placeholder — not selectable yet.</small></>}
-            {!supported && item.provider === "elegoo" && <><span>Elegoo multi-material integration.</span><small>Adapter placeholder — not selectable yet.</small></>}
-            {!supported && item.provider === "qidi" && <><span>QIDI multi-material integration.</span><small>Adapter placeholder — not selectable yet.</small></>}
-            {!supported && item.provider === "snapmaker" && <><span>Snapmaker multi-material/toolchanger integration.</span><small>Adapter placeholder — not selectable yet.</small></>}
+            {!supported && experimentalCapability && <>
+              <span>{experimentalCapability.detail}</span>
+              <div className="settingsCallout integrationAuthorityCallout">
+                <strong>Implemented · hardware validation required</strong>
+                <p>Configure this per printer from <strong>3D Printing → Live monitor</strong> using the <strong>{experimentalCapability.adapter}</strong> source. MakerVault exposes the adapter now; the Experimental label means representative hardware/firmware validation is still outstanding.</p>
+              </div>
+            </>}
 
             {supported && item.enabled && <div className="integrationSchedule">
               <label className="settingsToggle compact"><div><strong>Scheduled sync</strong><small>Run this integration automatically in the background.</small></div><input type="checkbox" checked={item.auto_sync} onChange={e => updateIntegrationLocal(item.provider, "auto_sync", e.target.checked)} /></label>
