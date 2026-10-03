@@ -14,18 +14,13 @@ The command checks PostgreSQL, pending migrations, Redis, the private-file encry
 
 The release candidate must also have green backend/frontend tests, migration checks, dependency audits, static security checks, production Docker build, container vulnerability scan, managed-backup rehearsal, encrypted-file recovery rehearsal and guide build/link checks.
 
-## Clean-install acceptance — remaining owner-run gate
+## Clean-install acceptance — passed 3 October 2026
 
-On a clean Linux/Docker host:
+A fresh MakerVault deployment was completed on a separate Debian/Docker host using a newly created `.env`, the documented three-service Compose stack and Docker-managed named volumes.
 
-- configure a fresh `.env` without copying development secrets;
-- start the documented three-service Compose stack;
-- create a superuser and sign in;
-- verify Dashboard, catalogue, inventory, project creation, Files, 3D Printing, Wiring and Settings load;
-- upload and download an encrypted private file;
-- restart the stack and confirm the data remains.
+The clean install successfully completed first-run migrations/catalogue setup, created a new superuser, loaded the main application areas, created inventory/project test data and used private encrypted storage. The stack was restarted and the created data remained available. Native HTTPS was also exercised on the fresh host using the MakerVault Local CA/server-certificate workflow. A final `v1_release_preflight` after restart passed PostgreSQL, migrations, Redis, AES-256 private storage key, media/backup write access, Django secret and production-mode checks.
 
-Record OS, Docker/Compose versions, MakerVault commit and storage layout.
+The brief initial browser-unavailable window observed during first-run catalogue initialization resolved once startup completed and Gunicorn entered service; the installation then remained reachable normally.
 
 ## Upgrade acceptance
 
@@ -71,6 +66,6 @@ Check desktop and mobile layouts, keyboard-only navigation, visible focus, modal
 
 ## Release decision
 
-The real-install restore gate is complete. Stable v1.0 still requires the clean-install smoke test above plus green final release-candidate CI.
+All mandatory v1.0 release gates are complete: representative real-install recovery, clean installation, restart/persistence checks, deployment preflight, security/reliability checks, UI/accessibility review and green final CI. MakerVault v1.0.0 is approved for stable release.
 
 A v1.0 release candidate may retain printer adapters explicitly labelled **Experimental** where hardware validation is unavailable. Experimental status must describe validation uncertainty, not hide already implemented functionality. Open issue #37 continues to track representative hardware testing after the release candidate.
