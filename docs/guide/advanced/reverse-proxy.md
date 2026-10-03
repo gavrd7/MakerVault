@@ -1,5 +1,17 @@
 # HTTPS and reverse proxies
 
+## HTTPS certificate wizard
+
+Superusers can open **Settings → HTTPS & certificates** to see the current browser host, native HTTPS status and certificate details.
+
+The wizard presents three deployment paths:
+
+- **Reverse proxy** — recommended for public/domain deployments. Your proxy manages its own publicly trusted ACME/Let's Encrypt certificate and forwards to MakerVault's ordinary HTTP port.
+- **Public ACME / Let's Encrypt** — MakerVault explains the public challenge requirements. MakerVault deliberately does not give its web process host/Docker privileges to open public ports or manipulate DNS, so use the reverse proxy or another host-level ACME client when public validation is required.
+- **MakerVault Local CA** — designed for private LAN addresses such as `192.168.x.x`. Enter the IP/DNS names, select **Generate local HTTPS certificate**, then download **MakerVault Local CA** and trust that public CA certificate on each client. The CA private key never has a GUI download route.
+
+With `MAKERVAULT_HTTPS_ENABLED=auto` (the default), the native HTTPS process waits until a valid certificate appears in TLS storage. Generating a local certificate from Settings therefore brings the separate HTTPS listener online without disabling the normal HTTP/reverse-proxy listener.
+
 **Advanced · Optional for local use**
 
 A reverse proxy accepts requests at your domain, handles HTTPS and forwards them to MakerVault. A certificate makes the browser's connection encrypted. DNS maps the domain to the address serving it.
