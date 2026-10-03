@@ -17,9 +17,10 @@ class ManagedBackupBundleTests(TestCase):
         self.backups = root / "backups"
         self.media = root / "media"
         self.keys = root / "keys"
-        self.tls = root / "tls"
-        for path in (self.backups, self.media, self.keys, self.tls):
+        self.tls = self.keys / "tls"
+        for path in (self.backups, self.media, self.keys):
             path.mkdir()
+        self.tls.mkdir()
         (self.media / "example.txt").write_text("media-original", encoding="utf-8")
         (self.keys / "private_storage.key").write_text("synthetic-key", encoding="utf-8")
         (self.tls / "cert.pem").write_text("synthetic-cert", encoding="utf-8")
