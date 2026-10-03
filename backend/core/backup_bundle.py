@@ -16,7 +16,7 @@ from django.conf import settings
 from django.db import connections
 
 
-FORMAT_VERSION = 2
+FORMAT_VERSION = 3
 SAFE_ID = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
@@ -36,6 +36,10 @@ def backup_root() -> Path:
 
 def media_root() -> Path:
     return Path(settings.MEDIA_ROOT)
+
+
+def tls_root() -> Path:
+    return Path(os.getenv("MAKERVAULT_TLS_ROOT", "/app/tls"))
 
 
 def key_root() -> Path:
@@ -291,8 +295,10 @@ def create_prepared_bundle(backup_id: str) -> dict:
 
         media_archive = work / "media.tar.gz"
         key_archive = work / "keys.tar.gz"
+        tls_archive = work / "tls.tar.gz"
         _archive_directory(media_root(), media_archive)
         _archive_directory(key_root(), key_archive)
+        _archive_directory(tls_root(), tls_archive)
         (work / ".env").write_text(recovery_env_text(), encoding="utf-8")
 
         recovery = {
@@ -304,7 +310,7 @@ def create_prepared_bundle(backup_id: str) -> dict:
                 "name": str(settings.DATABASES["default"].get("NAME") or "makervault"),
                 "user": str(settings.DATABASES["default"].get("USER") or "makervault"),
             },
-            "contents": ["database.dump", "media.tar.gz", "keys.tar.gz", ".env"],
+            "contents": ["database.dump", "media.tar.gz", "keys.tar.gz", "tls.tar.gz", ".env"],
             "note": "Contains secrets and the private-storage key. Keep this bundle private.",
         }
         (work / "recovery-info.json").write_text(json.dumps(recovery, indent=2), encoding="utf-8")
@@ -312,6 +318,7 @@ def create_prepared_bundle(backup_id: str) -> dict:
         _run(["pg_restore", "--list", str(dump)], capture=True)
         _check_tar(media_archive)
         _check_tar(key_archive)
+        _check_tar(tls_archive)
 
         checksum_targets = sorted(path for path in work.iterdir() if path.name != "SHA256SUMS")
         (work / "SHA256SUMS").write_text(
@@ -381,6 +388,9 @@ def validate_bundle(bundle: Path) -> dict:
         _run(["pg_restore", "--list", str(backup / "database.dump")], capture=True)
         _check_tar(backup / "media.tar.gz")
         _check_tar(backup / "keys.tar.gz")
+        tls_archive = backup / "tls.tar.gz"
+        if tls_archive.is_file():
+            _check_tar(tls_archive)
         info = json.loads((backup / "recovery-info.json").read_text(encoding="utf-8"))
         return {
             "valid": True,
@@ -457,6 +467,13 @@ def restore_bundle(backup_id: str):
         _clear_directory(key_root())
         _safe_extract_tar(backup / "media.tar.gz", media_root())
         _safe_extract_tar(backup / "keys.tar.gz", key_root())
+
+        # Format v3+ carries MakerVault-owned TLS identity. Older bundles do not,
+        # so preserve any existing TLS storage when restoring a legacy bundle.
+        tls_archive = backup / "tls.tar.gz"
+        if tls_archive.is_file():
+            _clear_directory(tls_root())
+            _safe_extract_tar(tls_archive, tls_root())
 
 
 def recover_interrupted_backups() -> int:
