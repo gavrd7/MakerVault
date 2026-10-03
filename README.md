@@ -128,8 +128,6 @@ For a **new installation**, edit `.env` before starting:
 - For direct LAN access, use `TRUST_PROXY_HEADERS=false` and `ALLAUTH_TRUSTED_PROXY_COUNT=0`.
 - Keep local registration disabled unless you deliberately need it.
 
-Repository access is required while the source repository is private. Use your normal GitHub authentication; do not embed tokens in clone URLs.
-
 ```bash
 sudo docker compose config --quiet
 sudo docker compose up -d --build
@@ -174,7 +172,7 @@ sudo docker compose ps
 
 Startup applies migrations and idempotent setup tasks. Read the changelog and update guide before changing versions. A database migration is not guaranteed to be reversible by simply switching to an older image.
 
-For the existing development-server layout, the checkout is `/mnt/Server/MakerVault/app`. Other installations can use their own location.
+Install MakerVault wherever you keep self-hosted application source, for example `~/apps/MakerVault` or `/srv/makervault/app`. Persistent data should use the storage locations configured in `.env`.
 
 ## Reference data and background work
 

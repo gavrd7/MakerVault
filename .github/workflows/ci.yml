@@ -6,15 +6,6 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      runner:
-        description: Where should this CI run execute?
-        required: true
-        default: self-hosted
-        type: choice
-        options:
-          - self-hosted
-          - github-hosted
 
 permissions:
   contents: read
@@ -26,7 +17,7 @@ concurrency:
 jobs:
   backend:
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
-    runs-on: ${{ github.event_name == 'workflow_dispatch' && inputs.runner == 'github-hosted' && 'ubuntu-latest' || 'makervault-ci' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     container: python:3.13-bookworm
     env:
@@ -86,7 +77,7 @@ jobs:
 
   frontend:
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
-    runs-on: ${{ github.event_name == 'workflow_dispatch' && inputs.runner == 'github-hosted' && 'ubuntu-latest' || 'makervault-ci' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     container: node:22-bookworm
     steps:
@@ -105,17 +96,10 @@ jobs:
         run: npm run build
 
   docker:
-    runs-on: ${{ github.event_name == 'workflow_dispatch' && inputs.runner == 'github-hosted' && 'ubuntu-latest' || 'makervault-ci' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: [backend, frontend]
     steps:
-      - name: Restore self-hosted workspace ownership
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.runner == 'self-hosted' }}
-        run: |
-          docker run --rm \
-            -v "${GITHUB_WORKSPACE}:/workspace" \
-            python:3.13-bookworm \
-            chown -R 1001:1001 /workspace
       - uses: actions/checkout@v4
       - name: Simulate a checkout created under umask 077
         run: chmod -R go-rwx backend
