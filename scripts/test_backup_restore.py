@@ -75,5 +75,46 @@ class RestoreBundleTests(unittest.TestCase):
                 restore.env_ids(path)
 
 
+    def test_adapt_recovered_env_appends_replacement_host(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / ".env"
+            path.write_text(
+                "MAKERVAULT_PORT=8765\n"
+                "DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,192.168.1.10\n"
+                "DJANGO_CSRF_TRUSTED_ORIGINS=http://localhost:8765,http://192.168.1.10:8765\n",
+                encoding="utf-8",
+            )
+            added = restore.adapt_recovered_env_for_hosts(path, ["192.168.1.127"])
+            self.assertEqual(added, ["192.168.1.127"])
+            text = path.read_text(encoding="utf-8")
+            self.assertIn(
+                "DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,192.168.1.10,192.168.1.127",
+                text,
+            )
+            self.assertIn(
+                "DJANGO_CSRF_TRUSTED_ORIGINS=http://localhost:8765,http://192.168.1.10:8765,http://192.168.1.127:8765",
+                text,
+            )
+
+    def test_adapt_recovered_env_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / ".env"
+            path.write_text(
+                "DJANGO_ALLOWED_HOSTS=localhost,192.168.1.127\n"
+                "DJANGO_CSRF_TRUSTED_ORIGINS=http://192.168.1.127:8765\n",
+                encoding="utf-8",
+            )
+            restore.adapt_recovered_env_for_hosts(path, ["192.168.1.127", "192.168.1.127"])
+            text = path.read_text(encoding="utf-8")
+            self.assertEqual(text.count("192.168.1.127"), 2)
+
+    def test_adapt_recovered_env_rejects_invalid_host(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / ".env"
+            path.write_text("PUID=1000\n", encoding="utf-8")
+            with self.assertRaises(restore.RestoreError):
+                restore.adapt_recovered_env_for_hosts(path, ["not-an-ip"])
+
+
 if __name__ == "__main__":
     unittest.main()
