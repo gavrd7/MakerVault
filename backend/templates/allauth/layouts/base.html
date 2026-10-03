@@ -32,7 +32,7 @@
         {% url 'account_change_password' as password_url_ %}
         {% if password_url_ %}<a href="{{ password_url_ }}">Password</a>{% endif %}
         {% url 'socialaccount_connections' as connections_url_ %}
-        {% if connections_url_ %}<a href="{{ connections_url_ }}">Account connections</a>{% endif %}
+        {% if connections_url_ %}<a href="{{ connections_url_ }}">Sign-in methods</a>{% endif %}
         {% url 'mfa_index' as mfa_url_ %}
         {% if mfa_url_ %}<a href="{{ mfa_url_ }}">Security &amp; MFA</a>{% endif %}
         {% if user.is_staff %}<a href="{% url 'oidc-provider-list' %}">Identity providers / OIDC</a>{% endif %}

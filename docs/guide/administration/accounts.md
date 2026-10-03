@@ -15,6 +15,14 @@ A group grants actions, not ownership of another person's workspace. The default
 
 Local self-registration is disabled by default. Enabling `ALLOW_LOCAL_REGISTRATION` is a separate administrative decision. OIDC provisioning is configured separately and does not mean a new identity should automatically become an administrator.
 
+## Sign-in methods and account linking
+
+Each signed-in user can open **Account & Security → Sign-in methods** to see external identities linked to their MakerVault account and any configured identity providers available to connect.
+
+Linking an OIDC identity does not create a second MakerVault workspace: it adds another way to sign in to the same account. Removing a linked identity removes only that sign-in route. MakerVault blocks removal when it would leave the user with neither a usable local password nor another external sign-in connection.
+
+Administrators configure which OIDC providers exist under **Account & Security → Identity providers / OIDC**. That administration screen and the per-user **Sign-in methods** screen serve different purposes.
+
 ## What is shared?
 
 Shared catalogue/reference records describe products. Personal inventory, projects, files, printers, spools, models, print history and integration settings are owner-scoped. Current project workspaces are not a general team-sharing system.
