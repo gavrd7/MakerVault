@@ -2389,3 +2389,28 @@ a:focus-visible,
     transition-duration: 0.01ms !important;
   }
 }
+
+
+/* HTTPS / certificate administration */
+.httpsModeGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:18px 0}
+.httpsModeCard{border:1px solid #29313c;border-radius:14px;background:#0d131a;padding:17px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.httpsModeCard.selected{border-color:#55479d;background:#101724}
+.httpsModeCard h4{margin:0;font-size:17px}
+.httpsModeCard p{margin:0;color:#9eabba;line-height:1.55}
+.httpsModeCard small{color:#7f8a9c;line-height:1.45}
+.httpsGenerateGrid{align-items:end}
+.httpsCurrentAddress{border:1px solid #29313c;border-radius:12px;background:#0d131a;padding:14px;display:grid;gap:5px}
+.httpsCurrentAddress span,.httpsCurrentAddress small{color:#7f8a9c;font-size:12px}
+.httpsCurrentAddress strong{font-size:16px;overflow-wrap:anywhere}
+.httpsCertGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:18px}
+.httpsCertSummary{border:1px solid #29313c;border-radius:14px;background:#0d131a;padding:16px;min-width:0}
+.httpsCertSummary h4{margin:0 0 4px}.httpsCertSummary p{margin:0}
+.httpsCertMeta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;margin:14px 0 0;border:1px solid #29313c;border-radius:10px;overflow:hidden}
+.httpsCertMeta>div{padding:10px 11px;border-bottom:1px solid #29313c;min-width:0}
+.httpsCertMeta>div:nth-child(odd){border-right:1px solid #29313c}
+.httpsCertMeta>div.wide{grid-column:1/-1;border-right:0}
+.httpsCertMeta dt{color:#748196;font-size:10px;text-transform:uppercase}
+.httpsCertMeta dd{margin:4px 0 0;overflow-wrap:anywhere;color:#cbd6e5}
+.httpsCertMeta code{white-space:normal;word-break:break-all}
+@media(max-width:900px){.httpsModeGrid{grid-template-columns:1fr}.httpsCertGrid{grid-template-columns:1fr}}
+@media(max-width:600px){.httpsCertMeta{grid-template-columns:1fr}.httpsCertMeta>div,.httpsCertMeta>div:nth-child(odd){border-right:0}}
