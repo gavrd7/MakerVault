@@ -1,6 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from allauth.socialaccount.models import SocialAccount
@@ -16,7 +16,7 @@ class AccountLinkingTests(TestCase):
             password="a-strong-test-password-123",
         )
 
-    @__import__("django.test").test.override_settings(
+    @override_settings(
         STORAGES={
             "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
             "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
