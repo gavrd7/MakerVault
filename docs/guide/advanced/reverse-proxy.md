@@ -10,7 +10,7 @@ The wizard presents three deployment paths:
 - **Public ACME / Let's Encrypt** — MakerVault explains the public challenge requirements. MakerVault deliberately does not give its web process host/Docker privileges to open public ports or manipulate DNS, so use the reverse proxy or another host-level ACME client when public validation is required.
 - **MakerVault Local CA** — designed for private LAN addresses such as `192.168.x.x`. Enter the IP/DNS names, select **Generate local HTTPS certificate**, then download **MakerVault Local CA** and trust that public CA certificate on each client. The CA private key never has a GUI download route.
 
-With `MAKERVAULT_HTTPS_ENABLED=auto` (the default), the native HTTPS process waits until a valid certificate appears in TLS storage. Generating a local certificate from Settings therefore brings the separate HTTPS listener online without disabling the normal HTTP/reverse-proxy listener.
+With `MAKERVAULT_HTTPS_ENABLED=auto` (the default), the native HTTPS process waits until a valid certificate appears in key storage. Generating a local certificate from Settings therefore brings the separate HTTPS listener online without disabling the normal HTTP/reverse-proxy listener.
 
 **Advanced · Optional for local use**
 
@@ -96,12 +96,12 @@ The normal HTTP listener remains available on `MAKERVAULT_PORT`, so a reverse pr
 
 ### Use your own certificate
 
-Put a PEM certificate and matching private key in `TLS_STORAGE` as `cert.pem` and `key.pem`, or change the two in-container paths deliberately:
+Put a PEM certificate and matching private key under `KEY_STORAGE/tls` as `cert.pem` and `key.pem`, or change the two in-container paths deliberately:
 
 ```dotenv
-TLS_STORAGE=/mnt/Server/MakerVault/tls
-MAKERVAULT_TLS_CERT_FILE=/app/tls/cert.pem
-MAKERVAULT_TLS_KEY_FILE=/app/tls/key.pem
+KEY_STORAGE=/mnt/Server/MakerVault/keys
+MAKERVAULT_TLS_CERT_FILE=/app/keys/tls/cert.pem
+MAKERVAULT_TLS_KEY_FILE=/app/keys/tls/key.pem
 MAKERVAULT_HTTPS_SELF_SIGNED=false
 ```
 
@@ -109,7 +109,7 @@ The pair may be CA-issued or self-signed. MakerVault validates that both files a
 
 ### Generate a persistent self-signed certificate
 
-For a local/test deployment, MakerVault can generate a certificate once and keep it in `TLS_STORAGE`:
+For a local/test deployment, MakerVault can generate a certificate once and keep it under `KEY_STORAGE/tls`:
 
 ```dotenv
 MAKERVAULT_HTTPS_ENABLED=true
@@ -122,6 +122,6 @@ DJANGO_CSRF_TRUSTED_ORIGINS=https://192.168.1.50:8443
 
 Open `https://192.168.1.50:8443` (substituting your address). A self-signed certificate is encrypted TLS, but browsers do not trust it automatically. Import/trust the certificate or its issuing CA on each client if you want to remove the browser warning. MakerVault deliberately does not disable browser certificate verification.
 
-The generated certificate/key are persistent and are included in new managed `.mvbackup` bundles. Existing v2 recovery bundles remain supported; because they predate native TLS, restoring one does not erase TLS storage already present on the target.
+The generated certificate/key are persistent and are included in new managed `.mvbackup` bundles. Existing v2 recovery bundles remain supported; because they predate native TLS, restoring one does not erase key storage already present on the target.
 
 If every browser-facing route is HTTPS, set `DJANGO_SECURE_COOKIES=true`. If you still intentionally use direct HTTP for interactive browser access, secure-only session cookies will prevent sign-in over that HTTP route.
