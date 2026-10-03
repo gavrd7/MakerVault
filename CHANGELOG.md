@@ -1,6 +1,8 @@
 # Changelog
 
 ## v1.0.0-rc.1 — release candidate (3 October 2026)
+- Add optional native HTTPS on a separate port inside the existing MakerVault container, with supplied PEM certificates or persistent MakerVault-generated self-signed certificates; reverse-proxy TLS over the standard HTTP port remains the recommended default.
+- Extend managed recovery bundles to format v3 so MakerVault-owned TLS identity is preserved, while keeping older v2 bundles restorable; replacement-host recovery also adapts HTTP/HTTPS origins and refreshes managed self-signed certificates for the new host.
 
 - Completed a representative off-server disaster-recovery rehearsal using a real managed `.mvbackup`; database, media, AES-256 private-storage key and deployment configuration restored successfully on a separate clean host.
 - Added the v1 release preflight command and acceptance checklist, and passed private-storage authentication plus owner-isolation audits on the restored installation.
