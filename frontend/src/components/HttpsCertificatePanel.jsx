@@ -153,7 +153,7 @@ export default function HttpsCertificatePanel() {
     <div className="settingsSubgrid httpsGenerateGrid">
       <label>
         <span>Certificate names / addresses</span>
-        <input value={hosts} onChange={event => setHosts(event.target.value)} placeholder="192.168.1.125,makervault.local" />
+        <input value={hosts} onChange={event => setHosts(event.target.value)} placeholder="192.168.1.50,makervault.local" />
         <small>Comma-separated IPv4 addresses or DNS names. localhost and 127.0.0.1 are added automatically.</small>
       </label>
       <div className="httpsCurrentAddress">
