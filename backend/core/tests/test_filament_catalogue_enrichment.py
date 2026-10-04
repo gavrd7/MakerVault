@@ -9,6 +9,7 @@ from core.filament_catalogue import (
     match_filament_catalogue_candidates,
     normalise_spoolmandb_row,
     refresh_imported_filament_products,
+    unmatch_filament_catalogue,
 )
 from core.filament_technical_sources import parse_filament_technical_text
 from core.models import CatalogSource, FilamentManufacturer, FilamentProduct
@@ -152,6 +153,42 @@ class FilamentCatalogueEnrichmentTests(TestCase):
         self.assertEqual(filament.profile_data["catalogue_provenance"]["external_id"], row["external_id"])
         authoritative.assert_called_once()
         self.assertIn("density_g_cm3", result["changed_fields"])
+
+    @patch("core.filament_catalogue.enrich_filament_from_authoritative_sources")
+    @patch("core.filament_catalogue.get_spoolmandb_item")
+    def test_catalogue_match_can_be_unmatched_and_restores_previous_values(self, get_item, authoritative):
+        row = normalise_spoolmandb_row(self.spoolmandb_row())
+        get_item.return_value = row
+        authoritative.return_value = {"checked_sources": 0, "changed_fields": [], "errors": 0}
+        maker = FilamentManufacturer.objects.create(name="Example Filament")
+        filament = FilamentProduct.objects.create(
+            filament_manufacturer=maker,
+            name="Local PLA",
+            material="PLA",
+            color_name="My Black",
+            color_hex="#101010",
+            diameter_mm="1.75",
+            density_g_cm3=None,
+            nominal_weight_g=None,
+            profile_data={"local_note": "keep me"},
+        )
+
+        apply_catalogue_match_to_filament(filament, row["external_id"])
+        filament.refresh_from_db()
+        self.assertIsNotNone(filament.source_id)
+        self.assertEqual(float(filament.density_g_cm3), 1.24)
+        self.assertIn("catalogue_match_restore", filament.profile_data)
+
+        result = unmatch_filament_catalogue(filament)
+        filament.refresh_from_db()
+
+        self.assertTrue(result["restored"])
+        self.assertIsNone(filament.source_id)
+        self.assertIsNone(filament.density_g_cm3)
+        self.assertIsNone(filament.nominal_weight_g)
+        self.assertEqual(filament.color_name, "My Black")
+        self.assertEqual(filament.color_hex, "#101010")
+        self.assertEqual(filament.profile_data, {"local_note": "keep me"})
 
     @patch("core.filament_catalogue.enrich_filament_from_authoritative_sources")
     @patch("core.filament_catalogue.get_spoolmandb_item")
