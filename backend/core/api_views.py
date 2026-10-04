@@ -5669,6 +5669,118 @@ def printing_slot_add_to_inventory(request, slot_id):
 
 
 
+def _spool_catalogue_match_plan(owner):
+    spool_rows = list(
+        Spool.objects.filter(owner=owner)
+        .values("filament_id")
+        .annotate(spool_count=Count("id"))
+    )
+    counts = {row["filament_id"]: int(row["spool_count"]) for row in spool_rows}
+    if not counts:
+        return {"review": [], "already_matched": 0, "unmatched": 0}
+
+    filaments = FilamentProduct.objects.filter(pk__in=counts).select_related(
+        "manufacturer", "filament_manufacturer", "source"
+    )
+    review = []
+    already_matched = 0
+    unmatched = 0
+    for filament in filaments:
+        profile = dict(filament.profile_data or {})
+        provenance = dict(profile.get("catalogue_provenance") or {})
+        source_type = getattr(filament.source, "source_type", "") if filament.source_id else ""
+        if source_type == "spoolmandb" or provenance.get("external_id"):
+            already_matched += 1
+            continue
+
+        unmatched += 1
+        candidates = match_filament_catalogue_candidates(filament, limit=10)
+        exact = [row for row in candidates if int(row.get("match_score") or 0) == 100]
+        review.append({
+            "filament": _serialise_filament_product(filament),
+            "spool_count": counts.get(filament.pk, 0),
+            "candidates": candidates,
+            "top_score": int(candidates[0]["match_score"]) if candidates else 0,
+            "unique_exact": len(exact) == 1,
+            "ambiguous_exact": len(exact) > 1,
+            "exact_external_id": exact[0]["external_id"] if len(exact) == 1 else "",
+        })
+
+    review.sort(key=lambda row: (
+        -int(row["top_score"]),
+        (row["filament"].get("manufacturer") or "").casefold(),
+        (row["filament"].get("name") or "").casefold(),
+    ))
+    return {
+        "review": review,
+        "already_matched": already_matched,
+        "unmatched": unmatched,
+    }
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def printing_spool_catalogue_matches(request):
+    denied = _require_permission(request, "core.change_filamentproduct")
+    if denied:
+        return denied
+
+    try:
+        plan = _spool_catalogue_match_plan(request.user)
+    except FilamentCatalogueError as exc:
+        return _error(str(exc), status=502)
+
+    if request.method == "GET":
+        return JsonResponse({
+            **plan,
+            "auto_matched": [],
+            "auto_matched_count": 0,
+        })
+
+    auto_matched = []
+    errors = []
+    for row in list(plan["review"]):
+        if not row["unique_exact"]:
+            continue
+        filament_id = row["filament"]["id"]
+        filament = FilamentProduct.objects.select_related(
+            "manufacturer", "filament_manufacturer", "source"
+        ).filter(pk=filament_id).first()
+        if not filament:
+            continue
+        try:
+            result = apply_catalogue_match_to_filament(filament, row["exact_external_id"])
+            filament.refresh_from_db()
+            auto_matched.append({
+                "filament": _serialise_filament_product(filament),
+                "spool_count": row["spool_count"],
+                "match": {
+                    "external_id": result["row"]["external_id"],
+                    "manufacturer": result["row"]["manufacturer"],
+                    "name": result["row"]["name"],
+                    "score": 100,
+                },
+            })
+        except (FilamentCatalogueError, ValidationError, ValueError, IntegrityError) as exc:
+            errors.append({
+                "filament_id": filament_id,
+                "filament": row["filament"].get("display_name") or row["filament"].get("name"),
+                "error": str(exc),
+            })
+
+    try:
+        remaining = _spool_catalogue_match_plan(request.user)
+    except FilamentCatalogueError as exc:
+        return _error(str(exc), status=502)
+
+    return JsonResponse({
+        **remaining,
+        "auto_matched": auto_matched,
+        "auto_matched_count": len(auto_matched),
+        "errors": errors,
+    })
+
+
 @login_required
 @require_http_methods(["PATCH", "DELETE"])
 def printing_spool_detail(request, spool_id):
