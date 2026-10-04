@@ -2174,7 +2174,7 @@ function FilamentCatalogueModal({ onClose, onImported }) {
     }
   }
 
-  return <Modal title="Open filament catalogue" subtitle="Search SpoolmanDB, preview the source record, then import it as a normal native MakerVault filament product." onClose={onClose} wide>
+  return <Modal title="Open filament catalogue" subtitle="Search MakerVault's merged filament catalogue, review the source record, then import it as a normal native MakerVault filament product." onClose={onClose} wide>
     <div className="filamentCatalogueModal">
       {error && <div className="formError">{error}</div>}
       <form className="filamentCatalogueSearch" onSubmit={search}>
@@ -2203,7 +2203,7 @@ function FilamentCatalogueModal({ onClose, onImported }) {
               ? <img src={selected.image} alt="" loading="lazy" />
               : <span style={filamentSwatchStyle(selected)} />}
           </div>
-          <span className="settingsEyebrow">SpoolmanDB preview</span>
+          <span className="settingsEyebrow">{selected.source_name || "Catalogue"} preview</span>
           <h3>{selected.manufacturer} · {selected.name}</h3>
           <div className="badgeRow"><Badge tone="accent">{selected.material}</Badge><Badge>{selected.transparency}</Badge>{selected.finish && <Badge>{selected.finish}</Badge>}{selected.pattern && <Badge>{selected.pattern}</Badge>}{selected.glow && <Badge>Glow</Badge>}</div>
           <dl className="detailSpecs">
@@ -2224,7 +2224,7 @@ function FilamentCatalogueModal({ onClose, onImported }) {
             {selected.sds_url && <a href={selected.sds_url} target="_blank" rel="noreferrer">Safety data sheet</a>}
           </div>}
           <button className="primary" disabled={importing} onClick={importSelected}>{importing ? "Importing…" : "Import into MakerVault"}</button>
-          <p className="muted">The imported record remains editable and usable without SpoolmanDB. Source provenance is retained separately.</p>
+          <p className="muted">The imported record remains editable and usable without its external source. Source provenance is retained separately.</p>
         </div>}
       </div>
     </div>
