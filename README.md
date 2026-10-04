@@ -69,7 +69,7 @@ This also sets an important support expectation: investigation, fixes and future
 
 | Workspace | Current capabilities |
 | --- | --- |
-| Catalogues | Boards, generic components, printers and filament products; technical specifications, images, provenance and scheduled enrichment |
+| Catalogues | Boards, generic components, printers and filament products; technical specifications, images, provenance, matching and scheduled enrichment |
 | Inventory | Physical stock, generated IDs, quantities, locations, condition, purchase information, lifecycle history and available/allocated quantities |
 | Projects and BOMs | Build notes, images, files, repository links, cost rollups and quantity-aware allocation from owned stock |
 | Files | Standalone or project-linked assets, immutable version history, authenticated downloads and encrypted private uploads |
@@ -108,7 +108,11 @@ HTTP snapshot/MJPEG sources provide refreshed images at approximately one frame 
 
 [Camera setup and limitations](docs/guide/integrations/printer-cameras.md) · [Printer controls](docs/guide/integrations/printer-controls.md) · [Hardware validation](docs/guide/integrations/printer-adapter-validation.md) · [Outstanding tests](https://github.com/gavrd7/MakerVault/issues/37)
 
-## Filament accounting and printed parts
+## Filament catalogue, accounting and printed parts
+
+MakerVault's filament catalogue is a merged reference layer rather than a copy of one upstream service. SpoolmanDB remains the primary public catalogue, with verified manufacturer-backed supplemental entries and technical data used to fill genuine coverage gaps. Saved filament products can be **matched, rematched or unmatched** from the catalogue; user-entered values remain authoritative, and newer matches keep a pre-match snapshot so an unmatch can restore the previous state. Spool Inventory shows **✓ Matched** or **Unmatched** at a glance for the shared filament product behind each physical spool.
+
+Catalogue matching is optional. An unmatched filament remains a normal usable MakerVault record, and MakerVault does not invent a match merely to remove the badge.
 
 Print history and filament accounting do not require saving a model or retaining a printed part. **Part creation is explicit and is never automatic by default.**
 
@@ -206,7 +210,7 @@ Install MakerVault wherever you keep self-hosted application source, for example
 
 ## Reference data and background work
 
-Administrator settings provide scheduled catalogue maintenance and manual refresh, plus separate integration synchronisation controls. Board/component data, OrcaSlicer printer profiles and SpoolmanDB filament definitions carry provenance and may have incomplete fields. Missing values are not proof that a capability is unsupported.
+Administrator settings provide scheduled catalogue maintenance and manual refresh, plus separate integration synchronisation controls. Board/component data, OrcaSlicer printer profiles and the merged MakerVault filament catalogue carry provenance and may have incomplete fields. Filament enrichment can combine SpoolmanDB, verified supplemental manufacturer records and authoritative product/TDS data while preserving manual corrections. Missing values or an **Unmatched** filament are not proof that the record is unusable.
 
 Catalogue media can be locally cached or retained as external references where redistribution is inappropriate. Third-party images keep their original source, licence and attribution; they are not relicensed as MakerVault software.
 
