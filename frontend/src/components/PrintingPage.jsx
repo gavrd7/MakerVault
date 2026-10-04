@@ -556,6 +556,7 @@ function SpoolInventoryPage({ spools, filaments, locations, printers, currency, 
   }, [spools.length, searchTarget?.token, searchTarget?.id]);
   const [addOpen, setAddOpen] = useState(false);
   const [manageSpool, setManageSpool] = useState(null);
+  const [detailFilament, setDetailFilament] = useState(null);
   const [deleteSpool, setDeleteSpool] = useState(null);
   const term = query.trim().toLowerCase();
   const rows = newestFirst(spools).filter(spool => !term || [
@@ -593,6 +594,7 @@ function SpoolInventoryPage({ spools, filaments, locations, printers, currency, 
             {spool.loaded_slots?.length > 0 && <Badge tone="accent">Loaded</Badge>}
             <Badge>{spool.status_label || spool.status}</Badge>
             {(spool.external_links || []).map(link => <Badge key={link.id}>{link.provider_label}</Badge>)}
+            <button type="button" onClick={() => setDetailFilament(filaments.find(item => item.id === spool.filament_id) || null)}>Filament details</button>
             {canChangeSpool && <button type="button" onClick={() => setManageSpool(spool)}>RFID / identity</button>}
             {canDeleteSpool && <button className="dangerButton" type="button" onClick={() => setDeleteSpool(spool)}>Delete</button>}
           </div>
@@ -603,6 +605,7 @@ function SpoolInventoryPage({ spools, filaments, locations, printers, currency, 
 
     {addOpen && <SpoolModal filaments={filaments} locations={locations} printers={printers} currency={currency} onClose={() => setAddOpen(false)} onSaved={async () => { setAddOpen(false); await onChanged(); }} />}
     {manageSpool && <SpoolIdentityModal spool={manageSpool} onClose={() => setManageSpool(null)} onSaved={async () => { setManageSpool(null); await onChanged(); }} />}
+    {detailFilament && <FilamentDetailsModal filament={detailFilament} onClose={() => setDetailFilament(null)} />}
     {deleteSpool && <DeletePrintingRecordModal
       title={"Delete spool · " + deleteSpool.spool_id}
       description={"Delete " + deleteSpool.spool_id + " from MakerVault spool inventory?"}
@@ -1463,6 +1466,7 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
     }, 0);
     return () => window.clearTimeout(timer);
   }, [filaments.length, searchTarget?.token, searchTarget?.id]);
+  const [detailFilament, setDetailFilament] = useState(null);
   const [editFilament, setEditFilament] = useState(null);
   const [imageFilament, setImageFilament] = useState(null);
   const term = query.trim().toLowerCase();
@@ -1509,6 +1513,7 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
             {item.country_of_origin && <Badge>{item.country_of_origin}</Badge>}
             {item.transparency && item.transparency !== "opaque" && <Badge>{item.transparency_label || item.transparency}</Badge>}
             {item.glow && <Badge>Glow</Badge>}
+            <button type="button" onClick={() => setDetailFilament(item)}>Details</button>
             {canChangeFilament && <button type="button" onClick={() => setImageFilament(item)}>Image</button>}
             {canChangeFilament && <button type="button" onClick={() => setEditFilament(item)}>Edit</button>}
           </div>
@@ -1516,6 +1521,8 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
         {!rows.length && <div className="printingEmptyInline">{term ? "No filament products match this search." : "No saved filament products yet."}</div>}
       </div>
     </section>
+
+    {detailFilament && <FilamentDetailsModal filament={detailFilament} onClose={() => setDetailFilament(null)} />}
 
     {imageFilament && <ImageManagerModal
       title={"Image — " + (imageFilament.display_name || imageFilament.name)}
@@ -1534,6 +1541,82 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
       onSaved={async () => { setEditFilament(null); await onChanged(); }}
     />}
   </div>;
+}
+
+
+function FilamentDetailsModal({ filament, onClose }) {
+  const temperatureRange = (min, max) => {
+    if (min == null && max == null) return "—";
+    if (min != null && max != null && Number(min) !== Number(max)) return `${min}–${max} °C`;
+    return `${min ?? max} °C`;
+  };
+  const drying = filament.drying_temp_c == null && filament.drying_time_hours == null
+    ? "—"
+    : [
+        filament.drying_temp_c != null ? filament.drying_temp_c + " °C" : "",
+        filament.drying_time_hours != null ? filament.drying_time_hours + " h" : "",
+      ].filter(Boolean).join(" · ");
+
+  return <Modal
+    title={filament.display_name || filament.name}
+    subtitle="Saved filament product details used by every physical spool linked to this product."
+    onClose={onClose}
+    wide
+  >
+    <div className="filamentCatalogueLayout">
+      <div>
+        <div className={`filamentCatalogueHero filamentPreview-${filament.transparency || "opaque"}`}>
+          {filament.image
+            ? <img src={filament.image} alt="" />
+            : <span style={filamentSwatchStyle(filament)} />}
+        </div>
+        <div className="badgeRow">
+          {filament.material && <Badge tone="accent">{filament.material}</Badge>}
+          {filament.color_name && <Badge>{filament.color_name}</Badge>}
+          {filament.transparency && <Badge>{filament.transparency_label || filament.transparency}</Badge>}
+          {filament.finish && <Badge>{filament.finish}</Badge>}
+          {filament.pattern && <Badge>{filament.pattern}</Badge>}
+          {filament.glow && <Badge>Glow</Badge>}
+          {filament.is_refill && <Badge>Refill</Badge>}
+        </div>
+        {filament.image_source_provider && <small className="muted">
+          Image: {filament.image_source_provider}
+          {filament.image_license ? " · " + filament.image_license : ""}
+          {filament.image_author ? " · " + filament.image_author : ""}
+        </small>}
+      </div>
+      <div>
+        <span className="settingsEyebrow">{filament.manufacturer || "Filament product"}</span>
+        <h3>{filament.name}</h3>
+        <dl className="detailSpecs">
+          <div><dt>Material</dt><dd>{filament.material || "—"}</dd></div>
+          <div><dt>Colour</dt><dd>{filament.color_name || filament.color_hex || "—"}</dd></div>
+          <div><dt>Diameter</dt><dd>{filament.diameter_mm == null ? "—" : filament.diameter_mm + " mm"}</dd></div>
+          <div><dt>Density</dt><dd>{filament.density_g_cm3 == null ? "—" : filament.density_g_cm3 + " g/cm³"}</dd></div>
+          <div><dt>Nominal weight</dt><dd>{grams(filament.nominal_weight_g)}</dd></div>
+          <div><dt>Empty spool</dt><dd>{grams(filament.empty_spool_weight_g)}</dd></div>
+          <div><dt>Nozzle</dt><dd>{temperatureRange(filament.nozzle_temp_min_c, filament.nozzle_temp_max_c)}</dd></div>
+          <div><dt>Bed</dt><dd>{temperatureRange(filament.bed_temp_min_c, filament.bed_temp_max_c)}</dd></div>
+          <div><dt>Drying</dt><dd>{drying}</dd></div>
+          <div><dt>Spool type</dt><dd>{filament.spool_type || (filament.is_refill ? "Refill" : "—")}</dd></div>
+          <div><dt>Origin</dt><dd>{filament.country_of_origin || "—"}</dd></div>
+          <div><dt>Source</dt><dd>{filament.source || "Manual"}{filament.source_license ? " · " + filament.source_license : ""}</dd></div>
+        </dl>
+        {(filament.product_url || filament.tds_url || filament.sds_url || filament.source_url || filament.image_source_page) && <div className="filamentCatalogueLinks">
+          {filament.product_url && <a href={filament.product_url} target="_blank" rel="noreferrer">Manufacturer product page</a>}
+          {filament.tds_url && <a href={filament.tds_url} target="_blank" rel="noreferrer">Technical data sheet</a>}
+          {filament.sds_url && <a href={filament.sds_url} target="_blank" rel="noreferrer">Safety data sheet</a>}
+          {!filament.product_url && filament.source_url && <a href={filament.source_url} target="_blank" rel="noreferrer">Catalogue source</a>}
+          {filament.image_source_page && filament.image_source_page !== filament.product_url && <a href={filament.image_source_page} target="_blank" rel="noreferrer">Image source</a>}
+        </div>}
+        {filament.color_hexes?.length > 1 && <div className="settingsCallout">
+          <strong>Multi-colour product</strong>
+          <p>{filament.color_hexes.length} recorded colours{filament.multi_color_direction ? " · " + filament.multi_color_direction : ""}</p>
+        </div>}
+        <div className="formActions"><button type="button" onClick={onClose}>Close</button></div>
+      </div>
+    </div>
+  </Modal>;
 }
 
 
