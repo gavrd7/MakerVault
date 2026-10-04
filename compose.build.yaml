@@ -1,0 +1,14 @@
+# Optional source-build override for MakerVault.
+#
+# Normal installations should use:
+#   docker compose up -d
+#
+# To build MakerVault locally from the checked-out source instead:
+#   docker compose -f compose.yaml -f compose.build.yaml up -d --build
+services:
+  makervault:
+    image: makervault-local:dev
+    pull_policy: build
+    build:
+      context: .
+      dockerfile: Dockerfile
