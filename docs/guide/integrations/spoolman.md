@@ -27,6 +27,8 @@ Export and bidirectional modes can change the external service. Back up existing
 
 MakerVault keeps its existing filament identity, placement, notes and status authoritative rather than silently replacing them with remote values. New imports may inherit remote location information. Review the results of the first sync before enabling a recurring schedule.
 
+Spoolman synchronisation and **filament catalogue matching are separate features**. Spoolman sync deals with physical spool records in your Spoolman service. The MakerVault filament catalogue uses SpoolmanDB as a primary reference source alongside verified supplemental manufacturer-backed entries and technical-source enrichment. A spool can therefore be linked to Spoolman while its filament product is still **Unmatched**, or vice versa.
+
 ## Resolve possible duplicates
 
 Choose **Review … possible duplicates** when offered. Compare physical spool identity, weight, product and any RFID/UID. Then choose one action:
