@@ -1,0 +1,334 @@
+{
+  "version": 1,
+  "scope": "MakerVault supplemental FDM/FFF printer catalogue. Presence does not imply live-integration support.",
+  "printers": [
+    {
+      "manufacturer": "Creality",
+      "name": "K1",
+      "family": "K1",
+      "source_url": "https://store.creality.com/uk/collections/k1-series-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "K1C",
+      "family": "K1",
+      "source_url": "https://store.creality.com/uk/collections/k1-series-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "K1 Max",
+      "family": "K1",
+      "source_url": "https://store.creality.com/uk/collections/k1-series-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "K1 SE",
+      "family": "K1",
+      "source_url": "https://store.creality.com/uk/collections/k1-series-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "K2",
+      "family": "K2",
+      "source_url": "https://store.creality.com/uk/collections/k2-series-3d-printers",
+      "multi_material_system": "creality_cfs"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "K2 Plus",
+      "family": "K2",
+      "source_url": "https://store.creality.com/uk/collections/k2-series-3d-printers",
+      "multi_material_system": "creality_cfs"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "K2 Pro",
+      "family": "K2",
+      "source_url": "https://store.creality.com/uk/collections/k2-series-3d-printers",
+      "multi_material_system": "creality_cfs"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "K2 SE",
+      "family": "K2",
+      "source_url": "https://store.creality.com/uk/collections/k2-series-3d-printers",
+      "multi_material_system": "creality_cfs"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "Ender-3",
+      "family": "Ender-3",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "Ender-3 Pro",
+      "family": "Ender-3",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "Ender-3 V2",
+      "family": "Ender-3",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "Ender-3 V2 Neo",
+      "family": "Ender-3",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "Ender-3 Neo",
+      "family": "Ender-3",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "Ender-3 Max",
+      "family": "Ender-3",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "Ender-3 Max Neo",
+      "family": "Ender-3",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "Ender-3 S1",
+      "family": "Ender-3",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "Ender-3 S1 Pro",
+      "family": "Ender-3",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "Ender-3 S1 Plus",
+      "family": "Ender-3",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "Ender-3 V3",
+      "family": "Ender-3",
+      "source_url": "https://store.creality.com/uk/collections/3d-printers"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "Ender-3 V3 SE",
+      "family": "Ender-3",
+      "source_url": "https://store.creality.com/uk/collections/3d-printers"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "Ender-3 V3 KE",
+      "family": "Ender-3",
+      "source_url": "https://store.creality.com/uk/collections/3d-printers"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "Ender-3 V3 Plus",
+      "family": "Ender-3",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "Ender-5",
+      "family": "Ender-5",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "Ender-5 Pro",
+      "family": "Ender-5",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "Ender-5 Plus",
+      "family": "Ender-5",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "Ender-5 S1",
+      "family": "Ender-5",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "Ender-5 Max",
+      "family": "Ender-5",
+      "source_url": "https://store.creality.com/uk/collections/3d-printers"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "Ender-6",
+      "family": "Ender",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "Ender-7",
+      "family": "Ender",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "CR-10",
+      "family": "CR",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "CR-10S",
+      "family": "CR",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "CR-10 V2",
+      "family": "CR",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "CR-10 V3",
+      "family": "CR",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "CR-10 Smart",
+      "family": "CR",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "CR-10 Smart Pro",
+      "family": "CR",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "CR-10S Pro",
+      "family": "CR",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "CR-10S Pro V2",
+      "family": "CR",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "CR-10 S4",
+      "family": "CR",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "CR-10 S5",
+      "family": "CR",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "CR-10 Max",
+      "family": "CR",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "CR-6 SE",
+      "family": "CR",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "CR-6 Max",
+      "family": "CR",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "CR-30",
+      "family": "CR",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "CR-M4",
+      "family": "CR",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "CR-200B",
+      "family": "CR",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "CR-200B Pro",
+      "family": "CR",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "Sermoon D1",
+      "family": "Sermoon",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "Sermoon V1",
+      "family": "Sermoon",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "Sermoon V1 Pro",
+      "family": "Sermoon",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "Sermoon M1",
+      "family": "Sermoon",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "Sermoon S1",
+      "family": "Sermoon",
+      "source_url": "https://store.creality.com/uk/collections/k1-series-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "CP-01",
+      "family": "CP",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "SPARKX i7",
+      "family": "SPARKX",
+      "source_url": "https://store.creality.com/uk/collections/3d-printers"
+    },
+    {
+      "manufacturer": "Creality",
+      "name": "SPARKX i7 NANO",
+      "family": "SPARKX",
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+    }
+  ]
+}
