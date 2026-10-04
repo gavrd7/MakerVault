@@ -24,6 +24,15 @@
 
 MakerVault keeps the practical parts of a workshop connected: what you own, what a build needs, which files and wiring belong to it, which model revision you printed, and where the finished parts ended up.
 
+## Development and validation model
+
+MakerVault is an **AI-coded project**. The application codebase has been produced entirely through AI systems working under human direction rather than by a human programmer writing the implementation by hand.
+
+The human maintainer is responsible for the product side of the project: feature ideas, priorities and design decisions; hands-on acceptance checks; bug discovery; practical testing; and deciding whether changes are good enough to merge and release.
+
+This also sets an important support expectation: investigation, fixes and future development depend on the capabilities of the available AI tooling, the quality of reproducible reports, and human validation of the resulting changes. AI-generated code and automated CI are not treated as substitutes for real-world testing.
+
+
 ## A look at MakerVault
 
 <p align="center">

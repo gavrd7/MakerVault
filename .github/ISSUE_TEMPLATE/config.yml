@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: MakerVault User Guide
+    url: https://gavrd7.github.io/MakerVault-docs/
+    about: Installation, configuration, updates, backups, HTTPS and feature documentation.
+  - name: Security vulnerability
+    url: https://github.com/gavrd7/MakerVault/security
+    about: Please do not report security vulnerabilities in public issues. Use GitHub's private security reporting tools where available.

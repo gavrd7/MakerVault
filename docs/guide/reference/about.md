@@ -6,6 +6,12 @@ This guide describes **MakerVault v1.0.0**, the first stable release. The releas
 
 The primary deployment route is Linux with the supplied Docker Compose configuration. Platform-specific NAS/Portainer and Windows/macOS installation walkthroughs are outside this edition's verified scope. No measured minimum hardware specification is claimed.
 
+## Development model
+
+MakerVault is coded entirely through AI systems under human direction. The human maintainer supplies the feature ideas, product priorities and design decisions, and performs the hands-on acceptance checks, bug finding and practical testing used to validate releases.
+
+This means support, investigation and future fixes are dependent on the capabilities of the available AI tooling as well as the quality of reproducible reports and human testing. Automated CI and AI-generated patches are useful checks, but they are not treated as proof that a real-world problem is solved.
+
 ## Verification
 
 Content was checked against the source README, environment example, Compose/entrypoint, authentication settings, role setup, storage/recovery implementation and frontend workflows. Documentation build/link checks verify presentation and internal references. The v1 release also completed clean-server installation and representative off-server backup/restore acceptance; hardware/provider testing remains separate for adapters explicitly marked experimental.
