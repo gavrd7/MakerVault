@@ -9,6 +9,7 @@ from django.conf import settings
 from django.core.cache import cache
 
 from .importers import _host_is_public
+from .filament_technical_sources import enrich_filament_from_authoritative_sources
 
 
 DEFAULT_SPOOLMANDB_URL = "https://donkie.github.io/SpoolmanDB/filaments.json"
@@ -350,6 +351,10 @@ def refresh_imported_filament_products(*, force_catalogue=False, limit=None):
         if changed:
             item.save(update_fields=list(dict.fromkeys(changed + ["updated_at"])))
             updated += 1
+
+        authoritative = enrich_filament_from_authoritative_sources(item, row)
+        if authoritative.get("changed_fields"):
+            updated += int(not changed)
 
         source_meta = dict(item.source.raw_metadata or {})
         if source_meta.get("record") != row.get("raw"):
