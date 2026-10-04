@@ -4,6 +4,13 @@ Thanks for helping improve MakerVault.
 
 MakerVault is a self-hosted workshop management application for electronics inventory, projects, files and 3D printing. Contributions are welcome for bug fixes, documentation, accessibility, integrations, tests and carefully scoped new features.
 
+## How MakerVault is developed
+
+MakerVault's codebase has been coded entirely through AI systems under human direction. The human maintainer supplies the feature ideas, product direction and merge/release decisions, and performs the hands-on acceptance checks, bug finding and practical testing.
+
+That means contributions are especially valuable when they are concrete and reproducible. Support and implementation work depend on what can be investigated and produced with the available AI tooling, followed by human validation. Please do not assume an AI-generated change is correct merely because it builds or passes automated tests.
+
+
 ## Before you start
 
 Please:
