@@ -188,7 +188,7 @@ sudo docker compose config --quiet
 
 No output and a successful exit means Compose could parse the configuration. It does **not** prove the database credentials, network address or storage choices are correct.
 
-For the first launch, return to [installation step 4](install.md#4-build-and-start) and build the app. For an existing installation after an ordinary settings edit:
+For the first launch, return to [installation step 4](install.md#4-pull-and-start-makervault-recommended) and build the app. For an existing installation after an ordinary settings edit:
 
 ```bash
 sudo docker compose up -d
