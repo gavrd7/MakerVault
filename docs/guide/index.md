@@ -10,7 +10,7 @@ Learn to install MakerVault, record what you own and bring your projects, files 
 </div>
 
 !!! info "Current release: v1.0.0"
-    MakerVault v1.0.0 is the first stable release. The v1 release gates include representative off-server recovery, clean-install and restart/persistence checks, native HTTPS/Local CA validation, deployment preflight and green CI. Experimental printer adapters remain labelled according to their hardware-validation status. See [scope and verification](reference/about.md).
+    MakerVault v1.0.0 is the current tagged stable release. This guide also tracks accepted post-v1 fixes being prepared for the next patch release, including richer filament catalogue matching and the K2 same-origin camera path. The v1 release gates include representative off-server recovery, clean-install and restart/persistence checks, native HTTPS/Local CA validation, deployment preflight and green CI. Experimental printer adapters remain labelled according to their hardware-validation status. See [scope and verification](reference/about.md).
 
 <div class="guide-grid" markdown>
 <div class="guide-card" markdown>
@@ -27,7 +27,7 @@ Find a board, add the units you own, plan a build and keep its files together.
 </div>
 <div class="guide-card" markdown>
 ### Organise 3D printing
-Keep track of printers, camera feeds, physical spools, models, print history and explicitly retained printed parts.
+Keep track of printers, camera feeds, physical spools, catalogue-matched filament products, models, print history and explicitly retained printed parts.
 
 [3D printing →](using/printing.md)
 </div>
