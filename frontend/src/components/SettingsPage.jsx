@@ -109,6 +109,7 @@ export default function SettingsPage({ config, onBackupStarted }) {
           interval_hours: Number(form.interval_hours),
           check_board_data: form.check_board_data,
           check_printer_data: form.check_printer_data,
+          check_filament_data: form.check_filament_data,
           check_images: form.check_images,
         },
       });
@@ -412,7 +413,11 @@ export default function SettingsPage({ config, onBackupStarted }) {
             <input type="checkbox" checked={form.check_printer_data} onChange={e => set("check_printer_data", e.target.checked)} />
           </label>
           <label className="settingsToggle">
-            <div><strong>Catalogue images</strong><small>Retry missing catalogue images on the saved maintenance cadence.</small></div>
+            <div><strong>Filament catalogue</strong><small>Refresh missing metadata and provenance for saved SpoolmanDB-backed filament products without overwriting your edits.</small></div>
+            <input type="checkbox" checked={form.check_filament_data !== false} onChange={e => set("check_filament_data", e.target.checked)} />
+          </label>
+          <label className="settingsToggle">
+            <div><strong>Catalogue images</strong><small>Retry missing board, component, printer and filament images on the saved maintenance cadence.</small></div>
             <input type="checkbox" checked={form.check_images} onChange={e => set("check_images", e.target.checked)} />
           </label>
         </div>
