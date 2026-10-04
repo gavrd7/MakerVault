@@ -155,6 +155,31 @@ class FilamentCatalogueEnrichmentTests(TestCase):
 
     @patch("core.filament_catalogue.enrich_filament_from_authoritative_sources")
     @patch("core.filament_catalogue.get_spoolmandb_item")
+    def test_catalogue_match_rounds_external_decimal_precision(self, get_item, authoritative):
+        raw = {**self.spoolmandb_row(), "density": 1.23456, "weight": 1000.127}
+        row = normalise_spoolmandb_row(raw)
+        get_item.return_value = row
+        authoritative.return_value = {"checked_sources": 0, "changed_fields": [], "errors": 0}
+        maker = FilamentManufacturer.objects.create(name="Example Filament")
+        filament = FilamentProduct.objects.create(
+            filament_manufacturer=maker,
+            name="Precision test",
+            material="PLA",
+            color_name="Black",
+            color_hex="#111111",
+            diameter_mm="1.75",
+            density_g_cm3=None,
+            nominal_weight_g=None,
+        )
+
+        apply_catalogue_match_to_filament(filament, row["external_id"])
+        filament.refresh_from_db()
+
+        self.assertEqual(str(filament.density_g_cm3), "1.235")
+        self.assertEqual(str(filament.nominal_weight_g), "1000.13")
+
+    @patch("core.filament_catalogue.enrich_filament_from_authoritative_sources")
+    @patch("core.filament_catalogue.get_spoolmandb_item")
     def test_catalogue_match_ignores_unrelated_legacy_validation_errors(self, get_item, authoritative):
         row = normalise_spoolmandb_row(self.spoolmandb_row())
         get_item.return_value = row
