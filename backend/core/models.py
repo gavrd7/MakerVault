@@ -1048,7 +1048,7 @@ class PrintJob(TimeStampedModel):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="makervault_print_jobs")
     model_revision = models.ForeignKey(ModelRevision, on_delete=models.SET_NULL, null=True, blank=True, related_name="prints")
     project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True, related_name="print_jobs")
-    printer = models.ForeignKey(Printer, on_delete=models.PROTECT, related_name="print_jobs")
+    printer = models.ForeignKey(Printer, on_delete=models.SET_NULL, null=True, blank=True, related_name="print_jobs")
     status = models.CharField(max_length=20, choices=STATUS, default="planned")
     quantity = models.PositiveIntegerField(default=1)
     currency = models.CharField(max_length=3, default="GBP")
