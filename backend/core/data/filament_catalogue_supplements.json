@@ -1,0 +1,175 @@
+[
+  {
+    "id": "makervault-esun-tpe83a-black-175-1000",
+    "manufacturer": "eSUN",
+    "name": "TPE-83A Black",
+    "aliases": [
+      "TPE 83A Black",
+      "Elastic TPE 83A Black",
+      "Flexible TPE 83A Black"
+    ],
+    "material": "TPE",
+    "density": 1.14,
+    "diameter": 1.75,
+    "weight": 1000,
+    "color_name": "Black",
+    "color_hex": "272729",
+    "extruder_temp_range": [
+      220,
+      250
+    ],
+    "bed_temp_range": [
+      45,
+      60
+    ],
+    "drying_temp": 55,
+    "drying_time_hours": 4,
+    "product_url": "https://www.esun3d.com/elastic-tpe-83a-product/",
+    "source_type": "manufacturer",
+    "source_name": "eSUN",
+    "source_url": "https://www.esun3d.com/elastic-tpe-83a-product/",
+    "source_license": "Manufacturer data"
+  },
+  {
+    "id": "makervault-esun-tpe83a-white-175-1000",
+    "manufacturer": "eSUN",
+    "name": "TPE-83A White",
+    "aliases": [
+      "TPE 83A White",
+      "Elastic TPE 83A White",
+      "Flexible TPE 83A White"
+    ],
+    "material": "TPE",
+    "density": 1.14,
+    "diameter": 1.75,
+    "weight": 1000,
+    "color_name": "White",
+    "color_hex": "f6f6f6",
+    "extruder_temp_range": [
+      220,
+      250
+    ],
+    "bed_temp_range": [
+      45,
+      60
+    ],
+    "drying_temp": 55,
+    "drying_time_hours": 4,
+    "product_url": "https://www.esun3d.com/elastic-tpe-83a-product/",
+    "source_type": "manufacturer",
+    "source_name": "eSUN",
+    "source_url": "https://www.esun3d.com/elastic-tpe-83a-product/",
+    "source_license": "Manufacturer data"
+  },
+  {
+    "id": "makervault-esun-tpe83a-butter-salmon-175-1000",
+    "manufacturer": "eSUN",
+    "name": "TPE-83A Butter Salmon",
+    "aliases": [
+      "TPE 83A Butter Salmon",
+      "Elastic TPE 83A Butter Salmon"
+    ],
+    "material": "TPE",
+    "density": 1.14,
+    "diameter": 1.75,
+    "weight": 1000,
+    "color_name": "Butter Salmon",
+    "color_hex": "ffa07a",
+    "extruder_temp_range": [
+      220,
+      250
+    ],
+    "bed_temp_range": [
+      45,
+      60
+    ],
+    "drying_temp": 55,
+    "drying_time_hours": 4,
+    "product_url": "https://www.esun3d.com/elastic-tpe-83a-product/",
+    "source_type": "manufacturer",
+    "source_name": "eSUN",
+    "source_url": "https://www.esun3d.com/elastic-tpe-83a-product/",
+    "source_license": "Manufacturer data"
+  },
+  {
+    "id": "makervault-eryone-asa-high-speed-black-175-1000",
+    "manufacturer": "Eryone",
+    "name": "ASA High-Speed Black",
+    "aliases": [
+      "Hyper ASA Black",
+      "High Speed ASA Black",
+      "ASA-High Speed-Black"
+    ],
+    "material": "ASA",
+    "diameter": 1.75,
+    "weight": 1000,
+    "color_name": "Black",
+    "extruder_temp_range": [
+      230,
+      260
+    ],
+    "bed_temp_range": [
+      75,
+      90
+    ],
+    "product_url": "https://uk.eryone3d.com/products/moq1-asa-high-speed-filament",
+    "source_type": "manufacturer",
+    "source_name": "Eryone",
+    "source_url": "https://uk.eryone3d.com/products/moq1-asa-high-speed-filament",
+    "source_license": "Manufacturer data"
+  },
+  {
+    "id": "makervault-eryone-asa-high-speed-white-175-1000",
+    "manufacturer": "Eryone",
+    "name": "ASA High-Speed White",
+    "aliases": [
+      "Hyper ASA White",
+      "High Speed ASA White",
+      "ASA-High Speed-White"
+    ],
+    "material": "ASA",
+    "diameter": 1.75,
+    "weight": 1000,
+    "color_name": "White",
+    "extruder_temp_range": [
+      230,
+      260
+    ],
+    "bed_temp_range": [
+      75,
+      90
+    ],
+    "product_url": "https://uk.eryone3d.com/products/moq1-asa-high-speed-filament",
+    "source_type": "manufacturer",
+    "source_name": "Eryone",
+    "source_url": "https://uk.eryone3d.com/products/moq1-asa-high-speed-filament",
+    "source_license": "Manufacturer data"
+  },
+  {
+    "id": "makervault-eryone-asa-high-speed-orange-175-1000",
+    "manufacturer": "Eryone",
+    "name": "ASA High-Speed Orange",
+    "aliases": [
+      "Hyper ASA Orange",
+      "High Speed ASA Orange",
+      "ASA-High Speed-Orange"
+    ],
+    "material": "ASA",
+    "diameter": 1.75,
+    "weight": 1000,
+    "color_name": "Orange",
+    "extruder_temp_range": [
+      230,
+      260
+    ],
+    "bed_temp_range": [
+      75,
+      90
+    ],
+    "product_url": "https://uk.eryone3d.com/products/moq1-asa-high-speed-filament",
+    "source_type": "manufacturer",
+    "source_name": "Eryone",
+    "source_url": "https://uk.eryone3d.com/products/moq1-asa-high-speed-filament",
+    "source_license": "Manufacturer data"
+  }
+]
