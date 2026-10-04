@@ -1,8 +1,15 @@
 # Changelog
 
-## Unreleased
+## v1.0.1 — 4 October 2026
 
-- Route Creality K2 camera compatibility video through MakerVault as authenticated same-origin HLS/fMP4. The bundled go2rtc helper and WebRTC listener remain loopback-only, Docker no longer publishes port 8555, and browsers can view K2 video through the normal MakerVault HTTP/HTTPS origin.
+- Expanded filament catalogue enrichment beyond SpoolmanDB with verified supplemental manufacturer-backed entries, alias-aware matching and broader technical provenance.
+- Added catalogue match, rematch and unmatch workflows for saved filament products, including reversible pre-match restoration for newer matches.
+- Added spool-inventory catalogue status badges and clearer match-selection controls so users can distinguish filament colour from selection state.
+- Improved Spoolman/CFS filament matching and colour visibility for similar records.
+- Added model-aware decimal rounding for imported/enriched numeric values to prevent precision-validation failures.
+- Improved manufacturer/TDS technical enrichment for density, nozzle/bed temperatures and drying guidance while preserving user-entered corrections.
+- Routed Creality K2 camera video through MakerVault as authenticated same-origin HLS/fMP4; go2rtc remains loopback-only and Docker no longer needs to publish port 8555.
+- Updated camera, reverse-proxy and troubleshooting guidance for the K2 same-origin path.
 
 ## v1.0.0 — released 3 October 2026
 
