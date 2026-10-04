@@ -85,6 +85,7 @@ def normalise_spoolmandb_row(row):
         "nominal_weight_g": row.get("weight"),
         "empty_spool_weight_g": row.get("spool_weight"),
         "spool_type": row.get("spool_type") or "",
+        "is_refill": bool(row.get("is_refill")),
         "color_name": color_name,
         "color_hex": display_primary,
         "color_hexes": color_hexes,
@@ -97,6 +98,13 @@ def normalise_spoolmandb_row(row):
         "nozzle_temp_max_c": nozzle_max,
         "bed_temp_min_c": bed_min,
         "bed_temp_max_c": bed_max,
+        "country_of_origin": str(row.get("country_of_origin") or "").strip(),
+        "product_url": str(row.get("product_url") or "").strip(),
+        "tds_url": str(row.get("tds_url") or "").strip(),
+        "sds_url": str(row.get("sds_url") or "").strip(),
+        "codes": row.get("codes") if isinstance(row.get("codes"), list) else [],
+        "eans": row.get("eans") if isinstance(row.get("eans"), list) else [],
+        "eans_refill": row.get("eans_refill") if isinstance(row.get("eans_refill"), list) else [],
         "source_name": "SpoolmanDB",
         "source_url": "https://donkie.github.io/SpoolmanDB/",
         "source_license": "MIT",
@@ -259,3 +267,101 @@ def spoolmandb_meta():
             "license": "MIT",
         },
     }
+
+def refresh_imported_filament_products(*, force_catalogue=False, limit=None):
+    """Refresh saved SpoolmanDB-backed products without overwriting user edits.
+
+    Only blank MakerVault fields are populated from upstream. Richer provenance
+    is retained in profile_data so future catalogue/image passes can use
+    manufacturer product, TDS and SDS links without turning them into user data.
+    """
+    from .models import FilamentProduct
+
+    upstream = {
+        row["external_id"]: row
+        for row in get_spoolmandb_catalogue(force=force_catalogue)
+        if row.get("external_id")
+    }
+    queryset = (
+        FilamentProduct.objects.select_related("source")
+        .filter(source__source_type="spoolmandb")
+        .order_by("updated_at", "pk")
+    )
+    if limit is not None:
+        queryset = queryset[:max(int(limit), 0)]
+
+    checked = updated = missing = 0
+    for item in queryset:
+        checked += 1
+        external_id = str(getattr(item.source, "external_id", "") or "").strip()
+        row = upstream.get(external_id)
+        if not row:
+            missing += 1
+            continue
+
+        changed = []
+        fill_fields = {
+            "color_name": row.get("color_name"),
+            "color_hex": row.get("color_hex"),
+            "color_hexes": row.get("color_hexes"),
+            "multi_color_direction": row.get("multi_color_direction"),
+            "finish": row.get("finish"),
+            "pattern": row.get("pattern"),
+            "density_g_cm3": row.get("density_g_cm3"),
+            "nominal_weight_g": row.get("nominal_weight_g"),
+            "empty_spool_weight_g": row.get("empty_spool_weight_g"),
+            "nozzle_temp_min_c": row.get("nozzle_temp_min_c"),
+            "nozzle_temp_max_c": row.get("nozzle_temp_max_c"),
+            "bed_temp_min_c": row.get("bed_temp_min_c"),
+            "bed_temp_max_c": row.get("bed_temp_max_c"),
+        }
+        for field, value in fill_fields.items():
+            current = getattr(item, field)
+            if current in (None, "", [], {}) and value not in (None, "", [], {}):
+                setattr(item, field, value)
+                changed.append(field)
+
+        if not item.glow and row.get("glow"):
+            item.glow = True
+            changed.append("glow")
+        if item.transparency == "opaque" and row.get("transparency") in {"translucent", "transparent"}:
+            item.transparency = row["transparency"]
+            changed.append("transparency")
+
+        profile = dict(item.profile_data or {})
+        upstream_meta = {
+            "catalogue": "SpoolmanDB",
+            "external_id": external_id,
+            "spool_type": row.get("spool_type") or "",
+            "is_refill": bool(row.get("is_refill")),
+            "country_of_origin": row.get("country_of_origin") or "",
+            "product_url": row.get("product_url") or "",
+            "tds_url": row.get("tds_url") or "",
+            "sds_url": row.get("sds_url") or "",
+            "codes": row.get("codes") or [],
+            "eans": row.get("eans") or [],
+            "eans_refill": row.get("eans_refill") or [],
+        }
+        if profile.get("catalogue_provenance") != upstream_meta:
+            profile["catalogue_provenance"] = upstream_meta
+            item.profile_data = profile
+            changed.append("profile_data")
+
+        if changed:
+            item.save(update_fields=list(dict.fromkeys(changed + ["updated_at"])))
+            updated += 1
+
+        source_meta = dict(item.source.raw_metadata or {})
+        if source_meta.get("record") != row.get("raw"):
+            source_meta["record"] = row.get("raw") or {}
+            source_meta["license"] = row.get("source_license") or source_meta.get("license", "")
+            item.source.raw_metadata = source_meta
+            item.source.save(update_fields=["raw_metadata", "updated_at"])
+
+    return {
+        "status": "ok",
+        "checked": checked,
+        "updated": updated,
+        "missing_upstream": missing,
+    }
+
