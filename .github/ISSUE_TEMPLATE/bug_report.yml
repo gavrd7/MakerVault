@@ -1,0 +1,135 @@
+name: Bug report
+description: Report reproducible behaviour that appears to be incorrect.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a MakerVault bug.
+
+        Please remove passwords, tokens, private backups, database contents, personal information and other secrets from anything you post.
+
+  - type: input
+    id: version
+    attributes:
+      label: MakerVault version
+      description: For example v1.0.0 or a commit SHA.
+      placeholder: v1.0.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install_type
+    attributes:
+      label: Installation type
+      options:
+        - Fresh installation
+        - Upgraded existing installation
+        - Development checkout
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Installation / Docker
+        - Accounts / authentication / OIDC
+        - Dashboard / navigation / search
+        - Board or component catalogue
+        - Inventory
+        - Projects / BOM
+        - Files / storage
+        - Interactive Wiring
+        - Maker Tags
+        - 3D Printing
+        - Printer integration / telemetry
+        - Camera feeds
+        - Filament / spools / Spoolman
+        - Models / viewer / analysis
+        - Backup / restore
+        - HTTPS / reverse proxy
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Host environment
+      description: OS, architecture and Docker/Compose versions where relevant.
+      placeholder: Debian 13 x86_64, Docker 29.x, Compose 2.x
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser / client
+      description: Include browser and platform for UI problems.
+      placeholder: Firefox on Windows 11
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Give the smallest reliable sequence that reproduces the problem.
+      placeholder: |
+        1. Open ...
+        2. Click ...
+        3. Enter ...
+        4. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or screenshots
+      description: Paste only sanitised excerpts. Remove secrets, personal information and private deployment data.
+      render: shell
+
+  - type: dropdown
+    id: hardware
+    attributes:
+      label: Does this involve printer or other physical hardware?
+      options:
+        - "No"
+        - "Yes"
+    validations:
+      required: true
+
+  - type: textarea
+    id: hardware_details
+    attributes:
+      label: Hardware / integration details
+      description: If applicable, include exact printer/model, firmware, integration type and whether the problem reproduces without optional integrations.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues for the same problem.
+          required: true
+        - label: I removed credentials, tokens, private backups and other sensitive information.
+          required: true
+        - label: This is not a security vulnerability requiring private disclosure.
+          required: true
