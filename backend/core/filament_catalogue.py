@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from decimal import Decimal
+from pathlib import Path
 import json
 from urllib.parse import urljoin, urlparse
 
@@ -17,6 +18,7 @@ from .model_values import fit_model_decimal
 DEFAULT_SPOOLMANDB_URL = "https://donkie.github.io/SpoolmanDB/filaments.json"
 MAX_CATALOGUE_BYTES = 64 * 1024 * 1024
 CACHE_SECONDS = 6 * 60 * 60
+SUPPLEMENTAL_CATALOGUE_PATH = Path(__file__).resolve().parent / "data" / "filament_catalogue_supplements.json"
 
 
 class FilamentCatalogueError(ValueError):
@@ -108,12 +110,57 @@ def normalise_spoolmandb_row(row):
         "codes": row.get("codes") if isinstance(row.get("codes"), list) else [],
         "eans": row.get("eans") if isinstance(row.get("eans"), list) else [],
         "eans_refill": row.get("eans_refill") if isinstance(row.get("eans_refill"), list) else [],
+        "aliases": [],
+        "source_type": "spoolmandb",
         "source_name": "SpoolmanDB",
         "source_url": "https://donkie.github.io/SpoolmanDB/",
         "source_license": "MIT",
         "raw": row,
     }
 
+
+
+def normalise_supplemental_row(row):
+    item = normalise_spoolmandb_row(row)
+    if not item:
+        return None
+    item["aliases"] = [str(value).strip() for value in (row.get("aliases") or []) if str(value).strip()]
+    item["drying_temp_c"] = row.get("drying_temp")
+    item["drying_time_hours"] = row.get("drying_time_hours")
+    item["source_type"] = str(row.get("source_type") or "manufacturer").strip() or "manufacturer"
+    item["source_name"] = str(row.get("source_name") or item["manufacturer"] or "Manufacturer").strip()
+    item["source_url"] = str(row.get("source_url") or row.get("product_url") or "").strip()
+    item["source_license"] = str(row.get("source_license") or "Manufacturer data").strip()
+    return item
+
+
+def get_supplemental_filament_catalogue():
+    try:
+        payload = json.loads(SUPPLEMENTAL_CATALOGUE_PATH.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return []
+    if not isinstance(payload, list):
+        return []
+    rows = []
+    for raw in payload:
+        item = normalise_supplemental_row(raw)
+        if item:
+            rows.append(item)
+    return rows
+
+
+def get_filament_catalogue(force=False):
+    primary = get_spoolmandb_catalogue(force=force)
+    supplements = get_supplemental_filament_catalogue()
+    seen = set()
+    merged = []
+    for row in [*primary, *supplements]:
+        external_id = str(row.get("external_id") or "").strip()
+        if not external_id or external_id in seen:
+            continue
+        seen.add(external_id)
+        merged.append(row)
+    return merged
 
 def _configured_url():
     return getattr(settings, "FILAMENT_CATALOGUE_SPOOLMANDB_URL", DEFAULT_SPOOLMANDB_URL)
@@ -213,14 +260,14 @@ def search_spoolmandb(*, query="", material="", manufacturer="", limit=50, offse
     material_key = str(material or "").strip().casefold()
     manufacturer_key = str(manufacturer or "").strip().casefold()
     matches = []
-    for item in get_spoolmandb_catalogue():
+    for item in get_filament_catalogue():
         if material_key and item["material"].casefold() != material_key:
             continue
         if manufacturer_key and manufacturer_key not in item["manufacturer"].casefold():
             continue
         haystack = " ".join([
             item["manufacturer"], item["name"], item["material"], item["color_name"],
-            item["finish"], item["pattern"],
+            item["finish"], item["pattern"], " ".join(item.get("aliases") or []),
         ]).casefold()
         if query_terms and not all(term in haystack for term in query_terms):
             continue
@@ -245,14 +292,14 @@ def get_spoolmandb_item(external_id):
     target = str(external_id or "").strip()
     if not target:
         raise FilamentCatalogueError("Choose a filament to import.")
-    for item in get_spoolmandb_catalogue():
+    for item in get_filament_catalogue():
         if item["external_id"] == target:
             return item
     raise FilamentCatalogueError("That SpoolmanDB filament could not be found.")
 
 
 def spoolmandb_meta():
-    rows = get_spoolmandb_catalogue()
+    rows = get_filament_catalogue()
     manufacturers = sorted(
         {item["manufacturer"] for item in rows if item.get("manufacturer")},
         key=str.casefold,
@@ -390,6 +437,20 @@ def _normalise_match_hex(value):
     return raw[:7]
 
 
+def _material_match_key(value):
+    raw = str(value or "").strip().casefold()
+    aliases = [
+        ("tpe", "tpe"), ("tpu", "tpu"), ("asa", "asa"), ("abs", "abs"),
+        ("petg", "petg"), ("pla", "pla"), ("nylon", "pa"), ("pa", "pa"),
+        ("polycarbonate", "pc"), ("pc", "pc"), ("hips", "hips"), ("pva", "pva"),
+        ("polypropylene", "pp"), ("pp", "pp"),
+    ]
+    for token, canonical in aliases:
+        if token in raw:
+            return canonical
+    return raw
+
+
 def match_filament_catalogue_candidates(filament, *, limit=8):
     """Rank catalogue records against an existing MakerVault filament product."""
     maker = (
@@ -398,7 +459,7 @@ def match_filament_catalogue_candidates(filament, *, limit=8):
         else filament.manufacturer.name if filament.manufacturer_id else ""
     )
     wanted_name = _match_tokens(filament.name)
-    wanted_material = str(filament.material or "").strip().casefold()
+    wanted_material = _material_match_key(filament.material)
     wanted_maker = str(maker or "").strip().casefold()
     wanted_colour_name = _match_tokens(filament.color_name)
     wanted_hex = _normalise_match_hex(filament.color_hex)
@@ -408,8 +469,8 @@ def match_filament_catalogue_candidates(filament, *, limit=8):
         score = 0
         reasons = []
         row_maker = str(row.get("manufacturer") or "").strip().casefold()
-        row_material = str(row.get("material") or "").strip().casefold()
-        row_name_tokens = _match_tokens(row.get("name"))
+        row_material = _material_match_key(row.get("material"))
+        row_name_tokens = _match_tokens(" ".join([str(row.get("name") or ""), *[str(value) for value in (row.get("aliases") or [])]]))
         row_colour_tokens = _match_tokens(row.get("color_name"))
         row_hex = _normalise_match_hex(row.get("color_hex"))
 
