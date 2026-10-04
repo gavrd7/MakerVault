@@ -96,6 +96,10 @@ The trusted proxy count must reflect the actual trusted chain. Do not copy `1` w
 
 Always forward private file requests through MakerVault. Do not expose `/app/media` as an unauthenticated Nginx alias or static file share. A proxy does not turn MakerVault into a public anonymous download service.
 
+### K2 camera playback through a reverse proxy
+
+Creality K2 camera playback uses the same MakerVault origin as the rest of the application. MakerVault's loopback-only go2rtc helper ingests the printer-side WebRTC stream internally and authenticated HLS/fMP4 is returned through the normal application routes. Your reverse proxy therefore needs only the usual MakerVault application backend; **do not publish or proxy a separate port 8555**. The browser does not need direct network reachability to the printer for this K2 compatibility path.
+
 
 ## Optional native HTTPS listener
 
