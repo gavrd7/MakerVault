@@ -20,6 +20,8 @@ A container can be replaced during an update. The database and uploads must ther
 
 Named volumes still consume space on the Docker host's disk. They are not cloud storage. Bind mounts do not automatically give you an extra copy of the data; the host directory is the actual live storage.
 
+> **Windows users:** Docker named volumes are the recommended first-install choice on Docker Desktop and WSL2 because they avoid Windows/Linux path and permission differences. If you later choose bind mounts, read the [Windows installation guide](windows.md#windows-storage-guidance) before changing any live storage path.
+
 Docker's [volumes guide](https://docs.docker.com/engine/storage/volumes/) and [bind mounts guide](https://docs.docker.com/engine/storage/bind-mounts/) describe the underlying storage options.
 
 ## MakerVault's five storage locations
@@ -54,7 +56,7 @@ Use the [backup procedure](../administration/backup.md) without needing to know 
 
 ## Option B: use your own server folders
 
-For a **new Linux installation**, you might choose this layout:
+For a **new Linux installation**, you might choose this layout. For Docker Desktop or WSL2, see the Windows-specific storage notes before copying these paths:
 
 | Host folder | Purpose |
 | --- | --- |
@@ -83,7 +85,7 @@ REDIS_STORAGE=/srv/makervault/redis
 BACKUP_STORAGE=/srv/makervault/backups
 ```
 
-Use full absolute paths beginning with `/`. Avoid `~`, relative paths and spaces for this beginner setup. If using the commented examples in `.env.example`, remove their `#` and remove/replace the old active entries so there is only one active entry per setting.
+On Linux or a WSL-hosted Docker Engine, use full absolute Linux paths beginning with `/`. Avoid `~`, relative paths and spaces for this beginner setup. On Docker Desktop from Windows, do not copy these `/srv/...` examples as Windows paths; keep named volumes unless you deliberately configure Docker Desktop bind mounts. If using the commented examples in `.env.example`, remove their `#` and remove/replace the old active entries so there is only one active entry per setting.
 
 ### Host path versus container path
 

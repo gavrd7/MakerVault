@@ -2,7 +2,11 @@
 
 **Goal:** run MakerVault on a Linux server and reach its sign-in page.
 
-MakerVault supports two installation routes:
+Using Windows instead? Follow [Install MakerVault on Windows](windows.md) for Docker Desktop, Docker Desktop + WSL2 integration, or Docker Engine directly inside WSL2.
+
+This chapter covers a native Linux Docker host. MakerVault also supports the same Compose stack on Windows through the separate Windows guide.
+
+MakerVault supports two image routes:
 
 - **Recommended:** pull the pre-built image from GitHub Container Registry (GHCR). This is the simplest route and does not compile MakerVault on your server.
 - **Build it yourself:** clone the same repository and build the Docker image locally from the supplied Dockerfile.
