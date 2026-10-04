@@ -22,7 +22,9 @@ from .catalogue_images import (
     CatalogueImageError,
     apply_catalogue_image,
     cache_catalogue_image_from_url,
+    catalogue_image_metadata,
     sanitise_uploaded_image,
+    set_catalogue_image_metadata,
 )
 from .importers import ImporterError, preview_board_url
 from .catalogue_enrichment import enrich_board
@@ -2124,18 +2126,22 @@ def _catalogue_image_response(request, obj, permission, serializer, response_key
     if request.method == "DELETE":
         if obj.image:
             obj.image.delete(save=False)
-        specs = dict(obj.specifications or {})
+        metadata, metadata_field = catalogue_image_metadata(obj)
         for key in [
             "external_image_url", "image_source_url", "image_source_type", "image_cached_at",
             "image_source_provider", "image_source_page", "image_source_query",
             "image_license", "image_author", "auto_image_seeded", "auto_image_seeded_at",
         ]:
-            specs.pop(key, None)
+            metadata.pop(key, None)
         # A deliberate removal is respected by the automatic seeder.
-        specs["auto_image_opt_out"] = True
-        obj.specifications = specs
+        metadata["auto_image_opt_out"] = True
+        if metadata_field:
+            set_catalogue_image_metadata(obj, metadata)
         obj.image = None
-        obj.save()
+        update_fields = ["image", "updated_at"]
+        if metadata_field:
+            update_fields.append(metadata_field)
+        obj.save(update_fields=update_fields)
         return JsonResponse({response_key: serializer(obj)})
 
     try:
