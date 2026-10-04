@@ -99,7 +99,7 @@ Leave the storage values at their defaults for named volumes. Leave `DJANGO_DEBU
 To pin MakerVault to one published version, optionally add:
 
 ```dotenv
-MAKERVAULT_IMAGE=ghcr.io/gavrd7/makervault:1.0.0
+MAKERVAULT_IMAGE=ghcr.io/gavrd7/makervault:1.0.2
 ```
 
 If that setting is omitted, Compose uses `ghcr.io/gavrd7/makervault:latest`.

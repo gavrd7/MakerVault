@@ -9,8 +9,8 @@ Learn to install MakerVault, record what you own and bring your projects, files 
 [Follow a first project](getting-started/first-project.md){ .md-button }
 </div>
 
-!!! info "Current release: v1.0.0"
-    MakerVault v1.0.0 is the current tagged stable release. This guide also tracks accepted post-v1 fixes being prepared for the next patch release, including richer filament catalogue matching and the K2 same-origin camera path. The v1 release gates include representative off-server recovery, clean-install and restart/persistence checks, native HTTPS/Local CA validation, deployment preflight and green CI. Experimental printer adapters remain labelled according to their hardware-validation status. See [scope and verification](reference/about.md).
+!!! info "Current release: v1.0.2"
+    MakerVault v1.0.2 is the current stable patch release. It includes the v1.0.1 filament catalogue/K2 camera improvements, first-class Windows Docker Desktop/WSL2 installation guidance, and the printed-part validation/project-assignment fix. The v1 release gates include representative off-server recovery, clean-install and restart/persistence checks, native HTTPS/Local CA validation, deployment preflight and green CI. Experimental printer adapters remain labelled according to their hardware-validation status. See [scope and verification](reference/about.md).
 
 <div class="guide-grid" markdown>
 <div class="guide-card" markdown>

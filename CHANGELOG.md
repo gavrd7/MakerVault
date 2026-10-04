@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.0.2 — 4 October 2026
+
+- Fixed printed-part creation so **Installed / in use** parts can be recorded without immediately assigning them to a project/installation; project assignment remains optional and can be added later.
+- Improved printed-part form validation by surfacing backend field-specific errors beneath the relevant controls, visually highlighting invalid fields and clearing messages as fields are corrected.
+- Added first-class Windows installation guidance for Docker Desktop, Docker Desktop with WSL2 integration, and Docker Engine running directly inside WSL2.
+- Added Windows-specific guidance for storage paths, named volumes, networking, startup/lifecycle behaviour, backups and update commands.
+- Updated the main README and installation guide cross-links so Linux and Windows users are directed to the correct deployment instructions.
+- No database migration is required for this patch release.
+
 ## v1.0.1 — 4 October 2026
 
 - Expanded filament catalogue enrichment beyond SpoolmanDB with verified supplemental manufacturer-backed entries, alias-aware matching and broader technical provenance.
