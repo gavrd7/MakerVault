@@ -208,6 +208,24 @@ def _printer_image_queries(printer_model) -> list[str]:
     return out[:4]
 
 
+def _filament_image_queries(filament) -> list[str]:
+    maker_obj = getattr(filament, "filament_manufacturer", None) or getattr(filament, "manufacturer", None)
+    maker = _normalise_search_label(str(getattr(maker_obj, "name", "") or ""))
+    name = _normalise_search_label(str(getattr(filament, "name", "") or ""))
+    material = _normalise_search_label(str(getattr(filament, "material", "") or ""))
+    colour = _normalise_search_label(str(getattr(filament, "color_name", "") or ""))
+    queries = [
+        " ".join(part for part in [maker, name, material, colour, "filament"] if part),
+        " ".join(part for part in [maker, name, material, "filament spool"] if part),
+    ]
+    out = []
+    for query in queries:
+        query = re.sub(r"\s+", " ", query).strip()
+        if query and query not in out:
+            out.append(query)
+    return out[:2]
+
+
 def _printer_multi_material_image_queries(printer_model) -> list[str]:
     maker = printer_model.manufacturer.name if printer_model.manufacturer else ""
     name = re.sub(r"\s+", " ", printer_model.name or "").strip()
@@ -623,6 +641,7 @@ def _candidate_source_pages(obj) -> list[dict]:
     """Return authoritative/source pages shared by boards, components and printers."""
     specs = getattr(obj, "specifications", None) or {}
     features = getattr(obj, "features", None) or {}
+    profile_data = getattr(obj, "profile_data", None) or {}
     candidates = []
     seen = set()
 
@@ -650,12 +669,16 @@ def _candidate_source_pages(obj) -> list[dict]:
 
     # Catalogue records use different metadata containers, but source-page
     # discovery should be consistent regardless of object type.
-    for container in (specs, features):
+    for container in (specs, features, profile_data, profile_data.get("catalogue_provenance", {})):
+        if not isinstance(container, dict):
+            continue
         for key in (
             "official_image_source_page",
             "reference_url",
             "technical_source_url",
             "product_url",
+            "tds_url",
+            "sds_url",
             "datasheet_url",
             "pinout_url",
         ):
@@ -1069,7 +1092,7 @@ def find_source_page_image(obj, diagnostics: list[dict] | None = None) -> dict |
 
 
 def resolve_catalogue_image(obj, variant: str = "base") -> ImageCandidate | None:
-    from .models import BoardModel, ComponentModel, PrinterCatalogModel
+    from .models import BoardModel, ComponentModel, FilamentProduct, PrinterCatalogModel
 
     if isinstance(obj, BoardModel):
         if settings.CATALOGUE_IMAGE_PREFER_ESPBOARDS:
@@ -1085,6 +1108,9 @@ def resolve_catalogue_image(obj, variant: str = "base") -> ImageCandidate | None
             return candidate
         if len(queries) > 3:
             return _search_open_media(queries[3:], minimum_score=0.12)
+
+    if isinstance(obj, FilamentProduct):
+        return _search_open_media(_filament_image_queries(obj), minimum_score=0.58)
 
     if isinstance(obj, PrinterCatalogModel):
         if variant == "multi_material":
@@ -1149,11 +1175,11 @@ def run_catalogue_image_seed(
     kinds: list[str] | tuple[str, ...] | None = None,
     board_types: list[str] | tuple[str, ...] | None = None,
 ) -> dict:
-    from .models import BoardModel, ComponentModel, PrinterCatalogModel
+    from .models import BoardModel, ComponentModel, FilamentProduct, PrinterCatalogModel
 
     limit = settings.CATALOGUE_IMAGE_MAX_PER_RUN if limit is None else max(int(limit), 0)
     retry_days = max(int(settings.CATALOGUE_IMAGE_RETRY_DAYS), 1)
-    allowed_kinds = {"printers", "boards", "components"}
+    allowed_kinds = {"printers", "boards", "components", "filaments"}
     requested = [str(item).strip().lower() for item in (kinds or []) if str(item).strip()]
     invalid = [item for item in requested if item not in allowed_kinds]
     if invalid:
@@ -1198,11 +1224,15 @@ def run_catalogue_image_seed(
         boards = BoardModel.objects.select_related("manufacturer", "source").filter(pk__in=board_ids).order_by("manufacturer__name", "name")
     components = ComponentModel.objects.select_related("category", "source").order_by("category__name", "name")
     printers = PrinterCatalogModel.objects.select_related("manufacturer").order_by("manufacturer__name", "name")
+    filaments = FilamentProduct.objects.select_related(
+        "filament_manufacturer", "manufacturer", "source"
+    ).order_by("filament_manufacturer__name", "name", "color_name")
 
     sources = {
         "boards": boards,
         "components": components,
         "printers": printers,
+        "filaments": filaments,
     }
     if requested:
         order = requested
@@ -1329,6 +1359,32 @@ def run_catalogue_image_seed(
 
                     source_fallback = None
                     try:
+                        if isinstance(obj, FilamentProduct):
+                            source_page_diagnostics = []
+                            source_fallback = find_source_page_image(
+                                obj,
+                                diagnostics=source_page_diagnostics,
+                            )
+                            if source_page_diagnostics:
+                                metadata["auto_image_source_page_attempts"] = source_page_diagnostics[-8:]
+                            if source_fallback and source_fallback.get("image_source_tier") == "manufacturer":
+                                metadata.update(source_fallback)
+                                metadata = append_source_trace(
+                                    metadata,
+                                    provider=source_fallback.get("image_source_provider", ""),
+                                    url=source_fallback.get("image_source_page", ""),
+                                    tier="manufacturer",
+                                    result="selected-authoritative-source-image",
+                                )
+                                metadata["auto_image_last_result"] = "remote-authoritative-source"
+                                field = set_catalogue_image_metadata(obj, metadata, variant=variant)
+                                obj.save(update_fields=[field, "updated_at"] if field else ["updated_at"])
+                                remote += 1
+                                by_kind[kind]["remote"] += 1
+                                provider_key = source_fallback["image_source_provider"] or "Official manufacturer"
+                                by_provider[provider_key] = by_provider.get(provider_key, 0) + 1
+                                continue
+
                         if isinstance(obj, PrinterCatalogModel):
                             source_page_diagnostics = []
                             if variant == "base":
