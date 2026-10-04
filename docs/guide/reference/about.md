@@ -2,9 +2,9 @@
 
 ## Version and scope
 
-This guide describes **MakerVault v1.0.1**, the current stable patch release. v1.0.1 adds richer filament catalogue matching/enrichment and the K2 same-origin camera compatibility path on top of v1.0.0. The first stable v1.0.0 release was accepted on **3 October 2026** after representative off-server recovery, a fresh Debian/Docker installation, restart/persistence checks, native HTTPS/Local CA validation and final green CI. Experimental hardware integrations retain explicit validation boundaries.
+This guide describes **MakerVault v1.0.2**, the current stable patch release. v1.0.2 adds first-class Windows Docker Desktop/WSL2 installation guidance and fixes printed-part creation so installed parts can remain unassigned until a project/installation is chosen later. It builds on v1.0.1's richer filament catalogue matching/enrichment and K2 same-origin camera compatibility path. The first stable v1.0.0 release was accepted on **3 October 2026** after representative off-server recovery, a fresh Debian/Docker installation, restart/persistence checks, native HTTPS/Local CA validation and final green CI. Experimental hardware integrations retain explicit validation boundaries.
 
-The primary deployment route is Linux with the supplied Docker Compose configuration. Platform-specific NAS/Portainer and Windows/macOS installation walkthroughs are outside this edition's verified scope. No measured minimum hardware specification is claimed.
+Linux with the supplied Docker Compose configuration remains the preferred always-on server deployment. Windows users can also follow the documented Docker Desktop, Docker Desktop + WSL2 integration, or direct WSL2 Docker Engine routes. NAS/Portainer and macOS remain platform-adaptation cases rather than fully validated walkthroughs. No measured minimum hardware specification is claimed.
 
 ## Development model
 
