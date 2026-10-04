@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from core.catalogue_coverage import catalogue_coverage_summary
@@ -87,7 +88,7 @@ class FilamentCatalogueEnrichmentTests(TestCase):
         self.assertEqual(provenance["country_of_origin"], "GB")
 
     def test_filament_image_delete_uses_image_metadata_and_opts_out(self):
-        user = __import__("django.contrib.auth", fromlist=["get_user_model"]).get_user_model().objects.create_superuser(
+        user = get_user_model().objects.create_superuser(
             username="filament-image-admin",
             email="filament-image@example.com",
             password="test-password",
