@@ -86,6 +86,35 @@ class FilamentCatalogueEnrichmentTests(TestCase):
         self.assertEqual(provenance["product_url"], "https://example.com/products/pla-basic")
         self.assertEqual(provenance["country_of_origin"], "GB")
 
+    def test_filament_image_delete_uses_image_metadata_and_opts_out(self):
+        user = __import__("django.contrib.auth", fromlist=["get_user_model"]).get_user_model().objects.create_superuser(
+            username="filament-image-admin",
+            email="filament-image@example.com",
+            password="test-password",
+        )
+        self.client.force_login(user)
+        maker = FilamentManufacturer.objects.create(name="Image Filament")
+        filament = FilamentProduct.objects.create(
+            filament_manufacturer=maker,
+            name="PLA Image Test",
+            material="PLA",
+            diameter_mm="1.75",
+            image_metadata={
+                "external_image_url": "https://example.com/filament.jpg",
+                "image_source_page": "https://example.com/products/filament",
+                "image_source_provider": "Example official",
+            },
+        )
+
+        response = self.client.delete(f"/api/printing/filaments/{filament.id}/image/")
+        self.assertEqual(response.status_code, 200, response.content)
+
+        filament.refresh_from_db()
+        self.assertFalse(filament.image)
+        self.assertNotIn("external_image_url", filament.image_metadata)
+        self.assertTrue(filament.image_metadata["auto_image_opt_out"])
+        self.assertEqual(response.json()["filament"]["image"], "")
+
     def test_coverage_counts_remote_filament_image_and_rich_metadata(self):
         maker = FilamentManufacturer.objects.create(name="Example Filament")
         FilamentProduct.objects.create(
