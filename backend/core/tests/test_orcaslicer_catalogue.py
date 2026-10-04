@@ -7,7 +7,9 @@ from core.models import PrinterCatalogModel, PrinterManufacturer
 from core.orcaslicer_catalogue import (
     ORCA_DIRECTORY_URL,
     _canonical_vendor,
+    _load_supplemental_printers,
     _merge_model,
+    _merge_supplemental_model,
     _normalise_model_name,
     _volume_from_machine_values,
     sync_orcaslicer_printer_catalogue,
@@ -94,8 +96,9 @@ class OrcaSlicerPrinterCatalogueTests(TestCase):
         self.assertEqual(model.features["orcaslicer"]["upstream_name"], "Creality K2")
 
     @override_settings(ORCASLICER_PRINTER_CATALOGUE_REF="main")
+    @patch("core.orcaslicer_catalogue._load_supplemental_printers", return_value=[])
     @patch("core.orcaslicer_catalogue.requests.get")
-    def test_sync_adds_models_and_collapses_cfs_profile_variants(self, get):
+    def test_sync_adds_models_and_collapses_cfs_profile_variants(self, get, supplements):
         listing = [
             {
                 "type": "file",
@@ -167,8 +170,9 @@ class OrcaSlicerPrinterCatalogueTests(TestCase):
 
 
     @override_settings(ORCASLICER_PRINTER_CATALOGUE_REF="main")
+    @patch("core.orcaslicer_catalogue._load_supplemental_printers", return_value=[])
     @patch("core.orcaslicer_catalogue.requests.get")
-    def test_sync_enriches_missing_build_volume_from_machine_profile_inheritance(self, get):
+    def test_sync_enriches_missing_build_volume_from_machine_profile_inheritance(self, get, supplements):
         listing = [{
             "type": "file",
             "name": "BBL.json",
@@ -225,3 +229,50 @@ class OrcaSlicerPrinterCatalogueTests(TestCase):
             model.features["orcaslicer"]["hardware_profile"],
             "machine/Bambu Lab A1 0.4 nozzle.json",
         )
+
+    def test_supplemental_catalogue_is_fdm_only_and_includes_known_creality_families(self):
+        rows = _load_supplemental_printers()
+        creality = [row for row in rows if row["manufacturer"] == "Creality"]
+        names = {row["name"] for row in creality}
+
+        self.assertIn("K2 Pro", names)
+        self.assertIn("K1 SE", names)
+        self.assertIn("Ender-3 V3 KE", names)
+        self.assertIn("Ender-5 Max", names)
+        self.assertIn("CR-30", names)
+        self.assertIn("CR-M4", names)
+        self.assertIn("Sermoon S1", names)
+        self.assertIn("SPARKX i7", names)
+        self.assertFalse(any("HALOT" in name.upper() for name in names))
+
+    def test_supplemental_model_adds_presence_without_overwriting_curated_specs(self):
+        maker = PrinterManufacturer.objects.create(name="Creality")
+        existing = PrinterCatalogModel.objects.create(
+            manufacturer=maker,
+            name="Ender-3 V3 KE",
+            build_volume_x_mm="220",
+            build_volume_y_mm="220",
+            build_volume_z_mm="240",
+            max_nozzle_temp_c=300,
+            source_url="https://example.invalid/manual-source",
+            features={"manual_note": "curated"},
+        )
+
+        maker_created, model_created, model_enriched = _merge_supplemental_model({
+            "manufacturer": "Creality",
+            "name": "Ender-3 V3 KE",
+            "family": "Ender-3",
+            "source_url": "https://store.creality.com/uk/collections/3d-printers",
+            "multi_material_system": "",
+        })
+
+        self.assertFalse(maker_created)
+        self.assertFalse(model_created)
+        self.assertTrue(model_enriched)
+        existing.refresh_from_db()
+        self.assertEqual(str(existing.build_volume_x_mm), "220.00")
+        self.assertEqual(existing.max_nozzle_temp_c, 300)
+        self.assertEqual(existing.source_url, "https://example.invalid/manual-source")
+        self.assertEqual(existing.features["manual_note"], "curated")
+        self.assertEqual(existing.features["makervault_supplemental"]["technology"], "FDM/FFF")
+
