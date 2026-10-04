@@ -72,7 +72,9 @@ class PrintedPartsTests(TestCase):
     def test_installed_requires_owned_project_and_retirement_keeps_usage(self):
         other_project = Project.objects.create(owner=self.other, name="Private")
         self.assertEqual(self.create(status="installed", project_id=str(other_project.id)).status_code, 400)
-        self.assertEqual(self.create(status="installed").status_code, 400)
+        response = self.create(status="installed")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["fields"]["project"], ["Choose the project where this part is installed."])
         project = Project.objects.create(owner=self.owner, name="Workshop")
         part = self.create(status="installed", project_id=str(project.pk)).json()["part"]
         response = self.client.patch(f'/api/printing/parts/{part["id"]}/', {"status": "scrapped"}, content_type="application/json")
