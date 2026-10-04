@@ -4582,6 +4582,27 @@ def printing_filament_detail(request, filament_id):
         for field in ["nozzle_temp_min_c", "nozzle_temp_max_c", "bed_temp_min_c", "bed_temp_max_c", "drying_temp_c"]:
             if field in payload:
                 setattr(item, field, payload.get(field) or None)
+
+        technical_fields = {
+            "density_g_cm3", "nozzle_temp_min_c", "nozzle_temp_max_c",
+            "bed_temp_min_c", "bed_temp_max_c", "drying_temp_c", "drying_time_hours",
+        }
+        manually_changed = sorted(technical_fields.intersection(payload))
+        if manually_changed:
+            profile = dict(item.profile_data or {})
+            sources = dict(profile.get("technical_field_sources") or {})
+            now = timezone.now().isoformat()
+            for field in manually_changed:
+                sources[field] = {
+                    "source": "user",
+                    "provider": "MakerVault user",
+                    "kind": "manual",
+                    "priority": 0,
+                    "checked_at": now,
+                }
+            profile["technical_field_sources"] = sources
+            item.profile_data = profile
+
         item.full_clean()
         item.save()
         return JsonResponse({"item": _serialise_filament_product(item)})
