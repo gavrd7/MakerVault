@@ -4483,6 +4483,16 @@ def _serialise_filament_product(filament):
         "codes": provenance.get("codes") or [],
         "eans": provenance.get("eans") or [],
         "eans_refill": provenance.get("eans_refill") or [],
+        "catalogue_matched": bool(
+            (filament.source and filament.source.source_type == "spoolmandb")
+            or provenance.get("external_id")
+        ),
+        "catalogue_external_id": provenance.get("external_id") or (
+            filament.source.external_id
+            if filament.source and filament.source.source_type == "spoolmandb"
+            else ""
+        ),
+        "catalogue_match_restorable": isinstance(profile.get("catalogue_match_restore"), dict),
         "source": filament.source.name if filament.source else "Manual",
         "source_type": filament.source.source_type if filament.source else "manual",
         "source_url": filament.source.url if filament.source else "",
@@ -4645,9 +4655,6 @@ def printing_filament_catalogue_match(request, filament_id):
             "changed_fields": result["changed_fields"],
         })
 
-    denied = _require_permission(request, "core.change_filamentproduct")
-    if denied:
-        return denied
     try:
         payload = _read_json(request)
         external_id = str(payload.get("external_id") or "").strip()
