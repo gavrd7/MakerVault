@@ -32,6 +32,8 @@ from .catalogue_coverage import catalogue_coverage_summary
 from .filament_catalogue import (
     FilamentCatalogueError,
     get_spoolmandb_item,
+    match_filament_catalogue_candidates,
+    apply_catalogue_match_to_filament,
     search_spoolmandb,
     spoolmandb_meta,
 )
