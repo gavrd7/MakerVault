@@ -1886,7 +1886,14 @@ function FilamentCatalogueMatchModal({ filament, onClose, onApplied }) {
         {rows.map(row => {
           const active = selected === row.external_id;
           return <label key={row.external_id} className={"filamentMatchCandidate" + (active ? " filamentMatchCandidateSelected" : "")}>
-            <input type="radio" name="filament-catalogue-match" checked={active} onChange={() => setSelected(row.external_id)} />
+            <input
+              className="filamentMatchRadio"
+              type="radio"
+              name="filament-catalogue-match"
+              checked={active}
+              onChange={() => setSelected(row.external_id)}
+            />
+            <span className={"filamentMatchSelectMark" + (active ? " filamentMatchSelectMarkChecked" : "")} aria-hidden="true">{active ? "✓" : ""}</span>
             <span className="printingSwatch" style={filamentSwatchStyle(row)} aria-hidden="true" />
             <span className="filamentMatchMain">
               <strong>{row.manufacturer} · {row.name}</strong>
