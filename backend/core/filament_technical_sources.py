@@ -201,7 +201,10 @@ def _pdf_text(data: bytes) -> str:
 
 def fetch_filament_technical_source(raw_url: str) -> tuple[str, dict]:
     key = "makervault:filament-technical:" + __import__("hashlib").sha256(str(raw_url).encode("utf-8")).hexdigest()[:24]
-    cached = cache.get(key)
+    try:
+        cached = cache.get(key)
+    except Exception:
+        cached = None
     if isinstance(cached, dict):
         return str(cached.get("url") or raw_url), dict(cached.get("data") or {})
 
@@ -215,7 +218,10 @@ def fetch_filament_technical_source(raw_url: str) -> tuple[str, dict]:
         raise FilamentTechnicalSourceError("The filament technical source was not HTML or PDF.")
 
     data = parse_filament_technical_text(text)
-    cache.set(key, {"url": final_url, "data": data}, CACHE_SECONDS)
+    try:
+        cache.set(key, {"url": final_url, "data": data}, CACHE_SECONDS)
+    except Exception:
+        pass
     return final_url, data
 
 
