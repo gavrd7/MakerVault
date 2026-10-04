@@ -2215,10 +2215,16 @@ function DiscoveredSpoolModal({ printer, slot, filaments, spools, currency, canC
       <div className="settingsCallout full detectedSpoolSummary">
         <strong>Detected in {printer.name} · {slot.system_label} unit {slot.unit_index + 1}, slot {slot.slot_index + 1}</strong>
         <p>{[slot.vendor, slot.product_name, slot.material].filter(Boolean).join(" · ") || "Unknown filament"}{detectedPercent != null ? " · " + detectedPercent + "% remaining" : ""}</p>
+        <div className="detectedSpoolColour">
+          <span className="printingSwatch" style={slot.color_hex ? { background: slot.color_hex } : undefined} aria-hidden="true" />
+          <strong>Detected colour</strong>
+          <span>{slot.color_name || slot.color_hex || "Not reported"}</span>
+        </div>
         <div className="badgeRow">
           {slot.vendor && <Badge>{slot.vendor}</Badge>}
           {slot.product_name && <Badge tone="accent">{slot.product_name}</Badge>}
           {slot.material && <Badge>{slot.material}</Badge>}
+          {slot.color_hex && <Badge>{slot.color_hex}</Badge>}
           {slot.rfid_detected && <Badge tone="good">RFID material detected</Badge>}
           {slot.rfid_uid && <Badge>Tag {slot.rfid_uid}</Badge>}
         </div>
@@ -2257,6 +2263,7 @@ function DiscoveredSpoolModal({ printer, slot, filaments, spools, currency, canC
                 checked={selected}
                 onChange={() => setExistingSpoolId(spool.id)}
               />
+              <span className={"detectedSpoolSelectMark" + (selected ? " detectedSpoolSelectMarkChecked" : "")} aria-hidden="true">{selected ? "✓" : ""}</span>
               <span className={"printingSwatch filamentPreview-" + (spool.transparency || "opaque")} style={filamentSwatchStyle(spool)} aria-hidden="true" />
               <span className="detectedSpoolCandidateMain">
                 <strong>{spool.spool_id} · {spool.filament}</strong>
