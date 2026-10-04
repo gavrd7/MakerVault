@@ -593,6 +593,9 @@ function SpoolInventoryPage({ spools, filaments, locations, printers, currency, 
           </div>
           <div className="printingBadges">
             {spool.loaded_slots?.length > 0 && <Badge tone="accent">Loaded</Badge>}
+            <Badge tone={spool.catalogue_matched ? "good" : "warning"}>
+              {spool.catalogue_matched ? "✓ Matched" : "Needs match"}
+            </Badge>
             <Badge>{spool.status_label || spool.status}</Badge>
             {(spool.external_links || []).map(link => <Badge key={link.id}>{link.provider_label}</Badge>)}
             <button type="button" onClick={() => setDetailFilament(filaments.find(item => item.id === spool.filament_id) || null)}>Filament details</button>
