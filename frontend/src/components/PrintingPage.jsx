@@ -1838,7 +1838,9 @@ function FilamentCatalogueMatchModal({ filament, onClose, onApplied }) {
       });
       await onApplied(result.item || null);
     } catch (err) {
-      setError(err.message);
+      const fieldMessages = Object.entries(err.fields || {})
+        .flatMap(([field, messages]) => (messages || []).map(message => `${field}: ${message}`));
+      setError(fieldMessages.length ? err.message + " " + fieldMessages.join(" · ") : err.message);
     } finally {
       setApplying(false);
     }
