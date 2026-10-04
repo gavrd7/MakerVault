@@ -611,6 +611,8 @@ def apply_catalogue_match_to_filament(filament, external_id):
         "nozzle_temp_max_c": row.get("nozzle_temp_max_c"),
         "bed_temp_min_c": row.get("bed_temp_min_c"),
         "bed_temp_max_c": row.get("bed_temp_max_c"),
+        "drying_temp_c": row.get("drying_temp_c"),
+        "drying_time_hours": row.get("drying_time_hours"),
     }
     for field, value in fill_fields.items():
         current = getattr(filament, field)
