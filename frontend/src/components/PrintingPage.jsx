@@ -1662,6 +1662,7 @@ function FilamentEditModal({ filament, manufacturers, materials, onClose, onSave
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [matchOpen, setMatchOpen] = useState(false);
   const set = (key, value) => setForm(current => ({ ...current, [key]: value }));
 
   async function submit(event) {
@@ -1739,6 +1740,12 @@ function FilamentEditModal({ filament, manufacturers, materials, onClose, onSave
       <label>Drying time (hours)<input type="number" min="0" step="0.1" value={form.drying_time_hours} onChange={e => set("drying_time_hours", e.target.value)} /></label>
 
       <div className="settingsCallout full">
+        <strong>Find catalogue data for this filament</strong>
+        <p>Search known filament products using the manufacturer, product name, material and colour already entered. You choose the match before MakerVault fills missing catalogue and technical data.</p>
+        <button type="button" onClick={() => setMatchOpen(true)}>Match catalogue</button>
+      </div>
+
+      <div className="settingsCallout full">
         <strong>Source provenance is preserved</strong>
         <p>{filament.source || "Manual"}{filament.source_type && filament.source_type !== "manual" ? " · " + filament.source_type : ""}. Editing does not discard the original catalogue/source attribution.</p>
         {(filament.product_url || filament.tds_url || filament.sds_url) && <div className="filamentCatalogueLinks">
@@ -1752,6 +1759,94 @@ function FilamentEditModal({ filament, manufacturers, materials, onClose, onSave
         <button className="primary" disabled={busy || !form.manufacturer_name || !form.material || !form.name}>{busy ? "Saving…" : "Save filament changes"}</button>
       </div>
     </form>
+    {matchOpen && <FilamentCatalogueMatchModal
+      filament={filament}
+      onClose={() => setMatchOpen(false)}
+      onApplied={async () => { setMatchOpen(false); await onSaved(); }}
+    />}
+  </Modal>;
+}
+
+
+function FilamentCatalogueMatchModal({ filament, onClose, onApplied }) {
+  const [rows, setRows] = useState([]);
+  const [selected, setSelected] = useState("");
+  const [busy, setBusy] = useState(true);
+  const [applying, setApplying] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    setBusy(true);
+    apiFetch("/api/printing/filaments/" + filament.id + "/catalogue-match/")
+      .then(result => {
+        if (cancelled) return;
+        const candidates = result.candidates || [];
+        setRows(candidates);
+        setSelected(candidates[0]?.external_id || "");
+      })
+      .catch(err => { if (!cancelled) setError(err.message); })
+      .finally(() => { if (!cancelled) setBusy(false); });
+    return () => { cancelled = true; };
+  }, [filament.id]);
+
+  async function applyMatch() {
+    if (!selected) return;
+    setApplying(true); setError("");
+    try {
+      await apiFetch("/api/printing/filaments/" + filament.id + "/catalogue-match/", {
+        method: "POST",
+        body: { external_id: selected },
+      });
+      await onApplied();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setApplying(false);
+    }
+  }
+
+  return <Modal
+    title={"Match catalogue · " + (filament.display_name || filament.name)}
+    subtitle="MakerVault ranks likely known products. Review the manufacturer, material, colour and technical data before applying a match."
+    onClose={onClose}
+    wide
+  >
+    <div className="formGrid">
+      {error && <div className="formError full">{error}</div>}
+      {busy && <div className="printingEmptyInline full">Searching the filament catalogue…</div>}
+      {!busy && !rows.length && <div className="settingsCallout full"><strong>No confident catalogue candidates found</strong><p>You can keep this filament as a manual record and try again later as the catalogue grows.</p></div>}
+      {!busy && rows.length > 0 && <div className="filamentMatchList full" role="radiogroup" aria-label="Catalogue matches">
+        {rows.map(row => {
+          const active = selected === row.external_id;
+          return <label key={row.external_id} className={"filamentMatchCandidate" + (active ? " filamentMatchCandidateSelected" : "")}>
+            <input type="radio" name="filament-catalogue-match" checked={active} onChange={() => setSelected(row.external_id)} />
+            <span className="printingSwatch" style={filamentSwatchStyle(row)} aria-hidden="true" />
+            <span className="filamentMatchMain">
+              <strong>{row.manufacturer} · {row.name}</strong>
+              <small>{[row.material, row.color_name || row.color_hex, row.diameter_mm ? row.diameter_mm + " mm" : ""].filter(Boolean).join(" · ")}</small>
+              <small>
+                {row.nozzle_temp_min_c != null ? "Nozzle " + row.nozzle_temp_min_c + (row.nozzle_temp_max_c != null && row.nozzle_temp_max_c !== row.nozzle_temp_min_c ? "–" + row.nozzle_temp_max_c : "") + " °C" : "No nozzle data"}
+                {" · "}
+                {row.bed_temp_min_c != null ? "Bed " + row.bed_temp_min_c + (row.bed_temp_max_c != null && row.bed_temp_max_c !== row.bed_temp_min_c ? "–" + row.bed_temp_max_c : "") + " °C" : "No bed data"}
+              </small>
+            </span>
+            <span className="printingBadges">
+              <Badge tone={row.match_score >= 75 ? "good" : row.match_score >= 50 ? "accent" : undefined}>{row.match_score}% match</Badge>
+              {(row.match_reasons || []).slice(0, 3).map(reason => <Badge key={reason}>{reason}</Badge>)}
+            </span>
+          </label>;
+        })}
+      </div>}
+      <div className="settingsCallout full">
+        <strong>Applying a match is conservative</strong>
+        <p>MakerVault links the catalogue source and fills missing metadata. Existing manual identity/colour values are retained. Manufacturer product pages and technical data sheets are then checked for higher-authority print temperatures and related technical data where available.</p>
+      </div>
+      <div className="formActions full">
+        <button type="button" onClick={onClose} disabled={applying}>Cancel</button>
+        <button type="button" className="primary" disabled={busy || applying || !selected} onClick={applyMatch}>{applying ? "Applying…" : "Apply selected match"}</button>
+      </div>
+    </div>
   </Modal>;
 }
 
