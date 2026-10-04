@@ -1,9 +1,12 @@
 SHELL := /bin/bash
 
-.PHONY: up down logs build rebuild-app update shell migrate seed-catalogue enrich-board-catalogue seed-catalogue-images cache-catalogue-images refresh-catalogue createsuperuser check
+.PHONY: up pull down logs build up-build rebuild-app update shell migrate seed-catalogue enrich-board-catalogue seed-catalogue-images cache-catalogue-images refresh-catalogue createsuperuser check
 
 up:
-	docker compose up -d --build
+	docker compose up -d
+
+pull:
+	docker compose pull
 
 down:
 	docker compose down
@@ -12,14 +15,18 @@ logs:
 	docker compose logs -f makervault
 
 build:
-	docker compose build --pull
+	docker compose -f compose.yaml -f compose.build.yaml build --pull
+
+up-build:
+	docker compose -f compose.yaml -f compose.build.yaml up -d --build
 
 rebuild-app:
-	docker compose up -d --build --no-deps makervault
+	docker compose -f compose.yaml -f compose.build.yaml up -d --build --no-deps makervault
 
 update:
 	git pull --ff-only
-	docker compose up -d --build --no-deps makervault
+	docker compose pull
+	docker compose up -d
 
 shell:
 	docker compose exec makervault python manage.py shell
