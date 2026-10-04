@@ -11,6 +11,8 @@
 
 The schedule is stored in PostgreSQL and survives container rebuilds. Background workers perform the work, so queueing a run is not the same as completing it. External sources, retry intervals and per-run limits affect how quickly gaps are filled.
 
+Printer catalogue maintenance uses OrcaSlicer for broad profile-backed coverage and merges MakerVault supplemental FDM/FFF entries for known printers that Orca omits. Supplemental records never remove local models and do not imply live-monitoring support.
+
 Enrichment is designed to preserve populated information rather than overwrite edits just because another source supplies a value. Filament maintenance can refresh missing catalogue fields and consult authoritative manufacturer product/TDS data for values such as density, nozzle/bed temperatures and drying guidance. The filament catalogue combines SpoolmanDB with verified supplemental records for gaps; provenance is retained so the source remains visible. Unsupported models, intentionally unmatched filaments or unavailable reliable sources can remain incomplete indefinitely.
 
 ## Server-level controls
