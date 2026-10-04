@@ -4229,30 +4229,36 @@ def _printing_analytics(owner):
         currency=default_currency
     ).exclude(material_cost=None).count()
 
+    printer_buckets = {}
+    for job in PrintJob.objects.filter(owner=owner).select_related("printer"):
+        settings_payload = job.settings if isinstance(job.settings, dict) else {}
+        snapshot = settings_payload.get("printer_snapshot") if isinstance(settings_payload.get("printer_snapshot"), dict) else {}
+        printer_id = str(job.printer_id) if job.printer_id else str(snapshot.get("id") or "deleted")
+        printer_name = job.printer.name if job.printer else str(snapshot.get("name") or "Deleted printer")
+        key = (printer_id, printer_name)
+        bucket = printer_buckets.setdefault(key, {
+            "printer_id": printer_id,
+            "printer": printer_name,
+            "jobs": 0,
+            "successes": 0,
+            "failures": 0,
+            "actual_minutes": 0,
+        })
+        bucket["jobs"] += 1
+        bucket["successes"] += int(job.status == "success")
+        bucket["failures"] += int(job.status == "failed")
+        bucket["actual_minutes"] += int(job.actual_minutes or 0)
+
     printer_rows = []
-    for row in (
-        PrintJob.objects.filter(owner=owner).values("printer_id", "printer__name")
-        .annotate(
-            jobs=Count("id"),
-            successes=Count("id", filter=Q(status="success")),
-            failures=Count("id", filter=Q(status="failed")),
-            actual_minutes=Sum("actual_minutes"),
-        )
-        .order_by("-jobs", "printer__name")
-    ):
-        printer_completed = int(row["successes"] or 0) + int(row["failures"] or 0)
+    for row in sorted(printer_buckets.values(), key=lambda value: (-value["jobs"], value["printer"].casefold())):
+        printer_completed = row["successes"] + row["failures"]
         printer_rows.append({
-            "printer_id": str(row["printer_id"]),
-            "printer": row["printer__name"],
-            "jobs": int(row["jobs"] or 0),
-            "successes": int(row["successes"] or 0),
-            "failures": int(row["failures"] or 0),
+            **row,
             "success_rate": (
-                round((int(row["successes"] or 0) / printer_completed) * 100, 1)
+                round((row["successes"] / printer_completed) * 100, 1)
                 if printer_completed
                 else None
             ),
-            "actual_minutes": int(row["actual_minutes"] or 0),
         })
 
     return {
@@ -4284,13 +4290,14 @@ def _serialise_print_job(job):
     total_cost = sum(costs, Decimal("0")) if costs else None
     settings_payload = job.settings if isinstance(job.settings, dict) else {}
     live_meta = settings_payload.get("live_monitor") if isinstance(settings_payload.get("live_monitor"), dict) else {}
+    printer_snapshot = settings_payload.get("printer_snapshot") if isinstance(settings_payload.get("printer_snapshot"), dict) else {}
     return {
         "id": str(job.id),
         "status": job.status,
         "status_label": job.get_status_display(),
         "quantity": job.quantity,
-        "printer_id": str(job.printer_id),
-        "printer": job.printer.name,
+        "printer_id": str(job.printer_id) if job.printer_id else printer_snapshot.get("id"),
+        "printer": job.printer.name if job.printer else str(printer_snapshot.get("name") or "Deleted printer"),
         "project_id": str(job.project_id) if job.project_id else None,
         "project": job.project.name if job.project else "",
         "model_revision_id": str(job.model_revision_id) if job.model_revision_id else None,
@@ -4927,11 +4934,37 @@ def printing_printer_detail(request, printer_id):
         denied = _require_permission(request, "core.delete_printer")
         if denied:
             return denied
-        try:
+
+        active_history = item.print_jobs.filter(status="printing").exists()
+        live_printing = any(
+            str((connection.last_snapshot or {}).get("state") or "").strip().casefold()
+            in {"printing", "paused", "pausing", "resuming"}
+            for connection in item.live_connections.all()
+            if connection.enabled
+        )
+        if active_history or live_printing:
+            return _error(
+                "This printer is currently printing. Stop or finish the active print before deleting it.",
+                status=409,
+            )
+
+        with transaction.atomic():
+            for job in item.print_jobs.select_for_update():
+                settings_payload = dict(job.settings or {})
+                settings_payload["printer_snapshot"] = {
+                    "id": str(item.id),
+                    "name": item.name,
+                    "manufacturer": (
+                        item.printer_manufacturer.name
+                        if item.printer_manufacturer
+                        else item.manufacturer.name if item.manufacturer else ""
+                    ),
+                    "model": item.model,
+                }
+                job.settings = settings_payload
+                job.save(update_fields=["settings", "updated_at"])
             item.delete()
-            return JsonResponse({"deleted": True})
-        except ProtectedError:
-            return _error("This printer is referenced by print history and cannot be deleted.", status=409)
+        return JsonResponse({"deleted": True})
 
     denied = _require_permission(request, "core.change_printer")
     if denied:
