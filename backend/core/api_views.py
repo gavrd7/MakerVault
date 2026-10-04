@@ -4613,6 +4613,55 @@ def printing_filament_detail(request, filament_id):
 
 
 @login_required
+@require_http_methods(["GET", "POST"])
+def printing_filament_catalogue_match(request, filament_id):
+    item = FilamentProduct.objects.select_related(
+        "manufacturer", "filament_manufacturer", "source"
+    ).filter(pk=filament_id).first()
+    if not item:
+        return _error("Filament product not found.", status=404)
+
+    if request.method == "GET":
+        try:
+            candidates = match_filament_catalogue_candidates(item, limit=10)
+            return JsonResponse({
+                "filament": _serialise_filament_product(item),
+                "candidates": candidates,
+            })
+        except FilamentCatalogueError as exc:
+            return _error(str(exc), status=502)
+
+    denied = _require_permission(request, "core.change_filamentproduct")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        external_id = str(payload.get("external_id") or "").strip()
+        if not external_id:
+            return _error("Choose a catalogue filament match.")
+        result = apply_catalogue_match_to_filament(item, external_id)
+        item = FilamentProduct.objects.select_related(
+            "manufacturer", "filament_manufacturer", "source"
+        ).get(pk=item.pk)
+        return JsonResponse({
+            "item": _serialise_filament_product(item),
+            "match": {
+                "external_id": result["row"]["external_id"],
+                "manufacturer": result["row"]["manufacturer"],
+                "name": result["row"]["name"],
+                "changed_fields": result["changed_fields"],
+                "manufacturer_enrichment": result["authoritative"],
+            },
+        })
+    except FilamentCatalogueError as exc:
+        return _error(str(exc), status=502)
+    except ValidationError as exc:
+        return _validation_response(exc)
+    except (ValueError, IntegrityError) as exc:
+        return _error(str(exc))
+
+
+@login_required
 @require_http_methods(["POST", "DELETE"])
 def printing_filament_image(request, filament_id):
     item = FilamentProduct.objects.select_related(
