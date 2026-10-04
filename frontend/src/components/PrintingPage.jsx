@@ -1559,6 +1559,8 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
 function FilamentDetailsModal({ filament, canChangeFilament = false, onChanged, onClose }) {
   const [current, setCurrent] = useState(filament);
   const [matchOpen, setMatchOpen] = useState(false);
+  const [unmatching, setUnmatching] = useState(false);
+  const [matchError, setMatchError] = useState("");
 
   useEffect(() => { setCurrent(filament); }, [filament]);
 
@@ -1573,6 +1575,26 @@ function FilamentDetailsModal({ filament, canChangeFilament = false, onChanged, 
         current.drying_temp_c != null ? current.drying_temp_c + " °C" : "",
         current.drying_time_hours != null ? current.drying_time_hours + " h" : "",
       ].filter(Boolean).join(" · ");
+
+  async function unmatchCatalogue() {
+    const restoreText = current.catalogue_match_restorable
+      ? "MakerVault will restore the values saved immediately before this catalogue match."
+      : "This is an older match without a saved before-state. MakerVault will remove the catalogue link but retain the current descriptive values.";
+    if (!window.confirm("Unmatch this filament from the catalogue?\n\n" + restoreText)) return;
+    setUnmatching(true);
+    setMatchError("");
+    try {
+      const result = await apiFetch("/api/printing/filaments/" + current.id + "/catalogue-match/", {
+        method: "DELETE",
+      });
+      if (result.item) setCurrent(result.item);
+      await onChanged?.();
+    } catch (err) {
+      setMatchError(err.message);
+    } finally {
+      setUnmatching(false);
+    }
+  }
 
   return <>
     <Modal
@@ -1635,14 +1657,18 @@ function FilamentDetailsModal({ filament, canChangeFilament = false, onChanged, 
             <strong>Multi-colour product</strong>
             <p>{current.color_hexes.length} recorded colours{current.multi_color_direction ? " · " + current.multi_color_direction : ""}</p>
           </div>}
+          {matchError && <div className="formError">{matchError}</div>}
           {canChangeFilament && <div className="settingsCallout filamentDetailsMatchCallout">
-            <strong>Missing or incomplete product data?</strong>
-            <p>Match this saved filament to the catalogue to fill available manufacturer, technical and provenance data without overwriting your manual corrections.</p>
-            <button type="button" onClick={() => setMatchOpen(true)}>Match catalogue</button>
+            <strong>{current.catalogue_matched ? "Catalogue match active" : "Missing or incomplete product data?"}</strong>
+            <p>{current.catalogue_matched
+              ? "You can review a different catalogue match at any time. Unmatching restores the pre-match values when MakerVault has a saved snapshot."
+              : "Match this saved filament to the catalogue to fill available manufacturer, technical and provenance data without overwriting your manual corrections."}</p>
+            {current.catalogue_external_id && <small>Catalogue ID · {current.catalogue_external_id}</small>}
           </div>}
           <div className="formActions">
-            {canChangeFilament && <button className="primary" type="button" onClick={() => setMatchOpen(true)}>Match catalogue</button>}
-            <button type="button" onClick={onClose}>Close</button>
+            {canChangeFilament && <button className="primary" type="button" disabled={unmatching} onClick={() => setMatchOpen(true)}>{current.catalogue_matched ? "Rematch catalogue" : "Match catalogue"}</button>}
+            {canChangeFilament && current.catalogue_matched && <button className="dangerButton" type="button" disabled={unmatching} onClick={unmatchCatalogue}>{unmatching ? "Unmatching…" : "Unmatch catalogue"}</button>}
+            <button type="button" onClick={onClose} disabled={unmatching}>Close</button>
           </div>
         </div>
       </div>
