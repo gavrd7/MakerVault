@@ -4809,6 +4809,8 @@ def printing_filament_catalogue_import(request):
             "nozzle_temp_max_c": data["nozzle_temp_max_c"],
             "bed_temp_min_c": data["bed_temp_min_c"],
             "bed_temp_max_c": data["bed_temp_max_c"],
+            "drying_temp_c": data.get("drying_temp_c"),
+            "drying_time_hours": _catalogue_decimal(data.get("drying_time_hours"), "drying_time_hours", 2),
             "profile_data": {
                 "source": source_name,
                 "source_license": data["source_license"],
