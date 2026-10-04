@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Route Creality K2 camera compatibility video through MakerVault as authenticated same-origin HLS/fMP4. The bundled go2rtc helper and WebRTC listener remain loopback-only, Docker no longer publishes port 8555, and browsers can view K2 video through the normal MakerVault HTTP/HTTPS origin.
+
 ## v1.0.0 — released 3 October 2026
 
 - Promoted the v1 release candidate to the first stable MakerVault release after completing the clean-install acceptance gate on a separate Debian/Docker host.
