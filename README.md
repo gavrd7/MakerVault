@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <strong>Current stable release: v1.0.1</strong>
+  <strong>Current stable release: v1.0.2</strong>
 </p>
 
 <p align="center">
@@ -198,7 +198,7 @@ sudo docker compose up -d
 sudo docker compose ps
 ```
 
-The default image is `ghcr.io/gavrd7/makervault:latest`. You can pin a release without editing Compose by setting `MAKERVAULT_IMAGE=ghcr.io/gavrd7/makervault:1.0.0` in `.env`.
+The default image is `ghcr.io/gavrd7/makervault:latest`. You can pin a release without editing Compose by setting `MAKERVAULT_IMAGE=ghcr.io/gavrd7/makervault:1.0.2` in `.env`.
 
 Prefer to build the application yourself? The repository retains the Dockerfile and provides `compose.build.yaml`:
 
@@ -222,7 +222,7 @@ Catalogue media can be locally cached or retained as external references where r
 
 ## Project status and development
 
-**v1.0.1** is the current stable MakerVault release, building on the first v1.0.0 release with post-release filament catalogue/matching improvements and the K2 same-origin camera path. The v1 release gates were completed on 3 October 2026, including representative off-server managed-backup recovery, a clean Linux/Docker installation, restart/persistence checks, native HTTPS/Local CA validation, deployment preflight, security/reliability checks and the final UI/accessibility pass. Unvalidated printer hardware remains explicitly experimental.
+**v1.0.2** is the current stable MakerVault release. It adds the printed-part validation/project-assignment fix and first-class Windows Docker Desktop/WSL2 installation guidance on top of the v1.0.1 filament catalogue and K2 camera improvements. The v1 release gates were completed on 3 October 2026, including representative off-server managed-backup recovery, a clean Linux/Docker installation, restart/persistence checks, native HTTPS/Local CA validation, deployment preflight, security/reliability checks and the final UI/accessibility pass. Unvalidated printer hardware remains explicitly experimental.
 
 Pull-request CI checks backend tests, frontend tests/build, migrations, dependency/static security and the production Docker image. The guide has its own strict build/link checks. CI passing does not substitute for hardware, deployment or restore testing.
 
