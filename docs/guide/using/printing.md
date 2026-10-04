@@ -20,7 +20,9 @@
 
 A printer model may support a multi-material system without your particular machine having one installed. Record the installed hardware accurately. Add a local host/IP only if an integration needs it; a normal manual printer record does not require a network connection.
 
-Printer catalogue names may come from OrcaSlicer profiles. A catalogue entry is not proof of a working live integration or complete build-volume data.
+Printer catalogue names may come from OrcaSlicer profiles. MakerVault also carries a small supplemental FDM/FFF catalogue for known models that are missing from OrcaSlicer; Creality is the first manufacturer covered this way. Supplemental entries are presence/provenance records first, so technical specifications remain blank unless a reliable source provides them. Resin printers are intentionally outside the MakerVault printer catalogue.
+
+A catalogue entry is not proof of a working live integration or complete build-volume data.
 
 ## Add filament, then add a spool
 

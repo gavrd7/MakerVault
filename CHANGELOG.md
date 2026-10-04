@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Expand the FDM/FFF printer catalogue with curated supplemental Creality models when OrcaSlicer lacks a profile-backed model entry; catalogue presence remains separate from live-integration support and resin printers remain out of scope.
+
 ## v1.0.2 — 4 October 2026
 
 - Fixed printed-part creation so **Installed / in use** parts can be recorded without immediately assigning them to a project/installation; project assignment remains optional and can be added later.
