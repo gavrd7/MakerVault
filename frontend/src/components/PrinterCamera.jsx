@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
+import Hls from "hls.js";
 import { apiFetch } from "../api";
-import { startFrameLoop, waitForIce, prepareCrealityOffer, cameraRequest, needsCrealityRelay } from "./cameraPlayback";
+import { startFrameLoop, cameraRequest, cameraHlsUrl } from "./cameraPlayback";
 
 const LABELS = { snapshot: "Live images", mjpeg: "MJPEG live images", creality_webrtc: "Creality WebRTC · experimental" };
 
@@ -141,7 +142,6 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
 }
 
 export function CameraPlayback({ camera, url, compact = false }) {
-  const compatibilityRelay = camera.mode === "creality_webrtc" && needsCrealityRelay(globalThis.navigator?.userAgent || "");
   const [expanded, setExpanded] = useState(false);
   const container = useRef(null);
   const video = useRef(null);
@@ -149,88 +149,121 @@ export function CameraPlayback({ camera, url, compact = false }) {
   const [status, setStatus] = useState("Connecting…");
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
+
   useEffect(() => {
     let cancelled = false;
     let objectUrl = "";
-    let peer;
-    let videoTimeout;
     let stopFrames;
+    let hls;
     const controller = new AbortController();
     setImage(""); setError(""); setStatus("Connecting…");
-    const closePeer = () => {
-      if (peer) {
-        peer.ontrack = null; peer.onconnectionstatechange = null;
-        peer.getReceivers().forEach(receiver => receiver.track?.stop());
-        peer.close();
+
+    const failed = message => {
+      if (cancelled) return;
+      setError(message);
+      setStatus("Disconnected · select Reconnect to retry");
+      if (video.current) {
+        video.current.pause();
+        video.current.removeAttribute("src");
+        video.current.load();
       }
-      if (video.current) video.current.srcObject = null;
     };
-    const failed = message => { if (!cancelled) { setError(message); setStatus("Disconnected"); closePeer(); } };
+
     if (camera.mode !== "creality_webrtc") {
       stopFrames = startFrameLoop({
         request: signal => cameraRequest(async () => {
           const response = await fetch(url, { credentials: "same-origin", cache: "no-store", signal });
-          if (!response.ok) { const result = await response.json().catch(() => ({})); throw new Error(result.error || "Camera unavailable. Check the source URL and printer connection."); }
-          if (!/^image\/(jpeg|png)/.test(response.headers.get("Content-Type") || "")) throw new Error("Camera response was not an image. Sign in again if your session expired.");
+          if (!response.ok) {
+            const result = await response.json().catch(() => ({}));
+            throw new Error(result.error || "Camera unavailable. Check the source URL and printer connection.");
+          }
+          if (!/^image\/(jpeg|png)/.test(response.headers.get("Content-Type") || "")) {
+            throw new Error("Camera response was not an image. Sign in again if your session expired.");
+          }
           return response.blob();
         }, signal),
         onFrame: blob => {
           const next = URL.createObjectURL(blob);
           if (objectUrl) URL.revokeObjectURL(objectUrl);
-          objectUrl = next; setImage(next); setError(""); setStatus("Live images · approximately 1 frame/s");
+          objectUrl = next;
+          setImage(next);
+          setError("");
+          setStatus("Live images · approximately 1 frame/s");
         },
-        onError: (err, retrying) => { setError(err.message); setImage(""); setStatus(retrying ? "Reconnecting…" : "Disconnected · select Reconnect to retry"); },
+        onError: (err, retrying) => {
+          setError(err.message);
+          setImage("");
+          setStatus(retrying ? "Reconnecting…" : "Disconnected · select Reconnect to retry");
+        },
       });
     } else {
-      (async () => {
-        try {
-          if (!globalThis.RTCPeerConnection) throw new Error("This browser does not support WebRTC camera playback.");
-          peer = new RTCPeerConnection({ iceServers: [] });
-          const transceiver = peer.addTransceiver("video", { direction: "recvonly" });
-          const codecs = RTCRtpReceiver.getCapabilities("video")?.codecs.filter(codec => codec.mimeType.toLowerCase() === "video/h264") || [];
-          if (!codecs.length) throw new Error("This browser has no H.264 WebRTC decoder.");
-          if (transceiver.setCodecPreferences) transceiver.setCodecPreferences(compatibilityRelay ? codecs : codecs.slice(0, 1));
-          peer.ontrack = event => {
-            if (cancelled || event.track.kind !== "video" || !video.current) return;
-            video.current.srcObject = event.streams[0] || new MediaStream([event.track]);
-            video.current.play().catch(() => failed("Playback was blocked. Use the video play control or reconnect."));
-          };
-          peer.onconnectionstatechange = () => {
-            if (cancelled) return;
-            if (peer.connectionState === "connected") setStatus("Connected · waiting for video");
-            if (["failed", "disconnected"].includes(peer.connectionState)) failed("Camera connection lost. Check LAN/VPN access, then reconnect.");
-          };
-          await peer.setLocalDescription(await peer.createOffer());
-          await waitForIce(peer, controller.signal);
+      const target = video.current;
+      const source = cameraHlsUrl(url);
+      if (!target) {
+        failed("Camera video element is unavailable.");
+      } else if (Hls.isSupported()) {
+        hls = new Hls({
+          enableWorker: true,
+          lowLatencyMode: false,
+          maxBufferLength: 12,
+          backBufferLength: 6,
+        });
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
           if (cancelled) return;
-          const signalUrl = compatibilityRelay ? url.replace(/media\/$/, "relay/") : url;
-          const signalSdp = compatibilityRelay ? peer.localDescription.sdp : prepareCrealityOffer(peer.localDescription.sdp);
-          const answer = await cameraRequest(() => apiFetch(signalUrl, { method: "POST", signal: controller.signal, body: { sdp: signalSdp } }), controller.signal);
-          if (cancelled) return;
-          await peer.setRemoteDescription(answer);
-          videoTimeout = setTimeout(() => { if (!cancelled && (video.current?.readyState || 0) < 2) failed("No camera video arrived. Your browser must reach the printer over LAN/VPN; HTTPS access to MakerVault alone does not relay WebRTC video."); }, 20000);
-        } catch (err) { if (err.name !== "AbortError") failed(err.message); }
-      })();
+          setStatus("Connected · waiting for video");
+          target.play().catch(() => failed("Playback was blocked. Use the video play control or reconnect."));
+        });
+        hls.on(Hls.Events.ERROR, (_event, data) => {
+          if (!cancelled && data?.fatal) failed("Camera relay disconnected. Check the printer connection, then reconnect.");
+        });
+        hls.loadSource(source);
+        hls.attachMedia(target);
+      } else if (target.canPlayType("application/vnd.apple.mpegurl")) {
+        target.src = source;
+        target.play().catch(() => failed("Playback was blocked. Use the video play control or reconnect."));
+      } else {
+        failed("This browser cannot play the MakerVault camera relay.");
+      }
     }
-    return () => { cancelled = true; controller.abort(); clearTimeout(videoTimeout); stopFrames?.(); closePeer(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [camera.id, url, attempt, compatibilityRelay]);
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      stopFrames?.();
+      hls?.destroy();
+      if (video.current) {
+        video.current.pause();
+        video.current.removeAttribute("src");
+        video.current.load();
+      }
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [camera.id, url, attempt]);
+
   useEffect(() => {
     if (!expanded) return;
     const oldOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const escape = event => { if (event.key === "Escape") setExpanded(false); };
     document.addEventListener("keydown", escape);
-    return () => { document.body.style.overflow = oldOverflow; document.removeEventListener("keydown", escape); };
+    return () => {
+      document.body.style.overflow = oldOverflow;
+      document.removeEventListener("keydown", escape);
+    };
   }, [expanded]);
+
   const fullscreen = () => {
     if (expanded) { setExpanded(false); return; }
     const target = container.current;
     if (target?.requestFullscreen) target.requestFullscreen().catch(() => setExpanded(true));
-    else if (video.current?.webkitEnterFullscreen) { try { video.current.webkitEnterFullscreen(); } catch { setExpanded(true); } }
-    else setExpanded(true);
+    else if (video.current?.webkitEnterFullscreen) {
+      try { video.current.webkitEnterFullscreen(); } catch { setExpanded(true); }
+    } else setExpanded(true);
   };
+
   const fit = Number(camera.rotation || 0) % 180 ? 9 / 16 : 1;
   const transform = `rotate(${camera.rotation || 0}deg) scale(${(camera.flip_horizontal ? -1 : 1) * fit}, ${(camera.flip_vertical ? -1 : 1) * fit})`;
+
   return <div className={"printerCameraPlayback" + (compact ? " cameraGlance" : "") + (expanded ? " cameraExpanded" : "")} ref={container}>
     <div className="printerCameraToolbar">
       {!compact && <small role="status">{status}</small>}
@@ -238,9 +271,13 @@ export function CameraPlayback({ camera, url, compact = false }) {
       <button type="button" className="cameraFullscreen" aria-label={expanded ? "Close fullscreen camera" : "Open fullscreen camera"} onClick={fullscreen}>{expanded ? "Close" : "Fullscreen"}</button>
     </div>
     <div className="printerCameraViewport">
-      {camera.mode === "creality_webrtc" ? <video ref={video} style={{ transform }} autoPlay muted playsInline controls={!compact} onPlaying={() => setStatus("Live video · experimental")} /> : image ? <img src={image} alt={camera.name + " live camera view"} style={{ transform }} /> : <span role="status">{status}</span>}
+      {camera.mode === "creality_webrtc"
+        ? <video ref={video} style={{ transform }} autoPlay muted playsInline controls={!compact} onPlaying={() => { setError(""); setStatus("Live video · relayed through MakerVault"); }} />
+        : image
+          ? <img src={image} alt={camera.name + " live camera view"} style={{ transform }} />
+          : <span role="status">{status}</span>}
     </div>
     {error && <p className="integrationError" role="alert">{error}</p>}
-    {!compact && <small>{LABELS[camera.mode]}{camera.mode === "creality_webrtc" ? (compatibilityRelay ? " · Firefox compatibility relay through MakerVault." : " · Browser needs LAN/VPN access to the printer.") : " · Images are relayed securely through your MakerVault session."}</small>}
+    {!compact && <small>{LABELS[camera.mode]}{camera.mode === "creality_webrtc" ? " · Video is relayed through your authenticated MakerVault connection; no camera media port is exposed." : " · Images are relayed securely through your MakerVault session."}</small>}
   </div>;
 }

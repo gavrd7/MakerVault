@@ -48,3 +48,18 @@ Stop making changes. Check whether `.env` points to a new empty bind directory o
 Include the MakerVault version/commit, OS, install method, affected feature, exact error, time and steps to reproduce. Explain whether it previously worked and what changed. Attach a redacted screenshot or short log excerpt, not credentials or the entire database.
 
 Use the repository's issue tracker for reproducible application problems. Do not publish private security details in a public issue; agree a private reporting route with the maintainer.
+
+
+## K2 camera playback
+
+For the Creality K2 compatibility path, the browser should load video from MakerVault's own origin. You should not need to expose port 8555 or give the browser direct access to the printer.
+
+If a K2 preview does not load:
+
+1. Confirm the Creality printer integration itself is connected and the camera source is saved.
+2. Stop and restart the preview once to recreate the short-lived HLS session.
+3. Check the MakerVault application logs for camera-relay or go2rtc errors.
+4. When using a reverse proxy, confirm ordinary MakerVault application routes are forwarded normally; do not add a separate 8555 proxy rule.
+5. Confirm another local/cloud camera viewer is not holding the printer's only available camera session.
+
+K1 snapshot/MJPEG sources use their existing authenticated media routes and are independent of the K2 HLS session path.

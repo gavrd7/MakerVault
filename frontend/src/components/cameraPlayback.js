@@ -1,36 +1,5 @@
-export function needsCrealityRelay(userAgent = "") {
-  // Firefox desktop currently fails to consume the K2's proprietary WebRTC
-  // stream directly on both Linux and Windows. iOS browsers use WebKit and do
-  // not expose the desktop Firefox UA token.
-  return /Firefox\//i.test(String(userAgent || ""));
-}
-
-export function waitForIce(peer, signal, timeoutMs = 8000) {
-  if (signal.aborted) return Promise.reject(new DOMException("Cancelled", "AbortError"));
-  if (peer.iceGatheringState === "complete") return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const finish = error => {
-      clearTimeout(timer);
-      peer.removeEventListener("icegatheringstatechange", changed);
-      signal.removeEventListener("abort", aborted);
-      error ? reject(error) : resolve();
-    };
-    const changed = () => { if (peer.iceGatheringState === "complete") finish(); };
-    const aborted = () => finish(new DOMException("Cancelled", "AbortError"));
-    const timer = setTimeout(() => finish(), timeoutMs);
-    peer.addEventListener("icegatheringstatechange", changed);
-    signal.addEventListener("abort", aborted, { once: true });
-  });
-}
-
-export function prepareCrealityOffer(sdp) {
-  // Older firmware expects numeric ICE addresses; peer-reflexive ICE learns the LAN route.
-  return sdp.split("\r\n").map(line => {
-    if (!line.startsWith("a=candidate:")) return line;
-    const fields = line.split(" ");
-    if (fields[4]?.endsWith(".local")) fields[4] = "192.0.2.1";
-    return fields.join(" ");
-  }).join("\r\n");
+export function cameraHlsUrl(mediaUrl = "") {
+  return String(mediaUrl).replace(/media\/$/, "hls/master.m3u8");
 }
 
 export function startFrameLoop({ request, onFrame, onError, interval = 1000 }) {

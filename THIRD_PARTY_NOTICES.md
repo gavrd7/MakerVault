@@ -30,7 +30,7 @@ The upstream project is available from the OrcaSlicer/OrcaSlicer repository on G
 
 MakerVault bundles the go2rtc media relay (v1.9.14) for browser compatibility with Creality K2 WebRTC camera streams. go2rtc is an independent project distributed under the MIT License, Copyright (c) 2022 Alexey Khit. Its licence text is included in `/app/licenses/go2rtc-LICENSE` in the MakerVault container.
 
-MakerVault uses a restricted go2rtc configuration: only the local stream/WebRTC API is enabled, the management API listens on loopback only, and the relay is used only for MakerVault-managed camera compatibility.
+MakerVault uses a restricted go2rtc configuration: the management/media API and WebRTC listener remain on loopback, only the stream/WebRTC plus HLS/fMP4 paths required by MakerVault are enabled, and no go2rtc media port is published by Docker. The relay is used only for MakerVault-managed camera compatibility.
 
 ## User-provided media
 
@@ -38,7 +38,7 @@ Images and files uploaded by users remain subject to the rights and licences app
 
 ## Software dependencies
 
-MakerVault is built with third-party open-source libraries and container images, including Django, django-allauth, Celery, Redis clients, Gunicorn, React, AG Grid Community, Vite, Three.js, Pillow, Beautiful Soup and PostgreSQL/Redis container images. Each dependency remains under its own upstream licence. Consult the package metadata and upstream projects for the authoritative licence text and notices.
+MakerVault is built with third-party open-source libraries and container images, including Django, django-allauth, Celery, Redis clients, Gunicorn, React, AG Grid Community, Vite, Three.js, hls.js (Apache-2.0), Pillow, Beautiful Soup and PostgreSQL/Redis container images. Each dependency remains under its own upstream licence. Consult the package metadata and upstream projects for the authoritative licence text and notices.
 
 ## Attribution in the application
 

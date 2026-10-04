@@ -5,13 +5,13 @@
 1. Open **Settings → Library updates** as an administrator.
 2. Review whether automatic maintenance is enabled.
 3. Choose the interval; the default is **24 hours**.
-4. Select the available technical board-data, printer-data and image checks you want.
+4. Select the available board/component, printer, filament and image checks you want.
 5. Choose **Save schedule**.
 6. Use **Run now** for an immediate queued check and review the last/next run information.
 
 The schedule is stored in PostgreSQL and survives container rebuilds. Background workers perform the work, so queueing a run is not the same as completing it. External sources, retry intervals and per-run limits affect how quickly gaps are filled.
 
-Enrichment is designed to preserve populated information rather than overwrite edits just because another source supplies a value. Unsupported models or unavailable reliable sources can remain incomplete indefinitely.
+Enrichment is designed to preserve populated information rather than overwrite edits just because another source supplies a value. Filament maintenance can refresh missing catalogue fields and consult authoritative manufacturer product/TDS data for values such as density, nozzle/bed temperatures and drying guidance. The filament catalogue combines SpoolmanDB with verified supplemental records for gaps; provenance is retained so the source remains visible. Unsupported models, intentionally unmatched filaments or unavailable reliable sources can remain incomplete indefinitely.
 
 ## Server-level controls
 

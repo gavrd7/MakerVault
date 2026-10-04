@@ -79,6 +79,6 @@ RUN chmod -R a+rX /app/backend \
     && chmod +x /usr/local/bin/makervault-entrypoint /usr/local/bin/makervault-https
 
 WORKDIR /app/backend
-EXPOSE 8000 8443 8555/tcp 8555/udp
+EXPOSE 8000 8443
 ENTRYPOINT ["/usr/local/bin/makervault-entrypoint"]
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/makervault.conf"]

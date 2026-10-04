@@ -1,6 +1,4 @@
-import os
 import uuid
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
@@ -10,8 +8,8 @@ from core.camera_relay import (
     bridge_signature,
     bridge_source,
     ensure_stream,
-    relay_offer,
-    rewrite_answer_candidates,
+    hls_master,
+    hls_resource,
     stream_name,
     valid_bridge_signature,
 )
@@ -42,37 +40,25 @@ class CameraRelayHelperTests(SimpleTestCase):
         self.assertEqual(kwargs["params"]["name"], name)
         self.assertIn("#format=creality", kwargs["params"]["src"])
 
-    @patch.dict(os.environ, {"MAKERVAULT_CAMERA_RELAY_CANDIDATE": "192.168.1.50"}, clear=False)
-    def test_loopback_ice_candidate_is_rewritten_for_browser(self):
-        request = SimpleNamespace(get_host=lambda: "maker.example:8765")
-        answer = (
-            "v=0\r\n"
-            "a=candidate:1 1 udp 2130706431 127.0.0.1 8555 typ host\r\n"
-        )
-        rewritten = rewrite_answer_candidates(answer, request)
-        self.assertIn("192.168.1.50 8555 typ host", rewritten)
-        self.assertNotIn("127.0.0.1 8555", rewritten)
-
-    @patch.dict(os.environ, {"MAKERVAULT_CAMERA_RELAY_CANDIDATE": "192.168.1.50"}, clear=False)
-    @patch("core.camera_relay._SESSION.post")
+    @patch("core.camera_relay._bounded_get")
     @patch("core.camera_relay.ensure_stream", return_value="makervault_test")
-    def test_relay_offer_returns_browser_reachable_answer(self, ensure, request_post):
-        response = MagicMock(status_code=200)
-        response.json.return_value = {
-            "type": "answer",
-            "sdp": "v=0\r\na=candidate:1 1 udp 1 127.0.0.1 8555 typ host\r\n",
-        }
-        request_post.return_value = response
-        request = SimpleNamespace(get_host=lambda: "192.168.1.50:8765")
-        result = relay_offer(
-            request,
-            uuid.uuid4(),
-            "camera-1",
-            "v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\n",
+    def test_hls_master_uses_loopback_go2rtc_stream(self, ensure, bounded):
+        bounded.return_value = (
+            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\nhls/playlist.m3u8?id=test123\n",
+            "application/vnd.apple.mpegurl",
         )
-        self.assertEqual(result["type"], "answer")
-        self.assertIn("192.168.1.50 8555", result["sdp"])
-        self.assertEqual(request_post.call_args.kwargs["json"]["type"], "offer")
+        connection_id = uuid.uuid4()
+        result = hls_master(connection_id, "camera-1")
+        self.assertTrue(result.startswith("#EXTM3U"))
+        ensure.assert_called_once_with(connection_id, "camera-1")
+        self.assertEqual(bounded.call_args.args[0], "/api/stream.m3u8")
+        self.assertEqual(bounded.call_args.kwargs["params"]["src"], "makervault_test")
+
+    @patch("core.camera_relay._bounded_get")
+    def test_hls_resource_rejects_unknown_resource(self, bounded):
+        with self.assertRaisesMessage(ValueError, "Unsupported camera relay resource"):
+            hls_resource("abc123", "debug")
+        bounded.assert_not_called()
 
 
 @override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}})
@@ -101,51 +87,58 @@ class CameraRelayApiTests(TestCase):
                 "camera_default_id": "k2-camera",
             },
         )
-        self.url = (
+        self.base = (
             f"/api/printing/printers/{self.printer.id}/connections/"
-            f"{self.connection.id}/cameras/k2-camera/relay/"
+            f"{self.connection.id}/cameras/k2-camera/hls/"
         )
         self.client.force_login(self.owner)
 
-    @patch("core.camera_views.relay_offer")
-    def test_owner_can_negotiate_saved_creality_source(self, relay):
-        relay.return_value = {
-            "type": "answer",
-            "sdp": "v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\n",
-        }
-        response = self.client.post(
-            self.url,
-            {"sdp": "v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\n"},
-            content_type="application/json",
+    @patch("core.camera_views.hls_master")
+    def test_owner_can_start_authenticated_hls_session(self, master):
+        master.return_value = (
+            "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,CODECS=\"avc1.64001F\"\n"
+            "hls/playlist.m3u8?id=abc123\n"
         )
+        response = self.client.get(self.base + "master.m3u8")
         self.assertEqual(response.status_code, 200, response.content)
-        relay.assert_called_once()
+        self.assertIn(b"playlist.m3u8?id=abc123", response.content)
+        self.assertNotIn(b"hls/playlist", response.content)
+        master.assert_called_once_with(self.connection.pk, "k2-camera")
 
-    @patch("core.camera_views.relay_offer")
-    def test_other_owner_cannot_access_relay(self, relay):
-        self.client.force_login(self.other)
-        response = self.client.post(
-            self.url,
-            {"sdp": "v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\n"},
-            content_type="application/json",
+    @patch("core.camera_views.hls_resource")
+    @patch("core.camera_views.hls_master")
+    def test_hls_resources_require_session_created_for_same_user_and_camera(self, master, resource):
+        master.return_value = "#EXTM3U\nhls/playlist.m3u8?id=abc123\n"
+        self.client.get(self.base + "master.m3u8")
+        resource.return_value = (
+            b"#EXTM3U\n#EXT-X-MAP:URI=\"init.mp4?id=abc123\"\nsegment.m4s?id=abc123\n",
+            "application/vnd.apple.mpegurl",
         )
-        self.assertEqual(response.status_code, 404)
-        relay.assert_not_called()
+        response = self.client.get(self.base + "playlist.m3u8?id=abc123")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertIn(b"segment.m4s?id=abc123", response.content)
+        resource.assert_called_once_with("abc123", "playlist.m3u8")
 
-    @patch("core.camera_views.relay_offer")
-    def test_disabled_connection_never_starts_relay(self, relay):
+        self.client.force_login(self.other)
+        denied = self.client.get(self.base + "playlist.m3u8?id=abc123")
+        self.assertEqual(denied.status_code, 404)
+
+    @patch("core.camera_views.hls_master")
+    def test_expired_or_uncreated_hls_session_is_rejected(self, master):
+        response = self.client.get(self.base + "segment.m4s?id=missing")
+        self.assertEqual(response.status_code, 403)
+        master.assert_not_called()
+
+    @patch("core.camera_views.hls_master")
+    def test_disabled_connection_never_starts_relay(self, master):
         self.connection.enabled = False
         self.connection.save(update_fields=["enabled"])
-        response = self.client.post(
-            self.url,
-            {"sdp": "v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\n"},
-            content_type="application/json",
-        )
+        response = self.client.get(self.base + "master.m3u8")
         self.assertEqual(response.status_code, 409)
-        relay.assert_not_called()
+        master.assert_not_called()
 
-    @patch("core.camera_views.relay_offer")
-    def test_non_creality_source_is_rejected(self, relay):
+    @patch("core.camera_views.hls_master")
+    def test_non_creality_source_is_rejected(self, master):
         config = dict(self.connection.config)
         config["cameras"] = [
             {
@@ -160,10 +153,6 @@ class CameraRelayApiTests(TestCase):
         ]
         self.connection.config = config
         self.connection.save(update_fields=["config"])
-        response = self.client.post(
-            self.url,
-            {"sdp": "v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\n"},
-            content_type="application/json",
-        )
+        response = self.client.get(self.base + "master.m3u8")
         self.assertEqual(response.status_code, 400)
-        relay.assert_not_called()
+        master.assert_not_called()
