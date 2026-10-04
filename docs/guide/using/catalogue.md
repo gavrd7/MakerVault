@@ -1,4 +1,4 @@
-# Boards and components
+# Boards, components and filament
 
 **Goal:** find or create an accurate description of a product before recording the units you own.
 
@@ -28,6 +28,14 @@ An existing match receives missing source details rather than an unnecessary dup
 Open **Components** for sensors, displays, power modules, audio parts, controls, connectors and other maker hardware. Check type, interface, voltage and package/form factor. Generic components are intentionally manufacturer-neutral; there is no need to invent a brand for a resistor or LED.
 
 A component definition does not increase your stock. Add a separate inventory record for the amount you bought and where you keep it.
+
+## Filament catalogue
+
+Filament products use the same reference-data principle but have their own matching workflow. The MakerVault filament catalogue merges SpoolmanDB with verified supplemental manufacturer-backed records so missing upstream products can be added without pretending every record came from the same provider.
+
+A saved filament may remain **Unmatched** indefinitely; matching is optional. From **Filament details**, editors can match or rematch a product to a ranked catalogue candidate, or unmatch it later. New reversible matches save the previous field values before catalogue data is applied. Manufacturer product pages and technical data sheets can supplement missing density, print-temperature and drying information where reliable sources are available.
+
+Catalogue and manufacturer data fill gaps rather than replacing deliberate manual corrections. The source/provenance remains attached so you can see where information came from.
 
 ## Images and automatic data
 
