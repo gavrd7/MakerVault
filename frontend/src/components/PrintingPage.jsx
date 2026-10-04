@@ -1330,7 +1330,7 @@ function PrinterManageModal({ printer, manufacturers, models, locations, canDele
         <button type="button" onClick={onClose}>Cancel</button>
         <button className="primary" disabled={busy}>{busy ? "Saving…" : "Save printer"}</button>
       </div>
-      {deleteArmed && <div className="settingsCallout full"><strong>Delete owned printer?</strong><p>This removes the printer and its live connection/camera configuration. Printers referenced by print history are protected and cannot be deleted; mark them inactive instead.</p></div>}
+      {deleteArmed && <div className="settingsCallout full"><strong>Delete owned printer?</strong><p>This removes the owned-printer record and its live connection/camera configuration. Existing print history is retained. A printer cannot be deleted while it is currently printing.</p></div>}
     </form>
   </Modal>;
 }
