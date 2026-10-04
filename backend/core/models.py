@@ -74,6 +74,7 @@ class CatalogueMaintenanceSettings(TimeStampedModel):
     interval_hours = models.PositiveIntegerField(default=24)
     check_board_data = models.BooleanField(default=True)
     check_printer_data = models.BooleanField(default=True)
+    check_filament_data = models.BooleanField(default=True)
     check_images = models.BooleanField(default=True)
     last_run_at = models.DateTimeField(blank=True, null=True)
     next_run_at = models.DateTimeField(blank=True, null=True)
@@ -653,6 +654,7 @@ class FilamentProduct(TimeStampedModel):
     drying_temp_c = models.SmallIntegerField(blank=True, null=True)
     drying_time_hours = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
     image = models.ImageField(upload_to="filament/catalog/", blank=True, null=True)
+    image_metadata = models.JSONField(default=dict, blank=True)
     profile_data = models.JSONField(default=dict, blank=True)
 
     class Meta:
