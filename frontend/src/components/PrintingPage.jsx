@@ -2245,14 +2245,18 @@ function DiscoveredSpoolModal({ printer, slot, filaments, spools, currency, canC
             const selected = existingSpoolId === spool.id;
             const colourLabel = spool.color_name || spool.color_hex || "Colour not recorded";
             const placement = spool.location || "Unassigned";
-            return <button
+            return <label
               key={spool.id}
-              type="button"
-              role="radio"
-              aria-checked={selected}
               className={"detectedSpoolCandidate" + (selected ? " detectedSpoolCandidateSelected" : "")}
-              onClick={() => setExistingSpoolId(spool.id)}
             >
+              <input
+                className="detectedSpoolCandidateRadio"
+                type="radio"
+                name="existing-spool"
+                value={spool.id}
+                checked={selected}
+                onChange={() => setExistingSpoolId(spool.id)}
+              />
               <span className={"printingSwatch filamentPreview-" + (spool.transparency || "opaque")} style={filamentSwatchStyle(spool)} aria-hidden="true" />
               <span className="detectedSpoolCandidateMain">
                 <strong>{spool.spool_id} · {spool.filament}</strong>
@@ -2260,11 +2264,12 @@ function DiscoveredSpoolModal({ printer, slot, filaments, spools, currency, canC
                 <small>{grams(spool.remaining_weight_g)} remaining · {placement}</small>
               </span>
               <span className="printingBadges detectedSpoolCandidateBadges">
+                {selected && <Badge tone="good">Selected</Badge>}
                 {spoolman && <Badge tone="accent">Spoolman #{spoolman.external_id}</Badge>}
                 {spool.rfid_uid && <Badge>RFID {spool.rfid_uid}</Badge>}
                 <Badge>{spool.status_label || spool.status}</Badge>
               </span>
-            </button>;
+            </label>;
           })}
         </div>
         {!candidateSpools.length && <div className="formError full">There are no currently unloaded MakerVault spools available to link.</div>}
