@@ -75,11 +75,6 @@ function PartModal({ part, job, options, rows, projects, projectId, canEditPrint
     e.preventDefault();
     setError("");
     setFieldErrors({});
-    if (form.status === "installed" && !form.project_id) {
-      setError("Please correct the highlighted fields.");
-      setFieldErrors({ project: ["Choose the project where this part is installed."] });
-      return;
-    }
     setBusy(true);
     try {
       await apiFetch(part ? `/api/printing/parts/${part.id}/` : "/api/printing/parts/", { method: part ? "PATCH" : "POST", body: form });
