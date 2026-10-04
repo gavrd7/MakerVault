@@ -34,13 +34,21 @@ Spool IDs are generated automatically. Two identical reels should be two spool r
 
 Weight fields refer to filament amounts; do not put the combined plastic-reel-and-filament scale reading into a filament-only remaining-weight field without accounting for the empty spool.
 
-### Filament catalogue data and images
+## Match a filament to catalogue data
 
-Imported SpoolmanDB products retain their catalogue identity and provenance while becoming normal editable MakerVault filament products. Catalogue maintenance can refresh **missing** density, weight, colour/appearance and print-temperature data without replacing values you have corrected manually. Where the upstream record provides them, MakerVault also retains manufacturer product, technical-data and safety-data links plus spool/refill metadata.
+Catalogue matching is optional. A manually created filament remains fully usable when it is **Unmatched**.
 
-Filament images follow the same conservative policy as the other MakerVault catalogues. An authoritative manufacturer product page can provide a remote image reference; confidently matched openly licensed media may be cached locally. MakerVault does not copy arbitrary commercial product imagery merely because it appears in search results. Editors can also use **Image** in the Filament Library to upload their own product image; administrators may provide a safe public HTTPS image URL.
+Open **Filament details** for a saved product and choose **Match catalogue**. MakerVault ranks candidates using manufacturer, material, product-name aliases and colour information. The catalogue is merged from SpoolmanDB plus verified supplemental manufacturer-backed records, so a result may come from more than one source. Review the source and technical values before applying a match.
 
-**Settings → Library updates** includes filament data in the normal catalogue-maintenance schedule and reports filament coverage for images, manufacturers, colour data, density, nominal weight, print temperatures and source links.
+A match can fill missing density, nominal/spool weight, nozzle/bed temperatures, drying information, colour metadata and source links. Incoming decimal values are rounded to the precision MakerVault stores before validation. Existing manual corrections are not silently overwritten by scheduled enrichment.
+
+After matching:
+
+- **Rematch catalogue** lets you choose a different catalogue record.
+- **Unmatch catalogue** removes the link. For matches created with the reversible workflow, MakerVault restores the saved pre-match values; older matches without a snapshot keep their current descriptive values rather than guessing what should be removed.
+- Spool Inventory displays **✓ Matched** or **Unmatched** for the filament product used by each physical spool. Multiple spools sharing one filament product therefore show the same state.
+
+The colour swatch represents the filament colour; the separate square tick marker represents the selected catalogue candidate.
 
 ## Locations and slots
 
