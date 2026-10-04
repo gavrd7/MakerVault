@@ -380,7 +380,7 @@ def refresh_imported_filament_products(*, force_catalogue=False, limit=None):
 
         profile = dict(item.profile_data or {})
         upstream_meta = {
-            "catalogue": "SpoolmanDB",
+            "catalogue": source_name,
             "external_id": external_id,
             "spool_type": row.get("spool_type") or "",
             "is_refill": bool(row.get("is_refill")),
@@ -465,7 +465,7 @@ def match_filament_catalogue_candidates(filament, *, limit=8):
     wanted_hex = _normalise_match_hex(filament.color_hex)
 
     ranked = []
-    for row in get_spoolmandb_catalogue():
+    for row in get_filament_catalogue():
         score = 0
         reasons = []
         row_maker = str(row.get("manufacturer") or "").strip().casefold()
@@ -565,11 +565,13 @@ def apply_catalogue_match_to_filament(filament, external_id):
     from .models import CatalogSource, FilamentManufacturer
 
     row = get_spoolmandb_item(external_id)
+    source_type = str(row.get("source_type") or "spoolmandb").strip() or "spoolmandb"
+    source_name = str(row.get("source_name") or "SpoolmanDB").strip() or "SpoolmanDB"
     source, _ = CatalogSource.objects.update_or_create(
-        source_type="spoolmandb",
+        source_type=source_type,
         external_id=row["external_id"],
         defaults={
-            "name": f"SpoolmanDB — {row['manufacturer']} — {row['name']}"[:200],
+            "name": f"{source_name} — {row['manufacturer']} — {row['name']}"[:200],
             "url": row["source_url"],
             "raw_metadata": {
                 "license": row["source_license"],
@@ -585,7 +587,8 @@ def apply_catalogue_match_to_filament(filament, external_id):
 
     changed = []
     current_source_type = getattr(filament.source, "source_type", "") if filament.source_id else ""
-    if filament.source_id is None or current_source_type in {"manual", "spoolmandb"}:
+    catalogue_source_types = {"manual", "spoolmandb", "manufacturer", "filamentprofiles", "filamentsdb"}
+    if filament.source_id is None or current_source_type in catalogue_source_types:
         if filament.source_id != source.id:
             filament.source = source
             changed.append("source")
