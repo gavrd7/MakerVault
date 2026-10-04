@@ -228,6 +228,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
   const summary = data?.summary || {};
   const canAddPrinter = Boolean(config?.permissions?.add_printer);
   const canChangePrinter = Boolean(config?.permissions?.change_printer);
+  const canDeletePrinter = Boolean(config?.permissions?.delete_printer);
   const canAddFilament = Boolean(config?.permissions?.add_filament);
   const canChangeFilament = Boolean(config?.permissions?.change_filament);
   const canAddSpool = Boolean(config?.permissions?.add_spool);
@@ -519,6 +520,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       manufacturers={data?.printer_manufacturers || []}
       models={data?.printer_catalogue_models || []}
       locations={data?.locations || []}
+      canDelete={canDeletePrinter}
       onClose={() => setManagePrinter(null)}
       onSaved={async () => { setManagePrinter(null); await load(); }}
     />}
@@ -793,6 +795,7 @@ function LocationModal({ onClose, onSaved }) {
   const [form, setForm] = useState({ name: "", kind: "storage", notes: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [deleteArmed, setDeleteArmed] = useState(false);
   const set = (key, value) => setForm(current => ({ ...current, [key]: value }));
 
   async function submit(event) {
@@ -1204,7 +1207,7 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
 }
 
 
-function PrinterManageModal({ printer, manufacturers, models, locations, onClose, onSaved }) {
+function PrinterManageModal({ printer, manufacturers, models, locations, canDelete, onClose, onSaved }) {
   const initialMaker = printer.manufacturer_id || manufacturers.find(x => x.name === printer.manufacturer)?.id || "";
   const [form, setForm] = useState({
     name: printer.name || "",
@@ -1280,6 +1283,24 @@ function PrinterManageModal({ printer, manufacturers, models, locations, onClose
     }
   }
 
+  async function removePrinter() {
+    if (!deleteArmed) {
+      setDeleteArmed(true);
+      setError("");
+      return;
+    }
+    setBusy(true); setError("");
+    try {
+      await apiFetch("/api/printing/printers/" + printer.id + "/", { method: "DELETE" });
+      await onSaved();
+    } catch (err) {
+      setDeleteArmed(false);
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return <Modal title={"Manage printer · " + printer.name} subtitle="Update the owned-printer record, catalogue profile, location and local connection used by optional integrations." onClose={onClose} wide>
     <form className="formGrid" onSubmit={submit}>
       {error && <div className="formError full">{error}</div>}
@@ -1303,7 +1324,13 @@ function PrinterManageModal({ printer, manufacturers, models, locations, onClose
       <label>Build Y (mm)<input type="number" min="1" step="0.1" value={form.build_volume_y_mm} onChange={e => set("build_volume_y_mm", e.target.value)} /></label>
       <label>Build Z (mm)<input type="number" min="1" step="0.1" value={form.build_volume_z_mm} onChange={e => set("build_volume_z_mm", e.target.value)} /></label>
       <label className="settingsToggle full"><div><strong>Currently in use</strong><small>Inactive printers remain available in historical print records.</small></div><input type="checkbox" checked={form.is_active} onChange={e => set("is_active", e.target.checked)} /></label>
-      <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Saving…" : "Save printer"}</button></div>
+      <div className="formActions full">
+        {canDelete && <button type="button" className="dangerButton" disabled={busy} onClick={removePrinter}>{deleteArmed ? "Confirm delete printer" : "Delete printer"}</button>}
+        {deleteArmed && <button type="button" disabled={busy} onClick={() => setDeleteArmed(false)}>Keep printer</button>}
+        <button type="button" onClick={onClose}>Cancel</button>
+        <button className="primary" disabled={busy}>{busy ? "Saving…" : "Save printer"}</button>
+      </div>
+      {deleteArmed && <div className="settingsCallout full"><strong>Delete owned printer?</strong><p>This removes the printer and its live connection/camera configuration. Printers referenced by print history are protected and cannot be deleted; mark them inactive instead.</p></div>}
     </form>
   </Modal>;
 }
