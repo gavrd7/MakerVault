@@ -2527,7 +2527,9 @@ a:focus-visible,
 .filamentMatchCandidate{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:11px 12px;border:1px solid #2b3644;border-radius:10px;background:#0d131a;cursor:pointer}
 .filamentMatchCandidate:hover,.filamentMatchCandidate:focus-within{border-color:#6f61d9;background:#101821}
 .filamentMatchCandidateSelected{border-color:#8c76ff;background:#15142a;box-shadow:0 0 0 1px #8c76ff}
-.filamentMatchCandidate input[type="radio"]{width:18px;height:18px;margin:0;accent-color:#8c76ff}
+.filamentMatchRadio{position:absolute;opacity:0;pointer-events:none}
+.filamentMatchSelectMark{display:grid;place-items:center;width:20px;height:20px;border:1px solid #566377;border-radius:5px;background:#121923;color:#fff;font-size:14px;font-weight:800}
+.filamentMatchSelectMarkChecked{border-color:#8c76ff;background:#6f58e8}
 .filamentMatchMain{min-width:0;display:grid;gap:3px}
 .filamentMatchMain strong,.filamentMatchMain small{overflow-wrap:anywhere}
 @media(max-width:720px){.filamentMatchCandidate{grid-template-columns:auto auto minmax(0,1fr)}.filamentMatchCandidate>.printingBadges{grid-column:1/-1;justify-content:flex-start}}
