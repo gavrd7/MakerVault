@@ -6,6 +6,13 @@ The public guide is the best starting point for installation, configuration, upd
 
 https://gavrd7.github.io/MakerVault-docs/
 
+## Support model
+
+MakerVault is coded entirely through AI systems under human direction. Feature ideas, product decisions, acceptance checks, bug discovery and hands-on testing are performed by the human maintainer.
+
+Support therefore depends on the capabilities of the available AI tooling and on receiving enough reproducible information to investigate a problem. A report may require additional logs, screenshots, reproduction steps or human testing before a reliable fix can be produced. Automated tests and AI-generated patches are not treated as proof that a real-world problem is solved.
+
+
 ## Bugs
 
 If MakerVault is behaving incorrectly, open a **Bug report** using the repository issue form.
