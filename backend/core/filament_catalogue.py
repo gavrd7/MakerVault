@@ -370,3 +370,187 @@ def refresh_imported_filament_products(*, force_catalogue=False, limit=None):
         "missing_upstream": missing,
     }
 
+
+
+def _match_tokens(value):
+    import re
+    stop = {"filament", "3d", "printer", "printing"}
+    return {
+        token for token in re.findall(r"[a-z0-9]+", str(value or "").casefold())
+        if len(token) > 1 and token not in stop
+    }
+
+
+def _normalise_match_hex(value):
+    raw = str(value or "").strip().casefold()
+    if raw and not raw.startswith("#"):
+        raw = "#" + raw
+    return raw[:7]
+
+
+def match_filament_catalogue_candidates(filament, *, limit=8):
+    """Rank catalogue records against an existing MakerVault filament product."""
+    maker = (
+        filament.filament_manufacturer.name
+        if filament.filament_manufacturer_id
+        else filament.manufacturer.name if filament.manufacturer_id else ""
+    )
+    wanted_name = _match_tokens(filament.name)
+    wanted_material = str(filament.material or "").strip().casefold()
+    wanted_maker = str(maker or "").strip().casefold()
+    wanted_colour_name = _match_tokens(filament.color_name)
+    wanted_hex = _normalise_match_hex(filament.color_hex)
+
+    ranked = []
+    for row in get_spoolmandb_catalogue():
+        score = 0
+        reasons = []
+        row_maker = str(row.get("manufacturer") or "").strip().casefold()
+        row_material = str(row.get("material") or "").strip().casefold()
+        row_name_tokens = _match_tokens(row.get("name"))
+        row_colour_tokens = _match_tokens(row.get("color_name"))
+        row_hex = _normalise_match_hex(row.get("color_hex"))
+
+        if wanted_maker and row_maker == wanted_maker:
+            score += 30
+            reasons.append("manufacturer")
+        elif wanted_maker and (wanted_maker in row_maker or row_maker in wanted_maker):
+            score += 18
+            reasons.append("manufacturer similar")
+
+        if wanted_material and row_material == wanted_material:
+            score += 28
+            reasons.append("material")
+        elif wanted_material and wanted_material in row_material:
+            score += 12
+            reasons.append("material similar")
+
+        if wanted_name and row_name_tokens:
+            overlap = wanted_name & row_name_tokens
+            if overlap:
+                ratio = len(overlap) / max(len(wanted_name | row_name_tokens), 1)
+                score += round(34 * ratio)
+                reasons.append("product name")
+
+        if wanted_hex and row_hex:
+            if wanted_hex == row_hex:
+                score += 24
+                reasons.append("colour")
+            else:
+                try:
+                    a = tuple(int(wanted_hex[i:i+2], 16) for i in (1, 3, 5))
+                    b = tuple(int(row_hex[i:i+2], 16) for i in (1, 3, 5))
+                    distance = sum((left - right) ** 2 for left, right in zip(a, b)) ** 0.5
+                    if distance <= 45:
+                        score += 12
+                        reasons.append("colour similar")
+                except ValueError:
+                    pass
+
+        if wanted_colour_name and row_colour_tokens and wanted_colour_name & row_colour_tokens:
+            score += 12
+            reasons.append("colour name")
+
+        if score <= 0:
+            continue
+        ranked.append({
+            **row,
+            "match_score": min(score, 100),
+            "match_reasons": reasons,
+        })
+
+    ranked.sort(key=lambda row: (
+        -int(row["match_score"]),
+        row["manufacturer"].casefold(),
+        row["name"].casefold(),
+    ))
+    return ranked[:max(1, min(int(limit or 8), 20))]
+
+
+def apply_catalogue_match_to_filament(filament, external_id):
+    """Attach a matched catalogue record and fill missing enrichment fields."""
+    from .models import CatalogSource, FilamentManufacturer
+
+    row = get_spoolmandb_item(external_id)
+    source, _ = CatalogSource.objects.update_or_create(
+        source_type="spoolmandb",
+        external_id=row["external_id"],
+        defaults={
+            "name": f"SpoolmanDB — {row['manufacturer']} — {row['name']}"[:200],
+            "url": row["source_url"],
+            "raw_metadata": {
+                "license": row["source_license"],
+                "catalogue_id": row["external_id"],
+                "record": row["raw"],
+            },
+        },
+    )
+    maker, _ = FilamentManufacturer.objects.get_or_create(name=row["manufacturer"] or "Generic")
+
+    changed = []
+    if filament.source_id is None or getattr(filament.source, "source_type", "") == "manual":
+        filament.source = source
+        changed.append("source")
+    if not filament.filament_manufacturer_id:
+        filament.filament_manufacturer = maker
+        filament.manufacturer = None
+        changed.extend(["filament_manufacturer", "manufacturer"])
+
+    fill_fields = {
+        "color_name": row.get("color_name"),
+        "color_hex": row.get("color_hex"),
+        "color_hexes": row.get("color_hexes"),
+        "multi_color_direction": row.get("multi_color_direction"),
+        "finish": row.get("finish"),
+        "pattern": row.get("pattern"),
+        "density_g_cm3": row.get("density_g_cm3"),
+        "nominal_weight_g": row.get("nominal_weight_g"),
+        "empty_spool_weight_g": row.get("empty_spool_weight_g"),
+        "nozzle_temp_min_c": row.get("nozzle_temp_min_c"),
+        "nozzle_temp_max_c": row.get("nozzle_temp_max_c"),
+        "bed_temp_min_c": row.get("bed_temp_min_c"),
+        "bed_temp_max_c": row.get("bed_temp_max_c"),
+    }
+    for field, value in fill_fields.items():
+        current = getattr(filament, field)
+        if current in (None, "", [], {}) and value not in (None, "", [], {}):
+            setattr(filament, field, value)
+            changed.append(field)
+
+    if not filament.glow and row.get("glow"):
+        filament.glow = True
+        changed.append("glow")
+    if filament.transparency == "opaque" and row.get("transparency") in {"translucent", "transparent"}:
+        filament.transparency = row["transparency"]
+        changed.append("transparency")
+
+    profile = dict(filament.profile_data or {})
+    profile["catalogue_provenance"] = {
+        "catalogue": "SpoolmanDB",
+        "external_id": row["external_id"],
+        "matched_manually": True,
+        "matched_at": __import__("django.utils.timezone", fromlist=["now"]).now().isoformat(),
+        "spool_type": row.get("spool_type") or "",
+        "is_refill": bool(row.get("is_refill")),
+        "country_of_origin": row.get("country_of_origin") or "",
+        "product_url": row.get("product_url") or "",
+        "tds_url": row.get("tds_url") or "",
+        "sds_url": row.get("sds_url") or "",
+        "codes": row.get("codes") or [],
+        "eans": row.get("eans") or [],
+        "eans_refill": row.get("eans_refill") or [],
+    }
+    filament.profile_data = profile
+    changed.append("profile_data")
+
+    filament.full_clean()
+    filament.save(update_fields=list(dict.fromkeys(changed + ["updated_at"])))
+
+    # After the catalogue link exists, prefer authoritative manufacturer/TDS
+    # technical data over the catalogue's fallback values.
+    authoritative = enrich_filament_from_authoritative_sources(filament, row)
+    return {
+        "row": row,
+        "changed_fields": sorted(set(changed)),
+        "authoritative": authoritative,
+    }
