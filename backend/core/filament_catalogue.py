@@ -543,8 +543,18 @@ def apply_catalogue_match_to_filament(filament, external_id):
     filament.profile_data = profile
     changed.append("profile_data")
 
-    filament.full_clean()
-    filament.save(update_fields=list(dict.fromkeys(changed + ["updated_at"])))
+    # A catalogue match should validate only the values it is applying.
+    # Older/manual MakerVault records may contain legacy values in unrelated
+    # fields that the database accepted before tighter model validation existed;
+    # those must not prevent linking otherwise valid catalogue data.
+    changed_fields = list(dict.fromkeys(changed))
+    concrete_fields = {
+        field.name for field in filament._meta.concrete_fields
+        if field.name not in {"id", "created_at", "updated_at"}
+    }
+    validation_exclude = sorted(concrete_fields - set(changed_fields))
+    filament.full_clean(exclude=validation_exclude, validate_unique=False, validate_constraints=False)
+    filament.save(update_fields=changed_fields + ["updated_at"])
 
     # After the catalogue link exists, prefer authoritative manufacturer/TDS
     # technical data over the catalogue's fallback values.
