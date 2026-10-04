@@ -4,7 +4,7 @@ import PrintedPartsSection from "./PrintedPartsSection";
 import { printerIntent } from "./printerNavigation";
 import { PrinterCameraPreview, PrinterCameraSetupModal } from "./PrinterCameras";
 import PrinterJobControls from "./PrinterJobControls";
-import { Badge, LoadingBlock, Modal } from "./Common";
+import { Badge, ImageManagerModal, LoadingBlock, Modal } from "./Common";
 import ModelViewerModal, { isViewableModelFile } from "./ModelViewer";
 import { suggestNextVersion } from "./FileVersionModal";
 
@@ -1437,6 +1437,7 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
     return () => window.clearTimeout(timer);
   }, [filaments.length, searchTarget?.token, searchTarget?.id]);
   const [editFilament, setEditFilament] = useState(null);
+  const [imageFilament, setImageFilament] = useState(null);
   const term = query.trim().toLowerCase();
   const rows = newestFirst(filaments).filter(item => !term || [
     item.display_name, item.name, item.manufacturer, item.material, item.color_name,
@@ -1481,12 +1482,22 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
             {item.country_of_origin && <Badge>{item.country_of_origin}</Badge>}
             {item.transparency && item.transparency !== "opaque" && <Badge>{item.transparency_label || item.transparency}</Badge>}
             {item.glow && <Badge>Glow</Badge>}
+            {canChangeFilament && <button type="button" onClick={() => setImageFilament(item)}>Image</button>}
             {canChangeFilament && <button type="button" onClick={() => setEditFilament(item)}>Edit</button>}
           </div>
         </article>)}
         {!rows.length && <div className="printingEmptyInline">{term ? "No filament products match this search." : "No saved filament products yet."}</div>}
       </div>
     </section>
+
+    {imageFilament && <ImageManagerModal
+      title={"Image — " + (imageFilament.display_name || imageFilament.name)}
+      endpoint={"/api/printing/filaments/" + imageFilament.id + "/image/"}
+      responseKey="filament"
+      currentImage={imageFilament.image}
+      onClose={() => setImageFilament(null)}
+      onUpdated={async () => { setImageFilament(null); await onChanged(); }}
+    />}
 
     {editFilament && <FilamentEditModal
       filament={editFilament}
