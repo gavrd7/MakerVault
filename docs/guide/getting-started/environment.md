@@ -55,9 +55,26 @@ For a new, direct-LAN installation:
 | **Choose before first start** | The six `*_STORAGE` entries | Keep named-volume defaults or choose [bind mounts](storage.md) |
 | **Review your preferences** | Timezone, language, currency and measurements | Change if the supplied UK/metric defaults do not suit you |
 | **Usually leave alone** | Database/Redis internal addresses, concurrency and catalogue limits | Keep defaults for the standard deployment |
+| **Optional version pin** | `MAKERVAULT_IMAGE` | Leave unset to use the default GHCR `latest` image, or pin a published version |
 | **Optional later** | OIDC, SMTP email, administrator bootstrap | Leave disabled/blank until you need them |
 
 You do not need to fill every empty line. Many are deliberately empty because their feature is optional.
+
+## Choose or pin the MakerVault image
+
+The normal Compose deployment pulls MakerVault from GitHub Container Registry:
+
+```text
+ghcr.io/gavrd7/makervault:latest
+```
+
+You normally do not need to add anything to `.env`. If you want to stay on a specific release until you deliberately upgrade, set:
+
+```dotenv
+MAKERVAULT_IMAGE=ghcr.io/gavrd7/makervault:1.0.0
+```
+
+This setting controls only the MakerVault application image. It does not change your database or storage. Users following the build-it-yourself route use `compose.build.yaml`, which replaces the published image with a locally built one.
 
 ## Generate the secrets
 
