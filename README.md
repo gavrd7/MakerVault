@@ -104,7 +104,7 @@ Pause, Resume and confirmed Cancel are available as **per-source opt-in controls
 
 Configured cameras appear automatically on visible dashboard and printer cards. The last configured camera is the default; the compact viewer provides fullscreen access, while setup stays in a separate dialog. Hidden/off-screen feeds pause. **K1 and K2 playback and the compact layout have been owner-confirmed.**
 
-HTTP snapshot/MJPEG sources provide refreshed images at approximately one frame per second. Creality WebRTC uses direct browser-to-printer media and requires LAN/VPN reachability. Discovery supports Moonraker, OctoPrint, applicable PrusaLink APIs and recognised manufacturer HTTP URLs. Native Bambu camera transport, cloud camera access, generic RTSP/HLS relaying and separate camera hosts are not implemented.
+HTTP snapshot/MJPEG sources provide refreshed images at approximately one frame per second. Creality K2 WebRTC is ingested by MakerVault's loopback-only go2rtc helper and exposed to signed-in users as same-origin HLS/fMP4, so no dedicated camera media port or direct browser-to-printer route is required. Discovery supports Moonraker, OctoPrint, applicable PrusaLink APIs and recognised manufacturer HTTP URLs. Native Bambu camera transport, cloud camera access, generic user-configurable RTSP/HLS relaying and separate camera hosts are not implemented.
 
 [Camera setup and limitations](docs/guide/integrations/printer-cameras.md) · [Printer controls](docs/guide/integrations/printer-controls.md) · [Hardware validation](docs/guide/integrations/printer-adapter-validation.md) · [Outstanding tests](https://github.com/gavrd7/MakerVault/issues/37)
 
