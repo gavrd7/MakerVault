@@ -4,7 +4,7 @@
 
 ## What you need
 
-A computer that can stay on while you use MakerVault, reliable storage, an internet connection for installation and a modern web browser. A Debian or Ubuntu Linux server is the primary walkthrough in this guide. It can be a spare PC or a virtual machine. Keep enough spare disk space for the database, uploaded files, Docker images, builds and backups; model files and retained versions can grow quickly.
+A computer that can stay on while you use MakerVault, reliable storage, an internet connection for installation and a modern web browser. A Debian or Ubuntu Linux server is the primary walkthrough in this guide. It can be a spare PC or a virtual machine. Keep enough spare disk space for the database, uploaded files, Docker images and backups; model files and retained versions can grow quickly. Extra temporary space is needed if you choose to build MakerVault locally.
 
 The project does not yet publish a measured minimum RAM/CPU requirement or a fully tested NAS/ARM compatibility matrix. Do not treat a particular Raspberry Pi or NAS as validated just because it can run Docker.
 
@@ -12,7 +12,7 @@ The project does not yet publish a measured minimum RAM/CPU requirement or a ful
 | --- | --- |
 | Debian / Ubuntu | Follow this guide and the linked official Docker installation for your exact OS release |
 | Windows / macOS | Docker Desktop supplies Docker and Compose; shell paths and permissions differ from this Linux walkthrough |
-| NAS / Portainer | Requires source-build support and the complete repository, not just a pasted Compose file; adapt only if you understand that platform |
+| NAS / Portainer | The pre-built GHCR image removes the need to compile MakerVault, but Compose paths, permissions and storage still need adapting to that platform |
 
 For a first installation, use the documented Linux route. You can access a Linux-hosted installation from Windows, macOS, a phone or a tablet without installing Docker on those client devices.
 
@@ -32,7 +32,7 @@ MakerVault uses three services: `makervault` for the app and background jobs, `p
 
 Use a terminal on the server, either directly or through SSH. Run the command blocks in order. Copy commands only, not surrounding headings. When a command uses `sudo`, it may ask for the Linux user's password; no characters appear as you type it.
 
-`cd` changes folder. `mkdir` creates one. A filename starting with a dot, such as `.env`, is normally hidden in graphical file browsers. Commands later in this guide assume you are inside the MakerVault source folder unless stated otherwise.
+`cd` changes folder. `mkdir` creates one. A filename starting with a dot, such as `.env`, is normally hidden in graphical file browsers. Commands later in this guide assume you are inside the cloned MakerVault repository. Normal installs use its deployment files while pulling the pre-built GHCR image; the same checkout can optionally be used to build from source.
 
 ## Decide on access and storage
 

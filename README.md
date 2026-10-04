@@ -120,7 +120,7 @@ Recorded material rows can estimate cost from spool purchase data, with manual o
 
 ## Install
 
-The supported deployment path uses Linux, Docker Engine and Docker Compose. The [step-by-step guide](docs/guide/getting-started/install.md) assumes no previous Docker experience.
+The recommended deployment path uses Linux, Docker Engine, Docker Compose and the pre-built MakerVault image from **GitHub Container Registry (GHCR)**. The [step-by-step guide](docs/guide/getting-started/install.md) assumes no previous Docker experience.
 
 ```bash
 git clone https://github.com/gavrd7/MakerVault.git
@@ -129,6 +129,14 @@ cp .env.example .env
 chmod 600 .env
 python3 -c "import secrets; print(secrets.token_urlsafe(64))"
 ```
+
+The default Compose file pulls:
+
+```text
+ghcr.io/gavrd7/makervault:latest
+```
+
+No application compilation is required on the server for the normal install.
 
 For a **new installation**, edit `.env` before starting:
 
@@ -140,7 +148,8 @@ For a **new installation**, edit `.env` before starting:
 
 ```bash
 sudo docker compose config --quiet
-sudo docker compose up -d --build
+sudo docker compose pull
+sudo docker compose up -d
 sudo docker compose ps
 sudo docker compose exec makervault python manage.py createsuperuser
 ```
@@ -176,9 +185,20 @@ Back up first, then run these commands from your MakerVault checkout:
 git fetch --prune origin
 git switch main
 git pull --ff-only origin main
-sudo docker compose up -d --build
+sudo docker compose pull
+sudo docker compose up -d
 sudo docker compose ps
 ```
+
+The default image is `ghcr.io/gavrd7/makervault:latest`. You can pin a release without editing Compose by setting `MAKERVAULT_IMAGE=ghcr.io/gavrd7/makervault:1.0.0` in `.env`.
+
+Prefer to build the application yourself? The repository retains the Dockerfile and provides `compose.build.yaml`:
+
+```bash
+sudo docker compose -f compose.yaml -f compose.build.yaml up -d --build
+```
+
+That source-build path uses the same database, Redis, media, key and backup storage as the pre-built image path.
 
 Startup applies migrations and idempotent setup tasks. Read the changelog and update guide before changing versions. A database migration is not guaranteed to be reversible by simply switching to an older image.
 

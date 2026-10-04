@@ -2,9 +2,7 @@ name: makervault
 
 services:
   makervault:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ${MAKERVAULT_IMAGE:-ghcr.io/gavrd7/makervault:latest}
     container_name: makervault
     restart: unless-stopped
     env_file:

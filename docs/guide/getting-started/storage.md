@@ -143,4 +143,4 @@ An empty new location can make your installation appear to have lost its account
 
 Follow [Back up and restore](../administration/backup.md) to migrate deliberately and verify the new copy before removing the old one. Restore the **matching database, media and key** together. Merely copying the media folder does not transfer your projects/accounts, and copying media without its key cannot recover encrypted private files.
 
-**Next:** return to [Configure your .env file](environment.md) or [installation step 4](install.md#4-build-and-start). Advanced operators can read [permissions and key handling](../advanced/storage.md).
+**Next:** return to [Configure your .env file](environment.md) or [installation step 4](install.md#4-pull-and-start-makervault-recommended). Advanced operators can read [permissions and key handling](../advanced/storage.md).
