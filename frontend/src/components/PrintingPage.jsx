@@ -2235,12 +2235,38 @@ function DiscoveredSpoolModal({ printer, slot, filaments, spools, currency, canC
       </select></label>
 
       {physicalMode === "link" && <>
-        <label className="full">Existing physical spool<select required value={existingSpoolId} onChange={e => setExistingSpoolId(e.target.value)}>
-          <option value="">Choose an unloaded spool…</option>
-          {candidateSpools.map(spool => <option key={spool.id} value={spool.id}>
-            {spool.spool_id} · {spool.filament}{spool.color_name ? " · " + spool.color_name : ""}{spool.rfid_uid ? " · RFID " + spool.rfid_uid : ""}
-          </option>)}
-        </select><small>Matching material and colour are shown first, but the final choice is yours.</small></label>
+        <div className="full">
+          <strong>Choose an unloaded physical spool</strong>
+          <small className="detectedSpoolHint">Best material/colour matches are shown first. Each row includes the details that distinguish otherwise identical reels.</small>
+        </div>
+        <div className="detectedSpoolCandidateList full" role="radiogroup" aria-label="Existing physical spool">
+          {candidateSpools.map(spool => {
+            const spoolman = (spool.external_links || []).find(link => link.provider === "spoolman");
+            const selected = existingSpoolId === spool.id;
+            const colourLabel = spool.color_name || spool.color_hex || "Colour not recorded";
+            const placement = spool.location || "Unassigned";
+            return <button
+              key={spool.id}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              className={"detectedSpoolCandidate" + (selected ? " detectedSpoolCandidateSelected" : "")}
+              onClick={() => setExistingSpoolId(spool.id)}
+            >
+              <span className={"printingSwatch filamentPreview-" + (spool.transparency || "opaque")} style={filamentSwatchStyle(spool)} aria-hidden="true" />
+              <span className="detectedSpoolCandidateMain">
+                <strong>{spool.spool_id} · {spool.filament}</strong>
+                <small>{[spool.manufacturer, spool.material, colourLabel].filter(Boolean).join(" · ")}</small>
+                <small>{grams(spool.remaining_weight_g)} remaining · {placement}</small>
+              </span>
+              <span className="printingBadges detectedSpoolCandidateBadges">
+                {spoolman && <Badge tone="accent">Spoolman #{spoolman.external_id}</Badge>}
+                {spool.rfid_uid && <Badge>RFID {spool.rfid_uid}</Badge>}
+                <Badge>{spool.status_label || spool.status}</Badge>
+              </span>
+            </button>;
+          })}
+        </div>
         {!candidateSpools.length && <div className="formError full">There are no currently unloaded MakerVault spools available to link.</div>}
       </>}
 
