@@ -34,6 +34,7 @@ from .filament_catalogue import (
     get_spoolmandb_item,
     match_filament_catalogue_candidates,
     apply_catalogue_match_to_filament,
+    unmatch_filament_catalogue,
     search_spoolmandb,
     spoolmandb_meta,
 )
@@ -4558,9 +4559,6 @@ def printing_filament_detail(request, filament_id):
         except ProtectedError:
             return _error("This filament product is still used by one or more spools.", status=409)
 
-    denied = _require_permission(request, "core.change_filamentproduct")
-    if denied:
-        return denied
     try:
         payload = _read_json(request)
         if any(key in payload for key in ["filament_manufacturer_id", "manufacturer_name", "manufacturer_id"]):
@@ -4613,7 +4611,7 @@ def printing_filament_detail(request, filament_id):
 
 
 @login_required
-@require_http_methods(["GET", "POST"])
+@require_http_methods(["GET", "POST", "DELETE"])
 def printing_filament_catalogue_match(request, filament_id):
     item = FilamentProduct.objects.select_related(
         "manufacturer", "filament_manufacturer", "source"
@@ -4630,6 +4628,22 @@ def printing_filament_catalogue_match(request, filament_id):
             })
         except FilamentCatalogueError as exc:
             return _error(str(exc), status=502)
+
+    denied = _require_permission(request, "core.change_filamentproduct")
+    if denied:
+        return denied
+
+    if request.method == "DELETE":
+        result = unmatch_filament_catalogue(item)
+        item = FilamentProduct.objects.select_related(
+            "manufacturer", "filament_manufacturer", "source"
+        ).get(pk=item.pk)
+        return JsonResponse({
+            "item": _serialise_filament_product(item),
+            "unmatched": True,
+            "restored": result["restored"],
+            "changed_fields": result["changed_fields"],
+        })
 
     denied = _require_permission(request, "core.change_filamentproduct")
     if denied:
