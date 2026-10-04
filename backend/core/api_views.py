@@ -3977,6 +3977,12 @@ def _estimated_spool_material_cost(spool, used_g, waste_g):
 def _serialise_spool(spool):
     filament = spool.filament
     maker = filament.filament_manufacturer or filament.manufacturer
+    filament_profile = dict(filament.profile_data or {})
+    filament_provenance = dict(filament_profile.get("catalogue_provenance") or {})
+    catalogue_matched = bool(
+        (filament.source and filament.source.source_type == "spoolmandb")
+        or filament_provenance.get("external_id")
+    )
     placement = ""
     placement_type = ""
     if spool.assigned_printer_id:
@@ -3994,6 +4000,12 @@ def _serialise_spool(spool):
         "rfid_uid": spool.rfid_uid,
         "filament": str(filament),
         "filament_id": str(filament.id),
+        "catalogue_matched": catalogue_matched,
+        "catalogue_external_id": filament_provenance.get("external_id") or (
+            filament.source.external_id
+            if filament.source and filament.source.source_type == "spoolmandb"
+            else ""
+        ),
         "manufacturer": maker.name if maker else "",
         "material": filament.material,
         "color_name": filament.color_name,
