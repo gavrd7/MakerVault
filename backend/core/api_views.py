@@ -3702,6 +3702,7 @@ def _serialise_catalogue_maintenance(config):
         "interval_hours": config.interval_hours,
         "check_board_data": config.check_board_data,
         "check_printer_data": config.check_printer_data,
+        "check_filament_data": config.check_filament_data,
         "check_images": config.check_images,
         "last_run_at": config.last_run_at.isoformat() if config.last_run_at else "",
         "next_run_at": config.next_run_at.isoformat() if config.next_run_at else "",
@@ -3741,6 +3742,8 @@ def catalogue_maintenance_settings(request):
             config.check_board_data = bool(payload["check_board_data"])
         if "check_printer_data" in payload:
             config.check_printer_data = bool(payload["check_printer_data"])
+        if "check_filament_data" in payload:
+            config.check_filament_data = bool(payload["check_filament_data"])
         if "check_images" in payload:
             config.check_images = bool(payload["check_images"])
         if "interval_hours" in payload:
@@ -4415,6 +4418,9 @@ def printing_overview(request):
 
 
 def _serialise_filament_product(filament):
+    image_metadata = dict(filament.image_metadata or {})
+    profile = dict(filament.profile_data or {})
+    provenance = dict(profile.get("catalogue_provenance") or {})
     return {
         "id": str(filament.id),
         "name": filament.name,
@@ -4445,6 +4451,22 @@ def _serialise_filament_product(filament):
         "bed_temp_max_c": filament.bed_temp_max_c,
         "drying_temp_c": filament.drying_temp_c,
         "drying_time_hours": _float(filament.drying_time_hours),
+        "image": _image_url(filament),
+        "image_cached": bool(filament.image),
+        "image_source_url": image_metadata.get("image_source_url") or image_metadata.get("external_image_url") or "",
+        "image_source_page": image_metadata.get("image_source_page") or provenance.get("product_url") or "",
+        "image_source_provider": image_metadata.get("image_source_provider") or "",
+        "image_license": image_metadata.get("image_license") or "",
+        "image_author": image_metadata.get("image_author") or "",
+        "spool_type": provenance.get("spool_type") or profile.get("spool_type") or "",
+        "is_refill": bool(provenance.get("is_refill", False)),
+        "country_of_origin": provenance.get("country_of_origin") or "",
+        "product_url": provenance.get("product_url") or "",
+        "tds_url": provenance.get("tds_url") or "",
+        "sds_url": provenance.get("sds_url") or "",
+        "codes": provenance.get("codes") or [],
+        "eans": provenance.get("eans") or [],
+        "eans_refill": provenance.get("eans_refill") or [],
         "source": filament.source.name if filament.source else "Manual",
         "source_type": filament.source.source_type if filament.source else "manual",
         "source_url": filament.source.url if filament.source else "",
@@ -4555,6 +4577,20 @@ def printing_filament_detail(request, filament_id):
 
 
 @login_required
+@require_http_methods(["POST", "DELETE"])
+def printing_filament_image(request, filament_id):
+    item = FilamentProduct.objects.select_related(
+        "manufacturer", "filament_manufacturer", "source"
+    ).filter(pk=filament_id).first()
+    if not item:
+        return _error("Filament product not found.", status=404)
+    return _catalogue_image_response(
+        request, item, "core.change_filamentproduct",
+        _serialise_filament_product, "filament",
+    )
+
+
+@login_required
 @require_http_methods(["GET"])
 def printing_filament_catalogue(request):
     try:
@@ -4659,6 +4695,19 @@ def printing_filament_catalogue_import(request):
                 "external_catalogue_id": data["external_id"],
                 "spool_type": data["spool_type"],
                 "raw_color_hexes": data["color_hexes"],
+                "catalogue_provenance": {
+                    "catalogue": "SpoolmanDB",
+                    "external_id": data["external_id"],
+                    "spool_type": data["spool_type"],
+                    "is_refill": data.get("is_refill", False),
+                    "country_of_origin": data.get("country_of_origin", ""),
+                    "product_url": data.get("product_url", ""),
+                    "tds_url": data.get("tds_url", ""),
+                    "sds_url": data.get("sds_url", ""),
+                    "codes": data.get("codes", []),
+                    "eans": data.get("eans", []),
+                    "eans_refill": data.get("eans_refill", []),
+                },
             },
         }
 
