@@ -30,7 +30,7 @@ from .importers import ImporterError, fetch_catalogue_source_html, fetch_import_
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 OPENVERSE_API = "https://api.openverse.org/v1/images/"
-IMAGE_SEED_VERSION = "0.7.2-authoritative-images-12"
+IMAGE_SEED_VERSION = "1.0.1-filament-images-1"
 USER_AGENT = f"MakerVault/{getattr(settings, 'MAKERVAULT_VERSION', 'dev')} (+self-hosted catalogue image seeder)"
 def _commons_license_allowed(license_name: str) -> bool:
     """Allow only licences suitable for normal open redistribution."""
@@ -663,7 +663,7 @@ def _candidate_source_pages(obj) -> list[dict]:
         else:
             add(curated_url, source_type="manufacturer", provider="Official manufacturer")
 
-    manufacturer = getattr(obj, "manufacturer", None)
+    manufacturer = getattr(obj, "filament_manufacturer", None) or getattr(obj, "manufacturer", None)
     manufacturer_name = str(getattr(manufacturer, "name", "") or "").strip()
     provider = f"{manufacturer_name} official".strip() if manufacturer_name else ""
 
@@ -684,7 +684,7 @@ def _candidate_source_pages(obj) -> list[dict]:
         ):
             add(
                 container.get(key),
-                source_type="manufacturer" if key == "official_image_source_page" else "",
+                source_type="manufacturer" if key in {"official_image_source_page", "product_url"} else "",
                 provider=str(container.get("reference_provider") or provider).strip(),
             )
 
