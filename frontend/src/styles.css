@@ -2443,3 +2443,63 @@ a:focus-visible,
 @media(max-width:1100px){.httpsSetupFlow{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:900px){.httpsModeGrid{grid-template-columns:1fr}.httpsCertGrid{grid-template-columns:1fr}}
 @media(max-width:600px){.httpsSetupFlow{grid-template-columns:1fr}.httpsSetupStep{grid-template-columns:auto minmax(0,1fr)}.httpsCertMeta{grid-template-columns:1fr}.httpsCertMeta>div,.httpsCertMeta>div:nth-child(odd){border-right:0}.httpsTrustPlatforms ol{padding-left:34px}}
+
+
+.detectedSpoolHint {
+  display: block;
+  margin-top: .35rem;
+}
+
+.detectedSpoolCandidateList {
+  display: grid;
+  gap: .65rem;
+}
+
+.detectedSpoolCandidate {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .8rem;
+  padding: .8rem .9rem;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: .8rem;
+  background: var(--panel-soft);
+}
+
+.detectedSpoolCandidate:hover,
+.detectedSpoolCandidate:focus-visible {
+  border-color: var(--accent);
+}
+
+.detectedSpoolCandidateSelected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.detectedSpoolCandidateMain {
+  min-width: 0;
+  display: grid;
+  gap: .18rem;
+}
+
+.detectedSpoolCandidateMain strong,
+.detectedSpoolCandidateMain small {
+  overflow-wrap: anywhere;
+}
+
+.detectedSpoolCandidateBadges {
+  justify-content: flex-end;
+}
+
+@media (max-width: 720px) {
+  .detectedSpoolCandidate {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .detectedSpoolCandidateBadges {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}
