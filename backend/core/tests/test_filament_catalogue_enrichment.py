@@ -6,6 +6,7 @@ from django.test import TestCase
 from core.catalogue_coverage import catalogue_coverage_summary
 from core.filament_catalogue import (
     apply_catalogue_match_to_filament,
+    get_supplemental_filament_catalogue,
     match_filament_catalogue_candidates,
     normalise_spoolmandb_row,
     refresh_imported_filament_products,
@@ -39,6 +40,31 @@ class FilamentCatalogueEnrichmentTests(TestCase):
             "codes": ["PLA-BLK"],
             "eans": ["1234567890123"],
         }
+
+    def test_supplemental_catalogue_contains_verified_gap_entries(self):
+        rows = get_supplemental_filament_catalogue()
+        ids = {row["external_id"] for row in rows}
+
+        self.assertIn("makervault-esun-tpe83a-black-175-1000", ids)
+        self.assertIn("makervault-eryone-asa-high-speed-black-175-1000", ids)
+
+    @patch("core.filament_catalogue.get_spoolmandb_catalogue", return_value=[])
+    def test_supplemental_catalogue_aliases_improve_matching(self, _catalogue):
+        maker = FilamentManufacturer.objects.create(name="Eryone")
+        filament = FilamentProduct.objects.create(
+            filament_manufacturer=maker,
+            name="Hyper ASA Black",
+            material="ASA",
+            color_name="Black",
+            diameter_mm="1.75",
+        )
+
+        matches = match_filament_catalogue_candidates(filament)
+
+        self.assertTrue(matches)
+        self.assertEqual(matches[0]["external_id"], "makervault-eryone-asa-high-speed-black-175-1000")
+        self.assertIn("product name", matches[0]["match_reasons"])
+        self.assertGreaterEqual(matches[0]["match_score"], 80)
 
     def test_normalise_spoolmandb_row_retains_richer_provenance(self):
         item = normalise_spoolmandb_row(self.spoolmandb_row())
