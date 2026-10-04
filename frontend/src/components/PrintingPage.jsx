@@ -1230,6 +1230,7 @@ function PrinterManageModal({ printer, manufacturers, models, locations, canDele
   const [customModel, setCustomModel] = useState(!printer.catalog_model_id);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [deleteArmed, setDeleteArmed] = useState(false);
   const set = (key, value) => setForm(current => ({ ...current, [key]: value }));
   const modelOptions = models.filter(item => item.manufacturer_id === form.printer_manufacturer_id);
   const selectedModel = models.find(item => item.id === form.catalog_model_id);
