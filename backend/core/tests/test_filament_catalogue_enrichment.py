@@ -153,6 +153,31 @@ class FilamentCatalogueEnrichmentTests(TestCase):
         authoritative.assert_called_once()
         self.assertIn("density_g_cm3", result["changed_fields"])
 
+    @patch("core.filament_catalogue.enrich_filament_from_authoritative_sources")
+    @patch("core.filament_catalogue.get_spoolmandb_item")
+    def test_catalogue_match_ignores_unrelated_legacy_validation_errors(self, get_item, authoritative):
+        row = normalise_spoolmandb_row(self.spoolmandb_row())
+        get_item.return_value = row
+        authoritative.return_value = {"checked_sources": 0, "changed_fields": [], "errors": 0}
+        maker = FilamentManufacturer.objects.create(name="Example Filament")
+        filament = FilamentProduct.objects.create(
+            filament_manufacturer=maker,
+            name="Legacy PLA",
+            material="PLA",
+            color_name="Black",
+            color_hex="#111111",
+            diameter_mm="1.75",
+            finish="x" * 80,
+            density_g_cm3=None,
+        )
+
+        result = apply_catalogue_match_to_filament(filament, row["external_id"])
+        filament.refresh_from_db()
+
+        self.assertEqual(filament.finish, "x" * 80)
+        self.assertEqual(float(filament.density_g_cm3), 1.24)
+        self.assertIn("density_g_cm3", result["changed_fields"])
+
     def test_manufacturer_technical_text_parser_extracts_print_settings(self):
         data = parse_filament_technical_text(
             "Density 1.24 g/cm3. Nozzle temperature 200-230 C. "
