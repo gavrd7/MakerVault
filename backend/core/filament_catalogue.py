@@ -10,6 +10,7 @@ from django.core.cache import cache
 
 from .importers import _host_is_public
 from .filament_technical_sources import enrich_filament_from_authoritative_sources
+from .model_values import fit_model_decimal
 
 
 DEFAULT_SPOOLMANDB_URL = "https://donkie.github.io/SpoolmanDB/filaments.json"
@@ -514,7 +515,7 @@ def apply_catalogue_match_to_filament(filament, external_id):
     for field, value in fill_fields.items():
         current = getattr(filament, field)
         if current in (None, "", [], {}) and value not in (None, "", [], {}):
-            setattr(filament, field, value)
+            setattr(filament, field, fit_model_decimal(filament, field, value))
             changed.append(field)
 
     if not filament.glow and row.get("glow"):
