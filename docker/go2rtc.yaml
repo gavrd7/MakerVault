@@ -1,14 +1,19 @@
 app:
-  modules: [api, webrtc]
+  modules: [api, webrtc, mp4, hls]
 
 api:
   listen: "127.0.0.1:1984"
   allow_paths:
     - "/api/streams"
     - "/api/webrtc"
+    - "/api/stream.m3u8"
+    - "/api/hls/playlist.m3u8"
+    - "/api/hls/init.mp4"
+    - "/api/hls/segment.m4s"
+    - "/api/hls/segment.ts"
 
 webrtc:
-  listen: ":8555"
+  listen: "127.0.0.1:8555"
   candidates:
     - "127.0.0.1:8555"
   ice_servers: []
