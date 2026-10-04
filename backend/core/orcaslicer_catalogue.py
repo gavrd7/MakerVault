@@ -1,5 +1,7 @@
 import json
 import re
+from functools import lru_cache
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
 from urllib.parse import quote
@@ -20,6 +22,7 @@ ORCA_DIRECTORY_URL = (
 ORCA_SOURCE_ROOT = "https://github.com/OrcaSlicer/OrcaSlicer/blob"
 ORCA_RAW_PREFIX = "https://raw.githubusercontent.com/OrcaSlicer/OrcaSlicer/"
 ORCA_LICENSE = "AGPL-3.0"
+SUPPLEMENTAL_CATALOGUE_PATH = Path(__file__).with_name("data") / "printer_catalogue_supplements.json"
 
 VENDOR_ALIASES = {
     "bambulab": "Bambu Lab",
@@ -40,6 +43,81 @@ ADDON_SUFFIX_RULES = [
 
 class OrcaCatalogueError(RuntimeError):
     pass
+
+
+@lru_cache(maxsize=1)
+def _load_supplemental_printers():
+    try:
+        payload = json.loads(SUPPLEMENTAL_CATALOGUE_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise OrcaCatalogueError(f"Could not read the supplemental printer catalogue: {exc}") from exc
+
+    rows = payload.get("printers", []) if isinstance(payload, dict) else []
+    if not isinstance(rows, list):
+        raise OrcaCatalogueError("Supplemental printer catalogue must contain a printers list.")
+
+    cleaned = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        manufacturer = str(row.get("manufacturer") or "").strip()
+        name = str(row.get("name") or "").strip()
+        if not manufacturer or not name:
+            continue
+        cleaned.append({
+            "manufacturer": manufacturer,
+            "name": name,
+            "family": str(row.get("family") or "").strip(),
+            "source_url": str(row.get("source_url") or "").strip(),
+            "multi_material_system": str(row.get("multi_material_system") or "").strip(),
+        })
+    return cleaned
+
+
+def _merge_supplemental_model(row):
+    maker, maker_created = _get_or_create_manufacturer(row["manufacturer"])
+    item = PrinterCatalogModel.objects.filter(
+        manufacturer=maker,
+        name__iexact=row["name"],
+    ).first()
+
+    provenance = {
+        "catalogue": "MakerVault supplemental FDM/FFF catalogue",
+        "source_type": "manufacturer",
+        "source_url": row.get("source_url", ""),
+        "family": row.get("family", ""),
+        "technology": "FDM/FFF",
+    }
+
+    if item is None:
+        features = {"makervault_supplemental": provenance}
+        item = PrinterCatalogModel.objects.create(
+            manufacturer=maker,
+            name=row["name"],
+            multi_material_system=row.get("multi_material_system", ""),
+            features=features,
+            source_url=row.get("source_url", ""),
+        )
+        return maker_created, True, False
+
+    changed = False
+    features = dict(item.features or {})
+    if features.get("makervault_supplemental") != provenance:
+        features["makervault_supplemental"] = provenance
+        item.features = features
+        changed = True
+
+    if not item.source_url and row.get("source_url"):
+        item.source_url = row["source_url"]
+        changed = True
+
+    if not item.multi_material_system and row.get("multi_material_system"):
+        item.multi_material_system = row["multi_material_system"]
+        changed = True
+
+    if changed:
+        item.save(update_fields=["features", "source_url", "multi_material_system", "updated_at"])
+    return maker_created, False, changed
 
 
 def _user_agent():
@@ -542,6 +620,11 @@ def sync_orcaslicer_printer_catalogue(*, ref=None, max_workers=8):
                 )):
                     hardware_enriched += 1
 
+    supplemental_rows = _load_supplemental_printers()
+    supplemental_seen = len(supplemental_rows)
+    supplemental_created = 0
+    supplemental_enriched = 0
+
     with transaction.atomic():
         for row in sorted(merged_rows.values(), key=lambda x: (x["vendor"].casefold(), x["name"].casefold())):
             maker_created, model_created, model_enriched = _merge_model(row, ref)
@@ -549,13 +632,25 @@ def sync_orcaslicer_printer_catalogue(*, ref=None, max_workers=8):
             models_created += int(model_created)
             models_enriched += int(model_enriched)
 
+        for row in sorted(supplemental_rows, key=lambda x: (x["manufacturer"].casefold(), x["name"].casefold())):
+            maker_created, model_created, model_enriched = _merge_supplemental_model(row)
+            manufacturers_created += int(maker_created)
+            models_created += int(model_created)
+            models_enriched += int(model_enriched)
+            supplemental_created += int(model_created)
+            supplemental_enriched += int(model_enriched)
+
     return {
         "status": "complete" if not failed_vendors else "partial",
         "source": ORCA_REPOSITORY,
         "ref": ref,
         "license": ORCA_LICENSE,
         "vendors_seen": vendors_seen,
-        "models_seen": models_seen,
+        "models_seen": models_seen + supplemental_seen,
+        "orcaslicer_models_seen": models_seen,
+        "supplemental_models_seen": supplemental_seen,
+        "supplemental_models_created": supplemental_created,
+        "supplemental_models_enriched": supplemental_enriched,
         "manufacturers_created": manufacturers_created,
         "models_created": models_created,
         "models_enriched": models_enriched,
