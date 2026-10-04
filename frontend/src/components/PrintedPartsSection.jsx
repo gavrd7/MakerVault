@@ -55,14 +55,36 @@ function PartModal({ part, job, options, rows, projects, projectId, canEditPrint
   const [form, setForm] = useState({ name: part?.name || job?.model || job?.filename || "", quantity: part?.quantity || 1, status: part?.status || "available", project_id: part?.project_id || projectId || job?.project_id || "", location_id: part?.location_id || "", replaces_id: part?.replaces_id || "", print_job_id: job?.id || "", print_job_quantity: job?.quantity || "", model_revision_id: part?.model_revision_id || "", notes: part?.notes || "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const selected = options.jobs.find(item => item.id === form.print_job_id);
   const production = part?.production || selected;
-  const set = (key, value) => setForm(current => ({ ...current, [key]: value }));
+  const clearFieldError = (...keys) => setFieldErrors(current => {
+    const next = { ...current };
+    keys.forEach(key => delete next[key]);
+    return next;
+  });
+  const set = (key, value, ...errorKeys) => {
+    setForm(current => ({ ...current, [key]: value }));
+    clearFieldError(key, ...errorKeys);
+  };
+  const fieldError = (...keys) => keys.flatMap(key => fieldErrors[key] || []);
+  const fieldErrorText = (...keys) => fieldError(...keys).join(" ");
+  const fieldInvalid = (...keys) => fieldError(...keys).length > 0;
+
   async function save(e) {
-    e.preventDefault(); setBusy(true); setError("");
-    try { await apiFetch(part ? `/api/printing/parts/${part.id}/` : "/api/printing/parts/", { method: part ? "PATCH" : "POST", body: form }); await onSaved(); }
-    catch (err) { setError(err.message); }
-    finally { setBusy(false); }
+    e.preventDefault();
+    setError("");
+    setFieldErrors({});
+    setBusy(true);
+    try {
+      await apiFetch(part ? `/api/printing/parts/${part.id}/` : "/api/printing/parts/", { method: part ? "PATCH" : "POST", body: form });
+      await onSaved();
+    } catch (err) {
+      setError(err.message);
+      setFieldErrors(err.fields || {});
+    } finally {
+      setBusy(false);
+    }
   }
   return <Modal title={part ? "Printed part" : "Create printed parts"} onClose={onClose} wide>
     <form onSubmit={save} className="formGrid">
@@ -71,14 +93,14 @@ function PartModal({ part, job, options, rows, projects, projectId, canEditPrint
         const found = options.jobs.find(item => item.id === e.target.value);
         setForm(current => ({ ...current, print_job_id: e.target.value, name: found?.model || found?.filename || current.name, project_id: found?.project_id || current.project_id, model_revision_id: found?.model_revision_id || "", print_job_quantity: found?.quantity || "" }));
       }}><option value="">Existing physical part / no print history link</option>{options.jobs.filter(item => item.status === "success").map(item => <option key={item.id} value={item.id}>{item.model || item.filename || "Unlinked print"} · {item.printer} · {new Date(item.created_at).toLocaleDateString()}</option>)}</select><small>Print tracking and filament usage do not require you to retain a part or save a model.</small></label>}
-      {!part && selected && canEditPrintJob && <label className="full">Total items successfully produced by this print<input type="number" min="1" step="1" disabled={!canEdit || busy} value={form.print_job_quantity} onChange={e => set("print_job_quantity", e.target.value)} /><small>Confirm the plate quantity; the retained quantity can be smaller. This updates the print record without multiplying its filament total.</small></label>}
-      <label>Name<input required maxLength={200} disabled={!canEdit || busy} value={form.name} onChange={e => set("name", e.target.value)} /></label>
-      <label>Quantity<input required type="number" min="1" step="1" disabled={!canEdit || busy} value={form.quantity} onChange={e => set("quantity", e.target.value)} /></label>
-      <label>Status<select disabled={!canEdit || busy} value={form.status} onChange={e => set("status", e.target.value)}>{Object.entries(STATES).map(([key, value]) => <option key={key} value={key}>{value}</option>)}</select></label>
-      <label>Project / installation<select disabled={!canEdit || busy} value={form.project_id} onChange={e => set("project_id", e.target.value)}><option value="">No project</option>{projects.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-      <label>Location<select disabled={!canEdit || busy} value={form.location_id} onChange={e => set("location_id", e.target.value)}><option value="">No location</option>{options.locations.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-      <label>Replaces (optional)<select disabled={!canEdit || busy} value={form.replaces_id} onChange={e => set("replaces_id", e.target.value)}><option value="">No replacement link</option>{rows.filter(item => item.id !== part?.id).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-      {!part && !form.print_job_id && <label className="full">Model revision (optional)<select disabled={!canEdit || busy} value={form.model_revision_id} onChange={e => set("model_revision_id", e.target.value)}><option value="">No saved model</option>{options.models.flatMap(model => model.revisions.map(revision => <option key={revision.id} value={revision.id}>{model.name} · {revision.version}</option>))}</select></label>}
+      {!part && selected && canEditPrintJob && <label className="full">Total items successfully produced by this print<input className={fieldInvalid("print_job_quantity") ? "fieldInvalid" : ""} aria-invalid={fieldInvalid("print_job_quantity") || undefined} type="number" min="1" step="1" disabled={!canEdit || busy} value={form.print_job_quantity} onChange={e => set("print_job_quantity", e.target.value)} /><small>Confirm the plate quantity; the retained quantity can be smaller. This updates the print record without multiplying its filament total.</small>{fieldInvalid("print_job_quantity") && <small className="fieldValidationError">{fieldErrorText("print_job_quantity")}</small>}</label>}
+      <label>Name<input className={fieldInvalid("name") ? "fieldInvalid" : ""} aria-invalid={fieldInvalid("name") || undefined} required maxLength={200} disabled={!canEdit || busy} value={form.name} onChange={e => set("name", e.target.value)} />{fieldInvalid("name") && <small className="fieldValidationError">{fieldErrorText("name")}</small>}</label>
+      <label>Quantity<input className={fieldInvalid("quantity") ? "fieldInvalid" : ""} aria-invalid={fieldInvalid("quantity") || undefined} required type="number" min="1" step="1" disabled={!canEdit || busy} value={form.quantity} onChange={e => set("quantity", e.target.value)} />{fieldInvalid("quantity") && <small className="fieldValidationError">{fieldErrorText("quantity")}</small>}</label>
+      <label>Status<select className={fieldInvalid("status") ? "fieldInvalid" : ""} aria-invalid={fieldInvalid("status") || undefined} disabled={!canEdit || busy} value={form.status} onChange={e => set("status", e.target.value)}>{Object.entries(STATES).map(([key, value]) => <option key={key} value={key}>{value}</option>)}</select>{fieldInvalid("status") && <small className="fieldValidationError">{fieldErrorText("status")}</small>}</label>
+      <label>Project / installation<select className={fieldInvalid("project", "project_id") ? "fieldInvalid" : ""} aria-invalid={fieldInvalid("project", "project_id") || undefined} disabled={!canEdit || busy} value={form.project_id} onChange={e => set("project_id", e.target.value, "project")}><option value="">No project</option>{projects.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>{fieldInvalid("project", "project_id") && <small className="fieldValidationError">{fieldErrorText("project", "project_id")}</small>}</label>
+      <label>Location<select className={fieldInvalid("location", "location_id") ? "fieldInvalid" : ""} aria-invalid={fieldInvalid("location", "location_id") || undefined} disabled={!canEdit || busy} value={form.location_id} onChange={e => set("location_id", e.target.value, "location")}><option value="">No location</option>{options.locations.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>{fieldInvalid("location", "location_id") && <small className="fieldValidationError">{fieldErrorText("location", "location_id")}</small>}</label>
+      <label>Replaces (optional)<select className={fieldInvalid("replaces", "replaces_id") ? "fieldInvalid" : ""} aria-invalid={fieldInvalid("replaces", "replaces_id") || undefined} disabled={!canEdit || busy} value={form.replaces_id} onChange={e => set("replaces_id", e.target.value, "replaces")}><option value="">No replacement link</option>{rows.filter(item => item.id !== part?.id).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>{fieldInvalid("replaces", "replaces_id") && <small className="fieldValidationError">{fieldErrorText("replaces", "replaces_id")}</small>}</label>
+      {!part && !form.print_job_id && <label className="full">Model revision (optional)<select className={fieldInvalid("model_revision", "model_revision_id") ? "fieldInvalid" : ""} aria-invalid={fieldInvalid("model_revision", "model_revision_id") || undefined} disabled={!canEdit || busy} value={form.model_revision_id} onChange={e => set("model_revision_id", e.target.value, "model_revision")}><option value="">No saved model</option>{options.models.flatMap(model => model.revisions.map(revision => <option key={revision.id} value={revision.id}>{model.name} · {revision.version}</option>))}</select>{fieldInvalid("model_revision", "model_revision_id") && <small className="fieldValidationError">{fieldErrorText("model_revision", "model_revision_id")}</small>}</label>}
       <label className="full">Notes<textarea disabled={!canEdit || busy} value={form.notes} onChange={e => set("notes", e.target.value)} /></label>
       {production && <div className="settingsCallout full"><strong>Production context</strong><p>{production.printer || "Printer not recorded"} · {production.filename || production.model || "Print job"}</p><p>{production.filament_used_g == null ? "Filament not recorded" : `${production.filament_used_g} g${production.filament_usage_estimated ? " estimated" : " recorded"}`} · Whole print job; this is not an allocation to each part.</p>{production.material_cost != null && <p>Material cost: {production.currency || ""} {production.material_cost} for the whole print.</p>}</div>}
       {!!part?.events?.length && <details className="full"><summary>Part history</summary>{part.events.map(event => <p key={event.id}><small>{new Date(event.created_at).toLocaleString()}</small> · {Object.entries(event.changes).map(([key, change]) => `${key}: ${change.to ?? JSON.stringify(change)}`).join("; ")}</p>)}</details>}

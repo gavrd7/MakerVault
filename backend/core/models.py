@@ -1145,8 +1145,6 @@ class PrintedPart(TimeStampedModel):
                 raise ValidationError({field: "Selected record belongs to a different user."})
         if self.replaces_id and self.replaces_id == self.id:
             raise ValidationError({"replaces": "A part cannot replace itself."})
-        if self.status == "installed" and not self.project_id:
-            raise ValidationError({"project": "Choose the project where this part is installed."})
 
     def __str__(self):
         return self.name
