@@ -380,7 +380,7 @@ def refresh_imported_filament_products(*, force_catalogue=False, limit=None):
 
         profile = dict(item.profile_data or {})
         upstream_meta = {
-            "catalogue": source_name,
+            "catalogue": "SpoolmanDB",
             "external_id": external_id,
             "spool_type": row.get("spool_type") or "",
             "is_refill": bool(row.get("is_refill")),
@@ -628,7 +628,7 @@ def apply_catalogue_match_to_filament(filament, external_id):
     profile = dict(filament.profile_data or {})
     profile["catalogue_match_restore"] = restore_snapshot
     profile["catalogue_provenance"] = {
-        "catalogue": "SpoolmanDB",
+        "catalogue": source_name,
         "external_id": row["external_id"],
         "matched_manually": True,
         "matched_at": __import__("django.utils.timezone", fromlist=["now"]).now().isoformat(),
