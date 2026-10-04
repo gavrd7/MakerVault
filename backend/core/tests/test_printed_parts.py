@@ -69,12 +69,12 @@ class PrintedPartsTests(TestCase):
         self.other.user_permissions.add(Permission.objects.get(codename="add_printedpart"))
         self.assertEqual(self.create().status_code, 404)
 
-    def test_installed_requires_owned_project_and_retirement_keeps_usage(self):
+    def test_installed_can_be_unassigned_but_rejects_foreign_project_and_retirement_keeps_usage(self):
         other_project = Project.objects.create(owner=self.other, name="Private")
         self.assertEqual(self.create(status="installed", project_id=str(other_project.id)).status_code, 400)
-        response = self.create(status="installed")
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json()["fields"]["project"], ["Choose the project where this part is installed."])
+        unassigned = self.create(status="installed")
+        self.assertEqual(unassigned.status_code, 201, unassigned.content)
+        self.assertIsNone(unassigned.json()["part"]["project_id"])
         project = Project.objects.create(owner=self.owner, name="Workshop")
         part = self.create(status="installed", project_id=str(project.pk)).json()["part"]
         response = self.client.patch(f'/api/printing/parts/{part["id"]}/', {"status": "scrapped"}, content_type="application/json")
