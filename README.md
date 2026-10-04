@@ -124,7 +124,11 @@ Recorded material rows can estimate cost from spool purchase data, with manual o
 
 ## Install
 
-The recommended deployment path uses Linux, Docker Engine, Docker Compose and the pre-built MakerVault image from **GitHub Container Registry (GHCR)**. The [step-by-step guide](docs/guide/getting-started/install.md) assumes no previous Docker experience.
+MakerVault uses Docker Compose and the pre-built MakerVault image from **GitHub Container Registry (GHCR)**. A dedicated Linux host remains the preferred always-on server deployment, but Windows users can also install MakerVault with **Docker Desktop**, **Docker Desktop + WSL2 integration**, or **Docker Engine directly inside WSL2**.
+
+[Linux installation](docs/guide/getting-started/install.md) · [Windows / Docker Desktop / WSL2 installation](docs/guide/getting-started/windows.md)
+
+The step-by-step guides assume no previous MakerVault experience and explain the host-specific differences.
 
 ```bash
 git clone https://github.com/gavrd7/MakerVault.git
@@ -162,7 +166,7 @@ Open `http://SERVER-IP:8765`. The host port is configurable through `MAKERVAULT_
 
 **Existing installation?** Preserve your current `.env`, secrets and storage. Follow the [update guide](docs/guide/administration/updates.md), not the new-install steps.
 
-[Environment settings](docs/guide/getting-started/environment.md) · [Storage choices](docs/guide/getting-started/storage.md) · [HTTPS/reverse proxy](docs/guide/advanced/reverse-proxy.md) · [OIDC](docs/guide/advanced/oidc.md)
+[Windows / Docker Desktop / WSL2](docs/guide/getting-started/windows.md) · [Environment settings](docs/guide/getting-started/environment.md) · [Storage choices](docs/guide/getting-started/storage.md) · [HTTPS/reverse proxy](docs/guide/advanced/reverse-proxy.md) · [OIDC](docs/guide/advanced/oidc.md)
 
 ## Deployment and data
 
