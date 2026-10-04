@@ -4758,11 +4758,13 @@ def printing_filament_catalogue_import(request):
         manufacturer, _ = FilamentManufacturer.objects.get_or_create(
             name=data["manufacturer"] or "Generic"
         )
+        source_type = str(data.get("source_type") or "spoolmandb").strip() or "spoolmandb"
+        source_name = str(data.get("source_name") or "SpoolmanDB").strip() or "SpoolmanDB"
         source, _ = CatalogSource.objects.update_or_create(
-            source_type="spoolmandb",
+            source_type=source_type,
             external_id=data["external_id"],
             defaults={
-                "name": f"SpoolmanDB — {data['manufacturer']} — {data['name']}"[:200],
+                "name": f"{source_name} — {data['manufacturer']} — {data['name']}"[:200],
                 "url": data["source_url"],
                 "raw_metadata": {
                     "license": data["source_license"],
@@ -4808,13 +4810,13 @@ def printing_filament_catalogue_import(request):
             "bed_temp_min_c": data["bed_temp_min_c"],
             "bed_temp_max_c": data["bed_temp_max_c"],
             "profile_data": {
-                "source": "SpoolmanDB",
+                "source": source_name,
                 "source_license": data["source_license"],
                 "external_catalogue_id": data["external_id"],
                 "spool_type": data["spool_type"],
                 "raw_color_hexes": data["color_hexes"],
                 "catalogue_provenance": {
-                    "catalogue": "SpoolmanDB",
+                    "catalogue": source_name,
                     "external_id": data["external_id"],
                     "spool_type": data["spool_type"],
                     "is_refill": data.get("is_refill", False),
