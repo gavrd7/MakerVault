@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from decimal import Decimal
 import json
 from urllib.parse import urljoin, urlparse
 
@@ -468,8 +469,38 @@ def match_filament_catalogue_candidates(filament, *, limit=8):
     return ranked[:max(1, min(int(limit or 8), 20))]
 
 
+def _catalogue_match_restore_snapshot(filament):
+    profile = dict(filament.profile_data or {})
+    existing = profile.get("catalogue_match_restore")
+    if isinstance(existing, dict):
+        return existing
+
+    prior_profile = dict(profile)
+    prior_profile.pop("catalogue_match_restore", None)
+    fields = [
+        "color_name", "color_hex", "color_hexes", "transparency",
+        "multi_color_direction", "finish", "pattern", "glow",
+        "density_g_cm3", "nominal_weight_g", "empty_spool_weight_g",
+        "nozzle_temp_min_c", "nozzle_temp_max_c",
+        "bed_temp_min_c", "bed_temp_max_c",
+        "drying_temp_c", "drying_time_hours",
+    ]
+    values = {}
+    for field in fields:
+        value = getattr(filament, field)
+        values[field] = str(value) if isinstance(value, Decimal) else value
+    return {
+        "version": 1,
+        "source_id": str(filament.source_id) if filament.source_id else "",
+        "filament_manufacturer_id": str(filament.filament_manufacturer_id) if filament.filament_manufacturer_id else "",
+        "manufacturer_id": str(filament.manufacturer_id) if filament.manufacturer_id else "",
+        "values": values,
+        "profile_data": prior_profile,
+    }
+
+
 def apply_catalogue_match_to_filament(filament, external_id):
-    """Attach a matched catalogue record and fill missing enrichment fields."""
+    """Attach or rematch a catalogue record and fill missing enrichment fields."""
     from .models import CatalogSource, FilamentManufacturer
 
     row = get_spoolmandb_item(external_id)
@@ -488,10 +519,15 @@ def apply_catalogue_match_to_filament(filament, external_id):
     )
     maker, _ = FilamentManufacturer.objects.get_or_create(name=row["manufacturer"] or "Generic")
 
+    profile = dict(filament.profile_data or {})
+    restore_snapshot = _catalogue_match_restore_snapshot(filament)
+
     changed = []
-    if filament.source_id is None or getattr(filament.source, "source_type", "") == "manual":
-        filament.source = source
-        changed.append("source")
+    current_source_type = getattr(filament.source, "source_type", "") if filament.source_id else ""
+    if filament.source_id is None or current_source_type in {"manual", "spoolmandb"}:
+        if filament.source_id != source.id:
+            filament.source = source
+            changed.append("source")
     if not filament.filament_manufacturer_id:
         filament.filament_manufacturer = maker
         filament.manufacturer = None
@@ -526,6 +562,7 @@ def apply_catalogue_match_to_filament(filament, external_id):
         changed.append("transparency")
 
     profile = dict(filament.profile_data or {})
+    profile["catalogue_match_restore"] = restore_snapshot
     profile["catalogue_provenance"] = {
         "catalogue": "SpoolmanDB",
         "external_id": row["external_id"],
@@ -565,3 +602,57 @@ def apply_catalogue_match_to_filament(filament, external_id):
         "changed_fields": sorted(set(changed)),
         "authoritative": authoritative,
     }
+
+
+def unmatch_filament_catalogue(filament):
+    """Remove a catalogue match, restoring the pre-match state when available."""
+    from .models import CatalogSource, FilamentManufacturer, Manufacturer
+
+    profile = dict(filament.profile_data or {})
+    snapshot = profile.get("catalogue_match_restore")
+    changed = []
+
+    if isinstance(snapshot, dict):
+        values = snapshot.get("values") if isinstance(snapshot.get("values"), dict) else {}
+        for field, value in values.items():
+            try:
+                model_field = filament._meta.get_field(field)
+            except Exception:
+                continue
+            if getattr(model_field, "decimal_places", None) is not None and value not in (None, ""):
+                value = fit_model_decimal(filament, field, value)
+            setattr(filament, field, value)
+            changed.append(field)
+
+        source_id = str(snapshot.get("source_id") or "").strip()
+        maker_id = str(snapshot.get("filament_manufacturer_id") or "").strip()
+        legacy_maker_id = str(snapshot.get("manufacturer_id") or "").strip()
+        filament.source = CatalogSource.objects.filter(pk=source_id).first() if source_id else None
+        filament.filament_manufacturer = FilamentManufacturer.objects.filter(pk=maker_id).first() if maker_id else None
+        filament.manufacturer = Manufacturer.objects.filter(pk=legacy_maker_id).first() if legacy_maker_id else None
+        changed.extend(["source", "filament_manufacturer", "manufacturer"])
+
+        prior_profile = snapshot.get("profile_data")
+        filament.profile_data = dict(prior_profile) if isinstance(prior_profile, dict) else {}
+        changed.append("profile_data")
+        restored = True
+    else:
+        # Legacy matches have no reliable before-state. Remove only the active
+        # catalogue linkage/provenance and retain descriptive values rather than
+        # guessing which ones were user-entered.
+        if filament.source_id and getattr(filament.source, "source_type", "") == "spoolmandb":
+            filament.source = None
+            changed.append("source")
+        for key in [
+            "catalogue_provenance", "catalogue_match_restore",
+            "external_catalogue_id", "spool_type", "raw_color_hexes",
+        ]:
+            profile.pop(key, None)
+        filament.profile_data = profile
+        changed.append("profile_data")
+        restored = False
+
+    changed_fields = list(dict.fromkeys(changed))
+    filament.save(update_fields=changed_fields + ["updated_at"])
+    return {"restored": restored, "changed_fields": changed_fields}
+
