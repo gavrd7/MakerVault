@@ -15,8 +15,9 @@
 </p>
 
 <p align="center">
-  <a href="docs/guide/index.md">User guide</a> ·
+  <a href="https://gavrd7.github.io/MakerVault-docs/">User guide</a> ·
   <a href="docs/guide/getting-started/install.md">Installation</a> ·
+  <a href="https://github.com/gavrd7/MakerVault-docs">Guide source</a> ·
   <a href="docs/ROADMAP.md">Roadmap</a> ·
   <a href="CHANGELOG.md">Changelog</a>
 </p>
@@ -53,7 +54,7 @@ MakerVault keeps the practical parts of a workshop connected: what you own, what
   </tr>
 </table>
 
-> The screenshots above come from the public, sanitised MakerVault user guide. See the [full guide](https://gavrd7.github.io/MakerVault-docs/) for walkthroughs and more screenshots.
+> The screenshots above come from the public, sanitised MakerVault user guide. See the [published guide](https://gavrd7.github.io/MakerVault-docs/) for walkthroughs and more screenshots, or visit the [documentation repository](https://github.com/gavrd7/MakerVault-docs) to contribute guide improvements.
 
 ## What you can do
 
