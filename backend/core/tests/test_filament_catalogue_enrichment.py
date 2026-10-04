@@ -255,14 +255,14 @@ class FilamentCatalogueEnrichmentTests(TestCase):
             color_name="Black",
             color_hex="#111111",
             diameter_mm="1.75",
-            finish="x" * 80,
+            transparency="legacy",
             density_g_cm3=None,
         )
 
         result = apply_catalogue_match_to_filament(filament, row["external_id"])
         filament.refresh_from_db()
 
-        self.assertEqual(filament.finish, "x" * 80)
+        self.assertEqual(filament.transparency, "legacy")
         self.assertEqual(float(filament.density_g_cm3), 1.24)
         self.assertIn("density_g_cm3", result["changed_fields"])
 
