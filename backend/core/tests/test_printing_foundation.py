@@ -182,6 +182,47 @@ class PrintingFoundationTests(TestCase):
             nozzle_mm="0.4",
         )
 
+    def test_public_config_exposes_printer_delete_permission(self):
+        response = self.client.get("/api/config/")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertTrue(response.json()["permissions"]["delete_printer"])
+
+    def test_idle_printer_with_history_can_be_deleted_and_history_is_retained(self):
+        job = PrintJob.objects.create(
+            owner=self.user,
+            printer=self.printer,
+            status="success",
+            actual_minutes=42,
+        )
+        printer_id = str(self.printer.id)
+        printer_name = self.printer.name
+
+        response = self.client.delete(f"/api/printing/printers/{self.printer.id}/")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertFalse(Printer.objects.filter(pk=printer_id).exists())
+
+        job.refresh_from_db()
+        self.assertIsNone(job.printer_id)
+        self.assertEqual(job.settings["printer_snapshot"]["id"], printer_id)
+        self.assertEqual(job.settings["printer_snapshot"]["name"], printer_name)
+
+        overview = self.client.get("/api/printing/")
+        self.assertEqual(overview.status_code, 200, overview.content)
+        history = next(row for row in overview.json()["recent_prints"] if row["id"] == str(job.id))
+        self.assertEqual(history["printer_id"], printer_id)
+        self.assertEqual(history["printer"], printer_name)
+
+    def test_currently_printing_printer_cannot_be_deleted(self):
+        PrintJob.objects.create(
+            owner=self.user,
+            printer=self.printer,
+            status="printing",
+        )
+        response = self.client.delete(f"/api/printing/printers/{self.printer.id}/")
+        self.assertEqual(response.status_code, 409, response.content)
+        self.assertIn("currently printing", response.json()["error"].lower())
+        self.assertTrue(Printer.objects.filter(pk=self.printer.id).exists())
+
     def test_filament_creation_supports_transparent_custom_colour(self):
         response = self.client.post(
             "/api/printing/filaments/",

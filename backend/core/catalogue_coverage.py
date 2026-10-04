@@ -205,19 +205,51 @@ def _printer_coverage() -> dict:
 
 
 def _filament_coverage() -> dict:
-    rows = list(FilamentProduct.objects.select_related("filament_manufacturer", "manufacturer").all())
+    rows = list(FilamentProduct.objects.select_related(
+        "filament_manufacturer", "manufacturer", "source"
+    ).all())
     total = len(rows)
     samples = []
+
+    def profile(row):
+        return dict(row.profile_data or {})
+
+    def provenance(row):
+        return dict(profile(row).get("catalogue_provenance") or {})
+
+    def has_image(row):
+        metadata = row.image_metadata or {}
+        return bool(row.image or metadata.get("external_image_url"))
+
+    def has_source(row):
+        data = provenance(row)
+        return bool(
+            data.get("product_url")
+            or data.get("tds_url")
+            or getattr(row.source, "url", "")
+        )
+
     for row in rows:
         missing = []
-        if not row.image:
+        if not has_image(row):
             missing.append("image")
         if not (row.filament_manufacturer_id or row.manufacturer_id):
             missing.append("manufacturer")
         if not row.color_name and not row.color_hex and not row.color_hexes:
             missing.append("colour")
-        if any(value is None for value in (row.nozzle_temp_min_c, row.nozzle_temp_max_c, row.bed_temp_min_c, row.bed_temp_max_c)):
+        if row.density_g_cm3 is None:
+            missing.append("density")
+        if row.nominal_weight_g is None:
+            missing.append("weight")
+        if any(value is None for value in (
+            row.nozzle_temp_min_c,
+            row.nozzle_temp_max_c,
+            row.bed_temp_min_c,
+            row.bed_temp_max_c,
+        )):
             missing.append("temperatures")
+        if not has_source(row):
+            missing.append("source")
         if missing and len(samples) < 12:
             samples.append({"id": str(row.id), "name": str(row), "missing": missing})
 
@@ -226,15 +258,33 @@ def _filament_coverage() -> dict:
         "label": "Filament catalogue",
         "total": total,
         "metrics": [
-            _metric("images", "Images", sum(bool(row.image) for row in rows), total),
-            _metric("manufacturer", "Manufacturer", sum(bool(row.filament_manufacturer_id or row.manufacturer_id) for row in rows), total),
-            _metric("colour", "Colour data", sum(bool(row.color_name or row.color_hex or row.color_hexes) for row in rows), total),
+            _metric("images", "Images", sum(has_image(row) for row in rows), total),
+            _metric(
+                "manufacturer",
+                "Manufacturer",
+                sum(bool(row.filament_manufacturer_id or row.manufacturer_id) for row in rows),
+                total,
+            ),
+            _metric(
+                "colour",
+                "Colour data",
+                sum(bool(row.color_name or row.color_hex or row.color_hexes) for row in rows),
+                total,
+            ),
+            _metric("density", "Density", sum(row.density_g_cm3 is not None for row in rows), total),
+            _metric("weight", "Nominal weight", sum(row.nominal_weight_g is not None for row in rows), total),
             _metric(
                 "temperatures",
                 "Print temperatures",
-                sum(all(value is not None for value in (row.nozzle_temp_min_c, row.nozzle_temp_max_c, row.bed_temp_min_c, row.bed_temp_max_c)) for row in rows),
+                sum(all(value is not None for value in (
+                    row.nozzle_temp_min_c,
+                    row.nozzle_temp_max_c,
+                    row.bed_temp_min_c,
+                    row.bed_temp_max_c,
+                )) for row in rows),
                 total,
             ),
+            _metric("sources", "Source links", sum(has_source(row) for row in rows), total),
         ],
         "missing_samples": samples,
     }

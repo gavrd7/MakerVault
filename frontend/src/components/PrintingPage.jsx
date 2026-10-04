@@ -4,7 +4,7 @@ import PrintedPartsSection from "./PrintedPartsSection";
 import { printerIntent } from "./printerNavigation";
 import { PrinterCameraPreview, PrinterCameraSetupModal } from "./PrinterCameras";
 import PrinterJobControls from "./PrinterJobControls";
-import { Badge, LoadingBlock, Modal } from "./Common";
+import { Badge, ImageManagerModal, LoadingBlock, Modal } from "./Common";
 import ModelViewerModal, { isViewableModelFile } from "./ModelViewer";
 import { suggestNextVersion } from "./FileVersionModal";
 
@@ -228,6 +228,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
   const summary = data?.summary || {};
   const canAddPrinter = Boolean(config?.permissions?.add_printer);
   const canChangePrinter = Boolean(config?.permissions?.change_printer);
+  const canDeletePrinter = Boolean(config?.permissions?.delete_printer);
   const canAddFilament = Boolean(config?.permissions?.add_filament);
   const canChangeFilament = Boolean(config?.permissions?.change_filament);
   const canAddSpool = Boolean(config?.permissions?.add_spool);
@@ -263,6 +264,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       canAddSpool={canAddSpool}
       canChangeSpool={canChangeSpool}
       canDeleteSpool={canDeleteSpool}
+      canChangeFilament={canChangeFilament}
       onBack={() => setWorkspaceView("overview")}
       onChanged={load}
       searchTarget={searchTarget}
@@ -519,6 +521,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       manufacturers={data?.printer_manufacturers || []}
       models={data?.printer_catalogue_models || []}
       locations={data?.locations || []}
+      canDelete={canDeletePrinter}
       onClose={() => setManagePrinter(null)}
       onSaved={async () => { setManagePrinter(null); await load(); }}
     />}
@@ -538,7 +541,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
   </div>;
 }
 
-function SpoolInventoryPage({ spools, filaments, locations, printers, currency, canAddSpool, canChangeSpool, canDeleteSpool, onBack, onChanged, searchTarget = null }) {
+function SpoolInventoryPage({ spools, filaments, locations, printers, currency, canAddSpool, canChangeSpool, canDeleteSpool, canChangeFilament, onBack, onChanged, searchTarget = null }) {
   const [query, setQuery] = useState("");
 
   useEffect(() => {
@@ -554,6 +557,7 @@ function SpoolInventoryPage({ spools, filaments, locations, printers, currency, 
   }, [spools.length, searchTarget?.token, searchTarget?.id]);
   const [addOpen, setAddOpen] = useState(false);
   const [manageSpool, setManageSpool] = useState(null);
+  const [detailFilament, setDetailFilament] = useState(null);
   const [deleteSpool, setDeleteSpool] = useState(null);
   const term = query.trim().toLowerCase();
   const rows = newestFirst(spools).filter(spool => !term || [
@@ -589,8 +593,12 @@ function SpoolInventoryPage({ spools, filaments, locations, printers, currency, 
           </div>
           <div className="printingBadges">
             {spool.loaded_slots?.length > 0 && <Badge tone="accent">Loaded</Badge>}
+            <Badge tone={spool.catalogue_matched ? "good" : "warning"}>
+              {spool.catalogue_matched ? "✓ Matched" : "Unmatched"}
+            </Badge>
             <Badge>{spool.status_label || spool.status}</Badge>
             {(spool.external_links || []).map(link => <Badge key={link.id}>{link.provider_label}</Badge>)}
+            <button type="button" onClick={() => setDetailFilament(filaments.find(item => item.id === spool.filament_id) || null)}>Filament details</button>
             {canChangeSpool && <button type="button" onClick={() => setManageSpool(spool)}>RFID / identity</button>}
             {canDeleteSpool && <button className="dangerButton" type="button" onClick={() => setDeleteSpool(spool)}>Delete</button>}
           </div>
@@ -601,6 +609,12 @@ function SpoolInventoryPage({ spools, filaments, locations, printers, currency, 
 
     {addOpen && <SpoolModal filaments={filaments} locations={locations} printers={printers} currency={currency} onClose={() => setAddOpen(false)} onSaved={async () => { setAddOpen(false); await onChanged(); }} />}
     {manageSpool && <SpoolIdentityModal spool={manageSpool} onClose={() => setManageSpool(null)} onSaved={async () => { setManageSpool(null); await onChanged(); }} />}
+    {detailFilament && <FilamentDetailsModal
+      filament={detailFilament}
+      canChangeFilament={canChangeFilament}
+      onChanged={onChanged}
+      onClose={() => setDetailFilament(null)}
+    />}
     {deleteSpool && <DeletePrintingRecordModal
       title={"Delete spool · " + deleteSpool.spool_id}
       description={"Delete " + deleteSpool.spool_id + " from MakerVault spool inventory?"}
@@ -793,6 +807,7 @@ function LocationModal({ onClose, onSaved }) {
   const [form, setForm] = useState({ name: "", kind: "storage", notes: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [deleteArmed, setDeleteArmed] = useState(false);
   const set = (key, value) => setForm(current => ({ ...current, [key]: value }));
 
   async function submit(event) {
@@ -1204,7 +1219,7 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
 }
 
 
-function PrinterManageModal({ printer, manufacturers, models, locations, onClose, onSaved }) {
+function PrinterManageModal({ printer, manufacturers, models, locations, canDelete, onClose, onSaved }) {
   const initialMaker = printer.manufacturer_id || manufacturers.find(x => x.name === printer.manufacturer)?.id || "";
   const [form, setForm] = useState({
     name: printer.name || "",
@@ -1224,6 +1239,7 @@ function PrinterManageModal({ printer, manufacturers, models, locations, onClose
   const [customModel, setCustomModel] = useState(!printer.catalog_model_id);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [deleteArmed, setDeleteArmed] = useState(false);
   const set = (key, value) => setForm(current => ({ ...current, [key]: value }));
   const modelOptions = models.filter(item => item.manufacturer_id === form.printer_manufacturer_id);
   const selectedModel = models.find(item => item.id === form.catalog_model_id);
@@ -1280,6 +1296,24 @@ function PrinterManageModal({ printer, manufacturers, models, locations, onClose
     }
   }
 
+  async function removePrinter() {
+    if (!deleteArmed) {
+      setDeleteArmed(true);
+      setError("");
+      return;
+    }
+    setBusy(true); setError("");
+    try {
+      await apiFetch("/api/printing/printers/" + printer.id + "/", { method: "DELETE" });
+      await onSaved();
+    } catch (err) {
+      setDeleteArmed(false);
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return <Modal title={"Manage printer · " + printer.name} subtitle="Update the owned-printer record, catalogue profile, location and local connection used by optional integrations." onClose={onClose} wide>
     <form className="formGrid" onSubmit={submit}>
       {error && <div className="formError full">{error}</div>}
@@ -1303,7 +1337,13 @@ function PrinterManageModal({ printer, manufacturers, models, locations, onClose
       <label>Build Y (mm)<input type="number" min="1" step="0.1" value={form.build_volume_y_mm} onChange={e => set("build_volume_y_mm", e.target.value)} /></label>
       <label>Build Z (mm)<input type="number" min="1" step="0.1" value={form.build_volume_z_mm} onChange={e => set("build_volume_z_mm", e.target.value)} /></label>
       <label className="settingsToggle full"><div><strong>Currently in use</strong><small>Inactive printers remain available in historical print records.</small></div><input type="checkbox" checked={form.is_active} onChange={e => set("is_active", e.target.checked)} /></label>
-      <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Saving…" : "Save printer"}</button></div>
+      <div className="formActions full">
+        {canDelete && <button type="button" className="dangerButton" disabled={busy} onClick={removePrinter}>{deleteArmed ? "Confirm delete printer" : "Delete printer"}</button>}
+        {deleteArmed && <button type="button" disabled={busy} onClick={() => setDeleteArmed(false)}>Keep printer</button>}
+        <button type="button" onClick={onClose}>Cancel</button>
+        <button className="primary" disabled={busy}>{busy ? "Saving…" : "Save printer"}</button>
+      </div>
+      {deleteArmed && <div className="settingsCallout full"><strong>Delete owned printer?</strong><p>This removes the owned-printer record and its live connection/camera configuration. Existing print history is retained. A printer cannot be deleted while it is currently printing.</p></div>}
     </form>
   </Modal>;
 }
@@ -1436,7 +1476,9 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
     }, 0);
     return () => window.clearTimeout(timer);
   }, [filaments.length, searchTarget?.token, searchTarget?.id]);
+  const [detailFilament, setDetailFilament] = useState(null);
   const [editFilament, setEditFilament] = useState(null);
+  const [imageFilament, setImageFilament] = useState(null);
   const term = query.trim().toLowerCase();
   const rows = newestFirst(filaments).filter(item => !term || [
     item.display_name, item.name, item.manufacturer, item.material, item.color_name,
@@ -1462,21 +1504,49 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
       </div>
       <div className="printingList">
         {rows.map(item => <article className={"printingListRow printingLibraryRow" + (searchTarget?.id === item.id ? " searchTargetRow" : "")} id={"filament-search-target-" + item.id} key={item.id}>
-          <span className={"printingSwatch filamentPreview-" + (item.transparency || "opaque")} style={filamentSwatchStyle(item)} />
+          {item.image
+            ? <img className="filamentLibraryThumb" src={item.image} alt="" loading="lazy" />
+            : <span className={"printingSwatch filamentPreview-" + (item.transparency || "opaque")} style={filamentSwatchStyle(item)} />}
           <div>
             <strong>{item.display_name || item.name}</strong>
             <small>{[item.manufacturer, item.material, item.color_name].filter(Boolean).join(" · ")}</small>
-            <small>{item.diameter_mm || "?"} mm · {grams(item.nominal_weight_g)} nominal · {item.source || "Manual"}</small>
+            <small>{item.diameter_mm || "?"} mm · {grams(item.nominal_weight_g)} nominal{item.density_g_cm3 ? " · " + item.density_g_cm3 + " g/cm³" : ""} · {item.source || "Manual"}</small>
+            {(item.product_url || item.tds_url || item.sds_url) && <small className="filamentSourceLinks">
+              {item.product_url && <a href={item.product_url} target="_blank" rel="noreferrer">Product</a>}
+              {item.tds_url && <a href={item.tds_url} target="_blank" rel="noreferrer">TDS</a>}
+              {item.sds_url && <a href={item.sds_url} target="_blank" rel="noreferrer">SDS</a>}
+            </small>}
           </div>
           <div className="printingBadges">
+            {item.spool_type && <Badge>{item.spool_type}</Badge>}
+            {item.is_refill && <Badge>Refill</Badge>}
+            {item.country_of_origin && <Badge>{item.country_of_origin}</Badge>}
             {item.transparency && item.transparency !== "opaque" && <Badge>{item.transparency_label || item.transparency}</Badge>}
             {item.glow && <Badge>Glow</Badge>}
+            <button type="button" onClick={() => setDetailFilament(item)}>Details</button>
+            {canChangeFilament && <button type="button" onClick={() => setImageFilament(item)}>Image</button>}
             {canChangeFilament && <button type="button" onClick={() => setEditFilament(item)}>Edit</button>}
           </div>
         </article>)}
         {!rows.length && <div className="printingEmptyInline">{term ? "No filament products match this search." : "No saved filament products yet."}</div>}
       </div>
     </section>
+
+    {detailFilament && <FilamentDetailsModal
+      filament={detailFilament}
+      canChangeFilament={canChangeFilament}
+      onChanged={onChanged}
+      onClose={() => setDetailFilament(null)}
+    />}
+
+    {imageFilament && <ImageManagerModal
+      title={"Image — " + (imageFilament.display_name || imageFilament.name)}
+      endpoint={"/api/printing/filaments/" + imageFilament.id + "/image/"}
+      responseKey="filament"
+      currentImage={imageFilament.image}
+      onClose={() => setImageFilament(null)}
+      onUpdated={async () => { setImageFilament(null); await onChanged(); }}
+    />}
 
     {editFilament && <FilamentEditModal
       filament={editFilament}
@@ -1488,6 +1558,135 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
   </div>;
 }
 
+
+function FilamentDetailsModal({ filament, canChangeFilament = false, onChanged, onClose }) {
+  const [current, setCurrent] = useState(filament);
+  const [matchOpen, setMatchOpen] = useState(false);
+  const [unmatching, setUnmatching] = useState(false);
+  const [matchError, setMatchError] = useState("");
+
+  useEffect(() => { setCurrent(filament); }, [filament]);
+
+  const temperatureRange = (min, max) => {
+    if (min == null && max == null) return "—";
+    if (min != null && max != null && Number(min) !== Number(max)) return `${min}–${max} °C`;
+    return `${min ?? max} °C`;
+  };
+  const drying = current.drying_temp_c == null && current.drying_time_hours == null
+    ? "—"
+    : [
+        current.drying_temp_c != null ? current.drying_temp_c + " °C" : "",
+        current.drying_time_hours != null ? current.drying_time_hours + " h" : "",
+      ].filter(Boolean).join(" · ");
+
+  async function unmatchCatalogue() {
+    const restoreText = current.catalogue_match_restorable
+      ? "MakerVault will restore the values saved immediately before this catalogue match."
+      : "This is an older match without a saved before-state. MakerVault will remove the catalogue link but retain the current descriptive values.";
+    if (!window.confirm("Unmatch this filament from the catalogue?\n\n" + restoreText)) return;
+    setUnmatching(true);
+    setMatchError("");
+    try {
+      const result = await apiFetch("/api/printing/filaments/" + current.id + "/catalogue-match/", {
+        method: "DELETE",
+      });
+      if (result.item) setCurrent(result.item);
+      await onChanged?.();
+    } catch (err) {
+      setMatchError(err.message);
+    } finally {
+      setUnmatching(false);
+    }
+  }
+
+  return <>
+    <Modal
+      title={current.display_name || current.name}
+      subtitle="Saved filament product details used by every physical spool linked to this product."
+      onClose={onClose}
+      wide
+    >
+      <div className="filamentCatalogueLayout">
+        <div>
+          <div className={`filamentCatalogueHero filamentPreview-${current.transparency || "opaque"}`}>
+            {current.image
+              ? <img src={current.image} alt="" />
+              : <div className="filamentNoImage">
+                  <span className="printingSwatch" style={filamentSwatchStyle(current)} aria-hidden="true" />
+                  <strong>No product image</strong>
+                  <small>{current.color_name || current.color_hex || "Colour preview unavailable"}</small>
+                </div>}
+          </div>
+          <div className="badgeRow">
+            {current.material && <Badge tone="accent">{current.material}</Badge>}
+            {current.color_name && <Badge>{current.color_name}</Badge>}
+            {current.transparency && <Badge>{current.transparency_label || current.transparency}</Badge>}
+            {current.finish && <Badge>{current.finish}</Badge>}
+            {current.pattern && <Badge>{current.pattern}</Badge>}
+            {current.glow && <Badge>Glow</Badge>}
+            {current.is_refill && <Badge>Refill</Badge>}
+          </div>
+          {current.image_source_provider && <small className="muted">
+            Image: {current.image_source_provider}
+            {current.image_license ? " · " + current.image_license : ""}
+            {current.image_author ? " · " + current.image_author : ""}
+          </small>}
+        </div>
+        <div>
+          <span className="settingsEyebrow">{current.manufacturer || "Filament product"}</span>
+          <h3>{current.name}</h3>
+          <dl className="detailSpecs">
+            <div><dt>Material</dt><dd>{current.material || "—"}</dd></div>
+            <div><dt>Colour</dt><dd>{current.color_name || current.color_hex || "—"}</dd></div>
+            <div><dt>Diameter</dt><dd>{current.diameter_mm == null ? "—" : current.diameter_mm + " mm"}</dd></div>
+            <div><dt>Density</dt><dd>{current.density_g_cm3 == null ? "—" : current.density_g_cm3 + " g/cm³"}</dd></div>
+            <div><dt>Nominal weight</dt><dd>{grams(current.nominal_weight_g)}</dd></div>
+            <div><dt>Empty spool</dt><dd>{grams(current.empty_spool_weight_g)}</dd></div>
+            <div><dt>Nozzle</dt><dd>{temperatureRange(current.nozzle_temp_min_c, current.nozzle_temp_max_c)}</dd></div>
+            <div><dt>Bed</dt><dd>{temperatureRange(current.bed_temp_min_c, current.bed_temp_max_c)}</dd></div>
+            <div><dt>Drying</dt><dd>{drying}</dd></div>
+            <div><dt>Spool type</dt><dd>{current.spool_type || (current.is_refill ? "Refill" : "—")}</dd></div>
+            <div><dt>Origin</dt><dd>{current.country_of_origin || "—"}</dd></div>
+            <div><dt>Source</dt><dd>{current.source || "Manual"}{current.source_license ? " · " + current.source_license : ""}</dd></div>
+          </dl>
+          {(current.product_url || current.tds_url || current.sds_url || current.source_url || current.image_source_page) && <div className="filamentCatalogueLinks">
+            {current.product_url && <a href={current.product_url} target="_blank" rel="noreferrer">Manufacturer product page</a>}
+            {current.tds_url && <a href={current.tds_url} target="_blank" rel="noreferrer">Technical data sheet</a>}
+            {current.sds_url && <a href={current.sds_url} target="_blank" rel="noreferrer">Safety data sheet</a>}
+            {!current.product_url && current.source_url && <a href={current.source_url} target="_blank" rel="noreferrer">Catalogue source</a>}
+            {current.image_source_page && current.image_source_page !== current.product_url && <a href={current.image_source_page} target="_blank" rel="noreferrer">Image source</a>}
+          </div>}
+          {current.color_hexes?.length > 1 && <div className="settingsCallout">
+            <strong>Multi-colour product</strong>
+            <p>{current.color_hexes.length} recorded colours{current.multi_color_direction ? " · " + current.multi_color_direction : ""}</p>
+          </div>}
+          {matchError && <div className="formError">{matchError}</div>}
+          {canChangeFilament && <div className="settingsCallout filamentDetailsMatchCallout">
+            <strong>{current.catalogue_matched ? "Catalogue match active" : "Missing or incomplete product data?"}</strong>
+            <p>{current.catalogue_matched
+              ? "You can review a different catalogue match at any time. Unmatching restores the pre-match values when MakerVault has a saved snapshot."
+              : "Match this saved filament to the catalogue to fill available manufacturer, technical and provenance data without overwriting your manual corrections."}</p>
+            {current.catalogue_external_id && <small>Catalogue ID · {current.catalogue_external_id}</small>}
+          </div>}
+          <div className="formActions">
+            {canChangeFilament && <button className="primary" type="button" disabled={unmatching} onClick={() => setMatchOpen(true)}>{current.catalogue_matched ? "Rematch catalogue" : "Match catalogue"}</button>}
+            {canChangeFilament && current.catalogue_matched && <button className="dangerButton" type="button" disabled={unmatching} onClick={unmatchCatalogue}>{unmatching ? "Unmatching…" : "Unmatch catalogue"}</button>}
+            <button type="button" onClick={onClose} disabled={unmatching}>Close</button>
+          </div>
+        </div>
+      </div>
+    </Modal>
+    {matchOpen && <FilamentCatalogueMatchModal
+      filament={current}
+      onClose={() => setMatchOpen(false)}
+      onApplied={async updated => {
+        setMatchOpen(false);
+        if (updated) setCurrent(updated);
+        await onChanged?.();
+      }}
+    />}
+  </>;
+}
 
 function FilamentEditModal({ filament, manufacturers, materials, onClose, onSaved }) {
   const manufacturerNames = Array.from(new Set([
@@ -1530,6 +1729,7 @@ function FilamentEditModal({ filament, manufacturers, materials, onClose, onSave
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [matchOpen, setMatchOpen] = useState(false);
   const set = (key, value) => setForm(current => ({ ...current, [key]: value }));
 
   async function submit(event) {
@@ -1607,14 +1807,122 @@ function FilamentEditModal({ filament, manufacturers, materials, onClose, onSave
       <label>Drying time (hours)<input type="number" min="0" step="0.1" value={form.drying_time_hours} onChange={e => set("drying_time_hours", e.target.value)} /></label>
 
       <div className="settingsCallout full">
+        <strong>Find catalogue data for this filament</strong>
+        <p>Search known filament products using the manufacturer, product name, material and colour already entered. You choose the match before MakerVault fills missing catalogue and technical data.</p>
+        <button type="button" onClick={() => setMatchOpen(true)}>Match catalogue</button>
+      </div>
+
+      <div className="settingsCallout full">
         <strong>Source provenance is preserved</strong>
         <p>{filament.source || "Manual"}{filament.source_type && filament.source_type !== "manual" ? " · " + filament.source_type : ""}. Editing does not discard the original catalogue/source attribution.</p>
+        {(filament.product_url || filament.tds_url || filament.sds_url) && <div className="filamentCatalogueLinks">
+          {filament.product_url && <a href={filament.product_url} target="_blank" rel="noreferrer">Product page</a>}
+          {filament.tds_url && <a href={filament.tds_url} target="_blank" rel="noreferrer">TDS</a>}
+          {filament.sds_url && <a href={filament.sds_url} target="_blank" rel="noreferrer">SDS</a>}
+        </div>}
       </div>
       <div className="formActions full">
         <button type="button" onClick={onClose}>Cancel</button>
         <button className="primary" disabled={busy || !form.manufacturer_name || !form.material || !form.name}>{busy ? "Saving…" : "Save filament changes"}</button>
       </div>
     </form>
+    {matchOpen && <FilamentCatalogueMatchModal
+      filament={filament}
+      onClose={() => setMatchOpen(false)}
+      onApplied={async () => { setMatchOpen(false); await onSaved(); }}
+    />}
+  </Modal>;
+}
+
+
+function FilamentCatalogueMatchModal({ filament, onClose, onApplied }) {
+  const [rows, setRows] = useState([]);
+  const [selected, setSelected] = useState("");
+  const [busy, setBusy] = useState(true);
+  const [applying, setApplying] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    setBusy(true);
+    apiFetch("/api/printing/filaments/" + filament.id + "/catalogue-match/")
+      .then(result => {
+        if (cancelled) return;
+        const candidates = result.candidates || [];
+        setRows(candidates);
+        setSelected(candidates[0]?.external_id || "");
+      })
+      .catch(err => { if (!cancelled) setError(err.message); })
+      .finally(() => { if (!cancelled) setBusy(false); });
+    return () => { cancelled = true; };
+  }, [filament.id]);
+
+  async function applyMatch() {
+    if (!selected) return;
+    setApplying(true); setError("");
+    try {
+      const result = await apiFetch("/api/printing/filaments/" + filament.id + "/catalogue-match/", {
+        method: "POST",
+        body: { external_id: selected },
+      });
+      await onApplied(result.item || null);
+    } catch (err) {
+      const fieldMessages = Object.entries(err.fields || {})
+        .flatMap(([field, messages]) => (messages || []).map(message => `${field}: ${message}`));
+      setError(fieldMessages.length ? err.message + " " + fieldMessages.join(" · ") : err.message);
+    } finally {
+      setApplying(false);
+    }
+  }
+
+  return <Modal
+    title={"Match catalogue · " + (filament.display_name || filament.name)}
+    subtitle="MakerVault ranks likely known products. Review the manufacturer, material, colour and technical data before applying a match."
+    onClose={onClose}
+    wide
+  >
+    <div className="formGrid">
+      {error && <div className="formError full">{error}</div>}
+      {busy && <div className="printingEmptyInline full">Searching the filament catalogue…</div>}
+      {!busy && !rows.length && <div className="settingsCallout full"><strong>No confident catalogue candidates found</strong><p>You can keep this filament as a manual record and try again later as the catalogue grows.</p></div>}
+      {!busy && rows.length > 0 && <div className="filamentMatchList full" role="radiogroup" aria-label="Catalogue matches">
+        {rows.map(row => {
+          const active = selected === row.external_id;
+          return <label key={row.external_id} className={"filamentMatchCandidate" + (active ? " filamentMatchCandidateSelected" : "")}>
+            <input
+              className="filamentMatchRadio"
+              type="radio"
+              name="filament-catalogue-match"
+              checked={active}
+              onChange={() => setSelected(row.external_id)}
+            />
+            <span className={"filamentMatchSelectMark" + (active ? " filamentMatchSelectMarkChecked" : "")} aria-hidden="true">{active ? "✓" : ""}</span>
+            <span className="printingSwatch" style={filamentSwatchStyle(row)} aria-hidden="true" />
+            <span className="filamentMatchMain">
+              <strong>{row.manufacturer} · {row.name}</strong>
+              <small>{[row.material, row.color_name || row.color_hex, row.diameter_mm ? row.diameter_mm + " mm" : ""].filter(Boolean).join(" · ")}</small>
+              <small>
+                {row.nozzle_temp_min_c != null ? "Nozzle " + row.nozzle_temp_min_c + (row.nozzle_temp_max_c != null && row.nozzle_temp_max_c !== row.nozzle_temp_min_c ? "–" + row.nozzle_temp_max_c : "") + " °C" : "No nozzle data"}
+                {" · "}
+                {row.bed_temp_min_c != null ? "Bed " + row.bed_temp_min_c + (row.bed_temp_max_c != null && row.bed_temp_max_c !== row.bed_temp_min_c ? "–" + row.bed_temp_max_c : "") + " °C" : "No bed data"}
+              </small>
+            </span>
+            <span className="printingBadges">
+              <Badge tone={row.match_score >= 75 ? "good" : row.match_score >= 50 ? "accent" : undefined}>{row.match_score}% match</Badge>
+              {(row.match_reasons || []).slice(0, 3).map(reason => <Badge key={reason}>{reason}</Badge>)}
+            </span>
+          </label>;
+        })}
+      </div>}
+      <div className="settingsCallout full">
+        <strong>Applying a match is conservative</strong>
+        <p>MakerVault links the catalogue source and fills missing metadata. Existing manual identity/colour values are retained. Manufacturer product pages and technical data sheets are then checked for higher-authority print temperatures and related technical data where available.</p>
+      </div>
+      <div className="formActions full">
+        <button type="button" onClick={onClose} disabled={applying}>Cancel</button>
+        <button type="button" className="primary" disabled={busy || applying || !selected} onClick={applyMatch}>{applying ? "Applying…" : "Apply selected match"}</button>
+      </div>
+    </div>
   </Modal>;
 }
 
@@ -1866,7 +2174,7 @@ function FilamentCatalogueModal({ onClose, onImported }) {
     }
   }
 
-  return <Modal title="Open filament catalogue" subtitle="Search SpoolmanDB, preview the source record, then import it as a normal native MakerVault filament product." onClose={onClose} wide>
+  return <Modal title="Open filament catalogue" subtitle="Search MakerVault's merged filament catalogue, review the source record, then import it as a normal native MakerVault filament product." onClose={onClose} wide>
     <div className="filamentCatalogueModal">
       {error && <div className="formError">{error}</div>}
       <form className="filamentCatalogueSearch" onSubmit={search}>
@@ -1891,9 +2199,11 @@ function FilamentCatalogueModal({ onClose, onImported }) {
 
         {selected && <div className="filamentCataloguePreview">
           <div className={`filamentCatalogueHero filamentPreview-${selected.transparency}`}>
-            <span style={filamentSwatchStyle(selected)} />
+            {selected.image
+              ? <img src={selected.image} alt="" loading="lazy" />
+              : <span style={filamentSwatchStyle(selected)} />}
           </div>
-          <span className="settingsEyebrow">SpoolmanDB preview</span>
+          <span className="settingsEyebrow">{selected.source_name || "Catalogue"} preview</span>
           <h3>{selected.manufacturer} · {selected.name}</h3>
           <div className="badgeRow"><Badge tone="accent">{selected.material}</Badge><Badge>{selected.transparency}</Badge>{selected.finish && <Badge>{selected.finish}</Badge>}{selected.pattern && <Badge>{selected.pattern}</Badge>}{selected.glow && <Badge>Glow</Badge>}</div>
           <dl className="detailSpecs">
@@ -1904,10 +2214,17 @@ function FilamentCatalogueModal({ onClose, onImported }) {
             <div><dt>Nozzle</dt><dd>{selected.nozzle_temp_min_c == null ? "—" : `${selected.nozzle_temp_min_c}–${selected.nozzle_temp_max_c} °C`}</dd></div>
             <div><dt>Bed</dt><dd>{selected.bed_temp_min_c == null ? "—" : `${selected.bed_temp_min_c}–${selected.bed_temp_max_c} °C`}</dd></div>
             <div><dt>Colour mode</dt><dd>{selected.color_hexes?.length > 1 ? `${selected.color_hexes.length}-colour ${selected.multi_color_direction || "multi-colour"}` : selected.color_hex || "—"}</dd></div>
+            <div><dt>Spool type</dt><dd>{selected.spool_type || (selected.is_refill ? "Refill" : "—")}</dd></div>
+            <div><dt>Origin</dt><dd>{selected.country_of_origin || "—"}</dd></div>
             <div><dt>Source ID</dt><dd>{selected.external_id}</dd></div>
           </dl>
+          {(selected.product_url || selected.tds_url || selected.sds_url) && <div className="filamentCatalogueLinks">
+            {selected.product_url && <a href={selected.product_url} target="_blank" rel="noreferrer">Manufacturer product page</a>}
+            {selected.tds_url && <a href={selected.tds_url} target="_blank" rel="noreferrer">Technical data sheet</a>}
+            {selected.sds_url && <a href={selected.sds_url} target="_blank" rel="noreferrer">Safety data sheet</a>}
+          </div>}
           <button className="primary" disabled={importing} onClick={importSelected}>{importing ? "Importing…" : "Import into MakerVault"}</button>
-          <p className="muted">The imported record remains editable and usable without SpoolmanDB. Source provenance is retained separately.</p>
+          <p className="muted">The imported record remains editable and usable without its external source. Source provenance is retained separately.</p>
         </div>}
       </div>
     </div>
@@ -2069,10 +2386,16 @@ function DiscoveredSpoolModal({ printer, slot, filaments, spools, currency, canC
       <div className="settingsCallout full detectedSpoolSummary">
         <strong>Detected in {printer.name} · {slot.system_label} unit {slot.unit_index + 1}, slot {slot.slot_index + 1}</strong>
         <p>{[slot.vendor, slot.product_name, slot.material].filter(Boolean).join(" · ") || "Unknown filament"}{detectedPercent != null ? " · " + detectedPercent + "% remaining" : ""}</p>
+        <div className="detectedSpoolColour">
+          <span className="printingSwatch" style={slot.color_hex ? { background: slot.color_hex } : undefined} aria-hidden="true" />
+          <strong>Detected colour</strong>
+          <span>{slot.color_name || slot.color_hex || "Not reported"}</span>
+        </div>
         <div className="badgeRow">
           {slot.vendor && <Badge>{slot.vendor}</Badge>}
           {slot.product_name && <Badge tone="accent">{slot.product_name}</Badge>}
           {slot.material && <Badge>{slot.material}</Badge>}
+          {slot.color_hex && <Badge>{slot.color_hex}</Badge>}
           {slot.rfid_detected && <Badge tone="good">RFID material detected</Badge>}
           {slot.rfid_uid && <Badge>Tag {slot.rfid_uid}</Badge>}
         </div>
@@ -2089,12 +2412,44 @@ function DiscoveredSpoolModal({ printer, slot, filaments, spools, currency, canC
       </select></label>
 
       {physicalMode === "link" && <>
-        <label className="full">Existing physical spool<select required value={existingSpoolId} onChange={e => setExistingSpoolId(e.target.value)}>
-          <option value="">Choose an unloaded spool…</option>
-          {candidateSpools.map(spool => <option key={spool.id} value={spool.id}>
-            {spool.spool_id} · {spool.filament}{spool.color_name ? " · " + spool.color_name : ""}{spool.rfid_uid ? " · RFID " + spool.rfid_uid : ""}
-          </option>)}
-        </select><small>Matching material and colour are shown first, but the final choice is yours.</small></label>
+        <div className="full">
+          <strong>Choose an unloaded physical spool</strong>
+          <small className="detectedSpoolHint">Best material/colour matches are shown first. Each row includes the details that distinguish otherwise identical reels.</small>
+        </div>
+        <div className="detectedSpoolCandidateList full" role="radiogroup" aria-label="Existing physical spool">
+          {candidateSpools.map(spool => {
+            const spoolman = (spool.external_links || []).find(link => link.provider === "spoolman");
+            const selected = existingSpoolId === spool.id;
+            const colourLabel = spool.color_name || spool.color_hex || "Colour not recorded";
+            const placement = spool.location || "Unassigned";
+            return <label
+              key={spool.id}
+              className={"detectedSpoolCandidate" + (selected ? " detectedSpoolCandidateSelected" : "")}
+            >
+              <input
+                className="detectedSpoolCandidateRadio"
+                type="radio"
+                name="existing-spool"
+                value={spool.id}
+                checked={selected}
+                onChange={() => setExistingSpoolId(spool.id)}
+              />
+              <span className={"detectedSpoolSelectMark" + (selected ? " detectedSpoolSelectMarkChecked" : "")} aria-hidden="true">{selected ? "✓" : ""}</span>
+              <span className={"printingSwatch filamentPreview-" + (spool.transparency || "opaque")} style={filamentSwatchStyle(spool)} aria-hidden="true" />
+              <span className="detectedSpoolCandidateMain">
+                <strong>{spool.spool_id} · {spool.filament}</strong>
+                <small>{[spool.manufacturer, spool.material, colourLabel].filter(Boolean).join(" · ")}</small>
+                <small>{grams(spool.remaining_weight_g)} remaining · {placement}</small>
+              </span>
+              <span className="printingBadges detectedSpoolCandidateBadges">
+                {selected && <Badge tone="good">Selected</Badge>}
+                {spoolman && <Badge tone="accent">Spoolman #{spoolman.external_id}</Badge>}
+                {spool.rfid_uid && <Badge>RFID {spool.rfid_uid}</Badge>}
+                <Badge>{spool.status_label || spool.status}</Badge>
+              </span>
+            </label>;
+          })}
+        </div>
         {!candidateSpools.length && <div className="formError full">There are no currently unloaded MakerVault spools available to link.</div>}
       </>}
 

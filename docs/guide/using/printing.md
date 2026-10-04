@@ -34,6 +34,14 @@ Spool IDs are generated automatically. Two identical reels should be two spool r
 
 Weight fields refer to filament amounts; do not put the combined plastic-reel-and-filament scale reading into a filament-only remaining-weight field without accounting for the empty spool.
 
+### Filament catalogue data and images
+
+Imported SpoolmanDB products retain their catalogue identity and provenance while becoming normal editable MakerVault filament products. Catalogue maintenance can refresh **missing** density, weight, colour/appearance and print-temperature data without replacing values you have corrected manually. Where the upstream record provides them, MakerVault also retains manufacturer product, technical-data and safety-data links plus spool/refill metadata.
+
+Filament images follow the same conservative policy as the other MakerVault catalogues. An authoritative manufacturer product page can provide a remote image reference; confidently matched openly licensed media may be cached locally. MakerVault does not copy arbitrary commercial product imagery merely because it appears in search results. Editors can also use **Image** in the Filament Library to upload their own product image; administrators may provide a safe public HTTPS image URL.
+
+**Settings → Library updates** includes filament data in the normal catalogue-maintenance schedule and reports filament coverage for images, manufacturers, colour data, density, nominal weight, print temperatures and source links.
+
 ## Locations and slots
 
 Create reusable printing locations such as a room, shelf or dry box. Update the placement when moving a spool. A discovered slot may display a material and colour before it has a physical spool linked.

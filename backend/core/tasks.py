@@ -12,6 +12,7 @@ from .catalogue_enrichment import run_board_catalogue_enrichment
 from .models import CatalogueMaintenanceSettings, PrinterConnection, PrintingIntegrationSetting
 from .orcaslicer_catalogue import OrcaCatalogueError, sync_orcaslicer_printer_catalogue
 from .printing_sync import PrintingSyncError, sync_printing_integration
+from .filament_catalogue import FilamentCatalogueError, refresh_imported_filament_products
 from .printer_connectivity import POLLERS, PrinterConnectionError, poll_connection
 
 
@@ -59,6 +60,19 @@ def sync_orcaslicer_printer_catalogue_task(self):
         return {"status": "error", "error": str(exc)}
 
 
+@shared_task(bind=True, acks_late=True)
+def enrich_filament_catalogue_task(self, force_catalogue=False, limit=None):
+    if backup_in_progress():
+        return {"status": "backup-in-progress"}
+    try:
+        return refresh_imported_filament_products(
+            force_catalogue=force_catalogue,
+            limit=limit,
+        )
+    except FilamentCatalogueError as exc:
+        return {"status": "error", "error": str(exc)}
+
+
 def _queue_catalogue_maintenance(config):
     if backup_in_progress():
         return []
@@ -69,6 +83,9 @@ def _queue_catalogue_maintenance(config):
     if config.check_printer_data and getattr(settings, "SYNC_ORCASLICER_PRINTER_CATALOGUE", True):
         sync_orcaslicer_printer_catalogue_task.delay()
         queued.append("printer-data")
+    if config.check_filament_data:
+        enrich_filament_catalogue_task.delay(force_catalogue=True)
+        queued.append("filament-data")
     if config.check_images and getattr(settings, "SEED_CATALOGUE_IMAGES", True):
         seed_catalogue_images_task.delay(force_retry=True)
         queued.append("images")

@@ -22,7 +22,9 @@ from .catalogue_images import (
     CatalogueImageError,
     apply_catalogue_image,
     cache_catalogue_image_from_url,
+    catalogue_image_metadata,
     sanitise_uploaded_image,
+    set_catalogue_image_metadata,
 )
 from .importers import ImporterError, preview_board_url
 from .catalogue_enrichment import enrich_board
@@ -30,6 +32,9 @@ from .catalogue_coverage import catalogue_coverage_summary
 from .filament_catalogue import (
     FilamentCatalogueError,
     get_spoolmandb_item,
+    match_filament_catalogue_candidates,
+    apply_catalogue_match_to_filament,
+    unmatch_filament_catalogue,
     search_spoolmandb,
     spoolmandb_meta,
 )
@@ -2124,18 +2129,22 @@ def _catalogue_image_response(request, obj, permission, serializer, response_key
     if request.method == "DELETE":
         if obj.image:
             obj.image.delete(save=False)
-        specs = dict(obj.specifications or {})
+        metadata, metadata_field = catalogue_image_metadata(obj)
         for key in [
             "external_image_url", "image_source_url", "image_source_type", "image_cached_at",
             "image_source_provider", "image_source_page", "image_source_query",
             "image_license", "image_author", "auto_image_seeded", "auto_image_seeded_at",
         ]:
-            specs.pop(key, None)
+            metadata.pop(key, None)
         # A deliberate removal is respected by the automatic seeder.
-        specs["auto_image_opt_out"] = True
-        obj.specifications = specs
+        metadata["auto_image_opt_out"] = True
+        if metadata_field:
+            set_catalogue_image_metadata(obj, metadata)
         obj.image = None
-        obj.save()
+        update_fields = ["image", "updated_at"]
+        if metadata_field:
+            update_fields.append(metadata_field)
+        obj.save(update_fields=update_fields)
         return JsonResponse({response_key: serializer(obj)})
 
     try:
@@ -3702,6 +3711,7 @@ def _serialise_catalogue_maintenance(config):
         "interval_hours": config.interval_hours,
         "check_board_data": config.check_board_data,
         "check_printer_data": config.check_printer_data,
+        "check_filament_data": config.check_filament_data,
         "check_images": config.check_images,
         "last_run_at": config.last_run_at.isoformat() if config.last_run_at else "",
         "next_run_at": config.next_run_at.isoformat() if config.next_run_at else "",
@@ -3741,6 +3751,8 @@ def catalogue_maintenance_settings(request):
             config.check_board_data = bool(payload["check_board_data"])
         if "check_printer_data" in payload:
             config.check_printer_data = bool(payload["check_printer_data"])
+        if "check_filament_data" in payload:
+            config.check_filament_data = bool(payload["check_filament_data"])
         if "check_images" in payload:
             config.check_images = bool(payload["check_images"])
         if "interval_hours" in payload:
@@ -3965,6 +3977,12 @@ def _estimated_spool_material_cost(spool, used_g, waste_g):
 def _serialise_spool(spool):
     filament = spool.filament
     maker = filament.filament_manufacturer or filament.manufacturer
+    filament_profile = dict(filament.profile_data or {})
+    filament_provenance = dict(filament_profile.get("catalogue_provenance") or {})
+    catalogue_matched = bool(
+        (filament.source and filament.source.source_type == "spoolmandb")
+        or filament_provenance.get("external_id")
+    )
     placement = ""
     placement_type = ""
     if spool.assigned_printer_id:
@@ -3982,6 +4000,12 @@ def _serialise_spool(spool):
         "rfid_uid": spool.rfid_uid,
         "filament": str(filament),
         "filament_id": str(filament.id),
+        "catalogue_matched": catalogue_matched,
+        "catalogue_external_id": filament_provenance.get("external_id") or (
+            filament.source.external_id
+            if filament.source and filament.source.source_type == "spoolmandb"
+            else ""
+        ),
         "manufacturer": maker.name if maker else "",
         "material": filament.material,
         "color_name": filament.color_name,
@@ -4220,30 +4244,36 @@ def _printing_analytics(owner):
         currency=default_currency
     ).exclude(material_cost=None).count()
 
+    printer_buckets = {}
+    for job in PrintJob.objects.filter(owner=owner).select_related("printer"):
+        settings_payload = job.settings if isinstance(job.settings, dict) else {}
+        snapshot = settings_payload.get("printer_snapshot") if isinstance(settings_payload.get("printer_snapshot"), dict) else {}
+        printer_id = str(job.printer_id) if job.printer_id else str(snapshot.get("id") or "deleted")
+        printer_name = job.printer.name if job.printer else str(snapshot.get("name") or "Deleted printer")
+        key = (printer_id, printer_name)
+        bucket = printer_buckets.setdefault(key, {
+            "printer_id": printer_id,
+            "printer": printer_name,
+            "jobs": 0,
+            "successes": 0,
+            "failures": 0,
+            "actual_minutes": 0,
+        })
+        bucket["jobs"] += 1
+        bucket["successes"] += int(job.status == "success")
+        bucket["failures"] += int(job.status == "failed")
+        bucket["actual_minutes"] += int(job.actual_minutes or 0)
+
     printer_rows = []
-    for row in (
-        PrintJob.objects.filter(owner=owner).values("printer_id", "printer__name")
-        .annotate(
-            jobs=Count("id"),
-            successes=Count("id", filter=Q(status="success")),
-            failures=Count("id", filter=Q(status="failed")),
-            actual_minutes=Sum("actual_minutes"),
-        )
-        .order_by("-jobs", "printer__name")
-    ):
-        printer_completed = int(row["successes"] or 0) + int(row["failures"] or 0)
+    for row in sorted(printer_buckets.values(), key=lambda value: (-value["jobs"], value["printer"].casefold())):
+        printer_completed = row["successes"] + row["failures"]
         printer_rows.append({
-            "printer_id": str(row["printer_id"]),
-            "printer": row["printer__name"],
-            "jobs": int(row["jobs"] or 0),
-            "successes": int(row["successes"] or 0),
-            "failures": int(row["failures"] or 0),
+            **row,
             "success_rate": (
-                round((int(row["successes"] or 0) / printer_completed) * 100, 1)
+                round((row["successes"] / printer_completed) * 100, 1)
                 if printer_completed
                 else None
             ),
-            "actual_minutes": int(row["actual_minutes"] or 0),
         })
 
     return {
@@ -4275,13 +4305,14 @@ def _serialise_print_job(job):
     total_cost = sum(costs, Decimal("0")) if costs else None
     settings_payload = job.settings if isinstance(job.settings, dict) else {}
     live_meta = settings_payload.get("live_monitor") if isinstance(settings_payload.get("live_monitor"), dict) else {}
+    printer_snapshot = settings_payload.get("printer_snapshot") if isinstance(settings_payload.get("printer_snapshot"), dict) else {}
     return {
         "id": str(job.id),
         "status": job.status,
         "status_label": job.get_status_display(),
         "quantity": job.quantity,
-        "printer_id": str(job.printer_id),
-        "printer": job.printer.name,
+        "printer_id": str(job.printer_id) if job.printer_id else printer_snapshot.get("id"),
+        "printer": job.printer.name if job.printer else str(printer_snapshot.get("name") or "Deleted printer"),
         "project_id": str(job.project_id) if job.project_id else None,
         "project": job.project.name if job.project else "",
         "model_revision_id": str(job.model_revision_id) if job.model_revision_id else None,
@@ -4415,6 +4446,9 @@ def printing_overview(request):
 
 
 def _serialise_filament_product(filament):
+    image_metadata = dict(filament.image_metadata or {})
+    profile = dict(filament.profile_data or {})
+    provenance = dict(profile.get("catalogue_provenance") or {})
     return {
         "id": str(filament.id),
         "name": filament.name,
@@ -4445,6 +4479,32 @@ def _serialise_filament_product(filament):
         "bed_temp_max_c": filament.bed_temp_max_c,
         "drying_temp_c": filament.drying_temp_c,
         "drying_time_hours": _float(filament.drying_time_hours),
+        "image": _image_url(filament),
+        "image_cached": bool(filament.image),
+        "image_source_url": image_metadata.get("image_source_url") or image_metadata.get("external_image_url") or "",
+        "image_source_page": image_metadata.get("image_source_page") or provenance.get("product_url") or "",
+        "image_source_provider": image_metadata.get("image_source_provider") or "",
+        "image_license": image_metadata.get("image_license") or "",
+        "image_author": image_metadata.get("image_author") or "",
+        "spool_type": provenance.get("spool_type") or profile.get("spool_type") or "",
+        "is_refill": bool(provenance.get("is_refill", False)),
+        "country_of_origin": provenance.get("country_of_origin") or "",
+        "product_url": provenance.get("product_url") or "",
+        "tds_url": provenance.get("tds_url") or "",
+        "sds_url": provenance.get("sds_url") or "",
+        "codes": provenance.get("codes") or [],
+        "eans": provenance.get("eans") or [],
+        "eans_refill": provenance.get("eans_refill") or [],
+        "catalogue_matched": bool(
+            (filament.source and filament.source.source_type == "spoolmandb")
+            or provenance.get("external_id")
+        ),
+        "catalogue_external_id": provenance.get("external_id") or (
+            filament.source.external_id
+            if filament.source and filament.source.source_type == "spoolmandb"
+            else ""
+        ),
+        "catalogue_match_restorable": isinstance(profile.get("catalogue_match_restore"), dict),
         "source": filament.source.name if filament.source else "Manual",
         "source_type": filament.source.source_type if filament.source else "manual",
         "source_url": filament.source.url if filament.source else "",
@@ -4521,9 +4581,6 @@ def printing_filament_detail(request, filament_id):
         except ProtectedError:
             return _error("This filament product is still used by one or more spools.", status=409)
 
-    denied = _require_permission(request, "core.change_filamentproduct")
-    if denied:
-        return denied
     try:
         payload = _read_json(request)
         if any(key in payload for key in ["filament_manufacturer_id", "manufacturer_name", "manufacturer_id"]):
@@ -4547,11 +4604,108 @@ def printing_filament_detail(request, filament_id):
         for field in ["nozzle_temp_min_c", "nozzle_temp_max_c", "bed_temp_min_c", "bed_temp_max_c", "drying_temp_c"]:
             if field in payload:
                 setattr(item, field, payload.get(field) or None)
+
+        technical_fields = {
+            "density_g_cm3", "nozzle_temp_min_c", "nozzle_temp_max_c",
+            "bed_temp_min_c", "bed_temp_max_c", "drying_temp_c", "drying_time_hours",
+        }
+        manually_changed = sorted(technical_fields.intersection(payload))
+        if manually_changed:
+            profile = dict(item.profile_data or {})
+            sources = dict(profile.get("technical_field_sources") or {})
+            now = timezone.now().isoformat()
+            for field in manually_changed:
+                sources[field] = {
+                    "source": "user",
+                    "provider": "MakerVault user",
+                    "kind": "manual",
+                    "priority": 0,
+                    "checked_at": now,
+                }
+            profile["technical_field_sources"] = sources
+            item.profile_data = profile
+
         item.full_clean()
         item.save()
         return JsonResponse({"item": _serialise_filament_product(item)})
     except ValidationError as exc:
         return _validation_response(exc)
+
+
+@login_required
+@require_http_methods(["GET", "POST", "DELETE"])
+def printing_filament_catalogue_match(request, filament_id):
+    item = FilamentProduct.objects.select_related(
+        "manufacturer", "filament_manufacturer", "source"
+    ).filter(pk=filament_id).first()
+    if not item:
+        return _error("Filament product not found.", status=404)
+
+    if request.method == "GET":
+        try:
+            candidates = match_filament_catalogue_candidates(item, limit=10)
+            return JsonResponse({
+                "filament": _serialise_filament_product(item),
+                "candidates": candidates,
+            })
+        except FilamentCatalogueError as exc:
+            return _error(str(exc), status=502)
+
+    denied = _require_permission(request, "core.change_filamentproduct")
+    if denied:
+        return denied
+
+    if request.method == "DELETE":
+        result = unmatch_filament_catalogue(item)
+        item = FilamentProduct.objects.select_related(
+            "manufacturer", "filament_manufacturer", "source"
+        ).get(pk=item.pk)
+        return JsonResponse({
+            "item": _serialise_filament_product(item),
+            "unmatched": True,
+            "restored": result["restored"],
+            "changed_fields": result["changed_fields"],
+        })
+
+    try:
+        payload = _read_json(request)
+        external_id = str(payload.get("external_id") or "").strip()
+        if not external_id:
+            return _error("Choose a catalogue filament match.")
+        result = apply_catalogue_match_to_filament(item, external_id)
+        item = FilamentProduct.objects.select_related(
+            "manufacturer", "filament_manufacturer", "source"
+        ).get(pk=item.pk)
+        return JsonResponse({
+            "item": _serialise_filament_product(item),
+            "match": {
+                "external_id": result["row"]["external_id"],
+                "manufacturer": result["row"]["manufacturer"],
+                "name": result["row"]["name"],
+                "changed_fields": result["changed_fields"],
+                "manufacturer_enrichment": result["authoritative"],
+            },
+        })
+    except FilamentCatalogueError as exc:
+        return _error(str(exc), status=502)
+    except ValidationError as exc:
+        return _validation_response(exc)
+    except (ValueError, IntegrityError) as exc:
+        return _error(str(exc))
+
+
+@login_required
+@require_http_methods(["POST", "DELETE"])
+def printing_filament_image(request, filament_id):
+    item = FilamentProduct.objects.select_related(
+        "manufacturer", "filament_manufacturer", "source"
+    ).filter(pk=filament_id).first()
+    if not item:
+        return _error("Filament product not found.", status=404)
+    return _catalogue_image_response(
+        request, item, "core.change_filamentproduct",
+        _serialise_filament_product, "filament",
+    )
 
 
 @login_required
@@ -4604,11 +4758,13 @@ def printing_filament_catalogue_import(request):
         manufacturer, _ = FilamentManufacturer.objects.get_or_create(
             name=data["manufacturer"] or "Generic"
         )
+        source_type = str(data.get("source_type") or "spoolmandb").strip() or "spoolmandb"
+        source_name = str(data.get("source_name") or "SpoolmanDB").strip() or "SpoolmanDB"
         source, _ = CatalogSource.objects.update_or_create(
-            source_type="spoolmandb",
+            source_type=source_type,
             external_id=data["external_id"],
             defaults={
-                "name": f"SpoolmanDB — {data['manufacturer']} — {data['name']}"[:200],
+                "name": f"{source_name} — {data['manufacturer']} — {data['name']}"[:200],
                 "url": data["source_url"],
                 "raw_metadata": {
                     "license": data["source_license"],
@@ -4653,12 +4809,27 @@ def printing_filament_catalogue_import(request):
             "nozzle_temp_max_c": data["nozzle_temp_max_c"],
             "bed_temp_min_c": data["bed_temp_min_c"],
             "bed_temp_max_c": data["bed_temp_max_c"],
+            "drying_temp_c": data.get("drying_temp_c"),
+            "drying_time_hours": _catalogue_decimal(data.get("drying_time_hours"), "drying_time_hours", 2),
             "profile_data": {
-                "source": "SpoolmanDB",
+                "source": source_name,
                 "source_license": data["source_license"],
                 "external_catalogue_id": data["external_id"],
                 "spool_type": data["spool_type"],
                 "raw_color_hexes": data["color_hexes"],
+                "catalogue_provenance": {
+                    "catalogue": source_name,
+                    "external_id": data["external_id"],
+                    "spool_type": data["spool_type"],
+                    "is_refill": data.get("is_refill", False),
+                    "country_of_origin": data.get("country_of_origin", ""),
+                    "product_url": data.get("product_url", ""),
+                    "tds_url": data.get("tds_url", ""),
+                    "sds_url": data.get("sds_url", ""),
+                    "codes": data.get("codes", []),
+                    "eans": data.get("eans", []),
+                    "eans_refill": data.get("eans_refill", []),
+                },
             },
         }
 
@@ -4872,11 +5043,37 @@ def printing_printer_detail(request, printer_id):
         denied = _require_permission(request, "core.delete_printer")
         if denied:
             return denied
-        try:
+
+        active_history = item.print_jobs.filter(status="printing").exists()
+        live_printing = any(
+            str((connection.last_snapshot or {}).get("state") or "").strip().casefold()
+            in {"printing", "paused", "pausing", "resuming"}
+            for connection in item.live_connections.all()
+            if connection.enabled
+        )
+        if active_history or live_printing:
+            return _error(
+                "This printer is currently printing. Stop or finish the active print before deleting it.",
+                status=409,
+            )
+
+        with transaction.atomic():
+            for job in item.print_jobs.select_for_update():
+                settings_payload = dict(job.settings or {})
+                settings_payload["printer_snapshot"] = {
+                    "id": str(item.id),
+                    "name": item.name,
+                    "manufacturer": (
+                        item.printer_manufacturer.name
+                        if item.printer_manufacturer
+                        else item.manufacturer.name if item.manufacturer else ""
+                    ),
+                    "model": item.model,
+                }
+                job.settings = settings_payload
+                job.save(update_fields=["settings", "updated_at"])
             item.delete()
-            return JsonResponse({"deleted": True})
-        except ProtectedError:
-            return _error("This printer is referenced by print history and cannot be deleted.", status=409)
+        return JsonResponse({"deleted": True})
 
     denied = _require_permission(request, "core.change_printer")
     if denied:
@@ -5507,6 +5704,118 @@ def printing_slot_add_to_inventory(request, slot_id):
         return _error("MakerVault could not create or link the detected spool; please retry.")
 
 
+
+
+def _spool_catalogue_match_plan(owner):
+    spool_rows = list(
+        Spool.objects.filter(owner=owner)
+        .values("filament_id")
+        .annotate(spool_count=Count("id"))
+    )
+    counts = {row["filament_id"]: int(row["spool_count"]) for row in spool_rows}
+    if not counts:
+        return {"review": [], "already_matched": 0, "unmatched": 0}
+
+    filaments = FilamentProduct.objects.filter(pk__in=counts).select_related(
+        "manufacturer", "filament_manufacturer", "source"
+    )
+    review = []
+    already_matched = 0
+    unmatched = 0
+    for filament in filaments:
+        profile = dict(filament.profile_data or {})
+        provenance = dict(profile.get("catalogue_provenance") or {})
+        source_type = getattr(filament.source, "source_type", "") if filament.source_id else ""
+        if source_type == "spoolmandb" or provenance.get("external_id"):
+            already_matched += 1
+            continue
+
+        unmatched += 1
+        candidates = match_filament_catalogue_candidates(filament, limit=10)
+        exact = [row for row in candidates if int(row.get("match_score") or 0) == 100]
+        review.append({
+            "filament": _serialise_filament_product(filament),
+            "spool_count": counts.get(filament.pk, 0),
+            "candidates": candidates,
+            "top_score": int(candidates[0]["match_score"]) if candidates else 0,
+            "unique_exact": len(exact) == 1,
+            "ambiguous_exact": len(exact) > 1,
+            "exact_external_id": exact[0]["external_id"] if len(exact) == 1 else "",
+        })
+
+    review.sort(key=lambda row: (
+        -int(row["top_score"]),
+        (row["filament"].get("manufacturer") or "").casefold(),
+        (row["filament"].get("name") or "").casefold(),
+    ))
+    return {
+        "review": review,
+        "already_matched": already_matched,
+        "unmatched": unmatched,
+    }
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def printing_spool_catalogue_matches(request):
+    denied = _require_permission(request, "core.change_filamentproduct")
+    if denied:
+        return denied
+
+    try:
+        plan = _spool_catalogue_match_plan(request.user)
+    except FilamentCatalogueError as exc:
+        return _error(str(exc), status=502)
+
+    if request.method == "GET":
+        return JsonResponse({
+            **plan,
+            "auto_matched": [],
+            "auto_matched_count": 0,
+        })
+
+    auto_matched = []
+    errors = []
+    for row in list(plan["review"]):
+        if not row["unique_exact"]:
+            continue
+        filament_id = row["filament"]["id"]
+        filament = FilamentProduct.objects.select_related(
+            "manufacturer", "filament_manufacturer", "source"
+        ).filter(pk=filament_id).first()
+        if not filament:
+            continue
+        try:
+            result = apply_catalogue_match_to_filament(filament, row["exact_external_id"])
+            filament.refresh_from_db()
+            auto_matched.append({
+                "filament": _serialise_filament_product(filament),
+                "spool_count": row["spool_count"],
+                "match": {
+                    "external_id": result["row"]["external_id"],
+                    "manufacturer": result["row"]["manufacturer"],
+                    "name": result["row"]["name"],
+                    "score": 100,
+                },
+            })
+        except (FilamentCatalogueError, ValidationError, ValueError, IntegrityError) as exc:
+            errors.append({
+                "filament_id": filament_id,
+                "filament": row["filament"].get("display_name") or row["filament"].get("name"),
+                "error": str(exc),
+            })
+
+    try:
+        remaining = _spool_catalogue_match_plan(request.user)
+    except FilamentCatalogueError as exc:
+        return _error(str(exc), status=502)
+
+    return JsonResponse({
+        **remaining,
+        "auto_matched": auto_matched,
+        "auto_matched_count": len(auto_matched),
+        "errors": errors,
+    })
 
 
 @login_required
@@ -6312,6 +6621,7 @@ def public_config(request):
             "change_file": request.user.has_perm("core.change_fileasset"),
             "add_printer": request.user.has_perm("core.add_printer"),
             "change_printer": request.user.has_perm("core.change_printer"),
+            "delete_printer": request.user.has_perm("core.delete_printer"),
             "add_printing_location": request.user.has_perm("core.add_printinglocation"),
             "change_printing_location": request.user.has_perm("core.change_printinglocation"),
             "add_filament": request.user.has_perm("core.add_filamentproduct"),
