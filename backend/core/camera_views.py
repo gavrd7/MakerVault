@@ -10,7 +10,7 @@ from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_http_methods
 
 from .api_views import _error, _read_json, _require_permission
-from .camera_relay import CameraRelayError, relay_offer
+from .camera_relay import CameraRelayError, hls_master, hls_resource
 from .models import PrinterConnection
 from .printer_cameras import CameraError, discover_result, frame, negotiate, normalise_source, sources, provider_info, setup_presets
 
@@ -165,25 +165,113 @@ def camera_discover(request, printer_id, connection_id):
         return _error(str(exc) if isinstance(exc, CameraError) else "Camera discovery returned an unsupported response.", 502)
 
 
-@login_required
-@require_http_methods(["POST"])
-def camera_relay(request, printer_id, connection_id, camera_id):
+def _hls_session_key(user_id, connection_id, camera_id, session_id):
+    return f"camera-hls:{user_id}:{connection_id}:{camera_id}:{session_id}"
+
+
+def _hls_camera(request, printer_id, connection_id, camera_id):
     connection = connection_for(request, printer_id, connection_id)
     if not connection:
-        return _error("Printer source not found.", 404)
+        return None, None, _error("Printer source not found.", 404)
     if not connection.enabled:
-        return _error("This printer source is disabled.", 409)
+        return None, None, _error("This printer source is disabled.", 409)
     source = next((item for item in sources(connection) if item["id"] == camera_id), None)
     if not source:
-        return _error("Camera source not found.", 404)
+        return None, None, _error("Camera source not found.", 404)
     if source.get("mode") != "creality_webrtc":
-        return _error("This camera source does not use the compatibility relay.", 400)
-    if request.META.get("CONTENT_LENGTH", "0").isdigit() and int(request.META.get("CONTENT_LENGTH", "0")) > 70000:
-        return _error("Camera offer is too large.", 413)
+        return None, None, _error("This camera source does not use the protected K2 relay.", 400)
+    return connection, source, None
+
+
+def _playlist_session_ids(text):
+    ids = []
+    for line in text.replace("\r\n", "\n").split("\n"):
+        if line.startswith("#") or "id=" not in line:
+            continue
+        query = line.split("?", 1)[1] if "?" in line else ""
+        for part in query.split("&"):
+            if part.startswith("id="):
+                value = part[3:]
+                if value and len(value) <= 128 and all(ch.isalnum() or ch in "_-" for ch in value):
+                    ids.append(value)
+    return ids
+
+
+def _rewrite_hls_playlist(text, expected_resource=None):
+    rewritten = []
+    for line in text.replace("\r\n", "\n").split("\n"):
+        if not line or line.startswith("#"):
+            rewritten.append(line)
+            continue
+        query = line.split("?", 1)[1] if "?" in line else ""
+        session_id = ""
+        for part in query.split("&"):
+            if part.startswith("id="):
+                session_id = part[3:]
+                break
+        if not session_id:
+            rewritten.append(line)
+            continue
+        if expected_resource:
+            resource = expected_resource
+        else:
+            resource = line.split("?", 1)[0].rstrip("/").split("/")[-1]
+            if resource not in {"playlist.m3u8", "init.mp4", "segment.m4s", "segment.ts"}:
+                rewritten.append(line)
+                continue
+        rewritten.append(f"{resource}?id={session_id}")
+    return "\n".join(rewritten)
+
+
+@login_required
+@require_http_methods(["GET"])
+def camera_hls_master(request, printer_id, connection_id, camera_id):
+    connection, _source, error = _hls_camera(request, printer_id, connection_id, camera_id)
+    if error:
+        return private_response(error)
     try:
-        with camera_slot(request.user.pk):
-            answer = relay_offer(request, connection.pk, camera_id, _read_json(request).get("sdp"))
-        return private_response(JsonResponse(answer))
+        playlist = hls_master(connection.pk, camera_id)
+        session_ids = _playlist_session_ids(playlist)
+        if not session_ids:
+            raise CameraRelayError("The camera relay did not create an HLS session.")
+        for session_id in session_ids:
+            cache.set(
+                _hls_session_key(request.user.pk, connection.pk, camera_id, session_id),
+                True,
+                timeout=120,
+            )
+        response = HttpResponse(
+            _rewrite_hls_playlist(playlist, expected_resource="playlist.m3u8"),
+            content_type="application/vnd.apple.mpegurl",
+        )
+        return private_response(response)
+    except (CameraRelayError, CameraError, ValidationError, TypeError, ValueError) as exc:
+        message = str(exc) if isinstance(exc, (CameraRelayError, CameraError)) else "Invalid camera relay request."
+        return private_response(_error(message, 502))
+
+
+@login_required
+@require_http_methods(["GET"])
+def camera_hls_resource(request, printer_id, connection_id, camera_id, resource):
+    connection, _source, error = _hls_camera(request, printer_id, connection_id, camera_id)
+    if error:
+        return private_response(error)
+    session_id = str(request.GET.get("id") or "")
+    key = _hls_session_key(request.user.pk, connection.pk, camera_id, session_id)
+    try:
+        if not session_id or cache.get(key) is not True:
+            return private_response(_error("Camera relay session expired. Reconnect the camera.", 403))
+        cache.set(key, True, timeout=120)
+        data, content_type = hls_resource(session_id, resource)
+        if resource == "playlist.m3u8":
+            try:
+                text = data.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise CameraRelayError("The camera relay returned an invalid HLS playlist.") from exc
+            data = _rewrite_hls_playlist(text).encode("utf-8")
+            content_type = "application/vnd.apple.mpegurl"
+        response = HttpResponse(data, content_type=content_type)
+        return private_response(response)
     except (CameraRelayError, CameraError, ValidationError, TypeError, ValueError) as exc:
         message = str(exc) if isinstance(exc, (CameraRelayError, CameraError)) else "Invalid camera relay request."
         return private_response(_error(message, 502))
