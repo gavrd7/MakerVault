@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import ipaddress
+import json
 import os
-import socket
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote
 
 import requests
 from django.conf import settings
@@ -13,10 +12,18 @@ from django.conf import settings
 
 GO2RTC_API = os.environ.get("MAKERVAULT_CAMERA_RELAY_API", "http://127.0.0.1:1984").rstrip("/")
 BRIDGE_PORT = int(os.environ.get("MAKERVAULT_CAMERA_RELAY_BRIDGE_PORT", "1985"))
-MEDIA_PORT = int(os.environ.get("MAKERVAULT_CAMERA_RELAY_PORT", "8555"))
 
 _SESSION = requests.Session()
 _SESSION.trust_env = False
+
+_PLAYLIST_MAX_BYTES = 512 * 1024
+_SEGMENT_MAX_BYTES = 16 * 1024 * 1024
+_HLS_RESOURCES = {
+    "playlist.m3u8": _PLAYLIST_MAX_BYTES,
+    "init.mp4": _SEGMENT_MAX_BYTES,
+    "segment.m4s": _SEGMENT_MAX_BYTES,
+    "segment.ts": _SEGMENT_MAX_BYTES,
+}
 
 
 class CameraRelayError(ValueError):
@@ -64,95 +71,69 @@ def ensure_stream(connection_id, camera_id: str) -> str:
     return name
 
 
-def _request_candidate_host(request) -> str:
-    override = os.environ.get("MAKERVAULT_CAMERA_RELAY_CANDIDATE", "").strip()
-    if override:
-        return override.strip("[]")
-
-    raw_host = request.get_host()
-    hostname = urlsplit(f"//{raw_host}").hostname or ""
-    if not hostname:
-        raise CameraRelayError("MakerVault could not determine the camera relay address.")
-
+def _bounded_get(path: str, *, params=None, max_bytes: int, timeout=(2, 20)):
     try:
-        ipaddress.ip_address(hostname)
-        return hostname
-    except ValueError:
-        pass
-
-    try:
-        answers = socket.getaddrinfo(hostname, MEDIA_PORT, type=socket.SOCK_STREAM)
-    except OSError as exc:
-        raise CameraRelayError(
-            "Set MAKERVAULT_CAMERA_RELAY_CANDIDATE to the LAN/VPN address clients use for MakerVault."
-        ) from exc
-
-    for answer in answers:
-        candidate = answer[4][0]
-        try:
-            ip = ipaddress.ip_address(candidate)
-        except ValueError:
-            continue
-        if not ip.is_loopback and not ip.is_unspecified:
-            return candidate
-
-    raise CameraRelayError(
-        "Set MAKERVAULT_CAMERA_RELAY_CANDIDATE to the LAN/VPN address clients use for MakerVault."
-    )
-
-
-def rewrite_answer_candidates(sdp: str, request) -> str:
-    host = _request_candidate_host(request)
-    port = str(MEDIA_PORT)
-    rewritten = []
-    for line in sdp.replace("\r\n", "\n").split("\n"):
-        if line.startswith("a=candidate:"):
-            fields = line.split(" ")
-            if len(fields) >= 6 and fields[4] in {"127.0.0.1", "::1"}:
-                fields[4] = host
-                fields[5] = port
-                line = " ".join(fields)
-        rewritten.append(line)
-    return "\r\n".join(rewritten).rstrip("\r\n") + "\r\n"
-
-
-def relay_offer(request, connection_id, camera_id: str, offer: str) -> dict:
-    if (
-        not isinstance(offer, str)
-        or len(offer) > 65536
-        or not offer.startswith("v=0")
-        or "m=video " not in offer
-        or "m=application " in offer
-    ):
-        raise CameraRelayError("Provide a bounded video WebRTC offer.")
-
-    name = ensure_stream(connection_id, camera_id)
-    try:
-        response = _SESSION.post(
-            f"{GO2RTC_API}/api/webrtc",
-            params={"src": name},
-            json={"type": "offer", "sdp": offer},
-            timeout=(2, 20),
+        response = _SESSION.get(
+            f"{GO2RTC_API}{path}",
+            params=params or {},
+            timeout=timeout,
             allow_redirects=False,
+            stream=True,
         )
     except requests.RequestException as exc:
-        raise CameraRelayError("The camera compatibility relay could not negotiate video.") from exc
+        raise CameraRelayError("The camera compatibility relay is unavailable.") from exc
 
     if response.status_code < 200 or response.status_code >= 300:
-        raise CameraRelayError("The camera compatibility relay rejected the video session.")
+        status = response.status_code
+        response.close()
+        raise CameraRelayError(f"The camera compatibility relay returned HTTP {status}.")
 
+    declared = response.headers.get("Content-Length")
+    if declared and declared.isdigit() and int(declared) > max_bytes:
+        response.close()
+        raise CameraRelayError("The camera relay response exceeded MakerVault's safety limit.")
+
+    chunks = []
+    total = 0
     try:
-        answer = response.json()
-    except ValueError as exc:
-        raise CameraRelayError("The camera compatibility relay returned an invalid response.") from exc
+        for chunk in response.iter_content(chunk_size=64 * 1024):
+            if not chunk:
+                continue
+            total += len(chunk)
+            if total > max_bytes:
+                raise CameraRelayError("The camera relay response exceeded MakerVault's safety limit.")
+            chunks.append(chunk)
+        content_type = response.headers.get("Content-Type", "application/octet-stream").split(";", 1)[0].strip()
+        return b"".join(chunks), content_type
+    finally:
+        response.close()
 
-    if (
-        not isinstance(answer, dict)
-        or answer.get("type") != "answer"
-        or not isinstance(answer.get("sdp"), str)
-        or not answer["sdp"].startswith("v=0")
-        or len(answer["sdp"]) > 65536
-    ):
-        raise CameraRelayError("The camera compatibility relay returned an invalid WebRTC answer.")
 
-    return {"type": "answer", "sdp": rewrite_answer_candidates(answer["sdp"], request)}
+def hls_master(connection_id, camera_id: str) -> str:
+    """Create/refresh the protected K2 source and return go2rtc's HLS/fMP4 master playlist."""
+    name = ensure_stream(connection_id, camera_id)
+    data, _content_type = _bounded_get(
+        "/api/stream.m3u8",
+        params={"src": name, "mp4": ""},
+        max_bytes=_PLAYLIST_MAX_BYTES,
+    )
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise CameraRelayError("The camera relay returned an invalid HLS playlist.") from exc
+    if not text.startswith("#EXTM3U"):
+        raise CameraRelayError("The camera relay returned an invalid HLS playlist.")
+    return text
+
+
+def hls_resource(session_id: str, resource: str):
+    """Fetch a bounded HLS resource from the loopback-only go2rtc API."""
+    if resource not in _HLS_RESOURCES:
+        raise CameraRelayError("Unsupported camera relay resource.")
+    if not session_id or len(session_id) > 128 or not all(ch.isalnum() or ch in "_-" for ch in session_id):
+        raise CameraRelayError("Invalid camera relay session.")
+    return _bounded_get(
+        f"/api/hls/{resource}",
+        params={"id": session_id},
+        max_bytes=_HLS_RESOURCES[resource],
+    )
