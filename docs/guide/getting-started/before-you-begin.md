@@ -4,17 +4,20 @@
 
 ## What you need
 
-A computer that can stay on while you use MakerVault, reliable storage, an internet connection for installation and a modern web browser. A Debian or Ubuntu Linux server is the primary walkthrough in this guide. It can be a spare PC or a virtual machine. Keep enough spare disk space for the database, uploaded files, Docker images and backups; model files and retained versions can grow quickly. Extra temporary space is needed if you choose to build MakerVault locally.
+A computer that can stay on while you use MakerVault, reliable storage, an internet connection for installation and a modern web browser. A Debian or Ubuntu Linux server remains the primary always-on server walkthrough, but Windows users can also run MakerVault through Docker Desktop or WSL2. Keep enough spare disk space for the database, uploaded files, Docker images and backups; model files and retained versions can grow quickly. Extra temporary space is needed if you choose to build MakerVault locally.
 
 The project does not yet publish a measured minimum RAM/CPU requirement or a fully tested NAS/ARM compatibility matrix. Do not treat a particular Raspberry Pi or NAS as validated just because it can run Docker.
 
 | Host | Route |
 | --- | --- |
-| Debian / Ubuntu | Follow this guide and the linked official Docker installation for your exact OS release |
-| Windows / macOS | Docker Desktop supplies Docker and Compose; shell paths and permissions differ from this Linux walkthrough |
-| NAS / Portainer | The pre-built GHCR image removes the need to compile MakerVault, but Compose paths, permissions and storage still need adapting to that platform |
+| Debian / Ubuntu | Preferred for an always-on server. Follow the [Linux installation guide](install.md) and Docker's instructions for your exact OS release. |
+| Windows + Docker Desktop | Easiest Windows route. Docker Desktop supplies Docker Engine and Compose, normally using its WSL2 backend. Follow the [Windows installation guide](windows.md). |
+| Windows + Docker Desktop WSL integration | Good for users who prefer Linux commands while retaining Docker Desktop as the engine. Follow the [Windows installation guide](windows.md#option-b-docker-desktop-with-wsl2-integration). |
+| Windows + Docker Engine inside WSL2 | Valid for experienced users who deliberately want WSL to act as the Docker host. Follow the [direct WSL2 route](windows.md#option-c-docker-engine-directly-inside-wsl2). |
+| macOS | Docker Desktop supplies Docker and Compose; shell paths and storage differ from the Linux walkthrough. |
+| NAS / Portainer | The pre-built GHCR image removes the need to compile MakerVault, but Compose paths, permissions and storage still need adapting to that platform. |
 
-For a first installation, use the documented Linux route. You can access a Linux-hosted installation from Windows, macOS, a phone or a tablet without installing Docker on those client devices.
+A dedicated Linux host is still the simplest appliance-style deployment, but it is no longer the only documented first-install route. You can also access any MakerVault installation from Windows, macOS, a phone or a tablet without installing Docker on those client devices.
 
 ## Five useful terms
 
@@ -30,7 +33,7 @@ MakerVault uses three services: `makervault` for the app and background jobs, `p
 
 ## Where you type commands
 
-Use a terminal on the server, either directly or through SSH. Run the command blocks in order. Copy commands only, not surrounding headings. When a command uses `sudo`, it may ask for the Linux user's password; no characters appear as you type it.
+Use the terminal appropriate to your host: a Linux/WSL shell for the Linux instructions, or PowerShell/Windows Terminal for the Docker Desktop Windows route. Run the command blocks in order. Copy commands only, not surrounding headings. When a Linux command uses `sudo`, it may ask for the Linux user's password; no characters appear as you type it.
 
 `cd` changes folder. `mkdir` creates one. A filename starting with a dot, such as `.env`, is normally hidden in graphical file browsers. Commands later in this guide assume you are inside the cloned MakerVault repository. Normal installs use its deployment files while pulling the pre-built GHCR image; the same checkout can optionally be used to build from source.
 
