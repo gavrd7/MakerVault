@@ -281,9 +281,9 @@ def search_spoolmandb(*, query="", material="", manufacturer="", limit=50, offse
         "offset": offset,
         "limit": limit,
         "source": {
-            "name": "SpoolmanDB",
+            "name": "MakerVault aggregate",
             "url": "https://donkie.github.io/SpoolmanDB/",
-            "license": "MIT",
+            "license": "SpoolmanDB MIT + sourced supplements",
         },
     }
 
