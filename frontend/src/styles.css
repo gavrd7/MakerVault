@@ -2514,3 +2514,11 @@ a:focus-visible,
     justify-content: flex-start;
   }
 }
+
+.detectedSpoolColour{display:flex;align-items:center;gap:8px;margin-top:10px;color:#aeb8c7}
+.detectedSpoolColour .printingSwatch{margin:0;width:20px;height:20px}
+.detectedSpoolColour strong{font-size:11px}
+.detectedSpoolColour span:last-child{color:#8793a5;font-size:11px}
+.detectedSpoolCandidateRadio{position:absolute;opacity:0;pointer-events:none}
+.detectedSpoolSelectMark{display:grid;place-items:center;width:20px;height:20px;border:1px solid #566377;border-radius:5px;background:#121923;color:#fff;font-size:14px;font-weight:800}
+.detectedSpoolSelectMarkChecked{border-color:#8c76ff;background:#6f58e8}
