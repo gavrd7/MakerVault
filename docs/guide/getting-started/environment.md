@@ -71,7 +71,7 @@ ghcr.io/gavrd7/makervault:latest
 You normally do not need to add anything to `.env`. If you want to stay on a specific release until you deliberately upgrade, set:
 
 ```dotenv
-MAKERVAULT_IMAGE=ghcr.io/gavrd7/makervault:1.0.1
+MAKERVAULT_IMAGE=ghcr.io/gavrd7/makervault:1.0.3
 ```
 
 This setting controls only the MakerVault application image. It does not change your database or storage. Users following the build-it-yourself route use `compose.build.yaml`, which replaces the published image with a locally built one.
