@@ -1092,6 +1092,12 @@
 .printingLibraryToolbar small{margin-top:3px;color:#7f8a9c}
 .printingLibraryToolbar input{width:min(520px,50vw)}
 .printingLibraryRow{min-height:64px}
+.filamentLibraryThumb{width:54px;height:54px;flex:0 0 54px;object-fit:contain;border:1px solid #303b49;border-radius:9px;background:#f6f7f8}
+.filamentSourceLinks,.filamentCatalogueLinks{display:flex!important;gap:10px;flex-wrap:wrap;align-items:center}
+.filamentSourceLinks a,.filamentCatalogueLinks a{color:#a99cff;text-decoration:none}
+.filamentSourceLinks a:hover,.filamentCatalogueLinks a:hover{text-decoration:underline}
+.filamentCatalogueHero>img{width:100%;height:100%;object-fit:contain;background:#f6f7f8}
+.filamentCatalogueLinks{margin:2px 0 10px;font-size:12px}
 .printingLibraryActions{display:flex;gap:8px;align-items:center;justify-content:flex-end}
 .integrationAuthorityCallout{margin-top:3px}
 .integrationReviewButton{border-color:#6a5b2f;background:#211d12;color:#e8d79a}
