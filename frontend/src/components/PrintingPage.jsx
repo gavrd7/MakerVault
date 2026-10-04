@@ -1462,13 +1462,23 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
       </div>
       <div className="printingList">
         {rows.map(item => <article className={"printingListRow printingLibraryRow" + (searchTarget?.id === item.id ? " searchTargetRow" : "")} id={"filament-search-target-" + item.id} key={item.id}>
-          <span className={"printingSwatch filamentPreview-" + (item.transparency || "opaque")} style={filamentSwatchStyle(item)} />
+          {item.image
+            ? <img className="filamentLibraryThumb" src={item.image} alt="" loading="lazy" />
+            : <span className={"printingSwatch filamentPreview-" + (item.transparency || "opaque")} style={filamentSwatchStyle(item)} />}
           <div>
             <strong>{item.display_name || item.name}</strong>
             <small>{[item.manufacturer, item.material, item.color_name].filter(Boolean).join(" · ")}</small>
-            <small>{item.diameter_mm || "?"} mm · {grams(item.nominal_weight_g)} nominal · {item.source || "Manual"}</small>
+            <small>{item.diameter_mm || "?"} mm · {grams(item.nominal_weight_g)} nominal{item.density_g_cm3 ? " · " + item.density_g_cm3 + " g/cm³" : ""} · {item.source || "Manual"}</small>
+            {(item.product_url || item.tds_url || item.sds_url) && <small className="filamentSourceLinks">
+              {item.product_url && <a href={item.product_url} target="_blank" rel="noreferrer">Product</a>}
+              {item.tds_url && <a href={item.tds_url} target="_blank" rel="noreferrer">TDS</a>}
+              {item.sds_url && <a href={item.sds_url} target="_blank" rel="noreferrer">SDS</a>}
+            </small>}
           </div>
           <div className="printingBadges">
+            {item.spool_type && <Badge>{item.spool_type}</Badge>}
+            {item.is_refill && <Badge>Refill</Badge>}
+            {item.country_of_origin && <Badge>{item.country_of_origin}</Badge>}
             {item.transparency && item.transparency !== "opaque" && <Badge>{item.transparency_label || item.transparency}</Badge>}
             {item.glow && <Badge>Glow</Badge>}
             {canChangeFilament && <button type="button" onClick={() => setEditFilament(item)}>Edit</button>}
@@ -1609,6 +1619,11 @@ function FilamentEditModal({ filament, manufacturers, materials, onClose, onSave
       <div className="settingsCallout full">
         <strong>Source provenance is preserved</strong>
         <p>{filament.source || "Manual"}{filament.source_type && filament.source_type !== "manual" ? " · " + filament.source_type : ""}. Editing does not discard the original catalogue/source attribution.</p>
+        {(filament.product_url || filament.tds_url || filament.sds_url) && <div className="filamentCatalogueLinks">
+          {filament.product_url && <a href={filament.product_url} target="_blank" rel="noreferrer">Product page</a>}
+          {filament.tds_url && <a href={filament.tds_url} target="_blank" rel="noreferrer">TDS</a>}
+          {filament.sds_url && <a href={filament.sds_url} target="_blank" rel="noreferrer">SDS</a>}
+        </div>}
       </div>
       <div className="formActions full">
         <button type="button" onClick={onClose}>Cancel</button>
@@ -1891,7 +1906,9 @@ function FilamentCatalogueModal({ onClose, onImported }) {
 
         {selected && <div className="filamentCataloguePreview">
           <div className={`filamentCatalogueHero filamentPreview-${selected.transparency}`}>
-            <span style={filamentSwatchStyle(selected)} />
+            {selected.image
+              ? <img src={selected.image} alt="" loading="lazy" />
+              : <span style={filamentSwatchStyle(selected)} />}
           </div>
           <span className="settingsEyebrow">SpoolmanDB preview</span>
           <h3>{selected.manufacturer} · {selected.name}</h3>
@@ -1904,8 +1921,15 @@ function FilamentCatalogueModal({ onClose, onImported }) {
             <div><dt>Nozzle</dt><dd>{selected.nozzle_temp_min_c == null ? "—" : `${selected.nozzle_temp_min_c}–${selected.nozzle_temp_max_c} °C`}</dd></div>
             <div><dt>Bed</dt><dd>{selected.bed_temp_min_c == null ? "—" : `${selected.bed_temp_min_c}–${selected.bed_temp_max_c} °C`}</dd></div>
             <div><dt>Colour mode</dt><dd>{selected.color_hexes?.length > 1 ? `${selected.color_hexes.length}-colour ${selected.multi_color_direction || "multi-colour"}` : selected.color_hex || "—"}</dd></div>
+            <div><dt>Spool type</dt><dd>{selected.spool_type || (selected.is_refill ? "Refill" : "—")}</dd></div>
+            <div><dt>Origin</dt><dd>{selected.country_of_origin || "—"}</dd></div>
             <div><dt>Source ID</dt><dd>{selected.external_id}</dd></div>
           </dl>
+          {(selected.product_url || selected.tds_url || selected.sds_url) && <div className="filamentCatalogueLinks">
+            {selected.product_url && <a href={selected.product_url} target="_blank" rel="noreferrer">Manufacturer product page</a>}
+            {selected.tds_url && <a href={selected.tds_url} target="_blank" rel="noreferrer">Technical data sheet</a>}
+            {selected.sds_url && <a href={selected.sds_url} target="_blank" rel="noreferrer">Safety data sheet</a>}
+          </div>}
           <button className="primary" disabled={importing} onClick={importSelected}>{importing ? "Importing…" : "Import into MakerVault"}</button>
           <p className="muted">The imported record remains editable and usable without SpoolmanDB. Source provenance is retained separately.</p>
         </div>}
