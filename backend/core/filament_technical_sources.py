@@ -12,6 +12,7 @@ from django.utils import timezone
 from pypdf import PdfReader
 
 from .importers import _host_is_public
+from .model_values import fit_model_decimal
 
 
 MAX_TECHNICAL_BYTES = 12 * 1024 * 1024
@@ -284,7 +285,7 @@ def enrich_filament_from_authoritative_sources(filament, upstream_row: dict) -> 
             )
             if not may_replace:
                 continue
-            setattr(filament, field, incoming)
+            setattr(filament, field, fit_model_decimal(filament, field, incoming))
             field_sources[field] = {
                 "source": "manufacturer",
                 "provider": manufacturer,
