@@ -16,6 +16,61 @@ const STATUS = {
   archived: "Archived",
 };
 
+const PRIORITY = {
+  1: "P1",
+  2: "P2",
+  3: "P3",
+  4: "P4",
+  5: "P5",
+};
+
+const DEADLINE_FILTERS = {
+  all: "All deadlines",
+  urgent: "Needs attention",
+  overdue: "Overdue",
+  due_soon: "Due within 3 days",
+  approaching: "Due within 7 days",
+  scheduled: "Has deadline",
+  none: "No deadline",
+};
+
+function priorityRank(project) {
+  return project.priority == null ? 6 : Number(project.priority);
+}
+
+function deadlineRank(project) {
+  return {
+    overdue: 0,
+    today: 1,
+    due_soon: 2,
+    approaching: 3,
+    scheduled: 4,
+    none: 4,
+    closed: 5,
+  }[project.deadline_state] ?? 4;
+}
+
+function projectAttentionSort(a, b) {
+  const closedA = ["complete", "archived"].includes(a.status) ? 1 : 0;
+  const closedB = ["complete", "archived"].includes(b.status) ? 1 : 0;
+  if (closedA !== closedB) return closedA - closedB;
+  return deadlineRank(a) - deadlineRank(b)
+    || priorityRank(a) - priorityRank(b)
+    || String(a.due_date || "9999-12-31").localeCompare(String(b.due_date || "9999-12-31"))
+    || a.name.localeCompare(b.name);
+}
+
+function PriorityBadge({ project }) {
+  if (project.priority == null) return null;
+  return <span className={`projectPriority projectPriority-p${project.priority}`} title={project.priority_label || `Priority ${project.priority}`}>{PRIORITY[project.priority] || `P${project.priority}`}</span>;
+}
+
+function DeadlineBadge({ project }) {
+  if (!project.due_date) return null;
+  const state = project.deadline_state || "scheduled";
+  return <span className={`projectDeadline projectDeadline-${state}`}>{project.deadline_label || `Due ${project.due_date}`}</span>;
+}
+
 const FILE_CATEGORIES = {
   source: "Source code",
   firmware: "Firmware",
@@ -62,15 +117,40 @@ function money(value, currency) {
 
 export default function ProjectsPage({ projects, setProjects, config, refreshDashboard, refreshInventory, boards, components, inventory, openProjectId, onOpenConsumed }) {
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [priorityFilter, setPriorityFilter] = useState("all");
+  const [deadlineFilter, setDeadlineFilter] = useState("all");
+  const [sortMode, setSortMode] = useState("attention");
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState("");
 
-  const filtered = useMemo(() => projects.filter(project => {
-    const hay = [project.name, project.summary, project.status_label].join(" ").toLowerCase();
-    return hay.includes(search.toLowerCase());
-  }), [projects, search]);
+  const filtered = useMemo(() => {
+    const rows = projects.filter(project => {
+      const hay = [project.name, project.summary, project.status_label, project.priority_label, project.deadline_label].join(" ").toLowerCase();
+      if (!hay.includes(search.toLowerCase())) return false;
+      if (statusFilter !== "all" && project.status !== statusFilter) return false;
+      if (priorityFilter === "none" && project.priority != null) return false;
+      if (!["all", "none"].includes(priorityFilter) && Number(project.priority) !== Number(priorityFilter)) return false;
+      if (deadlineFilter === "urgent" && !["overdue", "today", "due_soon", "approaching"].includes(project.deadline_state)) return false;
+      if (deadlineFilter === "overdue" && project.deadline_state !== "overdue") return false;
+      if (deadlineFilter === "due_soon" && !["today", "due_soon"].includes(project.deadline_state)) return false;
+      if (deadlineFilter === "approaching" && !["today", "due_soon", "approaching"].includes(project.deadline_state)) return false;
+      if (deadlineFilter === "scheduled" && !project.due_date) return false;
+      if (deadlineFilter === "none" && project.due_date) return false;
+      return true;
+    });
+
+    return [...rows].sort((a, b) => {
+      if (sortMode === "priority") return priorityRank(a) - priorityRank(b) || projectAttentionSort(a, b);
+      if (sortMode === "deadline") return String(a.due_date || "9999-12-31").localeCompare(String(b.due_date || "9999-12-31")) || priorityRank(a) - priorityRank(b);
+      if (sortMode === "status") return String(a.status_label).localeCompare(String(b.status_label)) || priorityRank(a) - priorityRank(b);
+      if (sortMode === "updated") return String(b.updated_at || "").localeCompare(String(a.updated_at || ""));
+      if (sortMode === "name") return a.name.localeCompare(b.name);
+      return projectAttentionSort(a, b);
+    });
+  }, [projects, search, statusFilter, priorityFilter, deadlineFilter, sortMode]);
 
   async function openProject(project) {
     setSelected(project);
@@ -105,8 +185,28 @@ export default function ProjectsPage({ projects, setProjects, config, refreshDas
     <section className="panel projectPanel">
       <div className="panelHead panelHeadWrap">
         <div><h3>Projects</h3><p>Track builds, inventory, photos, code, firmware, fabrication files and project costs.</p></div>
-        <div className="toolbarActions">
+        <div className="toolbarActions projectToolbar">
           <input className="searchInput" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search projects…" />
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} aria-label="Filter projects by status">
+            <option value="all">All statuses</option>
+            {Object.entries(STATUS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+          <select value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)} aria-label="Filter projects by priority">
+            <option value="all">All priorities</option>
+            {[1,2,3,4,5].map(value => <option key={value} value={value}>P{value}</option>)}
+            <option value="none">No priority</option>
+          </select>
+          <select value={deadlineFilter} onChange={e => setDeadlineFilter(e.target.value)} aria-label="Filter projects by deadline">
+            {Object.entries(DEADLINE_FILTERS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+          <select value={sortMode} onChange={e => setSortMode(e.target.value)} aria-label="Sort projects">
+            <option value="attention">Sort: attention</option>
+            <option value="priority">Sort: priority</option>
+            <option value="deadline">Sort: deadline</option>
+            <option value="status">Sort: status</option>
+            <option value="updated">Sort: recently updated</option>
+            <option value="name">Sort: name</option>
+          </select>
           {config?.permissions?.add_project && <button className="primary" onClick={() => setShowCreate(true)}>＋ New project</button>}
         </div>
       </div>
@@ -117,7 +217,11 @@ export default function ProjectsPage({ projects, setProjects, config, refreshDas
             {project.cover_image ? <img src={project.cover_image} alt="" /> : <span>PROJECT</span>}
           </div>
           <div className="projectCardBody">
-            <div className="projectCardHead"><h3>{project.name}</h3><Badge tone={project.status === "active" ? "good" : project.status === "idea" ? "accent" : "neutral"}>{project.status_label}</Badge></div>
+            <div className="projectCardHead">
+              <h3>{project.name}</h3>
+              <div className="projectCardBadges"><PriorityBadge project={project} /><Badge tone={project.status === "active" ? "good" : project.status === "idea" ? "accent" : "neutral"}>{project.status_label}</Badge></div>
+            </div>
+            <div className="projectDeadlineRow"><DeadlineBadge project={project} /></div>
             <p>{project.summary || "No project summary yet."}</p>
             <div className="projectCardMeta">
               <span>{project.inventory_count || 0} inventory item(s) · {project.bom_count || 0} BOM line(s)</span>
@@ -199,7 +303,7 @@ function ProjectDetail({ project, loading, canEdit, config, boards, components, 
       </button>
 
       <div className="projectTitleActions">
-        <div className="badgeRow"><Badge tone={project.status === "active" ? "good" : project.status === "idea" ? "accent" : "neutral"}>{project.status_label}</Badge>{(project.tags || []).map(tag => <Badge key={tag}>{tag}</Badge>)}</div>
+        <div className="badgeRow"><PriorityBadge project={project} /><Badge tone={project.status === "active" ? "good" : project.status === "idea" ? "accent" : "neutral"}>{project.status_label}</Badge><DeadlineBadge project={project} />{(project.tags || []).map(tag => <Badge key={tag}>{tag}</Badge>)}</div>
         {canEdit && <div className="detailActions"><button onClick={() => setEditing(true)}>Edit</button><button onClick={() => setCoverOpen(true)}>Cover</button><button onClick={() => setGalleryOpen(true)}>＋ Photo</button><button onClick={() => setFileOpen(true)}>＋ File</button><button onClick={() => setRepositoryOpen(true)}>＋ Repository</button></div>}
       </div>
 
@@ -210,6 +314,8 @@ function ProjectDetail({ project, loading, canEdit, config, boards, components, 
         <div><span>BOM coverage</span><strong>{project.bom_summary?.line_count ? `${project.bom_summary.complete_lines}/${project.bom_summary.line_count}` : "—"}</strong></div>
         <div><span>Project files</span><strong>{project.files?.length || project.file_count || 0}</strong></div>
         <div><span>Repositories</span><strong>{project.repositories?.length || project.repository_count || 0}</strong></div>
+        <div><span>Priority</span><strong>{project.priority_label || "—"}</strong></div>
+        <div><span>Deadline</span><strong>{project.due_date || "—"}</strong></div>
         <div><span>Started</span><strong>{project.started_on || "—"}</strong></div>
         <div><span>Completed</span><strong>{project.completed_on || "—"}</strong></div>
       </div>
@@ -323,6 +429,8 @@ function ProjectFormModal({ title, project, onClose, onSaved }) {
   const [form, setForm] = useState({
     name: project?.name || "",
     status: project?.status || "idea",
+    priority: project?.priority == null ? "" : String(project.priority),
+    due_date: project?.due_date || "",
     summary: project?.summary || "",
     description: project?.description || "",
     notes: project?.notes || "",
@@ -351,6 +459,8 @@ function ProjectFormModal({ title, project, onClose, onSaved }) {
       {error && <div className="formError full">{error}</div>}
       <label className="full">Name<input required value={form.name} onChange={e => set("name", e.target.value)} /></label>
       <label>Status<select value={form.status} onChange={e => set("status", e.target.value)}>{Object.entries(STATUS).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+      <label>Priority<select value={form.priority} onChange={e => set("priority", e.target.value)}><option value="">No priority</option>{[1,2,3,4,5].map(value => <option key={value} value={value}>P{value} — {value === 1 ? "Highest" : value === 2 ? "High" : value === 3 ? "Medium" : value === 4 ? "Low" : "Lowest"}</option>)}</select></label>
+      <label>Deadline<input type="date" value={form.due_date} onChange={e => set("due_date", e.target.value)} /></label>
       <label>Tags<input value={form.tags} onChange={e => set("tags", e.target.value)} placeholder="ESP32, Home Assistant, sensor" /></label>
       <label>Started<input type="date" value={form.started_on} onChange={e => set("started_on", e.target.value)} /></label>
       <label>Completed<input type="date" value={form.completed_on} onChange={e => set("completed_on", e.target.value)} /></label>
