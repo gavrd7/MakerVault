@@ -126,6 +126,12 @@ function money(value, currency) {
   return new Intl.NumberFormat(undefined, { style: "currency", currency: currency || "GBP" }).format(Number(value || 0));
 }
 
+function localDateIso() {
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60000;
+  return new Date(now.getTime() - offset).toISOString().slice(0, 10);
+}
+
 export default function ProjectsPage({ projects, setProjects, config, refreshDashboard, refreshInventory, boards, components, inventory, openProjectId, onOpenConsumed }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -162,6 +168,40 @@ export default function ProjectsPage({ projects, setProjects, config, refreshDas
       return projectAttentionSort(a, b);
     });
   }, [projects, search, statusFilter, priorityFilter, deadlineFilter, sortMode]);
+
+  const filtersActive = Boolean(
+    search
+    || statusFilter !== "all"
+    || priorityFilter !== "all"
+    || deadlineFilter !== "all"
+    || sortMode !== "attention"
+  );
+
+  function clearFilters() {
+    setSearch("");
+    setStatusFilter("all");
+    setPriorityFilter("all");
+    setDeadlineFilter("all");
+    setSortMode("attention");
+  }
+
+  async function completeProject(project) {
+    setError("");
+    try {
+      const result = await apiFetch(`/api/projects/${project.id}/`, {
+        method: "PATCH",
+        body: {
+          status: "complete",
+          completed_on: project.completed_on || localDateIso(),
+        },
+      });
+      setProjects(rows => rows.map(row => row.id === project.id ? { ...row, ...result.project } : row));
+      setSelected(current => current?.id === project.id ? { ...current, ...result.project } : current);
+      await refreshDashboard();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
 
   async function openProject(project) {
     setSelected(project);
@@ -218,29 +258,35 @@ export default function ProjectsPage({ projects, setProjects, config, refreshDas
             <option value="updated">Sort: recently updated</option>
             <option value="name">Sort: name</option>
           </select>
+          <button type="button" onClick={clearFilters} disabled={!filtersActive}>Clear filters</button>
           {config?.permissions?.add_project && <button className="primary" onClick={() => setShowCreate(true)}>＋ New project</button>}
         </div>
       </div>
       {error && <div className="inlineError">{error}</div>}
       <div className="projectGrid">
-        {filtered.map(project => <button className="projectCard" key={project.id} onClick={() => openProject(project)}>
-          <div className="projectCardCover">
-            {project.cover_image ? <img src={project.cover_image} alt="" /> : <span>PROJECT</span>}
-          </div>
-          <div className="projectCardBody">
-            <div className="projectCardHead">
-              <h3>{project.name}</h3>
-              <div className="projectCardBadges"><PriorityBadge project={project} /><Badge tone={project.status === "active" ? "good" : project.status === "idea" ? "accent" : "neutral"}>{project.status_label}</Badge></div>
+        {filtered.map(project => <article className="projectCard" key={project.id}>
+          <button className="projectCardOpen" type="button" onClick={() => openProject(project)}>
+            <div className="projectCardCover">
+              {project.cover_image ? <img src={project.cover_image} alt="" /> : <span>PROJECT</span>}
             </div>
-            <div className="projectDeadlineRow"><DeadlineBadge project={project} /></div>
-            <p>{project.summary || "No project summary yet."}</p>
-            <div className="projectCardMeta">
-              <span>{project.inventory_count || 0} inventory item(s) · {project.bom_count || 0} BOM line(s)</span>
-              <span>{project.file_count || 0} file(s) · {project.gallery_count || 0} photo(s)</span>
-              <strong>{money(project.inventory_cost, project.currency || config?.currency)}</strong>
+            <div className="projectCardBody">
+              <div className="projectCardHead">
+                <h3>{project.name}</h3>
+                <div className="projectCardBadges"><PriorityBadge project={project} /><Badge tone={project.status === "active" ? "good" : project.status === "idea" ? "accent" : "neutral"}>{project.status_label}</Badge></div>
+              </div>
+              <div className="projectDeadlineRow"><DeadlineBadge project={project} /></div>
+              <p>{project.summary || "No project summary yet."}</p>
+              <div className="projectCardMeta">
+                <span>{project.inventory_count || 0} inventory item(s) · {project.bom_count || 0} BOM line(s)</span>
+                <span>{project.file_count || 0} file(s) · {project.gallery_count || 0} photo(s)</span>
+                <strong>{money(project.inventory_cost, project.currency || config?.currency)}</strong>
+              </div>
             </div>
-          </div>
-        </button>)}
+          </button>
+          {config?.permissions?.change_project && !["complete", "archived"].includes(project.status) && <div className="projectCardActions">
+            <button type="button" className="projectCompleteButton" onClick={() => completeProject(project)}>✓ Completed</button>
+          </div>}
+        </article>)}
         {!filtered.length && <div className="projectEmpty"><strong>No projects found.</strong><span>Create a project to start linking inventory and documenting builds.</span></div>}
       </div>
     </section>
@@ -249,6 +295,7 @@ export default function ProjectsPage({ projects, setProjects, config, refreshDas
       project={selected}
       loading={loading}
       canEdit={config?.permissions?.change_project}
+      canDelete={config?.permissions?.delete_project}
       config={config}
       boards={boards}
       components={components}
@@ -259,6 +306,12 @@ export default function ProjectsPage({ projects, setProjects, config, refreshDas
       onUpdated={project => {
         setSelected(project);
         setProjects(rows => rows.map(row => row.id === project.id ? { ...row, ...project } : row));
+      }}
+      onComplete={completeProject}
+      onDeleted={async project => {
+        setProjects(rows => rows.filter(row => row.id !== project.id));
+        setSelected(null);
+        await Promise.all([refreshDashboard(), refreshInventory()]);
       }}
     />}
 
@@ -276,7 +329,7 @@ export default function ProjectsPage({ projects, setProjects, config, refreshDas
   </div>;
 }
 
-function ProjectDetail({ project, loading, canEdit, config, boards, components, inventory, refreshInventory, onClose, onRefresh, onUpdated }) {
+function ProjectDetail({ project, loading, canEdit, canDelete, config, boards, components, inventory, refreshInventory, onClose, onRefresh, onUpdated, onComplete, onDeleted }) {
   const [editing, setEditing] = useState(false);
   const [coverOpen, setCoverOpen] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
@@ -304,6 +357,16 @@ function ProjectDetail({ project, loading, canEdit, config, boards, components, 
     await onRefresh(project);
   }
 
+  async function deleteProject() {
+    if (!window.confirm(`Delete project "${project.name}"? This removes the project record and cannot be undone. Linked records may be detached according to their existing retention rules.`)) return;
+    try {
+      await apiFetch(`/api/projects/${project.id}/`, { method: "DELETE" });
+      await onDeleted(project);
+    } catch (err) {
+      window.alert(err.message);
+    }
+  }
+
   if (loading) return <aside className="projectDetailPane"><div className="detailHead"><h3>Project</h3><button className="iconButton" onClick={onClose}>×</button></div><LoadingBlock label="Loading project…" /></aside>;
 
   return <aside className="projectDetailPane">
@@ -315,7 +378,15 @@ function ProjectDetail({ project, loading, canEdit, config, boards, components, 
 
       <div className="projectTitleActions">
         <div className="badgeRow"><PriorityBadge project={project} /><Badge tone={project.status === "active" ? "good" : project.status === "idea" ? "accent" : "neutral"}>{project.status_label}</Badge><DeadlineBadge project={project} />{(project.tags || []).map(tag => <Badge key={tag}>{tag}</Badge>)}</div>
-        {canEdit && <div className="detailActions"><button onClick={() => setEditing(true)}>Edit</button><button onClick={() => setCoverOpen(true)}>Cover</button><button onClick={() => setGalleryOpen(true)}>＋ Photo</button><button onClick={() => setFileOpen(true)}>＋ File</button><button onClick={() => setRepositoryOpen(true)}>＋ Repository</button></div>}
+        {(canEdit || canDelete) && <div className="detailActions">
+          {canEdit && !["complete", "archived"].includes(project.status) && <button className="projectCompleteButton" onClick={() => onComplete(project)}>✓ Completed</button>}
+          {canEdit && <button onClick={() => setEditing(true)}>Edit</button>}
+          {canEdit && <button onClick={() => setCoverOpen(true)}>Cover</button>}
+          {canEdit && <button onClick={() => setGalleryOpen(true)}>＋ Photo</button>}
+          {canEdit && <button onClick={() => setFileOpen(true)}>＋ File</button>}
+          {canEdit && <button onClick={() => setRepositoryOpen(true)}>＋ Repository</button>}
+          {canDelete && <button className="dangerButton" onClick={deleteProject}>Delete project</button>}
+        </div>}
       </div>
 
       {project.summary && <p className="projectSummary">{project.summary}</p>}
