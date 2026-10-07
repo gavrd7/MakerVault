@@ -1107,6 +1107,93 @@ def _project_cost(project):
     return float(total), currency
 
 
+def _project_deadline(project, today=None):
+    if not project.due_date:
+        return {
+            "state": "none",
+            "label": "",
+            "days_until": None,
+            "urgent": False,
+        }
+
+    if project.status in {"complete", "archived"}:
+        return {
+            "state": "closed",
+            "label": f"Due {project.due_date.isoformat()}",
+            "days_until": None,
+            "urgent": False,
+        }
+
+    today = today or timezone.localdate()
+    days_until = (project.due_date - today).days
+    if days_until < 0:
+        state = "overdue"
+        label = f"Overdue by {abs(days_until)} day" + ("" if days_until == -1 else "s")
+    elif days_until == 0:
+        state = "today"
+        label = "Due today"
+    elif days_until <= 3:
+        state = "due_soon"
+        label = f"Due in {days_until} day" + ("" if days_until == 1 else "s")
+    elif days_until <= 7:
+        state = "approaching"
+        label = f"Due in {days_until} days"
+    else:
+        state = "scheduled"
+        label = f"Due {project.due_date.isoformat()}"
+
+    return {
+        "state": state,
+        "label": label,
+        "days_until": days_until,
+        "urgent": state in {"overdue", "today", "due_soon", "approaching"},
+    }
+
+
+def _project_attention_key(project, today=None):
+    deadline = _project_deadline(project, today=today)
+    urgency_order = {
+        "overdue": 0,
+        "today": 1,
+        "due_soon": 2,
+        "approaching": 3,
+        "scheduled": 4,
+        "none": 4,
+        "closed": 5,
+    }
+    due_sort = project.due_date.isoformat() if project.due_date else "9999-12-31"
+    priority_sort = project.priority if project.priority is not None else 6
+    return (urgency_order.get(deadline["state"], 4), priority_sort, due_sort, project.name.casefold())
+
+
+def _serialise_project_attention(project):
+    deadline = _project_deadline(project)
+    return {
+        "id": str(project.id),
+        "name": project.name,
+        "status": project.status,
+        "status_label": project.get_status_display(),
+        "priority": project.priority,
+        "priority_label": project.get_priority_display() if project.priority else "",
+        "due_date": project.due_date.isoformat() if project.due_date else "",
+        "deadline_state": deadline["state"],
+        "deadline_label": deadline["label"],
+        "days_until_due": deadline["days_until"],
+    }
+
+
+def _parse_project_priority(value):
+    if value in (None, ""):
+        return None
+    try:
+        priority = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValidationError({"priority": "Choose a priority from 1 to 5."}) from exc
+    if priority not in dict(Project.PRIORITIES):
+        raise ValidationError({"priority": "Choose a priority from 1 to 5."})
+    return priority
+
+
 def _serialise_project(project, detailed=False):
     gallery_qs = project.files.filter(owner=project.owner, category="image").order_by("-created_at")
     asset_qs = project.files.filter(owner=project.owner).exclude(category="image").filter(superseded_by__isnull=True).order_by("category", "-created_at")
@@ -1121,6 +1208,12 @@ def _serialise_project(project, detailed=False):
         "slug": project.slug,
         "status": project.status,
         "status_label": project.get_status_display(),
+        "priority": project.priority,
+        "priority_label": project.get_priority_display() if project.priority else "",
+        "due_date": project.due_date.isoformat() if project.due_date else "",
+        "deadline_state": _project_deadline(project)["state"],
+        "deadline_label": _project_deadline(project)["label"],
+        "days_until_due": _project_deadline(project)["days_until"],
         "summary": project.summary,
         "cover_image": _file_url(project.cover_image),
         "started_on": project.started_on.isoformat() if project.started_on else "",
@@ -1717,12 +1810,29 @@ def dashboard(request):
             "warnings": snapshot.get("warnings") or [],
         })
 
+    open_projects = list(
+        Project.objects.filter(owner=request.user)
+        .exclude(status__in=["complete", "archived"])
+        .only("id", "name", "status", "priority", "due_date")
+    )
+    project_attention = sorted(open_projects, key=_project_attention_key)
+    project_attention = [
+        project for project in project_attention
+        if project.priority is not None or project.due_date is not None
+    ][:5]
+    project_deadline_alerts = sum(
+        1 for project in open_projects
+        if _project_deadline(project)["urgent"]
+    )
+
     data = {
         "inventory_total": InventoryItem.objects.filter(owner=request.user).count(),
         "inventory_available": InventoryItem.objects.filter(owner=request.user).filter(status="available").count(),
         "inventory_in_use": InventoryItem.objects.filter(owner=request.user).filter(status="in_use").count(),
         "projects_active": Project.objects.filter(owner=request.user).filter(status="active").count(),
         "projects_total": Project.objects.filter(owner=request.user).count(),
+        "projects_deadline_alerts": project_deadline_alerts,
+        "project_attention": [_serialise_project_attention(project) for project in project_attention],
         "board_models": BoardModel.objects.count(),
         "component_models": ComponentModel.objects.count(),
         "filament_products": FilamentProduct.objects.count(),
@@ -2461,6 +2571,8 @@ def projects_lookup(request):
             owner=request.user,
             name=name,
             status=status,
+            priority=_parse_project_priority(payload.get("priority")),
+            due_date=_parse_date(payload.get("due_date"), "due_date"),
             summary=str(payload.get("summary") or "").strip(),
             description=str(payload.get("description") or "").strip(),
             notes=str(payload.get("notes") or "").strip(),
@@ -2513,6 +2625,10 @@ def project_detail(request, project_id):
             if status not in dict(Project.STATUS):
                 return _error("Unknown project status.")
             project.status = status
+        if "priority" in payload:
+            project.priority = _parse_project_priority(payload.get("priority"))
+        if "due_date" in payload:
+            project.due_date = _parse_date(payload.get("due_date"), "due_date")
         if "tags" in payload:
             project.tags = _normalise_tags(payload.get("tags"))
         if "started_on" in payload:
