@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added optional project priorities from P1 (highest) to P5 (lowest), with colour-coded indicators.
+- Added optional project deadlines with approaching, due-soon, due-today and overdue states; completed/archived projects stop generating deadline urgency.
+- Added project filtering and sorting by status, priority and deadline state, including an Attention ranking that combines deadline urgency with explicit priority.
+- Added a Dashboard "Projects needing attention" panel for high-priority and deadline-driven work.
+
 ## v1.0.3 — 5 October 2026
 
 - Expanded the FDM/FFF printer catalogue with curated supplemental Creality models when OrcaSlicer lacks a profile-backed model entry.
