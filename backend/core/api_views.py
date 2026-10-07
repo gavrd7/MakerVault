@@ -2567,6 +2567,9 @@ def projects_lookup(request):
         status = str(payload.get("status") or "idea")
         if status not in dict(Project.STATUS):
             return _error("Unknown project status.")
+        completed_on = _parse_date(payload.get("completed_on"), "completed_on")
+        if completed_on and status != "archived":
+            status = "complete"
         project = Project(
             owner=request.user,
             name=name,
@@ -2579,7 +2582,7 @@ def projects_lookup(request):
             tags=_normalise_tags(payload.get("tags")),
             reference_url=str(payload.get("reference_url") or "").strip(),
             started_on=_parse_date(payload.get("started_on"), "started_on"),
-            completed_on=_parse_date(payload.get("completed_on"), "completed_on"),
+            completed_on=completed_on,
             created_by=request.user,
         )
         project.full_clean()
@@ -2635,6 +2638,8 @@ def project_detail(request, project_id):
             project.started_on = _parse_date(payload.get("started_on"), "started_on")
         if "completed_on" in payload:
             project.completed_on = _parse_date(payload.get("completed_on"), "completed_on")
+            if project.completed_on and project.status != "archived":
+                project.status = "complete"
         project.full_clean()
         project.save()
         project = Project.objects.filter(owner=request.user).select_related("created_by").prefetch_related(
