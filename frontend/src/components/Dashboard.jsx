@@ -32,7 +32,7 @@ function liveTemp(temp) {
   return Math.round(Number(temp.actual_c)) + "°";
 }
 
-export default function Dashboard({ dashboard, inventory, onNavigate, onOpenLive, onOpenCamera, onChanged }) {
+export default function Dashboard({ dashboard, inventory, onNavigate, onOpenLive, onOpenCamera, onOpenProject, onChanged }) {
   const cards = dashboard ? [
     ["Inventory", dashboard.inventory_total, `${dashboard.inventory_available} available · ${dashboard.inventory_in_use} in use`, "Inventory"],
     ["Projects", dashboard.projects_total, `${dashboard.projects_active} active`, "Projects"],
@@ -56,6 +56,27 @@ export default function Dashboard({ dashboard, inventory, onNavigate, onOpenLive
         <span>{label}</span><strong>{value}</strong><small>{sub}</small>
       </button>)}
     </section>
+    {!!dashboard?.project_attention?.length && <section className="panel dashboardProjectAttention">
+      <div className="panelHead">
+        <div>
+          <h3>Projects needing attention</h3>
+          <p>{dashboard.projects_deadline_alerts ? `${dashboard.projects_deadline_alerts} deadline alert${dashboard.projects_deadline_alerts === 1 ? "" : "s"} · ` : ""}ranked by deadline urgency and priority.</p>
+        </div>
+        <button onClick={() => onNavigate("Projects")}>Open projects →</button>
+      </div>
+      <div className="dashboardProjectAttentionList">
+        {dashboard.project_attention.map(project => <button key={project.id} className={`dashboardProjectAttentionRow deadline-${project.deadline_state || "none"}`} onClick={() => onOpenProject?.(project)}>
+          <div className="dashboardProjectAttentionMain">
+            <strong>{project.name}</strong>
+            <small>{project.status_label}</small>
+          </div>
+          <div className="dashboardProjectAttentionBadges">
+            {project.priority != null && <span className={`projectPriority projectPriority-p${project.priority}`}>P{project.priority}</span>}
+            {project.due_date && <span className={`projectDeadline projectDeadline-${project.deadline_state || "scheduled"}`}>{project.deadline_label || project.due_date}</span>}
+          </div>
+        </button>)}
+      </div>
+    </section>}
     {!!dashboard?.live_printers?.length && <section className="panel dashboardLivePanel">
       <div className="panelHead">
         <div><h3>Live printers</h3><p>Current printer telemetry from configured local/provider sources.</p></div>
