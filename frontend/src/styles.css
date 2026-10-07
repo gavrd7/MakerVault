@@ -364,6 +364,11 @@
 .projectGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;padding:18px}
 .projectCard{display:block;text-align:left;padding:0;overflow:hidden;border:1px solid #29313c;border-radius:14px;background:#0e141b;color:inherit}
 .projectCard:hover{border-color:#4c5a70;transform:translateY(-1px)}
+.projectCardOpen{display:block;width:100%;padding:0;border:0;border-radius:0;background:transparent;color:inherit;text-align:left}
+.projectCardOpen:hover{border:0;background:transparent}
+.projectCardActions{display:flex;justify-content:flex-end;padding:0 15px 14px}
+.projectCompleteButton{border-color:#306448;background:#14291f;color:#b8ebcb}
+.projectCompleteButton:hover{border-color:#3f805d;background:#193525}
 .projectCardCover{height:170px;display:grid;place-items:center;background:#0a1017;color:#6f7d91;font-size:12px;font-weight:800;letter-spacing:.08em}
 .projectCardCover img{width:100%;height:100%;object-fit:cover}
 .projectCardBody{padding:15px}
