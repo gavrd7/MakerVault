@@ -33,7 +33,7 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="project",
             constraint=models.CheckConstraint(
-                condition=models.Q(("priority__isnull", True), models.Q(("priority__gte", 1), ("priority__lte", 5)), _connector="OR"),
+                condition=models.Q(priority__isnull=True) | models.Q(priority__gte=1, priority__lte=5),
                 name="project_priority_between_1_and_5",
             ),
         ),
