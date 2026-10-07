@@ -38,6 +38,17 @@ function priorityRank(project) {
   return project.priority == null ? 6 : Number(project.priority);
 }
 
+function statusRank(project) {
+  return {
+    idea: 0,
+    planning: 1,
+    active: 2,
+    paused: 3,
+    complete: 4,
+    archived: 5,
+  }[project.status] ?? 6;
+}
+
 function deadlineRank(project) {
   return {
     overdue: 0,
@@ -145,7 +156,7 @@ export default function ProjectsPage({ projects, setProjects, config, refreshDas
     return [...rows].sort((a, b) => {
       if (sortMode === "priority") return priorityRank(a) - priorityRank(b) || projectAttentionSort(a, b);
       if (sortMode === "deadline") return String(a.due_date || "9999-12-31").localeCompare(String(b.due_date || "9999-12-31")) || priorityRank(a) - priorityRank(b);
-      if (sortMode === "status") return String(a.status_label).localeCompare(String(b.status_label)) || priorityRank(a) - priorityRank(b);
+      if (sortMode === "status") return statusRank(a) - statusRank(b) || priorityRank(a) - priorityRank(b) || a.name.localeCompare(b.name);
       if (sortMode === "updated") return String(b.updated_at || "").localeCompare(String(a.updated_at || ""));
       if (sortMode === "name") return a.name.localeCompare(b.name);
       return projectAttentionSort(a, b);
