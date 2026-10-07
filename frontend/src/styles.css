@@ -364,6 +364,11 @@
 .projectGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;padding:18px}
 .projectCard{display:block;text-align:left;padding:0;overflow:hidden;border:1px solid #29313c;border-radius:14px;background:#0e141b;color:inherit}
 .projectCard:hover{border-color:#4c5a70;transform:translateY(-1px)}
+.projectCardOpen{display:block;width:100%;padding:0;border:0;border-radius:0;background:transparent;color:inherit;text-align:left}
+.projectCardOpen:hover{border:0;background:transparent}
+.projectCardActions{display:flex;justify-content:flex-end;padding:0 15px 14px}
+.projectCompleteButton{border-color:#306448;background:#14291f;color:#b8ebcb}
+.projectCompleteButton:hover{border-color:#3f805d;background:#193525}
 .projectCardCover{height:170px;display:grid;place-items:center;background:#0a1017;color:#6f7d91;font-size:12px;font-weight:800;letter-spacing:.08em}
 .projectCardCover img{width:100%;height:100%;object-fit:cover}
 .projectCardBody{padding:15px}
@@ -372,6 +377,30 @@
 .projectCardBody p{min-height:42px;margin:10px 0 14px;color:#8f9bac;line-height:1.45}
 .projectCardMeta{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;color:#7f8a9c;font-size:11px}
 .projectCardMeta strong{color:#e8edf5;font-size:13px}
+.projectToolbar select{width:auto;min-width:132px}
+.projectCardBadges{display:flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
+.projectDeadlineRow{min-height:24px;margin-top:8px}
+.projectPriority,.projectDeadline{display:inline-flex;align-items:center;justify-content:center;border:1px solid transparent;border-radius:999px;padding:4px 8px;font-size:10px;font-weight:800;line-height:1.1;white-space:nowrap}
+.projectPriority-p1{border-color:#8a3f49;background:#32191e;color:#ffc2ca}
+.projectPriority-p2{border-color:#8a5b34;background:#302115;color:#ffd0a0}
+.projectPriority-p3{border-color:#7b6a31;background:#2b2512;color:#f2dd87}
+.projectPriority-p4{border-color:#395e85;background:#142336;color:#acd2ff}
+.projectPriority-p5{border-color:#4a5565;background:#1a2028;color:#bdc6d2}
+.projectDeadline-overdue{border-color:#8a3f49;background:#32191e;color:#ffc2ca}
+.projectDeadline-today,.projectDeadline-due_soon{border-color:#8a5b34;background:#302115;color:#ffd0a0}
+.projectDeadline-approaching{border-color:#7b6a31;background:#2b2512;color:#f2dd87}
+.projectDeadline-scheduled,.projectDeadline-closed{border-color:#3a4657;background:#171e27;color:#b6c1d0}
+.dashboardProjectAttention{margin-bottom:20px}
+.dashboardProjectAttentionList{display:grid}
+.dashboardProjectAttentionRow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;width:100%;padding:12px 16px;border:0;border-bottom:1px solid #202833;border-radius:0;background:#0f151d;text-align:left}
+.dashboardProjectAttentionRow:last-child{border-bottom:0}
+.dashboardProjectAttentionRow:hover{background:#141c26}
+.dashboardProjectAttentionRow.deadline-overdue{box-shadow:inset 3px 0 #d65d69}
+.dashboardProjectAttentionRow.deadline-today,.dashboardProjectAttentionRow.deadline-due_soon{box-shadow:inset 3px 0 #d38a45}
+.dashboardProjectAttentionRow.deadline-approaching{box-shadow:inset 3px 0 #c4a548}
+.dashboardProjectAttentionMain strong,.dashboardProjectAttentionMain small{display:block}
+.dashboardProjectAttentionMain small{margin-top:3px;color:#7f8a9c;font-size:11px}
+.dashboardProjectAttentionBadges{display:flex;gap:6px;justify-content:flex-end;align-items:center;flex-wrap:wrap}
 .projectEmpty{grid-column:1/-1;padding:42px;border:1px dashed #394657;border-radius:14px;text-align:center;color:#8995a7}
 .projectEmpty strong,.projectEmpty span{display:block}.projectEmpty span{margin-top:6px}
 .projectDetailPane{height:calc(100vh - 120px);position:sticky;top:28px;border:1px solid #29313c;border-radius:16px;background:#10161e;overflow:hidden}
@@ -2541,3 +2570,12 @@ a:focus-visible,
 .filamentNoImage small{max-width:220px;overflow-wrap:anywhere}
 .filamentDetailsMatchCallout{margin-top:12px}
 .filamentDetailsMatchCallout button{margin-top:8px}
+
+@media(max-width:760px){
+  .projectToolbar{display:grid;width:100%;grid-template-columns:1fr 1fr}
+  .projectToolbar .searchInput{grid-column:1/-1}
+  .projectToolbar>*{min-width:0!important;width:100%!important}
+  .projectToolbar .primary{grid-column:1/-1}
+  .dashboardProjectAttentionRow{grid-template-columns:1fr}
+  .dashboardProjectAttentionBadges{justify-content:flex-start}
+}
