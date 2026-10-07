@@ -21,7 +21,11 @@ Deadline highlighting is calculated from the current date for open projects:
 - A date in the past is **Overdue**.
 - Completed and archived projects keep their recorded deadline but are no longer treated as overdue.
 
-The Projects toolbar can filter by status, priority and deadline state, and can sort by attention, priority, deadline, status, recent updates or name. The Dashboard also shows up to five projects needing attention, ranked by deadline urgency and then priority.
+The Projects toolbar can filter by status, priority and deadline state, and can sort by attention, priority, deadline, status, recent updates or name. Use **Clear filters** to return to the default Attention view. The Dashboard also shows up to five projects needing attention, ranked by deadline urgency and then priority.
+
+Open projects also provide a **✓ Completed** action. It marks the project Complete and records today's date when no completion date has already been set. Setting or changing the **Completed** date in Edit also marks a non-archived project Complete automatically.
+
+Projects can be deleted from the project workspace when your account has delete permission. MakerVault asks for confirmation first; related records follow their existing retention/detachment rules rather than being silently rewritten.
 
 Keep notes actionable: wiring changes, firmware settings, assembly decisions and remaining work are useful when returning to a project months later.
 
