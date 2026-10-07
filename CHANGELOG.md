@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v1.0.4 — 7 October 2026
+
 - Added optional project priorities from P1 (highest) to P5 (lowest), with colour-coded indicators.
 - Added optional project deadlines with approaching, due-soon, due-today and overdue states; completed/archived projects stop generating deadline urgency.
 - Added project filtering and sorting by status, priority and deadline state, including an Attention ranking that combines deadline urgency with explicit priority.
