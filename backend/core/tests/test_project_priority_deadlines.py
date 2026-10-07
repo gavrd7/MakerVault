@@ -132,3 +132,41 @@ class ProjectPriorityDeadlineTests(TestCase):
         self.assertEqual(ids[:3], [str(overdue.id), str(due_soon.id), str(high_priority.id)])
         self.assertEqual(payload["projects_deadline_alerts"], 2)
         self.assertEqual(payload["project_attention"][0]["deadline_state"], "overdue")
+
+    def test_setting_completed_date_marks_project_complete(self):
+        project = Project.objects.create(
+            owner=self.user,
+            created_by=self.user,
+            name="Finish me",
+            status="active",
+            priority=2,
+        )
+        completed = timezone.localdate()
+
+        response = self.client.patch(
+            f"/api/projects/{project.id}/",
+            data={"completed_on": completed.isoformat()},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()["project"]
+        self.assertEqual(payload["status"], "complete")
+        self.assertEqual(payload["completed_on"], completed.isoformat())
+
+    def test_archived_project_stays_archived_when_completion_date_changes(self):
+        project = Project.objects.create(
+            owner=self.user,
+            created_by=self.user,
+            name="Archived project",
+            status="archived",
+        )
+        completed = timezone.localdate()
+
+        response = self.client.patch(
+            f"/api/projects/{project.id}/",
+            data={"completed_on": completed.isoformat()},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["project"]["status"], "archived")
+
