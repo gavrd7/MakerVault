@@ -215,10 +215,19 @@ class ComponentModel(TimeStampedModel):
 
 class Project(TimeStampedModel):
     STATUS = [("idea", "Idea"), ("planning", "Planning"), ("active", "Active"), ("paused", "Paused"), ("complete", "Complete"), ("archived", "Archived")]
+    PRIORITIES = [
+        (1, "P1 — Highest"),
+        (2, "P2 — High"),
+        (3, "P3 — Medium"),
+        (4, "P4 — Low"),
+        (5, "P5 — Lowest"),
+    ]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
     slug = models.SlugField(max_length=280, blank=True)
     status = models.CharField(max_length=20, choices=STATUS, default="idea")
+    priority = models.PositiveSmallIntegerField(choices=PRIORITIES, blank=True, null=True)
+    due_date = models.DateField(blank=True, null=True)
     summary = models.CharField(max_length=500, blank=True)
     description = models.TextField(blank=True)
     notes = models.TextField(blank=True)
@@ -234,6 +243,10 @@ class Project(TimeStampedModel):
         ordering = ["-updated_at"]
         constraints = [
             models.UniqueConstraint(fields=["owner", "slug"], name="uniq_project_slug_per_owner"),
+            models.CheckConstraint(
+                condition=models.Q(priority__isnull=True) | models.Q(priority__gte=1, priority__lte=5),
+                name="project_priority_between_1_and_5",
+            ),
         ]
 
     def save(self, *args, **kwargs):
