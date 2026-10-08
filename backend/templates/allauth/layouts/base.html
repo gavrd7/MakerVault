@@ -9,6 +9,7 @@
   <title>{% block head_title %}Account{% endblock head_title %} · MakerVault</title>
   <link rel="icon" type="image/svg+xml" href="{% static 'core/favicon.svg' %}">
   <link rel="stylesheet" href="{% static 'core/account.css' %}">
+  <script>if (window.self !== window.top) document.documentElement.classList.add("maker-embedded-account");</script>
   {% block extra_head %}{% endblock extra_head %}
 </head>
 <body>
@@ -25,19 +26,17 @@
 
       {% if user.is_authenticated %}
       <nav class="account-nav" aria-label="Account settings">
-        <span class="account-nav-heading">Account &amp; Security</span>
+        <span class="account-nav-heading">User Account</span>
         <a href="/" class="account-back">← Back to MakerVault</a>
         {% url 'account_email' as email_url_ %}
         {% if email_url_ %}<a href="{{ email_url_ }}">Email addresses</a>{% endif %}
         {% url 'account_change_password' as password_url_ %}
         {% if password_url_ %}<a href="{{ password_url_ }}">Password</a>{% endif %}
         {% url 'socialaccount_connections' as connections_url_ %}
-        {% if connections_url_ %}<a href="{{ connections_url_ }}">Sign-in methods</a>{% endif %}
+        {% if connections_url_ %}<a href="{{ connections_url_ }}">Connected accounts</a>{% endif %}
         {% url 'mfa_index' as mfa_url_ %}
         {% if mfa_url_ %}<a href="{{ mfa_url_ }}">Security &amp; MFA</a>{% endif %}
         {% if user.is_staff %}<a href="{% url 'oidc-provider-list' %}">Identity providers / OIDC</a>{% endif %}
-        {% url 'usersessions_list' as sessions_url_ %}
-        {% if sessions_url_ %}<a href="{{ sessions_url_ }}">Sessions</a>{% endif %}
       </nav>
       <div class="account-sidebar-footer">
         <span>{{ user.get_username }}</span>

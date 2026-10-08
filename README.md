@@ -22,6 +22,8 @@
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
+**Planned for v1.0.5 (not yet released):** consolidated, mobile-friendly account and server security settings; Admin, Supervisor, User and Viewer roles with administrator reassignment; and the `python3 scripts/generate_env_secrets.py` setup helper. These changes remain under review in [PR #78](https://github.com/gavrd7/MakerVault/pull/78). The stable container is still v1.0.4. The separate first-run wizard is tracked in draft [PR #80](https://github.com/gavrd7/MakerVault/pull/80) and is not part of PR #78.
+
 MakerVault keeps the practical parts of a workshop connected: what you own, what a build needs, which files and wiring belong to it, which model revision you printed, and where the finished parts ended up.
 
 ## Development and validation model
@@ -82,7 +84,7 @@ This also sets an important support expectation: investigation, fixes and future
 
 Catalogue definitions describe a product; inventory records describe the physical items you own. Personal workspaces are owner-scoped while reference catalogues are shared. Projects are not shared team folders.
 
-The interface works on desktop, tablet and mobile. Local accounts, MFA, optional OpenID Connect, Viewer/Editor permissions and administrator storage quotas are included.
+The interface works on desktop, tablet and mobile. Local accounts, MFA, optional OpenID Connect, role-based permissions and administrator storage quotas are included.
 
 ## Live printers and cameras
 

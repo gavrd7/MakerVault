@@ -243,8 +243,8 @@ export default function App() {
         <small className="brandVersion">{config?.version ? "v" + config.version : "version loading…"} · AGPL</small>
       </div>
       <GlobalSearch onOpenResult={openSearchResult} onOpenAdvanced={openAdvancedSearch} />
-      <nav>{NAV.filter(n => n !== "Settings" || config?.is_staff).map(n => <button key={n} className={section === n ? "active" : ""} onClick={() => navigateSection(n)}>{n}</button>)}</nav>
-      <div className="asideBottom"><a href="/admin/">Administration</a><a href="/accounts/2fa/">Account &amp; Security</a><a href="/accounts/logout/">Sign out</a></div>
+      <nav>{NAV.map(n => <button key={n} className={section === n ? "active" : ""} onClick={() => navigateSection(n)}>{n}</button>)}</nav>
+      <div className="asideBottom">{config?.is_superuser && <a href="/admin/">Administration</a>}<a href="/accounts/logout/">Sign out</a></div>
     </aside>
     <main>
       <header><div><h1>{section}</h1><p>{config ? `${config.user} · ${config.timezone} · ${config.currency}` : "Loading MakerVault…"}</p></div>{section === "Board Catalogue" && config?.permissions?.add_board && <button className="primary" onClick={() => setImportOpen(true)}>＋ Import URL</button>}</header>

@@ -22,7 +22,7 @@ Configure the provider to supply the normal OpenID identity information required
 
 ## Configure MakerVault
 
-Administrators can add database-backed providers from **Account & Security → Identity providers**. Use the provider's form for name/ID, server URL and client credentials. Alternatively, use these environment settings for server-managed bootstrap:
+Administrators can add database-backed providers from **Settings → Security → OIDC identity providers**. Use the provider's form for name/ID, server URL and client credentials. Alternatively, use these environment settings for server-managed bootstrap:
 
 ```dotenv
 OIDC_ENABLED=true

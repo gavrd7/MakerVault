@@ -2579,3 +2579,15 @@ a:focus-visible,
   .dashboardProjectAttentionRow{grid-template-columns:1fr}
   .dashboardProjectAttentionBadges{justify-content:flex-start}
 }
+
+/* Personal and instance security are part of the primary Settings workspace. */
+.settingsAccountLinks{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:10px;padding:4px 0 6px}
+.settingsAccountLinks a{display:flex;align-items:center;min-height:52px;padding:12px 14px;border:1px solid #344052;border-radius:11px;background:#101923;color:#ded6ff;font-weight:650;text-decoration:none}
+.settingsAccountLinks a:hover,.settingsAccountLinks a:focus-visible{border-color:#7766d4;background:#192136;color:#fff}
+@media(max-width:600px){.settingsAccountLinks{grid-template-columns:1fr}}
+
+.settingsAccountSelector{margin:14px 0;grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr))}
+.settingsAccountSelector button{min-height:48px;border:1px solid #344052;border-radius:11px;background:#101923;color:#ded6ff;padding:12px;text-align:left;font:inherit;font-weight:650;cursor:pointer}
+.settingsAccountSelector button.active{border-color:#8e7aea;background:#211b38;color:#fff}
+.settingsAccountFrame{display:block;width:100%;border:0;background:transparent;min-height:340px}
+@media(max-width:600px){.settingsAccountSelector{grid-template-columns:1fr 1fr}.settingsAccountSelector button{font-size:13px;padding:9px}}

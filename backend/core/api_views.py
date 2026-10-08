@@ -7,6 +7,7 @@ from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
@@ -55,7 +56,7 @@ from .printer_controls import CONTROL_ADAPTERS, PrinterControlError, control_ava
 from .printing_sync import PrintingSyncError, next_spool_id, resolve_spoolman_review, sync_printing_integration
 from .tasks import queue_catalogue_maintenance_now
 from .storage_usage import StorageQuotaExceeded, ensure_storage_capacity, storage_settings, storage_summary
-from .user_admin import admin_user_summary, purge_user_private_data
+from .user_admin import admin_user_summary, purge_user_private_data, user_role, can_manage_workspace_settings, assign_user_role
 from .private_storage import private_storage_key_status
 from .https_certificates import (
     CertificateError,
@@ -1667,6 +1668,18 @@ def admin_user_detail(request, user_id):
 
     try:
         payload = _read_json(request)
+        if "role" in payload:
+            role = str(payload.get("role") or "").strip()
+            if target.pk == request.user.pk and role != "Admin":
+                return _error("You cannot remove your own administrator privileges.")
+            if role != "Admin" and target.is_superuser:
+                active_admins = User.objects.filter(is_superuser=True, is_active=True).count()
+                if target.is_active and active_admins <= 1:
+                    return _error("The last active administrator cannot be demoted.")
+            try:
+                assign_user_role(target, role)
+            except (ValueError, Group.DoesNotExist):
+                return _error("Unknown role or role presets have not been initialized.")
         if "is_active" in payload:
             active = bool(payload.get("is_active"))
             if target.pk == request.user.pk and not active:
@@ -3578,7 +3591,7 @@ def _serialise_printing_integration_status(item):
 @login_required
 @require_http_methods(["GET"])
 def printing_integration_settings(request):
-    if not request.user.is_staff:
+    if not can_manage_workspace_settings(request.user):
         return _error("Administrator access is required.", status=403)
     rows = _ensure_printing_integrations(request.user)
     return JsonResponse({
@@ -3589,7 +3602,7 @@ def printing_integration_settings(request):
 @login_required
 @require_http_methods(["PATCH"])
 def printing_integration_detail(request, provider):
-    if not request.user.is_staff:
+    if not can_manage_workspace_settings(request.user):
         return _error("Administrator access is required.", status=403)
     if provider not in dict(PrintingIntegrationSetting.PROVIDERS):
         return _error("Unknown printing integration.", status=404)
@@ -3695,7 +3708,7 @@ def printing_integration_detail(request, provider):
 @login_required
 @require_http_methods(["POST"])
 def printing_integration_test(request, provider):
-    if not request.user.is_staff:
+    if not can_manage_workspace_settings(request.user):
         return _error("Administrator access is required.", status=403)
     if provider not in dict(PrintingIntegrationSetting.PROVIDERS):
         return _error("Unknown printing integration.", status=404)
@@ -3759,7 +3772,7 @@ def printing_integration_test(request, provider):
 @login_required
 @require_http_methods(["GET"])
 def printing_integration_reviews(request, provider):
-    if not request.user.is_staff:
+    if not can_manage_workspace_settings(request.user):
         return _error("Administrator access is required.", status=403)
     item = PrintingIntegrationSetting.objects.filter(owner=request.user).filter(provider=provider).first()
     if not item:
@@ -3775,7 +3788,7 @@ def printing_integration_reviews(request, provider):
 @login_required
 @require_http_methods(["POST"])
 def printing_integration_review_resolve(request, provider, external_id):
-    if not request.user.is_staff:
+    if not can_manage_workspace_settings(request.user):
         return _error("Administrator access is required.", status=403)
     item = PrintingIntegrationSetting.objects.filter(owner=request.user).filter(provider=provider).first()
     if not item:
@@ -3803,7 +3816,7 @@ def printing_integration_review_resolve(request, provider, external_id):
 @login_required
 @require_http_methods(["POST"])
 def printing_integration_sync_now(request, provider):
-    if not request.user.is_staff:
+    if not can_manage_workspace_settings(request.user):
         return _error("Administrator access is required.", status=403)
     if provider not in {"spoolman", "simplyprint", "creality_cfs"}:
         return _error("This integration does not have a sync adapter yet.", status=409)
@@ -3849,7 +3862,7 @@ def _serialise_catalogue_maintenance(config):
 @login_required
 @require_http_methods(["GET"])
 def catalogue_coverage(request):
-    if not request.user.is_staff:
+    if not can_manage_workspace_settings(request.user):
         return _error("Administrator access is required.", status=403)
     return JsonResponse(catalogue_coverage_summary())
 
@@ -3857,7 +3870,7 @@ def catalogue_coverage(request):
 @login_required
 @require_http_methods(["GET", "PATCH"])
 def catalogue_maintenance_settings(request):
-    if not request.user.is_staff:
+    if not can_manage_workspace_settings(request.user):
         return _error("Administrator access is required.", status=403)
 
     config, _ = CatalogueMaintenanceSettings.objects.get_or_create(singleton_key=1)
@@ -3896,7 +3909,7 @@ def catalogue_maintenance_settings(request):
 @login_required
 @require_http_methods(["POST"])
 def catalogue_maintenance_run_now(request):
-    if not request.user.is_staff:
+    if not can_manage_workspace_settings(request.user):
         return _error("Administrator access is required.", status=403)
     config, queued = queue_catalogue_maintenance_now(
         triggered_by=f"user:{request.user.get_username()}"
@@ -6726,6 +6739,8 @@ def public_config(request):
         "user": request.user.get_username(),
         "is_staff": request.user.is_staff,
         "is_superuser": request.user.is_superuser,
+        "role": user_role(request.user),
+        "can_manage_workspace_settings": can_manage_workspace_settings(request.user),
         "user_id": request.user.pk,
         "permissions": {
             "add_board": request.user.has_perm("core.add_boardmodel"),
