@@ -7,10 +7,10 @@ import secrets
 import time
 from pathlib import Path
 
-from django.conf import settings
 from django.contrib.auth import get_user_model, password_validation
 from django.db import connection, transaction
 from django import forms
+from django.core.exceptions import ValidationError
 
 TOKEN_LIFETIME = 30 * 60
 
@@ -63,14 +63,8 @@ class InitialAdminForm(forms.Form):
         if values.get("password1"):
             try:
                 password_validation.validate_password(values["password1"])
-            except forms.ValidationError as exc:
+            except ValidationError as exc:
                 self.add_error("password1", exc)
-            except Exception as exc:
-                from django.core.exceptions import ValidationError
-                if isinstance(exc, ValidationError):
-                    self.add_error("password1", exc)
-                else:
-                    raise
         return values
 
 
