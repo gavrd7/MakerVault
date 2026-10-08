@@ -63,6 +63,18 @@ jobs:
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
+      - name: Validate release tag against application version
+        if: ${{ steps.version.outputs.is_dev != 'true' }}
+        shell: bash
+        env:
+          EXPECTED_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          ACTUAL_VERSION=$(sed -nE 's/^VERSION = "([^"]+)"/\\1/p' backend/makervault/version.py)
+          if [[ -z "$ACTUAL_VERSION" || "$ACTUAL_VERSION" != "$EXPECTED_VERSION" ]]; then
+            echo "::error::Release tag is $EXPECTED_VERSION but backend/makervault/version.py declares $ACTUAL_VERSION"
+            exit 1
+          fi
+
       - name: Generate image metadata
         id: meta
         uses: docker/metadata-action@v5
