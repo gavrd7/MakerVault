@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — planned for v1.0.5 (not published)
+## v1.0.5 — 8 October 2026
 
 - Added idempotent `scripts/generate_env_secrets.py` to generate only the Django and PostgreSQL secrets without overwriting custom `.env` settings.
 - Integrated personal account and OIDC management views within the main Settings interface and renamed linked sign-in methods to Connected accounts; removed the unavailable Active sessions shortcut.
