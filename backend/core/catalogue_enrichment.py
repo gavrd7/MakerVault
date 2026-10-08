@@ -363,22 +363,37 @@ def enrich_board_from_espboards(board) -> bool:
 
 
 def run_board_catalogue_enrichment(limit: int | None = None, force_retry: bool = False) -> dict:
+    """Process a bounded, rotating board batch instead of always starting at row one.
+
+    The Redis-backed cursor is a performance hint, not a correctness dependency:
+    losing the cache only restarts the sweep. Existing board data is never reset.
+    """
     from .models import BoardModel
 
     if limit is None:
         limit = max(int(getattr(settings, "BOARD_ENRICHMENT_MAX_PER_RUN", 80)), 0)
     lock_key = f"makervault:board-catalogue-enrichment:{ENRICHMENT_VERSION}"
+    cursor_key = f"{lock_key}:cursor"
     if not cache.add(lock_key, "running", timeout=60 * 45):
         return EnrichmentResult("already-running", 0, 0, 0, 0).as_dict()
 
     processed = enriched = failed = skipped = 0
     try:
-        queryset = BoardModel.objects.select_related("manufacturer", "source").order_by("manufacturer__name", "name")
-        for board in queryset.iterator():
-            if limit and processed >= limit:
-                return EnrichmentResult("limit-reached", processed, enriched, failed, skipped).as_dict()
-
+        queryset = BoardModel.objects.select_related("manufacturer", "source").order_by("id")
+        last_id = cache.get(cursor_key) if limit else None
+        if last_id:
+            remaining = queryset.filter(id__gt=last_id)
+            # If the previous sweep ended exactly on its batch boundary, wrap.
+            queryset = remaining if remaining.exists() else queryset
+        # One extra row determines whether this batch has more work remaining.
+        boards = list(queryset[:limit + 1]) if limit else queryset.iterator()
+        has_more = bool(limit and len(boards) > limit)
+        if limit:
+            boards = boards[:limit]
+        last_processed_id = None
+        for board in boards:
             processed += 1
+            last_processed_id = board.id
             changed = False
             board_failed = False
 
@@ -406,7 +421,14 @@ def run_board_catalogue_enrichment(limit: int | None = None, force_retry: bool =
             failed += int(board_failed)
             skipped += int(not changed and not board_failed)
 
-        return EnrichmentResult("complete", processed, enriched, failed, skipped).as_dict()
+        if limit:
+            if has_more and last_processed_id is not None:
+                cache.set(cursor_key, str(last_processed_id), timeout=60 * 60 * 24 * 30)
+            else:
+                cache.delete(cursor_key)
+        return EnrichmentResult(
+            "limit-reached" if has_more else "complete",
+            processed, enriched, failed, skipped,
+        ).as_dict()
     finally:
         cache.delete(lock_key)
-

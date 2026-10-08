@@ -47,7 +47,12 @@ def seed_catalogue_images_task(self, limit=None, force_retry=False, kinds=None):
 def enrich_board_catalogue_task(self, limit=None, force_retry=False):
     if backup_in_progress():
         return {"status": "backup-in-progress"}
-    return run_board_catalogue_enrichment(limit=limit, force_retry=force_retry)
+    result = run_board_catalogue_enrichment(limit=limit, force_retry=force_retry)
+    if result.get("status") == "limit-reached" and result.get("processed", 0) > 0:
+        # Each bounded batch advances its cursor. Continue this sweep without
+        # forcing another round of online requests or waiting for tomorrow.
+        self.apply_async(kwargs={"limit": limit, "force_retry": False}, countdown=5)
+    return result
 
 
 @shared_task(bind=True, acks_late=True)
@@ -78,7 +83,7 @@ def _queue_catalogue_maintenance(config):
         return []
     queued = []
     if config.check_board_data and getattr(settings, "ENRICH_BOARD_CATALOGUE", True):
-        enrich_board_catalogue_task.delay(force_retry=True)
+        enrich_board_catalogue_task.delay(force_retry=False)
         queued.append("board-data")
     if config.check_printer_data and getattr(settings, "SYNC_ORCASLICER_PRINTER_CATALOGUE", True):
         sync_orcaslicer_printer_catalogue_task.delay()
