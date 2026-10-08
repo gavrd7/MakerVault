@@ -58,7 +58,7 @@ This also sets an important support expectation: investigation, fixes and future
   </tr>
   <tr>
     <td colspan="2" align="center">
-      <img src="https://raw.githubusercontent.com/gavrd7/MakerVault-docs/main/docs/guide/assets/screenshots/settings-https-certificates.png" alt="MakerVault HTTPS and certificate settings" width="92%">
+      <a href="https://gavrd7.github.io/MakerVault-docs/">Explore the MakerVault administration and HTTPS documentation</a>
       <br><strong>Self-hosting without hiding the hard parts</strong><br>
       Native HTTPS, Local CA guidance, backups, recovery and security settings are built into the application.
     </td>
