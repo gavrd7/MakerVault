@@ -26,7 +26,7 @@ class AccountLinkingTests(TestCase):
         self.client.force_login(self.user)
         response = self.client.get(reverse("socialaccount_connections"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Sign-in methods")
+        self.assertContains(response, "Connected accounts")
         self.assertContains(response, "does not create, merge or move workshop data")
         self.assertContains(response, "No external identity is linked yet")
 
