@@ -9,8 +9,8 @@ Learn to install MakerVault, record what you own and bring your projects, files 
 [Follow a first project](getting-started/first-project.md){ .md-button }
 </div>
 
-!!! info "Current release: v1.0.4"
-    MakerVault v1.0.4 is the current stable patch release. It adds project priorities, optional deadlines, attention ranking, deadline highlighting, quick completion and project deletion controls, while retaining the v1.0.3 Creality FDM catalogue expansion and earlier v1 improvements. The v1 release gates include representative off-server recovery, clean-install and restart/persistence checks, native HTTPS/Local CA validation, deployment preflight and green CI. Experimental printer adapters remain labelled according to their hardware-validation status. See [scope and verification](reference/about.md).
+!!! info "Current release: v1.0.5"
+    MakerVault v1.0.5 is the current stable release. It adds the first-run administrator wizard, in-app account and security settings, role-based administration, and background catalogue initialization, along with the existing v1.0.4 project-management improvements. See [scope and verification](reference/about.md).
 
 <div class="guide-grid" markdown>
 <div class="guide-card" markdown>

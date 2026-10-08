@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <strong>Current stable release: v1.0.4</strong>
+  <strong>Current stable release: v1.0.5</strong>
 </p>
 
 <p align="center">
@@ -22,11 +22,11 @@
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
-**Planned for v1.0.5 (not yet released):** the merged account/security settings and Admin / Supervisor / User / Viewer roles (PR #78), safe `.env` secret generation (PR #79), and development-image publishing (PR #81). PR #80 adds a secure browser-based first-run administrator wizard and moves catalogue seeding and OrcaSlicer enrichment into background startup work. The published stable image remains v1.0.4.
+**What's new in v1.0.5:** integrated User Account and Security settings, Admin / Supervisor / User / Viewer roles, safe `.env` secret generation, a secure first-run administrator wizard and faster startup with background catalogue population. Development container builds can now use the separate `dev` tag.
 
 MakerVault keeps the practical parts of a workshop connected: what you own, what a build needs, which files and wiring belong to it, which model revision you printed, and where the finished parts ended up.
 
-## First-run administrator setup (upcoming v1.0.5)
+## First-run administrator setup (v1.0.5)
 
 On a **fresh installation with no superuser**, opening MakerVault's normal URL redirects to the first-run setup wizard automatically. The server operator obtains a short-lived token (valid for 30 minutes) from the Docker host, then creates the first administrator in the browser with username, email, password and confirmation. The wizard includes a password-visibility checkbox and matching feedback. It closes automatically once any superuser exists; existing installations continue to the standard sign-in page.
 
@@ -212,7 +212,7 @@ sudo docker compose up -d
 sudo docker compose ps
 ```
 
-The default image is `ghcr.io/gavrd7/makervault:latest`. You can pin a release without editing Compose by setting `MAKERVAULT_IMAGE=ghcr.io/gavrd7/makervault:1.0.4` in `.env`.
+The default image is `ghcr.io/gavrd7/makervault:latest`. You can pin a release without editing Compose by setting `MAKERVAULT_IMAGE=ghcr.io/gavrd7/makervault:1.0.5` in `.env`.
 
 Prefer to build the application yourself? The repository retains the Dockerfile and provides `compose.build.yaml`:
 
@@ -236,7 +236,7 @@ Catalogue media can be locally cached or retained as external references where r
 
 ## Project status and development
 
-**v1.0.4** is the current stable MakerVault release. It adds project priorities, optional deadlines, attention ranking, deadline highlighting, quick completion and project deletion controls, while retaining the v1.0.3 Creality FDM catalogue expansion and earlier v1 improvements. The v1 release gates were completed on 3 October 2026, including representative off-server managed-backup recovery, a clean Linux/Docker installation, restart/persistence checks, native HTTPS/Local CA validation, deployment preflight, security/reliability checks and the final UI/accessibility pass. Unvalidated printer hardware remains explicitly experimental.
+**v1.0.5** is the current stable MakerVault release. It introduces browser-based first-run administrator setup, consolidated account/security management, role-based access controls, safe environment secret generation, and faster access to the web interface while catalogue seeding and OrcaSlicer enrichment continue in the background. The v1.0.4 project priorities and deadline improvements remain included. Experimental printer hardware remains subject to its documented validation boundaries.
 
 Pull-request CI checks backend tests, frontend tests/build, migrations, dependency/static security and the production Docker image. The guide has its own strict build/link checks. CI passing does not substitute for hardware, deployment or restore testing.
 
