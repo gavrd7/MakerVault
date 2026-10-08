@@ -88,5 +88,55 @@ class BoardBatchProgressTests(unittest.TestCase):
         self.assertEqual(seen[103:], list(range(1, 81)))
 
 
+class BoardContinuationTaskTests(unittest.TestCase):
+    def test_limit_reached_queues_next_batch_without_force_retry(self):
+        from core.tasks import enrich_board_catalogue_task
+
+        with (
+            patch("core.tasks.backup_in_progress", return_value=False),
+            patch("core.tasks.run_board_catalogue_enrichment",
+                  return_value={"status": "limit-reached", "processed": 80}) as run,
+            patch.object(enrich_board_catalogue_task, "apply_async") as queue,
+        ):
+            result = enrich_board_catalogue_task(limit=80, force_retry=True)
+
+        self.assertEqual(result["status"], "limit-reached")
+        run.assert_called_once_with(limit=80, force_retry=True)
+        queue.assert_called_once_with(
+            kwargs={"limit": 80, "force_retry": False}, countdown=5,
+        )
+
+    def test_complete_and_empty_batches_do_not_requeue(self):
+        from core.tasks import enrich_board_catalogue_task
+
+        for result in (
+            {"status": "complete", "processed": 23},
+            {"status": "already-running", "processed": 0},
+            {"status": "limit-reached", "processed": 0},
+        ):
+            with (
+                self.subTest(result=result),
+                patch("core.tasks.backup_in_progress", return_value=False),
+                patch("core.tasks.run_board_catalogue_enrichment", return_value=result),
+                patch.object(enrich_board_catalogue_task, "apply_async") as queue,
+            ):
+                self.assertEqual(enrich_board_catalogue_task(limit=80), result)
+                queue.assert_not_called()
+
+    def test_backup_in_progress_does_not_run_or_requeue(self):
+        from core.tasks import enrich_board_catalogue_task
+
+        with (
+            patch("core.tasks.backup_in_progress", return_value=True),
+            patch("core.tasks.run_board_catalogue_enrichment") as run,
+            patch.object(enrich_board_catalogue_task, "apply_async") as queue,
+        ):
+            result = enrich_board_catalogue_task(limit=80)
+
+        self.assertEqual(result["status"], "backup-in-progress")
+        run.assert_not_called()
+        queue.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
