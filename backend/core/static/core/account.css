@@ -185,3 +185,33 @@ button,input,select,textarea{font:inherit}
 @media(max-width:760px){
   .oidc-toggle-grid{grid-template-columns:1fr}
 }
+
+/* Narrow screens: account operations retain their secure Allauth views but
+   no longer render a desktop sidebar or spill horizontally beyond the viewport. */
+.account-shell,.account-sidebar,.account-main,.account-main-inner,.account-card{min-width:0;max-width:100%}
+.account-nav-heading{display:block}
+.account-card :is(table,pre,code){max-width:100%}
+.account-card table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.account-card :is(p,li,td,a,span){overflow-wrap:anywhere}
+.account-card :is(input,select,textarea,button){max-width:100%}
+@media(max-width:900px){
+  .account-shell{display:flex;flex-direction:column}
+  .account-sidebar{width:100%;position:relative;height:auto;gap:12px}
+  .account-nav{display:flex;flex-wrap:wrap;overflow:visible;align-items:center;gap:6px}
+  .account-nav-heading{width:100%;padding:0 8px 2px}
+  .account-nav a{white-space:normal;max-width:100%;padding:8px 10px}
+  .account-brand{justify-content:flex-start}
+  .account-main{width:100%}
+}
+@media(max-width:600px){
+  .account-shell{width:100%}
+  .account-sidebar{padding:14px 16px}
+  .account-nav{margin:0;gap:4px}
+  .account-nav a{font-size:13px}
+  .account-main{padding:12px}
+  .account-card{padding:20px 16px}
+  .account-card h1{font-size:clamp(24px,7vw,32px)}
+  .account-card h2{font-size:20px}
+  .security-page-head,.security-section-head{display:block}
+  .account-card form>div{min-width:0}
+}
