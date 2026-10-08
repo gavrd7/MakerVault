@@ -37,8 +37,6 @@
         {% url 'mfa_index' as mfa_url_ %}
         {% if mfa_url_ %}<a href="{{ mfa_url_ }}">Security &amp; MFA</a>{% endif %}
         {% if user.is_staff %}<a href="{% url 'oidc-provider-list' %}">Identity providers / OIDC</a>{% endif %}
-        {% url 'usersessions_list' as sessions_url_ %}
-        {% if sessions_url_ %}<a href="{{ sessions_url_ }}">Sessions</a>{% endif %}
       </nav>
       <div class="account-sidebar-footer">
         <span>{{ user.get_username }}</span>
