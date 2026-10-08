@@ -376,6 +376,51 @@ class FilamentContinuationTaskTests(TestCase):
             )
             self.assertEqual(queue.call_count, 1)
 
+
+    @patch("core.filament_catalogue.enrich_filament_from_authoritative_sources",
+           return_value={"changed_fields": []})
+    @patch("core.filament_catalogue.get_spoolmandb_catalogue")
+    def test_refresh_all_103_imported_products_in_two_batches(self, upstream, _authoritative):
+        import uuid
+
+        source_ids = []
+        records = []
+        for index in range(103):
+            external_id = f"batch-fixture-{index:03d}"
+            source_ids.append(external_id)
+            source = CatalogSource.objects.create(
+                source_type="spoolmandb",
+                name=f"Fixture {index}",
+                url=f"https://example.com/filament/{index}",
+                external_id=external_id,
+            )
+            records.append(FilamentProduct(
+                id=uuid.UUID(int=index + 1),
+                source=source,
+                name=f"Fixture PLA {index}",
+                material="PLA",
+                color_name="Existing colour",
+            ))
+        FilamentProduct.objects.bulk_create(records)
+        upstream.return_value = [
+            {"external_id": external_id, "color_name": "Upstream colour",
+             "density_g_cm3": 1.24, "raw": {}, "source_license": "MIT"}
+            for external_id in source_ids
+        ]
+
+        first = refresh_imported_filament_products(limit=80)
+        second = refresh_imported_filament_products(limit=80, cursor=first["next_cursor"])
+        self.assertEqual((first["status"], first["checked"]), ("limit-reached", 80))
+        self.assertEqual((second["status"], second["checked"]), ("complete", 23))
+        self.assertIsNone(second["next_cursor"])
+        self.assertEqual(
+            FilamentProduct.objects.filter(source__source_type="spoolmandb",
+                                          density_g_cm3="1.24").count(), 103,
+        )
+        self.assertEqual(
+            FilamentProduct.objects.filter(color_name="Existing colour").count(), 103,
+        )
+
     @patch("core.tasks.backup_in_progress", return_value=True)
     @patch("core.tasks.refresh_imported_filament_products")
     def test_does_not_refresh_during_backup(self, refresh, _backup):
