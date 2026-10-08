@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from django.db import transaction
+from django.contrib.auth.models import Group
 
 from .models import (
     FileAsset,
@@ -16,6 +17,39 @@ from .models import (
     UserStorageProfile,
 )
 from .storage_usage import refresh_user_storage_profile, storage_summary
+
+
+ROLE_GROUPS = ("Supervisor", "User", "Editor", "Viewer")
+
+
+def user_role(user):
+    if user.is_superuser:
+        return "Admin"
+    groups = set(user.groups.values_list("name", flat=True))
+    for name in ROLE_GROUPS:
+        if name in groups:
+            return name
+    return "Staff" if user.is_staff else "User"
+
+
+def can_manage_workspace_settings(user):
+    return bool(user.is_superuser or user.is_staff or user.groups.filter(name="Supervisor").exists())
+
+
+def assign_user_role(target, role):
+    if role not in {"Admin", "Supervisor", "User", "Viewer"}:
+        raise ValueError("Unknown account role.")
+    role_group_names = ("Supervisor", "User", "Editor", "Viewer")
+    # Only superusers may administer the instance or grant roles.
+    target.is_superuser = role == "Admin"
+    target.is_staff = role == "Admin"
+    with transaction.atomic():
+        target.save(update_fields=["is_superuser", "is_staff"])
+        groups = Group.objects.filter(name__in=role_group_names)
+        target.groups.remove(*groups)
+        if role != "Admin":
+            group = Group.objects.get(name=role)
+            target.groups.add(group)
 
 
 def admin_user_summary(user) -> dict:
@@ -36,6 +70,7 @@ def admin_user_summary(user) -> dict:
         "is_active": bool(user.is_active),
         "is_staff": bool(user.is_staff),
         "is_superuser": bool(user.is_superuser),
+        "role": user_role(user),
         "date_joined": user.date_joined.isoformat() if user.date_joined else None,
         "last_login": user.last_login.isoformat() if user.last_login else None,
         "quota_mode": quota_mode,

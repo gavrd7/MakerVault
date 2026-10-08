@@ -117,6 +117,22 @@ export default function AdminUsersPanel({ config }) {
     }
   }
 
+  async function changeRole(user, role) {
+    setBusy(`role-${user.id}`); setError(""); setNotice("");
+    try {
+      const result = await apiFetch(`/api/settings/users/${user.id}/`, {
+        method: "PATCH",
+        body: { role },
+      });
+      setUsers(rows => rows.map(row => row.id === user.id ? result.item : row));
+      setNotice(`${user.username} is now ${result.item.role}.`);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function toggleActive(user) {
     setBusy(`active-${user.id}`); setError(""); setNotice("");
     try {
@@ -254,6 +270,14 @@ export default function AdminUsersPanel({ config }) {
               </div>
             </div>
 
+            <div className="adminQuotaControls">
+              <label><span>Access role</span><select aria-label={`Role for ${user.username}`} value={user.role === "Staff" || user.role === "Editor" ? "User" : user.role} disabled={busy === `role-${user.id}` || isSelf} onChange={e => changeRole(user, e.target.value)}>
+                <option value="Admin">Admin — full instance access</option>
+                <option value="Supervisor">Supervisor — operational settings</option>
+                <option value="User">User — personal account and workspace</option>
+                <option value="Viewer">Viewer — read-only workspace</option>
+              </select><small>{isSelf ? "Another administrator must change your role." : "Roles can be changed at any time; access is checked on each request."}</small></label>
+            </div>
             <div className="adminStorageHeadline">
               <div><strong>{formatBytes(user.storage?.used_bytes)}</strong><span>{quotaLabel(user)}</span></div>
               {!user.storage?.unlimited && <strong>{user.storage?.percent_used ?? 0}%</strong>}
