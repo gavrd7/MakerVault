@@ -215,3 +215,12 @@ button,input,select,textarea{font:inherit}
   .security-page-head,.security-section-head{display:block}
   .account-card form>div{min-width:0}
 }
+
+/* When used inside the app's Settings panel, suppress the duplicate shell. */
+.maker-embedded-account,.maker-embedded-account body{background:transparent}
+.maker-embedded-account .account-shell{display:block;min-height:0}
+.maker-embedded-account .account-sidebar{display:none!important}
+.maker-embedded-account .account-main{padding:0!important;min-height:0}
+.maker-embedded-account .account-main-inner{max-width:100%;width:100%}
+.maker-embedded-account .account-card{box-shadow:none;border:0;padding:12px!important;background:transparent}
+.maker-embedded-account .account-card h1{font-size:clamp(22px,4vw,29px)}
