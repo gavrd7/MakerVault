@@ -78,7 +78,7 @@ def _queue_catalogue_maintenance(config):
         return []
     queued = []
     if config.check_board_data and getattr(settings, "ENRICH_BOARD_CATALOGUE", True):
-        enrich_board_catalogue_task.delay(force_retry=True)
+        enrich_board_catalogue_task.delay(force_retry=False)
         queued.append("board-data")
     if config.check_printer_data and getattr(settings, "SYNC_ORCASLICER_PRINTER_CATALOGUE", True):
         sync_orcaslicer_printer_catalogue_task.delay()
