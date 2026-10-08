@@ -47,6 +47,7 @@
       {% else %}
       <nav class="account-nav" aria-label="Account access">
         <a href="/" class="account-back">← MakerVault</a>
+        {% if makervault_initial_setup_available %}<a href="/setup/">Initial administrator setup</a>{% endif %}
         {% url 'account_login' as login_url_ %}
         {% if login_url_ %}<a href="{{ login_url_ }}">Sign in</a>{% endif %}
         {% if makervault_local_registration %}
