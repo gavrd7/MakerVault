@@ -28,7 +28,7 @@ class AccountLinkingTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Connected accounts")
         self.assertContains(response, "does not create, merge or move workshop data")
-        self.assertContains(response, "No external identity is linked yet")
+        self.assertContains(response, "No connected accounts yet")
 
     def test_disconnect_allowed_when_local_password_remains(self):
         account = SocialAccount.objects.create(
