@@ -11,6 +11,31 @@
 {% if form.non_field_errors %}<div role="alert">{{ form.non_field_errors }}</div>{% endif %}
 {% for field in form %}<div style="margin:16px 0"><label for="{{ field.id_for_label }}">{{ field.label }}</label>
 <div>{{ field }}</div><div role="alert">{{ field.errors }}</div></div>{% endfor %}
-<button type="submit">Create administrator</button></form>{% endif %}
+<div style="margin:14px 0"><label><input type="checkbox" id="show-setup-passwords"> Show passwords while typing</label></div>
+<p id="password-match-status" aria-live="polite"></p>
+<button type="submit" id="create-admin-button">Create administrator</button></form>
+<script>
+(function () {
+  const first = document.getElementById("id_password1");
+  const second = document.getElementById("id_password2");
+  const reveal = document.getElementById("show-setup-passwords");
+  const status = document.getElementById("password-match-status");
+  const submit = document.getElementById("create-admin-button");
+  if (!first || !second) return;
+  reveal.addEventListener("change", () => {
+    first.type = second.type = reveal.checked ? "text" : "password";
+  });
+  function checkMatch() {
+    const mismatch = second.value.length > 0 && first.value !== second.value;
+    const match = second.value.length > 0 && first.value === second.value;
+    status.textContent = mismatch ? "Passwords do not match." : match ? "Passwords match." : "";
+    status.style.color = mismatch ? "#ff9999" : "#93e8b3";
+    submit.disabled = mismatch;
+    second.setCustomValidity(mismatch ? "Passwords do not match." : "");
+  }
+  first.addEventListener("input", checkMatch);
+  second.addEventListener("input", checkMatch);
+})();
+</script>{% endif %}
 <p>Already created an administrator? <a href="/accounts/login/">Sign in</a>.</p>
 </section></div></main></body></html>
