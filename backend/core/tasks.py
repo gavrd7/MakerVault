@@ -66,16 +66,27 @@ def sync_orcaslicer_printer_catalogue_task(self):
 
 
 @shared_task(bind=True, acks_late=True)
-def enrich_filament_catalogue_task(self, force_catalogue=False, limit=None):
+def enrich_filament_catalogue_task(self, force_catalogue=False, limit=None, cursor=None):
     if backup_in_progress():
         return {"status": "backup-in-progress"}
+    # A None limit in scheduled work means bounded background batches, not
+    # an unbounded task; direct refresh callers still retain their own defaults.
+    batch_limit = 80 if limit is None else limit
     try:
-        return refresh_imported_filament_products(
+        result = refresh_imported_filament_products(
             force_catalogue=force_catalogue,
-            limit=limit,
+            limit=batch_limit,
+            cursor=cursor,
         )
     except FilamentCatalogueError as exc:
         return {"status": "error", "error": str(exc)}
+    if result.get("status") == "limit-reached" and result.get("next_cursor"):
+        self.apply_async(
+            kwargs={"force_catalogue": False, "limit": batch_limit,
+                    "cursor": result["next_cursor"]},
+            countdown=5,
+        )
+    return result
 
 
 def _queue_catalogue_maintenance(config):
