@@ -47,7 +47,12 @@ def seed_catalogue_images_task(self, limit=None, force_retry=False, kinds=None):
 def enrich_board_catalogue_task(self, limit=None, force_retry=False):
     if backup_in_progress():
         return {"status": "backup-in-progress"}
-    return run_board_catalogue_enrichment(limit=limit, force_retry=force_retry)
+    result = run_board_catalogue_enrichment(limit=limit, force_retry=force_retry)
+    if result.get("status") == "limit-reached" and result.get("processed", 0) > 0:
+        # Each bounded batch advances its cursor. Continue this sweep without
+        # forcing another round of online requests or waiting for tomorrow.
+        self.apply_async(kwargs={"limit": limit, "force_retry": False}, countdown=5)
+    return result
 
 
 @shared_task(bind=True, acks_late=True)
