@@ -56,13 +56,18 @@ def enrich_board_catalogue_task(self, limit=None, force_retry=False):
 
 
 @shared_task(bind=True, acks_late=True)
-def sync_orcaslicer_printer_catalogue_task(self):
+def sync_orcaslicer_printer_catalogue_task(self, retry_attempt=0):
     if backup_in_progress():
         return {"status": "backup-in-progress"}
     try:
-        return sync_orcaslicer_printer_catalogue()
+        result = sync_orcaslicer_printer_catalogue()
     except OrcaCatalogueError as exc:
-        return {"status": "error", "error": str(exc)}
+        result = {"status": "error", "error": str(exc)}
+    # Make one delayed recovery attempt for failed upstream lookups. Do not
+    # retry merely because Orca has no usable volume for a given profile.
+    if result.get("status") in {"partial", "error"} and retry_attempt < 1:
+        self.apply_async(kwargs={"retry_attempt": 1}, countdown=600)
+    return result
 
 
 @shared_task(bind=True, acks_late=True)

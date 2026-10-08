@@ -582,6 +582,8 @@ def sync_orcaslicer_printer_catalogue(*, ref=None, max_workers=8):
     profile_cache = {}
     profile_cache_lock = Lock()
     hardware_enriched = 0
+    failed_hardware_profiles = []
+    incomplete_hardware_profiles = []
     rows_needing_hardware = []
     existing_complete = {
         (maker.casefold(), name.casefold())
@@ -611,7 +613,11 @@ def sync_orcaslicer_printer_catalogue(*, ref=None, max_workers=8):
             row = futures[future]
             try:
                 hardware = future.result()
-            except (requests.RequestException, OrcaCatalogueError, ValueError):
+            except (requests.RequestException, OrcaCatalogueError, ValueError) as exc:
+                failed_hardware_profiles.append({
+                    "model": f'{row["vendor"]} {row["name"]}',
+                    "error": str(exc)[:300],
+                })
                 hardware = {}
             if hardware:
                 row["hardware_specs"] = hardware
@@ -619,6 +625,10 @@ def sync_orcaslicer_printer_catalogue(*, ref=None, max_workers=8):
                     "build_volume_x_mm", "build_volume_y_mm", "build_volume_z_mm"
                 )):
                     hardware_enriched += 1
+                else:
+                    incomplete_hardware_profiles.append(
+                        f'{row["vendor"]} {row["name"]}'
+                    )
 
     supplemental_rows = _load_supplemental_printers()
     supplemental_seen = len(supplemental_rows)
@@ -641,7 +651,7 @@ def sync_orcaslicer_printer_catalogue(*, ref=None, max_workers=8):
             supplemental_enriched += int(model_enriched)
 
     return {
-        "status": "complete" if not failed_vendors else "partial",
+        "status": "complete" if not (failed_vendors or failed_hardware_profiles) else "partial",
         "source": ORCA_REPOSITORY,
         "ref": ref,
         "license": ORCA_LICENSE,
@@ -655,5 +665,10 @@ def sync_orcaslicer_printer_catalogue(*, ref=None, max_workers=8):
         "models_created": models_created,
         "models_enriched": models_enriched,
         "hardware_profiles_enriched": hardware_enriched,
+        "hardware_profiles_attempted": len(rows_needing_hardware),
+        "hardware_profiles_failed": len(failed_hardware_profiles),
+        "failed_hardware_profiles": failed_hardware_profiles[:30],
+        "hardware_profiles_incomplete": len(incomplete_hardware_profiles),
+        "incomplete_hardware_profiles": incomplete_hardware_profiles[:30],
         "failed_vendors": failed_vendors,
     }
