@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.admin.views.decorators import staff_member_required
 from django.urls import include, path
-from core import views, oidc_views
+from core import views, oidc_views, setup_views
 
 # Do not allow Django admin's standalone password login to bypass the allauth/MFA flow.
 admin.site.login = staff_member_required(admin.site.login, login_url="/accounts/login/")
@@ -17,6 +17,7 @@ def legal_text(filename):
 
 
 urlpatterns = [
+    path("setup/", setup_views.initial_setup, name="initial-setup"),
     path("admin/", admin.site.urls),
     path("accounts/security/oidc/", oidc_views.oidc_provider_list, name="oidc-provider-list"),
     path("accounts/security/oidc/add/", oidc_views.oidc_provider_create, name="oidc-provider-create"),

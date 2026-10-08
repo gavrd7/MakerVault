@@ -1,0 +1,41 @@
+{% load static %}
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>First-run setup · MakerVault</title>
+<link rel="stylesheet" href="{% static 'core/account.css' %}"></head>
+<body><main class="account-main"><div class="account-main-inner"><section class="account-card">
+<h1>Welcome to MakerVault</h1><p>Create the first administrator. This wizard works only before an administrator exists.</p>
+<p>On your server, run <code>sudo docker compose exec -u makervault makervault python manage.py first_run_token</code> to obtain the 30-minute setup token. Keep it private.</p>
+{% if rate_limited %}<p role="alert">Too many attempts. Try again in 15 minutes.</p>{% else %}
+<form method="post">{% csrf_token %}
+{% if form.non_field_errors %}<div role="alert">{{ form.non_field_errors }}</div>{% endif %}
+{% for field in form %}<div style="margin:16px 0"><label for="{{ field.id_for_label }}">{{ field.label }}</label>
+<div>{{ field }}</div><div role="alert">{{ field.errors }}</div></div>{% endfor %}
+<div style="margin:14px 0"><label><input type="checkbox" id="show-setup-passwords"> Show passwords while typing</label></div>
+<p id="password-match-status" aria-live="polite"></p>
+<button type="submit" id="create-admin-button">Create administrator</button></form>
+<script>
+(function () {
+  const first = document.getElementById("id_password1");
+  const second = document.getElementById("id_password2");
+  const reveal = document.getElementById("show-setup-passwords");
+  const status = document.getElementById("password-match-status");
+  const submit = document.getElementById("create-admin-button");
+  if (!first || !second) return;
+  reveal.addEventListener("change", () => {
+    first.type = second.type = reveal.checked ? "text" : "password";
+  });
+  function checkMatch() {
+    const mismatch = second.value.length > 0 && first.value !== second.value;
+    const match = second.value.length > 0 && first.value === second.value;
+    status.textContent = mismatch ? "Passwords do not match." : match ? "Passwords match." : "";
+    status.style.color = mismatch ? "#ff9999" : "#93e8b3";
+    submit.disabled = mismatch;
+    second.setCustomValidity(mismatch ? "Passwords do not match." : "");
+  }
+  first.addEventListener("input", checkMatch);
+  second.addEventListener("input", checkMatch);
+})();
+</script>{% endif %}
+<p>Already created an administrator? <a href="/accounts/login/">Sign in</a>.</p>
+</section></div></main></body></html>

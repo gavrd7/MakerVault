@@ -71,12 +71,13 @@ COPY backend/ /app/backend/
 COPY LICENSE THIRD_PARTY_NOTICES.md .env.example /app/
 COPY --from=frontend-builder /frontend/dist/ /app/backend/core/static/app/
 COPY docker/entrypoint.sh /usr/local/bin/makervault-entrypoint
+COPY docker/startup-printer-catalogue.sh /usr/local/bin/makervault-printer-catalogue
 COPY docker/run-https.sh /usr/local/bin/makervault-https
 COPY docker/supervisord.conf /etc/supervisor/conf.d/makervault.conf
 COPY docker/go2rtc.yaml /etc/go2rtc.yaml
 COPY docker/licenses/go2rtc-LICENSE /app/licenses/go2rtc-LICENSE
 RUN chmod -R a+rX /app/backend \
-    && chmod +x /usr/local/bin/makervault-entrypoint /usr/local/bin/makervault-https
+    && chmod +x /usr/local/bin/makervault-entrypoint /usr/local/bin/makervault-https /usr/local/bin/makervault-printer-catalogue
 
 WORKDIR /app/backend
 EXPOSE 8000 8443

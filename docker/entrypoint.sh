@@ -183,16 +183,9 @@ if ! gosu makervault python manage.py migrate_private_storage; then
   echo "WARNING: Some legacy private media could not be encrypted. MakerVault will continue and retry on the next start." >&2
 fi
 
-echo "Ensuring starter catalogue..."
-gosu makervault python manage.py seed_catalogue
-
-echo "Ensuring 3D printer catalogue..."
-gosu makervault python manage.py seed_printing_catalogue
-
-if [ "${SYNC_ORCASLICER_PRINTER_CATALOGUE:-true}" = "true" ] || [ "${SYNC_ORCASLICER_PRINTER_CATALOGUE:-true}" = "1" ]; then
-  echo "Expanding sparse 3D printer catalogue from OrcaSlicer..."
-  gosu makervault python manage.py sync_orcaslicer_printer_catalogue --best-effort --if-sparse 100
-fi
+# Catalogue seeding and OrcaSlicer enrichment are supervised background work.
+# Migrations, roles, backup recovery and storage safety checks remain synchronous.
+# The first-run wizard does not depend on catalogue data.
 
 echo "Catalogue maintenance is handled by the persistent scheduler."
 

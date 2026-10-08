@@ -5,6 +5,8 @@ from pathlib import Path
 import magic
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.views import redirect_to_login
+from django.shortcuts import redirect
 from django.core.cache import cache
 from django.db import connection
 from django.http import FileResponse, Http404, JsonResponse
@@ -15,9 +17,14 @@ from .models import FileAsset, InventoryItem, Project
 logger = logging.getLogger(__name__)
 
 
-@login_required
 @ensure_csrf_cookie
 def app_shell(request):
+    from .first_run import needs_setup
+
+    if needs_setup():
+        return redirect("initial-setup")
+    if not request.user.is_authenticated:
+        return redirect_to_login(request.get_full_path())
     return render(request, "core/app.html")
 
 
