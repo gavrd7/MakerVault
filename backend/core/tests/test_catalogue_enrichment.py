@@ -1,4 +1,6 @@
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from core.catalogue_enrichment import _slug_candidates, _tokens
 
@@ -19,6 +21,71 @@ class CatalogueEnrichmentTests(unittest.TestCase):
     def test_token_matching_ignores_generic_words(self):
         self.assertEqual(_tokens("Generic ESP32-S3 Super Mini board"), {"esp32", "s3", "super"})
         self.assertTrue({"esp32", "c6"}.issubset(_tokens("Seeed Studio XIAO ESP32C6")))
+
+
+class BoardBatchProgressTests(unittest.TestCase):
+    def test_bounded_runs_visit_all_boards_and_wrap_without_duplicates(self):
+        from core.catalogue_enrichment import run_board_catalogue_enrichment
+
+        class FakeCache:
+            def __init__(self):
+                self.store = {}
+
+            def add(self, key, value, timeout=None):
+                if key in self.store:
+                    return False
+                self.store[key] = value
+                return True
+
+            def get(self, key):
+                return self.store.get(key)
+
+            def set(self, key, value, timeout=None):
+                self.store[key] = value
+
+            def delete(self, key):
+                self.store.pop(key, None)
+
+        class FakeQuerySet:
+            def __init__(self, items):
+                self.items = items
+
+            def order_by(self, *args):
+                return self
+
+            def filter(self, **kwargs):
+                return FakeQuerySet([b for b in self.items if b.id > int(kwargs["id__gt"])])
+
+            def exists(self):
+                return bool(self.items)
+
+            def __getitem__(self, item):
+                return self.items[item]
+
+            def iterator(self):
+                return iter(self.items)
+
+        seen = []
+        boards = [SimpleNamespace(id=i, name=f"Board {i}") for i in range(1, 104)]
+        queryset = FakeQuerySet(boards)
+        memory_cache = FakeCache()
+        with (
+            patch("core.catalogue_enrichment.cache", memory_cache),
+            patch("core.models.BoardModel.objects") as objects,
+            patch("core.catalogue_enrichment._is_esp_family", return_value=False),
+            patch("core.catalogue_enrichment.enrich_board_from_profile", side_effect=lambda board: seen.append(board.id) or False),
+            patch("core.catalogue_enrichment.update_board_enrichment_state", return_value=False),
+        ):
+            objects.select_related.return_value = queryset
+            first = run_board_catalogue_enrichment(limit=80)
+            second = run_board_catalogue_enrichment(limit=80)
+            third = run_board_catalogue_enrichment(limit=80)
+
+        self.assertEqual((first["status"], first["processed"]), ("limit-reached", 80))
+        self.assertEqual((second["status"], second["processed"]), ("complete", 23))
+        self.assertEqual((third["status"], third["processed"]), ("limit-reached", 80))
+        self.assertEqual(seen[:103], list(range(1, 104)))
+        self.assertEqual(seen[103:], list(range(1, 81)))
 
 
 if __name__ == "__main__":
