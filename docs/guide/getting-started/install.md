@@ -62,7 +62,7 @@ Before editing, read [Configure your .env file](environment.md) for an explanati
 **Existing installation?** Keep your current `.env`; do not copy the example over it or regenerate its secrets. Use the [update guide](../administration/updates.md).
 
 ```bash
-python3 scripts/setup_env.py
+python3 scripts/generate_env_secrets.py
 ```
 
 The setup script creates `.env` from the example, generates distinct Django and PostgreSQL secrets, and restricts file permissions to the current user. Rerunning it preserves already configured secrets and all other settings. Do not reuse production storage or database credentials for a test installation.
