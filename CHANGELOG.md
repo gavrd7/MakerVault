@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Consolidated personal account and server-wide security links into permission-aware Settings sections; improved responsive layouts for existing Allauth pages.
+- Added Admin, Supervisor, User and Viewer role assignment in user administration, with backend enforcement for operational settings and protections against self-demotion.
+
 ## v1.0.4 — 7 October 2026
 
 - Added optional project priorities from P1 (highest) to P5 (lowest), with colour-coded indicators.
