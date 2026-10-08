@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Existing Git tag to publish (for example v1.0.0)"
+        description: "Existing release tag (e.g. v1.0.4), or main to publish dev only"
         required: true
         type: string
 
@@ -51,6 +51,11 @@ jobs:
           else
             VERSION="${GITHUB_REF_NAME}"
           fi
+          if [[ "${VERSION}" == "main" ]]; then
+            echo "is_dev=true" >> "$GITHUB_OUTPUT"
+            echo "version=dev" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           VERSION="${VERSION#v}"
           if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
             echo "Unsupported version: ${VERSION}" >&2
@@ -64,9 +69,10 @@ jobs:
         with:
           images: ghcr.io/gavrd7/makervault
           tags: |
-            type=semver,pattern={{version}},value=${{ steps.version.outputs.version }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.version }}
-            type=raw,value=latest,enable=${{ !contains(steps.version.outputs.version, '-') }}
+            type=raw,value=dev,enable=${{ steps.version.outputs.is_dev == 'true' }}
+            type=semver,pattern={{version}},value=${{ steps.version.outputs.version }},enable=${{ steps.version.outputs.is_dev != 'true' }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.version }},enable=${{ steps.version.outputs.is_dev != 'true' }}
+            type=raw,value=latest,enable=${{ steps.version.outputs.is_dev != 'true' && !contains(steps.version.outputs.version, '-') }}
 
       - name: Build and publish multi-platform image
         uses: docker/build-push-action@v6
