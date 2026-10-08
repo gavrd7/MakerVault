@@ -46,3 +46,31 @@ class SetupEnvironmentTests(TestCase):
         self.env.write_text("MAKERVAULT_PORT=8766\n", encoding="utf-8")
         self.assertEqual(len(setup_env(self.env, self.example)), 2)
         self.assertIn("POSTGRES_PASSWORD=", self.env.read_text(encoding="utf-8"))
+
+    def test_existing_custom_configuration_is_unchanged(self):
+        original = (
+            "# User-managed settings must remain exactly as written.\n"
+            "MAKERVAULT_PORT=9472\n"
+            "MEDIA_STORAGE=/mnt/other path/media\n"
+            "OIDC_ENABLED=true\n"
+            "CUSTOM_SETTING=custom-value # intentional comment\n"
+            "DJANGO_SECRET_KEY=CHANGE_ME_TO_A_LONG_RANDOM_VALUE\n"
+            "POSTGRES_PASSWORD=CHANGE_ME_DATABASE_PASSWORD\n"
+            "DJANGO_ALLOWED_HOSTS=example.com,localhost\n"
+        )
+        self.env.write_text(original, encoding="utf-8")
+        setup_env(self.env, self.example)
+        updated = self.env.read_text(encoding="utf-8")
+        original_lines = [line for line in original.splitlines() if not line.startswith(("DJANGO_SECRET_KEY=", "POSTGRES_PASSWORD="))]
+        updated_lines = [line for line in updated.splitlines() if not line.startswith(("DJANGO_SECRET_KEY=", "POSTGRES_PASSWORD="))]
+        self.assertEqual(updated_lines, original_lines)
+
+    def test_configured_secrets_are_not_rotated(self):
+        original = (
+            "DJANGO_SECRET_KEY=keep-this-existing-secret\n"
+            "POSTGRES_PASSWORD=keep-this-existing-password\n"
+            "CUSTOM_SETTING=keep-me\n"
+        )
+        self.env.write_text(original, encoding="utf-8")
+        self.assertEqual(setup_env(self.env, self.example), [])
+        self.assertEqual(self.env.read_text(encoding="utf-8"), original)
