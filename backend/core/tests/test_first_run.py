@@ -57,6 +57,16 @@ class FirstRunSetupTests(TestCase):
         self.location.write_text(json.dumps(payload))
         self.assertFalse(token_valid(token))
 
+    def test_fresh_homepage_opens_setup_automatically(self):
+        response = self.client.get("/")
+        self.assertRedirects(response, "/setup/", fetch_redirect_response=False)
+
+    def test_existing_admin_preserves_normal_login_flow(self):
+        get_user_model().objects.create_superuser("existing", "existing@example.test", "a-good-test-password")
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/accounts/login/", response["Location"])
+
     def test_token_page_is_not_embeddable(self):
         response = self.client.get("/setup/")
         self.assertEqual(response.status_code, 200)
