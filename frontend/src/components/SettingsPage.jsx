@@ -72,7 +72,7 @@ export default function SettingsPage({ config, onBackupStarted }) {
   const [notice, setNotice] = useState("");
   const [reviewState, setReviewState] = useState(null);
   const [reviewBusy, setReviewBusy] = useState("");
-  const [activeTab, setActiveTab] = useState("library");
+  const [activeTab, setActiveTab] = useState("account");
 
   async function load() {
     setError("");
@@ -89,12 +89,9 @@ export default function SettingsPage({ config, onBackupStarted }) {
     }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { if (config?.can_manage_workspace_settings) load(); }, [config?.can_manage_workspace_settings]);
 
-  if (!config?.is_staff) {
-    return <section className="empty"><div className="emptyIcon">◇</div><h2>Administrator settings</h2><p>Catalogue maintenance scheduling is available to administrators only.</p></section>;
-  }
-  if (!settings || !form) return <LoadingBlock label="Loading settings…" />;
+  if (config?.can_manage_workspace_settings && (!settings || !form)) return <LoadingBlock label="Loading settings…" />;
 
   const set = (key, value) => setForm(current => ({ ...current, [key]: value }));
 
@@ -308,13 +305,17 @@ export default function SettingsPage({ config, onBackupStarted }) {
   return <div className="settingsStack">
     <section className="panel settingsHero">
       <div>
-        <span className="settingsEyebrow">Administration</span>
+        <span className="settingsEyebrow">{config?.role || "User"} settings</span>
         <h2>MakerVault settings</h2>
         <p>Settings are grouped by the part of MakerVault they belong to, so unrelated controls no longer compete for the same page.</p>
       </div>
       <div className="settingsStatus">
-        {activeTab === "library"
-          ? <span className={settings.enabled ? "status-pill status-on" : "status-pill"}>{settings.enabled ? "Updates enabled" : "Updates disabled"}</span>
+        {activeTab === "account"
+          ? <span className="status-pill status-on">Personal account</span>
+          : activeTab === "security"
+            ? <span className="status-pill status-on">Instance security</span>
+          : activeTab === "library"
+          ? <span className={settings?.enabled ? "status-pill status-on" : "status-pill"}>{settings?.enabled ? "Updates enabled" : "Updates disabled"}</span>
           : activeTab === "printing"
             ? <span className={enabledIntegrations ? "status-pill status-on" : "status-pill"}>{enabledIntegrations} integration{enabledIntegrations === 1 ? "" : "s"} enabled</span>
             : activeTab === "backups"
@@ -326,7 +327,13 @@ export default function SettingsPage({ config, onBackupStarted }) {
     </section>
 
     <div className="settingsTabs" role="tablist" aria-label="Settings sections">
-      <button
+      <button type="button" role="tab" aria-selected={activeTab === "account"} className={activeTab === "account" ? "active" : ""} onClick={() => setActiveTab("account")}>
+        <strong>User Account</strong><small>Email, password, MFA, sign-in methods and sessions</small>
+      </button>
+      {config?.is_superuser && <button type="button" role="tab" aria-selected={activeTab === "security"} className={activeTab === "security" ? "active" : ""} onClick={() => setActiveTab("security")}>
+        <strong>Security</strong><small>Identity providers and server-wide authentication</small>
+      </button>}
+      {config?.can_manage_workspace_settings && <button
         type="button"
         role="tab"
         aria-selected={activeTab === "library"}
@@ -335,8 +342,8 @@ export default function SettingsPage({ config, onBackupStarted }) {
       >
         <strong>Library updates</strong>
         <small>Catalogue data, images and maintenance schedule</small>
-      </button>
-      <button
+      </button>}
+      {config?.can_manage_workspace_settings && <button
         type="button"
         role="tab"
         aria-selected={activeTab === "printing"}
@@ -345,7 +352,7 @@ export default function SettingsPage({ config, onBackupStarted }) {
       >
         <strong>3D Printing</strong>
         <small>Spool, printer and multi-material integrations</small>
-      </button>
+      </button>}
 
       {config?.is_superuser && <button
         type="button"
@@ -385,7 +392,24 @@ export default function SettingsPage({ config, onBackupStarted }) {
     {error && <div className="error">{error}</div>}
     {notice && <div className="notice">{notice}<button onClick={() => setNotice("")}>×</button></div>}
 
-    {activeTab === "library" && <>
+    {activeTab === "account" && <section className="panel settingsPanel">
+      <div className="panelHead"><div><h3>User Account</h3><p>Manage your own sign-in and security credentials. These controls use MakerVault's existing secure authentication flows.</p></div></div>
+      <div className="settingsAccountLinks">
+        <a href="/accounts/email/">Email addresses</a>
+        <a href="/accounts/password/change/">Change password</a>
+        <a href="/accounts/2fa/">Two-factor authentication</a>
+        <a href="/accounts/3rdparty/">Connected sign-in methods</a>
+        <a href="/accounts/sessions/">Active sessions</a>
+      </div>
+    </section>}
+    {activeTab === "security" && config?.is_superuser && <section className="panel settingsPanel">
+      <div className="panelHead"><div><h3>Security</h3><p>Server-wide authentication and identity-provider administration.</p></div></div>
+      <div className="settingsAccountLinks">
+        <a href="/accounts/security/oidc/">OIDC identity providers</a>
+        <a href="/admin/">Django administration</a>
+      </div>
+    </section>}
+    {activeTab === "library" && config?.can_manage_workspace_settings && <>
     <CatalogueCoveragePanel />
     <section className="panel settingsPanel">
       <div className="panelHead">
@@ -441,7 +465,7 @@ export default function SettingsPage({ config, onBackupStarted }) {
 
     </>}
 
-    {activeTab === "printing" && <>
+    {activeTab === "printing" && config?.can_manage_workspace_settings && <>
     <section className="panel settingsPanel settingsPrintingPanel">
       <div className="panelHead">
         <div><h3>3D printing integrations</h3><p>Enable and configure the services used by the 3D Printing area. Connected services can be synchronised manually or on their own schedule.</p></div>
