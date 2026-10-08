@@ -345,3 +345,43 @@ class FilamentCatalogueEnrichmentTests(TestCase):
         self.assertEqual(metrics["density"]["percent"], 100.0)
         self.assertEqual(metrics["weight"]["percent"], 100.0)
         self.assertEqual(metrics["sources"]["percent"], 100.0)
+
+
+class FilamentContinuationTaskTests(TestCase):
+    @patch("core.tasks.backup_in_progress", return_value=False)
+    @patch("core.tasks.refresh_imported_filament_products")
+    def test_continue_only_when_more_rows_exist(self, refresh, _backup):
+        from core.tasks import enrich_filament_catalogue_task
+
+        refresh.return_value = {
+            "status": "limit-reached", "checked": 80, "updated": 2,
+            "next_cursor": "00000000-0000-0000-0000-000000000080",
+        }
+        with patch.object(enrich_filament_catalogue_task, "apply_async") as queue:
+            result = enrich_filament_catalogue_task(force_catalogue=True)
+            queue.assert_called_once_with(
+                kwargs={
+                    "force_catalogue": False,
+                    "limit": 80,
+                    "cursor": "00000000-0000-0000-0000-000000000080",
+                },
+                countdown=5,
+            )
+            refresh.return_value = {
+                "status": "complete", "checked": 23,
+                "updated": 0, "next_cursor": None,
+            }
+            enrich_filament_catalogue_task(
+                limit=80, cursor=result["next_cursor"],
+            )
+            self.assertEqual(queue.call_count, 1)
+
+    @patch("core.tasks.backup_in_progress", return_value=True)
+    @patch("core.tasks.refresh_imported_filament_products")
+    def test_does_not_refresh_during_backup(self, refresh, _backup):
+        from core.tasks import enrich_filament_catalogue_task
+
+        self.assertEqual(
+            enrich_filament_catalogue_task()["status"], "backup-in-progress",
+        )
+        refresh.assert_not_called()
