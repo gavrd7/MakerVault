@@ -48,7 +48,7 @@ class MakerVaultRoleTests(TestCase):
         self.assertEqual(self.client.get("/api/settings/printing-integrations/").status_code, 200)
         self.assertEqual(self.client.get("/api/settings/users/").status_code, 403)
         self.assertEqual(self.client.get("/api/settings/https/").status_code, 403)
-        self.assertEqual(self.client.get("/accounts/security/oidc/").status_code, 403)
+        self.assertEqual(self.client.get("/accounts/security/oidc/").status_code, 302)
 
     def test_viewer_cannot_access_admin_or_operational_settings(self):
         self.client.force_login(self.viewer)
