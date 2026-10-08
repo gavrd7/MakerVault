@@ -133,7 +133,7 @@ The step-by-step guides assume no previous MakerVault experience and explain the
 ```bash
 git clone https://github.com/gavrd7/MakerVault.git
 cd MakerVault
-python3 scripts/setup_env.py
+python3 scripts/generate_env_secrets.py
 ```
 
 The default Compose file pulls:
