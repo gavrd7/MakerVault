@@ -318,7 +318,7 @@ def spoolmandb_meta():
         },
     }
 
-def refresh_imported_filament_products(*, force_catalogue=False, limit=None):
+def refresh_imported_filament_products(*, force_catalogue=False, limit=None, cursor=None):
     """Refresh saved SpoolmanDB-backed products without overwriting user edits.
 
     Only blank MakerVault fields are populated from upstream. Richer provenance
@@ -335,13 +335,21 @@ def refresh_imported_filament_products(*, force_catalogue=False, limit=None):
     queryset = (
         FilamentProduct.objects.select_related("source")
         .filter(source__source_type="spoolmandb")
-        .order_by("updated_at", "pk")
+        .order_by("pk")
     )
-    if limit is not None:
-        queryset = queryset[:max(int(limit), 0)]
+    if cursor:
+        queryset = queryset.filter(pk__gt=cursor)
+    # Fetch one extra entry to distinguish a finished sweep from a full batch.
+    if limit is not None and int(limit) > 0:
+        entries = list(queryset[:int(limit) + 1])
+        more = len(entries) > int(limit)
+        entries = entries[:int(limit)]
+    else:
+        entries = list(queryset)
+        more = False
 
     checked = updated = missing = 0
-    for item in queryset:
+    for item in entries:
         checked += 1
         external_id = str(getattr(item.source, "external_id", "") or "").strip()
         row = upstream.get(external_id)
@@ -413,10 +421,11 @@ def refresh_imported_filament_products(*, force_catalogue=False, limit=None):
             item.source.save(update_fields=["raw_metadata", "updated_at"])
 
     return {
-        "status": "ok",
+        "status": "limit-reached" if more else "complete",
         "checked": checked,
         "updated": updated,
         "missing_upstream": missing,
+        "next_cursor": str(entries[-1].pk) if more and entries else None,
     }
 
 
