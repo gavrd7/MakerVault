@@ -43,19 +43,19 @@ def setup_env(destination: Path, template: Path) -> list[str]:
         if name in found:
             raise ValueError(f"Duplicate setting {name} in {source}; resolve this before setup.")
         found.add(name)
-        actual = value.strip().strip("\\r\\n").strip("'\\\"")
+        actual = value.strip().strip('"').strip("'")
         if actual in PLACEHOLDERS[name]:
             generated.append(name)
-            newline = "\\n" if line.endswith("\\n") else ""
+            newline = "\n" if line.endswith("\n") else ""
             rewritten.append(f"{name}={secrets.token_urlsafe(64)}{newline}")
         else:
             rewritten.append(line)
 
     for name in PLACEHOLDERS:
         if name not in found:
-            if rewritten and not rewritten[-1].endswith("\\n"):
-                rewritten.append("\\n")
-            rewritten.append(f"{name}={secrets.token_urlsafe(64)}\\n")
+            if rewritten and not rewritten[-1].endswith("\n"):
+                rewritten.append("\n")
+            rewritten.append(f"{name}={secrets.token_urlsafe(64)}\n")
             generated.append(name)
 
     original_mode = destination.stat().st_mode & 0o777 if destination.exists() else 0o600
