@@ -62,12 +62,10 @@ Before editing, read [Configure your .env file](environment.md) for an explanati
 **Existing installation?** Keep your current `.env`; do not copy the example over it or regenerate its secrets. Use the [update guide](../administration/updates.md).
 
 ```bash
-cp .env.example .env
-chmod 600 .env
-python3 -c "import secrets; print(secrets.token_urlsafe(64))"
+python3 scripts/generate_env_secrets.py
 ```
 
-Copy the generated random value. It is your **Django secret key**, not your login password or file-encryption key. Generate a second value for the database password by running the Python command again.
+The setup script creates `.env` from the example, generates distinct Django and PostgreSQL secrets, and restricts file permissions to the current user. Rerunning it preserves already configured secrets and all other settings. Do not reuse production storage or database credentials for a test installation.
 
 Find your server's network address:
 
