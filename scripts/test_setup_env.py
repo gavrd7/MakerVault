@@ -2,7 +2,7 @@ import tempfile
 from pathlib import Path
 from unittest import TestCase
 
-from scripts.setup_env import setup_env
+from scripts.generate_env_secrets import setup_env
 
 
 class SetupEnvironmentTests(TestCase):
