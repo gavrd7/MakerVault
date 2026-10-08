@@ -2579,3 +2579,9 @@ a:focus-visible,
   .dashboardProjectAttentionRow{grid-template-columns:1fr}
   .dashboardProjectAttentionBadges{justify-content:flex-start}
 }
+
+/* Personal and instance security are part of the primary Settings workspace. */
+.settingsAccountLinks{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:10px;padding:4px 0 6px}
+.settingsAccountLinks a{display:flex;align-items:center;min-height:52px;padding:12px 14px;border:1px solid #344052;border-radius:11px;background:#101923;color:#ded6ff;font-weight:650;text-decoration:none}
+.settingsAccountLinks a:hover,.settingsAccountLinks a:focus-visible{border-color:#7766d4;background:#192136;color:#fff}
+@media(max-width:600px){.settingsAccountLinks{grid-template-columns:1fr}}
