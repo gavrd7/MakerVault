@@ -1,9 +1,9 @@
 {% extends "socialaccount/base_manage.html" %}
 {% load i18n %}
 {% load allauth %}
-{% block head_title %}Sign-in methods{% endblock head_title %}
+{% block head_title %}Connected accounts{% endblock head_title %}
 {% block content %}
-    {% element h1 %}Sign-in methods{% endelement %}
+    {% element h1 %}Connected accounts{% endelement %}
     {% element p %}
         Link an external identity provider to this MakerVault account, or remove a link you no longer use.
         Linking changes how you sign in; it does not create, merge or move workshop data.
@@ -39,8 +39,8 @@
     {% else %}
         {% element h2 %}Linked external identities{% endelement %}
         {% element p %}
-            No external identity is linked yet. If you normally sign in with a username/email and password,
-            that local sign-in continues to work independently.
+            No connected accounts yet. You can continue signing in with your MakerVault password.
+            If your administrator enables external identity providers, compatible providers can be linked below.
         {% endelement %}
     {% endif %}
 
