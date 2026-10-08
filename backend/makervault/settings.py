@@ -107,6 +107,7 @@ MIDDLEWARE = [
     "allauth.account.middleware.AccountMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "core.account_embed.AccountEmbedFrameMiddleware",
 ]
 
 ROOT_URLCONF = "makervault.urls"

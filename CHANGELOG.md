@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## Unreleased — planned for v1.0.5 (not published)
+
+- Added idempotent `scripts/generate_env_secrets.py` to generate only the Django and PostgreSQL secrets without overwriting custom `.env` settings.
+- Integrated personal account and OIDC management views within the main Settings interface and renamed linked sign-in methods to Connected accounts; removed the unavailable Active sessions shortcut.
+
+- Consolidated personal account and server-wide security links into permission-aware Settings sections; improved responsive layouts for existing Allauth pages.
+- Added Admin, Supervisor, User and Viewer role assignment in user administration, with backend enforcement for operational settings and protections against self-demotion.
 
 ## v1.0.4 — 7 October 2026
 

@@ -6,22 +6,35 @@
 
 1. Sign in as a superuser and open **Administration**.
 2. Open **Users** and add a user with a unique username and strong initial password.
-3. Save, then edit the user's permissions/groups.
-4. Add **Editor** for everyday creation/editing, or **Viewer** for read-only access to records the account is allowed to see.
-5. Keep **Active** enabled. Grant **Staff status** only if administrative access is needed, and **Superuser status** only for a full administrator.
-6. Ask the person to sign in and change their initial password through **Account & Security**.
+3. Save the user, then open **Settings → Users & storage** to assign the appropriate role.
+4. Choose Admin, Supervisor, User or Viewer using the role selector.
+5. Keep **Active** enabled. Admin is reserved for trusted full-instance administrators.
+6. Ask the person to sign in and change their initial password through **Settings → User Account**.
 
 A group grants actions, not ownership of another person's workspace. The default Editor group includes view/add/change core permissions and inventory deletion; it does not grant every delete action. A button may be absent because a specific permission is missing.
 
 Local self-registration is disabled by default. Enabling `ALLOW_LOCAL_REGISTRATION` is a separate administrative decision. OIDC provisioning is configured separately and does not mean a new identity should automatically become an administrator.
 
+## Change user roles
+
+A superuser can manage roles at any time under **Settings → Users & storage → Users**.
+
+- **Admin:** full instance access, including account administration, HTTPS, OIDC, security and backups.
+- **Supervisor:** operational settings (library updates and 3D printing integrations), without administrator, HTTPS, OIDC, backups or user-management access.
+- **User:** personal account settings and standard workspace access.
+- **Viewer:** read-only workspace access and personal account settings.
+
+The existing Editor group is retained for installations that already use it. The new User and Supervisor role presets use the existing workspace editing permissions, while server-wide settings require separate authorization. Roles restrict which settings can be *used* as well as which sections appear; hiding a tab alone is not a security boundary. A newly changed role takes effect on subsequent authenticated requests; reload the app to refresh its navigation.
+
+Only a superuser can assign roles. MakerVault rejects attempts to demote the current administrator or the last active superuser.
+
 ## Sign-in methods and account linking
 
-Each signed-in user can open **Account & Security → Sign-in methods** to see external identities linked to their MakerVault account and any configured identity providers available to connect.
+Each signed-in user can open **Settings → User Account → Connected sign-in methods** to see external identities linked to their MakerVault account and any configured identity providers available to connect.
 
 Linking an OIDC identity does not create a second MakerVault workspace: it adds another way to sign in to the same account. Removing a linked identity removes only that sign-in route. MakerVault blocks removal when it would leave the user with neither a usable local password nor another external sign-in connection.
 
-Administrators configure which OIDC providers exist under **Account & Security → Identity providers / OIDC**. That administration screen and the per-user **Sign-in methods** screen serve different purposes.
+Administrators configure which OIDC providers exist under **Settings → Security → OIDC identity providers**. That administration screen and the per-user **Sign-in methods** screen serve different purposes.
 
 ## What is shared?
 
