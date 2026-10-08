@@ -133,9 +133,7 @@ The step-by-step guides assume no previous MakerVault experience and explain the
 ```bash
 git clone https://github.com/gavrd7/MakerVault.git
 cd MakerVault
-cp .env.example .env
-chmod 600 .env
-python3 -c "import secrets; print(secrets.token_urlsafe(64))"
+python3 scripts/setup_env.py
 ```
 
 The default Compose file pulls:
@@ -148,7 +146,7 @@ No application compilation is required on the server for the normal install.
 
 For a **new installation**, edit `.env` before starting:
 
-- Set a newly generated `DJANGO_SECRET_KEY` and a separate strong `POSTGRES_PASSWORD`.
+- The setup script generates independent `DJANGO_SECRET_KEY` and `POSTGRES_PASSWORD` values automatically, retaining existing values if run again.
 - Add your server hostname/IP to `DJANGO_ALLOWED_HOSTS` and its full URL to `DJANGO_CSRF_TRUSTED_ORIGINS`.
 - Select timezone, currency and persistent storage locations.
 - For direct LAN access, use `TRUST_PROXY_HEADERS=false` and `ALLAUTH_TRUSTED_PROXY_COUNT=0`.
