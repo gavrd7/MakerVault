@@ -22,9 +22,23 @@
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
-**Planned for v1.0.5 (not yet released):** consolidated, mobile-friendly account and server security settings; Admin, Supervisor, User and Viewer roles with administrator reassignment; and the `python3 scripts/generate_env_secrets.py` setup helper. These changes remain under review in [PR #78](https://github.com/gavrd7/MakerVault/pull/78). The stable container is still v1.0.4. The separate first-run wizard is tracked in draft [PR #80](https://github.com/gavrd7/MakerVault/pull/80) and is not part of PR #78.
+**Planned for v1.0.5 (not yet released):** the merged account/security settings and Admin / Supervisor / User / Viewer roles (PR #78), safe `.env` secret generation (PR #79), and development-image publishing (PR #81). PR #80 adds a secure browser-based first-run administrator wizard and moves catalogue seeding and OrcaSlicer enrichment into background startup work. The published stable image remains v1.0.4.
 
 MakerVault keeps the practical parts of a workshop connected: what you own, what a build needs, which files and wiring belong to it, which model revision you printed, and where the finished parts ended up.
+
+## First-run administrator setup (upcoming v1.0.5)
+
+On a **fresh installation with no superuser**, opening MakerVault's normal URL redirects to the first-run setup wizard automatically. The server operator obtains a short-lived token (valid for 30 minutes) from the Docker host, then creates the first administrator in the browser with username, email, password and confirmation. The wizard includes a password-visibility checkbox and matching feedback. It closes automatically once any superuser exists; existing installations continue to the standard sign-in page.
+
+Using standard Compose in your deployment directory, obtain the one-time token with:
+
+```bash
+sudo docker compose exec -u makervault makervault python manage.py first_run_token
+```
+
+Use the same `-p` and `-f` options as your original `docker compose up` command when using a custom project or build override. **Never publish or share the token.** Leave `MAKERVAULT_ADMIN_PASSWORD` empty if you want to create the administrator in the GUI; the existing environment-based initial admin mechanism and Django's `createsuperuser` remain available as alternatives. The first-run wizard cannot be used to reset an existing administrator's password; instead use `python manage.py changepassword YOUR_ADMIN_USERNAME` in the running container.
+
+The web interface no longer waits for initial catalogue seeding or OrcaSlicer printer-model enrichment to finish. These tasks run under the supervised background process; catalogue entries may populate shortly after the interface becomes available.
 
 ## Development and validation model
 
