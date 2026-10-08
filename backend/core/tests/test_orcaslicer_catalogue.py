@@ -230,6 +230,57 @@ class OrcaSlicerPrinterCatalogueTests(TestCase):
             "machine/Bambu Lab A1 0.4 nozzle.json",
         )
 
+
+    def test_verified_supplemental_build_volume_fills_only_missing_fields(self):
+        maker = PrinterManufacturer.objects.create(name="Creality")
+        item = PrinterCatalogModel.objects.create(
+            manufacturer=maker, name="Fixture Printer",
+            build_volume_x_mm=245,
+            source_url="https://example.com/manual",
+        )
+        row = {
+            "manufacturer": "Creality", "name": "Fixture Printer",
+            "family": "Test", "source_url": "https://example.com/catalogue",
+            "build_volume_mm": [220, 220, 250],
+            "build_volume_source_url": "https://www.creality.com/products/test",
+        }
+        _merge_supplemental_model(row)
+        item.refresh_from_db()
+        self.assertEqual(str(item.build_volume_x_mm), "245.00")
+        self.assertEqual(str(item.build_volume_y_mm), "220.00")
+        self.assertEqual(str(item.build_volume_z_mm), "250.00")
+        self.assertEqual(item.source_url, "https://example.com/manual")
+        self.assertEqual(
+            item.features["makervault_supplemental"]["build_volume_source_url"],
+            row["build_volume_source_url"],
+        )
+
+    def test_supplemental_volumes_require_valid_reference_and_dimensions(self):
+        maker = PrinterManufacturer.objects.create(name="Creality")
+        for index, bad in enumerate((
+            {"build_volume_mm": [220, 220, 250]},
+            {"build_volume_mm": [-1, 220, 250],
+             "build_volume_source_url": "https://www.creality.com/test"},
+            {"build_volume_mm": [220, 250],
+             "build_volume_source_url": "https://www.creality.com/test"},
+        )):
+            row = {
+                "manufacturer": "Creality", "name": f"Invalid {index}",
+                "source_url": "", **bad,
+            }
+            _merge_supplemental_model(row)
+            item = PrinterCatalogModel.objects.get(manufacturer=maker, name=row["name"])
+            self.assertIsNone(item.build_volume_x_mm)
+
+    def test_supplemental_catalogue_has_verified_creality_volumes(self):
+        records = {
+            row["name"]: row for row in _load_supplemental_printers()
+            if row["manufacturer"] == "Creality"
+        }
+        self.assertEqual(records["K2 Pro"]["build_volume_mm"], [300, 300, 300])
+        self.assertEqual(records["K1 SE"]["build_volume_mm"], [220, 220, 250])
+        self.assertTrue(records["K1 SE"]["build_volume_source_url"].startswith("https://"))
+
     def test_supplemental_catalogue_is_fdm_only_and_includes_known_creality_families(self):
         rows = _load_supplemental_printers()
         creality = [row for row in rows if row["manufacturer"] == "Creality"]
