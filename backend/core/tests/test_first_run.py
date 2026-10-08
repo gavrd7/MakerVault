@@ -12,7 +12,7 @@ from core.first_run import create_token, token_valid
 @override_settings(STORAGES={
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
-})
+}, CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}})
 class FirstRunSetupTests(TestCase):
     def setUp(self):
         self.folder = tempfile.TemporaryDirectory()
