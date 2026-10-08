@@ -276,3 +276,44 @@ class OrcaSlicerPrinterCatalogueTests(TestCase):
         self.assertEqual(existing.features["manual_note"], "curated")
         self.assertEqual(existing.features["makervault_supplemental"]["technology"], "FDM/FFF")
 
+
+
+class OrcaPrinterTaskRetryTests(TestCase):
+    @patch("core.tasks.backup_in_progress", return_value=False)
+    @patch("core.tasks.sync_orcaslicer_printer_catalogue")
+    def test_partial_sync_requeues_once(self, sync, _backup):
+        from core.tasks import sync_orcaslicer_printer_catalogue_task
+
+        sync.return_value = {"status": "partial", "hardware_profiles_failed": 1}
+        with patch.object(sync_orcaslicer_printer_catalogue_task, "apply_async") as queue:
+            sync_orcaslicer_printer_catalogue_task()
+            queue.assert_called_once_with(
+                kwargs={"retry_attempt": 1}, countdown=600,
+            )
+            sync_orcaslicer_printer_catalogue_task(retry_attempt=1)
+            self.assertEqual(queue.call_count, 1)
+
+    @patch("core.tasks.backup_in_progress", return_value=False)
+    @patch("core.tasks.sync_orcaslicer_printer_catalogue",
+           return_value={"status": "complete", "hardware_profiles_incomplete": 3})
+    def test_missing_unavailable_hardware_does_not_trigger_retry(self, _sync, _backup):
+        from core.tasks import sync_orcaslicer_printer_catalogue_task
+
+        with patch.object(sync_orcaslicer_printer_catalogue_task, "apply_async") as queue:
+            self.assertEqual(
+                sync_orcaslicer_printer_catalogue_task()["status"], "complete",
+            )
+            queue.assert_not_called()
+
+    @patch("core.tasks.backup_in_progress", return_value=True)
+    @patch("core.tasks.sync_orcaslicer_printer_catalogue")
+    def test_backup_skips_sync_and_retry(self, sync, _backup):
+        from core.tasks import sync_orcaslicer_printer_catalogue_task
+
+        with patch.object(sync_orcaslicer_printer_catalogue_task, "apply_async") as queue:
+            self.assertEqual(
+                sync_orcaslicer_printer_catalogue_task()["status"],
+                "backup-in-progress",
+            )
+            queue.assert_not_called()
+            sync.assert_not_called()
