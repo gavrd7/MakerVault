@@ -61,6 +61,35 @@ function formatWhen(value) {
   return date.toLocaleString();
 }
 
+function AccountSettingsFrame({ src, title }) {
+  const [height, setHeight] = useState(520);
+  function frameLoaded(event) {
+    try {
+      const frame = event.currentTarget;
+      const doc = frame.contentDocument;
+      if (!doc || frame.contentWindow?.location.origin !== window.location.origin) return;
+      const resize = () => setHeight(Math.max(340, Math.ceil(doc.documentElement.scrollHeight + 24)));
+      resize();
+      if (typeof ResizeObserver !== "undefined") {
+        frame._accountResize?.disconnect();
+        frame._accountResize = new ResizeObserver(resize);
+        frame._accountResize.observe(doc.body);
+      }
+      // External identity-provider authorisation must occur in the top-level
+      // browser rather than inside a frame.
+      for (const link of doc.querySelectorAll('a[href*="/accounts/oidc/"], a[href*="/accounts/social/"]')) {
+        link.setAttribute("target", "_top");
+      }
+      for (const form of doc.querySelectorAll('form[action*="/accounts/oidc/"], form[action*="/accounts/social/"]')) {
+        form.setAttribute("target", "_top");
+      }
+    } catch {
+      // Authentication redirects to third-party sites cannot be inspected.
+    }
+  }
+  return <iframe className="settingsAccountFrame" title={title} src={src} style={{ height }} onLoad={frameLoaded} />;
+}
+
 export default function SettingsPage({ config, onBackupStarted }) {
   const [settings, setSettings] = useState(null);
   const [form, setForm] = useState(null);
@@ -73,6 +102,8 @@ export default function SettingsPage({ config, onBackupStarted }) {
   const [reviewState, setReviewState] = useState(null);
   const [reviewBusy, setReviewBusy] = useState("");
   const [activeTab, setActiveTab] = useState("account");
+  const [accountRoute, setAccountRoute] = useState("/accounts/email/");
+  const [securityRoute, setSecurityRoute] = useState("/accounts/security/oidc/");
 
   async function load() {
     setError("");
@@ -393,21 +424,26 @@ export default function SettingsPage({ config, onBackupStarted }) {
     {notice && <div className="notice">{notice}<button onClick={() => setNotice("")}>×</button></div>}
 
     {activeTab === "account" && <section className="panel settingsPanel">
-      <div className="panelHead"><div><h3>User Account</h3><p>Manage your own sign-in and security credentials. These controls use MakerVault's existing secure authentication flows.</p></div></div>
-      <div className="settingsAccountLinks">
-        <a href="/accounts/email/">Email addresses</a>
-        <a href="/accounts/password/change/">Change password</a>
-        <a href="/accounts/2fa/">Two-factor authentication</a>
-        <a href="/accounts/3rdparty/">Connected sign-in methods</a>
-        <a href="/accounts/sessions/">Active sessions</a>
+      <div className="panelHead"><div><h3>User Account</h3><p>Manage your email, password, two-factor authentication and connected accounts without leaving Settings.</p></div></div>
+      <div className="settingsAccountLinks settingsAccountSelector" role="group" aria-label="User account options">
+        {[
+          ["Email addresses", "/accounts/email/"],
+          ["Change password", "/accounts/password/change/"],
+          ["Two-factor authentication", "/accounts/2fa/"],
+          ["Connected accounts", "/accounts/3rdparty/"],
+          ["Active sessions", "/accounts/sessions/"],
+        ].map(([label, path]) => <button key={path} type="button" className={accountRoute === path ? "active" : ""} aria-pressed={accountRoute === path} onClick={() => setAccountRoute(path)}>{label}</button>)}
       </div>
+      {accountRoute === "/accounts/3rdparty/" && <div className="settingsCallout"><strong>Connected accounts</strong><p>Any external identities linked to your MakerVault login will appear below. If none are linked, you can keep using your local password. Available connection options depend on configured identity providers.</p></div>}
+      <AccountSettingsFrame key={accountRoute} src={accountRoute} title="Account preferences" />
     </section>}
     {activeTab === "security" && config?.is_superuser && <section className="panel settingsPanel">
       <div className="panelHead"><div><h3>Security</h3><p>Server-wide authentication and identity-provider administration.</p></div></div>
-      <div className="settingsAccountLinks">
-        <a href="/accounts/security/oidc/">OIDC identity providers</a>
-        <a href="/admin/">Django administration</a>
+      <div className="settingsAccountLinks settingsAccountSelector" role="group" aria-label="Security options">
+        <button type="button" className="active" onClick={() => setSecurityRoute("/accounts/security/oidc/")}>OIDC identity providers</button>
       </div>
+      <AccountSettingsFrame key={securityRoute} src={securityRoute} title="OIDC identity providers" />
+      <div className="settingsCallout"><p>Advanced Django administration is available separately for administrators.</p><a href="/admin/">Open Django administration</a></div>
     </section>}
     {activeTab === "library" && config?.can_manage_workspace_settings && <>
     <CatalogueCoveragePanel />
