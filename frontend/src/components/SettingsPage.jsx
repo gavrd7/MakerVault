@@ -431,7 +431,6 @@ export default function SettingsPage({ config, onBackupStarted }) {
           ["Change password", "/accounts/password/change/"],
           ["Two-factor authentication", "/accounts/2fa/"],
           ["Connected accounts", "/accounts/3rdparty/"],
-          ["Active sessions", "/accounts/sessions/"],
         ].map(([label, path]) => <button key={path} type="button" className={accountRoute === path ? "active" : ""} aria-pressed={accountRoute === path} onClick={() => setAccountRoute(path)}>{label}</button>)}
       </div>
       {accountRoute === "/accounts/3rdparty/" && <div className="settingsCallout"><strong>Connected accounts</strong><p>Any external identities linked to your MakerVault login will appear below. If none are linked, you can keep using your local password. Available connection options depend on configured identity providers.</p></div>}
