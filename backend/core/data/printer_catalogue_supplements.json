@@ -6,46 +6,88 @@
       "manufacturer": "Creality",
       "name": "K1",
       "family": "K1",
-      "source_url": "https://store.creality.com/uk/collections/k1-series-3d-printer"
+      "source_url": "https://store.creality.com/uk/collections/k1-series-3d-printer",
+      "build_volume_mm": [
+        220,
+        220,
+        250
+      ],
+      "build_volume_source_url": "https://store.creality.com/blogs/all/k1-vs-k1-max-vs-k1c"
     },
     {
       "manufacturer": "Creality",
       "name": "K1C",
       "family": "K1",
-      "source_url": "https://store.creality.com/uk/collections/k1-series-3d-printer"
+      "source_url": "https://store.creality.com/uk/collections/k1-series-3d-printer",
+      "build_volume_mm": [
+        220,
+        220,
+        250
+      ],
+      "build_volume_source_url": "https://www.creality.com/products/k1c-carbon-3d-printer"
     },
     {
       "manufacturer": "Creality",
       "name": "K1 Max",
       "family": "K1",
-      "source_url": "https://store.creality.com/uk/collections/k1-series-3d-printer"
+      "source_url": "https://store.creality.com/uk/collections/k1-series-3d-printer",
+      "build_volume_mm": [
+        300,
+        300,
+        300
+      ],
+      "build_volume_source_url": "https://store.creality.com/blogs/all/k1-vs-k1-max-vs-k1c"
     },
     {
       "manufacturer": "Creality",
       "name": "K1 SE",
       "family": "K1",
-      "source_url": "https://store.creality.com/uk/collections/k1-series-3d-printer"
+      "source_url": "https://store.creality.com/uk/collections/k1-series-3d-printer",
+      "build_volume_mm": [
+        220,
+        220,
+        250
+      ],
+      "build_volume_source_url": "https://www.creality.com/compare/compare-k1-flagship-series"
     },
     {
       "manufacturer": "Creality",
       "name": "K2",
       "family": "K2",
       "source_url": "https://store.creality.com/uk/collections/k2-series-3d-printers",
-      "multi_material_system": "creality_cfs"
+      "multi_material_system": "creality_cfs",
+      "build_volume_mm": [
+        260,
+        260,
+        260
+      ],
+      "build_volume_source_url": "https://www.creality.com/ae/products/k2-series"
     },
     {
       "manufacturer": "Creality",
       "name": "K2 Plus",
       "family": "K2",
       "source_url": "https://store.creality.com/uk/collections/k2-series-3d-printers",
-      "multi_material_system": "creality_cfs"
+      "multi_material_system": "creality_cfs",
+      "build_volume_mm": [
+        350,
+        350,
+        350
+      ],
+      "build_volume_source_url": "https://store.creality.com/uk/pages/compare"
     },
     {
       "manufacturer": "Creality",
       "name": "K2 Pro",
       "family": "K2",
       "source_url": "https://store.creality.com/uk/collections/k2-series-3d-printers",
-      "multi_material_system": "creality_cfs"
+      "multi_material_system": "creality_cfs",
+      "build_volume_mm": [
+        300,
+        300,
+        300
+      ],
+      "build_volume_source_url": "https://www.creality.com/ae/products/k2-series"
     },
     {
       "manufacturer": "Creality",
@@ -118,25 +160,49 @@
       "manufacturer": "Creality",
       "name": "Ender-3 V3",
       "family": "Ender-3",
-      "source_url": "https://store.creality.com/uk/collections/3d-printers"
+      "source_url": "https://store.creality.com/uk/collections/3d-printers",
+      "build_volume_mm": [
+        220,
+        220,
+        250
+      ],
+      "build_volume_source_url": "https://www.creality.com/products/creality-ender-3-v3"
     },
     {
       "manufacturer": "Creality",
       "name": "Ender-3 V3 SE",
       "family": "Ender-3",
-      "source_url": "https://store.creality.com/uk/collections/3d-printers"
+      "source_url": "https://store.creality.com/uk/collections/3d-printers",
+      "build_volume_mm": [
+        220,
+        220,
+        250
+      ],
+      "build_volume_source_url": "https://devstore.creality.com/uk/blogs/tutorial/ender-series-3d-printer-comparison"
     },
     {
       "manufacturer": "Creality",
       "name": "Ender-3 V3 KE",
       "family": "Ender-3",
-      "source_url": "https://store.creality.com/uk/collections/3d-printers"
+      "source_url": "https://store.creality.com/uk/collections/3d-printers",
+      "build_volume_mm": [
+        220,
+        220,
+        240
+      ],
+      "build_volume_source_url": "https://store.creality.com/products/ender-3-v3-ke-3d-printer"
     },
     {
       "manufacturer": "Creality",
       "name": "Ender-3 V3 Plus",
       "family": "Ender-3",
-      "source_url": "https://store.creality.com/collections/fdm-3d-printer"
+      "source_url": "https://store.creality.com/collections/fdm-3d-printer",
+      "build_volume_mm": [
+        300,
+        300,
+        330
+      ],
+      "build_volume_source_url": "https://devstore.creality.com/uk/blogs/tutorial/ender-series-3d-printer-comparison"
     },
     {
       "manufacturer": "Creality",
@@ -166,7 +232,13 @@
       "manufacturer": "Creality",
       "name": "Ender-5 Max",
       "family": "Ender-5",
-      "source_url": "https://store.creality.com/uk/collections/3d-printers"
+      "source_url": "https://store.creality.com/uk/collections/3d-printers",
+      "build_volume_mm": [
+        400,
+        400,
+        400
+      ],
+      "build_volume_source_url": "https://devstore.creality.com/uk/blogs/tutorial/ender-series-3d-printer-comparison"
     },
     {
       "manufacturer": "Creality",
