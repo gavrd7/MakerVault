@@ -150,3 +150,42 @@ class VerifiedComponentReferenceTests(TestCase):
         self.assertEqual((first["status"], first["processed"]), ("limit-reached", 80))
         self.assertEqual((second["status"], second["processed"]), ("complete", 23))
         self.assertEqual(first["enriched"] + second["enriched"], 1)
+
+
+    def test_verified_technical_fields_are_fill_only_and_sourced(self):
+        from core.component_reference_enrichment import enrich_component_reference_links
+        component = ComponentModel.objects.create(
+            name="MCP23017 I/O expander", part_number="MCP23017",
+            specifications={"interface": "User custom", "note": "Keep me"},
+        )
+        result = enrich_component_reference_links()
+        component.refresh_from_db()
+        self.assertEqual(result["enriched"], 1)
+        self.assertEqual(component.specifications["interface"], "User custom")
+        self.assertEqual(component.specifications["gpio_count"], 16)
+        self.assertEqual(component.specifications["technical_field_sources"]["gpio_count"],
+                         "https://www.microchip.com/en-us/product/mcp23017")
+        self.assertEqual(component.specifications["note"], "Keep me")
+        self.assertEqual(enrich_component_reference_links()["enriched"], 0)
+
+    def test_family_chip_specs_do_not_transfer_to_breakout_modules(self):
+        from core.component_reference_enrichment import enrich_component_reference_links
+        component = ComponentModel.objects.create(
+            name="VL53L0X breakout module", part_number="VL53L0X",
+            specifications={"type": "sensor"},
+        )
+        enrich_component_reference_links()
+        component.refresh_from_db()
+        self.assertNotIn("maximum_range_m", component.specifications)
+        self.assertNotIn("interface", component.specifications)
+
+    def test_verified_sensor_range_from_manufacturer_is_recorded(self):
+        from core.component_reference_enrichment import enrich_component_reference_links
+        component = ComponentModel.objects.create(
+            name="VL53L0X ranging sensor IC", part_number="VL53L0X",
+            specifications={},
+        )
+        enrich_component_reference_links()
+        component.refresh_from_db()
+        self.assertEqual(component.specifications["maximum_range_m"], 2)
+        self.assertEqual(component.specifications["interface"], "I2C")
