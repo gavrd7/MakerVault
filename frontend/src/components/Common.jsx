@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { apiFetch } from "../api";
+import GenericComponentIllustration from "./GenericComponentIllustration";
+import { componentIllustrationKind } from "./componentIllustrations";
 
 export function Modal({ title, subtitle, onClose, children, wide = false, className = "" }) {
   const dialogRef = useRef(null);
@@ -66,23 +68,6 @@ export function BoardImage({ src, alt = "", size = "normal", placeholder = "MCU"
   </div>;
 }
 
-const COMPONENT_ARTWORK = [
-  { match: ["speaker", "buzzer"], glyph: "◖))", label: "Audio output" },
-  { match: ["microphone", "audio-player", "amplifier"], glyph: "◉♪", label: "Audio module" },
-  { match: ["button", "switch", "encoder", "joystick", "keypad", "touch", "potentiometer", "trimmer"], glyph: "⌁", label: "Control" },
-  { match: ["sensor", "temperature", "humidity", "pressure", "imu", "accelerometer", "gyroscope", "load-cell"], glyph: "◌", label: "Sensor" },
-  { match: ["display", "oled", "lcd", "matrix"], glyph: "▣", label: "Display" },
-  { match: ["relay", "mosfet", "transistor", "diode", "regulator", "buck", "boost", "battery", "power", "charger", "bms"], glyph: "ϟ", label: "Power" },
-  { match: ["connector", "header", "terminal", "usb", "uart", "rs232", "rs485"], glyph: "↔", label: "Connector" },
-  { match: ["wifi", "bluetooth", "zigbee", "lora", "radio", "nfc", "rfid", "communications"], glyph: "⌁)", label: "Communications" },
-  { match: ["led", "neopixel", "rgb"], glyph: "✦", label: "Lighting" },
-  { match: ["resistor"], glyph: "—/\/—", label: "Resistor" },
-  { match: ["capacitor"], glyph: "—| |—", label: "Capacitor" },
-  { match: ["fan"], glyph: "✣", label: "Fan" },
-  { match: ["motor", "servo", "stepper"], glyph: "⟳", label: "Motor" },
-  { match: ["fastener", "screw", "insert", "magnet", "mechanical"], glyph: "⬡", label: "Mechanical" },
-];
-
 export function ComponentArtwork({ src, alt = "", size = "normal", type = "", category = "", partNumber = "" }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [src]);
@@ -92,14 +77,16 @@ export function ComponentArtwork({ src, alt = "", size = "normal", type = "", ca
     </div>;
   }
 
-  const haystack = `${type} ${category} ${partNumber} ${alt}`.toLowerCase();
-  const artwork = COMPONENT_ARTWORK.find(entry => entry.match.some(term => haystack.includes(term)))
-    || { glyph: "◇", label: category || "Component" };
-  return <div className={`boardImage boardImage-${size} componentArtwork`} role="img" aria-label={`${artwork.label} generic artwork`}>
-    <span className="componentArtworkGlyph" aria-hidden="true">{artwork.glyph}</span>
+  if (partNumber?.trim()) {
+    return <div className={`boardImage boardImage-${size} componentArtwork`} role="img" aria-label="No verified product image">
+      <span className="componentArtworkGlyph" aria-hidden="true">◇</span>
+    </div>;
+  }
+  const kind = componentIllustrationKind({ type, category, name: alt });
+  return <div className={`boardImage boardImage-${size} componentArtwork`}>
+    <GenericComponentIllustration kind={kind} />
   </div>;
 }
-
 
 export function ImageViewer({ src, alt = "", title = "Image", onClose }) {
   const [scale, setScale] = useState(1);
