@@ -131,23 +131,50 @@ export default function BackupRestorePanel({ onBackupStarted }) {
   }
 
   async function copyCommand(command) {
+    // Most browsers deny navigator.clipboard on ordinary HTTP connections.
+    // Try it first, then fall back to the older synchronous copy operation.
+    let copied = false;
     try {
-      if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
-      await navigator.clipboard.writeText(command);
-      setNotice("Restore command copied.");
-    } catch {
-      // Clipboard access can be blocked by browser permissions or an
-      // insecure origin. Select the full command for ordinary manual copy.
-      const commandElement = document.querySelector(".restoreCommand code");
-      if (commandElement) {
-        const selection = window.getSelection();
-        const range = document.createRange();
-        range.selectNodeContents(commandElement);
-        selection?.removeAllRanges();
-        selection?.addRange(range);
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(command);
+        copied = true;
       }
-      setNotice("Clipboard access was blocked. The full restore command is selected; press Ctrl+C (or Cmd+C) to copy.");
+    } catch {
+      // Continue to the legacy fallback.
     }
+
+    if (!copied) {
+      const field = document.createElement("textarea");
+      field.value = command;
+      field.setAttribute("readonly", "");
+      field.style.position = "fixed";
+      field.style.left = "-9999px";
+      document.body.appendChild(field);
+      try {
+        field.focus();
+        field.select();
+        copied = document.execCommand("copy") === true;
+      } catch {
+        copied = false;
+      } finally {
+        field.remove();
+      }
+    }
+
+    if (copied) {
+      setNotice("Restore command copied to clipboard.");
+      return;
+    }
+
+    const commandElement = document.querySelector(".restoreCommand code");
+    if (commandElement) {
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(commandElement);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    }
+    setNotice("Automatic copying was blocked. Select the restore command and press Ctrl+C to copy it.");
   }
 
   if (!state) return <LoadingBlock label="Loading backups…" />;
