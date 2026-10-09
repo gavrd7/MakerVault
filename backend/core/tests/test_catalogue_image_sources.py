@@ -862,6 +862,26 @@ class CatalogueImagePriorityTests(TestCase):
             specifications={"type": "sensor"},
         )
 
+    @override_settings(CATALOGUE_IMAGE_MAX_PER_RUN=1, CATALOGUE_IMAGE_RETRY_DAYS=1)
+    @patch("core.catalogue_image_sources.cache.delete")
+    @patch("core.catalogue_image_sources.cache.add", return_value=True)
+    @patch("core.catalogue_image_sources.find_source_page_image", return_value=None)
+    @patch("core.catalogue_image_sources.resolve_catalogue_image", return_value=None)
+    def test_identifiable_component_without_image_does_not_use_generic_artwork(
+        self, resolve_image, source_image, cache_add, cache_delete,
+    ):
+        self.component.part_number = "BME280"
+        self.component.save(update_fields=["part_number"])
+        result = run_catalogue_image_seed(
+            limit=1, force_retry=True, kinds=["components"],
+        )
+        self.component.refresh_from_db()
+        self.assertEqual(result["artwork"], 0)
+        self.assertEqual(result["failed"], 1)
+        self.assertNotEqual(
+            self.component.specifications.get("image_source_type"), "generic-artwork"
+        )
+
     @override_settings(
         CATALOGUE_IMAGE_MAX_PER_RUN=1,
         CATALOGUE_IMAGE_RETRY_DAYS=1,

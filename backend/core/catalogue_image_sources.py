@@ -1550,7 +1550,7 @@ def run_catalogue_image_seed(
                                 by_provider[provider_key] = by_provider.get(provider_key, 0) + 1
                                 continue
 
-                            if isinstance(obj, ComponentModel):
+                            if isinstance(obj, ComponentModel) and not (obj.part_number or "").strip():
                                 metadata["auto_image_last_result"] = "generic-artwork"
                                 metadata["image_source_type"] = "generic-artwork"
                                 field = set_catalogue_image_metadata(obj, metadata, variant=variant)
@@ -1600,7 +1600,7 @@ def run_catalogue_image_seed(
                         by_provider[provider_key] = by_provider.get(provider_key, 0) + 1
                     except (CatalogueImageError, requests.RequestException, ValueError) as exc:
                         metadata["auto_image_last_error"] = str(exc)[:300]
-                        if isinstance(obj, ComponentModel):
+                        if isinstance(obj, ComponentModel) and not (obj.part_number or "").strip():
                             metadata["auto_image_last_result"] = "generic-artwork-after-image-error"
                             metadata["image_source_type"] = "generic-artwork"
                             field = set_catalogue_image_metadata(obj, metadata, variant=variant)
