@@ -444,10 +444,25 @@ class FilamentContinuationTaskTests(TestCase):
             for external_id in source_ids
         ]
 
-        first = refresh_imported_filament_products(limit=80)
-        second = refresh_imported_filament_products(limit=80, cursor=first["next_cursor"])
+        # CI can run with a cache backend unlike the Debian test server.
+        # Use an isolated, deterministic shared cache to test sweep reuse.
+        snapshot = {}
+        class FakeCache:
+            def get(self, key):
+                return snapshot.get(key)
+            def set(self, key, value, timeout=None):
+                snapshot[key] = value
+            def delete(self, key):
+                snapshot.pop(key, None)
+
+        with patch("core.filament_catalogue.cache", FakeCache()):
+            first = refresh_imported_filament_products(limit=80)
+            second = refresh_imported_filament_products(limit=80, cursor=first["next_cursor"])
         self.assertEqual((first["status"], first["checked"]), ("limit-reached", 80))
         self.assertEqual((second["status"], second["checked"]), ("complete", 23))
+        # A 103-record sweep must not refetch the same upstream catalogue
+        # for the second 23-record batch.
+        upstream.assert_called_once()
         self.assertIsNone(second["next_cursor"])
         self.assertEqual(
             FilamentProduct.objects.filter(source__source_type="spoolmandb",

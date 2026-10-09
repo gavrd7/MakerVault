@@ -391,9 +391,31 @@ def refresh_imported_filament_products(*, force_catalogue=False, limit=None, cur
     """
     from .models import FilamentProduct
 
+    # Pin the upstream dataset for an entire bounded sweep. The normal
+    # six-hour shared cache is useful, but may expire between continuation jobs.
+    # A resumed sweep can refetch safely if Redis loses this snapshot.
+    bounded = limit is not None and int(limit) > 0
+    snapshot_key = (
+        "makervault:filament-sweep:"
+        + hashlib.sha256(_configured_url().encode("utf-8")).hexdigest()[:16]
+        + ":v1"
+    )
+    upstream_rows = None
+    if bounded and cursor:
+        try:
+            upstream_rows = cache.get(snapshot_key)
+        except Exception:
+            pass
+    if not isinstance(upstream_rows, list):
+        upstream_rows = get_spoolmandb_catalogue(force=force_catalogue)
+        if bounded:
+            try:
+                cache.set(snapshot_key, upstream_rows, timeout=24 * 60 * 60)
+            except Exception:
+                pass
     upstream = {
         row["external_id"]: row
-        for row in get_spoolmandb_catalogue(force=force_catalogue)
+        for row in upstream_rows
         if row.get("external_id")
     }
     queryset = (
@@ -484,6 +506,11 @@ def refresh_imported_filament_products(*, force_catalogue=False, limit=None, cur
             item.source.raw_metadata = source_meta
             item.source.save(update_fields=["raw_metadata", "updated_at"])
 
+    if bounded and not more:
+        try:
+            cache.delete(snapshot_key)
+        except Exception:
+            pass
     return {
         "status": "limit-reached" if more else "complete",
         "checked": checked,
