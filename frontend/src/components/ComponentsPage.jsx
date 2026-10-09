@@ -124,15 +124,20 @@ function ComponentDetail({ component, loading, canEdit, canAddInventory, boards,
   return <aside className="detailPane">
     <div className="detailHead"><h3>Component details</h3><button className="iconButton" onClick={onClose}>×</button></div>
     {loading ? <LoadingBlock label="Loading component details…" /> : <>
-      <button
-        type="button"
-        className="componentHeroImage imageViewerTrigger"
-        onClick={() => component.image && setViewerOpen(true)}
-        disabled={!component.image}
-        title={component.image ? "Open image viewer" : undefined}
-      >
-        <ComponentArtwork src={component.image} alt={component.name} size="large" type={component.type} category={component.category} partNumber={component.part_number} />
-      </button>
+      <div className="componentMediaStage">
+        {component.image ? (
+          <button type="button" className="componentMediaViewer imageViewerTrigger"
+            onClick={() => setViewerOpen(true)} title="Open image viewer">
+            <ComponentArtwork src={component.image} alt={component.name} size="large"
+              type={component.type} category={component.category} partNumber={component.part_number} />
+          </button>
+        ) : (
+          <div className="componentMediaFallback">
+            <ComponentArtwork src="" alt={component.name} size="large"
+              type={component.type} category={component.category} partNumber={component.part_number} />
+          </div>
+        )}
+      </div>
       <div className="detailTitleRow componentDetailTitleRow"><div><h2>{component.name}</h2><p className="muted detailMaker">{component.category}</p></div><div className="detailActions">{canAddInventory && <button className="primary" onClick={() => setInventoryOpen(true)}>＋ Add to inventory</button>}{canEdit && <button onClick={() => setImageOpen(true)}>Image</button>}</div></div>
       <p className="muted">{component.description || "Reusable makerspace component definition."}</p>
       <div className="badgeRow">
