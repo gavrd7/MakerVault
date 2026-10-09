@@ -637,8 +637,19 @@ def _curated_board_source_pages(obj) -> list[str]:
     return []
 
 
+def _component_family_reference_is_image_safe(component):
+    """A chip-family page does not depict an arbitrary breakout module."""
+    specs = component.specifications or {}
+    if specs.get("reference_match_type") != "exact-part-number-family":
+        return True
+    name = str(component.name or "").casefold()
+    return not any(token in name for token in ("module", "breakout", "board", "carrier", "shield"))
+
+
 def _candidate_source_pages(obj) -> list[dict]:
     """Return authoritative/source pages shared by boards, components and printers."""
+    from .models import ComponentModel
+
     specs = getattr(obj, "specifications", None) or {}
     features = getattr(obj, "features", None) or {}
     profile_data = getattr(obj, "profile_data", None) or {}
@@ -682,6 +693,12 @@ def _candidate_source_pages(obj) -> list[dict]:
             "datasheet_url",
             "pinout_url",
         ):
+            if (
+                key == "reference_url"
+                and isinstance(obj, ComponentModel)
+                and not _component_family_reference_is_image_safe(obj)
+            ):
+                continue
             add(
                 container.get(key),
                 source_type="manufacturer" if key in {"official_image_source_page", "product_url"} else "",
