@@ -75,9 +75,13 @@ def seed_starter_filament_catalogue_task(self):
     if backup_in_progress():
         return {"status": "backup-in-progress"}
     try:
-        return seed_starter_filament_catalogue()
+        result = seed_starter_filament_catalogue()
     except FilamentCatalogueError as exc:
         return {"status": "error", "error": str(exc)}
+    # Refresh only after the starter rows exist; avoid a race with an empty
+    # catalogue on first startup. The refresh task continues in bounded batches.
+    enrich_filament_catalogue_task.delay(force_catalogue=False)
+    return result
 
 
 @shared_task(bind=True, acks_late=True)
@@ -116,7 +120,6 @@ def _queue_catalogue_maintenance(config):
         queued.append("printer-data")
     if config.check_filament_data:
         seed_starter_filament_catalogue_task.delay()
-        enrich_filament_catalogue_task.delay(force_catalogue=True)
         queued.append("filament-data")
     if config.check_images and getattr(settings, "SEED_CATALOGUE_IMAGES", True):
         seed_catalogue_images_task.delay(force_retry=True)
