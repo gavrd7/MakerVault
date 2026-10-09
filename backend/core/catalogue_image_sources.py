@@ -1260,13 +1260,20 @@ def run_catalogue_image_seed(
     if requested:
         order = requested
     else:
-        # Work on the least-complete catalogue first so a per-run cap cannot
-        # indefinitely starve the largest gap.
+        # Balance initial priority by missing-image share, then rotate the
+        # starting kind durably so one catalogue cannot consume every batch.
+        from .models import CatalogueMaintenanceSettings
+        maintenance, _ = CatalogueMaintenanceSettings.objects.get_or_create(singleton_key=1)
         order = sorted(
             sources,
             key=lambda key: missing_ratio(sources[key]),
             reverse=True,
         )
+        if maintenance.image_next_kind in order:
+            index = order.index(maintenance.image_next_kind)
+            order = order[index:] + order[:index]
+        maintenance.image_next_kind = order[1 % len(order)]
+        maintenance.save(update_fields=["image_next_kind", "updated_at"])
 
     processed = cached = failed = skipped = remote = artwork = 0
     by_kind = {
