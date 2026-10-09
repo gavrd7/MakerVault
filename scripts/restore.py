@@ -272,12 +272,21 @@ def main() -> int:
     args = parser.parse_args()
 
     source = Path(args.source_dir).resolve()
-    if not (source / "compose.yaml").is_file():
-        print("Restore not started: compose.yaml was not found in the MakerVault checkout.", file=sys.stderr)
+    compose_names = ("compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml")
+    present = [source / name for name in compose_names if (source / name).is_file()]
+    if not present:
+        print("Restore not started: no Compose file found (compose.yaml, compose.yml, docker-compose.yaml, docker-compose.yml).", file=sys.stderr)
         return 2
+    # Match Docker Compose's preference for the canonical compose.yaml name.
+    # Print the selected file so ambiguous deployments are visible to operators.
+    compose_file = present[0]
+    if len(present) > 1:
+        print("Multiple Compose files found; selecting " + compose_file.name + ".")
+    else:
+        print("Using Compose file: " + compose_file.name)
 
     docker = compose_command(args.sudo)
-    base = [*docker, "-f", str(source / "compose.yaml")]
+    base = [*docker, "-f", str(compose_file)]
     if args.build_override:
         override = source / "compose.build.yaml"
         if not override.is_file():
