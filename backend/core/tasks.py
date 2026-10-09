@@ -9,6 +9,7 @@ from .backup_bundle import BackupBundleError, create_prepared_bundle
 from .backups import backup_in_progress
 from .catalogue_image_sources import run_catalogue_image_seed
 from .catalogue_enrichment import run_board_catalogue_enrichment
+from .component_reference_enrichment import enrich_component_reference_links
 from .models import CatalogueMaintenanceSettings, PrinterConnection, PrintingIntegrationSetting
 from .orcaslicer_catalogue import OrcaCatalogueError, sync_orcaslicer_printer_catalogue
 from .printing_sync import PrintingSyncError, sync_printing_integration
@@ -52,6 +53,18 @@ def enrich_board_catalogue_task(self, limit=None, force_retry=False):
         # Each bounded batch advances its cursor. Continue this sweep without
         # forcing another round of online requests or waiting for tomorrow.
         self.apply_async(kwargs={"limit": limit, "force_retry": False}, countdown=5)
+    return result
+
+
+@shared_task(bind=True, acks_late=True)
+def enrich_component_references_task(self, limit=80, cursor=None):
+    if backup_in_progress():
+        return {"status": "backup-in-progress"}
+    result = enrich_component_reference_links(limit=limit, cursor=cursor)
+    if result["status"] == "limit-reached" and result["next_cursor"]:
+        self.apply_async(
+            kwargs={"limit": limit, "cursor": result["next_cursor"]}, countdown=5,
+        )
     return result
 
 
@@ -115,6 +128,9 @@ def _queue_catalogue_maintenance(config):
     if config.check_board_data and getattr(settings, "ENRICH_BOARD_CATALOGUE", True):
         enrich_board_catalogue_task.delay(force_retry=False)
         queued.append("board-data")
+    if config.check_board_data:
+        enrich_component_references_task.delay()
+        queued.append("component-references")
     if config.check_printer_data and getattr(settings, "SYNC_ORCASLICER_PRINTER_CATALOGUE", True):
         sync_orcaslicer_printer_catalogue_task.delay()
         queued.append("printer-data")
