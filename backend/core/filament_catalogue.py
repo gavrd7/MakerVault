@@ -340,10 +340,15 @@ def seed_starter_filament_catalogue(*, limit=STARTER_FILAMENT_LIMIT):
         if material in STARTER_MATERIALS and maker and row.get("external_id"):
             representatives.setdefault((maker.casefold(), material), row)
 
-    selected = [
-        row for material in STARTER_MATERIALS
-        for (maker, kind), row in representatives.items() if kind == material
-    ][:limit]
+    pools = {
+        material: [row for (maker, kind), row in representatives.items() if kind == material]
+        for material in STARTER_MATERIALS
+    }
+    selected = []
+    while len(selected) < limit and any(pools.values()):
+        for material in STARTER_MATERIALS:
+            if pools[material] and len(selected) < limit:
+                selected.append(pools[material].pop(0))
     created = 0
     with transaction.atomic():
         for row in selected:
