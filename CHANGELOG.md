@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.1.0 — Release candidate (unpublished)
+
+- Improved automated catalogue seeding, bounded batch continuation and restart-safe PostgreSQL checkpoints for boards, components, filaments and image records.
+- Added safe manufacturer-backed technical enrichment for selected components and non-ESP boards, preserving existing user-entered information.
+- Added lightweight generic component illustrations with distinct switch types, consistent board/component image display and safeguards against mismatched product imagery.
+- Improved OrcaSlicer printer metadata recovery, including reuse of successful vendor manifests during partial-sync retries.
+- Reduced repeated SpoolmanDB downloads during multi-batch filament enrichment by sharing an upstream snapshot.
+- Added fair image-maintenance scheduling, image attempt diagnostics and protection against zero-progress requeue loops.
+- Added starter-catalogue acceptance tests for repeatable seeding, coverage reporting and preservation of manual edits.
+- Catalogue maintenance remains automatic by default. Some manufacturer data and exact product images may remain unavailable; no artificial completeness targets are implied.
+
+**Release gate:** Validate migrations, full test suite, restore/upgrade safety, and an unattended maintenance cycle on the merged candidate before publishing v1.1.0. The stable Docker image and README remain at v1.0.5 until release.
+
+
 ## v1.0.5 — 8 October 2026
 
 - Added idempotent `scripts/generate_env_secrets.py` to generate only the Django and PostgreSQL secrets without overwriting custom `.env` settings.
