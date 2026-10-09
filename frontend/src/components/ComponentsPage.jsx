@@ -133,7 +133,7 @@ function ComponentDetail({ component, loading, canEdit, canAddInventory, boards,
       >
         <ComponentArtwork src={component.image} alt={component.name} size="large" type={component.type} category={component.category} partNumber={component.part_number} />
       </button>
-      <div className="detailTitleRow"><div><h2>{component.name}</h2><p className="muted detailMaker">{component.category}</p></div><div className="detailActions">{canAddInventory && <button className="primary" onClick={() => setInventoryOpen(true)}>＋ Add to inventory</button>}{canEdit && <button onClick={() => setImageOpen(true)}>Image</button>}</div></div>
+      <div className="detailTitleRow componentDetailTitleRow"><div><h2>{component.name}</h2><p className="muted detailMaker">{component.category}</p></div><div className="detailActions">{canAddInventory && <button className="primary" onClick={() => setInventoryOpen(true)}>＋ Add to inventory</button>}{canEdit && <button onClick={() => setImageOpen(true)}>Image</button>}</div></div>
       <p className="muted">{component.description || "Reusable makerspace component definition."}</p>
       <div className="badgeRow">
         {component.type && <Badge tone="accent">{component.type}</Badge>}
