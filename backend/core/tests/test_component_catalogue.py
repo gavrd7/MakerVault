@@ -65,3 +65,17 @@ class ComponentCatalogueManufacturerRemovalTests(TestCase):
         response = self.client.get("/api/components/?q=lighting")
         self.assertEqual(response.status_code, 200, response.content)
         self.assertEqual([row["name"] for row in response.json()["rows"]], ["5mm amber LED"])
+
+    def test_component_coverage_distinguishes_generic_and_sourced_parts(self):
+        from core.catalogue_coverage import _component_coverage
+
+        category = ComponentCategory.objects.create(name="Test components", slug="test-components")
+        ComponentModel.objects.create(
+            category=category, name="10k resistor", part_number="",
+        )
+        ComponentModel.objects.create(
+            category=category, name="Identifiable IC", part_number="LM358",
+        )
+        result = _component_coverage()
+        self.assertEqual(result["diagnostics"]["generic_without_part_number"], 1)
+        self.assertEqual(result["diagnostics"]["identifiable_without_authoritative_source"], 1)
