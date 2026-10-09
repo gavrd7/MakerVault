@@ -430,3 +430,65 @@ class FilamentContinuationTaskTests(TestCase):
             enrich_filament_catalogue_task()["status"], "backup-in-progress",
         )
         refresh.assert_not_called()
+
+
+class AutomaticStarterFilamentTests(TestCase):
+    @patch("core.filament_catalogue.get_spoolmandb_catalogue")
+    def test_populates_empty_catalogue_and_is_idempotent(self, upstream):
+        from core.filament_catalogue import seed_starter_filament_catalogue
+        upstream.return_value = [
+            {
+                "external_id": f"starter-{i}", "manufacturer": f"Maker {i}",
+                "name": f"PLA Variant {i}", "material": "PLA",
+                "color_name": "Black", "color_hex": "#111111",
+                "color_hexes": ["#111111"], "raw": {},
+                "source_url": "https://donkie.github.io/SpoolmanDB/",
+            }
+            for i in range(125)
+        ]
+        first = seed_starter_filament_catalogue()
+        self.assertEqual(first["created"], 120)
+        self.assertEqual(FilamentProduct.objects.count(), 120)
+        second = seed_starter_filament_catalogue()
+        self.assertEqual(second["created"], 0)
+        self.assertEqual(FilamentProduct.objects.count(), 120)
+
+    @patch("core.filament_catalogue.get_spoolmandb_catalogue")
+    def test_starter_does_not_change_existing_product(self, upstream):
+        from core.filament_catalogue import seed_starter_filament_catalogue
+        upstream.return_value = [{
+            "external_id": "starter-existing", "manufacturer": "Fixture",
+            "name": "PLA Black", "material": "PLA",
+            "color_name": "Black", "color_hex": "#111111",
+            "color_hexes": ["#111111"], "raw": {},
+        }]
+        source = CatalogSource.objects.create(
+            name="Fixture source", source_type="spoolmandb",
+            external_id="starter-existing", url="https://example.com",
+        )
+        existing = FilamentProduct.objects.create(
+            source=source, name="Custom PLA", material="PLA", color_name="My colour",
+        )
+        outcome = seed_starter_filament_catalogue()
+        existing.refresh_from_db()
+        self.assertEqual(outcome["created"], 0)
+        self.assertEqual(existing.name, "Custom PLA")
+        self.assertEqual(existing.color_name, "My colour")
+
+    @patch("core.tasks.backup_in_progress", return_value=True)
+    @patch("core.tasks.seed_starter_filament_catalogue")
+    def test_starter_pauses_for_backup(self, seed, _backup):
+        from core.tasks import seed_starter_filament_catalogue_task
+        self.assertEqual(seed_starter_filament_catalogue_task()["status"], "backup-in-progress")
+        seed.assert_not_called()
+
+    @patch("core.tasks.backup_in_progress", return_value=False)
+    @patch("core.tasks.enrich_filament_catalogue_task.delay")
+    @patch("core.tasks.seed_starter_filament_catalogue",
+           return_value={"status": "complete", "created": 15})
+    def test_starter_queues_refresh_after_seeding(self, seed, refresh, _backup):
+        from core.tasks import seed_starter_filament_catalogue_task
+
+        self.assertEqual(seed_starter_filament_catalogue_task()["created"], 15)
+        seed.assert_called_once()
+        refresh.assert_called_once_with(force_catalogue=False)

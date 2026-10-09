@@ -318,6 +318,70 @@ def spoolmandb_meta():
         },
     }
 
+
+STARTER_FILAMENT_LIMIT = 120
+STARTER_MATERIALS = ("PLA", "PETG", "ABS", "ASA", "TPU", "PA", "PC", "PVA")
+
+
+def seed_starter_filament_catalogue(*, limit=STARTER_FILAMENT_LIMIT):
+    """Create bounded, representative shared catalogue records; never edit existing ones."""
+    from django.db import transaction
+    from .models import CatalogSource, FilamentManufacturer, FilamentProduct
+
+    limit = max(0, min(int(limit), STARTER_FILAMENT_LIMIT))
+    if not limit:
+        return {"status": "complete", "selected": 0, "created": 0}
+    representatives = {}
+    for row in sorted(get_spoolmandb_catalogue(), key=lambda r: (
+        r["manufacturer"].casefold(), r["material"].casefold(), r["name"].casefold(),
+    )):
+        material = row["material"].strip().upper()
+        maker = row["manufacturer"].strip()
+        if material in STARTER_MATERIALS and maker and row.get("external_id"):
+            representatives.setdefault((maker.casefold(), material), row)
+
+    pools = {
+        material: [row for (maker, kind), row in representatives.items() if kind == material]
+        for material in STARTER_MATERIALS
+    }
+    selected = []
+    while len(selected) < limit and any(pools.values()):
+        for material in STARTER_MATERIALS:
+            if pools[material] and len(selected) < limit:
+                selected.append(pools[material].pop(0))
+    created = 0
+    with transaction.atomic():
+        for row in selected:
+            external_id = row["external_id"]
+            if FilamentProduct.objects.filter(
+                source__source_type="spoolmandb", source__external_id=external_id,
+            ).exists():
+                continue
+            maker, _ = FilamentManufacturer.objects.get_or_create(name=row["manufacturer"])
+            source, _ = CatalogSource.objects.get_or_create(
+                source_type="spoolmandb", external_id=external_id,
+                defaults={
+                    "name": (f"SpoolmanDB — {row['manufacturer']} — {row['name']}")[:200],
+                    "url": row.get("source_url") or DEFAULT_SPOOLMANDB_URL,
+                    "raw_metadata": {"license": "MIT", "record": row.get("raw") or {}},
+                },
+            )
+            if FilamentProduct.objects.filter(source=source).exists():
+                continue
+            FilamentProduct.objects.create(
+                source=source, filament_manufacturer=maker,
+                name=row["name"], material=row["material"],
+                color_name=row.get("color_name") or "",
+                color_hex=row.get("color_hex") or "",
+                color_hexes=row.get("color_hexes") or [],
+                profile_data={"source": "SpoolmanDB",
+                              "source_license": "MIT",
+                              "external_catalogue_id": external_id},
+            )
+            created += 1
+    return {"status": "complete", "selected": len(selected), "created": created}
+
+
 def refresh_imported_filament_products(*, force_catalogue=False, limit=None, cursor=None):
     """Refresh saved SpoolmanDB-backed products without overwriting user edits.
 

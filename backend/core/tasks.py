@@ -12,7 +12,7 @@ from .catalogue_enrichment import run_board_catalogue_enrichment
 from .models import CatalogueMaintenanceSettings, PrinterConnection, PrintingIntegrationSetting
 from .orcaslicer_catalogue import OrcaCatalogueError, sync_orcaslicer_printer_catalogue
 from .printing_sync import PrintingSyncError, sync_printing_integration
-from .filament_catalogue import FilamentCatalogueError, refresh_imported_filament_products
+from .filament_catalogue import FilamentCatalogueError, refresh_imported_filament_products, seed_starter_filament_catalogue
 from .printer_connectivity import POLLERS, PrinterConnectionError, poll_connection
 
 
@@ -71,6 +71,20 @@ def sync_orcaslicer_printer_catalogue_task(self, retry_attempt=0):
 
 
 @shared_task(bind=True, acks_late=True)
+def seed_starter_filament_catalogue_task(self):
+    if backup_in_progress():
+        return {"status": "backup-in-progress"}
+    try:
+        result = seed_starter_filament_catalogue()
+    except FilamentCatalogueError as exc:
+        return {"status": "error", "error": str(exc)}
+    # Refresh only after the starter rows exist; avoid a race with an empty
+    # catalogue on first startup. The refresh task continues in bounded batches.
+    enrich_filament_catalogue_task.delay(force_catalogue=False)
+    return result
+
+
+@shared_task(bind=True, acks_late=True)
 def enrich_filament_catalogue_task(self, force_catalogue=False, limit=None, cursor=None):
     if backup_in_progress():
         return {"status": "backup-in-progress"}
@@ -105,7 +119,7 @@ def _queue_catalogue_maintenance(config):
         sync_orcaslicer_printer_catalogue_task.delay()
         queued.append("printer-data")
     if config.check_filament_data:
-        enrich_filament_catalogue_task.delay(force_catalogue=True)
+        seed_starter_filament_catalogue_task.delay()
         queued.append("filament-data")
     if config.check_images and getattr(settings, "SEED_CATALOGUE_IMAGES", True):
         seed_catalogue_images_task.delay(force_retry=True)
