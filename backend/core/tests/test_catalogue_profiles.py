@@ -17,6 +17,29 @@ class CatalogueProfileTests(unittest.TestCase):
         self.assertEqual(item["specifications"]["clock_mhz"], 133)
         self.assertEqual(item["specifications"]["uart_count"], 2)
 
+    def test_non_esp_arduino_usb_capabilities_and_psram_na(self):
+        for name, mcu, expected in (
+            ("Nano", "ATmega328P", "USB via USB-serial bridge"),
+            ("Micro", "ATmega32U4", "Native USB CDC/HID"),
+        ):
+            with self.subTest(board=name):
+                item = apply_board_profile({
+                    "manufacturer": "Arduino", "name": name,
+                    "mcu": mcu, "specifications": {},
+                })
+                self.assertEqual(item["specifications"]["usb_capability"], expected)
+                self.assertIn("psram", item["specifications"]["not_applicable_specs"])
+
+    def test_non_esp_profiles_preserve_manual_usb_details(self):
+        item = apply_board_profile({
+            "manufacturer": "Arduino", "name": "Micro",
+            "mcu": "ATmega32U4",
+            "specifications": {"usb_capability": "Manually entered USB details"},
+        })
+        self.assertEqual(
+            item["specifications"]["usb_capability"], "Manually entered USB details"
+        )
+
     def test_profile_never_overwrites_explicit_values(self):
         item = apply_board_profile({
             "manufacturer": "Raspberry Pi",
