@@ -368,19 +368,19 @@ def run_board_catalogue_enrichment(limit: int | None = None, force_retry: bool =
     The Redis-backed cursor is a performance hint, not a correctness dependency:
     losing the cache only restarts the sweep. Existing board data is never reset.
     """
-    from .models import BoardModel
+    from .models import BoardModel, CatalogueMaintenanceSettings
 
     if limit is None:
         limit = max(int(getattr(settings, "BOARD_ENRICHMENT_MAX_PER_RUN", 80)), 0)
     lock_key = f"makervault:board-catalogue-enrichment:{ENRICHMENT_VERSION}"
-    cursor_key = f"{lock_key}:cursor"
     if not cache.add(lock_key, "running", timeout=60 * 45):
         return EnrichmentResult("already-running", 0, 0, 0, 0).as_dict()
 
     processed = enriched = failed = skipped = 0
     try:
         queryset = BoardModel.objects.select_related("manufacturer", "source").order_by("id")
-        last_id = cache.get(cursor_key) if limit else None
+        maintenance, _ = CatalogueMaintenanceSettings.objects.get_or_create(singleton_key=1)
+        last_id = maintenance.board_enrichment_cursor if limit else None
         if last_id:
             remaining = queryset.filter(id__gt=last_id)
             # If the previous sweep ended exactly on its batch boundary, wrap.
@@ -423,9 +423,10 @@ def run_board_catalogue_enrichment(limit: int | None = None, force_retry: bool =
 
         if limit:
             if has_more and last_processed_id is not None:
-                cache.set(cursor_key, str(last_processed_id), timeout=60 * 60 * 24 * 30)
+                maintenance.board_enrichment_cursor = str(last_processed_id)
             else:
-                cache.delete(cursor_key)
+                maintenance.board_enrichment_cursor = ""
+            maintenance.save(update_fields=["board_enrichment_cursor", "updated_at"])
         return EnrichmentResult(
             "limit-reached" if has_more else "complete",
             processed, enriched, failed, skipped,

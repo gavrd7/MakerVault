@@ -69,7 +69,11 @@ class BoardBatchProgressTests(unittest.TestCase):
         boards = [SimpleNamespace(id=i, name=f"Board {i}") for i in range(1, 104)]
         queryset = FakeQuerySet(boards)
         memory_cache = FakeCache()
+        persistent = SimpleNamespace(board_enrichment_cursor="")
+        persistent.save = lambda **kwargs: None
         with (
+            patch("core.models.CatalogueMaintenanceSettings.objects.get_or_create",
+                  return_value=(persistent, False)),
             patch("core.catalogue_enrichment.cache", memory_cache),
             patch("core.models.BoardModel.objects") as objects,
             patch("core.catalogue_enrichment._is_esp_family", return_value=False),
@@ -86,6 +90,42 @@ class BoardBatchProgressTests(unittest.TestCase):
         self.assertEqual((third["status"], third["processed"]), ("limit-reached", 80))
         self.assertEqual(seen[:103], list(range(1, 104)))
         self.assertEqual(seen[103:], list(range(1, 81)))
+
+    def test_checkpoint_survives_cache_reset(self):
+        from core.catalogue_enrichment import run_board_catalogue_enrichment
+        class FakeCache:
+            def add(self, *args, **kwargs): return True
+            def delete(self, *args, **kwargs): pass
+        class FakeRows:
+            def __init__(self, rows): self.rows = rows
+            def order_by(self, *args): return self
+            def filter(self, **kwargs):
+                return FakeRows([b for b in self.rows if b.id > int(kwargs["id__gt"])])
+            def exists(self): return bool(self.rows)
+            def __getitem__(self, item): return self.rows[item]
+        checkpoint = SimpleNamespace(board_enrichment_cursor="")
+        checkpoint.save = lambda **kwargs: None
+        rows = FakeRows([SimpleNamespace(id=i) for i in range(1, 104)])
+        visited = []
+        with (
+            patch("core.catalogue_enrichment.cache", FakeCache()),
+            patch("core.models.BoardModel.objects") as objects,
+            patch("core.models.CatalogueMaintenanceSettings.objects.get_or_create",
+                  return_value=(checkpoint, False)),
+            patch("core.catalogue_enrichment._is_esp_family", return_value=False),
+            patch("core.catalogue_enrichment.enrich_board_from_profile",
+                  side_effect=lambda b: visited.append(b.id) or False),
+            patch("core.catalogue_enrichment.update_board_enrichment_state", return_value=False),
+        ):
+            objects.select_related.return_value = rows
+            first = run_board_catalogue_enrichment(limit=80)
+            self.assertEqual(checkpoint.board_enrichment_cursor, "80")
+            second = run_board_catalogue_enrichment(limit=80)
+        self.assertEqual(first["status"], "limit-reached")
+        self.assertEqual(second["status"], "complete")
+        self.assertEqual(visited, list(range(1, 104)))
+        self.assertEqual(checkpoint.board_enrichment_cursor, "")
+
 
 
 class BoardContinuationTaskTests(unittest.TestCase):
