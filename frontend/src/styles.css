@@ -2708,3 +2708,26 @@ a:focus-visible,
   max-height: 100%;
   aspect-ratio: auto;
 }
+
+/* Absolutely fill the component hero image stage. As a flex item, a small
+   intrinsic-size IMG can shrink to its source dimensions despite width:100%.
+   Positioning it independently fixes tiny cached thumbnails on iOS Safari. */
+.catalogueLayout .detailPane .componentHeroImage .boardImage-large {
+  position: relative;
+}
+.catalogueLayout .detailPane .componentHeroImage .boardImage-large > img,
+.catalogueLayout .detailPane .componentHeroImage .boardImage-large > svg {
+  position: absolute;
+  inset: 0;
+  display: block;
+  box-sizing: border-box;
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0;
+  min-height: 0;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  margin: 0 !important;
+  flex: none;
+  object-fit: contain;
+}
