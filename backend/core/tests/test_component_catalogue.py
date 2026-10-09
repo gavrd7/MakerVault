@@ -227,3 +227,41 @@ class ComponentSweepRetryTests(TestCase):
         enrich_component_references_task(limit=80, retry_attempt=2)
         self.assertEqual(enqueue.call_args.kwargs["kwargs"]["retry_attempt"], 0)
         self.assertEqual(enqueue.call_args.kwargs["kwargs"]["cursor"], "next-cursor")
+
+    @patch("core.tasks.backup_in_progress", return_value=False)
+    @patch("core.tasks.enrich_component_reference_links")
+    @patch("core.tasks.enrich_component_references_task.apply_async")
+    def test_new_task_resumes_persisted_cursor_after_restart(self, enqueue, enrich, backup):
+        from core.tasks import enrich_component_references_task
+        from core.models import CatalogueMaintenanceSettings
+        enrich.side_effect = [
+            {"status": "limit-reached", "processed": 80, "next_cursor": "cursor-80"},
+            {"status": "complete", "processed": 23, "next_cursor": None},
+        ]
+        enrich_component_references_task(limit=80)
+        checkpoint = CatalogueMaintenanceSettings.objects.get(singleton_key=1)
+        self.assertEqual(checkpoint.component_enrichment_cursor, "cursor-80")
+        # The follow-up is invoked as a new task with no explicit cursor:
+        # persistent PostgreSQL state, not previous worker memory, restores it.
+        enrich_component_references_task(limit=80)
+        self.assertEqual(enrich.call_args.kwargs["cursor"], "cursor-80")
+        checkpoint.refresh_from_db()
+        self.assertEqual(checkpoint.component_enrichment_cursor, "")
+        self.assertEqual(enqueue.call_count, 1)
+
+    @patch("core.tasks.backup_in_progress", return_value=False)
+    @patch("core.tasks.enrich_component_reference_links", side_effect=RuntimeError("offline"))
+    @patch("core.tasks.enrich_component_references_task.apply_async")
+    def test_failed_batch_keeps_persisted_checkpoint(self, enqueue, enrich, backup):
+        from core.tasks import enrich_component_references_task
+        from core.models import CatalogueMaintenanceSettings
+        CatalogueMaintenanceSettings.objects.update_or_create(
+            singleton_key=1, defaults={"component_enrichment_cursor": "cursor-80"},
+        )
+        result = enrich_component_references_task(limit=80, retry_attempt=2)
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["cursor"], "cursor-80")
+        self.assertEqual(
+            CatalogueMaintenanceSettings.objects.get(singleton_key=1).component_enrichment_cursor,
+            "cursor-80",
+        )
