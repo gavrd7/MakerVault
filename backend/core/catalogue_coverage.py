@@ -134,6 +134,13 @@ def _component_coverage() -> dict:
         if missing and len(samples) < 12:
             samples.append({"id": str(row.id), "name": row.name, "missing": missing})
 
+    # Not every generic component has a unique manufacturer's datasheet.
+    generic_count = sum(not str(row.part_number or "").strip() for row in rows)
+    identifiable_missing_source = sum(
+        bool(str(row.part_number or "").strip()) and not authoritative_source(row)
+        for row in rows
+    )
+
     return {
         "key": "components",
         "label": "Components",
@@ -146,6 +153,10 @@ def _component_coverage() -> dict:
             _metric("sources", "Authoritative sources", sum(authoritative_source(row) for row in rows), total),
         ],
         "missing_samples": samples,
+        "diagnostics": {
+            "generic_without_part_number": generic_count,
+            "identifiable_without_authoritative_source": identifiable_missing_source,
+        },
     }
 
 
