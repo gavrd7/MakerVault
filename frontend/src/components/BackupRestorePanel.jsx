@@ -33,6 +33,7 @@ export default function BackupRestorePanel({ onBackupStarted }) {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [commandCopied, setCommandCopied] = useState(false);
   const [validation, setValidation] = useState(null);
   const [restoreTarget, setRestoreTarget] = useState(null);
   const [watchedBackupId, setWatchedBackupId] = useState("");
@@ -131,6 +132,7 @@ export default function BackupRestorePanel({ onBackupStarted }) {
   }
 
   async function copyCommand(command) {
+    setCommandCopied(false);
     // Most browsers deny navigator.clipboard on ordinary HTTP connections.
     // Try it first, then fall back to the older synchronous copy operation.
     let copied = false;
@@ -162,7 +164,7 @@ export default function BackupRestorePanel({ onBackupStarted }) {
     }
 
     if (copied) {
-      setNotice("Restore command copied to clipboard.");
+      setCommandCopied(true);
       return;
     }
 
@@ -266,7 +268,7 @@ export default function BackupRestorePanel({ onBackupStarted }) {
           </div>
           <div className="restoreCommand">
             <code>{restoreTarget.restore_command}</code>
-            <button type="button" onClick={() => copyCommand(restoreTarget.restore_command)}>Copy command</button>
+            <button type="button" className={commandCopied ? "restoreCopySuccess" : ""} onClick={() => copyCommand(restoreTarget.restore_command)} aria-live="polite">{commandCopied ? "✓ Copied!" : "Copy command"}</button>
           </div>
           <small>Run this once from your MakerVault checkout on the server. You will be asked to type the backup ID before the restore proceeds.</small>
         </div>}
