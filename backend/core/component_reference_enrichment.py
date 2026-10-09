@@ -10,6 +10,12 @@ VERIFIED_FAMILY_REFERENCES = {
     "LM358": "https://www.ti.com/product/LM358",
     "LM393": "https://www.ti.com/product/LM393",
     "NE555": "https://www.ti.com/product/NE555",
+    "INA219": "https://www.ti.com/product/INA219",
+    "DRV8825": "https://www.ti.com/product/DRV8825",
+    "MCP23017": "https://www.microchip.com/en-us/product/mcp23017",
+    "MCP2515": "https://www.microchip.com/en-us/product/mcp2515",
+    "VL53L0X": "https://www.st.com/en/imaging-and-photonics-solutions/vl53l0x.html",
+    "VL53L1X": "https://www.st.com/en/imaging-and-photonics-solutions/vl53l1x",
 }
 
 
