@@ -2593,141 +2593,80 @@ a:focus-visible,
 @media(max-width:600px){.settingsAccountSelector{grid-template-columns:1fr 1fr}.settingsAccountSelector button{font-size:13px;padding:9px}}
 
 
-/* Share the board catalogue's responsive image-stage sizing for
-   component photographs and locally bundled SVG illustrations alike. */
-.componentHeroImage {
-  height: auto;
-  overflow: visible;
-}
-.componentHeroImage .boardImage-large {
-  height: auto;
-  min-height: 180px;
-  max-height: min(34vh, 340px);
-  aspect-ratio: 16 / 9;
-  overflow: hidden;
-}
-.componentHeroImage .boardImage-large svg {
+/* Component media uses the same contained-image presentation as boards,
+   but owns its dimensions rather than inheriting button sizing constraints. */
+.componentMediaStage {
   display: block;
-  width: auto;
-  height: auto;
-  max-width: 100%;
-  max-height: 100%;
-  aspect-ratio: 3 / 2;
-  flex: 0 1 auto;
-}
-@media (max-width: 720px) {
-  .componentHeroImage .boardImage-large {
-    min-height: 150px;
-    max-height: 260px;
-    aspect-ratio: 16 / 10;
-  }
-}
-
-
-/* Component details: enforce separate layout rows for image, title and actions.
-   The SVG's intrinsic dimensions must never determine the title's position. */
-.catalogueLayout .detailPane .componentHeroImage {
-  display: block;
-  position: relative;
   width: 100%;
-  height: 240px;
-  max-height: 30vh;
-  margin: 0 0 22px;
+  height: clamp(190px, 26vh, 290px);
+  margin: 0 0 20px;
+  border: 1px solid #303b4b;
+  border-radius: 14px;
+  background: #0b1118;
   overflow: hidden;
 }
-.catalogueLayout .detailPane .componentHeroImage .boardImage-large {
-  display: flex;
+.componentMediaViewer,
+.componentMediaFallback {
+  display: block;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.componentMediaStage .boardImage-large {
+  display: grid;
+  place-items: center;
   width: 100%;
   height: 100%;
   min-height: 0;
   max-height: none;
   aspect-ratio: auto;
-  align-items: center;
-  justify-content: center;
+  margin: 0;
+  padding: 12px;
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
 }
-.catalogueLayout .detailPane .componentHeroImage .boardImage-large svg {
+.componentMediaStage .boardImage-large > img,
+.componentMediaStage .boardImage-large > svg {
   display: block;
-  width: auto;
-  height: auto;
-  max-width: 90%;
-  max-height: 90%;
+  position: static;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  min-width: 0;
+  min-height: 0;
+  margin: 0 !important;
+  object-fit: contain !important;
+  object-position: center;
 }
-.catalogueLayout .detailPane .componentDetailTitleRow {
-  position: relative;
+.componentDetailTitleRow {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   align-items: start;
-  clear: both;
   margin: 0 0 16px;
 }
-.catalogueLayout .detailPane .componentDetailTitleRow h2 {
-  margin: 0 0 6px;
-  overflow-wrap: anywhere;
-}
-.catalogueLayout .detailPane .componentDetailTitleRow .detailActions {
-  position: static;
+.componentDetailTitleRow h2 { margin: 0 0 6px; overflow-wrap: anywhere; }
+.componentDetailTitleRow .detailActions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
 }
 @media (max-width: 720px) {
-  .catalogueLayout .detailPane .componentHeroImage {
-    height: 210px;
-    max-height: 26vh;
-    margin-bottom: 20px;
+  .componentMediaStage {
+    height: clamp(190px, 28vh, 260px);
   }
-  .catalogueLayout .detailPane .componentDetailTitleRow .detailActions {
+  .componentDetailTitleRow .detailActions {
     display: grid !important;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
   }
-  .catalogueLayout .detailPane .componentDetailTitleRow .detailActions button {
+  .componentDetailTitleRow .detailActions button {
     width: 100%;
     min-width: 0;
   }
-}
-
-
-/* Match board catalogue photographs: scale small source images up into
-   the available hero stage without cropping. Keep SVG artwork contained. */
-.catalogueLayout .detailPane .componentHeroImage .boardImage-large img {
-  display: block;
-  width: 100% !important;
-  height: 100% !important;
-  max-width: 100% !important;
-  max-height: 100% !important;
-  object-fit: contain !important;
-  object-position: center !important;
-  margin: 0;
-}
-.catalogueLayout .detailPane .componentHeroImage .boardImage-large svg {
-  width: 100%;
-  height: 100%;
-  max-width: 100%;
-  max-height: 100%;
-  aspect-ratio: auto;
-}
-
-/* Absolutely fill the component hero image stage. As a flex item, a small
-   intrinsic-size IMG can shrink to its source dimensions despite width:100%.
-   Positioning it independently fixes tiny cached thumbnails on iOS Safari. */
-.catalogueLayout .detailPane .componentHeroImage .boardImage-large {
-  position: relative;
-}
-.catalogueLayout .detailPane .componentHeroImage .boardImage-large > img,
-.catalogueLayout .detailPane .componentHeroImage .boardImage-large > svg {
-  position: absolute;
-  inset: 0;
-  display: block;
-  box-sizing: border-box;
-  width: 100% !important;
-  height: 100% !important;
-  min-width: 0;
-  min-height: 0;
-  max-width: 100% !important;
-  max-height: 100% !important;
-  margin: 0 !important;
-  flex: none;
-  object-fit: contain;
 }
