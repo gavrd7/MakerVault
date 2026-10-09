@@ -31,12 +31,63 @@ def create_managed_backup_task(self, backup_id):
         return {"status": "failed", "backup_id": str(backup_id), "error": str(exc)}
 
 
+def _image_failure_category(reason):
+    """Classify failures without retaining upstream URLs or exception details."""
+    value = str(reason or "").lower()
+    if any(term in value for term in ("timeout", "timed out", "connection", "dns", "network", "http 5", "503", "502")):
+        return "provider-unavailable"
+    if any(term in value for term in ("429", "rate limit", "too many requests")):
+        return "rate-limited"
+    if any(term in value for term in ("403", "401", "forbidden", "unauthorised", "unauthorized")):
+        return "access-blocked"
+    if any(term in value for term in ("no matching", "not found", "no image", "no trustworthy", "missing image", "no suitable")):
+        return "no-trustworthy-image"
+    return "other-failure"
+
+
+def summarise_image_batch(result):
+    """Store bounded aggregate diagnostics, never raw URLs or provider errors."""
+    kinds = ("boards", "components", "printers", "filaments")
+    per_kind = {}
+    for key in kinds:
+        source = (result.get("by_kind") or {}).get(key) or {}
+        per_kind[key] = {
+            field: max(0, int(source.get(field, 0) or 0))
+            for field in ("processed", "cached", "remote", "artwork", "failed", "skipped")
+        }
+    categories = {}
+    for entry in (result.get("failures") or []):
+        category = _image_failure_category(entry.get("reason"))
+        categories[category] = categories.get(category, 0) + 1
+    return {
+        "status": str(result.get("status") or "unknown")[:40],
+        "processed": max(0, int(result.get("processed", 0) or 0)),
+        "cached": max(0, int(result.get("cached", 0) or 0)),
+        "failed": max(0, int(result.get("failed", 0) or 0)),
+        "skipped": max(0, int(result.get("skipped", 0) or 0)),
+        "remote": max(0, int(result.get("remote", 0) or 0)),
+        "artwork": max(0, int(result.get("artwork", 0) or 0)),
+        "by_kind": per_kind,
+        "failure_categories": categories,
+        "unclassified_failures": max(
+            0, int(result.get("failed", 0) or 0) - sum(categories.values())
+        ),
+    }
+
+
 @shared_task(bind=True, acks_late=True)
 def seed_catalogue_images_task(self, limit=None, force_retry=False, kinds=None):
     if backup_in_progress():
         return {"status": "backup-in-progress"}
     result = run_catalogue_image_seed(limit=limit, force_retry=force_retry, kinds=kinds)
-    if result.get("status") == "limit-reached":
+    if result.get("status") in {"complete", "limit-reached"}:
+        from django.utils import timezone
+        from .models import CatalogueMaintenanceSettings
+        maintenance, _ = CatalogueMaintenanceSettings.objects.get_or_create(singleton_key=1)
+        maintenance.image_last_batch_at = timezone.now()
+        maintenance.image_last_batch_summary = summarise_image_batch(result)
+        maintenance.save(update_fields=["image_last_batch_at", "image_last_batch_summary", "updated_at"])
+    if result.get("status") == "limit-reached" and result.get("processed", 0) > 0:
         self.apply_async(
             kwargs={"limit": limit, "force_retry": False, "kinds": kinds},
             countdown=5,
