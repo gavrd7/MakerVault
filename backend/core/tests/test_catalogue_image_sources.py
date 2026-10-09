@@ -246,6 +246,44 @@ class CatalogueImageSourceTests(unittest.TestCase):
         self.assertIsNone(resolve_catalogue_image(component))
         self.assertGreaterEqual(search.call_args.kwargs["minimum_score"], 0.30)
 
+    def test_family_reference_image_used_for_identifiable_chip(self):
+        chip = ComponentModel(
+            name="INA219 current monitor IC",
+            part_number="INA219",
+            specifications={
+                "reference_url": "https://www.ti.com/product/INA219",
+                "reference_match_type": "exact-part-number-family",
+            },
+        )
+        urls = [item["url"] for item in _candidate_source_pages(chip)]
+        self.assertIn("https://www.ti.com/product/INA219", urls)
+
+    def test_family_reference_does_not_supply_module_photo(self):
+        module = ComponentModel(
+            name="INA219 current sensor module",
+            part_number="INA219",
+            specifications={
+                "reference_url": "https://www.ti.com/product/INA219",
+                "reference_match_type": "exact-part-number-family",
+            },
+        )
+        urls = [item["url"] for item in _candidate_source_pages(module)]
+        self.assertNotIn("https://www.ti.com/product/INA219", urls)
+
+    def test_explicit_module_product_image_source_remains_available(self):
+        module = ComponentModel(
+            name="INA219 current sensor module",
+            part_number="INA219",
+            specifications={
+                "reference_url": "https://www.ti.com/product/INA219",
+                "reference_match_type": "exact-part-number-family",
+                "product_url": "https://www.adafruit.com/product/904",
+            },
+        )
+        urls = [item["url"] for item in _candidate_source_pages(module)]
+        self.assertIn("https://www.adafruit.com/product/904", urls)
+        self.assertNotIn("https://www.ti.com/product/INA219", urls)
+
     def test_structured_product_image_supports_schema_org_product(self):
         html = """
         <html><head>
