@@ -79,6 +79,8 @@ class CatalogueMaintenanceSettings(TimeStampedModel):
     last_run_at = models.DateTimeField(blank=True, null=True)
     next_run_at = models.DateTimeField(blank=True, null=True)
     last_triggered_by = models.CharField(max_length=120, blank=True)
+    # Durable checkpoint for bounded board catalogue sweeps.
+    board_enrichment_cursor = models.CharField(max_length=64, blank=True, default="")
 
     class Meta:
         verbose_name = "Catalogue maintenance settings"
