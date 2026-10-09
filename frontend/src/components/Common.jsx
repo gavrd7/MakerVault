@@ -77,6 +77,11 @@ export function ComponentArtwork({ src, alt = "", size = "normal", type = "", ca
     </div>;
   }
 
+  if (partNumber?.trim()) {
+    return <div className={`boardImage boardImage-${size} componentArtwork`} role="img" aria-label="No verified product image">
+      <span className="componentArtworkGlyph" aria-hidden="true">◇</span>
+    </div>;
+  }
   const kind = componentIllustrationKind({ type, category, name: alt });
   return <div className={`boardImage boardImage-${size} componentArtwork`}>
     <GenericComponentIllustration kind={kind} />
