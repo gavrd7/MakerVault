@@ -481,3 +481,14 @@ class AutomaticStarterFilamentTests(TestCase):
         from core.tasks import seed_starter_filament_catalogue_task
         self.assertEqual(seed_starter_filament_catalogue_task()["status"], "backup-in-progress")
         seed.assert_not_called()
+
+    @patch("core.tasks.backup_in_progress", return_value=False)
+    @patch("core.tasks.enrich_filament_catalogue_task.delay")
+    @patch("core.tasks.seed_starter_filament_catalogue",
+           return_value={"status": "complete", "created": 15})
+    def test_starter_queues_refresh_after_seeding(self, seed, refresh, _backup):
+        from core.tasks import seed_starter_filament_catalogue_task
+
+        self.assertEqual(seed_starter_filament_catalogue_task()["created"], 15)
+        seed.assert_called_once()
+        refresh.assert_called_once_with(force_catalogue=False)
