@@ -1331,3 +1331,25 @@ class CatalogueImagePriorityTests(TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ImageCatalogueRotationTests(unittest.TestCase):
+    def test_rotation_preserves_all_catalogue_kinds(self):
+        from core.catalogue_image_sources import rotate_image_kind_order
+        kinds = ["components", "filaments", "boards", "printers"]
+        self.assertEqual(
+            rotate_image_kind_order(kinds, "boards"),
+            ["boards", "printers", "components", "filaments"],
+        )
+        self.assertEqual(rotate_image_kind_order(kinds, "unknown"), kinds)
+
+    def test_successive_round_robin_starts_visit_every_kind(self):
+        from core.catalogue_image_sources import rotate_image_kind_order
+        kinds = ["components", "filaments", "boards", "printers"]
+        next_kind = ""
+        heads = []
+        for _ in kinds:
+            order = rotate_image_kind_order(kinds, next_kind)
+            heads.append(order[0])
+            next_kind = order[1 % len(order)]
+        self.assertEqual(heads, kinds)
