@@ -154,7 +154,7 @@ def sync_orcaslicer_printer_catalogue_task(self, retry_attempt=0):
     if backup_in_progress():
         return {"status": "backup-in-progress"}
     try:
-        result = sync_orcaslicer_printer_catalogue()
+        result = sync_orcaslicer_printer_catalogue(retry_failed_only=retry_attempt > 0)
     except OrcaCatalogueError as exc:
         result = {"status": "error", "error": str(exc)}
     # Make one delayed recovery attempt for failed upstream lookups. Do not
