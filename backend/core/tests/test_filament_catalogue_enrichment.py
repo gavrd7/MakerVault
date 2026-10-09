@@ -377,6 +377,41 @@ class FilamentContinuationTaskTests(TestCase):
             self.assertEqual(queue.call_count, 1)
 
 
+    @patch("core.tasks.backup_in_progress", return_value=False)
+    @patch("core.tasks.refresh_imported_filament_products")
+    def test_new_scheduled_task_resumes_after_lost_celery_continuation(self, refresh, _backup):
+        from core.models import CatalogueMaintenanceSettings
+        from core.tasks import enrich_filament_catalogue_task
+        refresh.side_effect = [
+            {"status": "limit-reached", "checked": 80, "next_cursor": "cursor-80"},
+            {"status": "complete", "checked": 23, "next_cursor": None},
+        ]
+        with patch.object(enrich_filament_catalogue_task, "apply_async") as queue:
+            enrich_filament_catalogue_task()
+            checkpoint = CatalogueMaintenanceSettings.objects.get(singleton_key=1)
+            self.assertEqual(checkpoint.filament_enrichment_cursor, "cursor-80")
+            # No explicit cursor: scheduled job recovers the saved progress.
+            enrich_filament_catalogue_task()
+            self.assertEqual(refresh.call_args.kwargs["cursor"], "cursor-80")
+            checkpoint.refresh_from_db()
+            self.assertEqual(checkpoint.filament_enrichment_cursor, "")
+            self.assertEqual(queue.call_count, 1)
+
+    @patch("core.tasks.backup_in_progress", return_value=False)
+    @patch("core.tasks.refresh_imported_filament_products",
+           side_effect=FilamentCatalogueError("upstream unavailable"))
+    def test_failed_refresh_keeps_saved_checkpoint(self, refresh, _backup):
+        from core.models import CatalogueMaintenanceSettings
+        from core.tasks import enrich_filament_catalogue_task
+        checkpoint, _ = CatalogueMaintenanceSettings.objects.get_or_create(singleton_key=1)
+        checkpoint.filament_enrichment_cursor = "saved-cursor"
+        checkpoint.save(update_fields=["filament_enrichment_cursor"])
+        result = enrich_filament_catalogue_task()
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(refresh.call_args.kwargs["cursor"], "saved-cursor")
+        checkpoint.refresh_from_db()
+        self.assertEqual(checkpoint.filament_enrichment_cursor, "" if False else "saved-cursor")
+
     @patch("core.filament_catalogue.enrich_filament_from_authoritative_sources",
            return_value={"changed_fields": []})
     @patch("core.filament_catalogue.get_spoolmandb_catalogue")
