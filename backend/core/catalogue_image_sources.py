@@ -1311,7 +1311,9 @@ def run_catalogue_image_seed(
 
     try:
         for kind in order:
-            queryset = sources[kind]
+            # Cursor comparisons must use the same stable ordering on every
+            # batch; the default catalogue name ordering is not PK ordering.
+            queryset = sources[kind].order_by("pk") if checkpoint_owner else sources[kind]
             saved_position = checkpoints.get(kind) or {}
             saved_pk = str(saved_position.get("pk") or "")
             saved_variant = str(saved_position.get("variant") or "")
