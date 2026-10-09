@@ -60,8 +60,12 @@ def enrich_board_catalogue_task(self, limit=None, force_retry=False):
 def enrich_component_references_task(self, limit=80, cursor=None, retry_attempt=0):
     if backup_in_progress():
         return {"status": "backup-in-progress"}
-    # Unexpected failures must not create an infinite chain of short retries.
-    # Preserve the cursor so a transient failure retries the same batch.
+    from .models import CatalogueMaintenanceSettings
+    checkpoint, _ = CatalogueMaintenanceSettings.objects.get_or_create(singleton_key=1)
+    # Celery may lose a queued continuation during a restart. The persisted
+    # checkpoint is authoritative whenever a new maintenance cycle starts.
+    saved_cursor = checkpoint.component_enrichment_cursor or None
+    cursor = saved_cursor if cursor is None else cursor
     try:
         result = enrich_component_reference_links(limit=limit, cursor=cursor)
     except Exception as exc:
@@ -77,13 +81,22 @@ def enrich_component_references_task(self, limit=80, cursor=None, retry_attempt=
             "retry_attempt": retry_attempt,
             "error": str(exc)[:200],
         }
-    if result.get("status") == "limit-reached" and result.get("next_cursor") and result.get("processed", 0) > 0:
-        self.apply_async(
-            kwargs={"limit": limit, "cursor": result["next_cursor"], "retry_attempt": 0},
-            countdown=5,
+    if result.get("status") in {"limit-reached", "complete"}:
+        next_cursor = (
+            result.get("next_cursor")
+            if result.get("status") == "limit-reached" and result.get("processed", 0) > 0
+            else None
         )
+        # Write checkpoint before queuing so a worker crash between these
+        # steps doesn't discard the successful batch's position.
+        checkpoint.component_enrichment_cursor = str(next_cursor or "")
+        checkpoint.save(update_fields=["component_enrichment_cursor", "updated_at"])
+        if next_cursor:
+            self.apply_async(
+                kwargs={"limit": limit, "cursor": next_cursor, "retry_attempt": 0},
+                countdown=5,
+            )
     return result
-
 
 @shared_task(bind=True, acks_late=True)
 def sync_orcaslicer_printer_catalogue_task(self, retry_attempt=0):
