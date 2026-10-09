@@ -108,6 +108,34 @@ class VerifiedComponentReferenceTests(TestCase):
         self.assertNotIn("reference_url", generic.specifications)
         self.assertEqual(manual.specifications["reference_url"], "https://example.com/manual")
 
+
+    def test_expanded_family_references_cover_multiple_manufacturers(self):
+        from core.component_reference_enrichment import (
+            VERIFIED_FAMILY_REFERENCES,
+            enrich_component_reference_links,
+        )
+        expected = {
+            "INA219": "https://www.ti.com/product/INA219",
+            "MCP23017": "https://www.microchip.com/en-us/product/mcp23017",
+            "VL53L0X": "https://www.st.com/en/imaging-and-photonics-solutions/vl53l0x.html",
+        }
+        self.assertGreaterEqual(len(VERIFIED_FAMILY_REFERENCES), 9)
+        self.assertTrue(all(VERIFIED_FAMILY_REFERENCES[k] == v for k, v in expected.items()))
+        for part in expected:
+            ComponentModel.objects.create(
+                name=f"{part} generic module", part_number=part,
+                specifications={"existing_note": "Preserve me"},
+            )
+        result = enrich_component_reference_links()
+        self.assertEqual(result["enriched"], 3)
+        for part, link in expected.items():
+            item = ComponentModel.objects.get(part_number=part)
+            self.assertEqual(item.specifications["reference_url"], link)
+            self.assertEqual(item.specifications["existing_note"], "Preserve me")
+            self.assertEqual(
+                item.specifications["reference_match_type"], "exact-part-number-family"
+            )
+
     def test_batched_reference_sweep_visits_remaining_records(self):
         from core.component_reference_enrichment import enrich_component_reference_links
         import uuid
