@@ -223,6 +223,29 @@ class CatalogueImageSourceTests(unittest.TestCase):
         self.assertIn("10k slide potentiometer linear slider", queries)
         self.assertIn("slide potentiometer electronics", queries)
 
+    @patch("core.catalogue_image_sources._search_open_media", return_value=None)
+    def test_part_number_component_avoids_low_confidence_generic_fallback(self, search):
+        from core.catalogue_image_sources import resolve_catalogue_image
+        component = ComponentModel(
+            name="BME280 temperature/humidity/pressure sensor",
+            part_number="BME280",
+            specifications={"type": "environment"},
+        )
+        self.assertIsNone(resolve_catalogue_image(component))
+        self.assertEqual(search.call_count, 1)
+        self.assertGreaterEqual(search.call_args.kwargs["minimum_score"], 0.40)
+
+    @patch("core.catalogue_image_sources._search_open_media", return_value=None)
+    def test_generic_component_uses_bounded_higher_confidence_search(self, search):
+        from core.catalogue_image_sources import resolve_catalogue_image
+        component = ComponentModel(
+            name="10k slide potentiometer",
+            part_number="",
+            specifications={"type": "potentiometer"},
+        )
+        self.assertIsNone(resolve_catalogue_image(component))
+        self.assertGreaterEqual(search.call_args.kwargs["minimum_score"], 0.30)
+
     def test_structured_product_image_supports_schema_org_product(self):
         html = """
         <html><head>

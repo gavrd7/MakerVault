@@ -1103,11 +1103,17 @@ def resolve_catalogue_image(obj, variant: str = "base") -> ImageCandidate | None
 
     if isinstance(obj, ComponentModel):
         queries = _component_image_queries(obj)
-        candidate = _search_open_media(queries[:3], minimum_score=0.16)
+        # Part-numbered components need a recognisable identity match, not a
+        # generic lookalike photograph. Generic catalogue items can use a
+        # category illustration if no suitably specific image can be found.
+        identifiable = bool((obj.part_number or "").strip())
+        minimum = 0.42 if identifiable else 0.30
+        candidate = _search_open_media(queries[:3], minimum_score=minimum)
         if candidate:
             return candidate
-        if len(queries) > 3:
-            return _search_open_media(queries[3:], minimum_score=0.12)
+        if not identifiable and len(queries) > 3:
+            return _search_open_media(queries[3:], minimum_score=0.30)
+        return None
 
     if isinstance(obj, FilamentProduct):
         return _search_open_media(_filament_image_queries(obj), minimum_score=0.58)
