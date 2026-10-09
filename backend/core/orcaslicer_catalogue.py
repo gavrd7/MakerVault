@@ -70,8 +70,21 @@ def _load_supplemental_printers():
             "family": str(row.get("family") or "").strip(),
             "source_url": str(row.get("source_url") or "").strip(),
             "multi_material_system": str(row.get("multi_material_system") or "").strip(),
+            "build_volume_mm": row.get("build_volume_mm"),
+            "build_volume_source_url": str(row.get("build_volume_source_url") or "").strip(),
         })
     return cleaned
+
+
+def _verified_supplemental_volume(row):
+    """Only use plausible dimensions paired with a manufacturer reference."""
+    raw = row.get("build_volume_mm")
+    source = str(row.get("build_volume_source_url") or "")
+    if not isinstance(raw, list) or len(raw) != 3 or not source.startswith("https://"):
+        return {}
+    if any(type(value) not in (int, float) or not 0 < value <= 2000 for value in raw):
+        return {}
+    return dict(zip(("build_volume_x_mm", "build_volume_y_mm", "build_volume_z_mm"), raw))
 
 
 def _merge_supplemental_model(row):
@@ -89,12 +102,17 @@ def _merge_supplemental_model(row):
         "technology": "FDM/FFF",
     }
 
+    verified_volume = _verified_supplemental_volume(row)
+    if verified_volume:
+        provenance["build_volume_source_url"] = row["build_volume_source_url"]
+
     if item is None:
         features = {"makervault_supplemental": provenance}
         item = PrinterCatalogModel.objects.create(
             manufacturer=maker,
             name=row["name"],
             multi_material_system=row.get("multi_material_system", ""),
+            **verified_volume,
             features=features,
             source_url=row.get("source_url", ""),
         )
@@ -115,8 +133,15 @@ def _merge_supplemental_model(row):
         item.multi_material_system = row["multi_material_system"]
         changed = True
 
+    volume_fields = []
+    for field, value in verified_volume.items():
+        if getattr(item, field) is None:
+            setattr(item, field, value)
+            volume_fields.append(field)
+            changed = True
+
     if changed:
-        item.save(update_fields=["features", "source_url", "multi_material_system", "updated_at"])
+        item.save(update_fields=["features", "source_url", "multi_material_system", *volume_fields, "updated_at"])
     return maker_created, False, changed
 
 
