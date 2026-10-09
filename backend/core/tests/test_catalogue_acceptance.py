@@ -59,6 +59,7 @@ class FreshCatalogueAcceptanceTests(TestCase):
         self.assertEqual(by_label["Components"]["total"], len(COMPONENT_DEFINITIONS))
         for entry in summary["catalogues"]:
             for metric in entry["metrics"]:
-                self.assertEqual(metric["complete"] + metric["missing"], entry["total"]
-                                 if metric["complete"] + metric["missing"] == entry["total"] else
-                                 metric["complete"] + metric["missing"])
+                self.assertGreaterEqual(metric["complete"], 0)
+                self.assertGreaterEqual(metric["missing"], 0)
+                self.assertGreaterEqual(metric["percent"], 0)
+                self.assertLessEqual(metric["percent"], 100)
