@@ -862,16 +862,6 @@ class CatalogueImagePriorityTests(TestCase):
             specifications={"type": "sensor"},
         )
 
-    @override_settings(
-        CATALOGUE_IMAGE_MAX_PER_RUN=1,
-        CATALOGUE_IMAGE_RETRY_DAYS=1,
-        CATALOGUE_IMAGE_WIKIMEDIA=True,
-        CATALOGUE_IMAGE_OPENVERSE=True,
-    )
-    @patch("core.catalogue_image_sources.cache.delete")
-    @patch("core.catalogue_image_sources.cache.add", return_value=True)
-    @patch("core.catalogue_image_sources.find_source_page_image", return_value=None)
-    @patch("core.catalogue_image_sources.resolve_catalogue_image", return_value=None)
     @override_settings(CATALOGUE_IMAGE_MAX_PER_RUN=1, CATALOGUE_IMAGE_RETRY_DAYS=1)
     @patch("core.catalogue_image_sources.cache.delete")
     @patch("core.catalogue_image_sources.cache.add", return_value=True)
@@ -892,6 +882,16 @@ class CatalogueImagePriorityTests(TestCase):
             self.component.specifications.get("image_source_type"), "generic-artwork"
         )
 
+    @override_settings(
+        CATALOGUE_IMAGE_MAX_PER_RUN=1,
+        CATALOGUE_IMAGE_RETRY_DAYS=1,
+        CATALOGUE_IMAGE_WIKIMEDIA=True,
+        CATALOGUE_IMAGE_OPENVERSE=True,
+    )
+    @patch("core.catalogue_image_sources.cache.delete")
+    @patch("core.catalogue_image_sources.cache.add", return_value=True)
+    @patch("core.catalogue_image_sources.find_source_page_image", return_value=None)
+    @patch("core.catalogue_image_sources.resolve_catalogue_image", return_value=None)
     def test_component_without_exact_image_uses_generic_artwork(
         self,
         resolve_image,
