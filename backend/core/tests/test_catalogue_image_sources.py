@@ -226,8 +226,11 @@ class CatalogueImageSourceTests(unittest.TestCase):
     @patch("core.catalogue_image_sources._search_open_media", return_value=None)
     def test_part_number_component_avoids_low_confidence_generic_fallback(self, search):
         from core.catalogue_image_sources import resolve_catalogue_image
-        component = DummyComponent()
-        component.part_number = "BME280"
+        component = ComponentModel(
+            name="BME280 temperature/humidity/pressure sensor",
+            part_number="BME280",
+            specifications={"type": "environment"},
+        )
         self.assertIsNone(resolve_catalogue_image(component))
         self.assertEqual(search.call_count, 1)
         self.assertGreaterEqual(search.call_args.kwargs["minimum_score"], 0.40)
@@ -235,10 +238,11 @@ class CatalogueImageSourceTests(unittest.TestCase):
     @patch("core.catalogue_image_sources._search_open_media", return_value=None)
     def test_generic_component_uses_bounded_higher_confidence_search(self, search):
         from core.catalogue_image_sources import resolve_catalogue_image
-        component = DummyComponent()
-        component.name = "10k slide potentiometer"
-        component.part_number = ""
-        component.specifications = {"type": "potentiometer"}
+        component = ComponentModel(
+            name="10k slide potentiometer",
+            part_number="",
+            specifications={"type": "potentiometer"},
+        )
         self.assertIsNone(resolve_catalogue_image(component))
         self.assertGreaterEqual(search.call_args.kwargs["minimum_score"], 0.30)
 
