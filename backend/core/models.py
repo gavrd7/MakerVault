@@ -84,6 +84,8 @@ class CatalogueMaintenanceSettings(TimeStampedModel):
     component_enrichment_cursor = models.CharField(max_length=64, blank=True, default="")
     filament_enrichment_cursor = models.CharField(max_length=64, blank=True, default="")
     image_next_kind = models.CharField(max_length=20, blank=True, default="")
+    image_last_batch_at = models.DateTimeField(blank=True, null=True)
+    image_last_batch_summary = models.JSONField(default=dict, blank=True)
 
     class Meta:
         verbose_name = "Catalogue maintenance settings"
