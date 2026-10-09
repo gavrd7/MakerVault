@@ -260,6 +260,7 @@ def main() -> int:
     source_group.add_argument("--backup-id", help="Backup identifier shown in MakerVault Settings > Backup & restore.")
     source_group.add_argument("--bundle", help="Path to an off-server .mvbackup bundle, including on a clean replacement host.")
     parser.add_argument("--sudo", action="store_true", help="Run Docker commands through sudo.")
+    parser.add_argument("--build-override", action="store_true", help="Include compose.build.yaml for locally built development deployments.")
     parser.add_argument("--yes", action="store_true", help="Skip the interactive backup-ID confirmation.")
     parser.add_argument(
         "--recovery-host",
@@ -276,7 +277,14 @@ def main() -> int:
         return 2
 
     docker = compose_command(args.sudo)
-    base = [*docker, "-f", str(source / "compose.yaml"), "--project-directory", str(source)]
+    base = [*docker, "-f", str(source / "compose.yaml")]
+    if args.build_override:
+        override = source / "compose.build.yaml"
+        if not override.is_file():
+            print("Restore not started: compose.build.yaml was not found.", file=sys.stderr)
+            return 2
+        base.extend(["-f", str(override)])
+    base.extend(["--project-directory", str(source)])
     env_file = source / ".env"
 
     bundle = Path(args.bundle).expanduser().resolve() if args.bundle else None
