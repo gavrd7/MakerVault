@@ -1,4 +1,5 @@
 import json
+import hashlib
 import re
 from functools import lru_cache
 from pathlib import Path
@@ -8,6 +9,7 @@ from urllib.parse import quote
 
 import requests
 from django.conf import settings
+from django.core.cache import cache
 from django.db import transaction
 
 from .models import PrinterCatalogModel, PrinterManufacturer
@@ -527,7 +529,7 @@ def _merge_model(row, ref):
     return maker_created, False, changed
 
 
-def sync_orcaslicer_printer_catalogue(*, ref=None, max_workers=8):
+def sync_orcaslicer_printer_catalogue(*, ref=None, max_workers=8, retry_failed_only=False):
     """Augment MakerVault's printer catalogue from OrcaSlicer's model manifests.
 
     MakerVault never deletes local models and never replaces populated hardware
@@ -570,13 +572,42 @@ def sync_orcaslicer_printer_catalogue(*, ref=None, max_workers=8):
     models_enriched = 0
     failed_vendors = []
 
+    # Cache successful parsed vendor manifests for the bounded retry only.
+    # Include the upstream blob SHA so a changed manifest is never reused.
+    # Cache loss is harmless: a retry falls back to fetching that vendor.
+    def vendor_cache_key(entry):
+        identity = "|".join((
+            ref, str(entry.get("name") or ""),
+            str(entry.get("sha") or entry.get("download_url") or ""),
+        ))
+        return "makervault:orca-vendor-retry:" + hashlib.sha256(identity.encode()).hexdigest()
+
+    results = []
+    pending = []
+    for entry in entries:
+        saved = None
+        if retry_failed_only:
+            try:
+                saved = cache.get(vendor_cache_key(entry))
+            except Exception:
+                pass
+        if isinstance(saved, (list, tuple)) and len(saved) == 2 and isinstance(saved[1], list):
+            vendor, rows = saved
+            if rows:
+                results.append((vendor, rows))
+        else:
+            pending.append(entry)
+
     with ThreadPoolExecutor(max_workers=max(1, min(int(max_workers), 12))) as executor:
-        futures = {executor.submit(_fetch_vendor_manifest, entry, ref): entry for entry in entries}
-        results = []
+        futures = {executor.submit(_fetch_vendor_manifest, entry, ref): entry for entry in pending}
         for future in as_completed(futures):
             entry = futures[future]
             try:
                 vendor, rows = future.result()
+                try:
+                    cache.set(vendor_cache_key(entry), (vendor, rows), timeout=30 * 60)
+                except Exception:
+                    pass
                 if rows:
                     results.append((vendor, rows))
             except (requests.RequestException, OrcaCatalogueError, ValueError) as exc:
