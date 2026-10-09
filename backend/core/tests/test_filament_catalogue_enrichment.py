@@ -6,6 +6,7 @@ from django.test import TestCase
 from core.catalogue_coverage import catalogue_coverage_summary
 from core.filament_catalogue import (
     apply_catalogue_match_to_filament,
+    FilamentCatalogueError,
     get_supplemental_filament_catalogue,
     match_filament_catalogue_candidates,
     normalise_spoolmandb_row,
@@ -410,7 +411,7 @@ class FilamentContinuationTaskTests(TestCase):
         self.assertEqual(result["status"], "error")
         self.assertEqual(refresh.call_args.kwargs["cursor"], "saved-cursor")
         checkpoint.refresh_from_db()
-        self.assertEqual(checkpoint.filament_enrichment_cursor, "" if False else "saved-cursor")
+        self.assertEqual(checkpoint.filament_enrichment_cursor, "saved-cursor")
 
     @patch("core.filament_catalogue.enrich_filament_from_authoritative_sources",
            return_value={"changed_fields": []})
