@@ -79,3 +79,46 @@ class ComponentCatalogueManufacturerRemovalTests(TestCase):
         result = _component_coverage()
         self.assertEqual(result["diagnostics"]["generic_without_part_number"], 1)
         self.assertEqual(result["diagnostics"]["identifiable_without_authoritative_source"], 1)
+
+
+class VerifiedComponentReferenceTests(TestCase):
+    def test_exact_part_number_enriched_without_changing_existing_metadata(self):
+        from core.component_reference_enrichment import enrich_component_reference_links
+        item = ComponentModel.objects.create(
+            name="LM358 dual operational amplifier", part_number="LM358",
+            specifications={"type": "op-amp"},
+        )
+        result = enrich_component_reference_links()
+        item.refresh_from_db()
+        self.assertEqual(result["enriched"], 1)
+        self.assertEqual(item.specifications["reference_url"], "https://www.ti.com/product/LM358")
+        self.assertEqual(item.specifications["type"], "op-amp")
+        self.assertEqual(enrich_component_reference_links()["enriched"], 0)
+
+    def test_generic_and_existing_references_are_never_modified(self):
+        from core.component_reference_enrichment import enrich_component_reference_links
+        generic = ComponentModel.objects.create(name="Generic resistor", specifications={})
+        manual = ComponentModel.objects.create(
+            name="LM393 comparator", part_number="LM393",
+            specifications={"reference_url": "https://example.com/manual"},
+        )
+        enrich_component_reference_links()
+        generic.refresh_from_db()
+        manual.refresh_from_db()
+        self.assertNotIn("reference_url", generic.specifications)
+        self.assertEqual(manual.specifications["reference_url"], "https://example.com/manual")
+
+    def test_batched_reference_sweep_visits_remaining_records(self):
+        from core.component_reference_enrichment import enrich_component_reference_links
+        import uuid
+        for index in range(103):
+            ComponentModel.objects.create(
+                id=uuid.UUID(int=index + 1),
+                name=f"Fixture {index}",
+                part_number="LM358" if index == 102 else "",
+            )
+        first = enrich_component_reference_links(limit=80)
+        second = enrich_component_reference_links(limit=80, cursor=first["next_cursor"])
+        self.assertEqual((first["status"], first["processed"]), ("limit-reached", 80))
+        self.assertEqual((second["status"], second["processed"]), ("complete", 23))
+        self.assertEqual(first["enriched"] + second["enriched"], 1)
