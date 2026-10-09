@@ -155,6 +155,10 @@ def _component_coverage() -> dict:
         "missing_samples": samples,
         "diagnostics": {
             "generic_without_part_number": generic_count,
+            "generic_artwork_fallbacks": sum(
+                not has_image(row) and (row.specifications or {}).get("image_source_type") == "generic-artwork"
+                for row in rows
+            ),
             "identifiable_without_authoritative_source": identifiable_missing_source,
         },
     }
