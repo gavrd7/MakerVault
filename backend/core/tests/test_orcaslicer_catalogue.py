@@ -329,6 +329,39 @@ class OrcaSlicerPrinterCatalogueTests(TestCase):
 
 
 
+    @patch("core.orcaslicer_catalogue._load_supplemental_printers", return_value=[])
+    @patch("core.orcaslicer_catalogue.requests.get")
+    @patch("core.orcaslicer_catalogue._fetch_vendor_manifest")
+    def test_partial_vendor_retry_reuses_success_and_refetches_failure(self, fetch, get, _supplements):
+        from core.orcaslicer_catalogue import sync_orcaslicer_printer_catalogue
+        from core.orcaslicer_catalogue import OrcaCatalogueError
+
+        listing = [
+            {"type": "file", "name": "Alpha.json", "sha": "first"},
+            {"type": "file", "name": "Beta.json", "sha": "second"},
+        ]
+        get.return_value = FakeResponse(payload=listing)
+        saved = {}
+        class FakeCache:
+            def get(self, key): return saved.get(key)
+            def set(self, key, value, timeout=None): saved[key] = value
+        counts = {"Alpha.json": 0, "Beta.json": 0}
+        def fetch_vendor(entry, ref):
+            name = entry["name"]
+            counts[name] += 1
+            if name == "Beta.json" and counts[name] == 1:
+                raise OrcaCatalogueError("temporary vendor failure")
+            return name.removesuffix(".json"), []
+        fetch.side_effect = fetch_vendor
+
+        with patch("core.orcaslicer_catalogue.cache", FakeCache()):
+            first = sync_orcaslicer_printer_catalogue(max_workers=1)
+            second = sync_orcaslicer_printer_catalogue(max_workers=1, retry_failed_only=True)
+        self.assertEqual(first["status"], "partial")
+        self.assertEqual(second["status"], "complete")
+        self.assertEqual(counts["Alpha.json"], 1)
+        self.assertEqual(counts["Beta.json"], 2)
+
 class OrcaPrinterTaskRetryTests(TestCase):
     @patch("core.tasks.backup_in_progress", return_value=False)
     @patch("core.tasks.sync_orcaslicer_printer_catalogue")
@@ -342,6 +375,7 @@ class OrcaPrinterTaskRetryTests(TestCase):
                 kwargs={"retry_attempt": 1}, countdown=600,
             )
             sync_orcaslicer_printer_catalogue_task(retry_attempt=1)
+            self.assertEqual(sync.call_args.kwargs, {"retry_failed_only": True})
             self.assertEqual(queue.call_count, 1)
 
     @patch("core.tasks.backup_in_progress", return_value=False)
