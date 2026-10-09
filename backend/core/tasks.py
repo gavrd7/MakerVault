@@ -131,8 +131,12 @@ def seed_starter_filament_catalogue_task(self):
 def enrich_filament_catalogue_task(self, force_catalogue=False, limit=None, cursor=None):
     if backup_in_progress():
         return {"status": "backup-in-progress"}
-    # A None limit in scheduled work means bounded background batches, not
-    # an unbounded task; direct refresh callers still retain their own defaults.
+    from .models import CatalogueMaintenanceSettings
+    checkpoint, _ = CatalogueMaintenanceSettings.objects.get_or_create(singleton_key=1)
+    # A scheduled task with no cursor resumes from the durable checkpoint.
+    # Explicit cursors remain valid for in-flight continuation tasks.
+    if cursor is None:
+        cursor = checkpoint.filament_enrichment_cursor or None
     batch_limit = 80 if limit is None else limit
     try:
         result = refresh_imported_filament_products(
@@ -142,14 +146,21 @@ def enrich_filament_catalogue_task(self, force_catalogue=False, limit=None, curs
         )
     except FilamentCatalogueError as exc:
         return {"status": "error", "error": str(exc)}
-    if result.get("status") == "limit-reached" and result.get("next_cursor"):
-        self.apply_async(
-            kwargs={"force_catalogue": False, "limit": batch_limit,
-                    "cursor": result["next_cursor"]},
-            countdown=5,
+    if result.get("status") in {"limit-reached", "complete"}:
+        next_cursor = (
+            result.get("next_cursor")
+            if result.get("status") == "limit-reached" and result.get("checked", 0) > 0
+            else None
         )
+        checkpoint.filament_enrichment_cursor = str(next_cursor or "")
+        checkpoint.save(update_fields=["filament_enrichment_cursor", "updated_at"])
+        if next_cursor:
+            self.apply_async(
+                kwargs={"force_catalogue": False, "limit": batch_limit,
+                        "cursor": next_cursor},
+                countdown=5,
+            )
     return result
-
 
 def _queue_catalogue_maintenance(config):
     if backup_in_progress():
