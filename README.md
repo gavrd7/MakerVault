@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <strong>Current stable release: v1.0.5</strong>
+  <strong>Current stable release: v1.1.0</strong>
 </p>
 
 <p align="center">
@@ -22,11 +22,11 @@
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
-**What's new in v1.0.5:** integrated User Account and Security settings, Admin / Supervisor / User / Viewer roles, safe `.env` secret generation, a secure first-run administrator wizard and faster startup with background catalogue population. Development container builds can now use the separate `dev` tag.
+**What's new in v1.1.0:** reliable background catalogue maintenance with restart-safe board/component/filament/image checkpoints, improved manufacturer-backed technical data, clearer image diagnostics and resilient OrcaSlicer vendor retries. Previous account, security and first-run improvements remain included.
 
 MakerVault keeps the practical parts of a workshop connected: what you own, what a build needs, which files and wiring belong to it, which model revision you printed, and where the finished parts ended up.
 
-## First-run administrator setup (v1.0.5)
+## First-run administrator setup (v1.1.0)
 
 On a **fresh installation with no superuser**, opening MakerVault's normal URL redirects to the first-run setup wizard automatically. The server operator obtains a short-lived token (valid for 30 minutes) from the Docker host, then creates the first administrator in the browser with username, email, password and confirmation. The wizard includes a password-visibility checkbox and matching feedback. It closes automatically once any superuser exists; existing installations continue to the standard sign-in page.
 
@@ -236,7 +236,7 @@ Catalogue media can be locally cached or retained as external references where r
 
 ## Project status and development
 
-**v1.0.5** is the current stable MakerVault release. It introduces browser-based first-run administrator setup, consolidated account/security management, role-based access controls, safe environment secret generation, and faster access to the web interface while catalogue seeding and OrcaSlicer enrichment continue in the background. The v1.0.4 project priorities and deadline improvements remain included. Experimental printer hardware remains subject to its documented validation boundaries.
+**v1.1.0** is the current stable MakerVault release. It introduces browser-based first-run administrator setup, consolidated account/security management, role-based access controls, safe environment secret generation, and faster access to the web interface while catalogue seeding and OrcaSlicer enrichment continue in the background. The v1.0.4 project priorities and deadline improvements remain included. Experimental printer hardware remains subject to its documented validation boundaries.
 
 Pull-request CI checks backend tests, frontend tests/build, migrations, dependency/static security and the production Docker image. The guide has its own strict build/link checks. CI passing does not substitute for hardware, deployment or restore testing.
 
