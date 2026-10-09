@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../api";
 import { Badge, LoadingBlock } from "./Common";
 
@@ -34,6 +34,11 @@ export default function BackupRestorePanel({ onBackupStarted }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [commandCopied, setCommandCopied] = useState(false);
+  const copyResetTimer = useRef(null);
+
+  useEffect(() => () => {
+    if (copyResetTimer.current !== null) clearTimeout(copyResetTimer.current);
+  }, []);
   const [validation, setValidation] = useState(null);
   const [restoreTarget, setRestoreTarget] = useState(null);
   const [watchedBackupId, setWatchedBackupId] = useState("");
@@ -132,6 +137,8 @@ export default function BackupRestorePanel({ onBackupStarted }) {
   }
 
   async function copyCommand(command) {
+    if (copyResetTimer.current !== null) clearTimeout(copyResetTimer.current);
+    copyResetTimer.current = null;
     setCommandCopied(false);
     // Most browsers deny navigator.clipboard on ordinary HTTP connections.
     // Try it first, then fall back to the older synchronous copy operation.
@@ -165,6 +172,10 @@ export default function BackupRestorePanel({ onBackupStarted }) {
 
     if (copied) {
       setCommandCopied(true);
+      copyResetTimer.current = setTimeout(() => {
+        setCommandCopied(false);
+        copyResetTimer.current = null;
+      }, 2500);
       return;
     }
 
