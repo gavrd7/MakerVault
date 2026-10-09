@@ -1355,7 +1355,7 @@ class ImageCatalogueRotationTests(unittest.TestCase):
         self.assertEqual(heads, kinds)
 
 
-class ImageMaintenanceDiagnosticsTests(unittest.TestCase):
+class ImageMaintenanceDiagnosticsTests(TestCase):
     def test_batch_summary_keeps_aggregates_not_sensitive_provider_details(self):
         from core.tasks import summarise_image_batch
         result = summarise_image_batch({
@@ -1388,3 +1388,25 @@ class ImageMaintenanceDiagnosticsTests(unittest.TestCase):
             result = seed_catalogue_images_task()
             self.assertEqual(result["status"], "limit-reached")
             enqueue.assert_not_called()
+
+    def test_successful_batch_persists_summary(self):
+        from core.models import CatalogueMaintenanceSettings
+        from core.tasks import seed_catalogue_images_task
+        with (
+            patch("core.tasks.backup_in_progress", return_value=False),
+            patch("core.tasks.run_catalogue_image_seed", return_value={
+                "status": "complete", "processed": 4, "cached": 1, "failed": 1,
+                "by_kind": {"boards": {"processed": 4, "cached": 1, "failed": 1}},
+                "failures": [{"reason": "Connection refused https://secret.invalid"}],
+            }),
+            patch.object(seed_catalogue_images_task, "apply_async") as enqueue,
+        ):
+            seed_catalogue_images_task()
+        maintenance = CatalogueMaintenanceSettings.objects.get(singleton_key=1)
+        self.assertIsNotNone(maintenance.image_last_batch_at)
+        self.assertEqual(maintenance.image_last_batch_summary["processed"], 4)
+        self.assertEqual(
+            maintenance.image_last_batch_summary["failure_categories"]["provider-unavailable"], 1,
+        )
+        self.assertNotIn("secret.invalid", str(maintenance.image_last_batch_summary))
+        enqueue.assert_not_called()
