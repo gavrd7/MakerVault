@@ -1410,3 +1410,42 @@ class ImageMaintenanceDiagnosticsTests(TestCase):
         )
         self.assertNotIn("secret.invalid", str(maintenance.image_last_batch_summary))
         enqueue.assert_not_called()
+
+
+
+class DurableImageRecordCheckpointTests(TestCase):
+    @override_settings(CATALOGUE_IMAGE_MAX_PER_RUN=1, CATALOGUE_IMAGE_RETRY_DAYS=1)
+    @patch("core.catalogue_image_sources.cache.delete")
+    @patch("core.catalogue_image_sources.cache.add", return_value=True)
+    @patch("core.catalogue_image_sources.find_source_page_image", return_value=None)
+    @patch("core.catalogue_image_sources.resolve_catalogue_image", return_value=None)
+    def test_automatic_image_batches_resume_from_record_checkpoint(
+        self, resolve_image, source_image, cache_add, cache_delete,
+    ):
+        from core.catalogue_image_sources import run_catalogue_image_seed
+        from core.models import CatalogueMaintenanceSettings, ComponentCategory, ComponentModel
+
+        category = ComponentCategory.objects.create(name="Passives", slug="passives-image-checkpoint")
+        for name in ("Resistor A", "Resistor B", "Resistor C"):
+            ComponentModel.objects.create(
+                name=name, category=category, specifications={"type": "resistor"},
+            )
+
+        first = run_catalogue_image_seed(limit=1, force_retry=True)
+        checkpoint = CatalogueMaintenanceSettings.objects.get(singleton_key=1)
+        self.assertEqual(first["status"], "limit-reached")
+        self.assertIn("components", checkpoint.image_record_checkpoints)
+        first_position = checkpoint.image_record_checkpoints["components"]
+
+        # Simulate a new worker with no in-memory position; PostgreSQL is
+        # the only state carried between calls.
+        second = run_catalogue_image_seed(limit=1, force_retry=True)
+        checkpoint.refresh_from_db()
+        self.assertEqual(second["status"], "limit-reached")
+        self.assertNotEqual(first_position, checkpoint.image_record_checkpoints["components"])
+
+        third = run_catalogue_image_seed(limit=1, force_retry=True)
+        checkpoint.refresh_from_db()
+        self.assertEqual(third["status"], "complete")
+        self.assertNotIn("components", checkpoint.image_record_checkpoints)
+        self.assertEqual([first["processed"], second["processed"], third["processed"]], [1, 1, 1])
