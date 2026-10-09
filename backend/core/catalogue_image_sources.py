@@ -1282,6 +1282,25 @@ def run_catalogue_image_seed(
         maintenance.image_next_kind = order[1 % len(order)]
         maintenance.save(update_fields=["image_next_kind", "updated_at"])
 
+    # Explicit filtered reruns must always begin at the requested records.
+    # Automatic sweeps resume from the last *completed* record and image variant.
+    checkpoint_owner = None
+    checkpoints = {}
+    if not requested and not requested_board_types:
+        from .models import CatalogueMaintenanceSettings
+        checkpoint_owner, _ = CatalogueMaintenanceSettings.objects.get_or_create(singleton_key=1)
+        checkpoints = dict(checkpoint_owner.image_record_checkpoints or {})
+
+    def save_checkpoint(kind, position):
+        if checkpoint_owner is None:
+            return
+        if position:
+            checkpoints[kind] = position
+        else:
+            checkpoints.pop(kind, None)
+        checkpoint_owner.image_record_checkpoints = checkpoints
+        checkpoint_owner.save(update_fields=["image_record_checkpoints", "updated_at"])
+
     processed = cached = failed = skipped = remote = artwork = 0
     by_kind = {
         key: {"processed": 0, "cached": 0, "remote": 0, "artwork": 0, "failed": 0, "skipped": 0}
@@ -1292,14 +1311,34 @@ def run_catalogue_image_seed(
 
     try:
         for kind in order:
-            queryset = sources[kind]
+            # Cursor comparisons must use the same stable ordering on every
+            # batch; the default catalogue name ordering is not PK ordering.
+            queryset = sources[kind].order_by("pk") if checkpoint_owner else sources[kind]
+            saved_position = checkpoints.get(kind) or {}
+            saved_pk = str(saved_position.get("pk") or "")
+            saved_variant = str(saved_position.get("variant") or "")
+            if saved_pk:
+                queryset = queryset.order_by("pk").filter(pk__gte=saved_pk)
+            last_completed = None
+            current_position = None
             for obj in queryset.iterator():
                 variants = ["base"]
                 if isinstance(obj, PrinterCatalogModel) and obj.multi_material_system:
                     variants.append("multi_material")
 
                 for variant in variants:
+                    # The previous iteration finished (including all continue paths).
+                    # Only a completed variant can become the next durable cursor.
+                    if current_position is not None:
+                        last_completed = current_position
+                    current_position = {"pk": str(obj.pk), "variant": variant}
+                    if saved_pk and str(obj.pk) == saved_pk and variant == "base" and saved_variant in {"base", "multi_material"}:
+                        continue
+                    if saved_pk and str(obj.pk) == saved_pk and variant == "multi_material" and saved_variant == "multi_material":
+                        continue
                     if limit and processed >= limit:
+                        if last_completed:
+                            save_checkpoint(kind, last_completed)
                         return {
                             "status": "limit-reached",
                             "processed": processed,
@@ -1637,6 +1676,7 @@ def run_catalogue_image_seed(
                                 "reason": str(exc)[:200],
                             })
 
+            save_checkpoint(kind, None)
         return {
             "status": "complete",
             "processed": processed,
