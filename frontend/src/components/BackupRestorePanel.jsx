@@ -132,10 +132,21 @@ export default function BackupRestorePanel({ onBackupStarted }) {
 
   async function copyCommand(command) {
     try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
       await navigator.clipboard.writeText(command);
       setNotice("Restore command copied.");
     } catch {
-      setNotice("Select and copy the restore command below.");
+      // Clipboard access can be blocked by browser permissions or an
+      // insecure origin. Select the full command for ordinary manual copy.
+      const commandElement = document.querySelector(".restoreCommand code");
+      if (commandElement) {
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(commandElement);
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+      }
+      setNotice("Clipboard access was blocked. The full restore command is selected; press Ctrl+C (or Cmd+C) to copy.");
     }
   }
 
