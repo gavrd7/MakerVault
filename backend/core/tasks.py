@@ -57,13 +57,30 @@ def enrich_board_catalogue_task(self, limit=None, force_retry=False):
 
 
 @shared_task(bind=True, acks_late=True)
-def enrich_component_references_task(self, limit=80, cursor=None):
+def enrich_component_references_task(self, limit=80, cursor=None, retry_attempt=0):
     if backup_in_progress():
         return {"status": "backup-in-progress"}
-    result = enrich_component_reference_links(limit=limit, cursor=cursor)
-    if result["status"] == "limit-reached" and result["next_cursor"]:
+    # Unexpected failures must not create an infinite chain of short retries.
+    # Preserve the cursor so a transient failure retries the same batch.
+    try:
+        result = enrich_component_reference_links(limit=limit, cursor=cursor)
+    except Exception as exc:
+        if retry_attempt < 2:
+            self.apply_async(
+                kwargs={"limit": limit, "cursor": cursor,
+                        "retry_attempt": retry_attempt + 1},
+                countdown=60 * (2 ** retry_attempt),
+            )
+        return {
+            "status": "retry-scheduled" if retry_attempt < 2 else "error",
+            "cursor": cursor,
+            "retry_attempt": retry_attempt,
+            "error": str(exc)[:200],
+        }
+    if result.get("status") == "limit-reached" and result.get("next_cursor") and result.get("processed", 0) > 0:
         self.apply_async(
-            kwargs={"limit": limit, "cursor": result["next_cursor"]}, countdown=5,
+            kwargs={"limit": limit, "cursor": result["next_cursor"], "retry_attempt": 0},
+            countdown=5,
         )
     return result
 

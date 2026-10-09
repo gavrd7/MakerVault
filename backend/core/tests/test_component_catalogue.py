@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
@@ -189,3 +191,39 @@ class VerifiedComponentReferenceTests(TestCase):
         component.refresh_from_db()
         self.assertEqual(component.specifications["maximum_range_m"], 2)
         self.assertEqual(component.specifications["interface"], "I2C")
+
+
+class ComponentSweepRetryTests(TestCase):
+    @patch("core.tasks.backup_in_progress", return_value=False)
+    @patch("core.tasks.enrich_component_reference_links", side_effect=RuntimeError("temporary failure"))
+    @patch("core.tasks.enrich_component_references_task.apply_async")
+    def test_transient_failure_retries_same_cursor_with_backoff(self, enqueue, enrich, backup):
+        from core.tasks import enrich_component_references_task
+        first = enrich_component_references_task(limit=80, cursor="sample-cursor", retry_attempt=0)
+        self.assertEqual(first["status"], "retry-scheduled")
+        self.assertEqual(enqueue.call_args.kwargs["countdown"], 60)
+        self.assertEqual(enqueue.call_args.kwargs["kwargs"]["cursor"], "sample-cursor")
+        second = enrich_component_references_task(limit=80, cursor="sample-cursor", retry_attempt=1)
+        self.assertEqual(second["status"], "retry-scheduled")
+        self.assertEqual(enqueue.call_args.kwargs["countdown"], 120)
+        self.assertEqual(enqueue.call_count, 2)
+
+    @patch("core.tasks.backup_in_progress", return_value=False)
+    @patch("core.tasks.enrich_component_reference_links", side_effect=RuntimeError("provider down"))
+    @patch("core.tasks.enrich_component_references_task.apply_async")
+    def test_retries_stop_after_two_attempts(self, enqueue, enrich, backup):
+        from core.tasks import enrich_component_references_task
+        result = enrich_component_references_task(limit=80, retry_attempt=2)
+        self.assertEqual(result["status"], "error")
+        enqueue.assert_not_called()
+
+    @patch("core.tasks.backup_in_progress", return_value=False)
+    @patch("core.tasks.enrich_component_reference_links", return_value={
+        "status": "limit-reached", "processed": 80, "next_cursor": "next-cursor",
+    })
+    @patch("core.tasks.enrich_component_references_task.apply_async")
+    def test_successful_batch_resets_retry_budget(self, enqueue, enrich, backup):
+        from core.tasks import enrich_component_references_task
+        enrich_component_references_task(limit=80, retry_attempt=2)
+        self.assertEqual(enqueue.call_args.kwargs["kwargs"]["retry_attempt"], 0)
+        self.assertEqual(enqueue.call_args.kwargs["kwargs"]["cursor"], "next-cursor")
