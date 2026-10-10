@@ -2651,3 +2651,12 @@ a:focus-visible,
 
 .modelReusableSpoolRow{display:flex;justify-content:flex-start;padding:10px 14px 14px;border-top:1px solid var(--border,#303b49)}
 .modelReusableSpoolRow .modelReusableSpoolToggle{margin:0}
+
+/* Reusable spool forms: help text and actions never share the same text line. */
+.spoolEstimateBlock{display:flex;flex-direction:column;align-items:stretch;gap:10px;min-width:0}
+.spoolHelpText{display:block;margin:0;line-height:1.5;max-width:100%;color:var(--text-muted,#9ca6b6)}
+.spoolInlineActions{display:flex;justify-content:flex-start;align-items:center;gap:10px;flex-wrap:wrap;width:100%}
+.spoolInlineActions>button{display:inline-flex;flex:0 1 auto;max-width:100%;white-space:normal;text-align:center}
+.spoolRowActions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-left:auto}
+.spoolRowActions button{max-width:100%;white-space:normal}
+@media(max-width:720px){.spoolRowActions{width:100%;justify-content:flex-start;margin:12px 0 0}.spoolRowActions button{flex:0 1 auto}.spoolInlineActions button{width:100%}}
