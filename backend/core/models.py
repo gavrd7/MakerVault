@@ -782,6 +782,7 @@ class ReusableSpoolDesign(TimeStampedModel):
 
 class ReusableSpool(TimeStampedModel):
     """One owned empty spool/reel that may carry a changing filament refill."""
+    CONDITION = [("usable", "Usable"), ("damaged", "Damaged"), ("retired", "Retired")]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reusable_spools")
     design = models.ForeignKey(ReusableSpoolDesign, on_delete=models.PROTECT, related_name="owned_spools")
@@ -789,6 +790,7 @@ class ReusableSpool(TimeStampedModel):
     measured_tare_g = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
     color_name = models.CharField(max_length=80, blank=True)
     material_override = models.CharField(max_length=80, blank=True)
+    condition = models.CharField(max_length=20, choices=CONDITION, default="usable")
     storage_location = models.ForeignKey(PrintingLocation, on_delete=models.SET_NULL, blank=True, null=True, related_name="reusable_spools")
     filament_spool = models.OneToOneField(Spool, on_delete=models.SET_NULL, blank=True, null=True, related_name="reusable_reel")
     notes = models.TextField(blank=True)
@@ -814,6 +816,24 @@ class ReusableSpool(TimeStampedModel):
 
     def __str__(self):
         return self.code
+
+
+class ReusableSpoolAssignmentEvent(TimeStampedModel):
+    """Historical filament assignments, even if the filament stock is later deleted."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reusable_spool_assignment_events")
+    reel = models.ForeignKey(ReusableSpool, on_delete=models.CASCADE, related_name="assignment_events")
+    previous_filament_spool_id = models.UUIDField(blank=True, null=True)
+    new_filament_spool_id = models.UUIDField(blank=True, null=True)
+    previous_spool_code = models.CharField(max_length=40, blank=True)
+    new_spool_code = models.CharField(max_length=40, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.reel.code}: {self.previous_spool_code or 'empty'} → {self.new_spool_code or 'empty'}"
+
 
 class ExternalSpoolLink(TimeStampedModel):
     PROVIDERS = [
