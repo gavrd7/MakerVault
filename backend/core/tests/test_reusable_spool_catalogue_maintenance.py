@@ -53,6 +53,9 @@ class ReusableSpoolMaintenanceTests(TestCase):
         generic = ('<html><head><meta property="og:title" content="Home">'
                    '<meta property="og:image" content="https://cdn.example.org/logo.jpg"></head></html>')
         self.assertIsNone(official_image_candidate(entry, generic, entry.source_url))
+        brand_home = ('<html><head><meta property="og:title" content="Bambu Lab Official Store">'
+                      '<meta property="og:image" content="https://cdn.example.org/logo.jpg"></head></html>')
+        self.assertIsNone(official_image_candidate(entry, brand_home, entry.source_url))
 
     @patch("core.tasks.backup_in_progress", return_value=False)
     @patch("core.tasks.seed_catalogue_images_task.delay")
