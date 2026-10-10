@@ -88,7 +88,7 @@ def serialise_reel(item):
         "id": str(item.id), "code": item.code, "design_id": str(item.design_id),
         "design_name": item.design.name, "measured_tare_g": str(item.measured_tare_g) if item.measured_tare_g is not None else None,
         "effective_tare_g": str(item.effective_tare_g) if item.effective_tare_g is not None else None,
-        "color_name": item.color_name, "material_override": item.material_override,
+        "color_name": item.color_name, "color_hex": item.color_hex, "material_override": item.material_override,
         "storage_location_id": str(item.storage_location_id) if item.storage_location_id else None,
         "filament_spool_id": str(item.filament_spool_id) if item.filament_spool_id else None,
         "condition": item.condition,
@@ -183,6 +183,11 @@ def fill_reel(item, data):
     for field in ("color_name", "material_override", "condition", "notes"):
         if field in data:
             setattr(item, field, str(data[field] or "").strip())
+    if "color_hex" in data:
+        value = str(data["color_hex"] or "").strip().upper()
+        if value and not re.fullmatch(r"#[0-9A-F]{6}", value):
+            raise ValidationError({"color_hex": "Use a six-digit hex colour, e.g. #FF6600."})
+        item.color_hex = value
     if "measured_tare_g" in data:
         item.measured_tare_g = number(data, "measured_tare_g")
     if "design_id" in data:
