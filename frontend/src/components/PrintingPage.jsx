@@ -242,6 +242,19 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
   const recentSpools = newestFirst(data?.spools).slice(0, 5);
   const recentModels = newestFirst(data?.models).slice(0, 5);
 
+  if (workspaceView === "reusableSpools") {
+    return <ReusableSpoolsPage
+      onBack={() => setWorkspaceView("overview")}
+      models={data?.models || []}
+      spools={data?.spools || []}
+      locations={data?.locations || []}
+      canAdd={Boolean(config?.permissions?.add_reusablespool)}
+      canChange={Boolean(config?.permissions?.change_reusablespool)}
+      canDelete={Boolean(config?.permissions?.delete_reusablespool)}
+      canAddDesign={Boolean(config?.permissions?.add_reusablespooldesign)}
+    />;
+  }
+
   if (workspaceView === "filaments") {
     return <FilamentLibraryPage
       filaments={data?.filaments || []}
@@ -319,6 +332,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
           <div className="printingHeroActions">
             {canAddSpool && <button type="button" onClick={() => setModal("spool")}>Add spool</button>}
             <button type="button" onClick={() => setWorkspaceView("spools")}>Spool inventory</button>
+            <button type="button" onClick={() => setWorkspaceView("reusableSpools")}>Reusable spools</button>
             <button type="button" onClick={() => setWorkspaceView("filaments")}>Filament library</button>
             {canAddFilament && <button type="button" onClick={() => setModal("filamentCatalogue")}>Filament catalogue</button>}
           </div>
@@ -1516,6 +1530,168 @@ function PrinterModal({ manufacturers, models, locations, onClose, onSaved }) {
   </Modal>;
 }
 
+
+
+function ReusableSpoolsPage({ onBack, models, spools, locations, canAdd, canChange, canDelete, canAddDesign }) {
+  const [designs, setDesigns] = useState([]);
+  const [reels, setReels] = useState([]);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [working, setWorking] = useState(false);
+  const [form, setForm] = useState("");
+  const [editing, setEditing] = useState(null);
+  const [designForm, setDesignForm] = useState({ name: "", design_type: "printed", manufacturer: "", material: "", nominal_tare_g: "", max_dryer_temp_c: "", temperature_source: "", source_url: "", model_3d_id: "" });
+  const [reelForm, setReelForm] = useState({ code: "", design_id: "", measured_tare_g: "", color_name: "", material_override: "", storage_location_id: "", filament_spool_id: "", notes: "" });
+
+  async function load() {
+    try {
+      const [d, r] = await Promise.all([
+        apiFetch("/api/printing/reusable-spool-designs/"),
+        apiFetch("/api/printing/reusable-spools/"),
+      ]);
+      setDesigns(d.rows || []);
+      setReels(r.rows || []);
+      setError("");
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  function startDesign(item = null) {
+    setEditing(item);
+    setDesignForm(item ? Object.fromEntries(Object.entries(item).map(([k, v]) => [k, v ?? ""])) : { name: "", design_type: "printed", manufacturer: "", material: "", nominal_tare_g: "", max_dryer_temp_c: "", temperature_source: "", source_url: "", model_3d_id: "" });
+    setForm("design");
+  }
+
+  function startReel(item = null) {
+    setEditing(item);
+    setReelForm(item ? Object.fromEntries(Object.entries(item).map(([k, v]) => [k, v ?? ""])) : { code: "", design_id: designs[0]?.id || "", measured_tare_g: "", color_name: "", material_override: "", storage_location_id: "", filament_spool_id: "", notes: "" });
+    setForm("reel");
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    setWorking(true);
+    setError("");
+    const isDesign = form === "design";
+    const endpoint = isDesign ? "/api/printing/reusable-spool-designs/" : "/api/printing/reusable-spools/";
+    try {
+      await apiFetch(endpoint + (editing ? editing.id + "/" : ""), {
+        method: editing ? "PATCH" : "POST",
+        body: JSON.stringify(isDesign ? designForm : reelForm),
+      });
+      setNotice(isDesign ? "Spool design saved." : "Reusable spool saved.");
+      setForm("");
+      setEditing(null);
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function remove(kind, item) {
+    if (!window.confirm("Delete " + (item.name || item.code) + "?")) return;
+    setWorking(true);
+    try {
+      await apiFetch("/api/printing/" + (kind === "design" ? "reusable-spool-designs/" : "reusable-spools/") + item.id + "/", { method: "DELETE" });
+      setNotice("Record deleted.");
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  const field = (label, key, type = "text") => <label key={key}>{label}
+    <input type={type} value={(form === "design" ? designForm : reelForm)[key] ?? ""} onChange={e =>
+      form === "design" ? setDesignForm(p => ({ ...p, [key]: e.target.value })) : setReelForm(p => ({ ...p, [key]: e.target.value }))
+    } />
+  </label>;
+
+  return <div className="printingStack">
+    <section className="panel printingLibraryHero">
+      <div>
+        <span className="settingsEyebrow">3D Printing · Filaments</span>
+        <h2>Reusable spools</h2>
+        <p>Manage refillable empty spool designs and the individual reels you own. A reusable reel is separate from its current filament stock.</p>
+      </div>
+      <div className="printingHeroActions">
+        <button type="button" onClick={onBack}>← Printing overview</button>
+        {canAddDesign && <button type="button" onClick={() => startDesign()}>Add design</button>}
+        {canAdd && <button type="button" className="primary" onClick={() => startReel()} disabled={!designs.length}>Add reusable spool</button>}
+      </div>
+    </section>
+    {error && <div className="error" role="alert">{error}</div>}
+    {notice && <div className="notice" role="status">{notice}</div>}
+    <section className="panel printingSection">
+      <div className="panelHead"><h3>Owned reusable spools ({reels.length})</h3></div>
+      <div className="printingList">
+        {reels.map(reel => <article className="printingListRow" key={reel.id}>
+          <div><strong>{reel.code} · {reel.design_name}</strong>
+            <small>{[reel.color_name, reel.material_override].filter(Boolean).join(" · ") || "No material/colour recorded"}</small>
+            <small>Tare: {reel.effective_tare_g == null ? "Unknown" : reel.effective_tare_g + " g"}{reel.measured_tare_g != null ? " (measured)" : " (design default)"} · {reel.filament_spool_id ? "Loaded with filament" : "Unassigned"}</small>
+          </div>
+          <div className="printingBadges">
+            {canChange && <button type="button" onClick={() => startReel(reel)}>Edit</button>}
+            {canDelete && <button type="button" className="dangerButton" onClick={() => remove("reel", reel)}>Delete</button>}
+          </div>
+        </article>)}
+        {!reels.length && <div className="printingEmptyInline">No reusable spools registered yet. Add a design, then an individual spool.</div>}
+      </div>
+    </section>
+    <section className="panel printingSection">
+      <div className="panelHead"><h3>Spool designs ({designs.length})</h3></div>
+      <div className="printingList">
+        {designs.map(d => <article className="printingListRow" key={d.id}>
+          <div><strong>{d.name}</strong>
+            <small>{[d.manufacturer, d.design_type, d.material].filter(Boolean).join(" · ")}</small>
+            <small>Nominal tare: {d.nominal_tare_g == null ? "Unknown" : d.nominal_tare_g + " g"} · Dryer limit: {d.max_dryer_temp_c == null ? "Unverified" : d.max_dryer_temp_c + " °C"}</small>
+            {d.model_3d_id && <small>Linked 3D model: {models.find(m => m.id === d.model_3d_id)?.name || "Saved model"}</small>}
+          </div>
+          <div className="printingBadges">
+            {canChange && <button type="button" onClick={() => startDesign(d)}>Edit</button>}
+            {canDelete && <button type="button" className="dangerButton" onClick={() => remove("design", d)}>Delete</button>}
+          </div>
+        </article>)}
+        {!designs.length && <div className="printingEmptyInline">No spool designs yet.</div>}
+      </div>
+    </section>
+
+    {form && <Modal title={editing ? "Edit " + (form === "design" ? "spool design" : "reusable spool") : "Add " + (form === "design" ? "spool design" : "reusable spool")} onClose={() => setForm("")}>
+      <form className="formGrid" onSubmit={submit}>
+        {form === "design" ? <>
+          {field("Design name", "name")}
+          <label>Type<select value={designForm.design_type} onChange={e => setDesignForm(p => ({ ...p, design_type: e.target.value }))}><option value="printed">3D printed</option><option value="manufacturer">Manufacturer-made</option></select></label>
+          {field("Manufacturer", "manufacturer")}
+          {field("Material", "material")}
+          {field("Nominal empty weight (g)", "nominal_tare_g", "number")}
+          {field("Maximum verified dryer temperature (°C)", "max_dryer_temp_c", "number")}
+          {field("Temperature rating source", "temperature_source")}
+          {field("Design URL", "source_url", "url")}
+          <label>3D model (STL/3MF in Model Library)<select value={designForm.model_3d_id} onChange={e => setDesignForm(p => ({ ...p, model_3d_id: e.target.value }))}><option value="">Not linked</option>{models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
+        </> : <>
+          {field("Spool ID", "code")}
+          <label>Reusable spool design<select required value={reelForm.design_id} onChange={e => setReelForm(p => ({ ...p, design_id: e.target.value }))}>{designs.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
+          {field("Measured empty weight (g)", "measured_tare_g", "number")}
+          {field("Colour", "color_name")}
+          {field("Printed material", "material_override")}
+          <label>Storage location<select value={reelForm.storage_location_id} onChange={e => setReelForm(p => ({ ...p, storage_location_id: e.target.value }))}><option value="">None</option>{locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
+          <label>Assigned filament stock<select value={reelForm.filament_spool_id} onChange={e => setReelForm(p => ({ ...p, filament_spool_id: e.target.value }))}><option value="">Unassigned</option>{spools.map(spool => <option key={spool.id} value={spool.id}>{spool.spool_id} · {spool.filament}</option>)}</select></label>
+          {field("Notes", "notes")}
+        </>}
+        <div className="formActions full">
+          <button type="button" onClick={() => setForm("")}>Cancel</button>
+          <button type="submit" className="primary" disabled={working}>{working ? "Saving…" : "Save"}</button>
+        </div>
+      </form>
+    </Modal>}
+  </div>;
+}
 
 function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFilament, canAddFilament, onBack, onChanged, searchTarget = null }) {
   const [query, setQuery] = useState("");
