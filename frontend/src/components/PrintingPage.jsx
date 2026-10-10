@@ -1585,6 +1585,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
   useEffect(() => { load(); }, []);
 
   function startDesign(item = null) {
+    setError("");
     setEditing(item);
     setDensityProductId("");
     setDesignForm(item ? Object.fromEntries(Object.entries(item).map(([k, v]) => [k, v ?? ""])) : { name: "", design_type: "printed", manufacturer: "", material: "", nominal_tare_g: "", max_dryer_temp_c: "", temperature_source: "", source_url: "", outer_diameter_mm: "", width_mm: "", hub_diameter_mm: "", capacity_g: "", description: "", model_3d_id: "" });
@@ -1592,9 +1593,27 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
   }
 
   function startReel(item = null) {
+    setError("");
     setEditing(item);
     setReelForm(item ? Object.fromEntries(Object.entries(item).map(([k, v]) => [k, v ?? ""])) : { design_id: designs[0]?.id || "", measured_tare_g: "", color_name: "", material_override: "", condition: "usable", storage_location_id: "", filament_spool_id: "", notes: "" });
     setForm("reel");
+  }
+
+  const manufacturerAliases = {
+    "bambu": "Bambu Lab", "bambulab": "Bambu Lab", "bambulabs": "Bambu Lab",
+    "prusa": "Prusa Research", "prusament": "Prusa Research",
+    "esun": "eSUN", "sunlu": "SUNLU", "creality": "Creality",
+    "polymaker": "Polymaker", "panchroma": "Polymaker",
+  };
+  const manufacturerKey = raw => String(raw || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const manufacturerNames = [...new Set([...manufacturerDesigns.map(x => x.manufacturer), ...designs.map(x => x.manufacturer)].filter(Boolean))];
+  function resolveManufacturer(raw) {
+    const key = manufacturerKey(raw);
+    return manufacturerAliases[key] || manufacturerNames.find(name => manufacturerKey(name) === key) || null;
+  }
+  const matchedManufacturer = resolveManufacturer(designForm.manufacturer);
+  function acceptManufacturer() {
+    if (matchedManufacturer) setDesignForm(p => ({ ...p, manufacturer: matchedManufacturer }));
   }
 
   const selectedModel = models.find(m => m.id === designForm.model_3d_id);
@@ -1715,7 +1734,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
         {canAdd && <button type="button" className="primary" onClick={() => startReel()} disabled={!designs.length}>Add reusable spool</button>}
       </div>
     </section>
-    {error && <div className="error" role="alert">{error}</div>}
+    {error && !form && <div className="error" role="alert">{error}</div>}
     {notice && <div className="notice" role="status">{notice}</div>}
     <section className="panel printingSection">
       <div className="panelHead"><h3>Owned reusable spools ({reels.length})</h3></div>
@@ -1767,10 +1786,14 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
 
     {form && <Modal title={editing ? "Edit " + (form === "design" ? "spool design" : "reusable spool") : "Add " + (form === "design" ? "spool design" : "reusable spool")} onClose={() => setForm("")}>
       <form className="formGrid" onSubmit={submit}>
+        {error && <div className="formError full" role="alert">{error}</div>}
         {form === "design" ? <>
           {field("Design name", "name")}
           <label>Type<select value={designForm.design_type} onChange={e => setDesignForm(p => ({ ...p, design_type: e.target.value, ...(e.target.value === "printed" ? { manufacturer: "" } : {}) }))}><option value="printed">3D printed</option><option value="manufacturer">Manufacturer-made</option></select></label>
-          {designForm.design_type === "manufacturer" && field("Manufacturer", "manufacturer")}
+          {designForm.design_type === "manufacturer" && <label>Manufacturer
+            <input value={designForm.manufacturer} onChange={e => setDesignForm(p => ({ ...p, manufacturer: e.target.value }))} onBlur={acceptManufacturer} placeholder="Enter manufacturer (e.g. Bambu)" />
+            {matchedManufacturer && matchedManufacturer !== designForm.manufacturer && <small className="manufacturerMatchHint">Recognised manufacturer: <button type="button" onClick={acceptManufacturer}>{matchedManufacturer}</button></small>}
+          </label>}
           <label>Material
             <select value={designForm.material || ""} onChange={e => { setDesignForm(p => ({ ...p, material: e.target.value })); setDensityProductId(""); }}>
               <option value="">Choose known material</option>
