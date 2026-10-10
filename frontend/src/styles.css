@@ -2666,3 +2666,6 @@ a:focus-visible,
 .printingModelRow>.modelReusableSpoolRow{grid-area:reusable;justify-self:end;justify-content:flex-end;width:auto;padding:0;border:0;min-width:0}
 .spoolAutoIdNote{grid-column:1/-1;padding:11px 14px;border:1px dashed var(--border,#303b49);border-radius:9px;color:var(--text-muted,#aeb8c5);font-size:.9rem}
 @media(max-width:760px){.printingModelRow>.modelReusableSpoolRow{justify-self:stretch;width:100%;justify-content:flex-end;padding:8px 0 0}.printingModelRow>.modelReusableSpoolRow .modelReusableSpoolToggle{max-width:100%}}
+
+@container (max-width:620px){.printingModelList .printingModelRow{grid-template-areas:"identity actions" "badges reusable"!important}.printingModelRow>.modelReusableSpoolRow{justify-self:end}}
+@container (max-width:320px){.printingModelList .printingModelRow{grid-template-areas:"identity" "badges" "actions" "reusable"!important}.printingModelRow>.modelReusableSpoolRow{justify-self:start;justify-content:flex-start}}
