@@ -557,6 +557,7 @@ function SpoolInventoryPage({ spools, filaments, locations, printers, currency, 
   }, [spools.length, searchTarget?.token, searchTarget?.id]);
   const [addOpen, setAddOpen] = useState(false);
   const [manageSpool, setManageSpool] = useState(null);
+  const [dryingSpool, setDryingSpool] = useState(null);
   const [detailFilament, setDetailFilament] = useState(null);
   const [deleteSpool, setDeleteSpool] = useState(null);
   const term = query.trim().toLowerCase();
@@ -589,7 +590,7 @@ function SpoolInventoryPage({ spools, filaments, locations, printers, currency, 
           <div>
             <strong>{spool.spool_id} · {spool.filament}</strong>
             <small>{[spool.manufacturer, spool.material, spool.color_name].filter(Boolean).join(" · ")} · {grams(spool.remaining_weight_g)} remaining{spool.location ? " · " + spool.location : ""}</small>
-            <small>{spool.rfid_uid ? "RFID " + spool.rfid_uid + " · " : ""}Updated {formatDate(spool.updated_at)}</small>
+            <small>{spool.rfid_uid ? "RFID " + spool.rfid_uid + " · " : ""}Updated {formatDate(spool.updated_at)} · Last dried: {spool.last_dried_at || "Not recorded"}</small>
           </div>
           <div className="printingBadges">
             {spool.loaded_slots?.length > 0 && <Badge tone="accent">Loaded</Badge>}
@@ -600,6 +601,7 @@ function SpoolInventoryPage({ spools, filaments, locations, printers, currency, 
             {(spool.external_links || []).map(link => <Badge key={link.id}>{link.provider_label}</Badge>)}
             <button type="button" onClick={() => setDetailFilament(filaments.find(item => item.id === spool.filament_id) || null)}>Filament details</button>
             {canChangeSpool && <button type="button" onClick={() => setManageSpool(spool)}>RFID / identity</button>}
+            {canChangeSpool && <button type="button" onClick={() => setDryingSpool(spool)}>Last dried</button>}
             {canDeleteSpool && <button className="dangerButton" type="button" onClick={() => setDeleteSpool(spool)}>Delete</button>}
           </div>
         </article>)}
@@ -608,6 +610,7 @@ function SpoolInventoryPage({ spools, filaments, locations, printers, currency, 
     </section>
 
     {addOpen && <SpoolModal filaments={filaments} locations={locations} printers={printers} currency={currency} onClose={() => setAddOpen(false)} onSaved={async () => { setAddOpen(false); await onChanged(); }} />}
+    {dryingSpool && <SpoolDryingModal spool={dryingSpool} onClose={() => setDryingSpool(null)} onSaved={async () => { setDryingSpool(null); await onChanged(); }} />}
     {manageSpool && <SpoolIdentityModal spool={manageSpool} onClose={() => setManageSpool(null)} onSaved={async () => { setManageSpool(null); await onChanged(); }} />}
     {detailFilament && <FilamentDetailsModal
       filament={detailFilament}
@@ -624,6 +627,39 @@ function SpoolInventoryPage({ spools, filaments, locations, printers, currency, 
       onDeleted={async () => { setDeleteSpool(null); await onChanged(); }}
     />}
   </div>;
+}
+
+
+function SpoolDryingModal({ spool, onClose, onSaved }) {
+  const [lastDried, setLastDried] = useState(spool.last_dried_at || "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(event) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await apiFetch("/api/printing/spools/" + spool.id + "/", {
+        method: "PATCH",
+        body: { last_dried_at: lastDried || null },
+      });
+      await onSaved();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <Modal title={"Filament drying · " + spool.spool_id} subtitle="Track when this filament was last dried. Clearing the date marks it as not recorded." onClose={onClose}>
+    <form className="formGrid" onSubmit={submit}>
+      {error && <div className="formError full">{error}</div>}
+      <div className="settingsCallout full"><strong>{spool.filament}</strong><p>{[spool.material, spool.color_name].filter(Boolean).join(" · ")}</p></div>
+      <label className="full">Last dried<input type="date" value={lastDried} max={new Date().toLocaleDateString("en-CA")} onChange={event => setLastDried(event.target.value)} /><small>Leave blank if unknown. The date belongs to this filament spool record.</small></label>
+      <div className="formActions full"><button type="button" onClick={() => setLastDried("")}>Clear date</button><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Saving…" : "Save drying date"}</button></div>
+    </form>
+  </Modal>;
 }
 
 
@@ -2514,6 +2550,7 @@ function SpoolModal({ filaments, locations, printers, currency, onClose, onSaved
     assigned_printer_id: "",
     status: "sealed",
     opened_on: "",
+    last_dried_at: "",
     notes: "",
   });
   const [busy, setBusy] = useState(false);
@@ -2596,6 +2633,7 @@ function SpoolModal({ filaments, locations, printers, currency, onClose, onSaved
       <label>Status<select value={form.status} onChange={e => set("status", e.target.value)}><option value="sealed">Sealed</option><option value="open">Open</option><option value="drying">Drying</option><option value="empty">Empty</option><option value="retired">Retired</option></select></label>
       <label>Purchase cost<input type="number" min="0" step="0.01" value={form.purchase_cost} onChange={e => set("purchase_cost", e.target.value)} /></label>
       <label>Opened on<input type="date" value={form.opened_on} onChange={e => set("opened_on", e.target.value)} /></label>
+        <label>Last dried<input type="date" value={form.last_dried_at} onChange={e => set("last_dried_at", e.target.value)} /></label>
       <label className="full">Notes<textarea rows="3" value={form.notes} onChange={e => set("notes", e.target.value)} /></label>
       <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy || !availableFilaments.length || !form.filament_id}>{busy ? "Saving…" : "Add spool"}</button></div>
     </form>
