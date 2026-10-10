@@ -60,6 +60,8 @@ class Migration(migrations.Migration):
                 ("description", models.TextField(blank=True)),
                 ("source_url", models.URLField(blank=True)),
                 ("image_url", models.URLField(blank=True)),
+                ("image", models.ImageField(upload_to="catalogue/reusable-spools/", blank=True, null=True)),
+                ("image_metadata", models.JSONField(blank=True, default=dict)),
                 ("nominal_tare_g", models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)),
                 ("max_dryer_temp_c", models.PositiveSmallIntegerField(blank=True, null=True)),
                 ("temperature_source", models.URLField(blank=True)),
