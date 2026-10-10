@@ -821,10 +821,12 @@ function ModelLibraryPage({ models, files, printers, projects, canAddModel, canC
               {model.revisions.flatMap(r => r.assets).slice(0, 4).map(asset => <Badge key={asset.id}>{asset.file.category_label}</Badge>)}
               {analysis && <Badge tone="good">Analysed</Badge>}
             </div>
-            <div className="printingLibraryActions">
-              {hasViewableModelAsset(model) && <button className="primary" type="button" onClick={() => setViewerModel(model)}>View 3D</button>}
-              {canChangeModel && <button onClick={() => setManageModel(model)}>Manage</button>}
-              {canDeleteModel && <button className="dangerButton" type="button" onClick={() => setDeleteModel(model)}>Delete</button>}
+            <div className="printingLibraryActions modelActionsWithToggle">
+              <div className="modelActionButtons">
+                {hasViewableModelAsset(model) && <button className="primary" type="button" onClick={() => setViewerModel(model)}>View 3D</button>}
+                {canChangeModel && <button onClick={() => setManageModel(model)}>Manage</button>}
+                {canDeleteModel && <button className="dangerButton" type="button" onClick={() => setDeleteModel(model)}>Delete</button>}
+              </div>
               {canChangeModel && <div className="modelReusableSpoolRow"><label className="modelReusableSpoolToggle"><input type="checkbox" checked={Boolean(model.is_reusable_spool)} disabled={reusableModelBusy === model.id} onChange={e => toggleReusableModel(model, e.target.checked)} /> Reusable spool</label></div>}
             </div>
           </article>;
@@ -1693,7 +1695,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
       (x.manufacturer || "").trim().toLowerCase() === (designForm.manufacturer || "").trim().toLowerCase()
     );
     if (!candidate) {
-      setNotice("No exact manufacturer catalogue match. Keep your values or enter verified specifications manually.");
+      setError("No exact manufacturer catalogue match. Choose an exact spool design or enter verified specifications manually.");
       return;
     }
     const available = ["source_url", "description", "material", "nominal_tare_g", "max_dryer_temp_c", "temperature_source", "outer_diameter_mm", "width_mm", "hub_diameter_mm", "capacity_g"];
@@ -1890,7 +1892,12 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
               <input value={reelForm.color_name || ""} placeholder="Optional descriptive name" onChange={e => setReelForm(p => ({ ...p, color_name: e.target.value }))} />
             </label>
           </div>
-          {field("Printed material", "material_override")}
+          <label>Printed material
+            <select value={reelForm.material_override || ""} onChange={e => setReelForm(p => ({ ...p, material_override: e.target.value }))}>
+              <option value="">Choose known material (optional)</option>
+              {[...new Set([...materialOptions, ...filamentProducts.map(p => p.material), reelForm.material_override].filter(Boolean))].sort().map(material => <option key={material} value={material}>{material}</option>)}
+            </select>
+          </label>
           <label>Condition<select value={reelForm.condition || "usable"} onChange={e => setReelForm(p => ({ ...p, condition: e.target.value }))}><option value="usable">Usable</option><option value="damaged">Damaged</option><option value="retired">Retired</option></select></label>
           <label>Storage location<select value={reelForm.storage_location_id} onChange={e => setReelForm(p => ({ ...p, storage_location_id: e.target.value }))}><option value="">None</option>{locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
           <label>Assigned filament stock<select value={reelForm.filament_spool_id} onChange={e => setReelForm(p => ({ ...p, filament_spool_id: e.target.value }))}><option value="">Unassigned</option>{spools.map(spool => <option key={spool.id} value={spool.id}>{spool.spool_id} · {spool.filament}</option>)}</select></label>
