@@ -776,6 +776,7 @@ class ReusableSpoolDesign(TimeStampedModel):
     TYPES = [("manufacturer", "Manufacturer-made"), ("printed", "3D printed")]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reusable_spool_designs")
+    catalog_entry = models.ForeignKey(ReusableSpoolCatalogEntry, on_delete=models.SET_NULL, blank=True, null=True, related_name="personal_designs")
     name = models.CharField(max_length=200)
     manufacturer = models.CharField(max_length=120, blank=True)
     design_type = models.CharField(max_length=20, choices=TYPES, default="printed")
