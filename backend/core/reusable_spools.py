@@ -378,7 +378,18 @@ KNOWN_REUSABLE_SPOOL_DESIGNS = (
 @require_http_methods(["GET", "POST"])
 def manufacturer_catalogue(request):
     if request.method == "GET":
-        return JsonResponse({"rows": KNOWN_REUSABLE_SPOOL_DESIGNS})
+        query = str(request.GET.get("q") or "").strip().casefold()[:120]
+        manufacturer = str(request.GET.get("manufacturer") or "").strip().casefold()[:100]
+        design_type = str(request.GET.get("design_type") or "").strip().casefold()[:40]
+        rows = [
+            item for item in KNOWN_REUSABLE_SPOOL_DESIGNS
+            if (not query or query in " ".join(str(item.get(k) or "") for k in
+                ("name", "manufacturer", "description", "material", "key")).casefold())
+            and (not manufacturer or manufacturer == str(item["manufacturer"]).casefold())
+            and (not design_type or design_type == str(item["design_type"]).casefold())
+        ]
+        manufacturers = sorted({item["manufacturer"] for item in KNOWN_REUSABLE_SPOOL_DESIGNS})
+        return JsonResponse({"rows": rows, "total": len(rows), "manufacturers": manufacturers})
     denied = permission(request, "add_filamentproduct")
     if denied:
         return denied
