@@ -825,8 +825,8 @@ function ModelLibraryPage({ models, files, printers, projects, canAddModel, canC
               {hasViewableModelAsset(model) && <button className="primary" type="button" onClick={() => setViewerModel(model)}>View 3D</button>}
               {canChangeModel && <button onClick={() => setManageModel(model)}>Manage</button>}
               {canDeleteModel && <button className="dangerButton" type="button" onClick={() => setDeleteModel(model)}>Delete</button>}
+              {canChangeModel && <div className="modelReusableSpoolRow"><label className="modelReusableSpoolToggle"><input type="checkbox" checked={Boolean(model.is_reusable_spool)} disabled={reusableModelBusy === model.id} onChange={e => toggleReusableModel(model, e.target.checked)} /> Reusable spool</label></div>}
             </div>
-            <div className="modelReusableSpoolRow">{canChangeModel && <label className="modelReusableSpoolToggle"><input type="checkbox" checked={Boolean(model.is_reusable_spool)} disabled={reusableModelBusy === model.id} onChange={e => toggleReusableModel(model, e.target.checked)} /> Reusable spool</label>}</div>
           </article>;
         })}
         {!rows.length && <div className="printingEmptyInline">{term ? "No models match this search." : "No 3D models yet."}</div>}
