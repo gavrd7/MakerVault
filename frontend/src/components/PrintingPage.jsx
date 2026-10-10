@@ -248,6 +248,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       manufacturers={data?.filament_manufacturers || []}
       materials={data?.common_filament_materials || []}
       canChangeFilament={canChangeFilament}
+      canAddFilament={canAddFilament}
       onBack={() => setWorkspaceView("overview")}
       onChanged={load}
       searchTarget={searchTarget}
@@ -295,15 +296,33 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
         <p>Native MakerVault models, printers and spool inventory stay authoritative. External services and printer filament systems plug into this data rather than replacing it.</p>
       </div>
       <div className="printingHeroActions">
-        {canAddPrinter && <button onClick={() => setModal("printer")}>＋ Printer</button>}
-        {canAddLocation && <button onClick={() => setModal("location")}>＋ Location</button>}
-        {canAddFilament && <button onClick={() => setModal("filament")}>＋ Filament</button>}
-        <button onClick={() => setWorkspaceView("filaments")}>Filament library</button>
-        {canAddFilament && <button onClick={() => setModal("filamentCatalogue")}>⌕ Filament catalogue</button>}
-        {canAddSpool && <button onClick={() => setModal("spool")}>＋ Spool</button>}
-        {canAddModel && <button className="primary" onClick={() => setModal("model")}>＋ Model</button>}
-        {canAddPrintJob && <button onClick={() => setModal("print")}>＋ Print history</button>}
-        <button onClick={load}>Refresh</button>
+        <button type="button" onClick={load}>Refresh</button>
+      </div>
+      <div className="printingActionGroups">
+        <section className="printingActionGroup" aria-labelledby="printing-printers-heading">
+          <h3 id="printing-printers-heading">Printers &amp; locations</h3>
+          <div className="printingHeroActions">
+            {canAddPrinter && <button type="button" onClick={() => setModal("printer")}>Add printer</button>}
+            {canAddLocation && <button type="button" onClick={() => setModal("location")}>Add location</button>}
+          </div>
+        </section>
+        <section className="printingActionGroup" aria-labelledby="printing-models-heading">
+          <h3 id="printing-models-heading">Models &amp; print history</h3>
+          <div className="printingHeroActions">
+            <button type="button" onClick={() => setWorkspaceView("models")}>Model library</button>
+            {canAddModel && <button type="button" onClick={() => setModal("model")}>Add model</button>}
+            {canAddPrintJob && <button type="button" onClick={() => setModal("print")}>Add print history</button>}
+          </div>
+        </section>
+        <section className="printingActionGroup">
+          <h3>Filaments</h3>
+          <div className="printingHeroActions">
+            {canAddSpool && <button type="button" onClick={() => setModal("spool")}>Add spool</button>}
+            <button type="button" onClick={() => setWorkspaceView("spools")}>Spool inventory</button>
+            <button type="button" onClick={() => setWorkspaceView("filaments")}>Filament library</button>
+            {canAddFilament && <button type="button" onClick={() => setModal("filamentCatalogue")}>Filament catalogue</button>}
+          </div>
+        </section>
       </div>
     </section>
 
@@ -575,7 +594,7 @@ function SpoolInventoryPage({ spools, filaments, locations, printers, currency, 
       </div>
       <div className="printingHeroActions">
         <button onClick={onBack}>← Printing overview</button>
-        {canAddSpool && <button className="primary" onClick={() => setAddOpen(true)}>＋ Spool</button>}
+        {canAddSpool && <button className="primary" onClick={() => setAddOpen(true)}>Add spool</button>}
       </div>
     </section>
 
@@ -601,7 +620,7 @@ function SpoolInventoryPage({ spools, filaments, locations, printers, currency, 
             {(spool.external_links || []).map(link => <Badge key={link.id}>{link.provider_label}</Badge>)}
             <button type="button" onClick={() => setDetailFilament(filaments.find(item => item.id === spool.filament_id) || null)}>Filament details</button>
             {canChangeSpool && <button type="button" onClick={() => setManageSpool(spool)}>RFID / identity</button>}
-            {canChangeSpool && <button type="button" onClick={() => setDryingSpool(spool)}>Last dried</button>}
+            {canChangeSpool && <button type="button" onClick={() => setDryingSpool(spool)}>Drying</button>}
             {canDeleteSpool && <button className="dangerButton" type="button" onClick={() => setDeleteSpool(spool)}>Delete</button>}
           </div>
         </article>)}
@@ -652,7 +671,7 @@ function SpoolDryingModal({ spool, onClose, onSaved }) {
     }
   }
 
-  return <Modal title={"Filament drying · " + spool.spool_id} subtitle="Track when this filament was last dried. Clearing the date marks it as not recorded." onClose={onClose}>
+  return <Modal title={"Drying · " + spool.spool_id} subtitle="Track when this filament was last dried. Clearing the date marks it as not recorded." onClose={onClose}>
     <form className="formGrid" onSubmit={submit}>
       {error && <div className="formError full">{error}</div>}
       <div className="settingsCallout full"><strong>{spool.filament}</strong><p>{[spool.material, spool.color_name].filter(Boolean).join(" · ")}</p></div>
@@ -1498,8 +1517,9 @@ function PrinterModal({ manufacturers, models, locations, onClose, onSaved }) {
 }
 
 
-function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFilament, onBack, onChanged, searchTarget = null }) {
+function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFilament, canAddFilament, onBack, onChanged, searchTarget = null }) {
   const [query, setQuery] = useState("");
+  const [addFilamentOpen, setAddFilamentOpen] = useState(false);
 
   useEffect(() => {
     if (searchTarget?.type !== "filaments" || !searchTarget.id) return;
@@ -1530,6 +1550,7 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
       </div>
       <div className="printingHeroActions">
         <button onClick={onBack}>← Printing overview</button>
+        {canAddFilament && <button className="primary" type="button" onClick={() => setAddFilamentOpen(true)}>Add to library</button>}
       </div>
     </section>
 
@@ -1583,6 +1604,8 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
       onClose={() => setImageFilament(null)}
       onUpdated={async () => { setImageFilament(null); await onChanged(); }}
     />}
+
+    {addFilamentOpen && <FilamentModal manufacturers={manufacturers} materials={materials} onClose={() => setAddFilamentOpen(false)} onSaved={async () => { setAddFilamentOpen(false); await onChanged(); }} />}
 
     {editFilament && <FilamentEditModal
       filament={editFilament}
