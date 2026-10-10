@@ -245,6 +245,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
   if (workspaceView === "reusableSpools") {
     return <ReusableSpoolsPage
       onBack={() => setWorkspaceView("overview")}
+      onOpenModels={() => setWorkspaceView("models")}
       models={data?.models || []}
       spools={data?.spools || []}
       locations={data?.locations || []}
@@ -1533,7 +1534,7 @@ function PrinterModal({ manufacturers, models, locations, onClose, onSaved }) {
 
 
 
-function ReusableSpoolsPage({ onBack, models, spools, locations, canAdd, canChange, canDelete, canAddDesign, canChangeDesign }) {
+function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, canAdd, canChange, canDelete, canAddDesign, canChangeDesign }) {
   const [designs, setDesigns] = useState([]);
   const [reels, setReels] = useState([]);
   const [error, setError] = useState("");
@@ -1541,7 +1542,7 @@ function ReusableSpoolsPage({ onBack, models, spools, locations, canAdd, canChan
   const [working, setWorking] = useState(false);
   const [form, setForm] = useState("");
   const [editing, setEditing] = useState(null);
-  const [designForm, setDesignForm] = useState({ name: "", design_type: "printed", manufacturer: "", material: "", nominal_tare_g: "", max_dryer_temp_c: "", temperature_source: "", source_url: "", model_3d_id: "" });
+  const [designForm, setDesignForm] = useState({ name: "", design_type: "printed", manufacturer: "", material: "", nominal_tare_g: "", max_dryer_temp_c: "", temperature_source: "", source_url: "", outer_diameter_mm: "", width_mm: "", hub_diameter_mm: "", capacity_g: "", description: "", model_3d_id: "" });
   const [reelForm, setReelForm] = useState({ code: "", design_id: "", measured_tare_g: "", color_name: "", material_override: "", storage_location_id: "", filament_spool_id: "", notes: "" });
 
   async function load() {
@@ -1562,7 +1563,7 @@ function ReusableSpoolsPage({ onBack, models, spools, locations, canAdd, canChan
 
   function startDesign(item = null) {
     setEditing(item);
-    setDesignForm(item ? Object.fromEntries(Object.entries(item).map(([k, v]) => [k, v ?? ""])) : { name: "", design_type: "printed", manufacturer: "", material: "", nominal_tare_g: "", max_dryer_temp_c: "", temperature_source: "", source_url: "", model_3d_id: "" });
+    setDesignForm(item ? Object.fromEntries(Object.entries(item).map(([k, v]) => [k, v ?? ""])) : { name: "", design_type: "printed", manufacturer: "", material: "", nominal_tare_g: "", max_dryer_temp_c: "", temperature_source: "", source_url: "", outer_diameter_mm: "", width_mm: "", hub_diameter_mm: "", capacity_g: "", description: "", model_3d_id: "" });
     setForm("design");
   }
 
@@ -1623,6 +1624,7 @@ function ReusableSpoolsPage({ onBack, models, spools, locations, canAdd, canChan
       </div>
       <div className="printingHeroActions">
         <button type="button" onClick={onBack}>← Printing overview</button>
+        <button type="button" onClick={onOpenModels}>Model library (STL/3MF)</button>
         {canAddDesign && <button type="button" onClick={() => startDesign()}>Add design</button>}
         {canAdd && <button type="button" className="primary" onClick={() => startReel()} disabled={!designs.length}>Add reusable spool</button>}
       </div>
@@ -1652,7 +1654,7 @@ function ReusableSpoolsPage({ onBack, models, spools, locations, canAdd, canChan
           <div><strong>{d.name}</strong>
             <small>{[d.manufacturer, d.design_type, d.material].filter(Boolean).join(" · ")}</small>
             <small>Nominal tare: {d.nominal_tare_g == null ? "Unknown" : d.nominal_tare_g + " g"} · Dryer limit: {d.max_dryer_temp_c == null ? "Unverified" : d.max_dryer_temp_c + " °C"}</small>
-            {d.model_3d_id && <small>Linked 3D model: {models.find(m => m.id === d.model_3d_id)?.name || "Saved model"}</small>}
+            {d.model_3d_id && <button type="button" onClick={onOpenModels}>View linked STL/3MF in model library: {models.find(m => m.id === d.model_3d_id)?.name || "Saved model"}</button>}
           </div>
           <div className="printingBadges">
             {canChangeDesign && <button type="button" onClick={() => startDesign(d)}>Edit</button>}
@@ -1674,6 +1676,11 @@ function ReusableSpoolsPage({ onBack, models, spools, locations, canAdd, canChan
           {field("Maximum verified dryer temperature (°C)", "max_dryer_temp_c", "number")}
           {field("Temperature rating source", "temperature_source")}
           {field("Design URL", "source_url", "url")}
+          {field("Outer diameter (mm)", "outer_diameter_mm", "number")}
+          {field("Width (mm)", "width_mm", "number")}
+          {field("Hub / bore diameter (mm)", "hub_diameter_mm", "number")}
+          {field("Capacity (g)", "capacity_g", "number")}
+          <label>Description<textarea rows="3" value={designForm.description || ""} onChange={e => setDesignForm(p => ({ ...p, description: e.target.value }))}/></label>
           <label>3D model (STL/3MF in Model Library)<select value={designForm.model_3d_id} onChange={e => setDesignForm(p => ({ ...p, model_3d_id: e.target.value }))}><option value="">Not linked</option>{models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
         </> : <>
           {field("Spool ID", "code")}
