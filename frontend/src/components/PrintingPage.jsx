@@ -317,10 +317,10 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
         <section className="printingActionGroup">
           <h3>Filaments</h3>
           <div className="printingHeroActions">
-            <button type="button" onClick={() => setWorkspaceView("filaments")}>Filament library</button>
-            {canAddFilament && <button type="button" onClick={() => setModal("filamentCatalogue")}>Filament catalogue</button>}
             {canAddSpool && <button type="button" onClick={() => setModal("spool")}>Add spool</button>}
             <button type="button" onClick={() => setWorkspaceView("spools")}>Spool inventory</button>
+            <button type="button" onClick={() => setWorkspaceView("filaments")}>Filament library</button>
+            {canAddFilament && <button type="button" onClick={() => setModal("filamentCatalogue")}>Filament catalogue</button>}
           </div>
         </section>
       </div>
@@ -594,7 +594,7 @@ function SpoolInventoryPage({ spools, filaments, locations, printers, currency, 
       </div>
       <div className="printingHeroActions">
         <button onClick={onBack}>← Printing overview</button>
-        {canAddSpool && <button className="primary" onClick={() => setAddOpen(true)}>＋ Spool</button>}
+        {canAddSpool && <button className="primary" onClick={() => setAddOpen(true)}>Add spool</button>}
       </div>
     </section>
 
