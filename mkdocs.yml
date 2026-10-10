@@ -51,7 +51,7 @@ extra_css:
   - assets/guide.css
 extra:
   generator: false
-copyright: MakerVault · Guide for v1.0.0 · Stable release
+copyright: MakerVault · Guide for v1.1.0 · Stable release
 nav:
   - Welcome: index.md
   - Getting started:
