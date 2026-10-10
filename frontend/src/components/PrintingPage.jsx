@@ -1796,7 +1796,12 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
       </div>
       <div className="printingList">
         {filteredManufacturerDesigns.map(item => <article className="printingListRow" key={item.key}>
-          <div><strong>{item.name}</strong><small>{item.manufacturer} · Manufacturer reference; check actual tare and drying tolerance before use.</small></div>
+          <div className="spoolCatalogueRecord">
+            <strong>{item.name}</strong>
+            <small>{item.manufacturer} · {item.design_type === "printed" ? "Printable design" : "Manufacturer-made"}{item.verified ? " · Source documented" : " · Unverified"}</small>
+            <small>{item.nominal_tare_g ? "Tare: " + item.nominal_tare_g + " g" : "Tare: Unknown"} · {item.outer_diameter_mm && item.width_mm ? item.outer_diameter_mm + " × " + item.width_mm + " mm" : "Dimensions: Unknown"} · {item.max_dryer_temp_c != null ? "Rated temperature: " + item.max_dryer_temp_c + "°C" : "Dryer rating: Unknown"}</small>
+            {item.source_url && <a href={item.source_url} target="_blank" rel="noreferrer noopener">Manufacturer source ↗</a>}
+          </div>
           {canAddDesign && <button type="button" disabled={working || designs.some(d => d.catalog_entry_id === item.id)} onClick={() => importManufacturerDesign(item)}>
             {designs.some(d => d.catalog_entry_id === item.id) ? "Added to inventory" : "Add to inventory"}
           </button>}
