@@ -249,6 +249,8 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       models={data?.models || []}
       spools={data?.spools || []}
       locations={data?.locations || []}
+      filamentProducts={data?.filaments || []}
+      materialOptions={data?.common_filament_materials || []}
       canAdd={Boolean(config?.permissions?.add_spool)}
       canChange={Boolean(config?.permissions?.change_spool)}
       canDelete={Boolean(config?.permissions?.delete_spool)}
@@ -1551,10 +1553,11 @@ function PrinterModal({ manufacturers, models, locations, onClose, onSaved }) {
 
 
 
-function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, canAdd, canChange, canDelete, canAddDesign, canChangeDesign }) {
+function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, filamentProducts, materialOptions, canAdd, canChange, canDelete, canAddDesign, canChangeDesign }) {
   const [designs, setDesigns] = useState([]);
   const [manufacturerDesigns, setManufacturerDesigns] = useState([]);
   const [reels, setReels] = useState([]);
+  const [densityProductId, setDensityProductId] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [working, setWorking] = useState(false);
@@ -1583,6 +1586,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, c
 
   function startDesign(item = null) {
     setEditing(item);
+    setDensityProductId("");
     setDesignForm(item ? Object.fromEntries(Object.entries(item).map(([k, v]) => [k, v ?? ""])) : { name: "", design_type: "printed", manufacturer: "", material: "", nominal_tare_g: "", max_dryer_temp_c: "", temperature_source: "", source_url: "", outer_diameter_mm: "", width_mm: "", hub_diameter_mm: "", capacity_g: "", description: "", model_3d_id: "" });
     setForm("design");
   }
@@ -1591,6 +1595,21 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, c
     setEditing(item);
     setReelForm(item ? Object.fromEntries(Object.entries(item).map(([k, v]) => [k, v ?? ""])) : { code: "", design_id: designs[0]?.id || "", measured_tare_g: "", color_name: "", material_override: "", condition: "usable", storage_location_id: "", filament_spool_id: "", notes: "" });
     setForm("reel");
+  }
+
+  const selectedModel = models.find(m => m.id === designForm.model_3d_id);
+  const geometry = newestGeometryAnalysis(selectedModel);
+  const dimensions = geometry?.dimensions_mm;
+  const volume = Number(geometry?.volume_cm3);
+  const sourceProduct = filamentProducts.find(p => String(p.id) === densityProductId);
+  const density = Number(sourceProduct?.density_g_cm3);
+  const solidMass = Number.isFinite(volume) && volume > 0 && Number.isFinite(density) && density > 0
+    ? (volume * density).toFixed(2) : null;
+  const materials = [...new Set([...materialOptions, ...filamentProducts.map(p => p.material), designForm.material].filter(Boolean))].sort();
+  const densityProducts = filamentProducts.filter(p => p.material === designForm.material && Number(p.density_g_cm3) > 0);
+
+  function applyGeometryDimension(field, value) {
+    if (Number(value) > 0) setDesignForm(old => ({ ...old, [field]: Number(value).toFixed(2) }));
   }
 
   async function submit(event) {
@@ -1718,13 +1737,40 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, c
           {field("Design name", "name")}
           <label>Type<select value={designForm.design_type} onChange={e => setDesignForm(p => ({ ...p, design_type: e.target.value }))}><option value="printed">3D printed</option><option value="manufacturer">Manufacturer-made</option></select></label>
           {field("Manufacturer", "manufacturer")}
-          {field("Material", "material")}
+          <label>Material
+            <select value={designForm.material || ""} onChange={e => { setDesignForm(p => ({ ...p, material: e.target.value })); setDensityProductId(""); }}>
+              <option value="">Choose known material</option>
+              {materials.map(material => <option key={material} value={material}>{material}</option>)}
+            </select>
+          </label>
+          {designForm.design_type === "printed" && <>
+            <label>Density reference (optional)
+              <select value={densityProductId} onChange={e => setDensityProductId(e.target.value)}>
+                <option value="">Choose filament with known density</option>
+                {densityProducts.map(p => <option key={p.id} value={p.id}>{p.name} · {p.density_g_cm3} g/cm³</option>)}
+              </select>
+            </label>
+            <div className="full">
+              {solidMass ? <><small>Calculated solid-model mass: {solidMass} g (mesh volume {volume.toFixed(2)} cm³ × referenced density). This is NOT the print's expected weight if it uses infill, cavities, separate objects or different print settings.</small>
+                <button type="button" onClick={() => setDesignForm(p => ({ ...p, nominal_tare_g: solidMass }))}>Use solid-model estimate</button>
+              </> : <small>Choose an analysed 3D model and a filament with recorded density to see a solid-model mass estimate. Actual empty spool weight should be measured.</small>}
+            </div>
+          </>}
           {field("Nominal empty weight (g)", "nominal_tare_g", "number")}
           {field("Maximum verified dryer temperature (°C)", "max_dryer_temp_c", "number")}
+          <small className="full">Material alone does not establish a safe dryer limit. Enter a limit only when verified for the exact printed design/material and record its source; otherwise leave blank.</small>
           {field("Temperature rating source", "temperature_source")}
           {field("Design URL", "source_url", "url")}
           {field("Outer diameter (mm)", "outer_diameter_mm", "number")}
           {field("Width (mm)", "width_mm", "number")}
+          {designForm.design_type === "printed" && dimensions && <div className="full">
+            <small>Model bounding box: {Number(dimensions.x).toFixed(1)} × {Number(dimensions.y).toFixed(1)} × {Number(dimensions.z).toFixed(1)} mm. These are orientation-dependent, not verified reel dimensions.</small>
+            <button type="button" onClick={() => {
+              const d = [dimensions.x, dimensions.y, dimensions.z].map(Number).sort((a,b) => a-b);
+              applyGeometryDimension("outer_diameter_mm", d[2]);
+              applyGeometryDimension("width_mm", d[0]);
+            }}>Suggest outer diameter and width from bounds</button>
+          </div>}
           {field("Hub / bore diameter (mm)", "hub_diameter_mm", "number")}
           {field("Capacity (g)", "capacity_g", "number")}
           <label>Description<textarea rows="3" value={designForm.description || ""} onChange={e => setDesignForm(p => ({ ...p, description: e.target.value }))}/></label>
