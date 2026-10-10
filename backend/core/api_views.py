@@ -3856,6 +3856,7 @@ def _serialise_catalogue_maintenance(config):
         "check_board_data": config.check_board_data,
         "check_printer_data": config.check_printer_data,
         "check_filament_data": config.check_filament_data,
+        "check_reusable_spool_sources": config.check_reusable_spool_sources,
         "check_images": config.check_images,
         "last_run_at": config.last_run_at.isoformat() if config.last_run_at else "",
         "next_run_at": config.next_run_at.isoformat() if config.next_run_at else "",
@@ -3897,6 +3898,8 @@ def catalogue_maintenance_settings(request):
             config.check_printer_data = bool(payload["check_printer_data"])
         if "check_filament_data" in payload:
             config.check_filament_data = bool(payload["check_filament_data"])
+        if "check_reusable_spool_sources" in payload:
+            config.check_reusable_spool_sources = bool(payload["check_reusable_spool_sources"])
         if "check_images" in payload:
             config.check_images = bool(payload["check_images"])
         if "interval_hours" in payload:
