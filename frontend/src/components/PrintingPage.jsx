@@ -1785,14 +1785,14 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
               </select>
             </label>
             <div className="full spoolEstimateBlock">
-              {estimatedMass ? <><small>Estimated weight at 15% infill: {estimatedMass} g (mesh volume {volume.toFixed(2)} cm³ × {density.toFixed(2)} g/cm³ {sourceProduct ? "selected filament density" : "MakerVault library material median density"}). This is a rough baseline: walls, solid layers and slicer settings affect the real weight. Use a sliced estimate or measured tare when available.</small>
-                <button type="button" onClick={() => setDesignForm(p => ({ ...p, nominal_tare_g: estimatedMass }))}>Use 15% infill estimate</button>
+              {estimatedMass ? <><p className="spoolHelpText">Estimated weight at 15% infill: {estimatedMass} g (mesh volume {volume.toFixed(2)} cm³ × {density.toFixed(2)} g/cm³ {sourceProduct ? "selected filament density" : "MakerVault library material median density"}). This is a rough baseline: walls, solid layers and slicer settings affect the real weight. Use a sliced estimate or measured tare when available.</p>
+                <div className="spoolInlineActions"><button type="button" onClick={() => setDesignForm(p => ({ ...p, nominal_tare_g: estimatedMass }))}>Use estimated weight</button></div>
               </> : <small>Choose an analysed model and a material with a recorded density in your MakerVault filament library. Without library density data, no weight estimate is shown. Actual empty spool weight should be measured.</small>}
             </div>
           </>}
-          {designForm.design_type === "manufacturer" && <div className="full">
-            <button type="button" onClick={lookupKnownManufacturerSpecs}>Look up known specifications</button>
-            <small>Matches the saved manufacturer catalogue and only fills missing verified fields. No inferred specifications are treated as manufacturer data.</small>
+          {designForm.design_type === "manufacturer" && <div className="full spoolEstimateBlock">
+            <p className="spoolHelpText">Only verified catalogue information will be used, and entered values are preserved.</p>
+            <div className="spoolInlineActions"><button type="button" onClick={lookupKnownManufacturerSpecs}>Look up specifications</button></div>
           </div>}
           {field("Nominal empty weight (g)", "nominal_tare_g", "number")}
           {field("Maximum verified dryer temperature (°C)", "max_dryer_temp_c", "number")}
@@ -1802,12 +1802,12 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
           {field("Outer diameter (mm)", "outer_diameter_mm", "number")}
           {field("Width (mm)", "width_mm", "number")}
           {designForm.design_type === "printed" && dimensions && <div className="full spoolEstimateBlock">
-            <small>Model bounding box: {Number(dimensions.x).toFixed(1)} × {Number(dimensions.y).toFixed(1)} × {Number(dimensions.z).toFixed(1)} mm. These are orientation-dependent, not verified reel dimensions.</small>
-            <button type="button" onClick={() => {
+            <p className="spoolHelpText">Model bounding box: {Number(dimensions.x).toFixed(1)} × {Number(dimensions.y).toFixed(1)} × {Number(dimensions.z).toFixed(1)} mm. These are orientation-dependent, not verified reel dimensions.</p>
+            <div className="spoolInlineActions"><button type="button" onClick={() => {
               const d = [dimensions.x, dimensions.y, dimensions.z].map(Number).sort((a,b) => a-b);
               applyGeometryDimension("outer_diameter_mm", d[2]);
               applyGeometryDimension("width_mm", d[0]);
-            }}>Use model dimensions</button>
+            }}>Use model dimensions</button></div>
           </div>}
           {field("Hub / bore diameter (mm)", "hub_diameter_mm", "number")}
           {field("Capacity (g)", "capacity_g", "number")}
