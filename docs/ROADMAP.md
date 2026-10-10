@@ -94,6 +94,7 @@ These are not delivered capabilities or mandatory additions to the v1.0 scope:
 - Prusa MMU telemetry and manufacturer-specific material/toolchanger systems not exposed by current adapters; custom-named Klipper tools and older/non-compatible protocols.
 - Further model/file intelligence, catalogue enrichment and workflow improvements where real use establishes value.
 - Import/export and data portability improvements identified during the v1 review.
+- **Customisable theming and appearance** ([issue #124](https://github.com/gavrd7/MakerVault/issues/124)): user-selectable System/Light/Dark modes, curated colour palettes and modest interface styles via Settings → Appearance; live preview, reset to default, persisted user preferences and accessibility/contrast safeguards. Audit and centralise styling tokens first; preserve the current look as default. Future optional enhancement after filament-drying and reusable-spool work, not part of the active drying-data PR.
 
 Printer maintenance logs, schedules and reminders were removed from the planned milestone at the owner's request. Camera development replaced that scope; maintenance is not silently reintroduced here.
 
