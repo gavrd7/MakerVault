@@ -2672,3 +2672,9 @@ a:focus-visible,
 
 .manufacturerMatchHint{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:7px;font-size:.84rem}
 .manufacturerMatchHint button{padding:3px 8px;font-size:inherit;min-height:30px}
+
+/* Reusable spool colour entry: preset, visual picker, hex and optional name. */
+.spoolColourControls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.spoolColourControls label{min-width:0}
+.spoolColourControls input[type="color"]{min-height:43px;padding:4px 8px;cursor:pointer}
+@media(max-width:620px){.spoolColourControls{grid-template-columns:minmax(0,1fr)}}
