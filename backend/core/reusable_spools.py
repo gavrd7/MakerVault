@@ -7,11 +7,11 @@ from decimal import Decimal, InvalidOperation
 
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
-from .models import Model3D, PrintingLocation, ReusableSpool, ReusableSpoolDesign, Spool
+from .models import Model3D, PrintingLocation, ReusableSpool, ReusableSpoolAssignmentEvent, ReusableSpoolDesign, Spool
 
 
 def error(message, status=400, fields=None):
@@ -88,8 +88,31 @@ def serialise_reel(item):
         "color_name": item.color_name, "material_override": item.material_override,
         "storage_location_id": str(item.storage_location_id) if item.storage_location_id else None,
         "filament_spool_id": str(item.filament_spool_id) if item.filament_spool_id else None,
+        "condition": item.condition,
         "notes": item.notes,
+        "assignment_history": [{
+            "occurred_at": event.created_at.isoformat(),
+            "previous_filament_spool_id": str(event.previous_filament_spool_id) if event.previous_filament_spool_id else None,
+            "new_filament_spool_id": str(event.new_filament_spool_id) if event.new_filament_spool_id else None,
+            "previous_spool_code": event.previous_spool_code,
+            "new_spool_code": event.new_spool_code,
+        } for event in item.assignment_events.all()[:20]],
     }
+
+
+def record_assignment(item, previous_id):
+    if previous_id == item.filament_spool_id:
+        return
+    def code(spool_id):
+        return Spool.objects.filter(owner=item.owner, pk=spool_id).values_list("spool_id", flat=True).first() if spool_id else ""
+    ReusableSpoolAssignmentEvent.objects.create(
+        owner=item.owner,
+        reel=item,
+        previous_filament_spool_id=previous_id,
+        new_filament_spool_id=item.filament_spool_id,
+        previous_spool_code=code(previous_id),
+        new_spool_code=code(item.filament_spool_id),
+    )
 
 
 def fill_design(item, data):
@@ -110,7 +133,7 @@ def fill_design(item, data):
 
 
 def fill_reel(item, data):
-    for field in ("code", "color_name", "material_override", "notes"):
+    for field in ("code", "color_name", "material_override", "condition", "notes"):
         if field in data:
             setattr(item, field, str(data[field] or "").strip())
     if "measured_tare_g" in data:
@@ -170,7 +193,7 @@ def design_detail(request, design_id):
 @require_http_methods(["GET", "POST"])
 def reels(request):
     if request.method == "GET":
-        qs = ReusableSpool.objects.filter(owner=request.user).select_related("design")
+        qs = ReusableSpool.objects.filter(owner=request.user).select_related("design").prefetch_related("assignment_events")
         return JsonResponse({"rows": [serialise_reel(x) for x in qs]})
     denied = permission(request, "add_spool")
     if denied:
@@ -179,7 +202,9 @@ def reels(request):
         item = ReusableSpool(owner=request.user)
         fill_reel(item, read_json(request))
         item.full_clean()
-        item.save()
+        with transaction.atomic():
+            item.save()
+            record_assignment(item, None)
         return JsonResponse({"item": serialise_reel(item)}, status=201)
     except ValidationError as exc:
         return validation_error(exc)
@@ -200,9 +225,12 @@ def reel_detail(request, reel_id):
         item.delete()
         return JsonResponse({"deleted": True})
     try:
+        previous_id = item.filament_spool_id
         fill_reel(item, read_json(request))
         item.full_clean()
-        item.save()
+        with transaction.atomic():
+            item.save()
+            record_assignment(item, previous_id)
         return JsonResponse({"item": serialise_reel(item)})
     except ValidationError as exc:
         return validation_error(exc)
