@@ -2643,3 +2643,38 @@ a:focus-visible,
     min-width: 0;
   }
 }
+
+/* Model Library reusable-spool toggle stays legible and easy to tap on mobile. */
+.modelReusableSpoolToggle{display:inline-flex;align-items:center;gap:9px;min-height:38px;padding:6px 10px;border:1px solid var(--border,#303b49);border-radius:9px;cursor:pointer;white-space:nowrap;font-size:.875rem}
+.modelReusableSpoolToggle input{width:17px;height:17px;flex:0 0 auto;margin:0}
+@media(max-width:620px){.modelReusableSpoolToggle{min-height:44px;width:100%;justify-content:flex-start}.printingLibraryActions .modelReusableSpoolToggle{order:0}}
+
+.modelReusableSpoolRow{display:flex;justify-content:flex-start;padding:10px 14px 14px;border-top:1px solid var(--border,#303b49)}
+.modelReusableSpoolRow .modelReusableSpoolToggle{margin:0}
+
+/* Reusable spool forms: help text and actions never share the same text line. */
+.spoolEstimateBlock{display:flex;flex-direction:column;align-items:stretch;gap:10px;min-width:0}
+.spoolHelpText{display:block;margin:0;line-height:1.5;max-width:100%;color:var(--text-muted,#9ca6b6)}
+.spoolInlineActions{display:flex;justify-content:flex-start;align-items:center;gap:10px;flex-wrap:wrap;width:100%}
+.spoolInlineActions>button{display:inline-flex;flex:0 1 auto;max-width:100%;white-space:normal;text-align:center}
+.spoolRowActions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-left:auto}
+.spoolRowActions button{max-width:100%;white-space:normal}
+@media(max-width:720px){.spoolRowActions{width:100%;justify-content:flex-start;margin:12px 0 0}.spoolRowActions button{flex:0 1 auto}.spoolInlineActions button{width:100%}}
+
+/* Keep the reusable-spool designation below Model Library action buttons. */
+.printingModelRow{grid-template-areas:"identity badges actions" "identity badges reusable"}
+.printingModelRow>.modelReusableSpoolRow{grid-area:reusable;justify-self:end;justify-content:flex-end;width:auto;padding:0;border:0;min-width:0}
+.spoolAutoIdNote{grid-column:1/-1;padding:11px 14px;border:1px dashed var(--border,#303b49);border-radius:9px;color:var(--text-muted,#aeb8c5);font-size:.9rem}
+@media(max-width:760px){.printingModelRow>.modelReusableSpoolRow{justify-self:stretch;width:100%;justify-content:flex-end;padding:8px 0 0}.printingModelRow>.modelReusableSpoolRow .modelReusableSpoolToggle{max-width:100%}}
+
+@container (max-width:620px){.printingModelList .printingModelRow{grid-template-areas:"identity actions" "badges reusable"!important}.printingModelRow>.modelReusableSpoolRow{justify-self:end}}
+@container (max-width:320px){.printingModelList .printingModelRow{grid-template-areas:"identity" "badges" "actions" "reusable"!important}.printingModelRow>.modelReusableSpoolRow{justify-self:start;justify-content:flex-start}}
+
+.manufacturerMatchHint{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:7px;font-size:.84rem}
+.manufacturerMatchHint button{padding:3px 8px;font-size:inherit;min-height:30px}
+
+/* Reusable spool colour entry: preset, visual picker, hex and optional name. */
+.spoolColourControls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.spoolColourControls label{min-width:0}
+.spoolColourControls input[type="color"]{min-height:43px;padding:4px 8px;cursor:pointer}
+@media(max-width:620px){.spoolColourControls{grid-template-columns:minmax(0,1fr)}}

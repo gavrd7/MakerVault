@@ -242,6 +242,23 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
   const recentSpools = newestFirst(data?.spools).slice(0, 5);
   const recentModels = newestFirst(data?.models).slice(0, 5);
 
+  if (workspaceView === "reusableSpools") {
+    return <ReusableSpoolsPage
+      onBack={() => setWorkspaceView("overview")}
+      onOpenModels={() => setWorkspaceView("models")}
+      models={data?.models || []}
+      spools={data?.spools || []}
+      locations={data?.locations || []}
+      filamentProducts={data?.filaments || []}
+      materialOptions={data?.common_filament_materials || []}
+      canAdd={Boolean(config?.permissions?.add_spool)}
+      canChange={Boolean(config?.permissions?.change_spool)}
+      canDelete={Boolean(config?.permissions?.delete_spool)}
+      canAddDesign={Boolean(config?.permissions?.add_filament)}
+      canChangeDesign={Boolean(config?.permissions?.change_filament)}
+    />;
+  }
+
   if (workspaceView === "filaments") {
     return <FilamentLibraryPage
       filaments={data?.filaments || []}
@@ -319,6 +336,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
           <div className="printingHeroActions">
             {canAddSpool && <button type="button" onClick={() => setModal("spool")}>Add spool</button>}
             <button type="button" onClick={() => setWorkspaceView("spools")}>Spool inventory</button>
+            <button type="button" onClick={() => setWorkspaceView("reusableSpools")}>Reusable spools</button>
             <button type="button" onClick={() => setWorkspaceView("filaments")}>Filament library</button>
             {canAddFilament && <button type="button" onClick={() => setModal("filamentCatalogue")}>Filament catalogue</button>}
           </div>
@@ -739,6 +757,22 @@ function ModelLibraryPage({ models, files, printers, projects, canAddModel, canC
   const [manageModel, setManageModel] = useState(null);
   const [viewerModel, setViewerModel] = useState(null);
   const [deleteModel, setDeleteModel] = useState(null);
+  const [reusableModelBusy, setReusableModelBusy] = useState("");
+
+  async function toggleReusableModel(model, enabled) {
+    setReusableModelBusy(model.id);
+    try {
+      await apiFetch("/api/printing/models/" + model.id + "/reusable-spool-design/", {
+        method: enabled ? "POST" : "DELETE",
+      });
+      await onChanged();
+    } catch (err) {
+      window.alert(err.message);
+    } finally {
+      setReusableModelBusy("");
+    }
+  }
+
 
   async function refreshSelectedModel(modelId, setter) {
     const fresh = await onChanged();
@@ -791,6 +825,7 @@ function ModelLibraryPage({ models, files, printers, projects, canAddModel, canC
               {hasViewableModelAsset(model) && <button className="primary" type="button" onClick={() => setViewerModel(model)}>View 3D</button>}
               {canChangeModel && <button onClick={() => setManageModel(model)}>Manage</button>}
               {canDeleteModel && <button className="dangerButton" type="button" onClick={() => setDeleteModel(model)}>Delete</button>}
+              {canChangeModel && <div className="modelReusableSpoolRow"><label className="modelReusableSpoolToggle"><input type="checkbox" checked={Boolean(model.is_reusable_spool)} disabled={reusableModelBusy === model.id} onChange={e => toggleReusableModel(model, e.target.checked)} /> Reusable spool</label></div>}
             </div>
           </article>;
         })}
@@ -1516,6 +1551,359 @@ function PrinterModal({ manufacturers, models, locations, onClose, onSaved }) {
   </Modal>;
 }
 
+
+
+function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, filamentProducts, materialOptions, canAdd, canChange, canDelete, canAddDesign, canChangeDesign }) {
+  const [designs, setDesigns] = useState([]);
+  const [manufacturerDesigns, setManufacturerDesigns] = useState([]);
+  const [reels, setReels] = useState([]);
+  const [densityProductId, setDensityProductId] = useState("");
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [working, setWorking] = useState(false);
+  const [form, setForm] = useState("");
+  const [editing, setEditing] = useState(null);
+  const [designForm, setDesignForm] = useState({ name: "", design_type: "printed", manufacturer: "", material: "", nominal_tare_g: "", max_dryer_temp_c: "", temperature_source: "", source_url: "", outer_diameter_mm: "", width_mm: "", hub_diameter_mm: "", capacity_g: "", description: "", model_3d_id: "" });
+  const [reelForm, setReelForm] = useState({ code: "", design_id: "", measured_tare_g: "", color_name: "", color_hex: "", material_override: "", condition: "usable", storage_location_id: "", filament_spool_id: "", notes: "" });
+
+  async function load() {
+    try {
+      const [d, r, catalogue] = await Promise.all([
+        apiFetch("/api/printing/reusable-spool-designs/"),
+        apiFetch("/api/printing/reusable-spools/"),
+        apiFetch("/api/printing/reusable-spool-manufacturers/"),
+      ]);
+      setDesigns(d.rows || []);
+      setManufacturerDesigns(catalogue.rows || []);
+      setReels(r.rows || []);
+      setError("");
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  function startDesign(item = null) {
+    setError("");
+    setEditing(item);
+    setDensityProductId("");
+    setDesignForm(item ? Object.fromEntries(Object.entries(item).map(([k, v]) => [k, v ?? ""])) : { name: "", design_type: "printed", manufacturer: "", material: "", nominal_tare_g: "", max_dryer_temp_c: "", temperature_source: "", source_url: "", outer_diameter_mm: "", width_mm: "", hub_diameter_mm: "", capacity_g: "", description: "", model_3d_id: "" });
+    setForm("design");
+  }
+
+  const spoolColours = [
+    ["Black", "#111111"], ["White", "#FFFFFF"], ["Grey", "#808080"], ["Red", "#E53935"],
+    ["Orange", "#FF7A00"], ["Yellow", "#FFD600"], ["Green", "#43A047"], ["Blue", "#1976D2"],
+    ["Purple", "#8E44AD"], ["Pink", "#EC4899"], ["Brown", "#795548"], ["Natural", "#E8DDC5"],
+  ];
+  const inventoryColourOptions = spools.filter(spool => spool.color_name || spool.color_hex);
+  function useInventoryFilamentColour(spoolId) {
+    const spool = inventoryColourOptions.find(item => String(item.id) === String(spoolId));
+    if (!spool) return;
+    const hex = String(spool.color_hex || "").trim();
+    const validHex = /^#[0-9a-fA-F]{6}$/.test(hex) ? hex.toUpperCase() : "";
+    setReelForm(previous => ({
+      ...previous,
+      color_name: spool.color_name || (validHex ? "Custom" : ""),
+      color_hex: validHex,
+      material_override: spool.material || previous.material_override,
+    }));
+  }
+
+  function applySpoolColour(name, hex) {
+    setReelForm(previous => ({ ...previous, color_name: name, color_hex: hex }));
+  }
+
+  function startReel(item = null) {
+    setError("");
+    setEditing(item);
+    setReelForm(item ? Object.fromEntries(Object.entries(item).map(([k, v]) => [k, v ?? ""])) : { design_id: designs[0]?.id || "", measured_tare_g: "", color_name: "", color_hex: "", material_override: "", condition: "usable", storage_location_id: "", filament_spool_id: "", notes: "" });
+    setForm("reel");
+  }
+
+  const manufacturerAliases = {
+    "bambu": "Bambu Lab", "bambulab": "Bambu Lab", "bambulabs": "Bambu Lab",
+    "prusa": "Prusa Research", "prusament": "Prusa Research",
+    "esun": "eSUN", "sunlu": "SUNLU", "creality": "Creality",
+    "polymaker": "Polymaker", "panchroma": "Polymaker",
+  };
+  const manufacturerKey = raw => String(raw || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const manufacturerNames = [...new Set([...manufacturerDesigns.map(x => x.manufacturer), ...designs.map(x => x.manufacturer)].filter(Boolean))];
+  function resolveManufacturer(raw) {
+    const key = manufacturerKey(raw);
+    return manufacturerAliases[key] || manufacturerNames.find(name => manufacturerKey(name) === key) || null;
+  }
+  const matchedManufacturer = resolveManufacturer(designForm.manufacturer);
+  function acceptManufacturer() {
+    if (matchedManufacturer) setDesignForm(p => ({ ...p, manufacturer: matchedManufacturer }));
+  }
+
+  const selectedModel = models.find(m => m.id === designForm.model_3d_id);
+  const geometry = newestGeometryAnalysis(selectedModel);
+  const dimensions = geometry?.dimensions_mm;
+  const volume = Number(geometry?.volume_cm3);
+  const materials = [...new Set([...materialOptions, ...filamentProducts.map(p => p.material), designForm.material].filter(Boolean))].sort();
+  const densityProducts = filamentProducts.filter(p =>
+    String(p.material || "").trim().toLowerCase() === String(designForm.material || "").trim().toLowerCase() &&
+    Number(p.density_g_cm3) > 0
+  );
+  const sourceProduct = densityProducts.find(p => String(p.id) === densityProductId);
+  // Derive a typical density exclusively from recorded MakerVault filament data.
+  // Median avoids skew from an outlier; an exact filament selection overrides it.
+  const recordedDensities = densityProducts.map(p => Number(p.density_g_cm3)).sort((a, b) => a - b);
+  const mid = Math.floor(recordedDensities.length / 2);
+  const libraryDensity = recordedDensities.length
+    ? (recordedDensities.length % 2 ? recordedDensities[mid] : (recordedDensities[mid - 1] + recordedDensities[mid]) / 2)
+    : null;
+  const density = sourceProduct ? Number(sourceProduct.density_g_cm3) : libraryDensity;
+  // 15% infill baseline, excluding variable walls and top/bottom layers.
+  const estimatedMass = Number.isFinite(volume) && volume > 0 && Number.isFinite(density) && density > 0
+    ? (volume * density * 0.15).toFixed(2) : null;
+
+  function applyGeometryDimension(field, value) {
+    if (Number(value) > 0) setDesignForm(old => ({ ...old, [field]: Number(value).toFixed(2) }));
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    setWorking(true);
+    setError("");
+    const isDesign = form === "design";
+    const endpoint = isDesign ? "/api/printing/reusable-spool-designs/" : "/api/printing/reusable-spools/";
+    try {
+      await apiFetch(endpoint + (editing ? editing.id + "/" : ""), {
+        method: editing ? "PATCH" : "POST",
+        body: JSON.stringify(isDesign ? designForm : reelForm),
+      });
+      setNotice(isDesign ? "Spool design saved." : "Reusable spool saved.");
+      setForm("");
+      setEditing(null);
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  function lookupKnownManufacturerSpecs() {
+    const candidate = manufacturerDesigns.find(x =>
+      (x.name || "").trim().toLowerCase() === (designForm.name || "").trim().toLowerCase() &&
+      (x.manufacturer || "").trim().toLowerCase() === (designForm.manufacturer || "").trim().toLowerCase()
+    );
+    if (!candidate) {
+      setNotice("No exact manufacturer catalogue match. Keep your values or enter verified specifications manually.");
+      return;
+    }
+    const available = ["source_url", "description", "material", "nominal_tare_g", "max_dryer_temp_c", "temperature_source", "outer_diameter_mm", "width_mm", "hub_diameter_mm", "capacity_g"];
+    const update = {};
+    for (const key of available) {
+      if ((designForm[key] === "" || designForm[key] == null) && candidate[key] !== "" && candidate[key] != null) {
+        update[key] = candidate[key];
+      }
+    }
+    setDesignForm(p => ({ ...p, ...update }));
+    setNotice(Object.keys(update).length
+      ? "Filled available catalogue details without changing your entries. Verify the exact variant."
+      : "Catalogue match found, but no additional verified specifications are available yet.");
+  }
+
+  async function importManufacturerDesign(item) {
+    setWorking(true);
+    setError("");
+    try {
+      await apiFetch("/api/printing/reusable-spool-manufacturers/", { method: "POST", body: JSON.stringify({ key: item.key }) });
+      setNotice(item.name + " added to your spool designs.");
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function remove(kind, item) {
+    if (!window.confirm("Delete " + (item.name || item.code) + "?")) return;
+    setWorking(true);
+    try {
+      await apiFetch("/api/printing/" + (kind === "design" ? "reusable-spool-designs/" : "reusable-spools/") + item.id + "/", { method: "DELETE" });
+      setNotice("Record deleted.");
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  const field = (label, key, type = "text") => <label key={key}>{label}
+    <input type={type} step={type === "number" ? "any" : undefined} value={(form === "design" ? designForm : reelForm)[key] ?? ""} onChange={e =>
+      form === "design" ? setDesignForm(p => ({ ...p, [key]: e.target.value })) : setReelForm(p => ({ ...p, [key]: e.target.value }))
+    } />
+  </label>;
+
+  return <div className="printingStack">
+    <section className="panel printingLibraryHero">
+      <div>
+        <span className="settingsEyebrow">3D Printing · Filaments</span>
+        <h2>Reusable spools</h2>
+        <p>Manage refillable empty spool designs and the individual reels you own. A reusable reel is separate from its current filament stock.</p>
+      </div>
+      <div className="printingHeroActions">
+        <button type="button" onClick={onBack}>← Printing overview</button>
+        <button type="button" onClick={onOpenModels}>Model library (STL/3MF)</button>
+        {canAddDesign && <button type="button" onClick={() => startDesign()}>Add design</button>}
+        {canAdd && <button type="button" className="primary" onClick={() => startReel()} disabled={!designs.length}>Add reusable spool</button>}
+      </div>
+    </section>
+    {error && !form && <div className="error" role="alert">{error}</div>}
+    {notice && <div className="notice" role="status">{notice}</div>}
+    <section className="panel printingSection">
+      <div className="panelHead"><h3>Owned reusable spools ({reels.length})</h3></div>
+      <div className="printingList">
+        {reels.map(reel => <article className="printingListRow" key={reel.id}>
+          <div><strong>{reel.code} · {reel.design_name}</strong>
+            <small>{[reel.color_name, reel.material_override].filter(Boolean).join(" · ") || "No material/colour recorded"}</small>
+            <small>Tare: {reel.effective_tare_g == null ? "Unknown" : reel.effective_tare_g + " g"}{reel.measured_tare_g != null ? " (measured)" : " (design default)"} · {reel.filament_spool_id ? "Loaded with filament" : "Unassigned"}</small>
+            <small>Condition: {reel.condition || "usable"}{reel.assignment_history?.length ? " · " + reel.assignment_history.length + " recent assignment change(s)" : ""}</small>
+            {(reel.assignment_history || []).slice(0, 3).map((event, i) => <small key={i}>{new Date(event.occurred_at).toLocaleDateString()} · {event.previous_spool_code || "Empty"} → {event.new_spool_code || "Empty"}</small>)}
+          </div>
+          <div className="spoolRowActions">
+            {canChange && <button type="button" onClick={() => startReel(reel)}>Edit</button>}
+            {canDelete && <button type="button" className="dangerButton" onClick={() => remove("reel", reel)}>Delete</button>}
+          </div>
+        </article>)}
+        {!reels.length && <div className="printingEmptyInline">No reusable spools registered yet. Add a design, then an individual spool.</div>}
+      </div>
+    </section>
+    <section className="panel printingSection">
+      <div className="panelHead"><h3>Manufacturer spool catalogue</h3></div>
+      <div className="printingList">
+        {manufacturerDesigns.map(item => <article className="printingListRow" key={item.key}>
+          <div><strong>{item.name}</strong><small>{item.manufacturer} · Manufacturer reference; check actual tare and drying tolerance before use.</small></div>
+          {canAddDesign && <button type="button" disabled={working || designs.some(d => d.name === item.name && d.manufacturer === item.manufacturer)} onClick={() => importManufacturerDesign(item)}>
+            {designs.some(d => d.name === item.name && d.manufacturer === item.manufacturer) ? "Added to inventory" : "Add to inventory"}
+          </button>}
+        </article>)}
+      </div>
+    </section>
+    <section className="panel printingSection">
+      <div className="panelHead"><h3>Spool designs ({designs.length})</h3></div>
+      <div className="printingList">
+        {designs.map(d => <article className="printingListRow" key={d.id}>
+          <div><strong>{d.name}</strong>
+            <small>{[d.manufacturer, d.design_type, d.material].filter(Boolean).join(" · ")}</small>
+            <small>Nominal tare: {d.nominal_tare_g == null ? "Unknown" : d.nominal_tare_g + " g"} · Dryer limit: {d.max_dryer_temp_c == null ? "Unverified" : d.max_dryer_temp_c + " °C"}</small>
+            
+          </div>
+          <div className="spoolRowActions">
+            {d.model_3d_id && <button type="button" onClick={onOpenModels}>View linked model</button>}
+            {canChangeDesign && <button type="button" onClick={() => startDesign(d)}>Edit</button>}
+            {canChangeDesign && <button type="button" className="dangerButton" onClick={() => remove("design", d)}>Delete</button>}
+          </div>
+        </article>)}
+        {!designs.length && <div className="printingEmptyInline">No spool designs yet.</div>}
+      </div>
+    </section>
+
+    {form && <Modal title={editing ? "Edit " + (form === "design" ? "spool design" : "reusable spool") : "Add " + (form === "design" ? "spool design" : "reusable spool")} onClose={() => setForm("")}>
+      <form className="formGrid" onSubmit={submit}>
+        {error && <div className="formError full" role="alert">{error}</div>}
+        {form === "design" ? <>
+          {field("Design name", "name")}
+          <label>Type<select value={designForm.design_type} onChange={e => setDesignForm(p => ({ ...p, design_type: e.target.value, ...(e.target.value === "printed" ? { manufacturer: "" } : {}) }))}><option value="printed">3D printed</option><option value="manufacturer">Manufacturer-made</option></select></label>
+          {designForm.design_type === "manufacturer" && <label>Manufacturer
+            <input value={designForm.manufacturer} onChange={e => setDesignForm(p => ({ ...p, manufacturer: e.target.value }))} onBlur={acceptManufacturer} placeholder="Enter manufacturer (e.g. Bambu)" />
+            {matchedManufacturer && matchedManufacturer !== designForm.manufacturer && <small className="manufacturerMatchHint">Recognised manufacturer: <button type="button" onClick={acceptManufacturer}>{matchedManufacturer}</button></small>}
+          </label>}
+          <label>Material
+            <select value={designForm.material || ""} onChange={e => { setDesignForm(p => ({ ...p, material: e.target.value })); setDensityProductId(""); }}>
+              <option value="">Choose known material</option>
+              {materials.map(material => <option key={material} value={material}>{material}</option>)}
+            </select>
+          </label>
+          {designForm.design_type === "printed" && <>
+            <label>Density reference (optional)
+              <select value={densityProductId} onChange={e => setDensityProductId(e.target.value)}>
+                <option value="">Use library material density (automatic)</option>
+                {densityProducts.map(p => <option key={p.id} value={p.id}>{p.name} · {p.density_g_cm3} g/cm³</option>)}
+              </select>
+            </label>
+            <div className="full spoolEstimateBlock">
+              {estimatedMass ? <><p className="spoolHelpText">Estimated weight at 15% infill: {estimatedMass} g (mesh volume {volume.toFixed(2)} cm³ × {density.toFixed(2)} g/cm³ {sourceProduct ? "selected filament density" : "MakerVault library material median density"}). This is a rough baseline: walls, solid layers and slicer settings affect the real weight. Use a sliced estimate or measured tare when available.</p>
+                <div className="spoolInlineActions"><button type="button" onClick={() => setDesignForm(p => ({ ...p, nominal_tare_g: estimatedMass }))}>Use estimated weight</button></div>
+              </> : <small>Choose an analysed model and a material with a recorded density in your MakerVault filament library. Without library density data, no weight estimate is shown. Actual empty spool weight should be measured.</small>}
+            </div>
+          </>}
+          {designForm.design_type === "manufacturer" && <div className="full spoolEstimateBlock">
+            <p className="spoolHelpText">Only verified catalogue information will be used, and entered values are preserved.</p>
+            <div className="spoolInlineActions"><button type="button" onClick={lookupKnownManufacturerSpecs}>Look up specifications</button></div>
+          </div>}
+          {field("Nominal empty weight (g)", "nominal_tare_g", "number")}
+          {field("Maximum verified dryer temperature (°C)", "max_dryer_temp_c", "number")}
+          <small className="full">Material alone does not establish a safe dryer limit. Enter a limit only when verified for the exact printed design/material and record its source; otherwise leave blank.</small>
+          {field("Temperature rating source", "temperature_source")}
+          {field("Design URL", "source_url", "url")}
+          {field("Outer diameter (mm)", "outer_diameter_mm", "number")}
+          {field("Width (mm)", "width_mm", "number")}
+          {designForm.design_type === "printed" && dimensions && <div className="full spoolEstimateBlock">
+            <p className="spoolHelpText">Model bounding box: {Number(dimensions.x).toFixed(1)} × {Number(dimensions.y).toFixed(1)} × {Number(dimensions.z).toFixed(1)} mm. These are orientation-dependent, not verified reel dimensions.</p>
+            <div className="spoolInlineActions"><button type="button" onClick={() => {
+              const d = [dimensions.x, dimensions.y, dimensions.z].map(Number).sort((a,b) => a-b);
+              applyGeometryDimension("outer_diameter_mm", d[2]);
+              applyGeometryDimension("width_mm", d[0]);
+            }}>Use model dimensions</button></div>
+          </div>}
+          {field("Hub / bore diameter (mm)", "hub_diameter_mm", "number")}
+          {field("Capacity (g)", "capacity_g", "number")}
+          <label>Description<textarea rows="3" value={designForm.description || ""} onChange={e => setDesignForm(p => ({ ...p, description: e.target.value }))}/></label>
+          <label>3D model (STL/3MF in Model Library)<select value={designForm.model_3d_id} onChange={e => { const model = models.find(m => m.id === e.target.value); setDesignForm(p => ({ ...p, model_3d_id: e.target.value, ...(p.design_type === "printed" && model ? { name: model.name, manufacturer: "" } : {}) })); }}><option value="">Not linked</option>{models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
+        </> : <>
+          <div className="spoolAutoIdNote">Spool ID: {editing?.code || "Assigned automatically when saved (RSP-0001, RSP-0002…)"}</div>
+          <label>Reusable spool design<select required value={reelForm.design_id} onChange={e => setReelForm(p => ({ ...p, design_id: e.target.value }))}>{designs.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
+          {field("Measured empty weight (g)", "measured_tare_g", "number")}
+          <label className="full">Use colour from my filament inventory
+            <select defaultValue="" onChange={e => useInventoryFilamentColour(e.target.value)}>
+              <option value="">Select filament used to print this spool (optional)</option>
+              {inventoryColourOptions.map(spool => <option key={spool.id} value={spool.id}>{spool.spool_id} · {spool.filament} · {spool.color_name || spool.color_hex}</option>)}
+            </select>
+            <small>Copies the filament's recorded colour and material; does not assign that filament as the spool's current stock.</small>
+          </label>
+          <div className="full spoolColourControls">
+            <label>Common colours
+              <select value={spoolColours.find(([name, hex]) => hex === reelForm.color_hex && name === reelForm.color_name)?.[0] || ""} onChange={e => {
+                const selected = spoolColours.find(([name]) => name === e.target.value);
+                if (selected) applySpoolColour(...selected);
+              }}>
+                <option value="">Choose a colour (optional)</option>
+                {spoolColours.map(([name, hex]) => <option key={name} value={name}>{name}</option>)}
+              </select>
+            </label>
+            <label>Colour picker
+              <input type="color" value={/^#[0-9a-fA-F]{6}$/.test(reelForm.color_hex || "") ? reelForm.color_hex : "#808080"} onChange={e => setReelForm(p => ({ ...p, color_hex: e.target.value.toUpperCase(), color_name: spoolColours.find(([,hex]) => hex.toLowerCase() === e.target.value.toLowerCase())?.[0] || "Custom" }))} />
+            </label>
+            <label>Hex colour
+              <input value={reelForm.color_hex || ""} maxLength={7} placeholder="#FF7A00" onChange={e => setReelForm(p => ({ ...p, color_hex: e.target.value.toUpperCase(), color_name: "Custom" }))} />
+            </label>
+            <label>Colour name
+              <input value={reelForm.color_name || ""} placeholder="Optional descriptive name" onChange={e => setReelForm(p => ({ ...p, color_name: e.target.value }))} />
+            </label>
+          </div>
+          {field("Printed material", "material_override")}
+          <label>Condition<select value={reelForm.condition || "usable"} onChange={e => setReelForm(p => ({ ...p, condition: e.target.value }))}><option value="usable">Usable</option><option value="damaged">Damaged</option><option value="retired">Retired</option></select></label>
+          <label>Storage location<select value={reelForm.storage_location_id} onChange={e => setReelForm(p => ({ ...p, storage_location_id: e.target.value }))}><option value="">None</option>{locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
+          <label>Assigned filament stock<select value={reelForm.filament_spool_id} onChange={e => setReelForm(p => ({ ...p, filament_spool_id: e.target.value }))}><option value="">Unassigned</option>{spools.map(spool => <option key={spool.id} value={spool.id}>{spool.spool_id} · {spool.filament}</option>)}</select></label>
+          {field("Notes", "notes")}
+        </>}
+        <div className="formActions full">
+          <button type="button" onClick={() => setForm("")}>Cancel</button>
+          <button type="submit" className="primary" disabled={working}>{working ? "Saving…" : "Save"}</button>
+        </div>
+      </form>
+    </Modal>}
+  </div>;
+}
 
 function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFilament, canAddFilament, onBack, onChanged, searchTarget = null }) {
   const [query, setQuery] = useState("");
@@ -2674,6 +3062,7 @@ function ModelModal({ projects, canUpload, onClose, onSaved }) {
     tags: "",
     revision_version: "1.0",
     revision_notes: "",
+    is_reusable_spool: false,
   });
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -2695,9 +3084,11 @@ function ModelModal({ projects, canUpload, onClose, onSaved }) {
         const body = new FormData();
         for (const [key, value] of Object.entries(form)) body.append(key, value ?? "");
         body.append("file", file);
-        await apiFetch("/api/printing/models/", { method: "POST", body });
+        const created = await apiFetch("/api/printing/models/", { method: "POST", body });
+        if (form.is_reusable_spool) await apiFetch("/api/printing/models/" + created.item.id + "/reusable-spool-design/", { method: "POST" });
       } else {
-        await apiFetch("/api/printing/models/", { method: "POST", body: form });
+        const created = await apiFetch("/api/printing/models/", { method: "POST", body: form });
+        if (form.is_reusable_spool) await apiFetch("/api/printing/models/" + created.item.id + "/reusable-spool-design/", { method: "POST" });
       }
       await onSaved();
     } catch (err) {
@@ -2723,6 +3114,7 @@ function ModelModal({ projects, canUpload, onClose, onSaved }) {
       <label>Source URL<input type="url" value={form.source_url} onChange={e => set("source_url", e.target.value)} /></label>
       <label>Licence<input value={form.license} onChange={e => set("license", e.target.value)} placeholder="CC BY 4.0, personal use…" /></label>
       <label className="full">Tags<input value={form.tags} onChange={e => set("tags", e.target.value)} placeholder="Comma-separated" /></label>
+      <label className="full"><input type="checkbox" checked={form.is_reusable_spool} onChange={e => set("is_reusable_spool", e.target.checked)} /> Reusable spool design (also add to reusable spool catalogue)</label>
       <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy ? file ? "Uploading…" : "Saving…" : file ? "Upload & add model" : "Add model"}</button></div>
     </form>
   </Modal>;

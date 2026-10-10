@@ -6,6 +6,8 @@ import { componentIllustrationKind } from "./componentIllustrations";
 
 export function Modal({ title, subtitle, onClose, children, wide = false, className = "" }) {
   const dialogRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     const previous = document.activeElement;
@@ -18,7 +20,7 @@ export function Modal({ title, subtitle, onClose, children, wide = false, classN
     function keydown(event) {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose?.();
+        onCloseRef.current?.();
         return;
       }
       if (event.key !== "Tab" || !dialog) return;
@@ -42,7 +44,7 @@ export function Modal({ title, subtitle, onClose, children, wide = false, classN
       document.removeEventListener("keydown", keydown);
       if (previous instanceof HTMLElement) previous.focus();
     };
-  }, [onClose]);
+  }, []);
 
   const modal = <div className="modalBackdrop" role="presentation" onMouseDown={e => {
     if (e.target === e.currentTarget) onClose();
