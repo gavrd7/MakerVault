@@ -1593,7 +1593,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
 
   function startReel(item = null) {
     setEditing(item);
-    setReelForm(item ? Object.fromEntries(Object.entries(item).map(([k, v]) => [k, v ?? ""])) : { code: "", design_id: designs[0]?.id || "", measured_tare_g: "", color_name: "", material_override: "", condition: "usable", storage_location_id: "", filament_spool_id: "", notes: "" });
+    setReelForm(item ? Object.fromEntries(Object.entries(item).map(([k, v]) => [k, v ?? ""])) : { design_id: designs[0]?.id || "", measured_tare_g: "", color_name: "", material_override: "", condition: "usable", storage_location_id: "", filament_spool_id: "", notes: "" });
     setForm("reel");
   }
 
@@ -1814,7 +1814,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
           <label>Description<textarea rows="3" value={designForm.description || ""} onChange={e => setDesignForm(p => ({ ...p, description: e.target.value }))}/></label>
           <label>3D model (STL/3MF in Model Library)<select value={designForm.model_3d_id} onChange={e => { const model = models.find(m => m.id === e.target.value); setDesignForm(p => ({ ...p, model_3d_id: e.target.value, ...(p.design_type === "printed" && model ? { name: model.name, manufacturer: "" } : {}) })); }}><option value="">Not linked</option>{models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
         </> : <>
-          {field("Spool ID", "code")}
+          <div className="spoolAutoIdNote">Spool ID: {editing?.code || "Assigned automatically when saved (RSP-0001, RSP-0002…)"}</div>
           <label>Reusable spool design<select required value={reelForm.design_id} onChange={e => setReelForm(p => ({ ...p, design_id: e.target.value }))}>{designs.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
           {field("Measured empty weight (g)", "measured_tare_g", "number")}
           {field("Colour", "color_name")}
