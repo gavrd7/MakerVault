@@ -2694,3 +2694,7 @@ a:focus-visible,
 .spoolCatalogueFilters{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:12px;padding:12px 16px;border-bottom:1px solid #29313c}
 .spoolCatalogueFilters label{min-width:0}
 @media(max-width:620px){.spoolCatalogueFilters{grid-template-columns:minmax(0,1fr)}}
+
+.spoolCatalogueRecord{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1}
+.spoolCatalogueRecord a{color:#a99cff;text-decoration:none;font-size:.85rem;overflow-wrap:anywhere;align-self:flex-start}
+.spoolCatalogueRecord a:hover{text-decoration:underline}
