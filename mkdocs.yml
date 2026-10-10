@@ -56,6 +56,7 @@ nav:
   - Welcome: index.md
   - Getting started:
       - Before you begin: getting-started/before-you-begin.md
+      - Install on Windows: getting-started/windows.md
       - Install MakerVault: getting-started/install.md
       - Configure your .env file: getting-started/environment.md
       - Choose your storage: getting-started/storage.md
