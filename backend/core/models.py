@@ -789,6 +789,7 @@ class ReusableSpool(TimeStampedModel):
     code = models.CharField(max_length=40)
     measured_tare_g = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
     color_name = models.CharField(max_length=80, blank=True)
+    color_hex = models.CharField(max_length=7, blank=True)
     material_override = models.CharField(max_length=80, blank=True)
     condition = models.CharField(max_length=20, choices=CONDITION, default="usable")
     storage_location = models.ForeignKey(PrintingLocation, on_delete=models.SET_NULL, blank=True, null=True, related_name="reusable_spools")
