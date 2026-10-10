@@ -236,3 +236,32 @@ def reel_detail(request, reel_id):
         return validation_error(exc)
     except IntegrityError:
         return error("Spool ID or active filament assignment is already in use.", 409)
+
+
+@login_required
+@require_http_methods(["POST", "DELETE"])
+def model_design(request, model_id):
+    """Quickly mark/unmark a model as a reusable spool design."""
+    model = Model3D.objects.filter(owner=request.user, pk=model_id).first()
+    if model is None:
+        return error("Model not found.", 404)
+    denied = permission(request, "add_filamentproduct" if request.method == "POST" else "change_filamentproduct")
+    if denied:
+        return denied
+    design = ReusableSpoolDesign.objects.filter(owner=request.user, model_3d=model).first()
+    if request.method == "POST":
+        if design is None:
+            design = ReusableSpoolDesign(
+                owner=request.user, model_3d=model, name=model.name,
+                design_type="printed", description=model.description,
+                source_url=model.source_url,
+            )
+            design.full_clean()
+            design.save()
+        return JsonResponse({"item": serialise_design(design)}, status=200)
+    if design is None:
+        return JsonResponse({"removed": True})
+    if design.owned_spools.exists():
+        return error("This model is used by owned reusable spools. Reassign them before unmarking.", 409)
+    design.delete()
+    return JsonResponse({"removed": True})
