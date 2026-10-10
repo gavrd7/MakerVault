@@ -30,15 +30,12 @@ def official_image_candidate(entry, html, source_url):
     title_meta = soup.find("meta", attrs={"property": "og:title"})
     title = str(title_meta.get("content") or "") if title_meta else ""
     title = title or (soup.title.get_text(" ", strip=True) if soup.title else "")
-    model_tokens = _tokens(entry.name)
+    model_tokens = _tokens(entry.name) - _tokens(entry.manufacturer)
     title_tokens = _tokens(title)
-    # Both the manufacturer's identity and distinctive product terms should
-    # appear; vague landing pages often contain only the brand.
-    maker_match = bool(_tokens(entry.manufacturer) & title_tokens)
-    relevant = bool(model_tokens & title_tokens) and (
-        len(model_tokens & title_tokens) >= 2 or len(model_tokens) == 1
-    )
-    if not maker_match and not relevant:
+    # The brand name by itself is never enough: require relevant spool-model
+    # terms as well. Generic manufacturer homepages must not be used.
+    overlap = model_tokens & title_tokens
+    if len(overlap) < min(2, len(model_tokens)):
         return None
     image_meta = soup.find("meta", attrs={"property": "og:image"})
     if not image_meta:
