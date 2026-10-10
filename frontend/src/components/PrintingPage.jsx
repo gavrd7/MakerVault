@@ -1601,14 +1601,22 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
   const geometry = newestGeometryAnalysis(selectedModel);
   const dimensions = geometry?.dimensions_mm;
   const volume = Number(geometry?.volume_cm3);
-  const sourceProduct = filamentProducts.find(p => String(p.id) === densityProductId);
-  const approximateDensity = { PLA: 1.24, PETG: 1.27, ABS: 1.04, ASA: 1.07, TPU: 1.21, PC: 1.20 };
-  const knownDensity = approximateDensity[String(designForm.material || "").toUpperCase()];
-  const density = densityProductId ? Number(sourceProduct?.density_g_cm3) : Number(knownDensity);
+  const materials = [...new Set([...materialOptions, ...filamentProducts.map(p => p.material), designForm.material].filter(Boolean))].sort();
+  const densityProducts = filamentProducts.filter(p =>
+    String(p.material || "").trim().toLowerCase() === String(designForm.material || "").trim().toLowerCase() &&
+    Number(p.density_g_cm3) > 0
+  );
+  const sourceProduct = densityProducts.find(p => String(p.id) === densityProductId);
+  // Derive a typical density exclusively from recorded MakerVault filament data.
+  // Median avoids skew from an outlier; an exact filament selection overrides it.
+  const recordedDensities = densityProducts.map(p => Number(p.density_g_cm3)).sort((a, b) => a - b);
+  const mid = Math.floor(recordedDensities.length / 2);
+  const libraryDensity = recordedDensities.length
+    ? (recordedDensities.length % 2 ? recordedDensities[mid] : (recordedDensities[mid - 1] + recordedDensities[mid]) / 2)
+    : null;
+  const density = sourceProduct ? Number(sourceProduct.density_g_cm3) : libraryDensity;
   const solidMass = Number.isFinite(volume) && volume > 0 && Number.isFinite(density) && density > 0
     ? (volume * density).toFixed(2) : null;
-  const materials = [...new Set([...materialOptions, ...filamentProducts.map(p => p.material), designForm.material].filter(Boolean))].sort();
-  const densityProducts = filamentProducts.filter(p => p.material === designForm.material && Number(p.density_g_cm3) > 0);
 
   function applyGeometryDimension(field, value) {
     if (Number(value) > 0) setDesignForm(old => ({ ...old, [field]: Number(value).toFixed(2) }));
@@ -1770,14 +1778,14 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
           {designForm.design_type === "printed" && <>
             <label>Density reference (optional)
               <select value={densityProductId} onChange={e => setDensityProductId(e.target.value)}>
-                <option value="">Choose filament with known density</option>
+                <option value="">Use library material density (automatic)</option>
                 {densityProducts.map(p => <option key={p.id} value={p.id}>{p.name} · {p.density_g_cm3} g/cm³</option>)}
               </select>
             </label>
             <div className="full">
-              {solidMass ? <><small>Calculated solid-model mass: {solidMass} g (mesh volume {volume.toFixed(2)} cm³ × {density.toFixed(2)} g/cm³ {densityProductId ? "catalogue density" : "generic material approximation"}). This is NOT the print's expected weight if it uses infill, cavities, separate objects or different print settings.</small>
+              {solidMass ? <><small>Calculated solid-model mass: {solidMass} g (mesh volume {volume.toFixed(2)} cm³ × {density.toFixed(2)} g/cm³ {sourceProduct ? "selected filament density" : "MakerVault library material median density"}). This is NOT the print's expected weight if it uses infill, cavities, separate objects or different print settings.</small>
                 <button type="button" onClick={() => setDesignForm(p => ({ ...p, nominal_tare_g: solidMass }))}>Use solid-model estimate</button>
-              </> : <small>Choose an analysed model and material to see an estimated solid-model mass. Known material densities are approximate, and an exact filament density can override them. Actual empty spool weight should be measured.</small>}
+              </> : <small>Choose an analysed model and a material with a recorded density in your MakerVault filament library. Without library density data, no weight estimate is shown. Actual empty spool weight should be measured.</small>}
             </div>
           </>}
           {designForm.design_type === "manufacturer" && <div className="full">
