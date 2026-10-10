@@ -656,7 +656,7 @@ function SpoolDryingModal({ spool, onClose, onSaved }) {
     <form className="formGrid" onSubmit={submit}>
       {error && <div className="formError full">{error}</div>}
       <div className="settingsCallout full"><strong>{spool.filament}</strong><p>{[spool.material, spool.color_name].filter(Boolean).join(" · ")}</p></div>
-      <label className="full">Last dried<input type="date" value={lastDried} max={new Date().toLocaleDateString("en-CA")} onChange={event => setLastDried(event.target.value)} /><small>Leave blank if unknown. The date belongs to this filament spool record.</small></label>
+      <label className="full">Last dried<input type="date" value={lastDried} onChange={event => setLastDried(event.target.value)} /><small>Leave blank if unknown. The date belongs to this filament spool record.</small></label>
       <div className="formActions full"><button type="button" onClick={() => setLastDried("")}>Clear date</button><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Saving…" : "Save drying date"}</button></div>
     </form>
   </Modal>;
