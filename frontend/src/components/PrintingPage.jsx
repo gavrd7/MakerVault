@@ -248,6 +248,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       manufacturers={data?.filament_manufacturers || []}
       materials={data?.common_filament_materials || []}
       canChangeFilament={canChangeFilament}
+      canAddFilament={canAddFilament}
       onBack={() => setWorkspaceView("overview")}
       onChanged={load}
       searchTarget={searchTarget}
@@ -313,16 +314,15 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
             {canAddPrintJob && <button type="button" onClick={() => setModal("print")}>Add print history</button>}
           </div>
         </section>
-        <details className="printingActionGroup">
-          <summary>Filaments <span aria-hidden="true">▾</span></summary>
+        <section className="printingActionGroup">
+          <h3>Filaments</h3>
           <div className="printingHeroActions">
             <button type="button" onClick={() => setWorkspaceView("filaments")}>Filament library</button>
-            {canAddFilament && <button type="button" onClick={() => setModal("filament")}>Add to library</button>}
             {canAddFilament && <button type="button" onClick={() => setModal("filamentCatalogue")}>Filament catalogue</button>}
             {canAddSpool && <button type="button" onClick={() => setModal("spool")}>Add spool</button>}
             <button type="button" onClick={() => setWorkspaceView("spools")}>Spool inventory</button>
           </div>
-        </details>
+        </section>
       </div>
     </section>
 
@@ -1517,8 +1517,9 @@ function PrinterModal({ manufacturers, models, locations, onClose, onSaved }) {
 }
 
 
-function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFilament, onBack, onChanged, searchTarget = null }) {
+function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFilament, canAddFilament, onBack, onChanged, searchTarget = null }) {
   const [query, setQuery] = useState("");
+  const [addFilamentOpen, setAddFilamentOpen] = useState(false);
 
   useEffect(() => {
     if (searchTarget?.type !== "filaments" || !searchTarget.id) return;
@@ -1549,6 +1550,7 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
       </div>
       <div className="printingHeroActions">
         <button onClick={onBack}>← Printing overview</button>
+        {canAddFilament && <button className="primary" type="button" onClick={() => setAddFilamentOpen(true)}>Add to library</button>}
       </div>
     </section>
 
@@ -1602,6 +1604,8 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
       onClose={() => setImageFilament(null)}
       onUpdated={async () => { setImageFilament(null); await onChanged(); }}
     />}
+
+    {addFilamentOpen && <FilamentModal manufacturers={manufacturers} materials={materials} onClose={() => setAddFilamentOpen(false)} onSaved={async () => { setAddFilamentOpen(false); await onChanged(); }} />}
 
     {editFilament && <FilamentEditModal
       filament={editFilament}
