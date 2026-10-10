@@ -741,6 +741,80 @@ class Spool(TimeStampedModel):
         return f"{self.spool_id} — {self.filament}"
 
 
+
+class ReusableSpoolDesign(TimeStampedModel):
+    """Reference design for an empty, refillable spool (not filament stock)."""
+    TYPES = [("manufacturer", "Manufacturer-made"), ("printed", "3D printed")]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reusable_spool_designs")
+    name = models.CharField(max_length=200)
+    manufacturer = models.CharField(max_length=120, blank=True)
+    design_type = models.CharField(max_length=20, choices=TYPES, default="printed")
+    description = models.TextField(blank=True)
+    source_url = models.URLField(blank=True)
+    material = models.CharField(max_length=80, blank=True)
+    nominal_tare_g = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
+    max_dryer_temp_c = models.PositiveSmallIntegerField(blank=True, null=True)
+    temperature_source = models.CharField(max_length=255, blank=True)
+    outer_diameter_mm = models.DecimalField(max_digits=7, decimal_places=2, blank=True, null=True)
+    width_mm = models.DecimalField(max_digits=7, decimal_places=2, blank=True, null=True)
+    hub_diameter_mm = models.DecimalField(max_digits=7, decimal_places=2, blank=True, null=True)
+    capacity_g = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
+    model_3d = models.ForeignKey("Model3D", on_delete=models.SET_NULL, blank=True, null=True, related_name="reusable_spool_designs")
+
+    class Meta:
+        ordering = ["name", "created_at"]
+
+    def clean(self):
+        super().clean()
+        if self.model_3d_id and self.owner_id and self.model_3d.owner_id != self.owner_id:
+            raise ValidationError({"model_3d": "Choose a model from your own library."})
+        for field in ("nominal_tare_g", "outer_diameter_mm", "width_mm", "hub_diameter_mm", "capacity_g"):
+            value = getattr(self, field)
+            if value is not None and value <= 0:
+                raise ValidationError({field: "Enter a positive value."})
+        if self.max_dryer_temp_c is not None and not self.temperature_source.strip():
+            raise ValidationError({"temperature_source": "Record the source of the verified temperature rating."})
+
+    def __str__(self):
+        return self.name
+
+
+class ReusableSpool(TimeStampedModel):
+    """One owned empty spool/reel that may carry a changing filament refill."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reusable_spools")
+    design = models.ForeignKey(ReusableSpoolDesign, on_delete=models.PROTECT, related_name="owned_spools")
+    code = models.CharField(max_length=40)
+    measured_tare_g = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
+    color_name = models.CharField(max_length=80, blank=True)
+    material_override = models.CharField(max_length=80, blank=True)
+    storage_location = models.ForeignKey(PrintingLocation, on_delete=models.SET_NULL, blank=True, null=True, related_name="reusable_spools")
+    filament_spool = models.OneToOneField(Spool, on_delete=models.SET_NULL, blank=True, null=True, related_name="reusable_reel")
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["code"]
+        constraints = [models.UniqueConstraint(fields=["owner", "code"], name="uniq_reusable_spool_code_per_owner")]
+
+    @property
+    def effective_tare_g(self):
+        return self.measured_tare_g if self.measured_tare_g is not None else self.design.nominal_tare_g
+
+    def clean(self):
+        super().clean()
+        if self.owner_id and self.design_id and self.design.owner_id != self.owner_id:
+            raise ValidationError({"design": "The design belongs to another user."})
+        if self.owner_id and self.storage_location_id and self.storage_location.owner_id != self.owner_id:
+            raise ValidationError({"storage_location": "The location belongs to another user."})
+        if self.owner_id and self.filament_spool_id and self.filament_spool.owner_id != self.owner_id:
+            raise ValidationError({"filament_spool": "The filament spool belongs to another user."})
+        if self.measured_tare_g is not None and self.measured_tare_g <= 0:
+            raise ValidationError({"measured_tare_g": "Enter a positive tare weight."})
+
+    def __str__(self):
+        return self.code
+
 class ExternalSpoolLink(TimeStampedModel):
     PROVIDERS = [
         ("spoolman", "Spoolman"),
