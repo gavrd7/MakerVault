@@ -2643,3 +2643,8 @@ a:focus-visible,
     min-width: 0;
   }
 }
+
+/* Model Library reusable-spool toggle stays legible and easy to tap on mobile. */
+.modelReusableSpoolToggle{display:inline-flex;align-items:center;gap:9px;min-height:38px;padding:6px 10px;border:1px solid var(--border,#303b49);border-radius:9px;cursor:pointer;white-space:nowrap;font-size:.875rem}
+.modelReusableSpoolToggle input{width:17px;height:17px;flex:0 0 auto;margin:0}
+@media(max-width:620px){.modelReusableSpoolToggle{min-height:44px;width:100%;justify-content:flex-start}.printingLibraryActions .modelReusableSpoolToggle{order:0}}
