@@ -1597,6 +1597,20 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
     ["Orange", "#FF7A00"], ["Yellow", "#FFD600"], ["Green", "#43A047"], ["Blue", "#1976D2"],
     ["Purple", "#8E44AD"], ["Pink", "#EC4899"], ["Brown", "#795548"], ["Natural", "#E8DDC5"],
   ];
+  const inventoryColourOptions = spools.filter(spool => spool.color_name || spool.color_hex);
+  function useInventoryFilamentColour(spoolId) {
+    const spool = inventoryColourOptions.find(item => String(item.id) === String(spoolId));
+    if (!spool) return;
+    const hex = String(spool.color_hex || "").trim();
+    const validHex = /^#[0-9a-fA-F]{6}$/.test(hex) ? hex.toUpperCase() : "";
+    setReelForm(previous => ({
+      ...previous,
+      color_name: spool.color_name || (validHex ? "Custom" : ""),
+      color_hex: validHex,
+      material_override: spool.material || previous.material_override,
+    }));
+  }
+
   function applySpoolColour(name, hex) {
     setReelForm(previous => ({ ...previous, color_name: name, color_hex: hex }));
   }
@@ -1849,6 +1863,13 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
           <div className="spoolAutoIdNote">Spool ID: {editing?.code || "Assigned automatically when saved (RSP-0001, RSP-0002…)"}</div>
           <label>Reusable spool design<select required value={reelForm.design_id} onChange={e => setReelForm(p => ({ ...p, design_id: e.target.value }))}>{designs.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
           {field("Measured empty weight (g)", "measured_tare_g", "number")}
+          <label className="full">Use colour from my filament inventory
+            <select defaultValue="" onChange={e => useInventoryFilamentColour(e.target.value)}>
+              <option value="">Select filament used to print this spool (optional)</option>
+              {inventoryColourOptions.map(spool => <option key={spool.id} value={spool.id}>{spool.spool_id} · {spool.filament} · {spool.color_name || spool.color_hex}</option>)}
+            </select>
+            <small>Copies the filament's recorded colour and material; does not assign that filament as the spool's current stock.</small>
+          </label>
           <div className="full spoolColourControls">
             <label>Common colours
               <select value={spoolColours.find(([name, hex]) => hex === reelForm.color_hex && name === reelForm.color_name)?.[0] || ""} onChange={e => {
