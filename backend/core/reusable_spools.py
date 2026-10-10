@@ -323,57 +323,6 @@ def model_design(request, model_id):
 
 # Reference entries deliberately leave tare, dimensions and dryer temperature blank
 # until independently verified for the exact spool variant.
-KNOWN_REUSABLE_SPOOL_DESIGNS = (
-    {
-        "key": "bambu-basic",
-        "name": "Bambu Reusable Spool (Basic)",
-        "manufacturer": "Bambu Lab",
-        "design_type": "manufacturer",
-        "material": "ABS",
-        "nominal_tare_g": "250.00",
-        "max_dryer_temp_c": 70,
-        "temperature_source": "https://asia.store.bambulab.com/collections/filament-accessories/products/bambu-reusable-spool",
-        "description": "Official reusable ABS spool. Manufacturer lists 250 g weight and a 70°C temperature-resistance limit; packing dimensions are not treated as actual spool dimensions.",
-        "source_url": "https://asia.store.bambulab.com/collections/filament-accessories/products/bambu-reusable-spool",
-    },
-    {
-        "key": "bambu-high-temp",
-        "name": "Bambu Reusable Spool (High Temperature)",
-        "manufacturer": "Bambu Lab",
-        "design_type": "manufacturer",
-        "material": "ABS+PC",
-        "nominal_tare_g": "250.00",
-        "max_dryer_temp_c": 90,
-        "temperature_source": "https://eu.store.bambulab.com/en-at/products/high-temperature-reusable-spool",
-        "description": "Official ABS+PC high-temperature reusable spool. Manufacturer lists 250 g weight and a 90°C temperature-resistance limit.",
-        "source_url": "https://eu.store.bambulab.com/en-at/products/high-temperature-reusable-spool",
-    },
-    {
-        "key": "prusa-refill-1kg",
-        "name": "Prusament Refill 1kg Reusable Spool (Legacy)",
-        "manufacturer": "Prusa Research",
-        "design_type": "manufacturer",
-        "description": "Legacy Prusament spool with removable plastic sides and cardboard centre. Not interchangeable with the newer 900 g refill spool format. Weight and dryer rating unverified.",
-        "source_url": "https://help.prusa3d.com/article/how-to-use-prusament-refill-1kg_394630",
-    },
-    {
-        "key": "prusa-refill-900g",
-        "name": "Prusament Refill 900g Reusable Spool (New)",
-        "manufacturer": "Prusa Research",
-        "design_type": "manufacturer",
-        "description": "Newer reusable Prusament spool format with a plastic centre and locking sides. Not the legacy 1 kg cardboard-core format; verify exact variant and drying rating.",
-        "source_url": "https://help.prusa3d.com/guide/how-to-use-prusament-refill-900g_440297",
-    },
-    {
-        "key": "polymaker-master-printable",
-        "name": "Panchroma Master Reusable Spool (Printable)",
-        "manufacturer": "Polymaker",
-        "design_type": "printed",
-        "description": "Printable master spool design linked by Polymaker for its Panchroma PLA refills. Printed weight and temperature tolerance depend on the model, material and slicer settings.",
-        "source_url": "https://wiki.polymaker.com/polymaker-products/polymaker-filaments/panchroma-tm/panchroma-tm-pla-refill",
-    },
-)
-
 @login_required
 @require_http_methods(["GET", "POST"])
 def manufacturer_catalogue(request):
