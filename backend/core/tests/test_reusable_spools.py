@@ -160,3 +160,46 @@ class ReusableSpoolApiTests(TestCase):
         self.assertEqual(first.json()["item"]["nominal_tare_g"], "250.00")
         self.assertEqual(first.json()["item"]["max_dryer_temp_c"], 70)
         self.assertTrue(first.json()["item"]["temperature_source"])
+
+
+    def test_reel_ids_auto_increment_and_ignore_submitted_code(self):
+        design = ReusableSpoolDesign.objects.create(owner=self.owner, name="Reel")
+        first = self._post("/api/printing/reusable-spools/", {
+            "design_id": str(design.id), "code": "CUSTOM-IGNORED",
+        })
+        self.assertEqual(first.status_code, 201, first.content)
+        self.assertEqual(first.json()["item"]["code"], "RSP-0001")
+        second = self._post("/api/printing/reusable-spools/", {"design_id": str(design.id)})
+        self.assertEqual(second.status_code, 201, second.content)
+        self.assertEqual(second.json()["item"]["code"], "RSP-0002")
+        self.assertEqual(ReusableSpool.objects.filter(owner=self.owner).count(), 2)
+        updated = self._patch(
+            "/api/printing/reusable-spools/" + second.json()["item"]["id"] + "/",
+            {"code": "CHANGED", "color_name": "Blue"},
+        )
+        self.assertEqual(updated.status_code, 200, updated.content)
+        self.assertEqual(updated.json()["item"]["code"], "RSP-0002")
+
+    def test_reel_id_allocation_stays_owner_scoped(self):
+        other_design = ReusableSpoolDesign.objects.create(owner=self.other, name="Other reel")
+        other_reel = ReusableSpool.objects.create(owner=self.other, design=other_design, code="RSP-0001")
+        self.assertTrue(other_reel.pk)
+        design = ReusableSpoolDesign.objects.create(owner=self.owner, name="My reel")
+        response = self._post("/api/printing/reusable-spools/", {"design_id": str(design.id)})
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(response.json()["item"]["code"], "RSP-0001")
+
+    def test_manufacturer_alias_and_conservative_typo_matching(self):
+        for typed, expected in [
+            ("bambu", "Bambu Lab"), ("Bambu Labs", "Bambu Lab"),
+            ("prusament", "Prusa Research"), ("e sun", "eSUN"),
+            ("sunlu", "SUNLU"), ("poly maker", "Polymaker"),
+            ("creality", "Creality"), ("Bambuu Lab", "Bambu Lab"),
+            ("My Own Workshop", "My Own Workshop"),
+        ]:
+            response = self._post("/api/printing/reusable-spool-designs/", {
+                "name": "Spool by " + typed, "manufacturer": typed,
+                "design_type": "manufacturer",
+            })
+            self.assertEqual(response.status_code, 201, response.content)
+            self.assertEqual(response.json()["item"]["manufacturer"], expected)
