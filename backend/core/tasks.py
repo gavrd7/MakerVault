@@ -214,6 +214,16 @@ def enrich_filament_catalogue_task(self, force_catalogue=False, limit=None, curs
     return result
 
 @shared_task
+def refresh_reusable_spool_images_task(limit=3):
+    """Cache a small number of official manufacturer preview images each maintenance cycle."""
+    if backup_in_progress():
+        return {"status": "backup-in-progress"}
+    from .reusable_spool_images import refresh_reusable_spool_images
+
+    return refresh_reusable_spool_images(limit=limit)
+
+
+@shared_task
 def refresh_reusable_spool_sources_task(limit=5):
     """Check a bounded batch of trusted spool manufacturer URLs without changing hardware specs."""
     if backup_in_progress():
@@ -248,6 +258,8 @@ def _queue_catalogue_maintenance(config):
     if config.check_images and getattr(settings, "SEED_CATALOGUE_IMAGES", True):
         seed_catalogue_images_task.delay(force_retry=True)
         queued.append("images")
+        refresh_reusable_spool_images_task.delay(limit=3)
+        queued.append("reusable-spool-images")
     return queued
 
 
