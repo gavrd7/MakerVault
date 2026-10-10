@@ -237,3 +237,22 @@ class ReusableSpoolApiTests(TestCase):
         model.refresh_from_db()
         self.assertEqual(str(model.nominal_tare_g), "182.50")
         self.assertEqual(ReusableSpoolDesign.objects.filter(owner=self.owner, catalog_entry=entry).count(), 1)
+
+    def test_catalogue_does_not_expose_remote_image_as_thumbnail(self):
+        from core.models import ReusableSpoolCatalogEntry
+        entry = ReusableSpoolCatalogEntry.objects.create(
+            key="no-hotlink-test", manufacturer="Example", name="Test",
+            design_type="manufacturer", image_url="https://images.example.org/unverified.jpg",
+        )
+        result = self.client.get("/api/printing/reusable-spool-manufacturers/", {"q": "no-hotlink-test"})
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.json()["total"], 1)
+        self.assertIsNone(result.json()["rows"][0]["image_url"])
+        self.assertFalse(result.json()["rows"][0]["image_cached"])
+        self.assertEqual(result.json()["rows"][0]["id"], str(entry.id))
+
+    def test_seeded_catalogue_is_present_after_migration(self):
+        from core.models import ReusableSpoolCatalogEntry
+        self.assertTrue(ReusableSpoolCatalogEntry.objects.filter(key="bambu-basic").exists())
+        self.assertTrue(ReusableSpoolCatalogEntry.objects.filter(key="esun-espool-plus").exists())
+        self.assertTrue(ReusableSpoolCatalogEntry.objects.filter(key="sunlu-third-generation").exists())
