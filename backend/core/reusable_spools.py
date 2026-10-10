@@ -128,7 +128,7 @@ def fill_reel(item, data):
 def designs(request):
     if request.method == "GET":
         return JsonResponse({"rows": [serialise_design(x) for x in ReusableSpoolDesign.objects.filter(owner=request.user)]})
-    denied = permission(request, "add_reusablespooldesign")
+    denied = permission(request, "add_filamentproduct")
     if denied:
         return denied
     try:
@@ -149,7 +149,7 @@ def design_detail(request, design_id):
     item = ReusableSpoolDesign.objects.filter(owner=request.user, pk=design_id).first()
     if item is None:
         return error("Design not found.", 404)
-    denied = permission(request, "delete_reusablespooldesign" if request.method == "DELETE" else "change_reusablespooldesign")
+    denied = permission(request, "change_filamentproduct" if request.method == "DELETE" else "change_filamentproduct")
     if denied:
         return denied
     if request.method == "DELETE":
@@ -172,7 +172,7 @@ def reels(request):
     if request.method == "GET":
         qs = ReusableSpool.objects.filter(owner=request.user).select_related("design")
         return JsonResponse({"rows": [serialise_reel(x) for x in qs]})
-    denied = permission(request, "add_reusablespool")
+    denied = permission(request, "add_spool")
     if denied:
         return denied
     try:
@@ -193,7 +193,7 @@ def reel_detail(request, reel_id):
     item = ReusableSpool.objects.filter(owner=request.user, pk=reel_id).select_related("design").first()
     if item is None:
         return error("Reusable spool not found.", 404)
-    denied = permission(request, "delete_reusablespool" if request.method == "DELETE" else "change_reusablespool")
+    denied = permission(request, "delete_spool" if request.method == "DELETE" else "change_spool")
     if denied:
         return denied
     if request.method == "DELETE":
