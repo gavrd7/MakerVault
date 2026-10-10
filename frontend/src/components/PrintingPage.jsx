@@ -248,10 +248,11 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       models={data?.models || []}
       spools={data?.spools || []}
       locations={data?.locations || []}
-      canAdd={Boolean(config?.permissions?.add_reusablespool)}
-      canChange={Boolean(config?.permissions?.change_reusablespool)}
-      canDelete={Boolean(config?.permissions?.delete_reusablespool)}
-      canAddDesign={Boolean(config?.permissions?.add_reusablespooldesign)}
+      canAdd={Boolean(config?.permissions?.add_spool)}
+      canChange={Boolean(config?.permissions?.change_spool)}
+      canDelete={Boolean(config?.permissions?.delete_spool)}
+      canAddDesign={Boolean(config?.permissions?.add_filament)}
+      canChangeDesign={Boolean(config?.permissions?.change_filament)}
     />;
   }
 
@@ -1532,7 +1533,7 @@ function PrinterModal({ manufacturers, models, locations, onClose, onSaved }) {
 
 
 
-function ReusableSpoolsPage({ onBack, models, spools, locations, canAdd, canChange, canDelete, canAddDesign }) {
+function ReusableSpoolsPage({ onBack, models, spools, locations, canAdd, canChange, canDelete, canAddDesign, canChangeDesign }) {
   const [designs, setDesigns] = useState([]);
   const [reels, setReels] = useState([]);
   const [error, setError] = useState("");
@@ -1654,8 +1655,8 @@ function ReusableSpoolsPage({ onBack, models, spools, locations, canAdd, canChan
             {d.model_3d_id && <small>Linked 3D model: {models.find(m => m.id === d.model_3d_id)?.name || "Saved model"}</small>}
           </div>
           <div className="printingBadges">
-            {canChange && <button type="button" onClick={() => startDesign(d)}>Edit</button>}
-            {canDelete && <button type="button" className="dangerButton" onClick={() => remove("design", d)}>Delete</button>}
+            {canChangeDesign && <button type="button" onClick={() => startDesign(d)}>Edit</button>}
+            {canChangeDesign && <button type="button" className="dangerButton" onClick={() => remove("design", d)}>Delete</button>}
           </div>
         </article>)}
         {!designs.length && <div className="printingEmptyInline">No spool designs yet.</div>}
