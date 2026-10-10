@@ -2690,3 +2690,7 @@ a:focus-visible,
 .printingModelList .printingModelRow{grid-template-areas:"identity badges actions";align-content:center}
 @container (max-width:620px){.printingModelList .printingModelRow{grid-template-areas:"identity actions" "badges actions"!important}}
 @container (max-width:320px){.printingModelList .printingModelRow{grid-template-areas:"identity" "badges" "actions"!important}}
+
+.spoolCatalogueFilters{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:12px;padding:12px 16px;border-bottom:1px solid #29313c}
+.spoolCatalogueFilters label{min-width:0}
+@media(max-width:620px){.spoolCatalogueFilters{grid-template-columns:minmax(0,1fr)}}
