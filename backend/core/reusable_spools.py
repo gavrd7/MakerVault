@@ -155,7 +155,7 @@ def next_reusable_spool_code(owner):
     """Allocate the next owner-scoped physical-reel number, separate from SPL IDs."""
     max_number = 0
     for code in ReusableSpool.objects.filter(owner=owner, code__startswith="RSP-").values_list("code", flat=True):
-        match = re.fullmatch(r"RSP-(\\d+)", code)
+        match = re.fullmatch(r"RSP-(\d+)", code)
         if match:
             max_number = max(max_number, int(match.group(1)))
     return f"RSP-{max_number + 1:04d}"
