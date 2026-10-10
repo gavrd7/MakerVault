@@ -47,6 +47,7 @@ class Migration(migrations.Migration):
                 ("measured_tare_g", models.DecimalField(blank=True, decimal_places=2, max_digits=8, null=True)),
                 ("color_name", models.CharField(blank=True, max_length=80)),
                 ("material_override", models.CharField(blank=True, max_length=80)),
+                ("condition", models.CharField(choices=[("usable", "Usable"), ("damaged", "Damaged"), ("retired", "Retired")], default="usable", max_length=20)),
                 ("notes", models.TextField(blank=True)),
                 ("design", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="owned_spools", to="core.reusablespooldesign")),
                 ("filament_spool", models.OneToOneField(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name="reusable_reel", to="core.spool")),
@@ -58,5 +59,20 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="reusablespool",
             constraint=models.UniqueConstraint(fields=("owner", "code"), name="uniq_reusable_spool_code_per_owner"),
+        ),
+        migrations.CreateModel(
+            name="ReusableSpoolAssignmentEvent",
+            fields=[
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("id", models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
+                ("previous_filament_spool_id", models.UUIDField(blank=True, null=True)),
+                ("new_filament_spool_id", models.UUIDField(blank=True, null=True)),
+                ("previous_spool_code", models.CharField(blank=True, max_length=40)),
+                ("new_spool_code", models.CharField(blank=True, max_length=40)),
+                ("owner", models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name="reusable_spool_assignment_events", to=settings.AUTH_USER_MODEL)),
+                ("reel", models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name="assignment_events", to="core.reusablespool")),
+            ],
+            options={"ordering": ["-created_at"]},
         ),
     ]
