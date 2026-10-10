@@ -123,3 +123,39 @@ class ReusableSpoolApiTests(TestCase):
         self.assertEqual(history[0]["previous_spool_code"], "SP-102")
         self.assertEqual(history[0]["new_spool_code"], "")
 
+
+
+    def test_model_can_be_marked_as_reusable_spool_design(self):
+        from core.models import Model3D
+        model = Model3D.objects.create(owner=self.owner, name="Printed spool 200mm")
+        response = self._post(
+            "/api/printing/models/" + str(model.id) + "/reusable-spool-design/", {}
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(
+            ReusableSpoolDesign.objects.filter(owner=self.owner, model_3d=model).count(), 1
+        )
+        second = self._post(
+            "/api/printing/models/" + str(model.id) + "/reusable-spool-design/", {}
+        )
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(
+            ReusableSpoolDesign.objects.filter(owner=self.owner, model_3d=model).count(), 1
+        )
+        models_response = self.client.get("/api/printing/models/")
+        self.assertTrue(
+            next(row for row in models_response.json()["rows"] if row["id"] == str(model.id))["is_reusable_spool"]
+        )
+
+    def test_manufacturer_catalogue_import_does_not_duplicate_design(self):
+        catalogue = self.client.get("/api/printing/reusable-spool-manufacturers/")
+        self.assertEqual(catalogue.status_code, 200)
+        self.assertTrue(catalogue.json()["rows"])
+        entry = catalogue.json()["rows"][0]
+        first = self._post("/api/printing/reusable-spool-manufacturers/", {"key": entry["key"]})
+        self.assertEqual(first.status_code, 201, first.content)
+        again = self._post("/api/printing/reusable-spool-manufacturers/", {"key": entry["key"]})
+        self.assertEqual(again.status_code, 200, again.content)
+        self.assertEqual(ReusableSpoolDesign.objects.filter(owner=self.owner).count(), 1)
+        self.assertIsNone(first.json()["item"]["nominal_tare_g"])
+        self.assertIsNone(first.json()["item"]["max_dryer_temp_c"])
