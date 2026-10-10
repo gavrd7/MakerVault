@@ -2678,3 +2678,10 @@ a:focus-visible,
 .spoolColourControls label{min-width:0}
 .spoolColourControls input[type="color"]{min-height:43px;padding:4px 8px;cursor:pointer}
 @media(max-width:620px){.spoolColourControls{grid-template-columns:minmax(0,1fr)}}
+
+/* Arrange model actions and reusable flag in one compact right-aligned stack. */
+.printingModelList .printingModelRow>.modelActionsWithToggle{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:5px;align-self:center;justify-self:end;min-width:0}
+.modelActionsWithToggle .modelActionButtons{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px}
+.printingModelList .modelActionsWithToggle>.modelReusableSpoolRow{display:flex;align-self:flex-end;justify-content:flex-end;width:auto;margin:0;padding:0;border:0}
+@container (max-width:620px){.printingModelList .printingModelRow>.modelActionsWithToggle{max-width:175px;align-self:start;align-items:flex-end}.modelActionsWithToggle .modelActionButtons{justify-content:flex-end}}
+@container (max-width:320px){.printingModelList .printingModelRow>.modelActionsWithToggle{align-items:flex-start;justify-self:start;max-width:100%}.modelActionsWithToggle .modelActionButtons{justify-content:flex-start}.printingModelList .modelActionsWithToggle>.modelReusableSpoolRow{align-self:flex-start}}
