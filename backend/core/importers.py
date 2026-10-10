@@ -28,6 +28,8 @@ CATALOGUE_SOURCE_HOST_SUFFIXES = {
     "esun3d.com",
     "sunlu.com",
     "polymaker.com",
+    "fiberlogy.com",
+    "spectrumfilaments.com",
     "prusa3d.com",
     "anycubic.com",
     "flashforge.com",
