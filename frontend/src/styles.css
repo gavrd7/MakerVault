@@ -2698,3 +2698,5 @@ a:focus-visible,
 .spoolCatalogueRecord{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1}
 .spoolCatalogueRecord a{color:#a99cff;text-decoration:none;font-size:.85rem;overflow-wrap:anywhere;align-self:flex-start}
 .spoolCatalogueRecord a:hover{text-decoration:underline}
+
+.spoolCatalogueThumb{display:block;max-width:112px;width:100%;height:86px;object-fit:contain;border:1px solid #303b49;border-radius:8px;background:#f6f7f8;margin-bottom:5px}
