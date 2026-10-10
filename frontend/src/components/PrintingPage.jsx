@@ -1543,7 +1543,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, c
   const [form, setForm] = useState("");
   const [editing, setEditing] = useState(null);
   const [designForm, setDesignForm] = useState({ name: "", design_type: "printed", manufacturer: "", material: "", nominal_tare_g: "", max_dryer_temp_c: "", temperature_source: "", source_url: "", outer_diameter_mm: "", width_mm: "", hub_diameter_mm: "", capacity_g: "", description: "", model_3d_id: "" });
-  const [reelForm, setReelForm] = useState({ code: "", design_id: "", measured_tare_g: "", color_name: "", material_override: "", storage_location_id: "", filament_spool_id: "", notes: "" });
+  const [reelForm, setReelForm] = useState({ code: "", design_id: "", measured_tare_g: "", color_name: "", material_override: "", condition: "usable", storage_location_id: "", filament_spool_id: "", notes: "" });
 
   async function load() {
     try {
@@ -1569,7 +1569,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, c
 
   function startReel(item = null) {
     setEditing(item);
-    setReelForm(item ? Object.fromEntries(Object.entries(item).map(([k, v]) => [k, v ?? ""])) : { code: "", design_id: designs[0]?.id || "", measured_tare_g: "", color_name: "", material_override: "", storage_location_id: "", filament_spool_id: "", notes: "" });
+    setReelForm(item ? Object.fromEntries(Object.entries(item).map(([k, v]) => [k, v ?? ""])) : { code: "", design_id: designs[0]?.id || "", measured_tare_g: "", color_name: "", material_override: "", condition: "usable", storage_location_id: "", filament_spool_id: "", notes: "" });
     setForm("reel");
   }
 
@@ -1638,6 +1638,8 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, c
           <div><strong>{reel.code} · {reel.design_name}</strong>
             <small>{[reel.color_name, reel.material_override].filter(Boolean).join(" · ") || "No material/colour recorded"}</small>
             <small>Tare: {reel.effective_tare_g == null ? "Unknown" : reel.effective_tare_g + " g"}{reel.measured_tare_g != null ? " (measured)" : " (design default)"} · {reel.filament_spool_id ? "Loaded with filament" : "Unassigned"}</small>
+            <small>Condition: {reel.condition || "usable"}{reel.assignment_history?.length ? " · " + reel.assignment_history.length + " recent assignment change(s)" : ""}</small>
+            {(reel.assignment_history || []).slice(0, 3).map((event, i) => <small key={i}>{new Date(event.occurred_at).toLocaleDateString()} · {event.previous_spool_code || "Empty"} → {event.new_spool_code || "Empty"}</small>)}
           </div>
           <div className="printingBadges">
             {canChange && <button type="button" onClick={() => startReel(reel)}>Edit</button>}
@@ -1688,6 +1690,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, c
           {field("Measured empty weight (g)", "measured_tare_g", "number")}
           {field("Colour", "color_name")}
           {field("Printed material", "material_override")}
+          <label>Condition<select value={reelForm.condition || "usable"} onChange={e => setReelForm(p => ({ ...p, condition: e.target.value }))}><option value="usable">Usable</option><option value="damaged">Damaged</option><option value="retired">Retired</option></select></label>
           <label>Storage location<select value={reelForm.storage_location_id} onChange={e => setReelForm(p => ({ ...p, storage_location_id: e.target.value }))}><option value="">None</option>{locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
           <label>Assigned filament stock<select value={reelForm.filament_spool_id} onChange={e => setReelForm(p => ({ ...p, filament_spool_id: e.target.value }))}><option value="">Unassigned</option>{spools.map(spool => <option key={spool.id} value={spool.id}>{spool.spool_id} · {spool.filament}</option>)}</select></label>
           {field("Notes", "notes")}
