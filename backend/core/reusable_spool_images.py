@@ -54,13 +54,10 @@ def official_image_candidate(entry, html, source_url):
 def refresh_reusable_spool_images(*, limit=3, retry_days=7):
     now = timezone.now()
     saved = checked = failed = skipped = 0
-    qs = ReusableSpoolCatalogEntry.objects.exclude(source_url="").filter(
-        image__isnull=True,
-    ).order_by("updated_at", "key")
-    # ImageField may be an empty string rather than NULL.
+    # ImageField can be stored as NULL or an empty string.
     qs = ReusableSpoolCatalogEntry.objects.exclude(source_url="").order_by("updated_at", "key")
     for item in qs:
-        if saved + checked >= max(0, min(int(limit), 10)):
+        if checked >= max(0, min(int(limit), 10)):
             break
         if item.image:
             continue
