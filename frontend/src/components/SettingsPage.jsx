@@ -138,6 +138,7 @@ export default function SettingsPage({ config, onBackupStarted }) {
           check_board_data: form.check_board_data,
           check_printer_data: form.check_printer_data,
           check_filament_data: form.check_filament_data,
+          check_reusable_spool_sources: form.check_reusable_spool_sources,
           check_images: form.check_images,
         },
       });
@@ -474,6 +475,10 @@ export default function SettingsPage({ config, onBackupStarted }) {
           <label className="settingsToggle">
             <div><strong>Filament catalogue</strong><small>Refresh missing metadata and provenance for saved SpoolmanDB-backed filament products without overwriting your edits.</small></div>
             <input type="checkbox" checked={form.check_filament_data !== false} onChange={e => set("check_filament_data", e.target.checked)} />
+          </label>
+          <label className="settingsToggle">
+            <div><strong>Reusable spool sources</strong><small>Verify a small batch of official reusable spool reference links on the existing schedule. This does not overwrite verified specifications or your own measurements.</small></div>
+            <input type="checkbox" checked={form.check_reusable_spool_sources !== false} onChange={e => set("check_reusable_spool_sources", e.target.checked)} />
           </label>
           <label className="settingsToggle">
             <div><strong>Catalogue images</strong><small>Retry missing board, component, printer and filament images on the saved maintenance cadence.</small></div>
