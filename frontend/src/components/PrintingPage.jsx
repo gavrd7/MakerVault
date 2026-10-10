@@ -1797,8 +1797,8 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
       <div className="printingList">
         {filteredManufacturerDesigns.map(item => <article className="printingListRow" key={item.key}>
           <div><strong>{item.name}</strong><small>{item.manufacturer} · Manufacturer reference; check actual tare and drying tolerance before use.</small></div>
-          {canAddDesign && <button type="button" disabled={working || designs.some(d => d.name === item.name && d.manufacturer === item.manufacturer)} onClick={() => importManufacturerDesign(item)}>
-            {designs.some(d => d.name === item.name && d.manufacturer === item.manufacturer) ? "Added to inventory" : "Add to inventory"}
+          {canAddDesign && <button type="button" disabled={working || designs.some(d => d.catalog_entry_id === item.id)} onClick={() => importManufacturerDesign(item)}>
+            {designs.some(d => d.catalog_entry_id === item.id) ? "Added to inventory" : "Add to inventory"}
           </button>}
         </article>)}
         {!filteredManufacturerDesigns.length && <div className="printingEmptyInline">No catalogue entries match these filters.</div>}
