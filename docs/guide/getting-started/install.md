@@ -55,6 +55,10 @@ ghcr.io/gavrd7/makervault:latest
 
 You can pin a specific release later with `MAKERVAULT_IMAGE` if you prefer not to follow `latest`.
 
+### Optional setup helper
+
+The main repository already includes `python3 scripts/generate_env_secrets.py`. It creates `.env` from the example if needed and generates only `DJANGO_SECRET_KEY` and `POSTGRES_PASSWORD` when absent or placeholders, preserving user-defined settings and existing secrets. Use it when installing from a checkout that contains the script. For a new installation, the browser-based first-run administrator wizard is the recommended way to create the first administrator.
+
 ## 3. Create your configuration
 
 Before editing, read [Configure your .env file](environment.md) for an explanation of the entries, secret generation and what must change. Read [Choose your storage](storage.md) to decide between Docker-managed volumes and host folders.
@@ -62,10 +66,12 @@ Before editing, read [Configure your .env file](environment.md) for an explanati
 **Existing installation?** Keep your current `.env`; do not copy the example over it or regenerate its secrets. Use the [update guide](../administration/updates.md).
 
 ```bash
-python3 scripts/generate_env_secrets.py
+cp .env.example .env
+chmod 600 .env
+python3 -c "import secrets; print(secrets.token_urlsafe(64))"
 ```
 
-The setup script creates `.env` from the example, generates distinct Django and PostgreSQL secrets, and restricts file permissions to the current user. Rerunning it preserves already configured secrets and all other settings. Do not reuse production storage or database credentials for a test installation.
+Copy the generated random value. It is your **Django secret key**, not your login password or file-encryption key. Generate a second value for the database password by running the Python command again.
 
 Find your server's network address:
 
@@ -97,7 +103,7 @@ Leave the storage values at their defaults for named volumes. Leave `DJANGO_DEBU
 To pin MakerVault to one published version, optionally add:
 
 ```dotenv
-MAKERVAULT_IMAGE=ghcr.io/gavrd7/makervault:1.0.2
+MAKERVAULT_IMAGE=ghcr.io/gavrd7/makervault:1.1.0
 ```
 
 If that setting is omitted, Compose uses `ghcr.io/gavrd7/makervault:latest`.
@@ -116,7 +122,7 @@ sudo docker compose logs --tail=100 -f makervault
 
 The MakerVault application image is downloaded from GHCR; PostgreSQL and Redis are pulled from their upstream registries. The server does **not** build the MakerVault application in this route.
 
-Startup applies database changes, creates roles and starter catalogues, and creates the private-file encryption key in its separate persistent storage.
+Startup applies database changes, prepares the required roles and creates the private-file encryption key in its separate persistent storage. Starter catalogue seeding and enrichment can continue in the background rather than blocking access to the web interface.
 
 Press **Ctrl+C** to stop following logs; this does not stop MakerVault.
 
@@ -134,17 +140,17 @@ This builds the checked-out source using the repository Dockerfile and tags the 
 
 The source-build route changes only how the MakerVault application image is obtained. It uses the **same** PostgreSQL database, Redis data, media, encryption keys, backups, ports and `.env` settings as the GHCR route.
 
-## 5. Create the administrator
+## 5. Set up the first administrator
 
-When the app is running:
+MakerVault v1.1.0 provides a browser-based first-run setup wizard when no administrator exists. Leave `MAKERVAULT_ADMIN_PASSWORD` empty in `.env` to use it. Open MakerVault in your browser at the address shown below: the first-run wizard should appear automatically. On the Docker host, retrieve the required token:
 
 ```bash
-sudo docker compose exec makervault python manage.py createsuperuser
+sudo docker compose exec -u makervault makervault python manage.py first_run_token
 ```
 
-Follow the username, email and password prompts. Choose a unique password of at least 12 characters. Password typing is hidden.
+The token expires after 30 minutes. Do not share it. Enter it in the wizard along with your chosen username, email address, password and matching password confirmation. See [First sign-in](first-sign-in.md#first-administrator-on-a-new-installation) for full details, including recovery if a password is mistyped.
 
-There is no universal default login.
+If you deliberately want terminal-based setup instead, `sudo docker compose exec makervault python manage.py createsuperuser` remains available. There is no universal default login.
 
 ## 6. Open MakerVault
 
@@ -156,7 +162,7 @@ http://192.168.1.50:8765
 
 Replace the IP with your server address. If you changed `MAKERVAULT_PORT`, use that port in the URL and trusted origins.
 
-**Success check:** the sign-in page loads, your administrator account works, and the Dashboard appears. Continue with [First sign-in](first-sign-in.md).
+**Success check:** the first-run wizard appears if no administrator exists; after setup, your administrator account can sign in and the Dashboard appears. Continue with [First sign-in](first-sign-in.md).
 
 ## Stop, start and apply configuration changes
 
