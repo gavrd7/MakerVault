@@ -1558,6 +1558,8 @@ function PrinterModal({ manufacturers, models, locations, onClose, onSaved }) {
 function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, filamentProducts, materialOptions, canAdd, canChange, canDelete, canAddDesign, canChangeDesign }) {
   const [designs, setDesigns] = useState([]);
   const [manufacturerDesigns, setManufacturerDesigns] = useState([]);
+  const [catalogueQuery, setCatalogueQuery] = useState("");
+  const [catalogueMaker, setCatalogueMaker] = useState("");
   const [reels, setReels] = useState([]);
   const [densityProductId, setDensityProductId] = useState("");
   const [error, setError] = useState("");
@@ -1640,6 +1642,13 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
   function acceptManufacturer() {
     if (matchedManufacturer) setDesignForm(p => ({ ...p, manufacturer: matchedManufacturer }));
   }
+
+  const catalogueManufacturers = [...new Set(manufacturerDesigns.map(item => item.manufacturer).filter(Boolean))].sort();
+  const filteredManufacturerDesigns = manufacturerDesigns.filter(item =>
+    (!catalogueMaker || item.manufacturer === catalogueMaker) &&
+    (!catalogueQuery || [item.name, item.manufacturer, item.description, item.material, item.key]
+      .filter(Boolean).join(" ").toLowerCase().includes(catalogueQuery.trim().toLowerCase()))
+  );
 
   const selectedModel = models.find(m => m.id === designForm.model_3d_id);
   const geometry = newestGeometryAnalysis(selectedModel);
@@ -1781,13 +1790,18 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
     </section>
     <section className="panel printingSection">
       <div className="panelHead"><h3>Manufacturer spool catalogue</h3></div>
+      <div className="spoolCatalogueFilters">
+        <label>Search catalogue<input value={catalogueQuery} onChange={e => setCatalogueQuery(e.target.value)} placeholder="Spool, model, manufacturer…" /></label>
+        <label>Manufacturer<select value={catalogueMaker} onChange={e => setCatalogueMaker(e.target.value)}><option value="">All manufacturers</option>{catalogueManufacturers.map(name => <option key={name} value={name}>{name}</option>)}</select></label>
+      </div>
       <div className="printingList">
-        {manufacturerDesigns.map(item => <article className="printingListRow" key={item.key}>
+        {filteredManufacturerDesigns.map(item => <article className="printingListRow" key={item.key}>
           <div><strong>{item.name}</strong><small>{item.manufacturer} · Manufacturer reference; check actual tare and drying tolerance before use.</small></div>
           {canAddDesign && <button type="button" disabled={working || designs.some(d => d.name === item.name && d.manufacturer === item.manufacturer)} onClick={() => importManufacturerDesign(item)}>
             {designs.some(d => d.name === item.name && d.manufacturer === item.manufacturer) ? "Added to inventory" : "Add to inventory"}
           </button>}
         </article>)}
+        {!filteredManufacturerDesigns.length && <div className="printingEmptyInline">No catalogue entries match these filters.</div>}
       </div>
     </section>
     <section className="panel printingSection">
