@@ -1560,6 +1560,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
   const [manufacturerDesigns, setManufacturerDesigns] = useState([]);
   const [catalogueQuery, setCatalogueQuery] = useState("");
   const [catalogueMaker, setCatalogueMaker] = useState("");
+  const [catalogueImage, setCatalogueImage] = useState(null);
   const [reels, setReels] = useState([]);
   const [densityProductId, setDensityProductId] = useState("");
   const [error, setError] = useState("");
@@ -1797,7 +1798,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
       <div className="printingList">
         {filteredManufacturerDesigns.map(item => <article className="printingListRow" key={item.key}>
           <div className="spoolCatalogueRecord">
-            {item.image_url && <img className="spoolCatalogueThumb" src={item.image_url} alt={item.name} loading="lazy" />}
+            {item.image_url && <button type="button" className="spoolCatalogueImageButton" onClick={() => setCatalogueImage(item)} aria-label={"View " + item.name + " image"}><img className="spoolCatalogueThumb" src={item.image_url} alt={item.name} loading="lazy" /></button>}
             <strong>{item.name}</strong>
             <small>{item.manufacturer} · {item.design_type === "printed" ? "Printable design" : "Manufacturer-made"}{item.verified ? " · Source documented" : " · Unverified"}</small>
             <small>{item.nominal_tare_g ? "Tare: " + item.nominal_tare_g + " g" : "Tare: Unknown"} · {item.outer_diameter_mm && item.width_mm ? item.outer_diameter_mm + " × " + item.width_mm + " mm" : "Dimensions: Unknown"} · {item.max_dryer_temp_c != null ? "Rated temperature: " + item.max_dryer_temp_c + "°C" : "Dryer rating: Unknown"}</small>
@@ -1829,6 +1830,10 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
       </div>
     </section>
 
+    {catalogueImage && <Modal title={catalogueImage.name} onClose={() => setCatalogueImage(null)}>
+      <div className="spoolCatalogueImageViewer"><img src={catalogueImage.image_url} alt={catalogueImage.name} /></div>
+      {catalogueImage.source_url && <a href={catalogueImage.source_url} target="_blank" rel="noreferrer noopener">Manufacturer reference ↗</a>}
+    </Modal>}
     {form && <Modal title={editing ? "Edit " + (form === "design" ? "spool design" : "reusable spool") : "Add " + (form === "design" ? "spool design" : "reusable spool")} onClose={() => setForm("")}>
       <form className="formGrid" onSubmit={submit}>
         {error && <div className="formError full" role="alert">{error}</div>}
