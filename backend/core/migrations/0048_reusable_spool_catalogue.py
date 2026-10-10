@@ -33,6 +33,15 @@ def seed_reusable_catalogue(apps, schema_editor):
         )
 
 
+def link_existing_designs(apps, schema_editor):
+    Entry = apps.get_model("core", "ReusableSpoolCatalogEntry")
+    Design = apps.get_model("core", "ReusableSpoolDesign")
+    for entry in Entry.objects.all():
+        Design.objects.filter(
+            catalog_entry__isnull=True, name=entry.name, manufacturer=entry.manufacturer
+        ).update(catalog_entry=entry)
+
+
 class Migration(migrations.Migration):
     dependencies = [("core", "0047_reusable_spool_hex_color")]
 
@@ -70,4 +79,5 @@ class Migration(migrations.Migration):
                                     related_name="personal_designs", to="core.reusablespoolcatalogentry"),
         ),
         migrations.RunPython(seed_reusable_catalogue, migrations.RunPython.noop),
+        migrations.RunPython(link_existing_designs, migrations.RunPython.noop),
     ]
