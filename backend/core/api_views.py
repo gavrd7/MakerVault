@@ -2,7 +2,7 @@ import hashlib
 import json
 import re
 from pathlib import Path
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
@@ -1271,6 +1271,16 @@ def _parse_date(value, field_name):
         return date.fromisoformat(raw)
     except ValueError as exc:
         raise ValidationError({field_name: "Enter a valid date."}) from exc
+
+
+def _parse_last_dried_date(value):
+    """Accept a local calendar date, storing it in the existing timestamp field."""
+    dried = _parse_date(value, "last_dried_at")
+    if dried is None:
+        return None
+    if dried > timezone.localdate():
+        raise ValidationError({"last_dried_at": "Last dried cannot be a future date."})
+    return timezone.make_aware(datetime.combine(dried, datetime.min.time()))
 
 
 def _normalise_tags(value):
@@ -4154,6 +4164,7 @@ def _serialise_spool(spool):
         "diameter_mm": _float(filament.diameter_mm),
         "initial_weight_g": _float(spool.initial_weight_g),
         "remaining_weight_g": _float(spool.remaining_weight_g),
+        "last_dried_at": timezone.localtime(spool.last_dried_at).date().isoformat() if spool.last_dried_at else None,
         "purchase_cost": _float(spool.purchase_cost),
         "currency": spool.currency,
         "cost_per_g": _float(_spool_cost_per_g(spool)),
@@ -5552,6 +5563,7 @@ def printing_spools(request):
             location=str(payload.get("location") or "").strip() if not (storage_location or assigned_printer) else "",
             status=str(payload.get("status") or "sealed"),
             opened_on=_parse_date(payload.get("opened_on"), "opened_on"),
+            last_dried_at=_parse_last_dried_date(payload.get("last_dried_at")),
             notes=str(payload.get("notes") or "").strip(),
         )
         item.full_clean()
@@ -6016,6 +6028,8 @@ def printing_spool_detail(request, spool_id):
                 setattr(item, field, _parse_decimal(payload.get(field), field))
         if "opened_on" in payload:
             item.opened_on = _parse_date(payload.get("opened_on"), "opened_on")
+        if "last_dried_at" in payload:
+            item.last_dried_at = _parse_last_dried_date(payload.get("last_dried_at"))
         item.full_clean()
         item.save()
         return JsonResponse({"item": _serialise_spool(item)})
