@@ -1610,7 +1610,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, c
   }
 
   const field = (label, key, type = "text") => <label key={key}>{label}
-    <input type={type} value={(form === "design" ? designForm : reelForm)[key] ?? ""} onChange={e =>
+    <input type={type} step={type === "number" ? "any" : undefined} value={(form === "design" ? designForm : reelForm)[key] ?? ""} onChange={e =>
       form === "design" ? setDesignForm(p => ({ ...p, [key]: e.target.value })) : setReelForm(p => ({ ...p, [key]: e.target.value }))
     } />
   </label>;
