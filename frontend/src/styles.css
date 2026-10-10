@@ -2685,3 +2685,8 @@ a:focus-visible,
 .printingModelList .modelActionsWithToggle>.modelReusableSpoolRow{display:flex;align-self:flex-end;justify-content:flex-end;width:auto;margin:0;padding:0;border:0}
 @container (max-width:620px){.printingModelList .printingModelRow>.modelActionsWithToggle{max-width:175px;align-self:start;align-items:flex-end}.modelActionsWithToggle .modelActionButtons{justify-content:flex-end}}
 @container (max-width:320px){.printingModelList .printingModelRow>.modelActionsWithToggle{align-items:flex-start;justify-self:start;max-width:100%}.modelActionsWithToggle .modelActionButtons{justify-content:flex-start}.printingModelList .modelActionsWithToggle>.modelReusableSpoolRow{align-self:flex-start}}
+
+/* Model toggle now belongs inside actions, so no second grid track is required. */
+.printingModelList .printingModelRow{grid-template-areas:"identity badges actions";align-content:center}
+@container (max-width:620px){.printingModelList .printingModelRow{grid-template-areas:"identity actions" "badges actions"!important}}
+@container (max-width:320px){.printingModelList .printingModelRow{grid-template-areas:"identity" "badges" "actions"!important}}
