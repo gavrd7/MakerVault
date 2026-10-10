@@ -823,10 +823,10 @@ function ModelLibraryPage({ models, files, printers, projects, canAddModel, canC
             </div>
             <div className="printingLibraryActions">
               {hasViewableModelAsset(model) && <button className="primary" type="button" onClick={() => setViewerModel(model)}>View 3D</button>}
-              {canChangeModel && <label className="modelReusableSpoolToggle"><input type="checkbox" checked={Boolean(model.is_reusable_spool)} disabled={reusableModelBusy === model.id} onChange={e => toggleReusableModel(model, e.target.checked)} /> Reusable spool</label>}
               {canChangeModel && <button onClick={() => setManageModel(model)}>Manage</button>}
               {canDeleteModel && <button className="dangerButton" type="button" onClick={() => setDeleteModel(model)}>Delete</button>}
             </div>
+            <div className="modelReusableSpoolRow">{canChangeModel && <label className="modelReusableSpoolToggle"><input type="checkbox" checked={Boolean(model.is_reusable_spool)} disabled={reusableModelBusy === model.id} onChange={e => toggleReusableModel(model, e.target.checked)} /> Reusable spool</label>}</div>
           </article>;
         })}
         {!rows.length && <div className="printingEmptyInline">{term ? "No models match this search." : "No 3D models yet."}</div>}
@@ -1708,7 +1708,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
         {manufacturerDesigns.map(item => <article className="printingListRow" key={item.key}>
           <div><strong>{item.name}</strong><small>{item.manufacturer} · Manufacturer reference; check actual tare and drying tolerance before use.</small></div>
           {canAddDesign && <button type="button" disabled={working || designs.some(d => d.name === item.name && d.manufacturer === item.manufacturer)} onClick={() => importManufacturerDesign(item)}>
-            {designs.some(d => d.name === item.name && d.manufacturer === item.manufacturer) ? "In your designs" : "Add to my designs"}
+            {designs.some(d => d.name === item.name && d.manufacturer === item.manufacturer) ? "Added to inventory" : "Add to inventory"}
           </button>}
         </article>)}
       </div>
@@ -1735,8 +1735,8 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
       <form className="formGrid" onSubmit={submit}>
         {form === "design" ? <>
           {field("Design name", "name")}
-          <label>Type<select value={designForm.design_type} onChange={e => setDesignForm(p => ({ ...p, design_type: e.target.value }))}><option value="printed">3D printed</option><option value="manufacturer">Manufacturer-made</option></select></label>
-          {field("Manufacturer", "manufacturer")}
+          <label>Type<select value={designForm.design_type} onChange={e => setDesignForm(p => ({ ...p, design_type: e.target.value, ...(e.target.value === "printed" ? { manufacturer: "" } : {}) }))}><option value="printed">3D printed</option><option value="manufacturer">Manufacturer-made</option></select></label>
+          {designForm.design_type === "manufacturer" && field("Manufacturer", "manufacturer")}
           <label>Material
             <select value={designForm.material || ""} onChange={e => { setDesignForm(p => ({ ...p, material: e.target.value })); setDensityProductId(""); }}>
               <option value="">Choose known material</option>
@@ -1769,12 +1769,12 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
               const d = [dimensions.x, dimensions.y, dimensions.z].map(Number).sort((a,b) => a-b);
               applyGeometryDimension("outer_diameter_mm", d[2]);
               applyGeometryDimension("width_mm", d[0]);
-            }}>Suggest outer diameter and width from bounds</button>
+            }}>Pull estimated spool data from model</button>
           </div>}
           {field("Hub / bore diameter (mm)", "hub_diameter_mm", "number")}
           {field("Capacity (g)", "capacity_g", "number")}
           <label>Description<textarea rows="3" value={designForm.description || ""} onChange={e => setDesignForm(p => ({ ...p, description: e.target.value }))}/></label>
-          <label>3D model (STL/3MF in Model Library)<select value={designForm.model_3d_id} onChange={e => setDesignForm(p => ({ ...p, model_3d_id: e.target.value }))}><option value="">Not linked</option>{models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
+          <label>3D model (STL/3MF in Model Library)<select value={designForm.model_3d_id} onChange={e => { const model = models.find(m => m.id === e.target.value); setDesignForm(p => ({ ...p, model_3d_id: e.target.value, ...(p.design_type === "printed" && model ? { name: model.name, manufacturer: "" } : {}) })); }}><option value="">Not linked</option>{models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
         </> : <>
           {field("Spool ID", "code")}
           <label>Reusable spool design<select required value={reelForm.design_id} onChange={e => setReelForm(p => ({ ...p, design_id: e.target.value }))}>{designs.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
