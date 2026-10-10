@@ -2669,3 +2669,6 @@ a:focus-visible,
 
 @container (max-width:620px){.printingModelList .printingModelRow{grid-template-areas:"identity actions" "badges reusable"!important}.printingModelRow>.modelReusableSpoolRow{justify-self:end}}
 @container (max-width:320px){.printingModelList .printingModelRow{grid-template-areas:"identity" "badges" "actions" "reusable"!important}.printingModelRow>.modelReusableSpoolRow{justify-self:start;justify-content:flex-start}}
+
+.manufacturerMatchHint{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:7px;font-size:.84rem}
+.manufacturerMatchHint button{padding:3px 8px;font-size:inherit;min-height:30px}
