@@ -38,7 +38,8 @@ def link_existing_designs(apps, schema_editor):
     Design = apps.get_model("core", "ReusableSpoolDesign")
     for entry in Entry.objects.all():
         Design.objects.filter(
-            catalog_entry__isnull=True, name=entry.name, manufacturer=entry.manufacturer
+            catalog_entry__isnull=True, name=entry.name, manufacturer=entry.manufacturer,
+            source_url=entry.source_url,
         ).update(catalog_entry=entry)
 
 
