@@ -755,6 +755,22 @@ function ModelLibraryPage({ models, files, printers, projects, canAddModel, canC
   const [manageModel, setManageModel] = useState(null);
   const [viewerModel, setViewerModel] = useState(null);
   const [deleteModel, setDeleteModel] = useState(null);
+  const [reusableModelBusy, setReusableModelBusy] = useState("");
+
+  async function toggleReusableModel(model, enabled) {
+    setReusableModelBusy(model.id);
+    try {
+      await apiFetch("/api/printing/models/" + model.id + "/reusable-spool-design/", {
+        method: enabled ? "POST" : "DELETE",
+      });
+      await onChanged();
+    } catch (err) {
+      window.alert(err.message);
+    } finally {
+      setReusableModelBusy("");
+    }
+  }
+
 
   async function refreshSelectedModel(modelId, setter) {
     const fresh = await onChanged();
@@ -805,6 +821,7 @@ function ModelLibraryPage({ models, files, printers, projects, canAddModel, canC
             </div>
             <div className="printingLibraryActions">
               {hasViewableModelAsset(model) && <button className="primary" type="button" onClick={() => setViewerModel(model)}>View 3D</button>}
+              {canChangeModel && <label className="modelReusableSpoolToggle"><input type="checkbox" checked={Boolean(model.is_reusable_spool)} disabled={reusableModelBusy === model.id} onChange={e => toggleReusableModel(model, e.target.checked)} /> Reusable spool</label>}
               {canChangeModel && <button onClick={() => setManageModel(model)}>Manage</button>}
               {canDeleteModel && <button className="dangerButton" type="button" onClick={() => setDeleteModel(model)}>Delete</button>}
             </div>
@@ -2889,6 +2906,7 @@ function ModelModal({ projects, canUpload, onClose, onSaved }) {
     tags: "",
     revision_version: "1.0",
     revision_notes: "",
+    is_reusable_spool: false,
   });
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -2910,9 +2928,11 @@ function ModelModal({ projects, canUpload, onClose, onSaved }) {
         const body = new FormData();
         for (const [key, value] of Object.entries(form)) body.append(key, value ?? "");
         body.append("file", file);
-        await apiFetch("/api/printing/models/", { method: "POST", body });
+        const created = await apiFetch("/api/printing/models/", { method: "POST", body });
+        if (form.is_reusable_spool) await apiFetch("/api/printing/models/" + created.item.id + "/reusable-spool-design/", { method: "POST" });
       } else {
-        await apiFetch("/api/printing/models/", { method: "POST", body: form });
+        const created = await apiFetch("/api/printing/models/", { method: "POST", body: form });
+        if (form.is_reusable_spool) await apiFetch("/api/printing/models/" + created.item.id + "/reusable-spool-design/", { method: "POST" });
       }
       await onSaved();
     } catch (err) {
@@ -2938,6 +2958,7 @@ function ModelModal({ projects, canUpload, onClose, onSaved }) {
       <label>Source URL<input type="url" value={form.source_url} onChange={e => set("source_url", e.target.value)} /></label>
       <label>Licence<input value={form.license} onChange={e => set("license", e.target.value)} placeholder="CC BY 4.0, personal use…" /></label>
       <label className="full">Tags<input value={form.tags} onChange={e => set("tags", e.target.value)} placeholder="Comma-separated" /></label>
+      <label className="full"><input type="checkbox" checked={form.is_reusable_spool} onChange={e => set("is_reusable_spool", e.target.checked)} /> Reusable spool design (also add to reusable spool catalogue)</label>
       <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy ? file ? "Uploading…" : "Saving…" : file ? "Upload & add model" : "Add model"}</button></div>
     </form>
   </Modal>;
