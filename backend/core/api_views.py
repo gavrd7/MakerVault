@@ -4014,6 +4014,7 @@ def _serialise_printing_model(model):
         "project_id": str(model.project_id) if model.project_id else None,
         "project": model.project.name if model.project else "",
         "revision_count": len(revisions),
+        "is_reusable_spool": model.reusable_spool_designs.exists(),
         "revisions": revisions,
         "updated_at": model.updated_at.isoformat(),
     }

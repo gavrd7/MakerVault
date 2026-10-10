@@ -1,7 +1,13 @@
 from django.urls import path
-from . import api_views, printed_parts, camera_views
+from . import api_views, printed_parts, camera_views, reusable_spools
 
 urlpatterns = [
+    path("printing/reusable-spool-manufacturers/", reusable_spools.manufacturer_catalogue, name="api-reusable-spool-manufacturers"),
+    path("printing/reusable-spool-designs/", reusable_spools.designs, name="api-reusable-spool-designs"),
+    path("printing/reusable-spool-designs/<uuid:design_id>/", reusable_spools.design_detail, name="api-reusable-spool-design-detail"),
+    path("printing/models/<uuid:model_id>/reusable-spool-design/", reusable_spools.model_design, name="api-model-reusable-spool-design"),
+    path("printing/reusable-spools/", reusable_spools.reels, name="api-reusable-spools"),
+    path("printing/reusable-spools/<uuid:reel_id>/", reusable_spools.reel_detail, name="api-reusable-spool-detail"),
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/cameras/", camera_views.camera_sources),
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/cameras/discover/", camera_views.camera_discover),
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/cameras/<str:camera_id>/remove/", camera_views.camera_source_remove),
