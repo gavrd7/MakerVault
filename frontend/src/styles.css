@@ -2660,3 +2660,9 @@ a:focus-visible,
 .spoolRowActions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-left:auto}
 .spoolRowActions button{max-width:100%;white-space:normal}
 @media(max-width:720px){.spoolRowActions{width:100%;justify-content:flex-start;margin:12px 0 0}.spoolRowActions button{flex:0 1 auto}.spoolInlineActions button{width:100%}}
+
+/* Keep the reusable-spool designation below Model Library action buttons. */
+.printingModelRow{grid-template-areas:"identity badges actions" "identity badges reusable"}
+.printingModelRow>.modelReusableSpoolRow{grid-area:reusable;justify-self:end;justify-content:flex-end;width:auto;padding:0;border:0;min-width:0}
+.spoolAutoIdNote{grid-column:1/-1;padding:11px 14px;border:1px dashed var(--border,#303b49);border-radius:9px;color:var(--text-muted,#aeb8c5);font-size:.9rem}
+@media(max-width:760px){.printingModelRow>.modelReusableSpoolRow{justify-self:stretch;width:100%;justify-content:flex-end;padding:8px 0 0}.printingModelRow>.modelReusableSpoolRow .modelReusableSpoolToggle{max-width:100%}}
