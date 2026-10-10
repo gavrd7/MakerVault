@@ -1536,6 +1536,7 @@ function PrinterModal({ manufacturers, models, locations, onClose, onSaved }) {
 
 function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, canAdd, canChange, canDelete, canAddDesign, canChangeDesign }) {
   const [designs, setDesigns] = useState([]);
+  const [manufacturerDesigns, setManufacturerDesigns] = useState([]);
   const [reels, setReels] = useState([]);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -1547,11 +1548,13 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, c
 
   async function load() {
     try {
-      const [d, r] = await Promise.all([
+      const [d, r, catalogue] = await Promise.all([
         apiFetch("/api/printing/reusable-spool-designs/"),
         apiFetch("/api/printing/reusable-spools/"),
+        apiFetch("/api/printing/reusable-spool-manufacturers/"),
       ]);
       setDesigns(d.rows || []);
+      setManufacturerDesigns(catalogue.rows || []);
       setReels(r.rows || []);
       setError("");
     } catch (err) {
@@ -1587,6 +1590,20 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, c
       setNotice(isDesign ? "Spool design saved." : "Reusable spool saved.");
       setForm("");
       setEditing(null);
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function importManufacturerDesign(item) {
+    setWorking(true);
+    setError("");
+    try {
+      await apiFetch("/api/printing/reusable-spool-manufacturers/", { method: "POST", body: JSON.stringify({ key: item.key }) });
+      setNotice(item.name + " added to your spool designs.");
       await load();
     } catch (err) {
       setError(err.message);
@@ -1647,6 +1664,17 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, c
           </div>
         </article>)}
         {!reels.length && <div className="printingEmptyInline">No reusable spools registered yet. Add a design, then an individual spool.</div>}
+      </div>
+    </section>
+    <section className="panel printingSection">
+      <div className="panelHead"><h3>Manufacturer spool catalogue</h3></div>
+      <div className="printingList">
+        {manufacturerDesigns.map(item => <article className="printingListRow" key={item.key}>
+          <div><strong>{item.name}</strong><small>{item.manufacturer} · Manufacturer reference; check actual tare and drying tolerance before use.</small></div>
+          {canAddDesign && <button type="button" disabled={working || designs.some(d => d.name === item.name && d.manufacturer === item.manufacturer)} onClick={() => importManufacturerDesign(item)}>
+            {designs.some(d => d.name === item.name && d.manufacturer === item.manufacturer) ? "In your designs" : "Add to my designs"}
+          </button>}
+        </article>)}
       </div>
     </section>
     <section className="panel printingSection">
