@@ -75,6 +75,7 @@ class CatalogueMaintenanceSettings(TimeStampedModel):
     check_board_data = models.BooleanField(default=True)
     check_printer_data = models.BooleanField(default=True)
     check_filament_data = models.BooleanField(default=True)
+    check_reusable_spool_sources = models.BooleanField(default=True)
     check_images = models.BooleanField(default=True)
     last_run_at = models.DateTimeField(blank=True, null=True)
     next_run_at = models.DateTimeField(blank=True, null=True)
