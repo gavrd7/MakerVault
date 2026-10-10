@@ -1615,8 +1615,9 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
     ? (recordedDensities.length % 2 ? recordedDensities[mid] : (recordedDensities[mid - 1] + recordedDensities[mid]) / 2)
     : null;
   const density = sourceProduct ? Number(sourceProduct.density_g_cm3) : libraryDensity;
-  const solidMass = Number.isFinite(volume) && volume > 0 && Number.isFinite(density) && density > 0
-    ? (volume * density).toFixed(2) : null;
+  // 15% infill baseline, excluding variable walls and top/bottom layers.
+  const estimatedMass = Number.isFinite(volume) && volume > 0 && Number.isFinite(density) && density > 0
+    ? (volume * density * 0.15).toFixed(2) : null;
 
   function applyGeometryDimension(field, value) {
     if (Number(value) > 0) setDesignForm(old => ({ ...old, [field]: Number(value).toFixed(2) }));
@@ -1726,7 +1727,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
             <small>Condition: {reel.condition || "usable"}{reel.assignment_history?.length ? " · " + reel.assignment_history.length + " recent assignment change(s)" : ""}</small>
             {(reel.assignment_history || []).slice(0, 3).map((event, i) => <small key={i}>{new Date(event.occurred_at).toLocaleDateString()} · {event.previous_spool_code || "Empty"} → {event.new_spool_code || "Empty"}</small>)}
           </div>
-          <div className="printingBadges">
+          <div className="spoolRowActions">
             {canChange && <button type="button" onClick={() => startReel(reel)}>Edit</button>}
             {canDelete && <button type="button" className="dangerButton" onClick={() => remove("reel", reel)}>Delete</button>}
           </div>
@@ -1752,9 +1753,10 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
           <div><strong>{d.name}</strong>
             <small>{[d.manufacturer, d.design_type, d.material].filter(Boolean).join(" · ")}</small>
             <small>Nominal tare: {d.nominal_tare_g == null ? "Unknown" : d.nominal_tare_g + " g"} · Dryer limit: {d.max_dryer_temp_c == null ? "Unverified" : d.max_dryer_temp_c + " °C"}</small>
-            {d.model_3d_id && <button type="button" onClick={onOpenModels}>View linked STL/3MF in model library: {models.find(m => m.id === d.model_3d_id)?.name || "Saved model"}</button>}
+            
           </div>
-          <div className="printingBadges">
+          <div className="spoolRowActions">
+            {d.model_3d_id && <button type="button" onClick={onOpenModels}>View linked model</button>}
             {canChangeDesign && <button type="button" onClick={() => startDesign(d)}>Edit</button>}
             {canChangeDesign && <button type="button" className="dangerButton" onClick={() => remove("design", d)}>Delete</button>}
           </div>
@@ -1782,9 +1784,9 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
                 {densityProducts.map(p => <option key={p.id} value={p.id}>{p.name} · {p.density_g_cm3} g/cm³</option>)}
               </select>
             </label>
-            <div className="full">
-              {solidMass ? <><small>Calculated solid-model mass: {solidMass} g (mesh volume {volume.toFixed(2)} cm³ × {density.toFixed(2)} g/cm³ {sourceProduct ? "selected filament density" : "MakerVault library material median density"}). This is NOT the print's expected weight if it uses infill, cavities, separate objects or different print settings.</small>
-                <button type="button" onClick={() => setDesignForm(p => ({ ...p, nominal_tare_g: solidMass }))}>Use solid-model estimate</button>
+            <div className="full spoolEstimateBlock">
+              {estimatedMass ? <><small>Estimated weight at 15% infill: {estimatedMass} g (mesh volume {volume.toFixed(2)} cm³ × {density.toFixed(2)} g/cm³ {sourceProduct ? "selected filament density" : "MakerVault library material median density"}). This is a rough baseline: walls, solid layers and slicer settings affect the real weight. Use a sliced estimate or measured tare when available.</small>
+                <button type="button" onClick={() => setDesignForm(p => ({ ...p, nominal_tare_g: estimatedMass }))}>Use 15% infill estimate</button>
               </> : <small>Choose an analysed model and a material with a recorded density in your MakerVault filament library. Without library density data, no weight estimate is shown. Actual empty spool weight should be measured.</small>}
             </div>
           </>}
@@ -1799,13 +1801,13 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
           {field("Design URL", "source_url", "url")}
           {field("Outer diameter (mm)", "outer_diameter_mm", "number")}
           {field("Width (mm)", "width_mm", "number")}
-          {designForm.design_type === "printed" && dimensions && <div className="full">
+          {designForm.design_type === "printed" && dimensions && <div className="full spoolEstimateBlock">
             <small>Model bounding box: {Number(dimensions.x).toFixed(1)} × {Number(dimensions.y).toFixed(1)} × {Number(dimensions.z).toFixed(1)} mm. These are orientation-dependent, not verified reel dimensions.</small>
             <button type="button" onClick={() => {
               const d = [dimensions.x, dimensions.y, dimensions.z].map(Number).sort((a,b) => a-b);
               applyGeometryDimension("outer_diameter_mm", d[2]);
               applyGeometryDimension("width_mm", d[0]);
-            }}>Pull estimated spool data from model</button>
+            }}>Use model dimensions</button>
           </div>}
           {field("Hub / bore diameter (mm)", "hub_diameter_mm", "number")}
           {field("Capacity (g)", "capacity_g", "number")}
