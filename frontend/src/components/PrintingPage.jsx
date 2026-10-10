@@ -1797,6 +1797,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
       <div className="printingList">
         {filteredManufacturerDesigns.map(item => <article className="printingListRow" key={item.key}>
           <div className="spoolCatalogueRecord">
+            {item.image_url && <img className="spoolCatalogueThumb" src={item.image_url} alt={item.name} loading="lazy" />}
             <strong>{item.name}</strong>
             <small>{item.manufacturer} · {item.design_type === "printed" ? "Printable design" : "Manufacturer-made"}{item.verified ? " · Source documented" : " · Unverified"}</small>
             <small>{item.nominal_tare_g ? "Tare: " + item.nominal_tare_g + " g" : "Tare: Unknown"} · {item.outer_diameter_mm && item.width_mm ? item.outer_diameter_mm + " × " + item.width_mm + " mm" : "Dimensions: Unknown"} · {item.max_dryer_temp_c != null ? "Rated temperature: " + item.max_dryer_temp_c + "°C" : "Dryer rating: Unknown"}</small>
