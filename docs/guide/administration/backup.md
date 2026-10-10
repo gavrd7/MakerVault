@@ -64,7 +64,17 @@ A running web application cannot safely replace its own database and storage, an
 python3 scripts/restore.py --sudo --backup-id BACKUP_ID
 ```
 
-Replace `BACKUP_ID` with the value shown by MakerVault. The helper:
+Replace `BACKUP_ID` with the value shown by MakerVault.
+
+For installations built directly from source using `compose.build.yaml`, add `--build-override` so the restore helper uses both Compose files:
+
+```bash
+python3 scripts/restore.py --sudo --build-override --backup-id BACKUP_ID
+```
+
+The helper recognises `compose.yaml`, `compose.yml`, `docker-compose.yaml`, and `docker-compose.yml` as the primary Compose file. If more than one exists, it reports which one it selected. The `--build-override` option is only needed when using the local source-build override. The UI's Copy command button displays confirmation on successful copy and offers a manual selection fallback when clipboard access is blocked.
+
+ The helper:
 
 1. confirms that no backup is still running;
 2. validates the selected bundle again;

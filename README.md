@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <strong>Current stable release: v1.0.5</strong>
+  <strong>Current stable release: v1.1.0</strong>
 </p>
 
 <p align="center">
@@ -22,11 +22,11 @@
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
-**What's new in v1.0.5:** integrated User Account and Security settings, Admin / Supervisor / User / Viewer roles, safe `.env` secret generation, a secure first-run administrator wizard and faster startup with background catalogue population. Development container builds can now use the separate `dev` tag.
+**What's new in v1.1.0:** reliable background catalogue maintenance with restart-safe board/component/filament/image checkpoints, improved manufacturer-backed technical data, clearer image diagnostics and resilient OrcaSlicer vendor retries. Previous account, security and first-run improvements remain included.
 
 MakerVault keeps the practical parts of a workshop connected: what you own, what a build needs, which files and wiring belong to it, which model revision you printed, and where the finished parts ended up.
 
-## First-run administrator setup (v1.0.5)
+## First-run administrator setup (introduced in v1.0.5)
 
 On a **fresh installation with no superuser**, opening MakerVault's normal URL redirects to the first-run setup wizard automatically. The server operator obtains a short-lived token (valid for 30 minutes) from the Docker host, then creates the first administrator in the browser with username, email, password and confirmation. The wizard includes a password-visibility checkbox and matching feedback. It closes automatically once any superuser exists; existing installations continue to the standard sign-in page.
 
@@ -173,8 +173,15 @@ sudo docker compose config --quiet
 sudo docker compose pull
 sudo docker compose up -d
 sudo docker compose ps
-sudo docker compose exec makervault python manage.py createsuperuser
 ```
+
+On a new installation, open MakerVault in your browser to use the first-run administrator wizard. Retrieve its short-lived setup token from the server:
+
+```bash
+sudo docker compose exec -u makervault makervault python manage.py first_run_token
+```
+
+Enter the token in the browser setup screen, create your administrator account, then sign in. See [First sign-in](docs/guide/getting-started/first-sign-in.md) for recovery and alternative setup methods.
 
 Open `http://SERVER-IP:8765`. The host port is configurable through `MAKERVAULT_PORT`; the container listens on port 8000. There is no universal default login.
 
@@ -212,7 +219,7 @@ sudo docker compose up -d
 sudo docker compose ps
 ```
 
-The default image is `ghcr.io/gavrd7/makervault:latest`. You can pin a release without editing Compose by setting `MAKERVAULT_IMAGE=ghcr.io/gavrd7/makervault:1.0.5` in `.env`.
+The default image is `ghcr.io/gavrd7/makervault:latest`. You can pin a release without editing Compose by setting `MAKERVAULT_IMAGE=ghcr.io/gavrd7/makervault:1.1.0` in `.env`.
 
 Prefer to build the application yourself? The repository retains the Dockerfile and provides `compose.build.yaml`:
 
@@ -236,7 +243,7 @@ Catalogue media can be locally cached or retained as external references where r
 
 ## Project status and development
 
-**v1.0.5** is the current stable MakerVault release. It introduces browser-based first-run administrator setup, consolidated account/security management, role-based access controls, safe environment secret generation, and faster access to the web interface while catalogue seeding and OrcaSlicer enrichment continue in the background. The v1.0.4 project priorities and deadline improvements remain included. Experimental printer hardware remains subject to its documented validation boundaries.
+**v1.1.0** is the current stable MakerVault release. It retains browser-based first-run administrator setup, consolidated account/security management, role-based access controls, safe environment secret generation, and faster access to the web interface while catalogue seeding and OrcaSlicer enrichment continue in the background. The v1.0.4 project priorities and deadline improvements remain included. Experimental printer hardware remains subject to its documented validation boundaries.
 
 Pull-request CI checks backend tests, frontend tests/build, migrations, dependency/static security and the production Docker image. The guide has its own strict build/link checks. CI passing does not substitute for hardware, deployment or restore testing.
 

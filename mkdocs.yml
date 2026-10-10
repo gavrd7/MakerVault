@@ -51,11 +51,12 @@ extra_css:
   - assets/guide.css
 extra:
   generator: false
-copyright: MakerVault · Guide for v1.0.0 · Stable release
+copyright: MakerVault · Guide for v1.1.0 · Stable release
 nav:
   - Welcome: index.md
   - Getting started:
       - Before you begin: getting-started/before-you-begin.md
+      - Install on Windows: getting-started/windows.md
       - Install MakerVault: getting-started/install.md
       - Configure your .env file: getting-started/environment.md
       - Choose your storage: getting-started/storage.md
