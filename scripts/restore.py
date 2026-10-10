@@ -260,6 +260,7 @@ def main() -> int:
     source_group.add_argument("--backup-id", help="Backup identifier shown in MakerVault Settings > Backup & restore.")
     source_group.add_argument("--bundle", help="Path to an off-server .mvbackup bundle, including on a clean replacement host.")
     parser.add_argument("--sudo", action="store_true", help="Run Docker commands through sudo.")
+    parser.add_argument("--build-override", action="store_true", help="Include compose.build.yaml for locally built development deployments.")
     parser.add_argument("--yes", action="store_true", help="Skip the interactive backup-ID confirmation.")
     parser.add_argument(
         "--recovery-host",
@@ -271,12 +272,28 @@ def main() -> int:
     args = parser.parse_args()
 
     source = Path(args.source_dir).resolve()
-    if not (source / "compose.yaml").is_file():
-        print("Restore not started: compose.yaml was not found in the MakerVault checkout.", file=sys.stderr)
+    compose_names = ("compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml")
+    present = [source / name for name in compose_names if (source / name).is_file()]
+    if not present:
+        print("Restore not started: no Compose file found (compose.yaml, compose.yml, docker-compose.yaml, docker-compose.yml).", file=sys.stderr)
         return 2
+    # Match Docker Compose's preference for the canonical compose.yaml name.
+    # Print the selected file so ambiguous deployments are visible to operators.
+    compose_file = present[0]
+    if len(present) > 1:
+        print("Multiple Compose files found; selecting " + compose_file.name + ".")
+    else:
+        print("Using Compose file: " + compose_file.name)
 
     docker = compose_command(args.sudo)
-    base = [*docker, "-f", str(source / "compose.yaml"), "--project-directory", str(source)]
+    base = [*docker, "-f", str(compose_file)]
+    if args.build_override:
+        override = source / "compose.build.yaml"
+        if not override.is_file():
+            print("Restore not started: compose.build.yaml was not found.", file=sys.stderr)
+            return 2
+        base.extend(["-f", str(override)])
+    base.extend(["--project-directory", str(source)])
     env_file = source / ".env"
 
     bundle = Path(args.bundle).expanduser().resolve() if args.bundle else None

@@ -2368,6 +2368,9 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
 .restoreWarning{border-color:#735f2f;background:#2b2412;color:#ead393}
 .restoreCommand{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center}
 .restoreCommand code{display:block;overflow:auto;padding:13px;border:1px solid #354151;background:#090e14;border-radius:9px;color:#c9d4e5;white-space:nowrap}
+.restoreCopySuccess{border-color:#3e8062!important;color:#c9f5df!important;background:#18412e!important;animation:restoreCopiedPop .28s ease-out}
+@keyframes restoreCopiedPop{0%{transform:scale(.95)}65%{transform:scale(1.045)}100%{transform:scale(1)}}
+@media(prefers-reduced-motion:reduce){.restoreCopySuccess{animation:none}}
 .restoreReady>small{color:#8995a7;line-height:1.5}
 @media(max-width:900px){
   .backupSummaryGrid{grid-template-columns:1fr}

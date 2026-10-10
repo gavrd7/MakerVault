@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../api";
 import { Badge, LoadingBlock } from "./Common";
 
@@ -33,6 +33,12 @@ export default function BackupRestorePanel({ onBackupStarted }) {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [commandCopied, setCommandCopied] = useState(false);
+  const copyResetTimer = useRef(null);
+
+  useEffect(() => () => {
+    if (copyResetTimer.current !== null) clearTimeout(copyResetTimer.current);
+  }, []);
   const [validation, setValidation] = useState(null);
   const [restoreTarget, setRestoreTarget] = useState(null);
   const [watchedBackupId, setWatchedBackupId] = useState("");
@@ -131,12 +137,57 @@ export default function BackupRestorePanel({ onBackupStarted }) {
   }
 
   async function copyCommand(command) {
+    if (copyResetTimer.current !== null) clearTimeout(copyResetTimer.current);
+    copyResetTimer.current = null;
+    setCommandCopied(false);
+    // Most browsers deny navigator.clipboard on ordinary HTTP connections.
+    // Try it first, then fall back to the older synchronous copy operation.
+    let copied = false;
     try {
-      await navigator.clipboard.writeText(command);
-      setNotice("Restore command copied.");
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(command);
+        copied = true;
+      }
     } catch {
-      setNotice("Select and copy the restore command below.");
+      // Continue to the legacy fallback.
     }
+
+    if (!copied) {
+      const field = document.createElement("textarea");
+      field.value = command;
+      field.setAttribute("readonly", "");
+      field.style.position = "fixed";
+      field.style.left = "-9999px";
+      document.body.appendChild(field);
+      try {
+        field.focus();
+        field.select();
+        copied = document.execCommand("copy") === true;
+      } catch {
+        copied = false;
+      } finally {
+        field.remove();
+      }
+    }
+
+    if (copied) {
+      setCommandCopied(true);
+      copyResetTimer.current = setTimeout(() => {
+        setCommandCopied(false);
+        copyResetTimer.current = null;
+      }, 2500);
+      return;
+    }
+
+    const commandElement = document.querySelector(".restoreCommand code");
+    if (commandElement) {
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(commandElement);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    }
+    setNotice("Automatic copying was blocked. Select the restore command and press Ctrl+C to copy it.");
   }
 
   if (!state) return <LoadingBlock label="Loading backups…" />;
@@ -228,7 +279,7 @@ export default function BackupRestorePanel({ onBackupStarted }) {
           </div>
           <div className="restoreCommand">
             <code>{restoreTarget.restore_command}</code>
-            <button type="button" onClick={() => copyCommand(restoreTarget.restore_command)}>Copy command</button>
+            <button type="button" className={commandCopied ? "restoreCopySuccess" : ""} onClick={() => copyCommand(restoreTarget.restore_command)} aria-live="polite">{commandCopied ? "✓ Copied!" : "Copy command"}</button>
           </div>
           <small>Run this once from your MakerVault checkout on the server. You will be asked to type the backup ID before the restore proceeds.</small>
         </div>}
