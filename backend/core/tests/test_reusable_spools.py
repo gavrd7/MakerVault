@@ -212,7 +212,7 @@ class ReusableSpoolApiTests(TestCase):
             design_type="manufacturer", source_url="https://example.org/espool",
         )
         response = self.client.get("/api/printing/reusable-spool-manufacturers/", {
-            "manufacturer": "esun", "q": "espool",
+            "manufacturer": "esun", "q": "esun-espool-test",
         })
         self.assertEqual(response.status_code, 200, response.content)
         self.assertEqual(response.json()["total"], 1)
