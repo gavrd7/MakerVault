@@ -157,5 +157,6 @@ class ReusableSpoolApiTests(TestCase):
         again = self._post("/api/printing/reusable-spool-manufacturers/", {"key": entry["key"]})
         self.assertEqual(again.status_code, 200, again.content)
         self.assertEqual(ReusableSpoolDesign.objects.filter(owner=self.owner).count(), 1)
-        self.assertIsNone(first.json()["item"]["nominal_tare_g"])
-        self.assertIsNone(first.json()["item"]["max_dryer_temp_c"])
+        self.assertEqual(first.json()["item"]["nominal_tare_g"], "250.00")
+        self.assertEqual(first.json()["item"]["max_dryer_temp_c"], 70)
+        self.assertTrue(first.json()["item"]["temperature_source"])
