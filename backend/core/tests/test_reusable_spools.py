@@ -118,3 +118,8 @@ class ReusableSpoolApiTests(TestCase):
         reel.refresh_from_db()
         self.assertIsNone(reel.filament_spool_id)
         self.assertTrue(Spool.objects.filter(pk=stock.pk).exists())
+        history = response.json()["item"]["assignment_history"]
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0]["previous_spool_code"], "SP-102")
+        self.assertEqual(history[0]["new_spool_code"], "")
+
