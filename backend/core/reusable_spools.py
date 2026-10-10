@@ -265,3 +265,53 @@ def model_design(request, model_id):
         return error("This model is used by owned reusable spools. Reassign them before unmarking.", 409)
     design.delete()
     return JsonResponse({"removed": True})
+
+
+# Reference entries deliberately leave tare, dimensions and dryer temperature blank
+# until independently verified for the exact spool variant.
+KNOWN_REUSABLE_SPOOL_DESIGNS = (
+    {
+        "key": "bambu-basic",
+        "name": "Bambu Reusable Spool (Basic)",
+        "manufacturer": "Bambu Lab",
+        "design_type": "manufacturer",
+        "description": "Bambu Lab basic reusable spool. Verify variant and measure actual empty reel weight.",
+        "source_url": "https://us.store.bambulab.com/products/pla-cf",
+    },
+    {
+        "key": "bambu-high-temp",
+        "name": "Bambu Reusable Spool (High Temperature)",
+        "manufacturer": "Bambu Lab",
+        "design_type": "manufacturer",
+        "description": "Bambu Lab high-temperature reusable spool. No safe dryer limit assigned without an exact verified rating.",
+        "source_url": "https://us.store.bambulab.com/products/asa-filament",
+    },
+)
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def manufacturer_catalogue(request):
+    if request.method == "GET":
+        return JsonResponse({"rows": KNOWN_REUSABLE_SPOOL_DESIGNS})
+    denied = permission(request, "add_filamentproduct")
+    if denied:
+        return denied
+    try:
+        key = str(read_json(request).get("key") or "")
+    except ValidationError as exc:
+        return validation_error(exc)
+    preset = next((entry for entry in KNOWN_REUSABLE_SPOOL_DESIGNS if entry["key"] == key), None)
+    if preset is None:
+        return error("Unknown manufacturer spool catalogue entry.", 404)
+    item, created = ReusableSpoolDesign.objects.get_or_create(
+        owner=request.user,
+        name=preset["name"],
+        manufacturer=preset["manufacturer"],
+        defaults={
+            "design_type": preset["design_type"],
+            "description": preset["description"],
+            "source_url": preset["source_url"],
+        },
+    )
+    return JsonResponse({"item": serialise_design(item), "created": created}, status=201 if created else 200)
