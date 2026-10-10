@@ -1636,6 +1636,28 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
     }
   }
 
+  function lookupKnownManufacturerSpecs() {
+    const candidate = manufacturerDesigns.find(x =>
+      (x.name || "").trim().toLowerCase() === (designForm.name || "").trim().toLowerCase() &&
+      (x.manufacturer || "").trim().toLowerCase() === (designForm.manufacturer || "").trim().toLowerCase()
+    );
+    if (!candidate) {
+      setNotice("No exact manufacturer catalogue match. Keep your values or enter verified specifications manually.");
+      return;
+    }
+    const available = ["source_url", "description", "material", "nominal_tare_g", "max_dryer_temp_c", "temperature_source", "outer_diameter_mm", "width_mm", "hub_diameter_mm", "capacity_g"];
+    const update = {};
+    for (const key of available) {
+      if ((designForm[key] === "" || designForm[key] == null) && candidate[key] !== "" && candidate[key] != null) {
+        update[key] = candidate[key];
+      }
+    }
+    setDesignForm(p => ({ ...p, ...update }));
+    setNotice(Object.keys(update).length
+      ? "Filled available catalogue details without changing your entries. Verify the exact variant."
+      : "Catalogue match found, but no additional verified specifications are available yet.");
+  }
+
   async function importManufacturerDesign(item) {
     setWorking(true);
     setError("");
@@ -1758,6 +1780,10 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
               </> : <small>Choose an analysed model and material to see an estimated solid-model mass. Known material densities are approximate, and an exact filament density can override them. Actual empty spool weight should be measured.</small>}
             </div>
           </>}
+          {designForm.design_type === "manufacturer" && <div className="full">
+            <button type="button" onClick={lookupKnownManufacturerSpecs}>Look up known specifications</button>
+            <small>Matches the saved manufacturer catalogue and only fills missing verified fields. No inferred specifications are treated as manufacturer data.</small>
+          </div>}
           {field("Nominal empty weight (g)", "nominal_tare_g", "number")}
           {field("Maximum verified dryer temperature (°C)", "max_dryer_temp_c", "number")}
           <small className="full">Material alone does not establish a safe dryer limit. Enter a limit only when verified for the exact printed design/material and record its source; otherwise leave blank.</small>
