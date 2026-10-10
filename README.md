@@ -173,8 +173,15 @@ sudo docker compose config --quiet
 sudo docker compose pull
 sudo docker compose up -d
 sudo docker compose ps
-sudo docker compose exec makervault python manage.py createsuperuser
 ```
+
+On a new installation, open MakerVault in your browser to use the first-run administrator wizard. Retrieve its short-lived setup token from the server:
+
+```bash
+sudo docker compose exec -u makervault makervault python manage.py first_run_token
+```
+
+Enter the token in the browser setup screen, create your administrator account, then sign in. See [First sign-in](docs/guide/getting-started/first-sign-in.md) for recovery and alternative setup methods.
 
 Open `http://SERVER-IP:8765`. The host port is configurable through `MAKERVAULT_PORT`; the container listens on port 8000. There is no universal default login.
 
