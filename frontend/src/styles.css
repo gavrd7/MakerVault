@@ -942,6 +942,22 @@
 }
 
 .printingHeroActions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+
+/* Group 3D printing navigation by task, with an expandable filament workspace. */
+.printingHero:has(.printingActionGroups){flex-wrap:wrap;align-items:flex-start}
+.printingHero:has(.printingActionGroups)>div:first-child{flex:1 1 360px;min-width:0}
+.printingHero:has(.printingActionGroups)>.printingHeroActions{flex:0 0 auto}
+.printingHero:has(.printingActionGroups)>.printingActionGroups{flex:1 1 100%}
+.printingActionGroups{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;width:100%;margin-top:16px}
+.printingActionGroup{min-width:0;border:1px solid var(--border, #303b49);border-radius:12px;padding:14px;background:var(--surface, #111923)}
+.printingActionGroup h3,.printingActionGroup summary{font-size:1rem;font-weight:700;margin:0 0 12px;color:inherit}
+.printingActionGroup summary{display:list-item;cursor:pointer}
+.printingActionGroup summary span{float:right}
+.printingActionGroup[open] summary{margin-bottom:12px}
+.printingActionGroup .printingHeroActions{justify-content:flex-start}
+.printingActionGroup .printingHeroActions button{flex:1 1 145px}
+@media(max-width:950px){.printingActionGroups{grid-template-columns:1fr}}
+
 @media(max-width:900px){.printingHero{align-items:flex-start}.printingHeroActions{justify-content:flex-start}}
 @media(max-width:620px){.printingHeroActions{display:grid;grid-template-columns:1fr 1fr;width:100%}.printingHeroActions button{width:100%}}
 
