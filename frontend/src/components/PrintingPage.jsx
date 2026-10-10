@@ -1602,7 +1602,9 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
   const dimensions = geometry?.dimensions_mm;
   const volume = Number(geometry?.volume_cm3);
   const sourceProduct = filamentProducts.find(p => String(p.id) === densityProductId);
-  const density = Number(sourceProduct?.density_g_cm3);
+  const approximateDensity = { PLA: 1.24, PETG: 1.27, ABS: 1.04, ASA: 1.07, TPU: 1.21, PC: 1.20 };
+  const knownDensity = approximateDensity[String(designForm.material || "").toUpperCase()];
+  const density = densityProductId ? Number(sourceProduct?.density_g_cm3) : Number(knownDensity);
   const solidMass = Number.isFinite(volume) && volume > 0 && Number.isFinite(density) && density > 0
     ? (volume * density).toFixed(2) : null;
   const materials = [...new Set([...materialOptions, ...filamentProducts.map(p => p.material), designForm.material].filter(Boolean))].sort();
@@ -1751,9 +1753,9 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
               </select>
             </label>
             <div className="full">
-              {solidMass ? <><small>Calculated solid-model mass: {solidMass} g (mesh volume {volume.toFixed(2)} cm³ × referenced density). This is NOT the print's expected weight if it uses infill, cavities, separate objects or different print settings.</small>
+              {solidMass ? <><small>Calculated solid-model mass: {solidMass} g (mesh volume {volume.toFixed(2)} cm³ × {density.toFixed(2)} g/cm³ {densityProductId ? "catalogue density" : "generic material approximation"}). This is NOT the print's expected weight if it uses infill, cavities, separate objects or different print settings.</small>
                 <button type="button" onClick={() => setDesignForm(p => ({ ...p, nominal_tare_g: solidMass }))}>Use solid-model estimate</button>
-              </> : <small>Choose an analysed 3D model and a filament with recorded density to see a solid-model mass estimate. Actual empty spool weight should be measured.</small>}
+              </> : <small>Choose an analysed model and material to see an estimated solid-model mass. Known material densities are approximate, and an exact filament density can override them. Actual empty spool weight should be measured.</small>}
             </div>
           </>}
           {field("Nominal empty weight (g)", "nominal_tare_g", "number")}
