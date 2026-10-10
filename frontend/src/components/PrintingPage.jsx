@@ -1564,7 +1564,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
   const [form, setForm] = useState("");
   const [editing, setEditing] = useState(null);
   const [designForm, setDesignForm] = useState({ name: "", design_type: "printed", manufacturer: "", material: "", nominal_tare_g: "", max_dryer_temp_c: "", temperature_source: "", source_url: "", outer_diameter_mm: "", width_mm: "", hub_diameter_mm: "", capacity_g: "", description: "", model_3d_id: "" });
-  const [reelForm, setReelForm] = useState({ code: "", design_id: "", measured_tare_g: "", color_name: "", material_override: "", condition: "usable", storage_location_id: "", filament_spool_id: "", notes: "" });
+  const [reelForm, setReelForm] = useState({ code: "", design_id: "", measured_tare_g: "", color_name: "", color_hex: "", material_override: "", condition: "usable", storage_location_id: "", filament_spool_id: "", notes: "" });
 
   async function load() {
     try {
@@ -1592,10 +1592,19 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
     setForm("design");
   }
 
+  const spoolColours = [
+    ["Black", "#111111"], ["White", "#FFFFFF"], ["Grey", "#808080"], ["Red", "#E53935"],
+    ["Orange", "#FF7A00"], ["Yellow", "#FFD600"], ["Green", "#43A047"], ["Blue", "#1976D2"],
+    ["Purple", "#8E44AD"], ["Pink", "#EC4899"], ["Brown", "#795548"], ["Natural", "#E8DDC5"],
+  ];
+  function applySpoolColour(name, hex) {
+    setReelForm(previous => ({ ...previous, color_name: name, color_hex: hex }));
+  }
+
   function startReel(item = null) {
     setError("");
     setEditing(item);
-    setReelForm(item ? Object.fromEntries(Object.entries(item).map(([k, v]) => [k, v ?? ""])) : { design_id: designs[0]?.id || "", measured_tare_g: "", color_name: "", material_override: "", condition: "usable", storage_location_id: "", filament_spool_id: "", notes: "" });
+    setReelForm(item ? Object.fromEntries(Object.entries(item).map(([k, v]) => [k, v ?? ""])) : { design_id: designs[0]?.id || "", measured_tare_g: "", color_name: "", color_hex: "", material_override: "", condition: "usable", storage_location_id: "", filament_spool_id: "", notes: "" });
     setForm("reel");
   }
 
@@ -1840,7 +1849,26 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
           <div className="spoolAutoIdNote">Spool ID: {editing?.code || "Assigned automatically when saved (RSP-0001, RSP-0002…)"}</div>
           <label>Reusable spool design<select required value={reelForm.design_id} onChange={e => setReelForm(p => ({ ...p, design_id: e.target.value }))}>{designs.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
           {field("Measured empty weight (g)", "measured_tare_g", "number")}
-          {field("Colour", "color_name")}
+          <div className="full spoolColourControls">
+            <label>Common colours
+              <select value={spoolColours.find(([name, hex]) => hex === reelForm.color_hex && name === reelForm.color_name)?.[0] || ""} onChange={e => {
+                const selected = spoolColours.find(([name]) => name === e.target.value);
+                if (selected) applySpoolColour(...selected);
+              }}>
+                <option value="">Choose a colour (optional)</option>
+                {spoolColours.map(([name, hex]) => <option key={name} value={name}>{name}</option>)}
+              </select>
+            </label>
+            <label>Colour picker
+              <input type="color" value={/^#[0-9a-fA-F]{6}$/.test(reelForm.color_hex || "") ? reelForm.color_hex : "#808080"} onChange={e => setReelForm(p => ({ ...p, color_hex: e.target.value.toUpperCase(), color_name: spoolColours.find(([,hex]) => hex.toLowerCase() === e.target.value.toLowerCase())?.[0] || "Custom" }))} />
+            </label>
+            <label>Hex colour
+              <input value={reelForm.color_hex || ""} maxLength={7} placeholder="#FF7A00" onChange={e => setReelForm(p => ({ ...p, color_hex: e.target.value.toUpperCase(), color_name: "Custom" }))} />
+            </label>
+            <label>Colour name
+              <input value={reelForm.color_name || ""} placeholder="Optional descriptive name" onChange={e => setReelForm(p => ({ ...p, color_name: e.target.value }))} />
+            </label>
+          </div>
           {field("Printed material", "material_override")}
           <label>Condition<select value={reelForm.condition || "usable"} onChange={e => setReelForm(p => ({ ...p, condition: e.target.value }))}><option value="usable">Usable</option><option value="damaged">Damaged</option><option value="retired">Retired</option></select></label>
           <label>Storage location<select value={reelForm.storage_location_id} onChange={e => setReelForm(p => ({ ...p, storage_location_id: e.target.value }))}><option value="">None</option>{locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
