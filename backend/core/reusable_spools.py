@@ -3,8 +3,11 @@
 A reusable reel is hardware; core.Spool continues to represent filament stock.
 """
 import json
+import re
+from difflib import get_close_matches
 from decimal import Decimal, InvalidOperation
 
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
@@ -115,10 +118,54 @@ def record_assignment(item, previous_id):
     )
 
 
+KNOWN_MANUFACTURERS = {
+    "Bambu Lab": ("bambu", "bambulab", "bambu labs"),
+    "Prusa Research": ("prusa", "prusament", "prusa research"),
+    "eSUN": ("esun", "e sun"),
+    "SUNLU": ("sunlu",),
+    "Creality": ("creality",),
+    "Polymaker": ("polymaker", "poly maker", "panchroma"),
+}
+
+
+def canonical_manufacturer(value):
+    """Correct confidently recognised brands; leave uncertain/custom vendors intact."""
+    original = str(value or "").strip()
+    if not original:
+        return ""
+    def key(raw):
+        return re.sub(r"[^a-z0-9]", "", raw.casefold())
+    normalized = key(original)
+    aliases = {key(alias): brand for brand, variants in KNOWN_MANUFACTURERS.items()
+               for alias in (brand, *variants)}
+    if normalized in aliases:
+        return aliases[normalized]
+    # Fuzzy matching is conservative to avoid turning legitimate unknown brands
+    # into the wrong supplier; only correct long, near-exact typos.
+    if len(normalized) >= 6:
+        close = get_close_matches(normalized, list(aliases), n=2, cutoff=0.91)
+        if len(close) == 1:
+            return aliases[close[0]]
+        if len(close) > 1 and aliases[close[0]] == aliases[close[1]]:
+            return aliases[close[0]]
+    return original
+
+
+def next_reusable_spool_code(owner):
+    """Allocate the next owner-scoped physical-reel number, separate from SPL IDs."""
+    max_number = 0
+    for code in ReusableSpool.objects.filter(owner=owner, code__startswith="RSP-").values_list("code", flat=True):
+        match = re.fullmatch(r"RSP-(\\d+)", code)
+        if match:
+            max_number = max(max_number, int(match.group(1)))
+    return f"RSP-{max_number + 1:04d}"
+
+
 def fill_design(item, data):
     for field in ("name", "manufacturer", "design_type", "description", "source_url", "material", "temperature_source"):
         if field in data:
-            setattr(item, field, str(data[field] or "").strip())
+            value = str(data[field] or "").strip()
+            setattr(item, field, canonical_manufacturer(value) if field == "manufacturer" else value)
     for field in ("nominal_tare_g", "outer_diameter_mm", "width_mm", "hub_diameter_mm", "capacity_g"):
         if field in data:
             setattr(item, field, number(data, field))
@@ -133,7 +180,7 @@ def fill_design(item, data):
 
 
 def fill_reel(item, data):
-    for field in ("code", "color_name", "material_override", "condition", "notes"):
+    for field in ("color_name", "material_override", "condition", "notes"):
         if field in data:
             setattr(item, field, str(data[field] or "").strip())
     if "measured_tare_g" in data:
@@ -199,10 +246,12 @@ def reels(request):
     if denied:
         return denied
     try:
-        item = ReusableSpool(owner=request.user)
-        fill_reel(item, read_json(request))
-        item.full_clean()
         with transaction.atomic():
+            # Serialize allocations for this owner across concurrent API requests.
+            get_user_model().objects.select_for_update().get(pk=request.user.pk)
+            item = ReusableSpool(owner=request.user, code=next_reusable_spool_code(request.user))
+            fill_reel(item, read_json(request))
+            item.full_clean()
             item.save()
             record_assignment(item, None)
         return JsonResponse({"item": serialise_reel(item)}, status=201)
