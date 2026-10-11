@@ -2,7 +2,7 @@
 
 ## Version and scope
 
-This guide describes **MakerVault v1.0.4**, the current stable patch release. v1.0.4 adds project priorities, optional deadlines, attention ranking, deadline highlighting, quick completion and project deletion controls. It builds on v1.0.3's Creality FDM catalogue expansion while retaining the earlier Windows deployment, printed-part, filament catalogue and K2 camera improvements. The first stable v1.0.0 release was accepted on **3 October 2026** after representative off-server recovery, a fresh Debian/Docker installation, restart/persistence checks, native HTTPS/Local CA validation and final green CI. Experimental hardware integrations retain explicit validation boundaries.
+This guide describes **MakerVault v1.2.0**, which adds reusable spool hardware inventory, manufacturer and printable designs, reviewed catalogue additions and corrections, Maker Tags for reusable reels, branded QR labels and usability improvements. The earlier v1.1.0 catalogue-maintenance improvements and v1.0.4 project-planning features remain included. Experimental hardware integrations retain their documented validation limits.
 
 Linux with the supplied Docker Compose configuration remains the preferred always-on server deployment. Windows users can also follow the documented Docker Desktop, Docker Desktop + WSL2 integration, or direct WSL2 Docker Engine routes. NAS/Portainer and macOS remain platform-adaptation cases rather than fully validated walkthroughs. No measured minimum hardware specification is claimed.
 

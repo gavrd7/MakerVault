@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <strong>Current stable release: v1.1.0</strong>
+  <strong>Current stable release: v1.2.0</strong>
 </p>
 
 <p align="center">
@@ -22,9 +22,9 @@
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
-**What's new in v1.1.0:** reliable background catalogue maintenance with restart-safe board/component/filament/image checkpoints, improved manufacturer-backed technical data, clearer image diagnostics and resilient OrcaSlicer vendor retries. Previous account, security and first-run improvements remain included.
+**What’s new in v1.2.0:** reusable spool hardware inventory and refill assignments, an expanded spool catalogue, personal spool images, reviewed manufacturer-model suggestions, reusable-spool Maker Tags and branded QR labels, plus consistent Add controls.
 
-**Planned v1.2.0 (draft PR #132, changes since v1.1.0):** physical reusable-spool inventory and refill assignment/history separate from filament inventory; Maker Tags for reusable spools and branded QR labels; consistent **Add** action labels throughout the interface; and a source-backed reusable spool catalogue with manufacturer and printable spool hardware, optional tare/dimensions and dryer compatibility, personal image upload or secure HTTPS URL overrides, and reviewable submissions/corrections. Administrator submissions publish immediately; other users' suggestions await approval. Automatic source parsing and broad online discovery are not included in this release. The current stable version remains v1.1.0 until publication.
+**Included in v1.2.0 (changes since v1.1.0):** physical reusable-spool inventory and refill assignment/history separate from filament inventory; Maker Tags for reusable spools and branded QR labels; consistent **Add** action labels throughout the interface; and a source-backed reusable spool catalogue with manufacturer and printable spool hardware, optional tare/dimensions and dryer compatibility, personal image upload or secure HTTPS URL overrides, and reviewable submissions/corrections. Administrator submissions publish immediately; other users' suggestions await approval. Automatic source parsing and broad online discovery are not included in this release.
 
 MakerVault keeps the practical parts of a workshop connected: what you own, what a build needs, which files and wiring belong to it, which model revision you printed, and where the finished parts ended up.
 
@@ -245,7 +245,7 @@ Catalogue media can be locally cached or retained as external references where r
 
 ## Project status and development
 
-**v1.1.0** is the current stable MakerVault release. It retains browser-based first-run administrator setup, consolidated account/security management, role-based access controls, safe environment secret generation, and faster access to the web interface while catalogue seeding and OrcaSlicer enrichment continue in the background. The v1.0.4 project priorities and deadline improvements remain included. Experimental printer hardware remains subject to its documented validation boundaries.
+**v1.2.0** is the current stable MakerVault release. It retains browser-based first-run administrator setup, consolidated account/security management, role-based access controls, safe environment secret generation, and faster access to the web interface while catalogue seeding and OrcaSlicer enrichment continue in the background. The v1.0.4 project priorities and deadline improvements remain included. Experimental printer hardware remains subject to its documented validation boundaries.
 
 Pull-request CI checks backend tests, frontend tests/build, migrations, dependency/static security and the production Docker image. The guide has its own strict build/link checks. CI passing does not substitute for hardware, deployment or restore testing.
 
