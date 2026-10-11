@@ -2001,13 +2001,13 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
         {suggestionError && <div className="error" role="alert">{suggestionError}</div>}
         {reviewNotice && <div className="successMessage" role="status">{reviewNotice}</div>}
         <p>Pending catalogue additions and specification corrections are listed first.</p>
-        <div className="printingList">{[...suggestionRows].sort((a,b) => Number(b.status === "pending") - Number(a.status === "pending")).map(s => <div className="printingListRow" key={s.id}>
+        <div className="printingList">{suggestionRows.filter(s => s.status === "pending").map(s => <div className="printingListRow" key={s.id}>
           <div><strong>{s.manufacturer} — {s.name}</strong><small>{s.target_entry_key ? "Correction: " + s.target_entry_key : "New model"} · {s.status}</small>
             <a href={s.source_url} target="_blank" rel="noreferrer noopener">Review source ↗</a>
             <small>{Object.entries(s.proposed_specs || {}).map(([key,value]) => key.replaceAll("_"," ") + ": " + value).join(" · ") || "No specifications provided"}</small>
           </div>
           {canReviewSuggestions && s.status === "pending" && <div className="spoolInlineActions"><button type="button" disabled={suggestionBusy} onClick={() => reviewSuggestion(s, "approve")}>Approve</button><button type="button" disabled={suggestionBusy} onClick={() => reviewSuggestion(s, "reject")}>Reject</button></div>}
-        </div>)}{!suggestionRows.length && <p>No submissions yet.</p>}</div>
+        </div>)}{!suggestionRows.some(s => s.status === "pending") && <p>No pending suggestions.</p>}</div>
         <div className="spoolInlineActions"><button type="button" onClick={() => { setReviewsOpen(false); setCatalogueOpen(true); }}>Back to catalogue</button></div>
       </div>
     </Modal>}
