@@ -6,7 +6,7 @@ spool tare weights, and are deliberately not recorded as such.
 from django.db import migrations
 
 
-SOURCE = "https://www.formfutura.com/filaments/high-speed-filaments/refill-petg"
+SOURCE = "https://formfutura.com/product/refill-petg/"
 
 
 def seed_formfutura_masterspools(apps, schema_editor):
@@ -55,13 +55,17 @@ def seed_formfutura_masterspools(apps, schema_editor):
             "manufacturer": "AzureFilm",
             "name": "AzureFilm Master Spool",
             "design_type": "manufacturer",
+            "nominal_tare_g": "196.00",
+            "outer_diameter_mm": "200.00",
+            "hub_diameter_mm": "55.00",
             "source_url": azure_source,
             "description": (
                 "Manufacturer-produced reusable two-disc, injection-moulded "
-                "master spool for AzureFilm Refill filament. Also sold in "
-                "multi-packs; pack size and 1 kg refill mass are not hardware "
-                "variants or empty spool tare. Exact material, dimensions and "
-                "dryer limit are not confirmed here."
+                "master spool for AzureFilm Refill filament. Official complete "
+                "hardware set weighs 196g (two 98g discs), measures 200mm "
+                "outer diameter and 55mm inner opening. Manufacturer lists "
+                "120C temperature tolerance, not a validated dryer setting. "
+                "The 233g gross packaged weight is not spool tare."
             ),
             "verified": True,
             "provenance": {
@@ -71,11 +75,15 @@ def seed_formfutura_masterspools(apps, schema_editor):
                 "verified_fields": [
                     "manufacturer", "name", "design_type",
                     "refill_family", "injection_moulded_two_disc_construction",
+                    "nominal_tare_g", "outer_diameter_mm", "hub_diameter_mm",
                 ],
                 "unverified_fields": [
-                    "nominal_tare_g", "outer_diameter_mm", "width_mm",
-                    "hub_diameter_mm", "capacity_g", "material", "max_dryer_temp_c",
+                    "width_mm", "capacity_g", "material", "max_dryer_temp_c",
                 ],
+                "manufacturer_reported_temperature_tolerance_c": 120,
+                "temperature_tolerance_is_not_dryer_rating": True,
+                "disc_weight_g": 98,
+                "packaged_gross_weight_g": 233,
                 "image_status": "pending_rights_review",
                 "seed_version": 4,
             },
