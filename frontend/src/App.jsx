@@ -198,6 +198,11 @@ export default function App() {
       setSection("3D Printing");
       return;
     }
+    if (tag.target_type === "reusable_spool") {
+      setSearchTarget({ type: "reusable_spools", id: tag.target.id, section: "3D Printing", token });
+      setSection("3D Printing");
+      return;
+    }
     if (tag.target_type === "printer") {
       setSearchTarget({ type: "printers", id: tag.target.id, section: "3D Printing", token });
       setSection("3D Printing");
