@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <strong>Current stable release: v1.2.0</strong>
+  <strong>Current stable release: v1.2.1</strong>
 </p>
 
 <p align="center">
@@ -22,7 +22,7 @@
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
-**What’s new in v1.2.0:** reusable spool hardware inventory and refill assignments, an expanded spool catalogue, personal spool images, reviewed manufacturer-model suggestions, reusable-spool Maker Tags and branded QR labels, plus consistent Add controls.
+**What’s new in v1.2.1:** Maker Tags now offer Compact, Standard, Large and custom-sized QR labels, selectable text fields, isolated single-label printing, batch printing for selected or all matching active QR tags, and filtering by target entity type. v1.2.0's reusable-spool catalogue and inventory improvements remain included.
 
 
 MakerVault keeps the practical parts of a workshop connected: what you own, what a build needs, which files and wiring belong to it, which model revision you printed, and where the finished parts ended up.
@@ -244,7 +244,7 @@ Catalogue media can be locally cached or retained as external references where r
 
 ## Project status and development
 
-**v1.2.0** is the current stable MakerVault release. It retains browser-based first-run administrator setup, consolidated account/security management, role-based access controls, safe environment secret generation, and faster access to the web interface while catalogue seeding and OrcaSlicer enrichment continue in the background. The v1.0.4 project priorities and deadline improvements remain included. Experimental printer hardware remains subject to its documented validation boundaries.
+**v1.2.1** is the current stable MakerVault release. It retains browser-based first-run administrator setup, consolidated account/security management, role-based access controls, safe environment secret generation, and faster access to the web interface while catalogue seeding and OrcaSlicer enrichment continue in the background. The v1.0.4 project priorities and deadline improvements remain included. Experimental printer hardware remains subject to its documented validation boundaries.
 
 Pull-request CI checks backend tests, frontend tests/build, migrations, dependency/static security and the production Docker image. The guide has its own strict build/link checks. CI passing does not substitute for hardware, deployment or restore testing.
 
