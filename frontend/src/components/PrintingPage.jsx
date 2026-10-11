@@ -1566,6 +1566,10 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
   const [catalogueOpen, setCatalogueOpen] = useState(false);
   const [catalogueDetail, setCatalogueDetail] = useState(null);
   const [catalogueZoom, setCatalogueZoom] = useState(false);
+  const [imageEditor, setImageEditor] = useState(null);
+  const [spoolImageFile, setSpoolImageFile] = useState(null);
+  const [spoolImageUrl, setSpoolImageUrl] = useState("");
+  const [spoolImageRights, setSpoolImageRights] = useState(false);
   const [reels, setReels] = useState([]);
   useEffect(() => {
     if (!targetReelId || !reels.some(reel => reel.id === targetReelId)) return;
@@ -1747,6 +1751,53 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
     }
   }
 
+  function openSpoolImageEditor(kind, item) {
+    setImageEditor({ kind, item });
+    setSpoolImageFile(null);
+    setSpoolImageUrl("");
+    setSpoolImageRights(false);
+    setError("");
+  }
+
+  async function saveSpoolImage(mode) {
+    if (!imageEditor) return;
+    const { kind, item } = imageEditor;
+    const path = kind === "catalogue"
+      ? "/api/printing/reusable-spool-manufacturers/" + item.key + "/image/"
+      : "/api/printing/reusable-spool-designs/" + item.id + "/image/";
+    setWorking(true);
+    setError("");
+    try {
+      let result;
+      if (mode === "reset") {
+        result = await apiFetch(path, { method: "DELETE" });
+      } else {
+        if (!spoolImageRights) throw new Error("Confirm you have permission to use this image.");
+        const data = new FormData();
+        data.append("rights_confirmed", "true");
+        if (mode === "upload") {
+          if (!spoolImageFile) throw new Error("Choose an image to upload.");
+          data.append("image", spoolImageFile);
+        } else {
+          if (!spoolImageUrl.trim()) throw new Error("Enter a public HTTPS image URL.");
+          data.append("url", spoolImageUrl.trim());
+        }
+        result = await apiFetch(path, { method: "POST", body: data });
+      }
+      await load();
+      if (kind === "catalogue") {
+        setCatalogueDetail(old => old && old.key === item.key
+          ? { ...old, image_url: result.image_url, image_personal: mode !== "reset" } : old);
+      }
+      setImageEditor(null);
+      setNotice(mode === "reset" ? "Personal image cleared." : "Personal spool image saved.");
+    } catch (err) {
+      setError(err.message || "Unable to save image.");
+    } finally {
+      setWorking(false);
+    }
+  }
+
   async function remove(kind, item) {
     if (!window.confirm("Delete " + (item.name || item.code) + "?")) return;
     setWorking(true);
@@ -1839,6 +1890,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
           <div className="spoolRowActions">
             {d.model_3d_id && <button type="button" onClick={onOpenModels}>View linked model</button>}
             {canChangeDesign && <button type="button" onClick={() => startDesign(d)}>Edit</button>}
+            {canChangeDesign && <button type="button" onClick={() => openSpoolImageEditor("design", d)}>Add image — Upload / URL</button>
             {canChangeDesign && <button type="button" className="dangerButton" onClick={() => remove("design", d)}>Delete</button>}
           </div>
         </article>)}
@@ -1846,7 +1898,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
       </div>
     </section>
 
-    {catalogueDetail && <Modal title={catalogueDetail.name} wide onClose={() => { setCatalogueDetail(null); setCatalogueZoom(false); setCatalogueOpen(true); }}>
+    {catalogueDetail && !imageEditor && <Modal title={catalogueDetail.name} wide onClose={() => { setCatalogueDetail(null); setCatalogueZoom(false); setCatalogueOpen(true); }}>
       <div className="spoolCatalogueDetail">
         <div className="spoolCatalogueDetailMedia">
           {catalogueDetail.image_url ? <>
@@ -1871,6 +1923,11 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
             ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || "Not verified"}</dd></div>)}
           </dl>
           {catalogueDetail.avoid_dryer && <p className="spoolCatalogueDryerWarning">Not suitable for filament dryers according to the source.</p>}
+          {canChangeDesign && <div className="spoolInlineActions">
+            <button type="button" onClick={() => openSpoolImageEditor("catalogue", catalogueDetail)}>Add image — Upload / URL</button>
+            {catalogueDetail.image_personal && <button type="button" onClick={() => openSpoolImageEditor("catalogue", catalogueDetail)}>Manage personal image</button>}
+          </div>}
+          {catalogueDetail.image_personal && <small>Showing your personal image override.</small>}
           {catalogueDetail.source_type && <small>Source classification: {catalogueDetail.source_type}</small>}
           {catalogueDetail.source_url && <a href={catalogueDetail.source_url} target="_blank" rel="noreferrer noopener">View product source ↗</a>}
           {catalogueDetail.temperature_source && <a href={catalogueDetail.temperature_source} target="_blank" rel="noreferrer noopener">View dryer temperature evidence ↗</a>}
@@ -1880,6 +1937,26 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
               {designs.some(d => d.catalog_entry_id === catalogueDetail.id) ? "Added to inventory" : "Add to inventory"}
             </button>}
           </div>
+        </div>
+      </div>
+    </Modal>}
+    {imageEditor && <Modal title={"Image for " + imageEditor.item.name} onClose={() => { setImageEditor(null); setError(""); }}>
+      <div className="spoolImageEditor">
+        {error && <div className="error" role="alert">{error}</div>}
+        <p>This image is personal to your account. It overrides the shared catalogue image only for you.</p>
+        <label>Upload image
+          <input type="file" accept="image/png,image/jpeg,image/webp,image/heic,image/heif" onChange={e => setSpoolImageFile(e.target.files?.[0] || null)} />
+        </label>
+        <label>Or image URL (public HTTPS)
+          <input type="url" value={spoolImageUrl} placeholder="https://example.com/spool.jpg" onChange={e => setSpoolImageUrl(e.target.value)} />
+        </label>
+        <label className="spoolImageRights"><input type="checkbox" checked={spoolImageRights} onChange={e => setSpoolImageRights(e.target.checked)} /> I have permission to use this image.</label>
+        <small>URLs must resolve publicly over HTTPS. MakerVault downloads, validates and caches the image rather than hotlinking it.</small>
+        <div className="spoolInlineActions">
+          <button type="button" disabled={working || !spoolImageRights || !spoolImageFile} onClick={() => saveSpoolImage("upload")}>Add image — Upload</button>
+          <button type="button" disabled={working || !spoolImageRights || !spoolImageUrl.trim()} onClick={() => saveSpoolImage("url")}>Add image — URL</button>
+          <button type="button" disabled={working} onClick={() => saveSpoolImage("reset")}>Remove personal image</button>
+          <button type="button" disabled={working} onClick={() => setImageEditor(null)}>Cancel</button>
         </div>
       </div>
     </Modal>}
