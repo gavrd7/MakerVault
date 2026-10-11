@@ -24,7 +24,6 @@
 
 **What’s new in v1.2.0:** reusable spool hardware inventory and refill assignments, an expanded spool catalogue, personal spool images, reviewed manufacturer-model suggestions, reusable-spool Maker Tags and branded QR labels, plus consistent Add controls.
 
-**Included in v1.2.0 (changes since v1.1.0):** physical reusable-spool inventory and refill assignment/history separate from filament inventory; Maker Tags for reusable spools and branded QR labels; consistent **Add** action labels throughout the interface; and a source-backed reusable spool catalogue with manufacturer and printable spool hardware, optional tare/dimensions and dryer compatibility, personal image upload or secure HTTPS URL overrides, and reviewable submissions/corrections. Administrator submissions publish immediately; other users' suggestions await approval. Automatic source parsing and broad online discovery are not included in this release.
 
 MakerVault keeps the practical parts of a workshop connected: what you own, what a build needs, which files and wiring belong to it, which model revision you printed, and where the finished parts ended up.
 
