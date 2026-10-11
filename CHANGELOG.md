@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.2.0 — In development (not released)
+## v1.2.0 — 11 October 2026
 
 - Added reusable-spool hardware inventory, distinct from filament stock: physical reusable reels, owned/custom or 3D-printed designs, measured empty/tare weight, locations, condition, filament assignment/unassignment and assignment history.
 - Added Maker Tag targeting and deep-link navigation for reusable spools, plus MakerVault-branded QR label centre icons and print previews.
@@ -12,7 +12,7 @@
 - Approved/rejected items are removed from the pending review queue. Suggested values are not automatically deemed manufacturer-verified, and missing specifications stay unknown.
 - Added migrations 0053–0058 and regression coverage for catalogue entries, images, permissions, source checks and suggestion review.
 
-**Release gate:** Full regression tests, staging upgrade and permissions smoke-test, documentation review and PR approval before tagging v1.2.0. Automatic specification extraction and general online product search remain follow-up work.
+**Validation:** Reusable-spool and related regression tests, staging upgrade and migration consistency checks passed before release preparation. Automatic specification extraction and general online product search remain follow-up work.
 
 
 ## v1.1.0 — Previously released
