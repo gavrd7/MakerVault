@@ -296,6 +296,80 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
   </div>;
 }
 
+
+function MakerTagBatchPrint({ tags, allMatching, onClose }) {
+  const [scope, setScope] = useState(tags.length ? "selected" : "all");
+  const [format, setFormat] = useState("standard");
+  const [custom, setCustom] = useState({ width: 40, height: 30, qr: 20 });
+  const [fields, setFields] = useState({ title: true, code: true, target: true });
+  const presets = {
+    compact: { width: 50, height: 30, qr: 19 },
+    standard: { width: 70, height: 50, qr: 25 },
+    large: { width: 100, height: 70, qr: 38 },
+  };
+  const chosen = format === "custom" ? custom : presets[format];
+  const size = { width: Math.min(190, Math.max(12, Number(chosen.width) || 40)), height: Math.min(260, Math.max(12, Number(chosen.height) || 30)), qr: Math.min(120, Math.max(10, Number(chosen.qr) || 20)) };
+  const qr = Math.min(size.qr, size.width - 4, size.height - 4);
+  const batch = scope === "all" ? allMatching : tags;
+  const columns = Math.max(1, Math.floor(190 / (size.width + 3)));
+  const rowsPerSheet = Math.max(1, Math.floor(277 / (size.height + 3)));
+  const perSheet = columns * rowsPerSheet;
+  const pages = Array.from({ length: Math.ceil(batch.length / perSheet) }, (_, i) => batch.slice(i * perSheet, (i + 1) * perSheet));
+  return <>
+    <Modal title="Print Maker Tag labels" subtitle="Print active QR tags using a shared sheet layout." wide onClose={onClose}>
+      <div className="tagBatchSettings">
+        <label>Tags to print<select value={scope} onChange={e => setScope(e.target.value)}>
+          <option value="selected" disabled={!tags.length}>Selected ({tags.length})</option>
+          <option value="all">All matching active QR tags ({allMatching.length})</option>
+        </select></label>
+        <label>Label format<select value={format} onChange={e => setFormat(e.target.value)}>
+          <option value="compact">Compact · 50 × 30 mm</option>
+          <option value="standard">Standard · 70 × 50 mm</option>
+          <option value="large">Large · 100 × 70 mm</option>
+          <option value="custom">Custom</option>
+        </select></label>
+        {format === "custom" && <div className="tagLabelCustomSizes">
+          {[["width","Label width"],["height","Label height"],["qr","QR size"]].map(([key, name]) => <label key={key}>{name} (mm)<input type="number" min={key === "qr" ? 10 : 12} max={key === "height" ? 260 : key === "qr" ? 120 : 190} value={custom[key]} onChange={e => setCustom(old => ({ ...old, [key]: e.target.value }))} /></label>)}
+        </div>}
+        <div className="tagLabelTextOptions">
+          {[["title","Show title"],["code","Show tag code"],["target","Show target type"]].map(([key, name]) => <label key={key}><input type="checkbox" checked={fields[key]} onChange={e => setFields(old => ({ ...old, [key]: e.target.checked }))} /> {name}</label>)}
+        </div>
+        <p>{batch.length} labels · {pages.length} A4 sheet{pages.length === 1 ? "" : "s"} · {columns} across × {rowsPerSheet} down.</p>
+        {qr < 20 && <small>Very small QR codes may be hard to scan. Test one first.</small>}
+        <div className="tagBatchPreview">
+          {batch.slice(0, 6).map(tag => <MakerTagPrintable key={tag.id} tag={tag} size={size} qr={qr} fields={fields} preview />)}
+        </div>
+        <div className="formActions">
+          <button type="button" className="primary" disabled={!batch.length} onClick={() => window.print()}>Print {batch.length} labels</button>
+          <button type="button" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </Modal>
+    {typeof document !== "undefined" && createPortal(
+      <div className="makerTagBatchPrintDocument" aria-hidden="true">
+        {pages.map((group, i) => <div className="makerTagBatchSheet" key={i}>
+          {group.map(tag => <MakerTagPrintable key={tag.id} tag={tag} size={size} qr={qr} fields={fields} />)}
+        </div>)}
+      </div>, document.body
+    )}
+  </>;
+}
+
+function MakerTagPrintable({ tag, size, qr, fields, preview = false }) {
+  const scanUrl = typeof window !== "undefined" ? window.location.origin + tag.scan_path : tag.scan_path;
+  return <div className={"makerTagPrintLabel" + (preview ? " makerTagBatchSample" : "")} style={{ width: size.width + "mm", height: size.height + "mm" }}>
+    <div className="tagBrandedQr" style={{ width: qr + "mm", height: qr + "mm" }}>
+      <QRCodeSVG value={scanUrl} size={190} level="H" marginSize={3} />
+      <span className="tagBrandedQrBadge"><img src="/static/core/makervault-logo.jpg" alt="" /></span>
+    </div>
+    {(fields.title || fields.code || fields.target) && <div className="makerTagPrintText">
+      {fields.title && <strong>{tag.label || tag.code}</strong>}
+      {fields.code && <code>{tag.code}</code>}
+      {fields.target && <small>MakerVault · {tag.target?.type_label || tag.target_type}</small>}
+    </div>}
+  </div>;
+}
+
 function MakerTagForm({ title, data, tag = null, onClose, onSaved }) {
   const [form, setForm] = useState({
     kind: tag?.kind || "qr",
