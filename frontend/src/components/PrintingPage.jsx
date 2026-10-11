@@ -1566,6 +1566,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
   const [catalogueOpen, setCatalogueOpen] = useState(false);
   const [suggestionOpen, setSuggestionOpen] = useState(false);
   const [reviewsOpen, setReviewsOpen] = useState(false);
+  const [reviewNotice, setReviewNotice] = useState("");
   const [suggestionTarget, setSuggestionTarget] = useState(null);
   const [suggestionRows, setSuggestionRows] = useState([]);
   const [canReviewSuggestions, setCanReviewSuggestions] = useState(false);
@@ -1757,6 +1758,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
   async function openReviewsModal() {
     setCatalogueOpen(false);
     setReviewsOpen(true);
+    setReviewNotice("");
     setSuggestionError("");
     try {
       const response = await apiFetch("/api/printing/reusable-spool-suggestions/");
@@ -1808,7 +1810,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
       const response = await apiFetch("/api/printing/reusable-spool-suggestions/");
       setSuggestionRows(response.rows || []);
       await load();
-      setNotice(action === "approve" ? "Suggestion added to shared catalogue as unverified." : "Suggestion rejected.");
+      setReviewNotice(action === "approve" ? "Suggestion approved and added to the shared catalogue as unverified." : "Suggestion rejected.");
     } catch (err) { setSuggestionError(err.message); }
     finally { setSuggestionBusy(false); }
   }
@@ -1952,7 +1954,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
     </section>
     {catalogueOpen && <Modal title="Manufacturer spool catalogue" wide onClose={() => setCatalogueOpen(false)}>
       <div className="spoolCatalogueModalContent">
-        <div className="spoolCatalogueSuggestionHead"><small>{filteredManufacturerDesigns.length} matching designs</small>{canAddDesign && <button type="button" onClick={() => openSuggestionModal()}>Suggest New Model</button>}{canReviewSuggestions && <button type="button" onClick={openReviewsModal}>Review Suggestions</button>}</div>
+        <div className="spoolCatalogueSuggestionHead"><small>{filteredManufacturerDesigns.length} matching designs</small><div className="spoolCatalogueSuggestionActions">{canAddDesign && <button type="button" onClick={() => openSuggestionModal()}>Suggest New Model</button>}{canReviewSuggestions && <button type="button" onClick={openReviewsModal}>Review Suggestions</button>}</div></div>
       <div className="spoolCatalogueFilters">
         <label>Search catalogue<input value={catalogueQuery} onChange={e => setCatalogueQuery(e.target.value)} placeholder="Spool, model, manufacturer…" /></label>
         <label>Manufacturer<select value={catalogueMaker} onChange={e => setCatalogueMaker(e.target.value)}><option value="">All manufacturers</option>{catalogueManufacturers.map(name => <option key={name} value={name}>{name}</option>)}</select></label>
@@ -1997,6 +1999,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
     {reviewsOpen && <Modal title="Review Suggestions" wide onClose={() => { setReviewsOpen(false); setCatalogueOpen(true); }}>
       <div className="spoolSuggestionForm">
         {suggestionError && <div className="error" role="alert">{suggestionError}</div>}
+        {reviewNotice && <div className="successMessage" role="status">{reviewNotice}</div>}
         <p>Pending catalogue additions and specification corrections are listed first.</p>
         <div className="printingList">{[...suggestionRows].sort((a,b) => Number(b.status === "pending") - Number(a.status === "pending")).map(s => <div className="printingListRow" key={s.id}>
           <div><strong>{s.manufacturer} — {s.name}</strong><small>{s.target_entry_key ? "Correction: " + s.target_entry_key : "New model"} · {s.status}</small>
