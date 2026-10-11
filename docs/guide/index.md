@@ -9,8 +9,8 @@ Learn to install MakerVault, record what you own and bring your projects, files 
 [Follow a first project](getting-started/first-project.md){ .md-button }
 </div>
 
-!!! info "Current release: v1.1.0"
-    MakerVault v1.1.0 improves background catalogue enrichment, restart-safe processing, provenance and image diagnostics. It retains first-run administrator setup, account and security management, and earlier project-management improvements. See [scope and verification](reference/about.md).
+!!! info "Current release: v1.2.0"
+    MakerVault v1.2.0 adds reusable spool hardware inventory, catalogue references and reviewed corrections, personal images, branded QR labels and Maker Tag support for reusable reels. The v1.1.0 background catalogue improvements remain included.
 
 <div class="guide-grid" markdown>
 <div class="guide-card" markdown>
