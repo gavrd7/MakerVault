@@ -142,7 +142,7 @@ The source-build route changes only how the MakerVault application image is obta
 
 ## 5. Set up the first administrator
 
-MakerVault v1.1.0 provides a browser-based first-run setup wizard when no administrator exists. Leave `MAKERVAULT_ADMIN_PASSWORD` empty in `.env` to use it. Open MakerVault in your browser at the address shown below: the first-run wizard should appear automatically. On the Docker host, retrieve the required token:
+MakerVault provides a browser-based first-run setup wizard when no administrator exists. Leave `MAKERVAULT_ADMIN_PASSWORD` empty in `.env` to use it. Open MakerVault in your browser at the address shown below: the first-run wizard should appear automatically. On the Docker host, retrieve the required token:
 
 ```bash
 sudo docker compose exec -u makervault makervault python manage.py first_run_token
