@@ -259,7 +259,7 @@ export default function ProjectsPage({ projects, setProjects, config, refreshDas
             <option value="name">Sort: name</option>
           </select>
           <button type="button" onClick={clearFilters} disabled={!filtersActive}>Clear filters</button>
-          {config?.permissions?.add_project && <button className="primary" onClick={() => setShowCreate(true)}>＋ New project</button>}
+          {config?.permissions?.add_project && <button className="primary" onClick={() => setShowCreate(true)}>Add project</button>}
         </div>
       </div>
       {error && <div className="inlineError">{error}</div>}
@@ -382,9 +382,9 @@ function ProjectDetail({ project, loading, canEdit, canDelete, config, boards, c
           {canEdit && !["complete", "archived"].includes(project.status) && <button className="projectCompleteButton" onClick={() => onComplete(project)}>✓ Completed</button>}
           {canEdit && <button onClick={() => setEditing(true)}>Edit</button>}
           {canEdit && <button onClick={() => setCoverOpen(true)}>Cover</button>}
-          {canEdit && <button onClick={() => setGalleryOpen(true)}>＋ Photo</button>}
-          {canEdit && <button onClick={() => setFileOpen(true)}>＋ File</button>}
-          {canEdit && <button onClick={() => setRepositoryOpen(true)}>＋ Repository</button>}
+          {canEdit && <button onClick={() => setGalleryOpen(true)}>Add photo</button>}
+          {canEdit && <button onClick={() => setFileOpen(true)}>Add file</button>}
+          {canEdit && <button onClick={() => setRepositoryOpen(true)}>Add repository</button>}
           {canDelete && <button className="dangerButton" onClick={deleteProject}>Delete project</button>}
         </div>}
       </div>
