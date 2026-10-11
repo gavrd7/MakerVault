@@ -71,7 +71,7 @@ def refresh_reusable_spool_images(*, limit=3, retry_days=7):
         checked += 1
         status = "no-reviewed-image"
         try:
-            html, final_url = fetch_catalogue_source_html(item.source_url)
+            final_url, html = fetch_catalogue_source_html(item.source_url)
             candidate = official_image_candidate(item, html, final_url)
             if candidate:
                 cache_catalogue_image_from_url(item, candidate)
