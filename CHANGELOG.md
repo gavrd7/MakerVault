@@ -2,6 +2,9 @@
 
 ## v1.2.0 — In development (not released)
 
+- Added reusable-spool hardware inventory, distinct from filament stock: physical reusable reels, owned/custom or 3D-printed designs, measured empty/tare weight, locations, condition, filament assignment/unassignment and assignment history.
+- Added Maker Tag targeting and deep-link navigation for reusable spools, plus MakerVault-branded QR label centre icons and print previews.
+- Standardised key **Add** actions across boards, components, inventory, projects, files, diagrams and other pages; fixed modal-close handling and related usability details.
 - Expanded the reusable spool hardware catalogue with manufacturer and printable masterspool variants, source links, nominal empty weights and material/geometry/dryer data when available.
 - Added reusable-spool catalogue detail views with image zoom, image coverage/maintenance diagnostics, and conservative automatic source-image matching.
 - Added owner-specific image overrides: upload an image or securely cache a user-chosen public HTTPS image URL, with a reset to the shared catalogue image. Personal/printed spool designs support images too.
@@ -12,7 +15,7 @@
 **Release gate:** Full regression tests, staging upgrade and permissions smoke-test, documentation review and PR approval before tagging v1.2.0. Automatic specification extraction and general online product search remain follow-up work.
 
 
-## v1.1.0 — Release candidate (unpublished)
+## v1.1.0 — Previously released
 
 - Improved automated catalogue seeding, bounded batch continuation and restart-safe PostgreSQL checkpoints for boards, components, filaments and image records.
 - Added safe manufacturer-backed technical enrichment for selected components and non-ESP boards, preserving existing user-entered information.
