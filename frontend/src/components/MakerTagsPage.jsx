@@ -380,6 +380,13 @@ function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged, onOpenTarget
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const qrWrap = useRef(null);
+  const [labelFormat, setLabelFormat] = useState("standard");
+  const labelFormats = {
+    standard: { name: "Standard label · 70 × 50 mm", width: 70, height: 50, qr: 25 },
+    compact: { name: "Compact label · 50 × 30 mm", width: 50, height: 30, qr: 19 },
+    large: { name: "Large label · 100 × 70 mm", width: 100, height: 70, qr: 38 },
+  };
+  const selectedFormat = labelFormats[labelFormat];
   const scanUrl = typeof window !== "undefined" ? window.location.origin + tag.scan_path : tag.scan_path;
 
   async function setStatus(status) {
@@ -426,14 +433,31 @@ function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged, onOpenTarget
 
   function printLabel() {
     const svg = qrWrap.current?.querySelector(".tagBrandedQr")?.outerHTML || "";
-    const popup = window.open("", "_blank", "width=520,height=620");
+    const popup = window.open("", "_blank", "width=650,height=750");
     if (!popup) {
       setNotice("The browser blocked the print window.");
       return;
     }
-    const safeLabel = (tag.label || tag.code).replace(/[<>&"]/g, value => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[value]));
-    const safeCode = tag.code.replace(/[<>&"]/g, value => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[value]));
-    popup.document.write(`<!doctype html><html><head><title>Maker Tag</title><style>body{font-family:system-ui,sans-serif;display:grid;place-items:center;min-height:90vh;margin:0}.label{border:1px solid #aaa;border-radius:16px;padding:24px;text-align:center;max-width:340px}.label h1{font-size:22px;margin:12px 0 4px}.label code{font-size:13px;word-break:break-all}.label small{display:block;margin-top:10px;color:#555}@media print{button{display:none}.label{border-color:#000}}.tagBrandedQr{position:relative;width:190px;height:190px;margin:0 auto}.tagBrandedQr svg{display:block}.tagBrandedQrBadge{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:38px;height:38px;border:4px solid white;border-radius:7px;background:white;overflow:hidden;box-sizing:border-box}.tagBrandedQrBadge img{display:block;width:104px;height:auto;max-width:none;position:absolute;left:0;top:50%;transform:translateY(-50%)}</style></head><body><div class="label">${svg}<h1>${safeLabel}</h1><code>${safeCode}</code><small>MakerVault · ${tag.target?.type_label || tag.target_type}</small></div><script>window.onload=()=>window.print()<\/script></body></html>`);
+    const escapeHtml = value => String(value || "").replace(/[<>&"]/g, character => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[character]));
+    const safeLabel = escapeHtml(tag.label || tag.code);
+    const safeCode = escapeHtml(tag.code);
+    const safeType = escapeHtml(tag.target?.type_label || tag.target_type);
+    const { width, height, qr } = selectedFormat;
+    popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Maker Tag label</title><style>
+    @page{size:auto;margin:6mm}
+    *{box-sizing:border-box}
+    body{font-family:system-ui,sans-serif;margin:0;padding:12mm;display:flex;justify-content:center;background:#fff;color:#111}
+    .label{width:${width}mm;height:${height}mm;border:0.3mm solid #777;border-radius:2mm;padding:2mm;display:flex;align-items:center;gap:2mm;overflow:hidden;break-inside:avoid;page-break-inside:avoid}
+    .tagBrandedQr{position:relative;flex:none;width:${qr}mm;height:${qr}mm}
+    .tagBrandedQr svg{width:100%;height:100%;display:block}
+    .tagBrandedQrBadge{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:20%;height:20%;border:1mm solid white;border-radius:1mm;background:white;overflow:hidden}
+    .tagBrandedQrBadge img{display:block;width:280%;max-width:none;height:auto;position:absolute;left:0;top:50%;transform:translateY(-50%)}
+    .info{flex:1;min-width:0;overflow-wrap:anywhere}
+    .info strong{display:block;font-size:${labelFormat==="compact" ? 8 : 10}pt;line-height:1.1}
+    .info code{display:block;font-size:7pt;margin-top:1mm}
+    .info small{display:block;font-size:6pt;margin-top:1mm}
+    @media print{body{padding:0}}
+    </style></head><body><div class="label">${svg}<div class="info"><strong>${safeLabel}</strong><code>${safeCode}</code><small>MakerVault · ${safeType}</small></div></div><script>window.onload=()=>window.print()<\/script></body></html>`);
     popup.document.close();
   }
 
@@ -454,8 +478,24 @@ function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged, onOpenTarget
         <code>{scanUrl}</code>
         <div className="tagQrActions">
           <button onClick={() => copy(scanUrl, "Scan link")}>Copy scan link</button>
-          <button onClick={printLabel}>Print label</button>
         </div>
+        <label className="tagLabelFormat">Label format
+          <select value={labelFormat} onChange={event => setLabelFormat(event.target.value)}>
+            {Object.entries(labelFormats).map(([value, option]) => <option key={value} value={value}>{option.name}</option>)}
+          </select>
+        </label>
+        <div className="tagLabelPreviewWrap">
+          <div className="tagLabelPreview" style={{ width: selectedFormat.width * 3.2, height: selectedFormat.height * 3.2 }}>
+            <div className="tagLabelPreviewCode" style={{ width: selectedFormat.qr * 3.2, height: selectedFormat.qr * 3.2 }}>
+              <div className="tagBrandedQr"><QRCodeSVG value={scanUrl} size={190} level="H" marginSize={3} /><span className="tagBrandedQrBadge" aria-hidden="true"><img src="/static/core/makervault-logo.jpg" alt="" /></span></div>
+            </div>
+            <div className="tagLabelPreviewText">
+              <strong>{tag.label || tag.code}</strong><code>{tag.code}</code><small>MakerVault · {tag.target?.type_label || tag.target_type}</small>
+            </div>
+          </div>
+        </div>
+        <small>Label preview at approximate screen scale; the print output uses exact millimetre dimensions. Test one label on plain paper first.</small>
+        <button onClick={printLabel}>Print this label</button>
       </div> : <div className="tagQrCard">
         <div className="tagTapIcon">{tag.kind === "nfc" ? "NFC" : "RFID"}</div>
         <code>{tag.code}</code>
