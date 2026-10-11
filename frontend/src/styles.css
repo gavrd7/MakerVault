@@ -2908,3 +2908,26 @@ a:focus-visible,
 .tagLabelPreviewText small{font-size:9px}
 
 .tagPrintFrame{position:absolute;left:-10000px;top:0;width:210mm;height:297mm;border:0;visibility:hidden;pointer-events:none}
+
+.tagLabelCustomSizes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:100%;text-align:left}
+.tagLabelCustomSizes label{min-width:0;font-size:12px}
+.tagLabelCustomSizes input{width:100%;min-width:0}
+.tagLabelTextOptions{display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:center}
+.tagLabelTextOptions label{display:flex;align-items:center;gap:5px;font-size:12px}
+.makerTagPrintPage{display:none}
+@media print{
+  @page{size:A4 portrait;margin:0}
+  html,body{margin:0!important;padding:0!important;width:210mm!important;height:297mm!important;overflow:visible!important;background:white!important}
+  body>#root{display:none!important}
+  .makerTagPrintPage{display:block!important;position:absolute!important;top:10mm!important;left:10mm!important;width:190mm!important;height:277mm!important;overflow:hidden!important;color:black!important;background:white!important;break-after:avoid!important}
+  .makerTagPrintLabel{box-sizing:border-box!important;display:flex!important;flex-flow:row nowrap!important;align-items:center!important;gap:2mm!important;overflow:hidden!important;border:.25mm solid #777!important;padding:2mm!important;break-inside:avoid!important}
+  .makerTagPrintLabel .tagBrandedQr{display:block!important;position:relative!important;flex:none!important}
+  .makerTagPrintLabel .tagBrandedQr svg{display:block!important;width:100%!important;height:100%!important}
+  .makerTagPrintLabel .tagBrandedQrBadge{position:absolute!important;left:50%!important;top:50%!important;transform:translate(-50%,-50%)!important;width:20%!important;height:20%!important;border:1mm solid white!important;background:white!important;overflow:hidden!important}
+  .makerTagPrintLabel .tagBrandedQrBadge img{display:block!important;width:280%!important;max-width:none!important;height:auto!important;position:absolute!important;left:0!important;top:50%!important;transform:translateY(-50%)!important}
+  .makerTagPrintText{flex:1;min-width:0;overflow-wrap:anywhere;font-size:8pt;line-height:1.1}
+  .makerTagPrintText strong,.makerTagPrintText code,.makerTagPrintText small{display:block;margin-bottom:1mm}
+  .makerTagPrintText strong{font-size:10pt}
+  .makerTagPrintText code{font-size:7pt;white-space:normal}
+  .makerTagPrintText small{font-size:6pt}
+}
