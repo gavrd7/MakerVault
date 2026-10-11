@@ -1600,11 +1600,13 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
 
   async function load() {
     try {
-      const [d, r, catalogue] = await Promise.all([
+      const [d, r, catalogue, reviewAccess] = await Promise.all([
         apiFetch("/api/printing/reusable-spool-designs/"),
         apiFetch("/api/printing/reusable-spools/"),
         apiFetch("/api/printing/reusable-spool-manufacturers/"),
+        apiFetch("/api/printing/reusable-spool-suggestions/"),
       ]);
+      setCanReviewSuggestions(Boolean(reviewAccess.can_review));
       setDesigns(d.rows || []);
       setManufacturerDesigns(catalogue.rows || []);
       setReels(r.rows || []);
