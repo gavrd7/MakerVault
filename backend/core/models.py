@@ -775,6 +775,7 @@ class ReusableSpoolCatalogEntry(TimeStampedModel):
 
 
 class ReusableSpoolCatalogueSuggestion(TimeStampedModel):
+    target_entry = models.ForeignKey("ReusableSpoolCatalogEntry", on_delete=models.CASCADE, blank=True, null=True, related_name="correction_suggestions")
     """User-proposed hardware reference, held for explicit review before publication."""
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     manufacturer = models.CharField(max_length=120)
