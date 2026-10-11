@@ -103,6 +103,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("active");
   const [kind, setKind] = useState("");
+  const [targetType, setTargetType] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [detail, setDetail] = useState(null);
   const [editTag, setEditTag] = useState(null);
@@ -147,6 +148,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
     return (data?.rows || []).filter(item => {
       if (status && item.status !== status) return false;
       if (kind && item.kind !== kind) return false;
+      if (targetType && item.target_type !== targetType) return false;
       if (!term) return true;
       const haystack = [
         item.label, item.code, item.kind_label, item.status_label, item.technology_label,
@@ -154,7 +156,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
       ].filter(Boolean).join(" ").toLowerCase();
       return haystack.includes(term);
     });
-  }, [data, query, status, kind]);
+  }, [data, query, status, kind, targetType]);
 
   const printableRows = rows.filter(tag => tag.kind === "qr" && tag.status === "active");
   const selectedPrintableRows = printableRows.filter(tag => selectedTagIds.includes(String(tag.id)));
@@ -228,6 +230,10 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
         <select value={kind} onChange={e => setKind(e.target.value)}>
           <option value="">All tag types</option>
           {(data?.kinds || []).map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+        </select>
+        <select value={targetType} aria-label="Filter by target type" onChange={e => setTargetType(e.target.value)}>
+          <option value="">All target types</option>
+          {(data?.targets || []).map(group => <option key={group.type} value={group.type}>{group.label}</option>)}
         </select>
         <select value={status} onChange={e => setStatus(e.target.value)}>
           <option value="">All states</option>
