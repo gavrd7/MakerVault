@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
+import { createPortal } from "react-dom";
 import { apiFetch } from "../api";
 import { Badge, LoadingBlock, Modal } from "./Common";
 
@@ -380,14 +381,17 @@ function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged, onOpenTarget
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const qrWrap = useRef(null);
-  const printFrame = useRef(null);
+  const [customSize, setCustomSize] = useState({ width: 40, height: 30, qr: 20 });
+  const [textOptions, setTextOptions] = useState({ title: true, code: true, target: true });
   const [labelFormat, setLabelFormat] = useState("standard");
   const labelFormats = {
     standard: { name: "Standard label · 70 × 50 mm", width: 70, height: 50, qr: 25 },
     compact: { name: "Compact label · 50 × 30 mm", width: 50, height: 30, qr: 19 },
     large: { name: "Large label · 100 × 70 mm", width: 100, height: 70, qr: 38 },
   };
-  const selectedFormat = labelFormats[labelFormat];
+  const selectedFormat = labelFormat === "custom" ? { name: "Custom", ...customSize } : labelFormats[labelFormat];
+  const safeFormat = { width: Math.min(190, Math.max(12, Number(selectedFormat.width) || 40)), height: Math.min(260, Math.max(12, Number(selectedFormat.height) || 30)), qr: Math.min(120, Math.max(10, Number(selectedFormat.qr) || 20)) };
+  const qrSize = Math.min(safeFormat.qr, safeFormat.width - 4, safeFormat.height - 4);
   const scanUrl = typeof window !== "undefined" ? window.location.origin + tag.scan_path : tag.scan_path;
 
   async function setStatus(status) {
@@ -433,42 +437,12 @@ function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged, onOpenTarget
   }
 
   function printLabel() {
-    const svg = qrWrap.current?.querySelector(".tagBrandedQr")?.outerHTML || "";
-    const frame = printFrame.current;
-    if (!frame) {
-      setNotice("Print preview is unavailable.");
-      return;
-    }
-    const escapeHtml = value => String(value || "").replace(/[<>&"]/g, character => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[character]));
-    const safeLabel = escapeHtml(tag.label || tag.code);
-    const safeCode = escapeHtml(tag.code);
-    const safeType = escapeHtml(tag.target?.type_label || tag.target_type);
-    const { width, height, qr } = selectedFormat;
-    frame.onload = () => {
-      try { frame.contentWindow?.focus(); frame.contentWindow?.print(); }
-      catch { setNotice("Printing is not supported in this browser. Try a desktop browser."); }
-    };
-    frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><title>Maker Tag label</title><style>
-    @page{size:A4 portrait;margin:10mm}
-    html,body{margin:0!important;padding:0!important;width:190mm;height:277mm;overflow:hidden!important;background:#fff;color:#111}
-    *{box-sizing:border-box}
-    body{font-family:system-ui,sans-serif;display:block!important}
-    .label{position:relative;display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;width:${width}mm;height:${height}mm;border:0.3mm solid #777;border-radius:2mm;padding:2mm;display:flex;align-items:center;gap:2mm;overflow:hidden;break-inside:avoid;page-break-inside:avoid}
-    .tagBrandedQr{position:relative;flex:none;width:${qr}mm;height:${qr}mm}
-    .tagBrandedQr svg{width:100%;height:100%;display:block}
-    .tagBrandedQrBadge{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:20%;height:20%;border:1mm solid white;border-radius:1mm;background:white;overflow:hidden}
-    .tagBrandedQrBadge img{display:block;width:280%;max-width:none;height:auto;position:absolute;left:0;top:50%;transform:translateY(-50%)}
-    .info{flex:1;min-width:0;overflow-wrap:anywhere}
-    .info strong{display:block;font-size:${labelFormat==="compact" ? 8 : 10}pt;line-height:1.1}
-    .info code{display:block;font-size:7pt;margin-top:1mm}
-    .info small{display:block;font-size:6pt;margin-top:1mm}
-    @media print{html,body{margin:0!important;padding:0!important;page-break-after:avoid!important}.label{break-before:avoid!important;break-after:avoid!important;break-inside:avoid!important;page-break-inside:avoid!important}}
-    </style></head><body><div class="label">${svg}<div class="info"><strong>${safeLabel}</strong><code>${safeCode}</code><small>MakerVault · ${safeType}</small></div></div></body></html>`;
-
+    setNotice("");
+    window.print();
   }
 
   return <Modal title={tag.label || tag.code} subtitle="Maker Tag identity and assignment history." onClose={onClose} wide>
-    <iframe ref={printFrame} title="Maker Tag print layout" className="tagPrintFrame" />
+
     {notice && <div className={notice.toLowerCase().includes("blocked") ? "formError" : "notice"}>{notice}</div>}
     <div className="tagDetailGrid">
       <div className="tagDetailIdentity">
@@ -489,15 +463,27 @@ function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged, onOpenTarget
         <label className="tagLabelFormat">Label format
           <select value={labelFormat} onChange={event => setLabelFormat(event.target.value)}>
             {Object.entries(labelFormats).map(([value, option]) => <option key={value} value={value}>{option.name}</option>)}
+            <option value="custom">Custom dimensions</option>
           </select>
         </label>
-        <div className="tagLabelPreviewWrap">
-          <div className="tagLabelPreview" style={{ width: selectedFormat.width * 3.2, height: selectedFormat.height * 3.2 }}>
-            <div className="tagLabelPreviewCode" style={{ width: selectedFormat.qr * 3.2, height: selectedFormat.qr * 3.2 }}>
+        {labelFormat === "custom" && <div className="tagLabelCustomSizes">
+          {[["width","Label width"],["height","Label height"],["qr","QR size"]].map(([key, title]) => <label key={key}>{title} (mm)
+            <input type="number" min={key === "qr" ? 10 : 12} max={key === "height" ? 260 : key === "qr" ? 120 : 190} value={customSize[key]} onChange={event => setCustomSize(old => ({...old, [key]: event.target.value}))} />
+          </label>)}
+        </div>}
+        <div className="tagLabelTextOptions">
+          <label><input type="checkbox" checked={textOptions.title} onChange={event => setTextOptions(old => ({ ...old, title: event.target.checked }))} /> Show title</label>
+          <label><input type="checkbox" checked={textOptions.code} onChange={event => setTextOptions(old => ({ ...old, code: event.target.checked }))} /> Show tag code</label>
+          <label><input type="checkbox" checked={textOptions.target} onChange={event => setTextOptions(old => ({ ...old, target: event.target.checked }))} /> Show target type</label>
+        </div>
+        {qrSize < 20 && <small role="status">Small QR codes with long scan URLs may be difficult to scan. Test before printing a batch.</small>}
+                <div className="tagLabelPreviewWrap">
+          <div className="tagLabelPreview" style={{ width: safeFormat.width * 3.2, height: safeFormat.height * 3.2 }}>
+            <div className="tagLabelPreviewCode" style={{ width: qrSize * 3.2, height: qrSize * 3.2 }}>
               <div className="tagBrandedQr"><QRCodeSVG value={scanUrl} size={190} level="H" marginSize={3} /><span className="tagBrandedQrBadge" aria-hidden="true"><img src="/static/core/makervault-logo.jpg" alt="" /></span></div>
             </div>
             <div className="tagLabelPreviewText">
-              <strong>{tag.label || tag.code}</strong><code>{tag.code}</code><small>MakerVault · {tag.target?.type_label || tag.target_type}</small>
+              {textOptions.title && <strong>{tag.label || tag.code}</strong>}{textOptions.code && <code>{tag.code}</code>}{textOptions.target && <small>MakerVault · {tag.target?.type_label || tag.target_type}</small>}
             </div>
           </div>
         </div>
@@ -539,4 +525,20 @@ function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged, onOpenTarget
         : <button className="primary" disabled={busy} onClick={() => setStatus("active")}>Reactivate tag</button>)}
     </div>
   </Modal>;
+
+    {tag.kind === "qr" && typeof document !== "undefined" && createPortal(
+      <div className="makerTagPrintPage" aria-hidden="true">
+        <div className="makerTagPrintLabel" style={{ width: safeFormat.width + "mm", height: safeFormat.height + "mm" }}>
+          <div className="tagBrandedQr" style={{ width: qrSize + "mm", height: qrSize + "mm" }}>
+            <QRCodeSVG value={scanUrl} size={190} level="H" marginSize={3} />
+            <span className="tagBrandedQrBadge"><img src="/static/core/makervault-logo.jpg" alt="" /></span>
+          </div>
+          {(textOptions.title || textOptions.code || textOptions.target) && <div className="makerTagPrintText">
+            {textOptions.title && <strong>{tag.label || tag.code}</strong>}
+            {textOptions.code && <code>{tag.code}</code>}
+            {textOptions.target && <small>MakerVault · {tag.target?.type_label || tag.target_type}</small>}
+          </div>}
+        </div>
+      </div>, document.body
+    )}
 }
