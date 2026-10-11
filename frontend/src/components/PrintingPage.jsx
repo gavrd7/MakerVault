@@ -1565,6 +1565,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
   const [catalogueMaker, setCatalogueMaker] = useState("");
   const [catalogueOpen, setCatalogueOpen] = useState(false);
   const [suggestionOpen, setSuggestionOpen] = useState(false);
+  const [suggestionTarget, setSuggestionTarget] = useState(null);
   const [suggestionRows, setSuggestionRows] = useState([]);
   const [canReviewSuggestions, setCanReviewSuggestions] = useState(false);
   const [suggestionForm, setSuggestionForm] = useState({ manufacturer: "", name: "", design_type: "manufacturer", source_url: "", nominal_tare_g: "", outer_diameter_mm: "", width_mm: "", hub_diameter_mm: "", capacity_g: "", material: "", max_dryer_temp_c: "", temperature_source: "" });
@@ -1750,7 +1751,16 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
       : "Catalogue match found, but no additional verified specifications are available yet.");
   }
 
-  async function openSuggestionModal() {
+  async function openSuggestionModal(target = null) {
+    setSuggestionTarget(target);
+    setSuggestionForm(p => ({ ...p,
+      manufacturer: target?.manufacturer || "",
+      name: target?.name || "",
+      design_type: target?.design_type || "manufacturer",
+      source_url: target?.source_url || "",
+      nominal_tare_g: "", outer_diameter_mm: "", width_mm: "", hub_diameter_mm: "", capacity_g: "",
+      material: "", max_dryer_temp_c: "", temperature_source: "",
+    }));
     setSuggestionOpen(true);
     setCatalogueOpen(false);
     setSuggestionError("");
@@ -1797,7 +1807,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
     try {
       await apiFetch("/api/printing/reusable-spool-suggestions/", {
         method: "POST",
-        body: { manufacturer, name, design_type, source_url,
+        body: { manufacturer, name, design_type, source_url, target_entry_key: suggestionTarget?.key || "",
           proposed_specs: Object.fromEntries(Object.entries(proposed_specs).filter(([, v]) => String(v).trim())) },
       });
       setSuggestionRows((await apiFetch("/api/printing/reusable-spool-suggestions/")).rows || []);
@@ -1926,7 +1936,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
     </section>
     {catalogueOpen && <Modal title="Manufacturer spool catalogue" wide onClose={() => setCatalogueOpen(false)}>
       <div className="spoolCatalogueModalContent">
-        <div className="spoolCatalogueSuggestionHead"><small>{filteredManufacturerDesigns.length} matching designs</small>{canAddDesign && <button type="button" onClick={openSuggestionModal}>Suggest new model</button>}</div>
+        <div className="spoolCatalogueSuggestionHead"><small>{filteredManufacturerDesigns.length} matching designs</small>{canAddDesign && <button type="button" onClick={() => openSuggestionModal()}>Suggest new model</button>}</div>
       <div className="spoolCatalogueFilters">
         <label>Search catalogue<input value={catalogueQuery} onChange={e => setCatalogueQuery(e.target.value)} placeholder="Spool, model, manufacturer…" /></label>
         <label>Manufacturer<select value={catalogueMaker} onChange={e => setCatalogueMaker(e.target.value)}><option value="">All manufacturers</option>{catalogueManufacturers.map(name => <option key={name} value={name}>{name}</option>)}</select></label>
@@ -1968,14 +1978,14 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
       </div>
     </section>
 
-    {suggestionOpen && <Modal title="Suggest a reusable spool model" wide onClose={() => { setSuggestionOpen(false); setCatalogueOpen(true); }}>
+    {suggestionOpen && <Modal title={suggestionTarget ? "Suggest specification correction" : "Suggest a reusable spool model"} wide onClose={() => { setSuggestionOpen(false); setCatalogueOpen(true); }}>
       <form className="spoolSuggestionForm" onSubmit={submitSuggestion}>
-        <p>Suggest a new physical spool or printable design. Submissions are reviewed before entering the shared catalogue. Unknown specifications can be left blank.</p>
+        <p>{suggestionTarget ? "Propose corrected fields for this existing model. Enter only fields you want to change. The submitted evidence will be reviewed before the shared catalogue is updated." : "Suggest a new physical spool or printable design. Submissions are reviewed before entering the shared catalogue. Unknown specifications can be left blank."}</p>
         {suggestionError && <div className="error" role="alert">{suggestionError}</div>}
         <div className="spoolCatalogueFilters">
-          <label>Manufacturer<input required maxLength={120} value={suggestionForm.manufacturer} onChange={e => setSuggestionForm(p => ({ ...p, manufacturer: e.target.value }))} /></label>
-          <label>Model name<input required maxLength={200} value={suggestionForm.name} onChange={e => setSuggestionForm(p => ({ ...p, name: e.target.value }))} /></label>
-          <label>Type<select value={suggestionForm.design_type} onChange={e => setSuggestionForm(p => ({ ...p, design_type: e.target.value }))}><option value="manufacturer">Manufacturer-made</option><option value="printed">Printable design</option></select></label>
+          <label>Manufacturer<input disabled={Boolean(suggestionTarget)} required maxLength={120} value={suggestionForm.manufacturer} onChange={e => setSuggestionForm(p => ({ ...p, manufacturer: e.target.value }))} /></label>
+          <label>Model name<input disabled={Boolean(suggestionTarget)} required maxLength={200} value={suggestionForm.name} onChange={e => setSuggestionForm(p => ({ ...p, name: e.target.value }))} /></label>
+          <label>Type<select disabled={Boolean(suggestionTarget)} value={suggestionForm.design_type} onChange={e => setSuggestionForm(p => ({ ...p, design_type: e.target.value }))}><option value="manufacturer">Manufacturer-made</option><option value="printed">Printable design</option></select></label>
           <label>Source URL (HTTPS)<input required type="url" value={suggestionForm.source_url} onChange={e => { setSuggestionPreview(""); setSuggestionForm(p => ({ ...p, source_url: e.target.value })); }} /></label>
         </div>
         <div className="spoolInlineActions"><button type="button" disabled={suggestionBusy || !suggestionForm.source_url} onClick={previewSuggestionSource}>Check approved source</button>{suggestionPreview && <small>{suggestionPreview} — check product identity manually</small>}</div>
@@ -1989,7 +1999,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
         </div>
         <div className="spoolInlineActions"><button className="primary" disabled={suggestionBusy}>Submit for review</button><button type="button" onClick={() => { setSuggestionOpen(false); setCatalogueOpen(true); }}>Back to catalogue</button></div>
         <h3>Your submitted models</h3>
-        <div className="printingList">{suggestionRows.map(s => <div className="printingListRow" key={s.id}><div><strong>{s.manufacturer} — {s.name}</strong><small>Status: {s.status}{s.review_note ? " · " + s.review_note : ""}</small></div>{canReviewSuggestions && s.status === "pending" && <div className="spoolInlineActions"><button type="button" disabled={suggestionBusy} onClick={() => reviewSuggestion(s, "approve")}>Approve</button><button type="button" disabled={suggestionBusy} onClick={() => reviewSuggestion(s, "reject")}>Reject</button></div>}</div>)}{!suggestionRows.length && <small>No submissions yet.</small>}</div>
+        <div className="printingList">{suggestionRows.map(s => <div className="printingListRow" key={s.id}><div><strong>{s.manufacturer} — {s.name}</strong><small>Status: {s.status}{s.target_entry_key ? " · Correction to " + s.target_entry_key : " · New model"}{s.review_note ? " · " + s.review_note : ""}</small></div>{canReviewSuggestions && s.status === "pending" && <div className="spoolInlineActions"><button type="button" disabled={suggestionBusy} onClick={() => reviewSuggestion(s, "approve")}>Approve</button><button type="button" disabled={suggestionBusy} onClick={() => reviewSuggestion(s, "reject")}>Reject</button></div>}</div>)}{!suggestionRows.length && <small>No submissions yet.</small>}</div>
       </form>
     </Modal>}
     {catalogueDetail && !imageEditor && <Modal title={catalogueDetail.name} wide onClose={() => { setCatalogueDetail(null); setCatalogueZoom(false); setCatalogueOpen(true); }}>
@@ -2022,6 +2032,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
             {catalogueDetail.image_personal && <button type="button" onClick={() => openSpoolImageEditor("catalogue", catalogueDetail)}>Manage personal image</button>}
           </div>}
           {catalogueDetail.image_personal && <small>Showing your personal image override.</small>}
+          {canAddDesign && <button type="button" onClick={() => openSuggestionModal(catalogueDetail)}>Suggest specification correction</button>}
           {catalogueDetail.source_type && <small>Source classification: {catalogueDetail.source_type}</small>}
           {catalogueDetail.source_url && <a href={catalogueDetail.source_url} target="_blank" rel="noreferrer noopener">View product source ↗</a>}
           {catalogueDetail.temperature_source && <a href={catalogueDetail.temperature_source} target="_blank" rel="noreferrer noopener">View dryer temperature evidence ↗</a>}
