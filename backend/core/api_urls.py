@@ -1,7 +1,10 @@
 from django.urls import path
-from . import api_views, printed_parts, camera_views, reusable_spools
+from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery
 
 urlpatterns = [
+    path("printing/reusable-spool-suggestions/", reusable_spool_discovery.suggestions),
+    path("printing/reusable-spool-suggestions/preview/", reusable_spool_discovery.preview_source),
+    path("printing/reusable-spool-suggestions/<int:suggestion_id>/review/", reusable_spool_discovery.review_suggestion),
     path("printing/reusable-spool-manufacturers/", reusable_spools.manufacturer_catalogue, name="api-reusable-spool-manufacturers"),
     path("printing/reusable-spool-manufacturers/<slug:key>/image/", reusable_spools.catalogue_personal_image, name="api-reusable-spool-catalogue-image"),
     path("printing/reusable-spool-designs/<uuid:design_id>/image/", reusable_spools.design_personal_image, name="api-reusable-spool-design-image"),
