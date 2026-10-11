@@ -442,7 +442,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
                 <strong>{slot.product_name || slot.material || "Unknown material"}</strong>
                 <small>{[slot.vendor, slot.material].filter(Boolean).join(" · ")}{slot.vendor || slot.material ? " · " : ""}{slot.system_label} · unit {slot.unit_index + 1}, slot {slot.slot_index + 1}</small>
                 <small>{slot.spool_code || "Unmatched MakerVault spool"} · {slot.remaining_percent != null ? Math.round(slot.remaining_percent) + "% remaining" : grams(slot.remaining_weight_g)}</small>
-                {!slot.spool_id && canAddSpool && <button className="slotInventoryAction" type="button" onClick={() => setClaimSlot({ printer, slot })}>＋ Add to inventory</button>}
+                {!slot.spool_id && canAddSpool && <button className="slotInventoryAction" type="button" onClick={() => setClaimSlot({ printer, slot })}>Add to inventory</button>}
               </div>
             </div>)}
             {!printer.slots.some(slot => slot.is_loaded) && (
@@ -795,7 +795,7 @@ function ModelLibraryPage({ models, files, printers, projects, canAddModel, canC
       </div>
       <div className="printingHeroActions">
         <button onClick={onBack}>← Printing overview</button>
-        {canAddModel && <button className="primary" onClick={() => setAddOpen(true)}>＋ Model</button>}
+        {canAddModel && <button className="primary" onClick={() => setAddOpen(true)}>Add model</button>}
       </div>
     </section>
 
@@ -3233,7 +3233,7 @@ function ModelManageModal({ model, files, printers, canUpload, onClose, onChange
       <section>
         <div className="printingManageSectionHead">
           <h3>Revisions</h3>
-          {canUpload && <button className="primary" type="button" onClick={() => setVersionUploadOpen(true)}>＋ Upload new version</button>}
+          {canUpload && <button className="primary" type="button" onClick={() => setVersionUploadOpen(true)}>Upload new version</button>}
         </div>
         <div className="printingRevisionList">
           {model.revisions.map(revision => <article key={revision.id}>
@@ -3460,7 +3460,7 @@ function PrintJobModal({ gcodeFiles = [], printers, spools, models, projects, cu
       <label>Slicer<input value={form.slicer} onChange={e => set("slicer", e.target.value)} placeholder="OrcaSlicer, Creality Print…" /></label>
 
       <div className="full printingUsageEditor">
-        <div className="printingUsageTitle"><div><strong>Material usage</strong><small>Optional. Add one row per spool/material used.</small></div><button type="button" onClick={addUsage}>＋ Material</button></div>
+        <div className="printingUsageTitle"><div><strong>Material usage</strong><small>Optional. Add one row per spool/material used.</small></div><button type="button" onClick={addUsage}>Add material</button></div>
         {usages.map((row, index) => <div className="printingUsageRow" key={index}>
           <label>Spool<select value={row.spool_id} onChange={e => setUsage(index, "spool_id", e.target.value)}>
             <option value="">Choose spool…</option>
