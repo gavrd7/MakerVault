@@ -18,9 +18,10 @@ class Command(BaseCommand):
             meta = entry.provenance or {}
             status = "cached" if entry.image else meta.get("last_image_status") or "not-attempted"
             checked = meta.get("last_image_attempt_at") or "never"
+            reason = meta.get("last_image_error") or ""
             self.stdout.write(
                 f"{entry.key}: {status}; last_attempt={checked}; "
-                f"source={entry.source_url or 'none'}"
+                f"source={entry.source_url or 'none'}" + (f"; error={reason}" if reason else "")
             )
             count += 1
         self.stdout.write(f"Entries listed: {count}")
