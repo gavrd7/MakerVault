@@ -2786,3 +2786,33 @@ a:focus-visible,
 .tagBrandedQr>svg{display:block}
 .tagBrandedQrBadge{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:38px;height:38px;border:4px solid #fff;border-radius:7px;background:#fff;overflow:hidden;box-sizing:border-box}
 .tagBrandedQrBadge img{display:block;width:104px;max-width:none;height:auto;position:absolute;left:0;top:50%;transform:translateY(-50%)}
+
+/* Reusable spool catalogue: product detail and image enlargement. */
+.spoolCatalogueNameButton{padding:0;border:0;background:none;color:inherit;text-align:left;font:inherit;font-weight:700;cursor:pointer}
+.spoolCatalogueNameButton:hover{text-decoration:underline}
+.spoolCatalogueNameButton:focus-visible{outline:2px solid #8268ed;outline-offset:3px}
+.spoolCatalogueNoThumb{display:grid;place-items:center;width:52px;min-height:52px;border:1px dashed #455061;border-radius:8px;color:#a2acba;font-size:.7rem;float:left;margin-right:12px;text-align:center}
+.spoolCatalogueRowActions{display:flex;flex-direction:column;gap:8px;flex:0 0 auto;align-items:stretch}
+.spoolCatalogueDetail{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;max-height:70vh;overflow-y:auto}
+.spoolCatalogueDetailMedia{display:flex;align-items:center;flex-direction:column;gap:10px;min-width:0}
+.spoolCatalogueDetailImage{display:grid;place-items:center;overflow:auto;width:100%;min-height:230px;max-height:55vh;padding:10px;border:1px solid #303b49;border-radius:10px;background:#111923;cursor:zoom-in}
+.spoolCatalogueDetailImage img{display:block;max-width:100%;max-height:48vh;object-fit:contain}
+.spoolCatalogueDetailImage.isZoomed{display:block;cursor:zoom-out}
+.spoolCatalogueDetailImage.isZoomed img{max-width:none;max-height:none;width:auto;height:auto}
+.spoolCatalogueImageMissing{display:grid;place-items:center;min-height:230px;width:100%;border:1px dashed #455061;border-radius:10px;color:#a2acba;text-align:center;padding:24px}
+.spoolCatalogueDetailInfo{min-width:0;display:flex;flex-direction:column;gap:10px;overflow-wrap:anywhere}
+.spoolCatalogueDetailInfo p{margin:0}
+.spoolCatalogueDetailInfo a{color:#aa99ff}
+.spoolCatalogueSpecs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0}
+.spoolCatalogueSpecs div{min-width:0;padding:8px;border:1px solid #303b49;border-radius:7px}
+.spoolCatalogueSpecs dt{font-size:.78rem;color:#a2acba}
+.spoolCatalogueSpecs dd{margin:4px 0 0}
+.spoolCatalogueDryerWarning{border-left:3px solid #e9ad48;padding:8px 12px;background:#332814}
+.spoolCatalogueDetailActions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+@media(max-width:700px){
+ .spoolCatalogueDetail{grid-template-columns:minmax(0,1fr)}
+ .spoolCatalogueDetailImage{min-height:170px;max-height:38vh}
+ .spoolCatalogueDetailImage img{max-height:32vh}
+ .spoolCatalogueRowActions{flex-direction:row;flex-wrap:wrap}
+ .spoolCatalogueScrollList .spoolCatalogueItem>.spoolCatalogueRowActions{margin-left:0}
+}
