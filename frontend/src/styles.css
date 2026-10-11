@@ -2720,3 +2720,10 @@ a:focus-visible,
   .spoolCatalogueScrollList .spoolCatalogueItem{flex-wrap:wrap;align-items:flex-start}
   .spoolCatalogueScrollList .spoolCatalogueItem>button{margin-left:auto}
 }
+
+/* Browsable manufacturer catalogue lives in its own wide modal. */
+.spoolCatalogueModalContent{display:flex;flex-direction:column;gap:10px;min-width:0;max-height:min(74vh,780px)}
+.spoolCatalogueModalContent>.spoolCatalogueFilters{flex:0 0 auto;border:0;padding:0 0 10px}
+.spoolCatalogueModalContent>.spoolCatalogueScrollList{flex:1 1 auto;min-height:160px;max-height:min(54vh,540px);border:1px solid #29313c;border-radius:10px}
+.spoolCatalogueModalContent>small{color:var(--text-muted,#929eaf)}
+@media(max-width:620px){.spoolCatalogueModalContent{max-height:76vh}.spoolCatalogueModalContent>.spoolCatalogueScrollList{max-height:49vh}}
