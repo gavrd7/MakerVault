@@ -449,10 +449,11 @@ function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged, onOpenTarget
       catch { setNotice("Printing is not supported in this browser. Try a desktop browser."); }
     };
     frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><title>Maker Tag label</title><style>
-    @page{size:auto;margin:6mm}
+    @page{size:A4 portrait;margin:10mm}
+    html,body{margin:0!important;padding:0!important;width:190mm;height:277mm;overflow:hidden!important;background:#fff;color:#111}
     *{box-sizing:border-box}
-    body{font-family:system-ui,sans-serif;margin:0;padding:12mm;display:flex;justify-content:center;background:#fff;color:#111}
-    .label{width:${width}mm;height:${height}mm;border:0.3mm solid #777;border-radius:2mm;padding:2mm;display:flex;align-items:center;gap:2mm;overflow:hidden;break-inside:avoid;page-break-inside:avoid}
+    body{font-family:system-ui,sans-serif;display:block!important}
+    .label{position:relative;display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;width:${width}mm;height:${height}mm;border:0.3mm solid #777;border-radius:2mm;padding:2mm;display:flex;align-items:center;gap:2mm;overflow:hidden;break-inside:avoid;page-break-inside:avoid}
     .tagBrandedQr{position:relative;flex:none;width:${qr}mm;height:${qr}mm}
     .tagBrandedQr svg{width:100%;height:100%;display:block}
     .tagBrandedQrBadge{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:20%;height:20%;border:1mm solid white;border-radius:1mm;background:white;overflow:hidden}
@@ -461,7 +462,7 @@ function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged, onOpenTarget
     .info strong{display:block;font-size:${labelFormat==="compact" ? 8 : 10}pt;line-height:1.1}
     .info code{display:block;font-size:7pt;margin-top:1mm}
     .info small{display:block;font-size:6pt;margin-top:1mm}
-    @media print{body{padding:0}}
+    @media print{html,body{margin:0!important;padding:0!important;page-break-after:avoid!important}.label{break-before:avoid!important;break-after:avoid!important;break-inside:avoid!important;page-break-inside:avoid!important}}
     </style></head><body><div class="label">${svg}<div class="info"><strong>${safeLabel}</strong><code>${safeCode}</code><small>MakerVault · ${safeType}</small></div></div></body></html>`;
 
   }
