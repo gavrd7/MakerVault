@@ -15,7 +15,7 @@ class ReusableSpoolMaintenanceTests(TestCase):
         original_limit = entry.max_dryer_temp_c
         with patch(
             "core.management.commands.refresh_reusable_spool_sources.fetch_catalogue_source_html",
-            return_value=("<html><title>Reusable spool</title></html>", entry.source_url),
+            return_value=(entry.source_url, "<html><title>Reusable spool</title></html>"),
         ) as fetch:
             out = StringIO()
             call_command("refresh_reusable_spool_sources", key=entry.key, stdout=out)
@@ -70,3 +70,20 @@ class ReusableSpoolMaintenanceTests(TestCase):
         self.assertEqual(queued, ["images", "reusable-spool-images"])
         spool_task.assert_called_once_with(limit=3)
         image_task.assert_called_once_with(force_retry=True)
+
+    @patch("core.reusable_spool_images.cache_catalogue_image_from_url")
+    @patch("core.reusable_spool_images.fetch_catalogue_source_html")
+    def test_image_refresh_uses_final_url_and_html_in_correct_order(self, fetch, cache):
+        from core.reusable_spool_images import refresh_reusable_spool_images
+        entry = ReusableSpoolCatalogEntry.objects.get(key="bambu-basic")
+        page = ('<html><head><meta property="og:title" '
+                'content="Bambu Lab Reusable Spool Basic">'
+                '<meta property="og:image" content="/products/spool.webp"></head></html>')
+        fetch.return_value = (entry.source_url, page)
+        # Select one record without disturbing persistent catalogue data.
+        with patch("core.reusable_spool_images.ReusableSpoolCatalogEntry.objects") as manager:
+            manager.exclude.return_value.order_by.return_value = [entry]
+            result = refresh_reusable_spool_images(limit=1)
+        self.assertEqual(result["cached"], 1)
+        cache.assert_called_once_with(entry, "https://asia.store.bambulab.com/products/spool.webp")
+        self.assertEqual(entry.provenance["last_image_status"], "cached")
