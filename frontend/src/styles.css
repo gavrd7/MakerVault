@@ -2955,3 +2955,12 @@ a:focus-visible,
   .makerTagBatchSheet:last-child{page-break-after:auto!important;break-after:auto!important}
   .makerTagBatchSheet .makerTagPrintLabel{flex:none!important}
 }
+
+/* Keep batch-selection checkbox in its own column without displacing row actions. */
+.tagRow.tagRowSelectable{grid-template-columns:26px 72px minmax(0,1fr) auto}
+.tagRowSelectable .tagBatchCheck{padding:0;justify-content:center;min-width:0}
+.tagRowSelectable .tagRowActions{grid-column:auto}
+@media(max-width:720px){
+  .tagRow.tagRowSelectable{grid-template-columns:24px 54px minmax(0,1fr);gap:10px}
+  .tagRowSelectable .tagRowActions{grid-column:3;justify-content:flex-start;flex-wrap:wrap}
+}
