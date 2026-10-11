@@ -243,7 +243,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
         <button type="button" disabled={!selectedPrintableRows.length} onClick={() => setBatchOpen(true)}>Print selected</button>
       </div>
       <div className="tagList">
-        {rows.map(tag => <article className={"tagRow tagRow-" + tag.status} key={tag.id}>
+        {rows.map(tag => <article className={"tagRow tagRow-" + tag.status + (tag.kind === "qr" && tag.status === "active" ? " tagRowSelectable" : "")} key={tag.id}>
           {tag.kind === "qr" && tag.status === "active" && <label className="tagBatchCheck"><input type="checkbox" aria-label={"Select " + (tag.label || tag.code)} checked={selectedTagIds.includes(String(tag.id))} onChange={event => setSelectedTagIds(old => event.target.checked ? [...new Set([...old, String(tag.id)])] : old.filter(id => id !== String(tag.id)))} /></label>}
           <div className="tagIdentityMark">{tag.kind === "qr" ? "QR" : tag.kind === "nfc" ? "NFC" : "RFID"}</div>
           <div className="tagRowMain">
