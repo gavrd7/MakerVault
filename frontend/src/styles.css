@@ -2727,3 +2727,55 @@ a:focus-visible,
 .spoolCatalogueModalContent>.spoolCatalogueScrollList{flex:1 1 auto;min-height:160px;max-height:min(54vh,540px);border:1px solid #29313c;border-radius:10px}
 .spoolCatalogueModalContent>small{color:var(--text-muted,#929eaf)}
 @media(max-width:620px){.spoolCatalogueModalContent{max-height:76vh}.spoolCatalogueModalContent>.spoolCatalogueScrollList{max-height:49vh}}
+
+
+/* Prevent CSS Grid from shrinking catalogue records into overlapping tracks. */
+.spoolCatalogueModalContent>.spoolCatalogueScrollList{
+  display:block;
+  height:min(52vh,510px);
+  max-height:min(52vh,510px);
+  min-height:0;
+  overflow-y:auto;
+  overflow-x:hidden;
+  scrollbar-gutter:stable;
+}
+.spoolCatalogueScrollList>.spoolCatalogueItem{
+  display:flex;
+  box-sizing:border-box;
+  width:100%;
+  height:auto;
+  min-height:88px;
+  padding:12px 14px;
+  align-items:center;
+  flex-shrink:0;
+  gap:14px;
+}
+.spoolCatalogueScrollList .spoolCatalogueRecord{
+  display:flex;
+  flex:1 1 auto;
+  flex-direction:column;
+  align-items:flex-start;
+  min-width:0;
+  gap:4px;
+}
+.spoolCatalogueScrollList .spoolCatalogueRecord strong,
+.spoolCatalogueScrollList .spoolCatalogueRecord small,
+.spoolCatalogueScrollList .spoolCatalogueRecord a{
+  display:block;
+  margin:0;
+  position:static;
+  width:auto;
+  line-height:1.4;
+  overflow-wrap:anywhere;
+}
+.spoolCatalogueScrollList .spoolCatalogueImageButton{float:none;margin:0 0 4px}
+.spoolCatalogueScrollList .spoolCatalogueItem>button{
+  flex:0 0 auto;
+  align-self:center;
+  white-space:nowrap;
+}
+@media(max-width:620px){
+  .spoolCatalogueModalContent>.spoolCatalogueScrollList{height:min(48vh,450px);max-height:min(48vh,450px)}
+  .spoolCatalogueScrollList>.spoolCatalogueItem{min-height:92px;align-items:flex-start}
+  .spoolCatalogueScrollList .spoolCatalogueItem>button{align-self:flex-end}
+}
