@@ -109,6 +109,8 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
   const [resolveKind, setResolveKind] = useState("auto");
   const [resolveCode, setResolveCode] = useState("");
   const [resolveBusy, setResolveBusy] = useState(false);
+  const [batchOpen, setBatchOpen] = useState(false);
+  const [selectedTagIds, setSelectedTagIds] = useState([]);
 
   async function load() {
     setError("");
@@ -154,6 +156,9 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
     });
   }, [data, query, status, kind]);
 
+  const printableRows = rows.filter(tag => tag.kind === "qr" && tag.status === "active");
+  const selectedPrintableRows = printableRows.filter(tag => selectedTagIds.includes(String(tag.id)));
+
   async function changed(item) {
     setAddOpen(false);
     setEditTag(null);
@@ -190,6 +195,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
       <div className="printingHeroActions">
         {config?.permissions?.add_maker_tag && <button className="primary" onClick={() => setAddOpen(true)}>Add Maker Tag</button>}
         <button onClick={load}>Refresh</button>
+        <button disabled={!printableRows.length} onClick={() => setBatchOpen(true)}>Print labels</button>
       </div>
     </section>
 
@@ -230,8 +236,15 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
         </select>
       </div>
 
+      <div className="tagBatchSelectionBar">
+        <span>{selectedPrintableRows.length} selected · {printableRows.length} printable in current filters</span>
+        <button type="button" disabled={!printableRows.length} onClick={() => setSelectedTagIds(old => [...new Set([...old, ...printableRows.map(item => String(item.id))])])}>Select all matching QR tags</button>
+        <button type="button" disabled={!selectedTagIds.length} onClick={() => setSelectedTagIds([])}>Clear selection</button>
+        <button type="button" disabled={!selectedPrintableRows.length} onClick={() => setBatchOpen(true)}>Print selected</button>
+      </div>
       <div className="tagList">
         {rows.map(tag => <article className={"tagRow tagRow-" + tag.status} key={tag.id}>
+          {tag.kind === "qr" && tag.status === "active" && <label className="tagBatchCheck"><input type="checkbox" aria-label={"Select " + (tag.label || tag.code)} checked={selectedTagIds.includes(String(tag.id))} onChange={event => setSelectedTagIds(old => event.target.checked ? [...new Set([...old, String(tag.id)])] : old.filter(id => id !== String(tag.id)))} /></label>}
           <div className="tagIdentityMark">{tag.kind === "qr" ? "QR" : tag.kind === "nfc" ? "NFC" : "RFID"}</div>
           <div className="tagRowMain">
             <div className="tagRowTitle">
@@ -256,6 +269,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
       </div>
     </section>
 
+    {batchOpen && <MakerTagBatchPrint tags={selectedPrintableRows} allMatching={printableRows} onClose={() => setBatchOpen(false)} />}
     {addOpen && <MakerTagForm
       title="Create Maker Tag"
       data={data}
