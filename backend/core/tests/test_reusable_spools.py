@@ -151,7 +151,7 @@ class ReusableSpoolApiTests(TestCase):
         catalogue = self.client.get("/api/printing/reusable-spool-manufacturers/")
         self.assertEqual(catalogue.status_code, 200)
         self.assertTrue(catalogue.json()["rows"])
-        entry = catalogue.json()["rows"][0]
+        entry = next(row for row in catalogue.json()["rows"] if row["key"] == "bambu-basic")
         first = self._post("/api/printing/reusable-spool-manufacturers/", {"key": entry["key"]})
         self.assertEqual(first.status_code, 201, first.content)
         again = self._post("/api/printing/reusable-spool-manufacturers/", {"key": entry["key"]})
@@ -203,3 +203,56 @@ class ReusableSpoolApiTests(TestCase):
             })
             self.assertEqual(response.status_code, 201, response.content)
             self.assertEqual(response.json()["item"]["manufacturer"], expected)
+
+
+    def test_shared_catalogue_search_and_manufacturer_filter(self):
+        from core.models import ReusableSpoolCatalogEntry
+        ReusableSpoolCatalogEntry.objects.create(
+            key="esun-espool-test", manufacturer="eSUN", name="eSpool+",
+            design_type="manufacturer", source_url="https://example.org/espool",
+        )
+        response = self.client.get("/api/printing/reusable-spool-manufacturers/", {
+            "manufacturer": "esun", "q": "esun-espool-test",
+        })
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["total"], 1)
+        self.assertEqual(response.json()["rows"][0]["key"], "esun-espool-test")
+        self.assertIn("eSUN", response.json()["manufacturers"])
+
+    def test_catalogue_import_uses_reference_identity_and_preserves_custom_edits(self):
+        from core.models import ReusableSpoolCatalogEntry
+        entry = ReusableSpoolCatalogEntry.objects.create(
+            key="custom-id", manufacturer="Example Maker", name="Sample reel",
+            design_type="manufacturer", nominal_tare_g="180.00",
+        )
+        url = "/api/printing/reusable-spool-manufacturers/"
+        first = self._post(url, {"key": entry.key})
+        self.assertEqual(first.status_code, 201, first.content)
+        self.assertEqual(first.json()["item"]["catalog_entry_id"], str(entry.id))
+        model = ReusableSpoolDesign.objects.get(owner=self.owner, catalog_entry=entry)
+        model.nominal_tare_g = "182.50"
+        model.save(update_fields=["nominal_tare_g"])
+        second = self._post(url, {"key": entry.key})
+        self.assertEqual(second.status_code, 200, second.content)
+        model.refresh_from_db()
+        self.assertEqual(str(model.nominal_tare_g), "182.50")
+        self.assertEqual(ReusableSpoolDesign.objects.filter(owner=self.owner, catalog_entry=entry).count(), 1)
+
+    def test_catalogue_does_not_expose_remote_image_as_thumbnail(self):
+        from core.models import ReusableSpoolCatalogEntry
+        entry = ReusableSpoolCatalogEntry.objects.create(
+            key="no-hotlink-test", manufacturer="Example", name="Test",
+            design_type="manufacturer", image_url="https://images.example.org/unverified.jpg",
+        )
+        result = self.client.get("/api/printing/reusable-spool-manufacturers/", {"q": "no-hotlink-test"})
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.json()["total"], 1)
+        self.assertIsNone(result.json()["rows"][0]["image_url"])
+        self.assertFalse(result.json()["rows"][0]["image_cached"])
+        self.assertEqual(result.json()["rows"][0]["id"], str(entry.id))
+
+    def test_seeded_catalogue_is_present_after_migration(self):
+        from core.models import ReusableSpoolCatalogEntry
+        self.assertTrue(ReusableSpoolCatalogEntry.objects.filter(key="bambu-basic").exists())
+        self.assertTrue(ReusableSpoolCatalogEntry.objects.filter(key="esun-espool-plus").exists())
+        self.assertTrue(ReusableSpoolCatalogEntry.objects.filter(key="sunlu-third-generation").exists())

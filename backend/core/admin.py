@@ -4,7 +4,7 @@ from .models import (
     ComponentModel, Project, InventoryItem, InventoryHistory, BOMItem, BOMAllocation, FileAsset, RepositoryLink,
     FilamentProduct, Spool, ExternalSpoolLink, ExternalPrinterLink, PrinterManufacturer, PrinterCatalogModel,
     Printer, PrinterFilamentSlot,
-    Model3D, ModelRevision, ModelRevisionAsset, ProductListing, PrintJob, PrintMaterialUsage,
+    ReusableSpoolCatalogEntry, Model3D, ModelRevision, ModelRevisionAsset, ProductListing, PrintJob, PrintMaterialUsage,
 )
 
 
@@ -18,6 +18,15 @@ class CatalogueMaintenanceSettingsAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+@admin.register(ReusableSpoolCatalogEntry)
+class ReusableSpoolCatalogAdmin(admin.ModelAdmin):
+    list_display = ("manufacturer", "name", "design_type", "nominal_tare_g", "verified", "updated_at")
+    list_filter = ("manufacturer", "design_type", "verified")
+    search_fields = ("name", "manufacturer", "key", "material")
+    readonly_fields = ("created_at", "updated_at")
+    ordering = ("manufacturer", "name")
 
 
 @admin.register(BoardModel)

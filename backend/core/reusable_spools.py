@@ -14,7 +14,7 @@ from django.db import IntegrityError, transaction
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
-from .models import Model3D, PrintingLocation, ReusableSpool, ReusableSpoolAssignmentEvent, ReusableSpoolDesign, Spool
+from .models import Model3D, PrintingLocation, ReusableSpool, ReusableSpoolAssignmentEvent, ReusableSpoolCatalogEntry, ReusableSpoolDesign, Spool
 
 
 def error(message, status=400, fields=None):
@@ -69,7 +69,7 @@ def optional_fk(model, owner, raw, field):
 
 def serialise_design(item):
     return {
-        "id": str(item.id), "name": item.name, "manufacturer": item.manufacturer,
+        "id": str(item.id), "catalog_entry_id": str(item.catalog_entry_id) if item.catalog_entry_id else None, "name": item.name, "manufacturer": item.manufacturer,
         "design_type": item.design_type, "description": item.description,
         "source_url": item.source_url, "material": item.material,
         "nominal_tare_g": str(item.nominal_tare_g) if item.nominal_tare_g is not None else None,
@@ -323,62 +323,39 @@ def model_design(request, model_id):
 
 # Reference entries deliberately leave tare, dimensions and dryer temperature blank
 # until independently verified for the exact spool variant.
-KNOWN_REUSABLE_SPOOL_DESIGNS = (
-    {
-        "key": "bambu-basic",
-        "name": "Bambu Reusable Spool (Basic)",
-        "manufacturer": "Bambu Lab",
-        "design_type": "manufacturer",
-        "material": "ABS",
-        "nominal_tare_g": "250.00",
-        "max_dryer_temp_c": 70,
-        "temperature_source": "https://asia.store.bambulab.com/collections/filament-accessories/products/bambu-reusable-spool",
-        "description": "Official reusable ABS spool. Manufacturer lists 250 g weight and a 70°C temperature-resistance limit; packing dimensions are not treated as actual spool dimensions.",
-        "source_url": "https://asia.store.bambulab.com/collections/filament-accessories/products/bambu-reusable-spool",
-    },
-    {
-        "key": "bambu-high-temp",
-        "name": "Bambu Reusable Spool (High Temperature)",
-        "manufacturer": "Bambu Lab",
-        "design_type": "manufacturer",
-        "material": "ABS+PC",
-        "nominal_tare_g": "250.00",
-        "max_dryer_temp_c": 90,
-        "temperature_source": "https://eu.store.bambulab.com/en-at/products/high-temperature-reusable-spool",
-        "description": "Official ABS+PC high-temperature reusable spool. Manufacturer lists 250 g weight and a 90°C temperature-resistance limit.",
-        "source_url": "https://eu.store.bambulab.com/en-at/products/high-temperature-reusable-spool",
-    },
-    {
-        "key": "prusa-refill-1kg",
-        "name": "Prusament Refill 1kg Reusable Spool (Legacy)",
-        "manufacturer": "Prusa Research",
-        "design_type": "manufacturer",
-        "description": "Legacy Prusament spool with removable plastic sides and cardboard centre. Not interchangeable with the newer 900 g refill spool format. Weight and dryer rating unverified.",
-        "source_url": "https://help.prusa3d.com/article/how-to-use-prusament-refill-1kg_394630",
-    },
-    {
-        "key": "prusa-refill-900g",
-        "name": "Prusament Refill 900g Reusable Spool (New)",
-        "manufacturer": "Prusa Research",
-        "design_type": "manufacturer",
-        "description": "Newer reusable Prusament spool format with a plastic centre and locking sides. Not the legacy 1 kg cardboard-core format; verify exact variant and drying rating.",
-        "source_url": "https://help.prusa3d.com/guide/how-to-use-prusament-refill-900g_440297",
-    },
-    {
-        "key": "polymaker-master-printable",
-        "name": "Panchroma Master Reusable Spool (Printable)",
-        "manufacturer": "Polymaker",
-        "design_type": "printed",
-        "description": "Printable master spool design linked by Polymaker for its Panchroma PLA refills. Printed weight and temperature tolerance depend on the model, material and slicer settings.",
-        "source_url": "https://wiki.polymaker.com/polymaker-products/polymaker-filaments/panchroma-tm/panchroma-tm-pla-refill",
-    },
-)
-
 @login_required
 @require_http_methods(["GET", "POST"])
 def manufacturer_catalogue(request):
     if request.method == "GET":
-        return JsonResponse({"rows": KNOWN_REUSABLE_SPOOL_DESIGNS})
+        query = str(request.GET.get("q") or "").strip().casefold()[:120]
+        manufacturer = str(request.GET.get("manufacturer") or "").strip().casefold()[:100]
+        design_type = str(request.GET.get("design_type") or "").strip().casefold()[:40]
+        qs = ReusableSpoolCatalogEntry.objects.all()
+        if manufacturer:
+            qs = qs.filter(manufacturer__iexact=manufacturer)
+        if design_type:
+            qs = qs.filter(design_type=design_type)
+        rows = [{
+            "key": entry.key, "id": str(entry.id), "name": entry.name,
+            "manufacturer": entry.manufacturer, "design_type": entry.design_type,
+            "description": entry.description, "material": entry.material,
+            "nominal_tare_g": str(entry.nominal_tare_g) if entry.nominal_tare_g is not None else None,
+            "max_dryer_temp_c": entry.max_dryer_temp_c,
+            "temperature_source": entry.temperature_source,
+            "source_url": entry.source_url,
+            "image_url": entry.image.url if entry.image else None,
+            "image_cached": bool(entry.image),
+            "outer_diameter_mm": str(entry.outer_diameter_mm) if entry.outer_diameter_mm is not None else None,
+            "width_mm": str(entry.width_mm) if entry.width_mm is not None else None,
+            "hub_diameter_mm": str(entry.hub_diameter_mm) if entry.hub_diameter_mm is not None else None,
+            "capacity_g": str(entry.capacity_g) if entry.capacity_g is not None else None,
+            "verified": entry.verified,
+        } for entry in qs if not query or query in " ".join((
+            entry.name, entry.manufacturer, entry.description, entry.material, entry.key
+        )).casefold()]
+        manufacturers = list(ReusableSpoolCatalogEntry.objects.order_by("manufacturer")
+                             .values_list("manufacturer", flat=True).distinct())
+        return JsonResponse({"rows": rows, "total": len(rows), "manufacturers": manufacturers})
     denied = permission(request, "add_filamentproduct")
     if denied:
         return denied
@@ -386,21 +363,24 @@ def manufacturer_catalogue(request):
         key = str(read_json(request).get("key") or "")
     except ValidationError as exc:
         return validation_error(exc)
-    preset = next((entry for entry in KNOWN_REUSABLE_SPOOL_DESIGNS if entry["key"] == key), None)
+    preset = ReusableSpoolCatalogEntry.objects.filter(key=key).first()
     if preset is None:
         return error("Unknown manufacturer spool catalogue entry.", 404)
     item, created = ReusableSpoolDesign.objects.get_or_create(
         owner=request.user,
-        name=preset["name"],
-        manufacturer=preset["manufacturer"],
+        catalog_entry=preset,
         defaults={
-            "design_type": preset["design_type"],
-            "description": preset["description"],
-            "source_url": preset["source_url"],
-            "material": preset.get("material", ""),
-            "nominal_tare_g": preset.get("nominal_tare_g"),
-            "max_dryer_temp_c": preset.get("max_dryer_temp_c"),
-            "temperature_source": preset.get("temperature_source", ""),
+            "name": preset.name, "manufacturer": preset.manufacturer,
+            "design_type": preset.design_type,
+            "description": preset.description,
+            "source_url": preset.source_url, "material": preset.material,
+            "nominal_tare_g": preset.nominal_tare_g,
+            "max_dryer_temp_c": preset.max_dryer_temp_c,
+            "temperature_source": preset.temperature_source,
+            "outer_diameter_mm": preset.outer_diameter_mm,
+            "width_mm": preset.width_mm,
+            "hub_diameter_mm": preset.hub_diameter_mm,
+            "capacity_g": preset.capacity_g,
         },
     )
     return JsonResponse({"item": serialise_design(item), "created": created}, status=201 if created else 200)

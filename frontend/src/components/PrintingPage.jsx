@@ -1558,6 +1558,10 @@ function PrinterModal({ manufacturers, models, locations, onClose, onSaved }) {
 function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, filamentProducts, materialOptions, canAdd, canChange, canDelete, canAddDesign, canChangeDesign }) {
   const [designs, setDesigns] = useState([]);
   const [manufacturerDesigns, setManufacturerDesigns] = useState([]);
+  const [catalogueQuery, setCatalogueQuery] = useState("");
+  const [catalogueMaker, setCatalogueMaker] = useState("");
+  const [catalogueOpen, setCatalogueOpen] = useState(false);
+  const [catalogueImage, setCatalogueImage] = useState(null);
   const [reels, setReels] = useState([]);
   const [densityProductId, setDensityProductId] = useState("");
   const [error, setError] = useState("");
@@ -1640,6 +1644,13 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
   function acceptManufacturer() {
     if (matchedManufacturer) setDesignForm(p => ({ ...p, manufacturer: matchedManufacturer }));
   }
+
+  const catalogueManufacturers = [...new Set(manufacturerDesigns.map(item => item.manufacturer).filter(Boolean))].sort();
+  const filteredManufacturerDesigns = manufacturerDesigns.filter(item =>
+    (!catalogueMaker || item.manufacturer === catalogueMaker) &&
+    (!catalogueQuery || [item.name, item.manufacturer, item.description, item.material, item.key]
+      .filter(Boolean).join(" ").toLowerCase().includes(catalogueQuery.trim().toLowerCase()))
+  );
 
   const selectedModel = models.find(m => m.id === designForm.model_3d_id);
   const geometry = newestGeometryAnalysis(selectedModel);
@@ -1755,6 +1766,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
       <div className="printingHeroActions">
         <button type="button" onClick={onBack}>← Printing overview</button>
         <button type="button" onClick={onOpenModels}>Model library (STL/3MF)</button>
+        <button type="button" onClick={() => setCatalogueOpen(true)}>Browse manufacturer catalogue</button>
         {canAddDesign && <button type="button" onClick={() => startDesign()}>Add design</button>}
         {canAdd && <button type="button" className="primary" onClick={() => startReel()} disabled={!designs.length}>Add reusable spool</button>}
       </div>
@@ -1779,17 +1791,30 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
         {!reels.length && <div className="printingEmptyInline">No reusable spools registered yet. Add a design, then an individual spool.</div>}
       </div>
     </section>
-    <section className="panel printingSection">
-      <div className="panelHead"><h3>Manufacturer spool catalogue</h3></div>
-      <div className="printingList">
-        {manufacturerDesigns.map(item => <article className="printingListRow" key={item.key}>
-          <div><strong>{item.name}</strong><small>{item.manufacturer} · Manufacturer reference; check actual tare and drying tolerance before use.</small></div>
-          {canAddDesign && <button type="button" disabled={working || designs.some(d => d.name === item.name && d.manufacturer === item.manufacturer)} onClick={() => importManufacturerDesign(item)}>
-            {designs.some(d => d.name === item.name && d.manufacturer === item.manufacturer) ? "Added to inventory" : "Add to inventory"}
+    {catalogueOpen && <Modal title="Manufacturer spool catalogue" wide onClose={() => setCatalogueOpen(false)}>
+      <div className="spoolCatalogueModalContent">
+        <small>{filteredManufacturerDesigns.length} matching designs</small>
+      <div className="spoolCatalogueFilters">
+        <label>Search catalogue<input value={catalogueQuery} onChange={e => setCatalogueQuery(e.target.value)} placeholder="Spool, model, manufacturer…" /></label>
+        <label>Manufacturer<select value={catalogueMaker} onChange={e => setCatalogueMaker(e.target.value)}><option value="">All manufacturers</option>{catalogueManufacturers.map(name => <option key={name} value={name}>{name}</option>)}</select></label>
+      </div>
+      <div className="printingList spoolCatalogueScrollList" role="region" aria-label="Filtered manufacturer spool designs" tabIndex={0}>
+        {filteredManufacturerDesigns.map(item => <article className="printingListRow spoolCatalogueItem" key={item.key}>
+          <div className="spoolCatalogueRecord">
+            {item.image_url && <button type="button" className="spoolCatalogueImageButton" onClick={() => setCatalogueImage(item)} aria-label={"View " + item.name + " image"}><img className="spoolCatalogueThumb" src={item.image_url} alt={item.name} loading="lazy" /></button>}
+            <strong>{item.name}</strong>
+            <small>{item.manufacturer} · {item.design_type === "printed" ? "Printable design" : "Manufacturer-made"}{item.verified ? " · Source documented" : " · Unverified"}</small>
+            <small>{item.nominal_tare_g ? "Tare: " + item.nominal_tare_g + " g" : "Tare: Unknown"} · {item.outer_diameter_mm && item.width_mm ? item.outer_diameter_mm + " × " + item.width_mm + " mm" : "Dimensions: Unknown"} · {item.max_dryer_temp_c != null ? "Rated temperature: " + item.max_dryer_temp_c + "°C" : "Dryer rating: Unknown"}</small>
+            {item.source_url && <a href={item.source_url} target="_blank" rel="noreferrer noopener">Manufacturer source ↗</a>}
+          </div>
+          {canAddDesign && <button type="button" disabled={working || designs.some(d => d.catalog_entry_id === item.id)} onClick={() => importManufacturerDesign(item)}>
+            {designs.some(d => d.catalog_entry_id === item.id) ? "Added to inventory" : "Add to inventory"}
           </button>}
         </article>)}
+        {!filteredManufacturerDesigns.length && <div className="printingEmptyInline">No catalogue entries match these filters.</div>}
       </div>
-    </section>
+      </div>
+    </Modal>}
     <section className="panel printingSection">
       <div className="panelHead"><h3>Spool designs ({designs.length})</h3></div>
       <div className="printingList">
@@ -1809,6 +1834,10 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
       </div>
     </section>
 
+    {catalogueImage && <Modal title={catalogueImage.name} onClose={() => setCatalogueImage(null)}>
+      <div className="spoolCatalogueImageViewer"><img src={catalogueImage.image_url} alt={catalogueImage.name} /></div>
+      {catalogueImage.source_url && <a href={catalogueImage.source_url} target="_blank" rel="noreferrer noopener">Manufacturer reference ↗</a>}
+    </Modal>}
     {form && <Modal title={editing ? "Edit " + (form === "design" ? "spool design" : "reusable spool") : "Add " + (form === "design" ? "spool design" : "reusable spool")} onClose={() => setForm("")}>
       <form className="formGrid" onSubmit={submit}>
         {error && <div className="formError full" role="alert">{error}</div>}

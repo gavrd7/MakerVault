@@ -75,6 +75,7 @@ class CatalogueMaintenanceSettings(TimeStampedModel):
     check_board_data = models.BooleanField(default=True)
     check_printer_data = models.BooleanField(default=True)
     check_filament_data = models.BooleanField(default=True)
+    check_reusable_spool_sources = models.BooleanField(default=True)
     check_images = models.BooleanField(default=True)
     last_run_at = models.DateTimeField(blank=True, null=True)
     next_run_at = models.DateTimeField(blank=True, null=True)
@@ -742,11 +743,43 @@ class Spool(TimeStampedModel):
 
 
 
+
+class ReusableSpoolCatalogEntry(TimeStampedModel):
+    """Shared, source-backed reference design, independent of users' physical reels."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    key = models.SlugField(max_length=120, unique=True)
+    manufacturer = models.CharField(max_length=120)
+    name = models.CharField(max_length=200)
+    design_type = models.CharField(max_length=20, choices=[("manufacturer", "Manufacturer-made"), ("printed", "3D printed")])
+    material = models.CharField(max_length=80, blank=True)
+    description = models.TextField(blank=True)
+    source_url = models.URLField(blank=True)
+    image_url = models.URLField(blank=True)
+    image = models.ImageField(upload_to="catalogue/reusable-spools/", blank=True, null=True)
+    image_metadata = models.JSONField(default=dict, blank=True)
+    nominal_tare_g = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
+    max_dryer_temp_c = models.PositiveSmallIntegerField(blank=True, null=True)
+    temperature_source = models.URLField(blank=True)
+    outer_diameter_mm = models.DecimalField(max_digits=7, decimal_places=2, blank=True, null=True)
+    width_mm = models.DecimalField(max_digits=7, decimal_places=2, blank=True, null=True)
+    hub_diameter_mm = models.DecimalField(max_digits=7, decimal_places=2, blank=True, null=True)
+    capacity_g = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
+    verified = models.BooleanField(default=False)
+    provenance = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["manufacturer", "name"]
+
+    def __str__(self):
+        return f"{self.manufacturer} — {self.name}"
+
+
 class ReusableSpoolDesign(TimeStampedModel):
     """Reference design for an empty, refillable spool (not filament stock)."""
     TYPES = [("manufacturer", "Manufacturer-made"), ("printed", "3D printed")]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reusable_spool_designs")
+    catalog_entry = models.ForeignKey(ReusableSpoolCatalogEntry, on_delete=models.SET_NULL, blank=True, null=True, related_name="personal_designs")
     name = models.CharField(max_length=200)
     manufacturer = models.CharField(max_length=120, blank=True)
     design_type = models.CharField(max_length=20, choices=TYPES, default="printed")

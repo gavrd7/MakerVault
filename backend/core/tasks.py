@@ -213,6 +213,29 @@ def enrich_filament_catalogue_task(self, force_catalogue=False, limit=None, curs
             )
     return result
 
+@shared_task
+def refresh_reusable_spool_images_task(limit=3):
+    """Cache a small number of official manufacturer preview images each maintenance cycle."""
+    if backup_in_progress():
+        return {"status": "backup-in-progress"}
+    from .reusable_spool_images import refresh_reusable_spool_images
+
+    return refresh_reusable_spool_images(limit=limit)
+
+
+@shared_task
+def refresh_reusable_spool_sources_task(limit=5):
+    """Check a bounded batch of trusted spool manufacturer URLs without changing hardware specs."""
+    if backup_in_progress():
+        return {"status": "backup-in-progress"}
+    from io import StringIO
+    from django.core.management import call_command
+
+    output = StringIO()
+    call_command("refresh_reusable_spool_sources", limit=min(max(int(limit), 0), 20), stdout=output)
+    return {"status": "checked", "summary": output.getvalue().strip()[:160]}
+
+
 def _queue_catalogue_maintenance(config):
     if backup_in_progress():
         return []
@@ -229,9 +252,14 @@ def _queue_catalogue_maintenance(config):
     if config.check_filament_data:
         seed_starter_filament_catalogue_task.delay()
         queued.append("filament-data")
+    if config.check_reusable_spool_sources:
+        refresh_reusable_spool_sources_task.delay(limit=5)
+        queued.append("reusable-spool-sources")
     if config.check_images and getattr(settings, "SEED_CATALOGUE_IMAGES", True):
         seed_catalogue_images_task.delay(force_retry=True)
         queued.append("images")
+        refresh_reusable_spool_images_task.delay(limit=3)
+        queued.append("reusable-spool-images")
     return queued
 
 
