@@ -778,7 +778,7 @@ class ReusableSpoolCatalogImageOverride(TimeStampedModel):
     """Personal picture of shared hardware, never modifies the reference entry."""
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     catalog_entry = models.ForeignKey("ReusableSpoolCatalogEntry", on_delete=models.CASCADE)
-    image = models.ImageField(upload_to="user/reusable-spool-catalogue/")
+    image = models.ImageField(upload_to="catalogue/reusable-spools/personal-catalogue/")
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["owner", "catalog_entry"], name="unique_owned_spool_catalogue_image")]
@@ -804,7 +804,7 @@ class ReusableSpoolDesign(TimeStampedModel):
     hub_diameter_mm = models.DecimalField(max_digits=7, decimal_places=2, blank=True, null=True)
     capacity_g = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
     model_3d = models.ForeignKey("Model3D", on_delete=models.SET_NULL, blank=True, null=True, related_name="reusable_spool_designs")
-    image = models.ImageField(upload_to="user/reusable-spool-designs/", blank=True, null=True)
+    image = models.ImageField(upload_to="catalogue/reusable-spools/personal-designs/", blank=True, null=True)
 
     class Meta:
         ordering = ["name", "created_at"]
