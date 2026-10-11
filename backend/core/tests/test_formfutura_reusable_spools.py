@@ -35,3 +35,17 @@ class FormFuturaMasterSpoolCatalogueTests(TestCase):
             item = ReusableSpoolCatalogEntry.objects.get(key=key)
             self.assertEqual(item.provenance["compatible_refill_size"], refill_size)
             self.assertIn("nominal_tare_g", item.provenance["unverified_fields"])
+
+    def test_azurefilm_is_one_hardware_design_not_a_bundle_sku(self):
+        entry = ReusableSpoolCatalogEntry.objects.get(key="azurefilm-master-spool")
+        self.assertEqual(entry.manufacturer, "AzureFilm")
+        self.assertEqual(entry.design_type, "manufacturer")
+        self.assertEqual(entry.provenance["refill_family"], "AzureFilm Refill")
+        self.assertTrue(entry.verified)
+        self.assertIsNone(entry.nominal_tare_g)
+        self.assertIsNone(entry.max_dryer_temp_c)
+        self.assertEqual(
+            ReusableSpoolCatalogEntry.objects.filter(
+                key__startswith="azurefilm-master-spool"
+            ).count(), 1
+        )
