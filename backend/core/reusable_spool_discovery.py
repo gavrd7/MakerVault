@@ -55,7 +55,8 @@ def suggestions(request):
         qs = ReusableSpoolCatalogueSuggestion.objects.all() if request.user.is_staff else ReusableSpoolCatalogueSuggestion.objects.filter(owner=request.user)
         return JsonResponse({"can_review": bool(request.user.is_staff and request.user.has_perm("core.change_reusablespoolcatalogentry")), "rows": [
             {"id": x.id, "manufacturer": x.manufacturer, "name": x.name, "source_url": x.source_url,
-             "status": x.status, "review_note": x.review_note, "proposed_specs": x.proposed_specs}
+             "status": x.status, "review_note": x.review_note, "proposed_specs": x.proposed_specs,
+             "target_entry_key": x.target_entry.key if x.target_entry_id else None}
             for x in qs.order_by("-created_at")[:100]
         ]})
     if not request.user.has_perm("core.add_filamentproduct"):
@@ -67,18 +68,26 @@ def suggestions(request):
         source_url = str(data.get("source_url") or "").strip()[:500]
         design_type = str(data.get("design_type") or "manufacturer")
         specs = _specs(data.get("proposed_specs") or {})
+        target_key = str(data.get("target_entry_key") or "").strip()
+        target = ReusableSpoolCatalogEntry.objects.filter(key=target_key).first() if target_key else None
+        if target_key and not target:
+            raise ValueError("The catalogue entry to correct was not found.")
+        if target and not specs:
+            raise ValueError("Enter at least one proposed specification change.")
+        if target and (manufacturer.casefold() != target.manufacturer.casefold() or name.casefold() != target.name.casefold()):
+            raise ValueError("The manufacturer and model must match the selected catalogue entry.")
         if not manufacturer or not name or design_type not in ("manufacturer", "printed"):
             raise ValueError("Manufacturer, product name and design type are required.")
         parsed = urlparse(source_url)
         if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.port not in (None, 443):
             raise ValueError("Provide a valid public HTTPS product source.")
-        if ReusableSpoolCatalogEntry.objects.filter(manufacturer__iexact=manufacturer, name__iexact=name).exists():
+        if not target and ReusableSpoolCatalogEntry.objects.filter(manufacturer__iexact=manufacturer, name__iexact=name).exists():
             raise ValueError("This catalogue product already exists; propose corrections separately.")
         if ReusableSpoolCatalogueSuggestion.objects.filter(owner=request.user, manufacturer__iexact=manufacturer, name__iexact=name, status="pending").exists():
             raise ValueError("You already have a pending suggestion for this model.")
     except (ValueError, TypeError, ValidationError) as exc:
         return error(str(exc))
-    obj = ReusableSpoolCatalogueSuggestion.objects.create(owner=request.user, manufacturer=manufacturer, name=name, design_type=design_type, source_url=source_url, proposed_specs=specs)
+    obj = ReusableSpoolCatalogueSuggestion.objects.create(owner=request.user, manufacturer=manufacturer, name=name, design_type=design_type, source_url=source_url, proposed_specs=specs, target_entry=target)
     return JsonResponse({"id": obj.id, "status": obj.status}, status=201)
 
 
@@ -112,7 +121,25 @@ def review_suggestion(request, suggestion_id):
             suggestion = ReusableSpoolCatalogueSuggestion.objects.select_for_update().filter(pk=suggestion_id, status="pending").first()
             if suggestion is None:
                 return error("Pending suggestion not found.", 404)
-            if action == "approve":
+            if action == "approve" and suggestion.target_entry_id:
+                entry = ReusableSpoolCatalogEntry.objects.select_for_update().filter(pk=suggestion.target_entry_id).first()
+                if entry is None:
+                    return error("Catalogue entry no longer exists.", 404)
+                if suggestion.source_url != entry.source_url:
+                    return error("Correction evidence must match the product source; update the source separately.")
+                changes = dict(suggestion.proposed_specs)
+                for field, value in changes.items():
+                    setattr(entry, field, value)
+                provenance = dict(entry.provenance or {})
+                history = list(provenance.get("reviewed_corrections") or [])
+                history.append({"suggestion_id": suggestion.id, "fields": list(changes), "source_url": suggestion.source_url})
+                provenance["reviewed_corrections"] = history[-30:]
+                verified_fields = set(provenance.get("verified_fields") or [])
+                provenance["verified_fields"] = sorted(verified_fields - set(changes))
+                entry.provenance = provenance
+                entry.save(update_fields=list(changes) + ["provenance", "updated_at"])
+                entry_id = str(entry.id)
+            elif action == "approve":
                 if ReusableSpoolCatalogEntry.objects.filter(manufacturer__iexact=suggestion.manufacturer, name__iexact=suggestion.name).exists():
                     return error("Matching product already exists; no duplicate created.")
                 base = slugify(suggestion.manufacturer + "-" + suggestion.name)[:110] or "spool"
