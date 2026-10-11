@@ -1560,6 +1560,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
   const [manufacturerDesigns, setManufacturerDesigns] = useState([]);
   const [catalogueQuery, setCatalogueQuery] = useState("");
   const [catalogueMaker, setCatalogueMaker] = useState("");
+  const [catalogueOpen, setCatalogueOpen] = useState(false);
   const [catalogueImage, setCatalogueImage] = useState(null);
   const [reels, setReels] = useState([]);
   const [densityProductId, setDensityProductId] = useState("");
@@ -1790,7 +1791,12 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
       </div>
     </section>
     <section className="panel printingSection">
-      <div className="panelHead"><h3>Manufacturer spool catalogue</h3><small>{filteredManufacturerDesigns.length} matching designs</small></div>
+      <div className="panelHead"><h3>Manufacturer spool catalogue</h3><button type="button" onClick={() => setCatalogueOpen(true)}>Browse manufacturer catalogue</button></div>
+      <div className="printingEmptyInline">Browse {manufacturerDesigns.length} manufacturer spool designs, search by brand, and import a design without leaving your inventory.</div>
+    </section>
+    {catalogueOpen && <Modal title="Manufacturer spool catalogue" wide onClose={() => setCatalogueOpen(false)}>
+      <div className="spoolCatalogueModalContent">
+        <small>{filteredManufacturerDesigns.length} matching designs</small>
       <div className="spoolCatalogueFilters">
         <label>Search catalogue<input value={catalogueQuery} onChange={e => setCatalogueQuery(e.target.value)} placeholder="Spool, model, manufacturer…" /></label>
         <label>Manufacturer<select value={catalogueMaker} onChange={e => setCatalogueMaker(e.target.value)}><option value="">All manufacturers</option>{catalogueManufacturers.map(name => <option key={name} value={name}>{name}</option>)}</select></label>
@@ -1810,7 +1816,8 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
         </article>)}
         {!filteredManufacturerDesigns.length && <div className="printingEmptyInline">No catalogue entries match these filters.</div>}
       </div>
-    </section>
+      </div>
+    </Modal>}
     <section className="panel printingSection">
       <div className="panelHead"><h3>Spool designs ({designs.length})</h3></div>
       <div className="printingList">
