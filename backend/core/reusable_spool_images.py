@@ -52,8 +52,16 @@ def refresh_reusable_spool_images(*, limit=3, retry_days=7):
     now = timezone.now()
     saved = checked = failed = skipped = 0
     # ImageField can be stored as NULL or an empty string.
-    qs = ReusableSpoolCatalogEntry.objects.exclude(source_url="").order_by("updated_at", "key")
-    for item in qs:
+    qs = ReusableSpoolCatalogEntry.objects.exclude(source_url="").order_by("key")
+    # Prioritise never-attempted entries even when a low per-run limit is used.
+    # This prevents repeated runs from starving entries after earlier failures.
+    pending = [item for item in qs if not item.image]
+    pending.sort(key=lambda item: (
+        bool((item.provenance or {}).get("last_image_attempt_at")),
+        str((item.provenance or {}).get("last_image_attempt_at") or ""),
+        item.key,
+    ))
+    for item in pending:
         if checked >= max(0, min(int(limit), 10)):
             break
         if item.image:
@@ -70,6 +78,7 @@ def refresh_reusable_spool_images(*, limit=3, retry_days=7):
                 pass
         checked += 1
         status = "no-reviewed-image"
+        failure_reason = ""
         try:
             final_url, html = fetch_catalogue_source_html(item.source_url)
             candidate = official_image_candidate(item, html, final_url)
@@ -78,11 +87,13 @@ def refresh_reusable_spool_images(*, limit=3, retry_days=7):
                 item.image_url = candidate
                 saved += 1
                 status = "cached"
-        except (ImporterError, CatalogueImageError, OSError, ValueError):
+        except (ImporterError, CatalogueImageError, OSError, ValueError) as exc:
             failed += 1
             status = "source-unavailable"
+            # Keep a bounded human-readable diagnostic, never raw response data.
+            failure_reason = f"{type(exc).__name__}: {str(exc)[:180]}"
         meta = dict(item.provenance or {})
-        meta.update({"last_image_attempt_at": now.isoformat(), "last_image_status": status})
+        meta.update({"last_image_attempt_at": now.isoformat(), "last_image_status": status, "last_image_error": failure_reason})
         item.provenance = meta
         item.save(update_fields=["image_url", "provenance", "updated_at"])
     return {"processed": checked, "cached": saved, "failed": failed, "skipped": skipped}
