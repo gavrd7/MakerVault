@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.2.0 — In development (not released)
+
+- Expanded the reusable spool hardware catalogue with manufacturer and printable masterspool variants, source links, nominal empty weights and material/geometry/dryer data when available.
+- Added reusable-spool catalogue detail views with image zoom, image coverage/maintenance diagnostics, and conservative automatic source-image matching.
+- Added owner-specific image overrides: upload an image or securely cache a user-chosen public HTTPS image URL, with a reset to the shared catalogue image. Personal/printed spool designs support images too.
+- Added **Suggest New Model** and **Suggest specification correction** with provenance and duplicate checks. Administrator submissions are approved immediately; other users' changes remain pending until a catalogue administrator reviews them in **Review Suggestions**.
+- Approved/rejected items are removed from the pending review queue. Suggested values are not automatically deemed manufacturer-verified, and missing specifications stay unknown.
+- Added migrations 0053–0058 and regression coverage for catalogue entries, images, permissions, source checks and suggestion review.
+
+**Release gate:** Full regression tests, staging upgrade and permissions smoke-test, documentation review and PR approval before tagging v1.2.0. Automatic specification extraction and general online product search remain follow-up work.
+
+
 ## v1.1.0 — Release candidate (unpublished)
 
 - Improved automated catalogue seeding, bounded batch continuation and restart-safe PostgreSQL checkpoints for boards, components, filaments and image records.
