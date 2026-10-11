@@ -8,11 +8,11 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name="reusablespoolcatalogimageoverride",
             name="id",
-            field=models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID"),
+            field=models.BigAutoField(primary_key=True, serialize=False),
         ),
         migrations.AlterField(
             model_name="reusablespoolcataloguesuggestion",
             name="id",
-            field=models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID"),
+            field=models.BigAutoField(primary_key=True, serialize=False),
         ),
     ]
