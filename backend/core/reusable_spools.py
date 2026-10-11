@@ -350,6 +350,9 @@ def manufacturer_catalogue(request):
             "hub_diameter_mm": str(entry.hub_diameter_mm) if entry.hub_diameter_mm is not None else None,
             "capacity_g": str(entry.capacity_g) if entry.capacity_g is not None else None,
             "verified": entry.verified,
+            "approximate_tare": bool((entry.provenance or {}).get("approximate_tare_g")),
+            "avoid_dryer": bool((entry.provenance or {}).get("avoid_dryer")),
+            "source_type": (entry.provenance or {}).get("source_type") or (entry.provenance or {}).get("type") or "",
         } for entry in qs if not query or query in " ".join((
             entry.name, entry.manufacturer, entry.description, entry.material, entry.key
         )).casefold()]
