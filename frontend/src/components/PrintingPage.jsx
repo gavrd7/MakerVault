@@ -1781,13 +1781,13 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
         if (!spoolImageRights) throw new Error("Confirm you have permission to use this image.");
         const data = new FormData();
         data.append("rights_confirmed", "true");
-        if (mode === "upload") {
-          if (!spoolImageFile) throw new Error("Choose an image to upload.");
-          data.append("image", spoolImageFile);
-        } else {
-          if (!spoolImageUrl.trim()) throw new Error("Enter a public HTTPS image URL.");
-          data.append("url", spoolImageUrl.trim());
-        }
+        const hasFile = Boolean(spoolImageFile);
+        const hasUrl = Boolean(spoolImageUrl.trim());
+        if (hasFile === hasUrl) throw new Error(hasFile
+          ? "Choose either an uploaded file or an image URL, not both."
+          : "Choose an image file or enter an image URL.");
+        if (hasFile) data.append("image", spoolImageFile);
+        else data.append("url", spoolImageUrl.trim());
         result = await apiFetch(path, { method: "POST", body: data });
       }
       await load();
@@ -1895,7 +1895,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
           <div className="spoolRowActions">
             {d.model_3d_id && <button type="button" onClick={onOpenModels}>View linked model</button>}
             {canChangeDesign && <button type="button" onClick={() => startDesign(d)}>Edit</button>}
-            {canChangeDesign && <button type="button" onClick={() => openSpoolImageEditor("design", d)}>Add image — Upload / URL</button>}
+            {canChangeDesign && <button type="button" onClick={() => openSpoolImageEditor("design", d)}>Add Custom Image</button>}
             {canChangeDesign && <button type="button" className="dangerButton" onClick={() => remove("design", d)}>Delete</button>}
           </div>
         </article>)}
@@ -1929,7 +1929,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
           </dl>
           {catalogueDetail.avoid_dryer && <p className="spoolCatalogueDryerWarning">Not suitable for filament dryers according to the source.</p>}
           {canChangeDesign && <div className="spoolInlineActions">
-            <button type="button" onClick={() => openSpoolImageEditor("catalogue", catalogueDetail)}>Add image — Upload / URL</button>
+            <button type="button" onClick={() => openSpoolImageEditor("catalogue", catalogueDetail)}>Add Custom Image</button>
             {catalogueDetail.image_personal && <button type="button" onClick={() => openSpoolImageEditor("catalogue", catalogueDetail)}>Manage personal image</button>}
           </div>}
           {catalogueDetail.image_personal && <small>Showing your personal image override.</small>}
@@ -1958,8 +1958,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
         <label className="spoolImageRights"><input type="checkbox" checked={spoolImageRights} onChange={e => setSpoolImageRights(e.target.checked)} /> I have permission to use this image.</label>
         <small>URLs must resolve publicly over HTTPS. MakerVault downloads, validates and caches the image rather than hotlinking it.</small>
         <div className="spoolInlineActions">
-          <button type="button" disabled={working || !spoolImageRights || !spoolImageFile} onClick={() => saveSpoolImage("upload")}>Add image — Upload</button>
-          <button type="button" disabled={working || !spoolImageRights || !spoolImageUrl.trim()} onClick={() => saveSpoolImage("url")}>Add image — URL</button>
+          <button type="button" className="primary" disabled={working || !spoolImageRights || (!spoolImageFile && !spoolImageUrl.trim())} onClick={() => saveSpoolImage("add")}>{working ? "Saving…" : "Add Image"}</button>
           <button type="button" disabled={working} onClick={() => saveSpoolImage("reset")}>Remove personal image</button>
           <button type="button" disabled={working} onClick={() => setImageEditor(null)}>Cancel</button>
         </div>
