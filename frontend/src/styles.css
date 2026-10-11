@@ -2705,3 +2705,18 @@ a:focus-visible,
 .spoolCatalogueImageButton:focus-visible{outline:2px solid #8268ed;outline-offset:3px}
 .spoolCatalogueImageViewer{display:grid;place-items:center;min-height:200px;max-height:65vh;overflow:auto;background:#0c1118;border-radius:10px}
 .spoolCatalogueImageViewer img{display:block;max-width:100%;max-height:65vh;object-fit:contain}
+
+/* Manufacturer catalogue: compact five-row viewport; filters remain visible. */
+.spoolCatalogueScrollList{max-height:500px;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;min-height:0}
+.spoolCatalogueScrollList:focus-visible{outline:2px solid var(--accent,#8b74ed);outline-offset:-2px}
+.spoolCatalogueScrollList .spoolCatalogueItem{min-height:0;padding:10px 14px;gap:12px;align-items:center}
+.spoolCatalogueScrollList .spoolCatalogueRecord{gap:2px}
+.spoolCatalogueScrollList .spoolCatalogueRecord small{margin:0;line-height:1.35}
+.spoolCatalogueScrollList .spoolCatalogueThumb{width:52px;height:52px;max-width:52px;margin:0}
+.spoolCatalogueScrollList .spoolCatalogueImageButton{float:left;margin-right:12px}
+.spoolCatalogueScrollList .spoolCatalogueItem>button{flex:0 0 auto}
+@media(max-width:620px){
+  .spoolCatalogueScrollList{max-height:475px}
+  .spoolCatalogueScrollList .spoolCatalogueItem{flex-wrap:wrap;align-items:flex-start}
+  .spoolCatalogueScrollList .spoolCatalogueItem>button{margin-left:auto}
+}
