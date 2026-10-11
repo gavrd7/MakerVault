@@ -775,6 +775,7 @@ class ReusableSpoolCatalogEntry(TimeStampedModel):
 
 
 class ReusableSpoolCatalogueSuggestion(TimeStampedModel):
+    id = models.BigAutoField(primary_key=True)
     target_entry = models.ForeignKey("ReusableSpoolCatalogEntry", on_delete=models.CASCADE, blank=True, null=True, related_name="correction_suggestions")
     """User-proposed hardware reference, held for explicit review before publication."""
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
@@ -790,6 +791,7 @@ class ReusableSpoolCatalogueSuggestion(TimeStampedModel):
 
 class ReusableSpoolCatalogImageOverride(TimeStampedModel):
     """Personal picture of shared hardware, never modifies the reference entry."""
+    id = models.BigAutoField(primary_key=True)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     catalog_entry = models.ForeignKey("ReusableSpoolCatalogEntry", on_delete=models.CASCADE)
     image = models.ImageField(upload_to="catalogue/reusable-spools/personal-catalogue/")
