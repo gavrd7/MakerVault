@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.2.1 — Release preparation
+
+- Expanded Maker Tags QR label printing with Compact (50 × 30 mm), Standard (70 × 50 mm), Large (100 × 70 mm), and custom label and QR dimensions.
+- Added an adjustable single-label preview and independent checkboxes to include or omit the tag title, identity code and target type.
+- Improved print-only CSS to exclude application dialogs and print one label without the surrounding interface.
+- Added bulk selection, select-all-matching and batch printing of multiple active QR tags arranged across A4 sheets.
+- Added target entity-type filtering to Maker Tags, including reusable spools and other supported targets; batch selection respects the active search and filters.
+- Aligned checkboxes, QR markers, tag information and actions across desktop/mobile layouts.
+
+**Testing:** Verify the frontend/backend CI checks, single-tag and batch printing on desktop and mobile, sheet pagination and scannability before publishing. The v1.2.0 feature set remains included.
+
+
 ## v1.2.0 — 11 October 2026
 
 - Added reusable-spool hardware inventory, distinct from filament stock: physical reusable reels, owned/custom or 3D-printed designs, measured empty/tare weight, locations, condition, filament assignment/unassignment and assignment history.
