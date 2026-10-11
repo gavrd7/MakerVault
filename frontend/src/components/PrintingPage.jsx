@@ -1566,6 +1566,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
   const [catalogueOpen, setCatalogueOpen] = useState(false);
   const [suggestionOpen, setSuggestionOpen] = useState(false);
   const [suggestionRows, setSuggestionRows] = useState([]);
+  const [canReviewSuggestions, setCanReviewSuggestions] = useState(false);
   const [suggestionForm, setSuggestionForm] = useState({ manufacturer: "", name: "", design_type: "manufacturer", source_url: "", nominal_tare_g: "", outer_diameter_mm: "", width_mm: "", hub_diameter_mm: "", capacity_g: "", material: "", max_dryer_temp_c: "", temperature_source: "" });
   const [suggestionError, setSuggestionError] = useState("");
   const [suggestionPreview, setSuggestionPreview] = useState("");
@@ -1757,6 +1758,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
     try {
       const response = await apiFetch("/api/printing/reusable-spool-suggestions/");
       setSuggestionRows(response.rows || []);
+      setCanReviewSuggestions(Boolean(response.can_review));
     } catch (err) { setSuggestionError(err.message); }
   }
 
@@ -1768,6 +1770,21 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
         method: "POST", body: { url: suggestionForm.source_url },
       });
       setSuggestionPreview(response.page_title || "Source accessible (no title)");
+    } catch (err) { setSuggestionError(err.message); }
+    finally { setSuggestionBusy(false); }
+  }
+
+  async function reviewSuggestion(suggestion, action) {
+    setSuggestionBusy(true);
+    setSuggestionError("");
+    try {
+      await apiFetch("/api/printing/reusable-spool-suggestions/" + suggestion.id + "/review/", {
+        method: "POST", body: { action },
+      });
+      const response = await apiFetch("/api/printing/reusable-spool-suggestions/");
+      setSuggestionRows(response.rows || []);
+      await load();
+      setNotice(action === "approve" ? "Suggestion added to shared catalogue as unverified." : "Suggestion rejected.");
     } catch (err) { setSuggestionError(err.message); }
     finally { setSuggestionBusy(false); }
   }
@@ -1972,7 +1989,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
         </div>
         <div className="spoolInlineActions"><button className="primary" disabled={suggestionBusy}>Submit for review</button><button type="button" onClick={() => { setSuggestionOpen(false); setCatalogueOpen(true); }}>Back to catalogue</button></div>
         <h3>Your submitted models</h3>
-        <div className="printingList">{suggestionRows.map(s => <div className="printingListRow" key={s.id}><div><strong>{s.manufacturer} — {s.name}</strong><small>Status: {s.status}{s.review_note ? " · " + s.review_note : ""}</small></div></div>)}{!suggestionRows.length && <small>No submissions yet.</small>}</div>
+        <div className="printingList">{suggestionRows.map(s => <div className="printingListRow" key={s.id}><div><strong>{s.manufacturer} — {s.name}</strong><small>Status: {s.status}{s.review_note ? " · " + s.review_note : ""}</small></div>{canReviewSuggestions && s.status === "pending" && <div className="spoolInlineActions"><button type="button" disabled={suggestionBusy} onClick={() => reviewSuggestion(s, "approve")}>Approve</button><button type="button" disabled={suggestionBusy} onClick={() => reviewSuggestion(s, "reject")}>Reject</button></div>}</div>)}{!suggestionRows.length && <small>No submissions yet.</small>}</div>
       </form>
     </Modal>}
     {catalogueDetail && !imageEditor && <Modal title={catalogueDetail.name} wide onClose={() => { setCatalogueDetail(null); setCatalogueZoom(false); setCatalogueOpen(true); }}>
