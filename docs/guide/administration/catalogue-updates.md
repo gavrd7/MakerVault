@@ -22,3 +22,12 @@ Enrichment is designed to preserve populated information rather than overwrite e
 If nothing runs, inspect the application logs and container health. Celery worker and Beat run inside the application container in this deployment; you do not need to create separate worker services for the standard Compose setup.
 
 [Troubleshooting →](../reference/troubleshooting.md)
+
+
+## Review reusable spool catalogue suggestions (v1.2.0 candidate)
+
+In **3D Printing → Reusable spools → Browse manufacturer catalogue**, administrators with catalogue-edit permissions can open **Review Suggestions**, next to **Suggest New Model**. The review modal lists pending new designs and corrections, their proposed fields and source links. Review evidence and then choose **Approve** or **Reject**. Resolved suggestions disappear from the pending queue but retain a record in the database.
+
+Administrator-authored additions/corrections are automatically approved when submitted; ordinary editors' submissions are queued. This is a workflow approval, **not independent technical verification**. New records remain unverified and a suggested dryer temperature must include source evidence for the exact design. A source page being reachable does not establish correctness of a specification.
+
+Reusable spool catalogue source checks and conservative image discovery are separate from review. They cannot fill every missing specification or identify every suitable image. General online product search and automatic extraction of spool dimensions are future enhancements, not features of this version.
