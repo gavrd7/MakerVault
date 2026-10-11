@@ -1766,6 +1766,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
       <div className="printingHeroActions">
         <button type="button" onClick={onBack}>← Printing overview</button>
         <button type="button" onClick={onOpenModels}>Model library (STL/3MF)</button>
+        <button type="button" onClick={() => setCatalogueOpen(true)}>Browse manufacturer catalogue</button>
         {canAddDesign && <button type="button" onClick={() => startDesign()}>Add design</button>}
         {canAdd && <button type="button" className="primary" onClick={() => startReel()} disabled={!designs.length}>Add reusable spool</button>}
       </div>
@@ -1789,10 +1790,6 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
         </article>)}
         {!reels.length && <div className="printingEmptyInline">No reusable spools registered yet. Add a design, then an individual spool.</div>}
       </div>
-    </section>
-    <section className="panel printingSection">
-      <div className="panelHead"><h3>Manufacturer spool catalogue</h3><button type="button" onClick={() => setCatalogueOpen(true)}>Browse manufacturer catalogue</button></div>
-      <div className="printingEmptyInline">Browse {manufacturerDesigns.length} manufacturer spool designs, search by brand, and import a design without leaving your inventory.</div>
     </section>
     {catalogueOpen && <Modal title="Manufacturer spool catalogue" wide onClose={() => setCatalogueOpen(false)}>
       <div className="spoolCatalogueModalContent">
