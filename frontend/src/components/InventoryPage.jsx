@@ -120,7 +120,7 @@ export default function InventoryPage({ inventory, setInventory, boards, compone
         <div><h3>Inventory</h3><p>Click an item for its full record. Total, BOM-allocated and free quantities stay visible while you quick-edit stock details.</p></div>
         <div className="toolbarActions">
           <input className="searchInput" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search inventory…" />
-          {config?.permissions?.add_inventory && <button className="primary" onClick={() => setShowAdd(true)}>＋ Add item</button>}
+          {config?.permissions?.add_inventory && <button className="primary" onClick={() => setShowAdd(true)}>Add item</button>}
         </div>
       </div>
       {message && <div className="inlineError">{message}</div>}
