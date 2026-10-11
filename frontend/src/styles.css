@@ -2885,6 +2885,7 @@ a:focus-visible,
 
 /* Review-first discovery of reusable spool catalogue references. */
 .spoolCatalogueSuggestionHead{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.spoolCatalogueSuggestionActions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .spoolCatalogueSuggestionHead small{color:var(--text-muted,#929eaf)}
 .spoolSuggestionForm{display:flex;flex-direction:column;gap:14px;max-height:72vh;overflow-y:auto}
 .spoolSuggestionForm .spoolCatalogueFilters{border:0;padding:0}
