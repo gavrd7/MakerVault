@@ -3,6 +3,7 @@ from decimal import Decimal, InvalidOperation
 from urllib.parse import urlparse
 
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import JsonResponse
 from django.utils.text import slugify
@@ -75,7 +76,7 @@ def suggestions(request):
             raise ValueError("This catalogue product already exists; propose corrections separately.")
         if ReusableSpoolCatalogueSuggestion.objects.filter(owner=request.user, manufacturer__iexact=manufacturer, name__iexact=name, status="pending").exists():
             raise ValueError("You already have a pending suggestion for this model.")
-    except (ValueError, TypeError) as exc:
+    except (ValueError, TypeError, ValidationError) as exc:
         return error(str(exc))
     obj = ReusableSpoolCatalogueSuggestion.objects.create(owner=request.user, manufacturer=manufacturer, name=name, design_type=design_type, source_url=source_url, proposed_specs=specs)
     return JsonResponse({"id": obj.id, "status": obj.status}, status=201)
@@ -92,7 +93,7 @@ def preview_source(request):
         from bs4 import BeautifulSoup
         soup = BeautifulSoup(html, "html.parser")
         title = soup.title.get_text(" ", strip=True)[:200] if soup.title else ""
-    except (ImporterError, ValueError, OSError) as exc:
+    except (ImporterError, ValueError, OSError, ValidationError) as exc:
         return error(f"Unable to inspect approved catalogue source: {exc}")
     return JsonResponse({"source_url": resolved, "page_title": title, "note": "Page metadata only; specifications require review."})
 
