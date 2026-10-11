@@ -1893,7 +1893,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
           <div className="spoolRowActions">
             {d.model_3d_id && <button type="button" onClick={onOpenModels}>View linked model</button>}
             {canChangeDesign && <button type="button" onClick={() => startDesign(d)}>Edit</button>}
-            {canChangeDesign && <button type="button" onClick={() => openSpoolImageEditor("design", d)}>Add image — Upload / URL</button>
+            {canChangeDesign && <button type="button" onClick={() => openSpoolImageEditor("design", d)}>Add image — Upload / URL</button>}
             {canChangeDesign && <button type="button" className="dangerButton" onClick={() => remove("design", d)}>Delete</button>}
           </div>
         </article>)}
