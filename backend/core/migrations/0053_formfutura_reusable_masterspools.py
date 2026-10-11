@@ -46,6 +46,42 @@ def seed_formfutura_masterspools(apps, schema_editor):
             },
         )
 
+    # AzureFilm sells this actual reusable hardware separately, including a
+    # multi-pack; pack count is not a distinct physical spool design.
+    azure_source = "https://azurefilm.com/product/azurefilm-master-spool-10-pack/"
+    Entry.objects.get_or_create(
+        key="azurefilm-master-spool",
+        defaults={
+            "manufacturer": "AzureFilm",
+            "name": "AzureFilm Master Spool",
+            "design_type": "manufacturer",
+            "source_url": azure_source,
+            "description": (
+                "Manufacturer-produced reusable two-disc, injection-moulded "
+                "master spool for AzureFilm Refill filament. Also sold in "
+                "multi-packs; pack size and 1 kg refill mass are not hardware "
+                "variants or empty spool tare. Exact material, dimensions and "
+                "dryer limit are not confirmed here."
+            ),
+            "verified": True,
+            "provenance": {
+                "source": azure_source,
+                "type": "manufacturer_reference",
+                "refill_family": "AzureFilm Refill",
+                "verified_fields": [
+                    "manufacturer", "name", "design_type",
+                    "refill_family", "injection_moulded_two_disc_construction",
+                ],
+                "unverified_fields": [
+                    "nominal_tare_g", "outer_diameter_mm", "width_mm",
+                    "hub_diameter_mm", "capacity_g", "material", "max_dryer_temp_c",
+                ],
+                "image_status": "pending_rights_review",
+                "seed_version": 4,
+            },
+        },
+    )
+
 
 class Migration(migrations.Migration):
     dependencies = [("core", "0052_maker_tag_reusable_spool_target")]
