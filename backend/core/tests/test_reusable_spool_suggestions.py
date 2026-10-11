@@ -2,6 +2,7 @@ import json
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.test import TestCase
 
 from core.models import ReusableSpoolCatalogEntry, ReusableSpoolCatalogueSuggestion
@@ -23,7 +24,8 @@ class ReusableSpoolSuggestionsTests(TestCase):
                 "proposed_specs": {"nominal_tare_g": "175.5"}}
         denied = self._post("/api/printing/reusable-spool-suggestions/", data)
         self.assertEqual(denied.status_code, 403)
-        self.client.force_login(self.admin)
+        self.user.user_permissions.add(Permission.objects.get(codename="add_filamentproduct"))
+        self.client.force_login(self.user)
         response = self._post("/api/printing/reusable-spool-suggestions/", data)
         self.assertEqual(response.status_code, 201, response.content)
         self.assertFalse(ReusableSpoolCatalogEntry.objects.filter(manufacturer="Example Maker").exists())
@@ -40,8 +42,7 @@ class ReusableSpoolSuggestionsTests(TestCase):
         })
         self.assertEqual(submitted.status_code, 201, submitted.content)
         id_ = submitted.json()["id"]
-        approved = self._post(f"/api/printing/reusable-spool-suggestions/{id_}/review/", {"action": "approve"})
-        self.assertEqual(approved.status_code, 200, approved.content)
+        self.assertEqual(submitted.json()["status"], "approved")
         entry = ReusableSpoolCatalogEntry.objects.get(manufacturer="Example Maker")
         self.assertFalse(entry.verified)
         self.assertEqual(str(entry.nominal_tare_g), "183.00")
@@ -69,7 +70,7 @@ class ReusableSpoolSuggestionsTests(TestCase):
         self.assertEqual(response.json()["page_title"], "Master Spool Product")
         self.assertEqual(ReusableSpoolCatalogueSuggestion.objects.count(), 0)
 
-    def test_existing_catalogue_correction_waits_for_review(self):
+    def test_admin_catalogue_correction_automatically_applies(self):
         self.client.force_login(self.admin)
         entry = ReusableSpoolCatalogEntry.objects.get(key="bambu-basic")
         previous = entry.nominal_tare_g
@@ -81,11 +82,11 @@ class ReusableSpoolSuggestionsTests(TestCase):
         })
         self.assertEqual(response.status_code, 201, response.content)
         entry.refresh_from_db()
-        self.assertEqual(entry.nominal_tare_g, previous)
+        self.assertNotEqual(entry.nominal_tare_g, previous)
+        self.assertEqual(entry.nominal_tare_g, 247.5)
         proposal = ReusableSpoolCatalogueSuggestion.objects.get(pk=response.json()["id"])
         self.assertEqual(proposal.target_entry_id, entry.id)
-        approved = self._post(f"/api/printing/reusable-spool-suggestions/{proposal.id}/review/", {"action": "approve"})
-        self.assertEqual(approved.status_code, 200, approved.content)
+        self.assertEqual(proposal.status, "approved")
         entry.refresh_from_db()
         self.assertEqual(entry.nominal_tare_g, 247.5)
         self.assertEqual(entry.provenance["reviewed_corrections"][-1]["suggestion_id"], proposal.id)
@@ -100,3 +101,18 @@ class ReusableSpoolSuggestionsTests(TestCase):
             "proposed_specs": {"width_mm": "70"},
         })
         self.assertEqual(response.status_code, 400)
+
+    def test_regular_user_submission_remains_pending_for_review(self):
+        self.user.user_permissions.add(Permission.objects.get(codename="add_filamentproduct"))
+        self.client.force_login(self.user)
+        response = self._post("/api/printing/reusable-spool-suggestions/", {
+            "manufacturer": "New Spool Brand", "name": "Empty Reel",
+            "source_url": "https://example.org/reel", "proposed_specs": {"width_mm": "62"},
+        })
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(response.json()["status"], "pending")
+        self.assertFalse(ReusableSpoolCatalogEntry.objects.filter(manufacturer="New Spool Brand").exists())
+        self.client.force_login(self.admin)
+        approved = self._post(f"/api/printing/reusable-spool-suggestions/{response.json()['id']}/review/", {"action": "approve"})
+        self.assertEqual(approved.status_code, 200, approved.content)
+        self.assertTrue(ReusableSpoolCatalogEntry.objects.filter(manufacturer="New Spool Brand").exists())
