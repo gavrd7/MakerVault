@@ -2816,3 +2816,58 @@ a:focus-visible,
  .spoolCatalogueRowActions{flex-direction:row;flex-wrap:wrap}
  .spoolCatalogueScrollList .spoolCatalogueItem>.spoolCatalogueRowActions{margin-left:0}
 }
+
+
+/* Keep reusable-spool image, product text and actions aligned across each row. */
+.spoolCatalogueScrollList .spoolCatalogueItem{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(175px,28%);
+  align-items:center;
+  gap:16px;
+}
+.spoolCatalogueScrollList .spoolCatalogueRecord{
+  display:grid;
+  grid-template-columns:84px minmax(0,1fr);
+  grid-template-rows:repeat(4,auto);
+  column-gap:14px;
+  row-gap:4px;
+  align-items:center;
+}
+.spoolCatalogueScrollList .spoolCatalogueImageButton,
+.spoolCatalogueScrollList .spoolCatalogueNoThumb{
+  grid-column:1;
+  grid-row:1 / -1;
+  float:none;
+  margin:0;
+  width:84px;
+  height:84px;
+  max-width:none;
+  align-self:center;
+}
+.spoolCatalogueScrollList .spoolCatalogueThumb{
+  width:84px;
+  height:84px;
+  max-width:none;
+}
+.spoolCatalogueScrollList .spoolCatalogueRecord > :not(.spoolCatalogueImageButton):not(.spoolCatalogueNoThumb){
+  grid-column:2;
+  min-width:0;
+}
+.spoolCatalogueScrollList .spoolCatalogueRecord .spoolCatalogueNameButton{
+  justify-self:start;
+}
+.spoolCatalogueScrollList .spoolCatalogueRowActions{
+  grid-column:2;
+  width:100%;
+}
+@media(max-width:620px){
+  .spoolCatalogueScrollList .spoolCatalogueItem{
+    grid-template-columns:minmax(0,1fr);
+    gap:12px;
+  }
+  .spoolCatalogueScrollList .spoolCatalogueRowActions{
+    grid-column:1;
+    width:auto;
+    justify-content:flex-start;
+  }
+}
