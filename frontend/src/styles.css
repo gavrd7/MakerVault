@@ -2049,7 +2049,7 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
 .tagResolvePanel small{color:#7f8a9c}
 .tagResolvePanel form{display:grid;grid-template-columns:150px minmax(180px,1fr) auto;gap:9px}
 .tagLibrary{overflow:hidden}
-.tagToolbar{display:grid;grid-template-columns:minmax(170px,.7fr) minmax(220px,1.3fr) 170px 150px;gap:10px;align-items:center;padding:16px 18px;border-bottom:1px solid #29313c}
+.tagToolbar{display:grid;grid-template-columns:minmax(145px,.7fr) minmax(190px,1.3fr) repeat(3,minmax(135px,.65fr));gap:10px;align-items:center;padding:16px 18px;border-bottom:1px solid #29313c}
 .tagToolbar>div{display:grid;gap:3px}
 .tagToolbar small{color:#7f8a9c}
 .tagList{display:grid}
