@@ -1567,6 +1567,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
   const [catalogueDetail, setCatalogueDetail] = useState(null);
   const [catalogueZoom, setCatalogueZoom] = useState(false);
   const [imageEditor, setImageEditor] = useState(null);
+  const [imageEditorError, setImageEditorError] = useState("");
   const [spoolImageFile, setSpoolImageFile] = useState(null);
   const [spoolImageUrl, setSpoolImageUrl] = useState("");
   const [spoolImageRights, setSpoolImageRights] = useState(false);
@@ -1757,6 +1758,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
 
   function openSpoolImageEditor(kind, item) {
     setImageEditor({ kind, item });
+    setImageEditorError("");
     setSpoolImageFile(null);
     setSpoolImageUrl("");
     setSpoolImageRights(false);
@@ -1770,7 +1772,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
       ? "/api/printing/reusable-spool-manufacturers/" + item.key + "/image/"
       : "/api/printing/reusable-spool-designs/" + item.id + "/image/";
     setWorking(true);
-    setError("");
+    setImageEditorError("");
     try {
       let result;
       if (mode === "reset") {
@@ -1796,7 +1798,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
       setImageEditor(null);
       setNotice(mode === "reset" ? "Personal image cleared." : "Personal spool image saved.");
     } catch (err) {
-      setError(err.message || "Unable to save image.");
+      setImageEditorError(err.message || "Unable to save image.");
     } finally {
       setWorking(false);
     }
@@ -1943,9 +1945,9 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
         </div>
       </div>
     </Modal>}
-    {imageEditor && <Modal title={"Image for " + imageEditor.item.name} onClose={() => { setImageEditor(null); setError(""); }}>
+    {imageEditor && <Modal title={"Image for " + imageEditor.item.name} onClose={() => { setImageEditor(null); setImageEditorError(""); }}>
       <div className="spoolImageEditor">
-        {error && <div className="error" role="alert">{error}</div>}
+        {imageEditorError && <div className="error" role="alert">{imageEditorError}</div>}
         <p>This image is personal to your account. It overrides the shared catalogue image only for you.</p>
         <label>Upload image
           <input type="file" accept="image/png,image/jpeg,image/webp,image/heic,image/heif" onChange={e => setSpoolImageFile(e.target.files?.[0] || null)} />
