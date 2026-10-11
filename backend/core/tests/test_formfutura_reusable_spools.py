@@ -42,7 +42,11 @@ class FormFuturaMasterSpoolCatalogueTests(TestCase):
         self.assertEqual(entry.design_type, "manufacturer")
         self.assertEqual(entry.provenance["refill_family"], "AzureFilm Refill")
         self.assertTrue(entry.verified)
-        self.assertIsNone(entry.nominal_tare_g)
+        self.assertEqual(str(entry.nominal_tare_g), "196.00")
+        self.assertEqual(str(entry.outer_diameter_mm), "200.00")
+        self.assertEqual(str(entry.hub_diameter_mm), "55.00")
+        self.assertEqual(entry.provenance["manufacturer_reported_temperature_tolerance_c"], 120)
+        self.assertTrue(entry.provenance["temperature_tolerance_is_not_dryer_rating"])
         self.assertIsNone(entry.max_dryer_temp_c)
         self.assertEqual(
             ReusableSpoolCatalogEntry.objects.filter(
