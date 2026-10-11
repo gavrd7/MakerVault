@@ -24,6 +24,8 @@ If nothing runs, inspect the application logs and container health. Celery worke
 [Troubleshooting →](../reference/troubleshooting.md)
 
 
+Reusable spool source-check maintenance can be enabled alongside the existing catalogue checks. It reviews official reference links on the configured schedule without overwriting measured tare weights or independently verifying submitted technical data.
+
 ## Review reusable spool catalogue suggestions (v1.2.0 candidate)
 
 In **3D Printing → Reusable spools → Browse manufacturer catalogue**, administrators with catalogue-edit permissions can open **Review Suggestions**, next to **Suggest New Model**. The review modal lists pending new designs and corrections, their proposed fields and source links. Review evidence and then choose **Approve** or **Reject**. Resolved suggestions disappear from the pending queue but retain a record in the database.
