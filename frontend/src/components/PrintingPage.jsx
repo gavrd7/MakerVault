@@ -1882,11 +1882,10 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
       <div className="panelHead"><h3>Spool designs ({designs.length})</h3></div>
       <div className="printingList">
         {designs.map(d => <article className="printingListRow" key={d.id}>
-          <div><strong>{d.name}</strong>
+          <div className="spoolOwnedDesignContent">{d.image_url ? <img className="spoolCatalogueThumb" src={d.image_url} alt={d.name} loading="lazy" /> : <span className="spoolCatalogueNoThumb" aria-hidden="true">No image</span>}<div><strong>{d.name}</strong>
             <small>{[d.manufacturer, d.design_type, d.material].filter(Boolean).join(" · ")}</small>
             <small>Nominal tare: {d.nominal_tare_g == null ? "Unknown" : d.nominal_tare_g + " g"} · Dryer limit: {d.max_dryer_temp_c == null ? "Unverified" : d.max_dryer_temp_c + " °C"}</small>
-            
-          </div>
+          </div></div>
           <div className="spoolRowActions">
             {d.model_3d_id && <button type="button" onClick={onOpenModels}>View linked model</button>}
             {canChangeDesign && <button type="button" onClick={() => startDesign(d)}>Edit</button>}
