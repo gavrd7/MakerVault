@@ -71,7 +71,7 @@ Pause, Resume and confirmed Cancel are optional per-source controls for Creality
 [Spoolman setup →](../integrations/spoolman.md) · [Creality CFS →](../integrations/creality.md) · [SimplyPrint →](../integrations/simplyprint.md)
 
 
-## Reusable and refillable spool hardware (v1.2.0 candidate)
+## Reusable and refillable spool hardware
 
 Reusable spool designs describe **empty spool hardware**, not filament stock. A physical reusable spool can be assigned a filament spool separately. Avoid treating the nominal empty/tare weight of a catalogue design as a measured weight for your actual reel.
 
