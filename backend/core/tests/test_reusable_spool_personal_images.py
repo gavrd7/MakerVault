@@ -1,5 +1,6 @@
 """Personal spool imagery must never overwrite global catalogue artwork."""
 from io import BytesIO
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -68,3 +69,19 @@ class PersonalSpoolImageTests(TestCase):
         self.assertEqual(reset.status_code, 200)
         design.refresh_from_db()
         self.assertFalse(design.image)
+
+    def test_uploaded_design_image_uses_writable_catalogue_media_path(self):
+        design = ReusableSpoolDesign.objects.create(owner=self.owner, name="Filesystem test spool")
+        upload = SimpleUploadedFile("spool.png", b"image-input", content_type="image/png")
+        with TemporaryDirectory() as media, override_settings(MEDIA_ROOT=media):
+            with patch("core.reusable_spools.sanitise_uploaded_image", return_value=(
+                ContentFile(b"sanitised-image"), "spool.webp"
+            )):
+                response = self.client.post(
+                    f"/api/printing/reusable-spool-designs/{design.id}/image/",
+                    {"image": upload, "rights_confirmed": "true"},
+                )
+            self.assertEqual(response.status_code, 200, response.content)
+            design.refresh_from_db()
+            self.assertTrue(design.image.name.startswith("catalogue/reusable-spools/personal-designs/"))
+            self.assertTrue(design.image.storage.exists(design.image.name))
