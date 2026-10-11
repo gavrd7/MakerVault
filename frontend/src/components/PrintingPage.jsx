@@ -2010,7 +2010,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
     </Modal>}
     {suggestionOpen && <Modal title={suggestionTarget ? "Suggest specification correction" : "Suggest a reusable spool model"} wide onClose={() => { setSuggestionOpen(false); if (!suggestionTarget) setCatalogueOpen(true); }}>
       <form className="spoolSuggestionForm" onSubmit={submitSuggestion}>
-        <p>{suggestionTarget ? "Propose corrected fields for this existing model. Enter only fields you want to change. The submitted evidence will be reviewed before the shared catalogue is updated." : "Suggest a new physical spool or printable design. Submissions are reviewed before entering the shared catalogue. Unknown specifications can be left blank."}</p>
+        <p>{suggestionTarget ? "Propose corrected fields for this existing model. Enter only fields you want to change. Submissions from other users require approval; administrator corrections take effect immediately." : "Suggest a new physical spool or printable design. Submissions from other users are reviewed before entering the shared catalogue. Administrator submissions are added immediately. Unknown specifications can be left blank."}</p>
         {suggestionError && <div className="error" role="alert">{suggestionError}</div>}
         <div className="spoolCatalogueFilters">
           <label>Manufacturer<input disabled={Boolean(suggestionTarget)} required maxLength={120} value={suggestionForm.manufacturer} onChange={e => setSuggestionForm(p => ({ ...p, manufacturer: e.target.value }))} /></label>
@@ -2027,7 +2027,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
             ["Verified dryer limit (°C)", "max_dryer_temp_c"], ["Dryer temperature source URL", "temperature_source"],
           ].map(([label, key]) => <label key={key}>{label}<input type={key === "material" ? "text" : key === "temperature_source" ? "url" : "number"} step={key === "material" || key === "temperature_source" ? undefined : "any"} value={suggestionForm[key]} onChange={e => setSuggestionForm(p => ({ ...p, [key]: e.target.value }))} /></label>)}
         </div>
-        <div className="spoolInlineActions"><button className="primary" disabled={suggestionBusy}>Submit for review</button><button type="button" onClick={() => { setSuggestionOpen(false); if (!suggestionTarget) setCatalogueOpen(true); }}>{suggestionTarget ? "Back to details" : "Back to catalogue"}</button></div>
+        <div className="spoolInlineActions"><button className="primary" disabled={suggestionBusy}>{canReviewSuggestions ? "Save to catalogue" : "Submit for review"}</button><button type="button" onClick={() => { setSuggestionOpen(false); if (!suggestionTarget) setCatalogueOpen(true); }}>{suggestionTarget ? "Back to details" : "Back to catalogue"}</button></div>
       </form>
     </Modal>}
     {catalogueDetail && !imageEditor && !suggestionOpen && <Modal title={catalogueDetail.name} wide onClose={() => { setCatalogueDetail(null); setCatalogueZoom(false); setCatalogueOpen(true); }}>
