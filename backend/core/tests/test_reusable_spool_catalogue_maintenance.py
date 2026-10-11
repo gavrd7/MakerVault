@@ -87,3 +87,20 @@ class ReusableSpoolMaintenanceTests(TestCase):
         self.assertEqual(result["cached"], 1)
         cache.assert_called_once_with(entry, "https://asia.store.bambulab.com/products/spool.webp")
         self.assertEqual(entry.provenance["last_image_status"], "cached")
+
+    @patch("core.reusable_spool_images.fetch_catalogue_source_html")
+    def test_image_refresh_prioritises_unattempted_entries(self, fetch):
+        from core.importers import ImporterError
+        from core.reusable_spool_images import refresh_reusable_spool_images
+        attempted = ReusableSpoolCatalogEntry.objects.get(key="bambu-basic")
+        unattempted = ReusableSpoolCatalogEntry.objects.get(key="azurefilm-master-spool")
+        attempted.provenance = {"last_image_attempt_at": "2026-10-10T00:00:00+00:00"}
+        attempted.save(update_fields=["provenance"])
+        fetch.side_effect = ImporterError("HTTP 403")
+        with patch("core.reusable_spool_images.ReusableSpoolCatalogEntry.objects") as manager:
+            manager.exclude.return_value.order_by.return_value = [attempted, unattempted]
+            result = refresh_reusable_spool_images(limit=1)
+        fetch.assert_called_once_with(unattempted.source_url)
+        self.assertEqual(result["processed"], 1)
+        unattempted.refresh_from_db()
+        self.assertIn("HTTP 403", unattempted.provenance["last_image_error"])
