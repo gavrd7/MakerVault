@@ -119,8 +119,8 @@ export default function BoardsPage({ boards, setBoards, components, projects, co
           <select value={boardType} onChange={e => setBoardType(e.target.value)}><option value="">All board types</option>{boardTypes.map(x => <option key={x} value={x}>{boardTypeLabel(x)}</option>)}</select>
           <select value={family} onChange={e => setFamily(e.target.value)}><option value="">All families</option>{families.map(x => <option key={x}>{x}</option>)}</select>
           {config?.permissions?.add_board && <>
-            <button onClick={() => setShowAdd(true)}>＋ Manual</button>
-            <button className="primary" onClick={onOpenImport}>＋ Import URL</button>
+            <button onClick={() => setShowAdd(true)}>Add manually</button>
+            <button className="primary" onClick={onOpenImport}>Add from URL</button>
           </>}
         </div>
       </div>
@@ -230,7 +230,7 @@ function BoardDetail({ board, loading, canEdit, canAddInventory, boards, compone
       <div className="detailTitleRow boardTitleRow">
         <h2>{board.display_name}</h2>
         <div className="detailActions">
-          {canAddInventory && <button className="primary" onClick={() => setInventoryOpen(true)}>＋ Add to inventory</button>}
+          {canAddInventory && <button className="primary" onClick={() => setInventoryOpen(true)}>Add to inventory</button>}
           {canEdit && <button onClick={() => setImageOpen(true)}>Image</button>}
           {canEdit && <button onClick={enrichBoard} disabled={enriching}>{enriching ? "Refreshing…" : "Refresh specs"}</button>}
         </div>
