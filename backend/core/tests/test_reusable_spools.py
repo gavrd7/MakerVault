@@ -151,7 +151,7 @@ class ReusableSpoolApiTests(TestCase):
         catalogue = self.client.get("/api/printing/reusable-spool-manufacturers/")
         self.assertEqual(catalogue.status_code, 200)
         self.assertTrue(catalogue.json()["rows"])
-        entry = catalogue.json()["rows"][0]
+        entry = next(row for row in catalogue.json()["rows"] if row["key"] == "bambu-basic")
         first = self._post("/api/printing/reusable-spool-manufacturers/", {"key": entry["key"]})
         self.assertEqual(first.status_code, 201, first.content)
         again = self._post("/api/printing/reusable-spool-manufacturers/", {"key": entry["key"]})
