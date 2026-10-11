@@ -441,7 +441,7 @@ function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged, onOpenTarget
     window.print();
   }
 
-  return <Modal title={tag.label || tag.code} subtitle="Maker Tag identity and assignment history." onClose={onClose} wide>
+  return <><Modal title={tag.label || tag.code} subtitle="Maker Tag identity and assignment history." onClose={onClose} wide>
 
     {notice && <div className={notice.toLowerCase().includes("blocked") ? "formError" : "notice"}>{notice}</div>}
     <div className="tagDetailGrid">
@@ -524,7 +524,7 @@ function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged, onOpenTarget
         ? <button className="dangerButton" disabled={busy} onClick={() => setStatus("retired")}>Retire tag</button>
         : <button className="primary" disabled={busy} onClick={() => setStatus("active")}>Reactivate tag</button>)}
     </div>
-  </Modal>;
+  </Modal>
 
     {tag.kind === "qr" && typeof document !== "undefined" && createPortal(
       <div className="makerTagPrintPage" aria-hidden="true">
@@ -541,4 +541,5 @@ function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged, onOpenTarget
         </div>
       </div>, document.body
     )}
+  </>;
 }
