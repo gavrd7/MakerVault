@@ -91,3 +91,8 @@ In the catalogue detail view or an owned design, choose **Add Custom Image**. Se
 In the manufacturer catalogue choose **Suggest New Model**. Supply manufacturer, model name, HTTPS source and any known specifications; leave unknown measurements blank. Use **Check approved source** for supported source pages; this checks page metadata, not factual completeness. From an existing model's detail view, choose **Suggest specification correction** and enter only fields that should change.
 
 Administrator submissions are accepted directly into the shared catalogue. Other users' suggestions remain pending until a catalogue administrator acts. Accepted user-provided specs retain provenance but are not automatically manufacturer-verified. [Catalogue review →](../administration/catalogue-updates.md)
+
+
+### Maker Tag label preview (in development)
+
+Under **Maker Tags**, open an existing QR tag and select a label format. The preview provides a visual check of the QR and label text before printing. Three label dimensions are available for initial testing: compact 50 × 30 mm, standard 70 × 50 mm and large 100 × 70 mm. The print window uses millimetre dimensions; printer scaling and margins may affect the finished size. Print a single test on ordinary paper and scan it before using adhesive stock. Multi-label sheets and batch printing are planned separately.
