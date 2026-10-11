@@ -7,7 +7,7 @@
 | Printer model | Shared specifications for a machine type |
 | Owned printer | Your particular machine, with name, location and connection details |
 | Filament product | A material/product/colour definition |
-| Physical spool | One actual reel with its own weight, price and identity |
+| Filament spool | Filament stock, with its own weight, price and identity |\n| Reusable spool design | Empty reel hardware specification or printable design, separate from filament |\n| Physical reusable spool | An actual refillable reel with measured tare, condition and optional assigned filament |
 | Slot | A position in a printer's multi-material system |
 
 ## Add your printer
@@ -77,7 +77,7 @@ Reusable spool designs describe **empty spool hardware**, not filament stock. A 
 
 1. Open **3D Printing → Reusable spools** and choose **Browse manufacturer catalogue**.
 2. Search for the maker and model. Open its detail view to inspect images, specifications and linked source evidence.
-3. Choose **Add to inventory** to create your own design reference, then add a physical reusable spool and record its measured tare or assigned filament as needed.
+3. Choose **Add to inventory** to create your own design reference, then add a physical reusable spool. Record its measured tare, storage location, condition and any assigned filament. Unassigning filament retains the reusable reel and its history.
 4. For a printed design, create your own spool design, optionally associate a model from your model library, and add a picture.
 
 An entry may be marked unverified or show unknown dimensions/dryer limits. A 3D-printed spool's heat tolerance depends on its actual printed material and construction; do not infer safety from filament type alone.
