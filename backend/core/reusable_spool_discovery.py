@@ -38,7 +38,7 @@ def _specs(raw):
                 raise ValueError("Dryer temperature must be between 1 and 200°C.")
             clean[key] = int(value)
         else:
-            clean[key] = str(value).strip()[:1000 if key == "description" else 500]
+            clean[key] = str(value).strip()[:1000 if key == "description" else 80 if key == "material" else 200]
     if "max_dryer_temp_c" in clean and not clean.get("temperature_source"):
         raise ValueError("Dryer temperature needs a source URL for the exact design.")
     if clean.get("temperature_source"):
