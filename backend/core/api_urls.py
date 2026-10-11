@@ -3,6 +3,8 @@ from . import api_views, printed_parts, camera_views, reusable_spools
 
 urlpatterns = [
     path("printing/reusable-spool-manufacturers/", reusable_spools.manufacturer_catalogue, name="api-reusable-spool-manufacturers"),
+    path("printing/reusable-spool-manufacturers/<slug:key>/image/", reusable_spools.catalogue_personal_image, name="api-reusable-spool-catalogue-image"),
+    path("printing/reusable-spool-designs/<uuid:design_id>/image/", reusable_spools.design_personal_image, name="api-reusable-spool-design-image"),
     path("printing/reusable-spool-designs/", reusable_spools.designs, name="api-reusable-spool-designs"),
     path("printing/reusable-spool-designs/<uuid:design_id>/", reusable_spools.design_detail, name="api-reusable-spool-design-detail"),
     path("printing/models/<uuid:model_id>/reusable-spool-design/", reusable_spools.model_design, name="api-model-reusable-spool-design"),
