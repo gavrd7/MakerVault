@@ -2882,3 +2882,12 @@ a:focus-visible,
 .spoolOwnedDesignContent>.spoolCatalogueThumb,.spoolOwnedDesignContent>.spoolCatalogueNoThumb{flex:0 0 84px;width:84px;height:84px;max-width:84px;margin:0;float:none}
 .spoolOwnedDesignContent>div{min-width:0;display:flex;flex-direction:column;gap:4px}
 @media(max-width:620px){.spoolOwnedDesignContent>.spoolCatalogueThumb,.spoolOwnedDesignContent>.spoolCatalogueNoThumb{flex-basis:64px;width:64px;height:64px}}
+
+/* Review-first discovery of reusable spool catalogue references. */
+.spoolCatalogueSuggestionHead{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.spoolCatalogueSuggestionHead small{color:var(--text-muted,#929eaf)}
+.spoolSuggestionForm{display:flex;flex-direction:column;gap:14px;max-height:72vh;overflow-y:auto}
+.spoolSuggestionForm .spoolCatalogueFilters{border:0;padding:0}
+.spoolSuggestionForm .spoolCatalogueFilters label{display:flex;flex-direction:column;gap:6px}
+.spoolSuggestionForm h3,.spoolSuggestionForm p{margin:0}
+.spoolSuggestionForm .printingList{max-height:220px;overflow-y:auto}
