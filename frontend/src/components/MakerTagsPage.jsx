@@ -380,6 +380,7 @@ function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged, onOpenTarget
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const qrWrap = useRef(null);
+  const printFrame = useRef(null);
   const [labelFormat, setLabelFormat] = useState("standard");
   const labelFormats = {
     standard: { name: "Standard label · 70 × 50 mm", width: 70, height: 50, qr: 25 },
@@ -433,9 +434,9 @@ function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged, onOpenTarget
 
   function printLabel() {
     const svg = qrWrap.current?.querySelector(".tagBrandedQr")?.outerHTML || "";
-    const popup = window.open("", "_blank", "width=650,height=750");
-    if (!popup) {
-      setNotice("The browser blocked the print window.");
+    const frame = printFrame.current;
+    if (!frame) {
+      setNotice("Print preview is unavailable.");
       return;
     }
     const escapeHtml = value => String(value || "").replace(/[<>&"]/g, character => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[character]));
@@ -443,7 +444,11 @@ function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged, onOpenTarget
     const safeCode = escapeHtml(tag.code);
     const safeType = escapeHtml(tag.target?.type_label || tag.target_type);
     const { width, height, qr } = selectedFormat;
-    popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Maker Tag label</title><style>
+    frame.onload = () => {
+      try { frame.contentWindow?.focus(); frame.contentWindow?.print(); }
+      catch { setNotice("Printing is not supported in this browser. Try a desktop browser."); }
+    };
+    frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><title>Maker Tag label</title><style>
     @page{size:auto;margin:6mm}
     *{box-sizing:border-box}
     body{font-family:system-ui,sans-serif;margin:0;padding:12mm;display:flex;justify-content:center;background:#fff;color:#111}
@@ -457,11 +462,12 @@ function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged, onOpenTarget
     .info code{display:block;font-size:7pt;margin-top:1mm}
     .info small{display:block;font-size:6pt;margin-top:1mm}
     @media print{body{padding:0}}
-    </style></head><body><div class="label">${svg}<div class="info"><strong>${safeLabel}</strong><code>${safeCode}</code><small>MakerVault · ${safeType}</small></div></div><script>window.onload=()=>window.print()<\/script></body></html>`);
-    popup.document.close();
+    </style></head><body><div class="label">${svg}<div class="info"><strong>${safeLabel}</strong><code>${safeCode}</code><small>MakerVault · ${safeType}</small></div></div></body></html>`;
+
   }
 
   return <Modal title={tag.label || tag.code} subtitle="Maker Tag identity and assignment history." onClose={onClose} wide>
+    <iframe ref={printFrame} title="Maker Tag print layout" className="tagPrintFrame" />
     {notice && <div className={notice.toLowerCase().includes("blocked") ? "formError" : "notice"}>{notice}</div>}
     <div className="tagDetailGrid">
       <div className="tagDetailIdentity">
