@@ -1565,6 +1565,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
   const [catalogueMaker, setCatalogueMaker] = useState("");
   const [catalogueOpen, setCatalogueOpen] = useState(false);
   const [suggestionOpen, setSuggestionOpen] = useState(false);
+  const [reviewsOpen, setReviewsOpen] = useState(false);
   const [suggestionTarget, setSuggestionTarget] = useState(null);
   const [suggestionRows, setSuggestionRows] = useState([]);
   const [canReviewSuggestions, setCanReviewSuggestions] = useState(false);
@@ -1751,6 +1752,17 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
       : "Catalogue match found, but no additional verified specifications are available yet.");
   }
 
+  async function openReviewsModal() {
+    setCatalogueOpen(false);
+    setReviewsOpen(true);
+    setSuggestionError("");
+    try {
+      const response = await apiFetch("/api/printing/reusable-spool-suggestions/");
+      setSuggestionRows(response.rows || []);
+      setCanReviewSuggestions(Boolean(response.can_review));
+    } catch (err) { setSuggestionError(err.message); }
+  }
+
   async function openSuggestionModal(target = null) {
     setSuggestionTarget(target);
     setSuggestionForm(p => ({ ...p,
@@ -1810,9 +1822,11 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
         body: { manufacturer, name, design_type, source_url, target_entry_key: suggestionTarget?.key || "",
           proposed_specs: Object.fromEntries(Object.entries(proposed_specs).filter(([, v]) => String(v).trim())) },
       });
-      setSuggestionRows((await apiFetch("/api/printing/reusable-spool-suggestions/")).rows || []);
+      const refreshed = await apiFetch("/api/printing/reusable-spool-suggestions/");
+      setSuggestionRows(refreshed.rows || []);
+      if (refreshed.rows?.[0]?.status === "approved") await load();
       setSuggestionPreview("");
-      setNotice("Catalogue suggestion submitted for review. Shared records are unchanged.");
+      setNotice(canReviewSuggestions ? "Model saved to the shared catalogue." : "Catalogue suggestion submitted for review. Shared records are unchanged.");
     } catch (err) { setSuggestionError(err.message); }
     finally { setSuggestionBusy(false); }
   }
@@ -1936,7 +1950,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
     </section>
     {catalogueOpen && <Modal title="Manufacturer spool catalogue" wide onClose={() => setCatalogueOpen(false)}>
       <div className="spoolCatalogueModalContent">
-        <div className="spoolCatalogueSuggestionHead"><small>{filteredManufacturerDesigns.length} matching designs</small>{canAddDesign && <button type="button" onClick={() => openSuggestionModal()}>Suggest new model</button>}</div>
+        <div className="spoolCatalogueSuggestionHead"><small>{filteredManufacturerDesigns.length} matching designs</small>{canAddDesign && <button type="button" onClick={() => openSuggestionModal()}>Suggest New Model</button>}{canReviewSuggestions && <button type="button" onClick={openReviewsModal}>Review Suggestions</button>}</div>
       <div className="spoolCatalogueFilters">
         <label>Search catalogue<input value={catalogueQuery} onChange={e => setCatalogueQuery(e.target.value)} placeholder="Spool, model, manufacturer…" /></label>
         <label>Manufacturer<select value={catalogueMaker} onChange={e => setCatalogueMaker(e.target.value)}><option value="">All manufacturers</option>{catalogueManufacturers.map(name => <option key={name} value={name}>{name}</option>)}</select></label>
@@ -1978,6 +1992,20 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
       </div>
     </section>
 
+    {reviewsOpen && <Modal title="Review Suggestions" wide onClose={() => { setReviewsOpen(false); setCatalogueOpen(true); }}>
+      <div className="spoolSuggestionForm">
+        {suggestionError && <div className="error" role="alert">{suggestionError}</div>}
+        <p>Pending catalogue additions and specification corrections are listed first.</p>
+        <div className="printingList">{[...suggestionRows].sort((a,b) => Number(b.status === "pending") - Number(a.status === "pending")).map(s => <div className="printingListRow" key={s.id}>
+          <div><strong>{s.manufacturer} — {s.name}</strong><small>{s.target_entry_key ? "Correction: " + s.target_entry_key : "New model"} · {s.status}</small>
+            <a href={s.source_url} target="_blank" rel="noreferrer noopener">Review source ↗</a>
+            <small>{Object.entries(s.proposed_specs || {}).map(([key,value]) => key.replaceAll("_"," ") + ": " + value).join(" · ") || "No specifications provided"}</small>
+          </div>
+          {canReviewSuggestions && s.status === "pending" && <div className="spoolInlineActions"><button type="button" disabled={suggestionBusy} onClick={() => reviewSuggestion(s, "approve")}>Approve</button><button type="button" disabled={suggestionBusy} onClick={() => reviewSuggestion(s, "reject")}>Reject</button></div>}
+        </div>)}{!suggestionRows.length && <p>No submissions yet.</p>}</div>
+        <div className="spoolInlineActions"><button type="button" onClick={() => { setReviewsOpen(false); setCatalogueOpen(true); }}>Back to catalogue</button></div>
+      </div>
+    </Modal>}
     {suggestionOpen && <Modal title={suggestionTarget ? "Suggest specification correction" : "Suggest a reusable spool model"} wide onClose={() => { setSuggestionOpen(false); if (!suggestionTarget) setCatalogueOpen(true); }}>
       <form className="spoolSuggestionForm" onSubmit={submitSuggestion}>
         <p>{suggestionTarget ? "Propose corrected fields for this existing model. Enter only fields you want to change. The submitted evidence will be reviewed before the shared catalogue is updated." : "Suggest a new physical spool or printable design. Submissions are reviewed before entering the shared catalogue. Unknown specifications can be left blank."}</p>
@@ -1998,8 +2026,6 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
           ].map(([label, key]) => <label key={key}>{label}<input type={key === "material" ? "text" : key === "temperature_source" ? "url" : "number"} step={key === "material" || key === "temperature_source" ? undefined : "any"} value={suggestionForm[key]} onChange={e => setSuggestionForm(p => ({ ...p, [key]: e.target.value }))} /></label>)}
         </div>
         <div className="spoolInlineActions"><button className="primary" disabled={suggestionBusy}>Submit for review</button><button type="button" onClick={() => { setSuggestionOpen(false); if (!suggestionTarget) setCatalogueOpen(true); }}>{suggestionTarget ? "Back to details" : "Back to catalogue"}</button></div>
-        <h3>Your submitted models</h3>
-        <div className="printingList">{suggestionRows.map(s => <div className="printingListRow" key={s.id}><div><strong>{s.manufacturer} — {s.name}</strong><small>Status: {s.status}{s.target_entry_key ? " · Correction to " + s.target_entry_key : " · New model"}{s.review_note ? " · " + s.review_note : ""}</small></div>{canReviewSuggestions && s.status === "pending" && <div className="spoolInlineActions"><button type="button" disabled={suggestionBusy} onClick={() => reviewSuggestion(s, "approve")}>Approve</button><button type="button" disabled={suggestionBusy} onClick={() => reviewSuggestion(s, "reject")}>Reject</button></div>}</div>)}{!suggestionRows.length && <small>No submissions yet.</small>}</div>
       </form>
     </Modal>}
     {catalogueDetail && !imageEditor && !suggestionOpen && <Modal title={catalogueDetail.name} wide onClose={() => { setCatalogueDetail(null); setCatalogueZoom(false); setCatalogueOpen(true); }}>
