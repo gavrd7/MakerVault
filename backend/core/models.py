@@ -774,6 +774,19 @@ class ReusableSpoolCatalogEntry(TimeStampedModel):
         return f"{self.manufacturer} — {self.name}"
 
 
+class ReusableSpoolCatalogueSuggestion(TimeStampedModel):
+    """User-proposed hardware reference, held for explicit review before publication."""
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    manufacturer = models.CharField(max_length=120)
+    name = models.CharField(max_length=200)
+    design_type = models.CharField(max_length=20, choices=[("manufacturer", "Manufacturer-made"), ("printed", "3D printed")])
+    source_url = models.URLField(max_length=500)
+    proposed_specs = models.JSONField(default=dict, blank=True)
+    status = models.CharField(max_length=20, default="pending", choices=[("pending", "Pending"), ("approved", "Approved"), ("rejected", "Rejected")])
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    review_note = models.TextField(blank=True)
+
+
 class ReusableSpoolCatalogImageOverride(TimeStampedModel):
     """Personal picture of shared hardware, never modifies the reference entry."""
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
