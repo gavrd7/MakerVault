@@ -18,7 +18,7 @@ class FormFuturaMasterSpoolCatalogueTests(TestCase):
             self.assertEqual(entry.design_type, "printed")
             self.assertTrue(entry.verified)
             self.assertEqual(entry.provenance["refill_family"], "FormFutura ReFill")
-            self.assertTrue(entry.source_url.startswith("https://www.formfutura.com/"))
+            self.assertTrue(entry.source_url.startswith("https://formfutura.com/"))
             self.assertIsNone(entry.nominal_tare_g)
             self.assertIsNone(entry.max_dryer_temp_c)
             self.assertIsNone(entry.capacity_g)
