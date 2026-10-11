@@ -186,7 +186,8 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
 
   useEffect(() => {
     if (!searchTarget?.type) return;
-    if (searchTarget.type === "models") setWorkspaceView("models");
+    if (searchTarget.type === "reusable_spools") setWorkspaceView("reusableSpools");
+    else if (searchTarget.type === "models") setWorkspaceView("models");
     else if (searchTarget.type === "spools") setWorkspaceView("spools");
     else if (searchTarget.type === "filaments") setWorkspaceView("filaments");
     else if (searchTarget.type === "printed_parts") setWorkspaceView("overview");
@@ -246,6 +247,8 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
     return <ReusableSpoolsPage
       onBack={() => setWorkspaceView("overview")}
       onOpenModels={() => setWorkspaceView("models")}
+      targetReelId={searchTarget?.type === "reusable_spools" ? searchTarget.id : ""}
+      targetToken={searchTarget?.token}
       models={data?.models || []}
       spools={data?.spools || []}
       locations={data?.locations || []}
@@ -1555,7 +1558,7 @@ function PrinterModal({ manufacturers, models, locations, onClose, onSaved }) {
 
 
 
-function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, filamentProducts, materialOptions, canAdd, canChange, canDelete, canAddDesign, canChangeDesign }) {
+function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, models, spools, locations, filamentProducts, materialOptions, canAdd, canChange, canDelete, canAddDesign, canChangeDesign }) {
   const [designs, setDesigns] = useState([]);
   const [manufacturerDesigns, setManufacturerDesigns] = useState([]);
   const [catalogueQuery, setCatalogueQuery] = useState("");
@@ -1563,6 +1566,13 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
   const [catalogueOpen, setCatalogueOpen] = useState(false);
   const [catalogueImage, setCatalogueImage] = useState(null);
   const [reels, setReels] = useState([]);
+  useEffect(() => {
+    if (!targetReelId || !reels.some(reel => reel.id === targetReelId)) return;
+    const frame = requestAnimationFrame(() => {
+      document.getElementById("reusable-spool-target-" + targetReelId)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [targetReelId, targetToken, reels]);
   const [densityProductId, setDensityProductId] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -1776,7 +1786,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
     <section className="panel printingSection">
       <div className="panelHead"><h3>Owned reusable spools ({reels.length})</h3></div>
       <div className="printingList">
-        {reels.map(reel => <article className="printingListRow" key={reel.id}>
+        {reels.map(reel => <article className="printingListRow" id={"reusable-spool-target-" + reel.id} key={reel.id}>
           <div><strong>{reel.code} · {reel.design_name}</strong>
             <small>{[reel.color_name, reel.material_override].filter(Boolean).join(" · ") || "No material/colour recorded"}</small>
             <small>Tare: {reel.effective_tare_g == null ? "Unknown" : reel.effective_tare_g + " g"}{reel.measured_tare_g != null ? " (measured)" : " (design default)"} · {reel.filament_spool_id ? "Loaded with filament" : "Unassigned"}</small>
