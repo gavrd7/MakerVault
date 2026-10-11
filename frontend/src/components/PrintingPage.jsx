@@ -1790,13 +1790,13 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
       </div>
     </section>
     <section className="panel printingSection">
-      <div className="panelHead"><h3>Manufacturer spool catalogue</h3></div>
+      <div className="panelHead"><h3>Manufacturer spool catalogue</h3><small>{filteredManufacturerDesigns.length} matching designs</small></div>
       <div className="spoolCatalogueFilters">
         <label>Search catalogue<input value={catalogueQuery} onChange={e => setCatalogueQuery(e.target.value)} placeholder="Spool, model, manufacturer…" /></label>
         <label>Manufacturer<select value={catalogueMaker} onChange={e => setCatalogueMaker(e.target.value)}><option value="">All manufacturers</option>{catalogueManufacturers.map(name => <option key={name} value={name}>{name}</option>)}</select></label>
       </div>
-      <div className="printingList">
-        {filteredManufacturerDesigns.map(item => <article className="printingListRow" key={item.key}>
+      <div className="printingList spoolCatalogueScrollList" role="region" aria-label="Filtered manufacturer spool designs" tabIndex={0}>
+        {filteredManufacturerDesigns.map(item => <article className="printingListRow spoolCatalogueItem" key={item.key}>
           <div className="spoolCatalogueRecord">
             {item.image_url && <button type="button" className="spoolCatalogueImageButton" onClick={() => setCatalogueImage(item)} aria-label={"View " + item.name + " image"}><img className="spoolCatalogueThumb" src={item.image_url} alt={item.name} loading="lazy" /></button>}
             <strong>{item.name}</strong>
