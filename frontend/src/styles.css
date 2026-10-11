@@ -2871,3 +2871,14 @@ a:focus-visible,
     justify-content:flex-start;
   }
 }
+
+/* Personal image controls for spool catalogue references and owned designs. */
+.spoolImageEditor{display:flex;flex-direction:column;gap:12px;min-width:0}
+.spoolImageEditor label{display:flex;flex-direction:column;gap:6px}
+.spoolImageEditor input[type=url],.spoolImageEditor input[type=file]{min-width:0;width:100%}
+.spoolImageEditor .spoolImageRights{display:flex;flex-direction:row;align-items:center}
+.spoolImageEditor .spoolImageRights input{width:auto}
+.spoolOwnedDesignContent{display:flex;align-items:center;gap:14px;min-width:0;flex:1}
+.spoolOwnedDesignContent>.spoolCatalogueThumb,.spoolOwnedDesignContent>.spoolCatalogueNoThumb{flex:0 0 84px;width:84px;height:84px;max-width:84px;margin:0;float:none}
+.spoolOwnedDesignContent>div{min-width:0;display:flex;flex-direction:column;gap:4px}
+@media(max-width:620px){.spoolOwnedDesignContent>.spoolCatalogueThumb,.spoolOwnedDesignContent>.spoolCatalogueNoThumb{flex-basis:64px;width:64px;height:64px}}
