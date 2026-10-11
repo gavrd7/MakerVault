@@ -1324,6 +1324,7 @@ class MakerTag(TimeStampedModel):
         ("printed_part", "Printed part"),
         ("inventory", "Inventory item"),
         ("spool", "Spool"),
+        ("reusable_spool", "Reusable spool"),
         ("printer", "Printer"),
         ("project", "Project"),
         ("location", "Storage / printing location"),
