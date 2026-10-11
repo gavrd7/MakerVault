@@ -53,7 +53,7 @@ def _specs(raw):
 def suggestions(request):
     if request.method == "GET":
         qs = ReusableSpoolCatalogueSuggestion.objects.all() if request.user.is_staff else ReusableSpoolCatalogueSuggestion.objects.filter(owner=request.user)
-        return JsonResponse({"rows": [
+        return JsonResponse({"can_review": bool(request.user.is_staff and request.user.has_perm("core.change_reusablespoolcatalogentry")), "rows": [
             {"id": x.id, "manufacturer": x.manufacturer, "name": x.name, "source_url": x.source_url,
              "status": x.status, "review_note": x.review_note, "proposed_specs": x.proposed_specs}
             for x in qs.order_by("-created_at")[:100]
