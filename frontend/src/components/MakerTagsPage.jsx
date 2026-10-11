@@ -187,7 +187,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
         <p>Attach QR, NFC and RFID identities to physical MakerVault records. Tags stay owner-scoped and can be reassigned or retired without losing their history.</p>
       </div>
       <div className="printingHeroActions">
-        {config?.permissions?.add_maker_tag && <button className="primary" onClick={() => setAddOpen(true)}>＋ Maker Tag</button>}
+        {config?.permissions?.add_maker_tag && <button className="primary" onClick={() => setAddOpen(true)}>Add Maker Tag</button>}
         <button onClick={load}>Refresh</button>
       </div>
     </section>
