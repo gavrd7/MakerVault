@@ -9,8 +9,8 @@ Learn to install MakerVault, record what you own and bring your projects, files 
 [Follow a first project](getting-started/first-project.md){ .md-button }
 </div>
 
-!!! info "Current release: v1.2.0"
-    MakerVault v1.2.0 adds reusable spool hardware inventory, catalogue references and reviewed corrections, personal images, branded QR labels and Maker Tag support for reusable reels. The v1.1.0 background catalogue improvements remain included.
+!!! info "Current release: v1.2.1"
+    MakerVault v1.2.1 includes improved Maker Tags QR label preview, custom label sizes, print-only output, batch label printing and target-type filters. v1.2.0 added reusable spool hardware inventory, catalogue references and reviewed corrections, personal images, branded QR labels and Maker Tag support for reusable reels. The v1.1.0 background catalogue improvements remain included.
 
 <div class="guide-grid" markdown>
 <div class="guide-card" markdown>
