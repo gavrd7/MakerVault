@@ -7,7 +7,7 @@
 | Printer model | Shared specifications for a machine type |
 | Owned printer | Your particular machine, with name, location and connection details |
 | Filament product | A material/product/colour definition |
-| Physical spool | One actual reel with its own weight, price and identity |
+| Filament spool | Filament stock, with its own weight, price and identity |\n| Reusable spool design | Empty reel hardware specification or printable design, separate from filament |\n| Physical reusable spool | An actual refillable reel with measured tare, condition and optional assigned filament |
 | Slot | A position in a printer's multi-material system |
 
 ## Add your printer
@@ -69,3 +69,25 @@ Pause, Resume and confirmed Cancel are optional per-source controls for Creality
 [Printed parts](printed-parts.md) are created explicitly. Filament tracking does not require saving a model or retaining a part.
 
 [Spoolman setup →](../integrations/spoolman.md) · [Creality CFS →](../integrations/creality.md) · [SimplyPrint →](../integrations/simplyprint.md)
+
+
+## Reusable and refillable spool hardware (v1.2.0 candidate)
+
+Reusable spool designs describe **empty spool hardware**, not filament stock. A physical reusable spool can be assigned a filament spool separately. Avoid treating the nominal empty/tare weight of a catalogue design as a measured weight for your actual reel.
+
+1. Open **3D Printing → Reusable spools** and choose **Browse manufacturer catalogue**.
+2. Search for the maker and model. Open its detail view to inspect images, specifications and linked source evidence.
+3. Choose **Add to inventory** to create your own design reference, then add a physical reusable spool. Record its measured tare, storage location, condition and any assigned filament. Unassigning filament retains the reusable reel and its history.
+4. For a printed design, create your own spool design, optionally associate a model from your model library, and add a picture.
+
+An entry may be marked unverified or show unknown dimensions/dryer limits. A 3D-printed spool's heat tolerance depends on its actual printed material and construction; do not infer safety from filament type alone.
+
+### Custom images
+
+In the catalogue detail view or an owned design, choose **Add Custom Image**. Select either a file upload or a public HTTPS image URL, acknowledge your image-use rights, then select **Add Image**. MakerVault validates and caches the image rather than hotlinking arbitrary URLs. If both upload and URL are provided, choose one. **Remove personal image** returns a catalogue entry to its shared image or placeholder. Your custom image does not replace the shared image for other users.
+
+### Suggest missing models or corrections
+
+In the manufacturer catalogue choose **Suggest New Model**. Supply manufacturer, model name, HTTPS source and any known specifications; leave unknown measurements blank. Use **Check approved source** for supported source pages; this checks page metadata, not factual completeness. From an existing model's detail view, choose **Suggest specification correction** and enter only fields that should change.
+
+Administrator submissions are accepted directly into the shared catalogue. Other users' suggestions remain pending until a catalogue administrator acts. Accepted user-provided specs retain provenance but are not automatically manufacturer-verified. [Catalogue review →](../administration/catalogue-updates.md)

@@ -28,7 +28,7 @@ class Command(BaseCommand):
             attempted += 1
             status = "ok"
             try:
-                _html, final_url = fetch_catalogue_source_html(item.source_url)
+                final_url, _html = fetch_catalogue_source_html(item.source_url)
             except (ImporterError, ValueError) as exc:
                 status = "fetch_failed"
                 final_url = item.source_url

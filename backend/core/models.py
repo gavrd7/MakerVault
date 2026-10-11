@@ -774,6 +774,32 @@ class ReusableSpoolCatalogEntry(TimeStampedModel):
         return f"{self.manufacturer} — {self.name}"
 
 
+class ReusableSpoolCatalogueSuggestion(TimeStampedModel):
+    id = models.BigAutoField(primary_key=True)
+    target_entry = models.ForeignKey("ReusableSpoolCatalogEntry", on_delete=models.CASCADE, blank=True, null=True, related_name="correction_suggestions")
+    """User-proposed hardware reference, held for explicit review before publication."""
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    manufacturer = models.CharField(max_length=120)
+    name = models.CharField(max_length=200)
+    design_type = models.CharField(max_length=20, choices=[("manufacturer", "Manufacturer-made"), ("printed", "3D printed")])
+    source_url = models.URLField(max_length=500)
+    proposed_specs = models.JSONField(default=dict, blank=True)
+    status = models.CharField(max_length=20, default="pending", choices=[("pending", "Pending"), ("approved", "Approved"), ("rejected", "Rejected")])
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    review_note = models.TextField(blank=True)
+
+
+class ReusableSpoolCatalogImageOverride(TimeStampedModel):
+    """Personal picture of shared hardware, never modifies the reference entry."""
+    id = models.BigAutoField(primary_key=True)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    catalog_entry = models.ForeignKey("ReusableSpoolCatalogEntry", on_delete=models.CASCADE)
+    image = models.ImageField(upload_to="catalogue/reusable-spools/personal-catalogue/")
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["owner", "catalog_entry"], name="unique_owned_spool_catalogue_image")]
+
+
 class ReusableSpoolDesign(TimeStampedModel):
     """Reference design for an empty, refillable spool (not filament stock)."""
     TYPES = [("manufacturer", "Manufacturer-made"), ("printed", "3D printed")]
@@ -794,6 +820,7 @@ class ReusableSpoolDesign(TimeStampedModel):
     hub_diameter_mm = models.DecimalField(max_digits=7, decimal_places=2, blank=True, null=True)
     capacity_g = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
     model_3d = models.ForeignKey("Model3D", on_delete=models.SET_NULL, blank=True, null=True, related_name="reusable_spool_designs")
+    image = models.ImageField(upload_to="catalogue/reusable-spools/personal-designs/", blank=True, null=True)
 
     class Meta:
         ordering = ["name", "created_at"]

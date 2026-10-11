@@ -1564,7 +1564,24 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
   const [catalogueQuery, setCatalogueQuery] = useState("");
   const [catalogueMaker, setCatalogueMaker] = useState("");
   const [catalogueOpen, setCatalogueOpen] = useState(false);
-  const [catalogueImage, setCatalogueImage] = useState(null);
+  const [suggestionOpen, setSuggestionOpen] = useState(false);
+  const [reviewsOpen, setReviewsOpen] = useState(false);
+  const [reviewNotice, setReviewNotice] = useState("");
+  const [suggestionTarget, setSuggestionTarget] = useState(null);
+  const [suggestionRows, setSuggestionRows] = useState([]);
+  const [canReviewSuggestions, setCanReviewSuggestions] = useState(false);
+  const [suggestionForm, setSuggestionForm] = useState({ manufacturer: "", name: "", design_type: "manufacturer", source_url: "", nominal_tare_g: "", outer_diameter_mm: "", width_mm: "", hub_diameter_mm: "", capacity_g: "", material: "", max_dryer_temp_c: "", temperature_source: "" });
+  const [suggestionError, setSuggestionError] = useState("");
+  const [suggestionPreview, setSuggestionPreview] = useState("");
+  const [suggestionBusy, setSuggestionBusy] = useState(false);
+
+  const [catalogueDetail, setCatalogueDetail] = useState(null);
+  const [catalogueZoom, setCatalogueZoom] = useState(false);
+  const [imageEditor, setImageEditor] = useState(null);
+  const [imageEditorError, setImageEditorError] = useState("");
+  const [spoolImageFile, setSpoolImageFile] = useState(null);
+  const [spoolImageUrl, setSpoolImageUrl] = useState("");
+  const [spoolImageRights, setSpoolImageRights] = useState(false);
   const [reels, setReels] = useState([]);
   useEffect(() => {
     if (!targetReelId || !reels.some(reel => reel.id === targetReelId)) return;
@@ -1584,11 +1601,13 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
 
   async function load() {
     try {
-      const [d, r, catalogue] = await Promise.all([
+      const [d, r, catalogue, reviewAccess] = await Promise.all([
         apiFetch("/api/printing/reusable-spool-designs/"),
         apiFetch("/api/printing/reusable-spools/"),
         apiFetch("/api/printing/reusable-spool-manufacturers/"),
+        apiFetch("/api/printing/reusable-spool-suggestions/"),
       ]);
+      setCanReviewSuggestions(Boolean(reviewAccess.can_review));
       setDesigns(d.rows || []);
       setManufacturerDesigns(catalogue.rows || []);
       setReels(r.rows || []);
@@ -1695,11 +1714,15 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
     const isDesign = form === "design";
     const endpoint = isDesign ? "/api/printing/reusable-spool-designs/" : "/api/printing/reusable-spools/";
     try {
-      await apiFetch(endpoint + (editing ? editing.id + "/" : ""), {
+      const result = await apiFetch(endpoint + (editing ? editing.id + "/" : ""), {
         method: editing ? "PATCH" : "POST",
         body: JSON.stringify(isDesign ? designForm : reelForm),
       });
       setNotice(isDesign ? "Spool design saved." : "Reusable spool saved.");
+      // Newly created printed designs can receive artwork immediately.
+      if (isDesign && !editing && designForm.design_type === "printed" && result.item) {
+        openSpoolImageEditor("design", result.item);
+      }
       setForm("");
       setEditing(null);
       await load();
@@ -1732,6 +1755,86 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
       : "Catalogue match found, but no additional verified specifications are available yet.");
   }
 
+  async function openReviewsModal() {
+    setCatalogueOpen(false);
+    setReviewsOpen(true);
+    setReviewNotice("");
+    setSuggestionError("");
+    try {
+      const response = await apiFetch("/api/printing/reusable-spool-suggestions/");
+      setSuggestionRows(response.rows || []);
+      setCanReviewSuggestions(Boolean(response.can_review));
+    } catch (err) { setSuggestionError(err.message); }
+  }
+
+  async function openSuggestionModal(target = null) {
+    setSuggestionTarget(target);
+    setSuggestionForm(p => ({ ...p,
+      manufacturer: target?.manufacturer || "",
+      name: target?.name || "",
+      design_type: target?.design_type || "manufacturer",
+      source_url: target?.source_url || "",
+      nominal_tare_g: "", outer_diameter_mm: "", width_mm: "", hub_diameter_mm: "", capacity_g: "",
+      material: "", max_dryer_temp_c: "", temperature_source: "",
+    }));
+    setSuggestionOpen(true);
+    setCatalogueOpen(false);
+    setSuggestionError("");
+    setSuggestionPreview("");
+    try {
+      const response = await apiFetch("/api/printing/reusable-spool-suggestions/");
+      setSuggestionRows(response.rows || []);
+      setCanReviewSuggestions(Boolean(response.can_review));
+    } catch (err) { setSuggestionError(err.message); }
+  }
+
+  async function previewSuggestionSource() {
+    setSuggestionBusy(true);
+    setSuggestionError("");
+    try {
+      const response = await apiFetch("/api/printing/reusable-spool-suggestions/preview/", {
+        method: "POST", body: { url: suggestionForm.source_url },
+      });
+      setSuggestionPreview(response.page_title || "Source accessible (no title)");
+    } catch (err) { setSuggestionError(err.message); }
+    finally { setSuggestionBusy(false); }
+  }
+
+  async function reviewSuggestion(suggestion, action) {
+    setSuggestionBusy(true);
+    setSuggestionError("");
+    try {
+      await apiFetch("/api/printing/reusable-spool-suggestions/" + suggestion.id + "/review/", {
+        method: "POST", body: { action },
+      });
+      const response = await apiFetch("/api/printing/reusable-spool-suggestions/");
+      setSuggestionRows(response.rows || []);
+      await load();
+      setReviewNotice(action === "approve" ? "Suggestion approved and added to the shared catalogue as unverified." : "Suggestion rejected.");
+    } catch (err) { setSuggestionError(err.message); }
+    finally { setSuggestionBusy(false); }
+  }
+
+  async function submitSuggestion(event) {
+    event.preventDefault();
+    setSuggestionBusy(true);
+    setSuggestionError("");
+    const { manufacturer, name, design_type, source_url, ...proposed_specs } = suggestionForm;
+    try {
+      await apiFetch("/api/printing/reusable-spool-suggestions/", {
+        method: "POST",
+        body: { manufacturer, name, design_type, source_url, target_entry_key: suggestionTarget?.key || "",
+          proposed_specs: Object.fromEntries(Object.entries(proposed_specs).filter(([, v]) => String(v).trim())) },
+      });
+      const refreshed = await apiFetch("/api/printing/reusable-spool-suggestions/");
+      setSuggestionRows(refreshed.rows || []);
+      if (refreshed.rows?.[0]?.status === "approved") await load();
+      setSuggestionPreview("");
+      setNotice(canReviewSuggestions ? "Model saved to the shared catalogue." : "Catalogue suggestion submitted for review. Shared records are unchanged.");
+    } catch (err) { setSuggestionError(err.message); }
+    finally { setSuggestionBusy(false); }
+  }
+
   async function importManufacturerDesign(item) {
     setWorking(true);
     setError("");
@@ -1741,6 +1844,54 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
       await load();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  function openSpoolImageEditor(kind, item) {
+    setImageEditor({ kind, item });
+    setImageEditorError("");
+    setSpoolImageFile(null);
+    setSpoolImageUrl("");
+    setSpoolImageRights(false);
+    setError("");
+  }
+
+  async function saveSpoolImage(mode) {
+    if (!imageEditor) return;
+    const { kind, item } = imageEditor;
+    const path = kind === "catalogue"
+      ? "/api/printing/reusable-spool-manufacturers/" + item.key + "/image/"
+      : "/api/printing/reusable-spool-designs/" + item.id + "/image/";
+    setWorking(true);
+    setImageEditorError("");
+    try {
+      let result;
+      if (mode === "reset") {
+        result = await apiFetch(path, { method: "DELETE" });
+      } else {
+        if (!spoolImageRights) throw new Error("Confirm you have permission to use this image.");
+        const data = new FormData();
+        data.append("rights_confirmed", "true");
+        const hasFile = Boolean(spoolImageFile);
+        const hasUrl = Boolean(spoolImageUrl.trim());
+        if (hasFile === hasUrl) throw new Error(hasFile
+          ? "Choose either an uploaded file or an image URL, not both."
+          : "Choose an image file or enter an image URL.");
+        if (hasFile) data.append("image", spoolImageFile);
+        else data.append("url", spoolImageUrl.trim());
+        result = await apiFetch(path, { method: "POST", body: data });
+      }
+      await load();
+      if (kind === "catalogue") {
+        setCatalogueDetail(old => old && old.key === item.key
+          ? { ...old, image_url: result.image_url, image_personal: mode !== "reset" } : old);
+      }
+      setImageEditor(null);
+      setNotice(mode === "reset" ? "Personal image cleared." : "Personal spool image saved.");
+    } catch (err) {
+      setImageEditorError(err.message || "Unable to save image.");
     } finally {
       setWorking(false);
     }
@@ -1803,7 +1954,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
     </section>
     {catalogueOpen && <Modal title="Manufacturer spool catalogue" wide onClose={() => setCatalogueOpen(false)}>
       <div className="spoolCatalogueModalContent">
-        <small>{filteredManufacturerDesigns.length} matching designs</small>
+        <div className="spoolCatalogueSuggestionHead"><small>{filteredManufacturerDesigns.length} matching designs</small><div className="spoolCatalogueSuggestionActions">{canAddDesign && <button type="button" onClick={() => openSuggestionModal()}>Suggest New Model</button>}{canReviewSuggestions && <button type="button" onClick={openReviewsModal}>Review Suggestions</button>}</div></div>
       <div className="spoolCatalogueFilters">
         <label>Search catalogue<input value={catalogueQuery} onChange={e => setCatalogueQuery(e.target.value)} placeholder="Spool, model, manufacturer…" /></label>
         <label>Manufacturer<select value={catalogueMaker} onChange={e => setCatalogueMaker(e.target.value)}><option value="">All manufacturers</option>{catalogueManufacturers.map(name => <option key={name} value={name}>{name}</option>)}</select></label>
@@ -1811,15 +1962,16 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
       <div className="printingList spoolCatalogueScrollList" role="region" aria-label="Filtered manufacturer spool designs" tabIndex={0}>
         {filteredManufacturerDesigns.map(item => <article className="printingListRow spoolCatalogueItem" key={item.key}>
           <div className="spoolCatalogueRecord">
-            {item.image_url && <button type="button" className="spoolCatalogueImageButton" onClick={() => setCatalogueImage(item)} aria-label={"View " + item.name + " image"}><img className="spoolCatalogueThumb" src={item.image_url} alt={item.name} loading="lazy" /></button>}
-            <strong>{item.name}</strong>
+            {item.image_url ? <button type="button" className="spoolCatalogueImageButton" onClick={() => { setCatalogueOpen(false); setCatalogueDetail(item); setCatalogueZoom(false); }} aria-label={"View " + item.name + " details"}><img className="spoolCatalogueThumb" src={item.image_url} alt={item.name} loading="lazy" /></button> : <span className="spoolCatalogueNoThumb" aria-hidden="true">No image</span>}
+            <button type="button" className="spoolCatalogueNameButton" onClick={() => { setCatalogueOpen(false); setCatalogueDetail(item); setCatalogueZoom(false); }}>{item.name}</button>
             <small>{item.manufacturer} · {item.design_type === "printed" ? "Printable design" : "Manufacturer-made"}{item.verified ? " · Source documented" : " · Unverified"}</small>
             <small>{item.nominal_tare_g ? "Tare: " + item.nominal_tare_g + " g" : "Tare: Unknown"} · {item.outer_diameter_mm && item.width_mm ? item.outer_diameter_mm + " × " + item.width_mm + " mm" : "Dimensions: Unknown"} · {item.max_dryer_temp_c != null ? "Rated temperature: " + item.max_dryer_temp_c + "°C" : "Dryer rating: Unknown"}</small>
             {item.source_url && <a href={item.source_url} target="_blank" rel="noreferrer noopener">Manufacturer source ↗</a>}
           </div>
+          <div className="spoolCatalogueRowActions"><button type="button" onClick={() => { setCatalogueOpen(false); setCatalogueDetail(item); setCatalogueZoom(false); }}>View details</button>
           {canAddDesign && <button type="button" disabled={working || designs.some(d => d.catalog_entry_id === item.id)} onClick={() => importManufacturerDesign(item)}>
             {designs.some(d => d.catalog_entry_id === item.id) ? "Added to inventory" : "Add to inventory"}
-          </button>}
+          </button>}</div>
         </article>)}
         {!filteredManufacturerDesigns.length && <div className="printingEmptyInline">No catalogue entries match these filters.</div>}
       </div>
@@ -1829,14 +1981,14 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
       <div className="panelHead"><h3>Spool designs ({designs.length})</h3></div>
       <div className="printingList">
         {designs.map(d => <article className="printingListRow" key={d.id}>
-          <div><strong>{d.name}</strong>
+          <div className="spoolOwnedDesignContent">{d.image_url ? <img className="spoolCatalogueThumb" src={d.image_url} alt={d.name} loading="lazy" /> : <span className="spoolCatalogueNoThumb" aria-hidden="true">No image</span>}<div><strong>{d.name}</strong>
             <small>{[d.manufacturer, d.design_type, d.material].filter(Boolean).join(" · ")}</small>
             <small>Nominal tare: {d.nominal_tare_g == null ? "Unknown" : d.nominal_tare_g + " g"} · Dryer limit: {d.max_dryer_temp_c == null ? "Unverified" : d.max_dryer_temp_c + " °C"}</small>
-            
-          </div>
+          </div></div>
           <div className="spoolRowActions">
             {d.model_3d_id && <button type="button" onClick={onOpenModels}>View linked model</button>}
             {canChangeDesign && <button type="button" onClick={() => startDesign(d)}>Edit</button>}
+            {canChangeDesign && <button type="button" onClick={() => openSpoolImageEditor("design", d)}>Add Custom Image</button>}
             {canChangeDesign && <button type="button" className="dangerButton" onClick={() => remove("design", d)}>Delete</button>}
           </div>
         </article>)}
@@ -1844,9 +1996,104 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
       </div>
     </section>
 
-    {catalogueImage && <Modal title={catalogueImage.name} onClose={() => setCatalogueImage(null)}>
-      <div className="spoolCatalogueImageViewer"><img src={catalogueImage.image_url} alt={catalogueImage.name} /></div>
-      {catalogueImage.source_url && <a href={catalogueImage.source_url} target="_blank" rel="noreferrer noopener">Manufacturer reference ↗</a>}
+    {reviewsOpen && <Modal title="Review Suggestions" wide onClose={() => { setReviewsOpen(false); setCatalogueOpen(true); }}>
+      <div className="spoolSuggestionForm">
+        {suggestionError && <div className="error" role="alert">{suggestionError}</div>}
+        {reviewNotice && <div className="successMessage" role="status">{reviewNotice}</div>}
+        <p>Pending catalogue additions and specification corrections are listed first.</p>
+        <div className="printingList">{suggestionRows.filter(s => s.status === "pending").map(s => <div className="printingListRow" key={s.id}>
+          <div><strong>{s.manufacturer} — {s.name}</strong><small>{s.target_entry_key ? "Correction: " + s.target_entry_key : "New model"} · {s.status}</small>
+            <a href={s.source_url} target="_blank" rel="noreferrer noopener">Review source ↗</a>
+            <small>{Object.entries(s.proposed_specs || {}).map(([key,value]) => key.replaceAll("_"," ") + ": " + value).join(" · ") || "No specifications provided"}</small>
+          </div>
+          {canReviewSuggestions && s.status === "pending" && <div className="spoolInlineActions"><button type="button" disabled={suggestionBusy} onClick={() => reviewSuggestion(s, "approve")}>Approve</button><button type="button" disabled={suggestionBusy} onClick={() => reviewSuggestion(s, "reject")}>Reject</button></div>}
+        </div>)}{!suggestionRows.some(s => s.status === "pending") && <p>No pending suggestions.</p>}</div>
+        <div className="spoolInlineActions"><button type="button" onClick={() => { setReviewsOpen(false); setCatalogueOpen(true); }}>Back to catalogue</button></div>
+      </div>
+    </Modal>}
+    {suggestionOpen && <Modal title={suggestionTarget ? "Suggest specification correction" : "Suggest a reusable spool model"} wide onClose={() => { setSuggestionOpen(false); if (!suggestionTarget) setCatalogueOpen(true); }}>
+      <form className="spoolSuggestionForm" onSubmit={submitSuggestion}>
+        <p>{suggestionTarget ? "Propose corrected fields for this existing model. Enter only fields you want to change. Submissions from other users require approval; administrator corrections take effect immediately." : "Suggest a new physical spool or printable design. Submissions from other users are reviewed before entering the shared catalogue. Administrator submissions are added immediately. Unknown specifications can be left blank."}</p>
+        {suggestionError && <div className="error" role="alert">{suggestionError}</div>}
+        <div className="spoolCatalogueFilters">
+          <label>Manufacturer<input disabled={Boolean(suggestionTarget)} required maxLength={120} value={suggestionForm.manufacturer} onChange={e => setSuggestionForm(p => ({ ...p, manufacturer: e.target.value }))} /></label>
+          <label>Model name<input disabled={Boolean(suggestionTarget)} required maxLength={200} value={suggestionForm.name} onChange={e => setSuggestionForm(p => ({ ...p, name: e.target.value }))} /></label>
+          <label>Type<select disabled={Boolean(suggestionTarget)} value={suggestionForm.design_type} onChange={e => setSuggestionForm(p => ({ ...p, design_type: e.target.value }))}><option value="manufacturer">Manufacturer-made</option><option value="printed">Printable design</option></select></label>
+          <label>Source URL (HTTPS)<input required type="url" value={suggestionForm.source_url} onChange={e => { setSuggestionPreview(""); setSuggestionForm(p => ({ ...p, source_url: e.target.value })); }} /></label>
+        </div>
+        <div className="spoolInlineActions"><button type="button" disabled={suggestionBusy || !suggestionForm.source_url} onClick={previewSuggestionSource}>Check approved source</button>{suggestionPreview && <small>{suggestionPreview} — check product identity manually</small>}</div>
+        <div className="spoolCatalogueFilters">
+          {[
+            ["Nominal empty weight (g)", "nominal_tare_g"], ["Outer diameter (mm)", "outer_diameter_mm"],
+            ["Width (mm)", "width_mm"], ["Centre opening (mm)", "hub_diameter_mm"],
+            ["Capacity (g)", "capacity_g"], ["Material", "material"],
+            ["Verified dryer limit (°C)", "max_dryer_temp_c"], ["Dryer temperature source URL", "temperature_source"],
+          ].map(([label, key]) => <label key={key}>{label}<input type={key === "material" ? "text" : key === "temperature_source" ? "url" : "number"} step={key === "material" || key === "temperature_source" ? undefined : "any"} value={suggestionForm[key]} onChange={e => setSuggestionForm(p => ({ ...p, [key]: e.target.value }))} /></label>)}
+        </div>
+        <div className="spoolInlineActions"><button className="primary" disabled={suggestionBusy}>{canReviewSuggestions ? "Save to catalogue" : "Submit for review"}</button><button type="button" onClick={() => { setSuggestionOpen(false); if (!suggestionTarget) setCatalogueOpen(true); }}>{suggestionTarget ? "Back to details" : "Back to catalogue"}</button></div>
+      </form>
+    </Modal>}
+    {catalogueDetail && !imageEditor && !suggestionOpen && <Modal title={catalogueDetail.name} wide onClose={() => { setCatalogueDetail(null); setCatalogueZoom(false); setCatalogueOpen(true); }}>
+      <div className="spoolCatalogueDetail">
+        <div className="spoolCatalogueDetailMedia">
+          {catalogueDetail.image_url ? <>
+            <button type="button" className={"spoolCatalogueDetailImage" + (catalogueZoom ? " isZoomed" : "")} onClick={() => setCatalogueZoom(v => !v)} aria-label={catalogueZoom ? "Fit image to view" : "Enlarge spool image"} aria-pressed={catalogueZoom}>
+              <img src={catalogueDetail.image_url} alt={catalogueDetail.name} />
+            </button>
+            <button type="button" onClick={() => setCatalogueZoom(v => !v)}>{catalogueZoom ? "Fit image" : "Zoom image"}</button>
+          </> : <div className="spoolCatalogueImageMissing" role="status">No verified product image available yet</div>}
+        </div>
+        <div className="spoolCatalogueDetailInfo">
+          <p>{catalogueDetail.manufacturer} · {catalogueDetail.design_type === "printed" ? "Printable design" : "Manufacturer-made"} · {catalogueDetail.verified ? "Source documented" : "Pending verification"}</p>
+          {catalogueDetail.description && <p>{catalogueDetail.description}</p>}
+          <dl className="spoolCatalogueSpecs">
+            {[
+              ["Material", catalogueDetail.material],
+              ["Nominal empty weight", catalogueDetail.nominal_tare_g != null ? catalogueDetail.nominal_tare_g + " g" + (catalogueDetail.approximate_tare ? " (approximate)" : "") : null],
+              ["Outside diameter", catalogueDetail.outer_diameter_mm != null ? catalogueDetail.outer_diameter_mm + " mm" : null],
+              ["Width", catalogueDetail.width_mm != null ? catalogueDetail.width_mm + " mm" : null],
+              ["Centre opening", catalogueDetail.hub_diameter_mm != null ? catalogueDetail.hub_diameter_mm + " mm" : null],
+              ["Capacity", catalogueDetail.capacity_g != null ? catalogueDetail.capacity_g + " g" : null],
+              ["Verified dryer limit", catalogueDetail.max_dryer_temp_c != null ? catalogueDetail.max_dryer_temp_c + " °C" : null],
+            ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || "Not verified"}</dd></div>)}
+          </dl>
+          {catalogueDetail.avoid_dryer && <p className="spoolCatalogueDryerWarning">Not suitable for filament dryers according to the source.</p>}
+          {canChangeDesign && <div className="spoolInlineActions">
+            <button type="button" onClick={() => openSpoolImageEditor("catalogue", catalogueDetail)}>Add Custom Image</button>
+            {catalogueDetail.image_personal && <button type="button" onClick={() => openSpoolImageEditor("catalogue", catalogueDetail)}>Manage personal image</button>}
+          </div>}
+          {catalogueDetail.image_personal && <small>Showing your personal image override.</small>}
+          {canAddDesign && <button type="button" onClick={() => openSuggestionModal(catalogueDetail)}>Suggest specification correction</button>}
+          {catalogueDetail.source_type && <small>Source classification: {catalogueDetail.source_type}</small>}
+          {catalogueDetail.source_url && <a href={catalogueDetail.source_url} target="_blank" rel="noreferrer noopener">View product source ↗</a>}
+          {catalogueDetail.temperature_source && <a href={catalogueDetail.temperature_source} target="_blank" rel="noreferrer noopener">View dryer temperature evidence ↗</a>}
+          <div className="spoolCatalogueDetailActions">
+            <button type="button" onClick={() => { setCatalogueDetail(null); setCatalogueZoom(false); setCatalogueOpen(true); }}>Back to catalogue</button>
+            {canAddDesign && <button type="button" className="primary" disabled={working || designs.some(d => d.catalog_entry_id === catalogueDetail.id)} onClick={() => importManufacturerDesign(catalogueDetail)}>
+              {designs.some(d => d.catalog_entry_id === catalogueDetail.id) ? "Added to inventory" : "Add to inventory"}
+            </button>}
+          </div>
+        </div>
+      </div>
+    </Modal>}
+    {imageEditor && <Modal title={"Image for " + imageEditor.item.name} onClose={() => { setImageEditor(null); setImageEditorError(""); }}>
+      <div className="spoolImageEditor">
+        {imageEditorError && <div className="error" role="alert">{imageEditorError}</div>}
+        <p>This image is personal to your account. It overrides the shared catalogue image only for you.</p>
+        <label>Upload image
+          <input type="file" accept="image/png,image/jpeg,image/webp,image/heic,image/heif" onChange={e => setSpoolImageFile(e.target.files?.[0] || null)} />
+        </label>
+        <label>Or image URL (public HTTPS)
+          <input type="url" value={spoolImageUrl} placeholder="https://example.com/spool.jpg" onChange={e => setSpoolImageUrl(e.target.value)} />
+        </label>
+        <label className="spoolImageRights"><input type="checkbox" checked={spoolImageRights} onChange={e => setSpoolImageRights(e.target.checked)} /> I have permission to use this image.</label>
+        <small>URLs must resolve publicly over HTTPS. MakerVault downloads, validates and caches the image rather than hotlinking it.</small>
+        <div className="spoolInlineActions">
+          <button type="button" className="primary" disabled={working || !spoolImageRights || (!spoolImageFile && !spoolImageUrl.trim())} onClick={() => saveSpoolImage("add")}>{working ? "Saving…" : "Add Image"}</button>
+          <button type="button" disabled={working} onClick={() => saveSpoolImage("reset")}>Remove personal image</button>
+          <button type="button" disabled={working} onClick={() => setImageEditor(null)}>Cancel</button>
+        </div>
+      </div>
     </Modal>}
     {form && <Modal title={editing ? "Edit " + (form === "design" ? "spool design" : "reusable spool") : "Add " + (form === "design" ? "spool design" : "reusable spool")} onClose={() => setForm("")}>
       <form className="formGrid" onSubmit={submit}>

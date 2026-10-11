@@ -14,7 +14,8 @@ from django.db import IntegrityError, transaction
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
-from .models import Model3D, PrintingLocation, ReusableSpool, ReusableSpoolAssignmentEvent, ReusableSpoolCatalogEntry, ReusableSpoolDesign, Spool
+from .models import Model3D, PrintingLocation, ReusableSpool, ReusableSpoolAssignmentEvent, ReusableSpoolCatalogEntry, ReusableSpoolCatalogImageOverride, ReusableSpoolDesign, Spool
+from .catalogue_images import CatalogueImageError, sanitise_uploaded_image, fetch_public_image
 
 
 def error(message, status=400, fields=None):
@@ -80,6 +81,7 @@ def serialise_design(item):
         "hub_diameter_mm": str(item.hub_diameter_mm) if item.hub_diameter_mm is not None else None,
         "capacity_g": str(item.capacity_g) if item.capacity_g is not None else None,
         "model_3d_id": str(item.model_3d_id) if item.model_3d_id else None,
+        "image_url": item.image.url if item.image else None,
     }
 
 
@@ -335,6 +337,7 @@ def manufacturer_catalogue(request):
             qs = qs.filter(manufacturer__iexact=manufacturer)
         if design_type:
             qs = qs.filter(design_type=design_type)
+        overrides = {str(x.catalog_entry_id): x for x in ReusableSpoolCatalogImageOverride.objects.filter(owner=request.user)}
         rows = [{
             "key": entry.key, "id": str(entry.id), "name": entry.name,
             "manufacturer": entry.manufacturer, "design_type": entry.design_type,
@@ -343,13 +346,17 @@ def manufacturer_catalogue(request):
             "max_dryer_temp_c": entry.max_dryer_temp_c,
             "temperature_source": entry.temperature_source,
             "source_url": entry.source_url,
-            "image_url": entry.image.url if entry.image else None,
+            "image_url": (overrides[str(entry.id)].image.url if str(entry.id) in overrides else entry.image.url if entry.image else None),
+            "image_personal": str(entry.id) in overrides,
             "image_cached": bool(entry.image),
             "outer_diameter_mm": str(entry.outer_diameter_mm) if entry.outer_diameter_mm is not None else None,
             "width_mm": str(entry.width_mm) if entry.width_mm is not None else None,
             "hub_diameter_mm": str(entry.hub_diameter_mm) if entry.hub_diameter_mm is not None else None,
             "capacity_g": str(entry.capacity_g) if entry.capacity_g is not None else None,
             "verified": entry.verified,
+            "approximate_tare": bool((entry.provenance or {}).get("approximate_tare_g")),
+            "avoid_dryer": bool((entry.provenance or {}).get("avoid_dryer")),
+            "source_type": (entry.provenance or {}).get("source_type") or (entry.provenance or {}).get("type") or "",
         } for entry in qs if not query or query in " ".join((
             entry.name, entry.manufacturer, entry.description, entry.material, entry.key
         )).casefold()]
@@ -384,3 +391,55 @@ def manufacturer_catalogue(request):
         },
     )
     return JsonResponse({"item": serialise_design(item), "created": created}, status=201 if created else 200)
+
+
+def _save_personal_spool_image(request, item):
+    """Store a sanitised private override; do not touch shared catalogue media."""
+    uploaded = request.FILES.get("image")
+    raw_url = str(request.POST.get("url") or "").strip()
+    if bool(uploaded) == bool(raw_url):
+        return error("Choose exactly one image upload or HTTPS image URL.")
+    if request.POST.get("rights_confirmed") != "true":
+        return error("Confirm you have permission to use this image.")
+    try:
+        if uploaded:
+            content, filename = sanitise_uploaded_image(uploaded, "reusable-spool")
+        else:
+            content, filename, _resolved = fetch_public_image(raw_url, "reusable-spool")
+        item.image.save(filename, content, save=True)
+    except (CatalogueImageError, ValueError, OSError) as exc:
+        return error(f"Unable to save image: {exc}")
+    return JsonResponse({"image_url": item.image.url})
+
+
+@login_required
+@require_http_methods(["POST", "DELETE"])
+def catalogue_personal_image(request, key):
+    if not request.user.has_perm("core.change_filamentproduct"):
+        return error("Permission denied.", 403)
+    entry = ReusableSpoolCatalogEntry.objects.filter(key=key).first()
+    if entry is None:
+        return error("Catalogue entry not found.", 404)
+    existing = ReusableSpoolCatalogImageOverride.objects.filter(owner=request.user, catalog_entry=entry).first()
+    if request.method == "DELETE":
+        if existing:
+            existing.image.delete(save=False)
+            existing.delete()
+        return JsonResponse({"image_url": entry.image.url if entry.image else None})
+    item = existing or ReusableSpoolCatalogImageOverride(owner=request.user, catalog_entry=entry)
+    return _save_personal_spool_image(request, item)
+
+
+@login_required
+@require_http_methods(["POST", "DELETE"])
+def design_personal_image(request, design_id):
+    if not request.user.has_perm("core.change_filamentproduct"):
+        return error("Permission denied.", 403)
+    item = ReusableSpoolDesign.objects.filter(owner=request.user, pk=design_id).first()
+    if item is None:
+        return error("Design not found.", 404)
+    if request.method == "DELETE":
+        if item.image:
+            item.image.delete(save=True)
+        return JsonResponse({"image_url": None})
+    return _save_personal_spool_image(request, item)

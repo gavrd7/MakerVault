@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from .catalogue_enrichment import TRACKED_BOARD_FIELDS, _tracked_board_values
 from .catalogue_source_policy import classify_source_url
-from .models import BoardModel, ComponentModel, FilamentProduct, PrinterCatalogModel
+from .models import BoardModel, ComponentModel, FilamentProduct, PrinterCatalogModel, ReusableSpoolCatalogEntry
 
 
 def _pct(value: int, total: int) -> float:
@@ -305,12 +305,59 @@ def _filament_coverage() -> dict:
     }
 
 
+
+def _reusable_spool_coverage() -> dict:
+    """Shared spool *hardware* audit; unverified dryer limits do not count."""
+    rows = list(ReusableSpoolCatalogEntry.objects.all())
+    total = len(rows)
+    samples = []
+    spec_fields = (
+        "nominal_tare_g", "outer_diameter_mm", "width_mm",
+        "hub_diameter_mm", "capacity_g", "material",
+    )
+    resolved = 0
+    for row in rows:
+        missing = []
+        if not row.image:
+            missing.append("image")
+        provenance = row.provenance or {}
+        verified = set(provenance.get("verified_fields") or [])
+        for key in spec_fields:
+            value = getattr(row, key)
+            if value in (None, "") or (verified and key not in verified):
+                missing.append(key)
+            else:
+                resolved += 1
+        if row.max_dryer_temp_c is None or not row.temperature_source:
+            missing.append("verified_dryer_limit")
+        if not row.source_url:
+            missing.append("source")
+        if missing and len(samples) < 12:
+            samples.append({"id": str(row.id), "name": str(row), "missing": missing})
+    return {
+        "key": "reusable_spools",
+        "label": "Reusable spool catalogue",
+        "total": total,
+        "metrics": [
+            _metric("images", "Cached images", sum(bool(row.image) for row in rows), total),
+            _metric("specifications", "Hardware fields resolved", resolved, total * len(spec_fields)),
+            _metric("sources", "Source links", sum(bool(row.source_url) for row in rows), total),
+            _metric("drying", "Verified dryer limits", sum(
+                row.max_dryer_temp_c is not None and bool(row.temperature_source)
+                for row in rows
+            ), total),
+        ],
+        "missing_samples": samples,
+    }
+
+
 def catalogue_coverage_summary() -> dict:
     catalogues = [
         _board_coverage(),
         _component_coverage(),
         _printer_coverage(),
         _filament_coverage(),
+        _reusable_spool_coverage(),
     ]
     return {
         "catalogues": catalogues,
