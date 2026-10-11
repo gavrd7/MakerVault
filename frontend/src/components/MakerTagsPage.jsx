@@ -187,7 +187,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
         <p>Attach QR, NFC and RFID identities to physical MakerVault records. Tags stay owner-scoped and can be reassigned or retired without losing their history.</p>
       </div>
       <div className="printingHeroActions">
-        {config?.permissions?.add_maker_tag && <button className="primary" onClick={() => setAddOpen(true)}>＋ Maker Tag</button>}
+        {config?.permissions?.add_maker_tag && <button className="primary" onClick={() => setAddOpen(true)}>Add Maker Tag</button>}
         <button onClick={load}>Refresh</button>
       </div>
     </section>
@@ -425,7 +425,7 @@ function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged, onOpenTarget
   }
 
   function printLabel() {
-    const svg = qrWrap.current?.querySelector("svg")?.outerHTML || "";
+    const svg = qrWrap.current?.querySelector(".tagBrandedQr")?.outerHTML || "";
     const popup = window.open("", "_blank", "width=520,height=620");
     if (!popup) {
       setNotice("The browser blocked the print window.");
@@ -433,7 +433,7 @@ function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged, onOpenTarget
     }
     const safeLabel = (tag.label || tag.code).replace(/[<>&"]/g, value => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[value]));
     const safeCode = tag.code.replace(/[<>&"]/g, value => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[value]));
-    popup.document.write(`<!doctype html><html><head><title>Maker Tag</title><style>body{font-family:system-ui,sans-serif;display:grid;place-items:center;min-height:90vh;margin:0}.label{border:1px solid #aaa;border-radius:16px;padding:24px;text-align:center;max-width:340px}.label h1{font-size:22px;margin:12px 0 4px}.label code{font-size:13px;word-break:break-all}.label small{display:block;margin-top:10px;color:#555}@media print{button{display:none}.label{border-color:#000}}</style></head><body><div class="label">${svg}<h1>${safeLabel}</h1><code>${safeCode}</code><small>MakerVault · ${tag.target?.type_label || tag.target_type}</small></div><script>window.onload=()=>window.print()<\/script></body></html>`);
+    popup.document.write(`<!doctype html><html><head><title>Maker Tag</title><style>body{font-family:system-ui,sans-serif;display:grid;place-items:center;min-height:90vh;margin:0}.label{border:1px solid #aaa;border-radius:16px;padding:24px;text-align:center;max-width:340px}.label h1{font-size:22px;margin:12px 0 4px}.label code{font-size:13px;word-break:break-all}.label small{display:block;margin-top:10px;color:#555}@media print{button{display:none}.label{border-color:#000}}.tagBrandedQr{position:relative;width:190px;height:190px;margin:0 auto}.tagBrandedQr svg{display:block}.tagBrandedQrBadge{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:38px;height:38px;border:4px solid white;border-radius:7px;background:white;overflow:hidden;box-sizing:border-box}.tagBrandedQrBadge img{display:block;width:104px;height:auto;max-width:none;position:absolute;left:0;top:50%;transform:translateY(-50%)}</style></head><body><div class="label">${svg}<h1>${safeLabel}</h1><code>${safeCode}</code><small>MakerVault · ${tag.target?.type_label || tag.target_type}</small></div><script>window.onload=()=>window.print()<\/script></body></html>`);
     popup.document.close();
   }
 
@@ -450,7 +450,7 @@ function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged, onOpenTarget
       </div>
 
       {tag.kind === "qr" ? <div className="tagQrCard" ref={qrWrap}>
-        <QRCodeSVG value={scanUrl} size={190} level="M" marginSize={2} />
+        <div className="tagBrandedQr"><QRCodeSVG value={scanUrl} size={190} level="H" marginSize={3} /><span className="tagBrandedQrBadge" aria-hidden="true"><img src="/static/core/makervault-logo.jpg" alt="" /></span></div>
         <code>{scanUrl}</code>
         <div className="tagQrActions">
           <button onClick={() => copy(scanUrl, "Scan link")}>Copy scan link</button>

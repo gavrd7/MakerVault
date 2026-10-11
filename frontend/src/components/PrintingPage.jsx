@@ -186,7 +186,8 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
 
   useEffect(() => {
     if (!searchTarget?.type) return;
-    if (searchTarget.type === "models") setWorkspaceView("models");
+    if (searchTarget.type === "reusable_spools") setWorkspaceView("reusableSpools");
+    else if (searchTarget.type === "models") setWorkspaceView("models");
     else if (searchTarget.type === "spools") setWorkspaceView("spools");
     else if (searchTarget.type === "filaments") setWorkspaceView("filaments");
     else if (searchTarget.type === "printed_parts") setWorkspaceView("overview");
@@ -246,6 +247,8 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
     return <ReusableSpoolsPage
       onBack={() => setWorkspaceView("overview")}
       onOpenModels={() => setWorkspaceView("models")}
+      targetReelId={searchTarget?.type === "reusable_spools" ? searchTarget.id : ""}
+      targetToken={searchTarget?.token}
       models={data?.models || []}
       spools={data?.spools || []}
       locations={data?.locations || []}
@@ -442,7 +445,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
                 <strong>{slot.product_name || slot.material || "Unknown material"}</strong>
                 <small>{[slot.vendor, slot.material].filter(Boolean).join(" · ")}{slot.vendor || slot.material ? " · " : ""}{slot.system_label} · unit {slot.unit_index + 1}, slot {slot.slot_index + 1}</small>
                 <small>{slot.spool_code || "Unmatched MakerVault spool"} · {slot.remaining_percent != null ? Math.round(slot.remaining_percent) + "% remaining" : grams(slot.remaining_weight_g)}</small>
-                {!slot.spool_id && canAddSpool && <button className="slotInventoryAction" type="button" onClick={() => setClaimSlot({ printer, slot })}>＋ Add to inventory</button>}
+                {!slot.spool_id && canAddSpool && <button className="slotInventoryAction" type="button" onClick={() => setClaimSlot({ printer, slot })}>Add to inventory</button>}
               </div>
             </div>)}
             {!printer.slots.some(slot => slot.is_loaded) && (
@@ -795,7 +798,7 @@ function ModelLibraryPage({ models, files, printers, projects, canAddModel, canC
       </div>
       <div className="printingHeroActions">
         <button onClick={onBack}>← Printing overview</button>
-        {canAddModel && <button className="primary" onClick={() => setAddOpen(true)}>＋ Model</button>}
+        {canAddModel && <button className="primary" onClick={() => setAddOpen(true)}>Add model</button>}
       </div>
     </section>
 
@@ -1555,7 +1558,7 @@ function PrinterModal({ manufacturers, models, locations, onClose, onSaved }) {
 
 
 
-function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, filamentProducts, materialOptions, canAdd, canChange, canDelete, canAddDesign, canChangeDesign }) {
+function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, models, spools, locations, filamentProducts, materialOptions, canAdd, canChange, canDelete, canAddDesign, canChangeDesign }) {
   const [designs, setDesigns] = useState([]);
   const [manufacturerDesigns, setManufacturerDesigns] = useState([]);
   const [catalogueQuery, setCatalogueQuery] = useState("");
@@ -1563,6 +1566,13 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
   const [catalogueOpen, setCatalogueOpen] = useState(false);
   const [catalogueImage, setCatalogueImage] = useState(null);
   const [reels, setReels] = useState([]);
+  useEffect(() => {
+    if (!targetReelId || !reels.some(reel => reel.id === targetReelId)) return;
+    const frame = requestAnimationFrame(() => {
+      document.getElementById("reusable-spool-target-" + targetReelId)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [targetReelId, targetToken, reels]);
   const [densityProductId, setDensityProductId] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -1776,7 +1786,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, models, spools, locations, f
     <section className="panel printingSection">
       <div className="panelHead"><h3>Owned reusable spools ({reels.length})</h3></div>
       <div className="printingList">
-        {reels.map(reel => <article className="printingListRow" key={reel.id}>
+        {reels.map(reel => <article className="printingListRow" id={"reusable-spool-target-" + reel.id} key={reel.id}>
           <div><strong>{reel.code} · {reel.design_name}</strong>
             <small>{[reel.color_name, reel.material_override].filter(Boolean).join(" · ") || "No material/colour recorded"}</small>
             <small>Tare: {reel.effective_tare_g == null ? "Unknown" : reel.effective_tare_g + " g"}{reel.measured_tare_g != null ? " (measured)" : " (design default)"} · {reel.filament_spool_id ? "Loaded with filament" : "Unassigned"}</small>
@@ -3233,7 +3243,7 @@ function ModelManageModal({ model, files, printers, canUpload, onClose, onChange
       <section>
         <div className="printingManageSectionHead">
           <h3>Revisions</h3>
-          {canUpload && <button className="primary" type="button" onClick={() => setVersionUploadOpen(true)}>＋ Upload new version</button>}
+          {canUpload && <button className="primary" type="button" onClick={() => setVersionUploadOpen(true)}>Upload new version</button>}
         </div>
         <div className="printingRevisionList">
           {model.revisions.map(revision => <article key={revision.id}>
@@ -3460,7 +3470,7 @@ function PrintJobModal({ gcodeFiles = [], printers, spools, models, projects, cu
       <label>Slicer<input value={form.slicer} onChange={e => set("slicer", e.target.value)} placeholder="OrcaSlicer, Creality Print…" /></label>
 
       <div className="full printingUsageEditor">
-        <div className="printingUsageTitle"><div><strong>Material usage</strong><small>Optional. Add one row per spool/material used.</small></div><button type="button" onClick={addUsage}>＋ Material</button></div>
+        <div className="printingUsageTitle"><div><strong>Material usage</strong><small>Optional. Add one row per spool/material used.</small></div><button type="button" onClick={addUsage}>Add material</button></div>
         {usages.map((row, index) => <div className="printingUsageRow" key={index}>
           <label>Spool<select value={row.spool_id} onChange={e => setUsage(index, "spool_id", e.target.value)}>
             <option value="">Choose spool…</option>

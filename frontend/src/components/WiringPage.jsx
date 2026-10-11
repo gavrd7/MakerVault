@@ -55,7 +55,7 @@ export default function WiringPage({ boards, components, inventory, projects, co
         <h2>Experiment before committing to a project</h2>
         <p>Build and validate standalone circuits using MakerVault catalogue data. A finished diagram can be moved into one of your projects later.</p>
       </div>
-      {canAdd && <button className="primary" onClick={() => setCreateOpen(true)}>＋ New diagram</button>}
+      {canAdd && <button className="primary" onClick={() => setCreateOpen(true)}>Add diagram</button>}
     </div>
 
     {error && <div className="inlineError">{error}</div>}

@@ -8,6 +8,8 @@ from core.models import (
     MakerTag,
     Project,
     Spool,
+    ReusableSpool,
+    ReusableSpoolDesign,
 )
 
 
@@ -247,3 +249,40 @@ class MakerTagApiTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 400, response.content)
+
+    def test_physical_reusable_spool_can_receive_qr_tag(self):
+        design = ReusableSpoolDesign.objects.create(owner=self.owner, name="Printed ABS reel")
+        physical_reel = ReusableSpool.objects.create(
+            owner=self.owner, design=design, code="RSP-0001"
+        )
+        response = self.client.post(
+            "/api/tags/",
+            data={
+                "kind": "qr", "target_type": "reusable_spool",
+                "target_id": str(physical_reel.id), "label": "My reusable reel",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        tag = response.json()["item"]
+        self.assertEqual(tag["target"]["label"], "RSP-0001")
+        self.assertEqual(tag["target"]["subtitle"], design.name)
+        self.assertIn("reusable_spool", [
+            option["value"] for option in self.client.get("/api/tags/").json()["target_types"]
+        ])
+        groups = self.client.get("/api/tags/").json()["targets"]
+        reel_group = next(group for group in groups if group["type"] == "reusable_spool")
+        self.assertEqual(reel_group["rows"][0]["label"], "RSP-0001")
+
+    def test_reusable_spool_tags_enforce_owner_boundary(self):
+        design = ReusableSpoolDesign.objects.create(owner=self.other, name="Private reel")
+        physical_reel = ReusableSpool.objects.create(
+            owner=self.other, design=design, code="RSP-0001"
+        )
+        response = self.client.post(
+            "/api/tags/",
+            data={"kind": "qr", "target_type": "reusable_spool", "target_id": str(physical_reel.id)},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertFalse(MakerTag.objects.filter(target_id=physical_reel.id).exists())

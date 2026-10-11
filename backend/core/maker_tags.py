@@ -12,6 +12,7 @@ from .models import (
     PrintingLocation,
     Project,
     Spool,
+    ReusableSpool,
 )
 
 
@@ -39,6 +40,7 @@ TARGETS = {
     "printed_part": TagTargetDefinition("printed_part", "Printed part", PrintedPart),
     "inventory": TagTargetDefinition("inventory", "Inventory item", InventoryItem),
     "spool": TagTargetDefinition("spool", "Spool", Spool),
+    "reusable_spool": TagTargetDefinition("reusable_spool", "Reusable spool", ReusableSpool),
     "printer": TagTargetDefinition("printer", "Printer", Printer),
     "project": TagTargetDefinition("project", "Project", Project),
     "location": TagTargetDefinition("location", "Storage / printing location", PrintingLocation),
@@ -70,6 +72,8 @@ def target_display(target_type: str, obj) -> dict:
             "label": obj.spool_id,
             "subtitle": str(obj.filament),
         }
+    if target_type == "reusable_spool":
+        return {"id": str(obj.id), "label": obj.code, "subtitle": obj.design.name}
     if target_type == "printer":
         return {
             "id": str(obj.id),
@@ -109,6 +113,8 @@ def tag_target_options(owner) -> list[dict]:
         rows = definition.model.objects.filter(owner=owner)
         if target_type == "inventory":
             rows = rows.select_related("board__manufacturer", "component").order_by("inventory_id")
+        elif target_type == "reusable_spool":
+            rows = rows.select_related("design").order_by("code")
         elif target_type == "spool":
             rows = rows.select_related("filament__filament_manufacturer", "filament__manufacturer").order_by("spool_id")
         else:

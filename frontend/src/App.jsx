@@ -198,6 +198,11 @@ export default function App() {
       setSection("3D Printing");
       return;
     }
+    if (tag.target_type === "reusable_spool") {
+      setSearchTarget({ type: "reusable_spools", id: tag.target.id, section: "3D Printing", token });
+      setSection("3D Printing");
+      return;
+    }
     if (tag.target_type === "printer") {
       setSearchTarget({ type: "printers", id: tag.target.id, section: "3D Printing", token });
       setSection("3D Printing");
@@ -247,7 +252,7 @@ export default function App() {
       <div className="asideBottom">{config?.is_superuser && <a href="/admin/">Administration</a>}<a href="/accounts/logout/">Sign out</a></div>
     </aside>
     <main>
-      <header><div><h1>{section}</h1><p>{config ? `${config.user} · ${config.timezone} · ${config.currency}` : "Loading MakerVault…"}</p></div>{section === "Board Catalogue" && config?.permissions?.add_board && <button className="primary" onClick={() => setImportOpen(true)}>＋ Import URL</button>}</header>
+      <header><div><h1>{section}</h1><p>{config ? `${config.user} · ${config.timezone} · ${config.currency}` : "Loading MakerVault…"}</p></div>{section === "Board Catalogue" && config?.permissions?.add_board && <button className="primary" onClick={() => setImportOpen(true)}>Add from URL</button>}</header>
       {error && <div className="error">{error}</div>}{notice && <div className="notice">{notice}<button onClick={() => setNotice("")}>×</button></div>}
       {page()}
     </main>

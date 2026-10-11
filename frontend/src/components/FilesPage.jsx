@@ -125,7 +125,7 @@ export default function FilesPage({ projects, onOpenProject, config, searchTarge
       </div>
       <div className="filesHeroActions">
         <div className="filesHeroCount"><strong>{filtered.length}</strong><span>{filtered.length === 1 ? "asset" : "assets"}</span></div>
-        {config?.permissions?.add_file && <button className="primary" onClick={() => setUploadOpen(true)}>＋ Upload file</button>}
+        {config?.permissions?.add_file && <button className="primary" onClick={() => setUploadOpen(true)}>Upload file</button>}
       </div>
     </section>
 
