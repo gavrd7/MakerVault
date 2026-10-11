@@ -104,3 +104,22 @@ class ReusableSpoolMaintenanceTests(TestCase):
         self.assertEqual(result["processed"], 1)
         unattempted.refresh_from_db()
         self.assertIn("HTTP 403", unattempted.provenance["last_image_error"])
+
+    @patch("core.management.commands.inspect_reusable_spool_images.fetch_catalogue_source_html")
+    def test_image_inspection_never_downloads_or_persists_images(self, fetch):
+        entry = ReusableSpoolCatalogEntry.objects.get(key="bambu-basic")
+        fetch.return_value = (entry.source_url, (
+            '<html><head><meta property="og:title" content="Bambu Lab Reusable Spool Basic">'
+            '<meta property="og:image" content="/spool.webp"></head>'
+            '<body><img src="/other.webp" alt="Possible photo"></body></html>'
+        ))
+        output = StringIO()
+        original = dict(entry.provenance)
+        with patch("core.reusable_spool_images.cache_catalogue_image_from_url") as cache:
+            call_command("inspect_reusable_spool_images", entry.key, stdout=output)
+            cache.assert_not_called()
+        self.assertIn("spool.webp", output.getvalue())
+        self.assertIn("other.webp", output.getvalue())
+        self.assertIn("none cached", output.getvalue())
+        entry.refresh_from_db()
+        self.assertEqual(entry.provenance, original)
