@@ -1700,11 +1700,15 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
     const isDesign = form === "design";
     const endpoint = isDesign ? "/api/printing/reusable-spool-designs/" : "/api/printing/reusable-spools/";
     try {
-      await apiFetch(endpoint + (editing ? editing.id + "/" : ""), {
+      const result = await apiFetch(endpoint + (editing ? editing.id + "/" : ""), {
         method: editing ? "PATCH" : "POST",
         body: JSON.stringify(isDesign ? designForm : reelForm),
       });
       setNotice(isDesign ? "Spool design saved." : "Reusable spool saved.");
+      // Newly created printed designs can receive artwork immediately.
+      if (isDesign && !editing && designForm.design_type === "printed" && result.item) {
+        openSpoolImageEditor("design", result.item);
+      }
       setForm("");
       setEditing(null);
       await load();
