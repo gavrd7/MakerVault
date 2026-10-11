@@ -2906,3 +2906,5 @@ a:focus-visible,
 .tagLabelPreviewText strong{font-size:12px}
 .tagLabelPreviewText code{font-size:10px;white-space:normal;overflow-wrap:anywhere}
 .tagLabelPreviewText small{font-size:9px}
+
+.tagPrintFrame{position:fixed;left:-10000px;top:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none}
