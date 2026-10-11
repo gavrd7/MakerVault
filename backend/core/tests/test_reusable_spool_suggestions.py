@@ -68,3 +68,35 @@ class ReusableSpoolSuggestionsTests(TestCase):
         self.assertEqual(response.status_code, 200, response.content)
         self.assertEqual(response.json()["page_title"], "Master Spool Product")
         self.assertEqual(ReusableSpoolCatalogueSuggestion.objects.count(), 0)
+
+    def test_existing_catalogue_correction_waits_for_review(self):
+        self.client.force_login(self.admin)
+        entry = ReusableSpoolCatalogEntry.objects.get(key="bambu-basic")
+        previous = entry.nominal_tare_g
+        response = self._post("/api/printing/reusable-spool-suggestions/", {
+            "manufacturer": entry.manufacturer, "name": entry.name,
+            "design_type": entry.design_type, "source_url": entry.source_url,
+            "target_entry_key": entry.key,
+            "proposed_specs": {"nominal_tare_g": "247.5"},
+        })
+        self.assertEqual(response.status_code, 201, response.content)
+        entry.refresh_from_db()
+        self.assertEqual(entry.nominal_tare_g, previous)
+        proposal = ReusableSpoolCatalogueSuggestion.objects.get(pk=response.json()["id"])
+        self.assertEqual(proposal.target_entry_id, entry.id)
+        approved = self._post(f"/api/printing/reusable-spool-suggestions/{proposal.id}/review/", {"action": "approve"})
+        self.assertEqual(approved.status_code, 200, approved.content)
+        entry.refresh_from_db()
+        self.assertEqual(entry.nominal_tare_g, 247.5)
+        self.assertEqual(entry.provenance["reviewed_corrections"][-1]["suggestion_id"], proposal.id)
+        self.assertNotIn("nominal_tare_g", entry.provenance.get("verified_fields", []))
+
+    def test_existing_correction_must_match_existing_product(self):
+        self.client.force_login(self.admin)
+        entry = ReusableSpoolCatalogEntry.objects.get(key="bambu-basic")
+        response = self._post("/api/printing/reusable-spool-suggestions/", {
+            "manufacturer": "Wrong manufacturer", "name": entry.name,
+            "target_entry_key": entry.key, "source_url": entry.source_url,
+            "proposed_specs": {"width_mm": "70"},
+        })
+        self.assertEqual(response.status_code, 400)
