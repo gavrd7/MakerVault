@@ -71,7 +71,7 @@ export default function ComponentsPage({ components, setComponents, boards, proj
         <div className="toolbarActions">
           <input className="searchInput" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search components, ICs, interfaces…" />
           <select value={category} onChange={e => setCategory(e.target.value)}><option value="">All categories</option>{categories.map(x => <option key={x}>{x}</option>)}</select>
-          {config?.permissions?.add_component && <button className="primary" onClick={() => setShowAdd(true)}>＋ Add component</button>}
+          {config?.permissions?.add_component && <button className="primary" onClick={() => setShowAdd(true)}>Add component</button>}
         </div>
       </div>
       <div className="gridWrap">
@@ -134,7 +134,7 @@ function ComponentDetail({ component, loading, canEdit, canAddInventory, boards,
           : <ComponentArtwork src="" alt={component.name} size="large"
               type={component.type} category={component.category} partNumber={component.part_number} />}
       </button>
-      <div className="detailTitleRow componentDetailTitleRow"><div><h2>{component.name}</h2><p className="muted detailMaker">{component.category}</p></div><div className="detailActions">{canAddInventory && <button className="primary" onClick={() => setInventoryOpen(true)}>＋ Add to inventory</button>}{canEdit && <button onClick={() => setImageOpen(true)}>Image</button>}</div></div>
+      <div className="detailTitleRow componentDetailTitleRow"><div><h2>{component.name}</h2><p className="muted detailMaker">{component.category}</p></div><div className="detailActions">{canAddInventory && <button className="primary" onClick={() => setInventoryOpen(true)}>Add to inventory</button>}{canEdit && <button onClick={() => setImageOpen(true)}>Image</button>}</div></div>
       <p className="muted">{component.description || "Reusable makerspace component definition."}</p>
       <div className="badgeRow">
         {component.type && <Badge tone="accent">{component.type}</Badge>}
