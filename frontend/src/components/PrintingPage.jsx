@@ -1564,7 +1564,8 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
   const [catalogueQuery, setCatalogueQuery] = useState("");
   const [catalogueMaker, setCatalogueMaker] = useState("");
   const [catalogueOpen, setCatalogueOpen] = useState(false);
-  const [catalogueImage, setCatalogueImage] = useState(null);
+  const [catalogueDetail, setCatalogueDetail] = useState(null);
+  const [catalogueZoom, setCatalogueZoom] = useState(false);
   const [reels, setReels] = useState([]);
   useEffect(() => {
     if (!targetReelId || !reels.some(reel => reel.id === targetReelId)) return;
@@ -1811,15 +1812,16 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
       <div className="printingList spoolCatalogueScrollList" role="region" aria-label="Filtered manufacturer spool designs" tabIndex={0}>
         {filteredManufacturerDesigns.map(item => <article className="printingListRow spoolCatalogueItem" key={item.key}>
           <div className="spoolCatalogueRecord">
-            {item.image_url && <button type="button" className="spoolCatalogueImageButton" onClick={() => setCatalogueImage(item)} aria-label={"View " + item.name + " image"}><img className="spoolCatalogueThumb" src={item.image_url} alt={item.name} loading="lazy" /></button>}
-            <strong>{item.name}</strong>
+            {item.image_url ? <button type="button" className="spoolCatalogueImageButton" onClick={() => { setCatalogueOpen(false); setCatalogueDetail(item); setCatalogueZoom(false); }} aria-label={"View " + item.name + " details"}><img className="spoolCatalogueThumb" src={item.image_url} alt={item.name} loading="lazy" /></button> : <span className="spoolCatalogueNoThumb" aria-hidden="true">No image</span>}
+            <button type="button" className="spoolCatalogueNameButton" onClick={() => { setCatalogueOpen(false); setCatalogueDetail(item); setCatalogueZoom(false); }}>{item.name}</button>
             <small>{item.manufacturer} · {item.design_type === "printed" ? "Printable design" : "Manufacturer-made"}{item.verified ? " · Source documented" : " · Unverified"}</small>
             <small>{item.nominal_tare_g ? "Tare: " + item.nominal_tare_g + " g" : "Tare: Unknown"} · {item.outer_diameter_mm && item.width_mm ? item.outer_diameter_mm + " × " + item.width_mm + " mm" : "Dimensions: Unknown"} · {item.max_dryer_temp_c != null ? "Rated temperature: " + item.max_dryer_temp_c + "°C" : "Dryer rating: Unknown"}</small>
             {item.source_url && <a href={item.source_url} target="_blank" rel="noreferrer noopener">Manufacturer source ↗</a>}
           </div>
+          <div className="spoolCatalogueRowActions"><button type="button" onClick={() => { setCatalogueOpen(false); setCatalogueDetail(item); setCatalogueZoom(false); }}>View details</button>
           {canAddDesign && <button type="button" disabled={working || designs.some(d => d.catalog_entry_id === item.id)} onClick={() => importManufacturerDesign(item)}>
             {designs.some(d => d.catalog_entry_id === item.id) ? "Added to inventory" : "Add to inventory"}
-          </button>}
+          </button>}</div>
         </article>)}
         {!filteredManufacturerDesigns.length && <div className="printingEmptyInline">No catalogue entries match these filters.</div>}
       </div>
@@ -1844,9 +1846,42 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
       </div>
     </section>
 
-    {catalogueImage && <Modal title={catalogueImage.name} onClose={() => setCatalogueImage(null)}>
-      <div className="spoolCatalogueImageViewer"><img src={catalogueImage.image_url} alt={catalogueImage.name} /></div>
-      {catalogueImage.source_url && <a href={catalogueImage.source_url} target="_blank" rel="noreferrer noopener">Manufacturer reference ↗</a>}
+    {catalogueDetail && <Modal title={catalogueDetail.name} wide onClose={() => { setCatalogueDetail(null); setCatalogueZoom(false); setCatalogueOpen(true); }}>
+      <div className="spoolCatalogueDetail">
+        <div className="spoolCatalogueDetailMedia">
+          {catalogueDetail.image_url ? <>
+            <button type="button" className={"spoolCatalogueDetailImage" + (catalogueZoom ? " isZoomed" : "")} onClick={() => setCatalogueZoom(v => !v)} aria-label={catalogueZoom ? "Fit image to view" : "Enlarge spool image"} aria-pressed={catalogueZoom}>
+              <img src={catalogueDetail.image_url} alt={catalogueDetail.name} />
+            </button>
+            <button type="button" onClick={() => setCatalogueZoom(v => !v)}>{catalogueZoom ? "Fit image" : "Zoom image"}</button>
+          </> : <div className="spoolCatalogueImageMissing" role="status">No verified product image available yet</div>}
+        </div>
+        <div className="spoolCatalogueDetailInfo">
+          <p>{catalogueDetail.manufacturer} · {catalogueDetail.design_type === "printed" ? "Printable design" : "Manufacturer-made"} · {catalogueDetail.verified ? "Source documented" : "Pending verification"}</p>
+          {catalogueDetail.description && <p>{catalogueDetail.description}</p>}
+          <dl className="spoolCatalogueSpecs">
+            {[
+              ["Material", catalogueDetail.material],
+              ["Nominal empty weight", catalogueDetail.nominal_tare_g != null ? catalogueDetail.nominal_tare_g + " g" + (catalogueDetail.approximate_tare ? " (approximate)" : "") : null],
+              ["Outside diameter", catalogueDetail.outer_diameter_mm != null ? catalogueDetail.outer_diameter_mm + " mm" : null],
+              ["Width", catalogueDetail.width_mm != null ? catalogueDetail.width_mm + " mm" : null],
+              ["Centre opening", catalogueDetail.hub_diameter_mm != null ? catalogueDetail.hub_diameter_mm + " mm" : null],
+              ["Capacity", catalogueDetail.capacity_g != null ? catalogueDetail.capacity_g + " g" : null],
+              ["Verified dryer limit", catalogueDetail.max_dryer_temp_c != null ? catalogueDetail.max_dryer_temp_c + " °C" : null],
+            ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || "Not verified"}</dd></div>)}
+          </dl>
+          {catalogueDetail.avoid_dryer && <p className="spoolCatalogueDryerWarning">Not suitable for filament dryers according to the source.</p>}
+          {catalogueDetail.source_type && <small>Source classification: {catalogueDetail.source_type}</small>}
+          {catalogueDetail.source_url && <a href={catalogueDetail.source_url} target="_blank" rel="noreferrer noopener">View product source ↗</a>}
+          {catalogueDetail.temperature_source && <a href={catalogueDetail.temperature_source} target="_blank" rel="noreferrer noopener">View dryer temperature evidence ↗</a>}
+          <div className="spoolCatalogueDetailActions">
+            <button type="button" onClick={() => { setCatalogueDetail(null); setCatalogueZoom(false); setCatalogueOpen(true); }}>Back to catalogue</button>
+            {canAddDesign && <button type="button" className="primary" disabled={working || designs.some(d => d.catalog_entry_id === catalogueDetail.id)} onClick={() => importManufacturerDesign(catalogueDetail)}>
+              {designs.some(d => d.catalog_entry_id === catalogueDetail.id) ? "Added to inventory" : "Add to inventory"}
+            </button>}
+          </div>
+        </div>
+      </div>
     </Modal>}
     {form && <Modal title={editing ? "Edit " + (form === "design" ? "spool design" : "reusable spool") : "Add " + (form === "design" ? "spool design" : "reusable spool")} onClose={() => setForm("")}>
       <form className="formGrid" onSubmit={submit}>
