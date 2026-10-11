@@ -15,7 +15,7 @@
 **Validation:** Reusable-spool and related regression tests, staging upgrade and migration consistency checks passed before release preparation. Automatic specification extraction and general online product search remain follow-up work.
 
 
-## v1.1.0 — Previously released
+## v1.1.0 — 2026 release
 
 - Improved automated catalogue seeding, bounded batch continuation and restart-safe PostgreSQL checkpoints for boards, components, filaments and image records.
 - Added safe manufacturer-backed technical enrichment for selected components and non-ESP boards, preserving existing user-entered information.
@@ -26,7 +26,7 @@
 - Added starter-catalogue acceptance tests for repeatable seeding, coverage reporting and preservation of manual edits.
 - Catalogue maintenance remains automatic by default. Some manufacturer data and exact product images may remain unavailable; no artificial completeness targets are implied.
 
-**Release gate:** Validate migrations, full test suite, restore/upgrade safety, and an unattended maintenance cycle on the merged candidate before publishing v1.1.0. The stable Docker image and README remain at v1.0.5 until release.
+**Historical note:** v1.1.0 focused on restart-safe catalogue enrichment and image maintenance; v1.2.0 subsequently expanded reusable spool management.
 
 
 ## v1.0.5 — 8 October 2026
