@@ -9,7 +9,7 @@ const SCOPES = [
   ["spools:weight", "Submit spool weights (reserved)"],
   ["devices:status", "Report device status (reserved)"],
 ];
-const SCOPE_NAMES = Object.fromEntries(SCOPES.map(([id, label]) => [id, label.replace(/ \\(future device API\\)| \\(reserved\\)/g, "")]));
+const SCOPE_NAMES = { "tags:read": "Read and identify tags", "tags:write": "Register and assign tags", "inventory:read": "Read inventory records", "spools:weight": "Record spool weights", "devices:status": "Report device status" };
 
 export default function ApiKeysPanel() {
   const [rows, setRows] = useState([]);
