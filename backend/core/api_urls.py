@@ -1,7 +1,9 @@
 from django.urls import path
-from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views
+from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views, device_api_views
 
 urlpatterns = [
+    path("device/v1/me/", device_api_views.device_me, name="api-device-me"),
+    path("device/v1/tags/resolve/", device_api_views.resolve_tag, name="api-device-tag-resolve"),
     path("account/api-keys/", api_key_views.api_keys, name="api-account-keys"),
     path("account/api-keys/<uuid:key_id>/revoke/", api_key_views.revoke_api_key, name="api-account-key-revoke"),
     path("account/api-keys/<uuid:key_id>/", api_key_views.api_key_detail, name="api-account-key-detail"),
