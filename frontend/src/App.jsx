@@ -18,7 +18,7 @@ import WiringPage from "./components/WiringPage";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
-const NAV = ["Dashboard", "Search", "Board Catalogue", "Components", "Projects", "Inventory", "3D Printing", "Files", "Interactive Wiring", "Maker Tags", "Settings", "About"];
+const NAV = ["Dashboard", "Search", "Board Catalogue", "Components", "Projects", "Inventory", "3D Printing", "Model Library", "Files", "Interactive Wiring", "Maker Tags", "Settings", "About"];
 
 function formatBackupBytes(value) {
   const bytes = Number(value || 0);
@@ -35,6 +35,8 @@ function formatBackupBytes(value) {
 
 export default function App() {
   const [section, setSection] = useState("Dashboard");
+  const [makerTagIntent, setMakerTagIntent] = useState(null);
+  const [makerTagReturn, setMakerTagReturn] = useState(null);
   const [dashboard, setDashboard] = useState(null);
   const [inventory, setInventory] = useState([]);
   const [boards, setBoards] = useState([]);
@@ -180,6 +182,13 @@ export default function App() {
     setSection("Search");
   }
 
+  function openMakerTagsForRecord(type, id, originProjectId = null) {
+    const returnTargetType = type === "reusable_spool" ? "reusable_spools" : type === "spool" ? "spools" : type;
+    setMakerTagReturn({ section, searchTarget: { type: returnTargetType, id, token: Date.now() }, projectId: originProjectId || (type === "project" ? id : null) });
+    setMakerTagIntent({ type, id, token: Date.now() });
+    setSection("Maker Tags");
+  }
+
   function openTagTarget(tag) {
     if (!tag?.target?.id) return;
     const token = Date.now();
@@ -218,21 +227,30 @@ export default function App() {
     }
   }
 
+  function returnFromMakerTags() {
+    if (!makerTagReturn) return;
+    setSearchTarget(makerTagReturn.searchTarget || null);
+    if (makerTagReturn.projectId) setProjectTarget(makerTagReturn.projectId);
+    setSection(makerTagReturn.section);
+    setMakerTagReturn(null);
+  }
+
   function navigateSection(next) {
-    setSearchTarget(null);
+    setMakerTagReturn(null);
+    setSearchTarget(next === "Model Library" ? { type: "models", token: Date.now() } : null);
     setSection(next);
   }
 
   function page() {
     if (section === "Dashboard") return <Dashboard dashboard={dashboard} inventory={inventory} onNavigate={navigateSection} onOpenProject={project => { setProjectTarget(project.id); setSection("Projects"); }} onOpenCamera={printer => { setSearchTarget({ type: "printers", id: printer.id, openCamera: true, token: Date.now() }); setSection("3D Printing"); }} onChanged={refreshDashboard} onOpenLive={printer => { setSearchTarget({ type: "printers", id: printer.id, openLive: true, token: Date.now() }); setSection("3D Printing"); }} />;
     if (section === "Search") return <SearchPage initialQuery={searchQuery} projects={projects} onOpenResult={openSearchResult} />;
-    if (section === "Maker Tags") return <MakerTagsPage config={config} resolveToken={tagResolveToken} onResolveConsumed={() => { setTagResolveToken(""); const params = new URLSearchParams(window.location.search); params.delete("tag"); const query = params.toString(); window.history.replaceState({}, "", window.location.pathname + (query ? "?" + query : "") + window.location.hash); }} onChanged={refreshDashboard} onOpenTarget={openTagTarget} />;
+    if (section === "Maker Tags") return <MakerTagsPage config={config} recordIntent={makerTagIntent} onReturnToRecord={returnFromMakerTags} onRecordIntentConsumed={() => setMakerTagIntent(null)} resolveToken={tagResolveToken} onResolveConsumed={() => { setTagResolveToken(""); const params = new URLSearchParams(window.location.search); params.delete("tag"); const query = params.toString(); window.history.replaceState({}, "", window.location.pathname + (query ? "?" + query : "") + window.location.hash); }} onChanged={refreshDashboard} onOpenTarget={openTagTarget} />;
     if (section === "Interactive Wiring") return <WiringPage boards={boards} components={components} inventory={inventory} projects={projects} config={config} onOpenProject={projectId => { setProjectTarget(projectId); setSection("Projects"); }} />;
-    if (section === "Inventory") return <InventoryPage inventory={inventory} setInventory={setInventory} boards={boards} components={components} projects={projects} config={config} refreshDashboard={refreshDashboard} openItemId={searchTarget?.type === "inventory" ? searchTarget.id : ""} openToken={searchTarget?.token} />;
+    if (section === "Inventory") return <InventoryPage inventory={inventory} setInventory={setInventory} boards={boards} components={components} projects={projects} config={config} refreshDashboard={refreshDashboard} onOpenMakerTags={openMakerTagsForRecord} openItemId={searchTarget?.type === "inventory" ? searchTarget.id : ""} openToken={searchTarget?.token} />;
     if (section === "Board Catalogue") return <BoardsPage boards={boards} setBoards={setBoards} components={components} projects={projects} config={config} onOpenImport={() => setImportOpen(true)} refreshDashboard={refreshDashboard} openBoardId={searchTarget?.type === "boards" ? searchTarget.id : ""} openToken={searchTarget?.token} onInventoryCreated={async (item, items = [item]) => { setInventory(rows => { const ids = new Set(items.map(entry => entry.id)); return [...rows.filter(row => !ids.has(row.id)), ...items].sort((a,b) => a.inventory_id.localeCompare(b.inventory_id)); }); await refreshDashboard(); }} />;
     if (section === "Components") return <ComponentsPage components={components} setComponents={setComponents} boards={boards} projects={projects} config={config} refreshDashboard={refreshDashboard} openComponentId={searchTarget?.type === "components" ? searchTarget.id : ""} openToken={searchTarget?.token} onInventoryCreated={async (item, items = [item]) => { setInventory(rows => { const ids = new Set(items.map(entry => entry.id)); return [...rows.filter(row => !ids.has(row.id)), ...items].sort((a,b) => a.inventory_id.localeCompare(b.inventory_id)); }); await refreshDashboard(); }} />;
-    if (section === "Projects") return <ProjectsPage projects={projects} setProjects={setProjects} config={config} refreshDashboard={refreshDashboard} refreshInventory={refreshInventory} boards={boards} components={components} inventory={inventory} openProjectId={projectTarget} onOpenConsumed={() => setProjectTarget("")} />;
-    if (section === "3D Printing") return <PrintingPage config={config} projects={projects} searchTarget={searchTarget} onOpenConsumed={token => setSearchTarget(current => consumePrinterIntent(current, token))} />;
+    if (section === "Projects") return <ProjectsPage projects={projects} setProjects={setProjects} config={config} refreshDashboard={refreshDashboard} refreshInventory={refreshInventory} onOpenMakerTags={openMakerTagsForRecord} boards={boards} components={components} inventory={inventory} openProjectId={projectTarget} onOpenConsumed={() => setProjectTarget("")} />;
+    if (section === "3D Printing" || section === "Model Library") return <PrintingPage key={section} config={config} projects={projects} onOpenMakerTags={openMakerTagsForRecord} onModelLibraryBack={() => { setSearchTarget(null); setSection("3D Printing"); }} searchTarget={searchTarget} onOpenConsumed={token => setSearchTarget(current => consumePrinterIntent(current, token))} />;
     if (section === "Files") return <FilesPage projects={projects} config={config} searchTarget={searchTarget?.type === "files" ? searchTarget : null} onOpenProject={projectId => { setProjectTarget(projectId); setSection("Projects"); }} />;
     if (section === "Settings") return <SettingsPage config={config} onBackupStarted={watchBackup} />;
     return <AboutPage config={config} />;

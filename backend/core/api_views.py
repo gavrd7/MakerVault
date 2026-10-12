@@ -492,13 +492,23 @@ def maker_tags(request):
 
 
 @login_required
-@require_http_methods(["GET", "PATCH"])
+@require_http_methods(["GET", "PATCH", "DELETE"])
 def maker_tag_detail(request, tag_id):
     tag = MakerTag.objects.filter(owner=request.user, pk=tag_id).first()
     if not tag:
         return _error("Maker Tag not found.", status=404)
     if request.method == "GET":
         return JsonResponse({"item": serialise_tag(tag, include_events=True)})
+    if request.method == "DELETE":
+        denied = _require_permission(request, "core.delete_makertag")
+        if denied:
+            return denied
+        # This is deliberately a hard delete. It invalidates the printed scan URL.
+        # Leave the physical spool RFID UID mirror intact: removing an app tag must
+        # not silently erase a separately recorded CFS/Spoolman identity.
+        with transaction.atomic():
+            tag.delete()
+        return JsonResponse({"deleted": True})
 
     denied = _require_permission(request, "core.change_makertag")
     if denied:
@@ -6792,6 +6802,7 @@ def public_config(request):
             "change_printjob": request.user.has_perm("core.change_printjob"),
             "add_maker_tag": request.user.has_perm("core.add_makertag"),
             "change_maker_tag": request.user.has_perm("core.change_makertag"),
+            "delete_maker_tag": request.user.has_perm("core.delete_makertag"),
             "add_wiring_diagram": request.user.has_perm("core.add_wiringdiagram"),
             "change_wiring_diagram": request.user.has_perm("core.change_wiringdiagram"),
             "delete_wiring_diagram": request.user.has_perm("core.delete_wiringdiagram"),
