@@ -112,7 +112,7 @@ export default function HttpsCertificatePanel() {
 
   if (!state) return <section className="panel settingsPanel settingsHttpsPanel"><p>Loading HTTPS configuration…</p>{error && <div className="error">{error}</div>}</section>;
 
-  return <section className="panel settingsPanel">
+  return <section className="panel settingsPanel settingsHttpsPanel">
     <div className="panelHead">
       <div>
         <span className="settingsEyebrow">Transport security</span>
