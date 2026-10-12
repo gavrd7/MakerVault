@@ -4,7 +4,7 @@ import { Badge, Modal } from "./Common";
 
 const STATES = { available: "Available", installed: "Installed / in use", spare: "Spare", failed: "Failed", scrapped: "Scrapped", retired: "Retired" };
 
-export default function PrintedPartsSection({ config, projects = [], projectId = "", createJob = null, onCreateConsumed, focusId = "", refreshToken = 0 }) {
+export default function PrintedPartsSection({ config, projects = [], projectId = "", createJob = null, onCreateConsumed, focusId = "", refreshToken = 0, onOpenMakerTags = () => {} }) {
   const [rows, setRows] = useState([]);
   const [options, setOptions] = useState(null);
   const [editing, setEditing] = useState(null);
@@ -45,6 +45,7 @@ export default function PrintedPartsSection({ config, projects = [], projectId =
     <div className="printingList">{visible.map(part => <article className="printingListRow" key={part.id}>
       <div><strong>{part.name} · {part.quantity}</strong><small>{part.project || "No project"} · {part.location || "No location"}{part.model ? ` · ${part.model} ${part.revision || ""}` : ""}</small></div>
       <Badge tone={part.status === "installed" ? "good" : "neutral"}>{part.status_label}</Badge>
+      <button type="button" onClick={() => onOpenMakerTags("printed_part", part.id)}>Maker Tags</button>
       <button onClick={() => open(part)}>{config?.permissions?.change_printedpart ? "Manage" : "View"}</button>
     </article>)}{!visible.length && <p className="muted">No retained parts match. Successful prints never add parts automatically.</p>}</div>
     {editing && options && <PartModal {...editing} options={options} rows={rows} projects={projects} projectId={projectId} canEditPrintJob={Boolean(config?.permissions?.change_printjob)} canEdit={Boolean(editing.part ? config?.permissions?.change_printedpart : config?.permissions?.add_printedpart)} onClose={() => setEditing(null)} onSaved={async () => { setEditing(null); await load(); }} />}
