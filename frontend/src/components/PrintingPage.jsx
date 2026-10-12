@@ -149,7 +149,7 @@ function newestGeometryAnalysis(model) {
   return null;
 }
 
-export default function PrintingPage({ config, projects, searchTarget = null, onOpenConsumed }) {
+export default function PrintingPage({ config, projects, searchTarget = null, onOpenConsumed, onOpenMakerTags = () => {} }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [sourceNotice, setSourceNotice] = useState("");
@@ -249,6 +249,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       onOpenModels={() => setWorkspaceView("models")}
       targetReelId={searchTarget?.type === "reusable_spools" ? searchTarget.id : ""}
       targetToken={searchTarget?.token}
+      onOpenMakerTags={onOpenMakerTags}
       models={data?.models || []}
       spools={data?.spools || []}
       locations={data?.locations || []}
@@ -277,6 +278,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
 
   if (workspaceView === "spools") {
     return <SpoolInventoryPage
+      onOpenMakerTags={onOpenMakerTags}
       spools={data?.spools || []}
       filaments={data?.filaments || []}
       locations={data?.locations || []}
@@ -581,7 +583,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
   </div>;
 }
 
-function SpoolInventoryPage({ spools, filaments, locations, printers, currency, canAddSpool, canChangeSpool, canDeleteSpool, canChangeFilament, onBack, onChanged, searchTarget = null }) {
+function SpoolInventoryPage({ onOpenMakerTags, spools, filaments, locations, printers, currency, canAddSpool, canChangeSpool, canDeleteSpool, canChangeFilament, onBack, onChanged, searchTarget = null }) {
   const [query, setQuery] = useState("");
 
   useEffect(() => {
@@ -639,6 +641,7 @@ function SpoolInventoryPage({ spools, filaments, locations, printers, currency, 
             </Badge>
             <Badge>{spool.status_label || spool.status}</Badge>
             {(spool.external_links || []).map(link => <Badge key={link.id}>{link.provider_label}</Badge>)}
+            <button type="button" onClick={() => onOpenMakerTags("spool", spool.id)}>Maker Tags</button>
             <button type="button" onClick={() => setDetailFilament(filaments.find(item => item.id === spool.filament_id) || null)}>Filament details</button>
             {canChangeSpool && <button type="button" onClick={() => setManageSpool(spool)}>RFID / identity</button>}
             {canChangeSpool && <button type="button" onClick={() => setDryingSpool(spool)}>Drying</button>}
@@ -1558,7 +1561,7 @@ function PrinterModal({ manufacturers, models, locations, onClose, onSaved }) {
 
 
 
-function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, models, spools, locations, filamentProducts, materialOptions, canAdd, canChange, canDelete, canAddDesign, canChangeDesign }) {
+function ReusableSpoolsPage({ onOpenMakerTags, onBack, onOpenModels, targetReelId, targetToken, models, spools, locations, filamentProducts, materialOptions, canAdd, canChange, canDelete, canAddDesign, canChangeDesign }) {
   const [designs, setDesigns] = useState([]);
   const [manufacturerDesigns, setManufacturerDesigns] = useState([]);
   const [catalogueQuery, setCatalogueQuery] = useState("");
@@ -1945,6 +1948,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
             {(reel.assignment_history || []).slice(0, 3).map((event, i) => <small key={i}>{new Date(event.occurred_at).toLocaleDateString()} · {event.previous_spool_code || "Empty"} → {event.new_spool_code || "Empty"}</small>)}
           </div>
           <div className="spoolRowActions">
+            <button type="button" onClick={() => onOpenMakerTags("reusable_spool", reel.id)}>Maker Tags</button>
             {canChange && <button type="button" onClick={() => startReel(reel)}>Edit</button>}
             {canDelete && <button type="button" className="dangerButton" onClick={() => remove("reel", reel)}>Delete</button>}
           </div>
