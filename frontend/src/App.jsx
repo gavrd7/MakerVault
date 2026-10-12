@@ -183,7 +183,8 @@ export default function App() {
   }
 
   function openMakerTagsForRecord(type, id) {
-    setMakerTagReturn({ section, searchTarget });
+    const returnTargetType = type === "reusable_spool" ? "reusable_spools" : type === "spool" ? "spools" : type;
+    setMakerTagReturn({ section, searchTarget: { type: returnTargetType, id, token: Date.now() } });
     setMakerTagIntent({ type, id, token: Date.now() });
     setSection("Maker Tags");
   }
