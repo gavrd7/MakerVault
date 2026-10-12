@@ -419,7 +419,7 @@ function MakerTagForm({ title, data, tag = null, initialTarget = null, onClose, 
   const targetRows = currentGroup?.rows || [];
 
   useEffect(() => {
-    if (form.target_id && targetRows.some(row => row.id === form.target_id)) return;
+    if (form.target_id && targetRows.some(row => String(row.id) === String(form.target_id))) return;
     setForm(current => ({ ...current, target_id: targetRows[0]?.id || "" }));
   }, [form.target_type, targetRows.length]);
 
