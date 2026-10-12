@@ -127,6 +127,7 @@ export default function HttpsCertificatePanel() {
     {error && <div className="error">{error}</div>}
     {notice && <div className="notice">{notice}<button type="button" onClick={() => setNotice("")}>×</button></div>}
 
+    <div className="httpsPanelBody">
     <div className="httpsModeGrid">
       <article className="httpsModeCard">
         <span className="account-eyebrow">Recommended</span>
@@ -225,6 +226,7 @@ export default function HttpsCertificatePanel() {
     <div className="settingsCallout">
       <strong>Self-signed / local trust is intentional</strong>
       <p>A local CA provides encrypted HTTPS but is not publicly trusted. Import <strong>MakerVault Local CA</strong> into the trusted root store on each device that should trust this MakerVault instance. Do not distribute the CA private key.</p>
+    </div>
     </div>
   </section>;
 }
