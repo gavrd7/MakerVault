@@ -328,6 +328,12 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
             {canAddLocation && <button type="button" onClick={() => setModal("location")}>Add location</button>}
           </div>
         </section>
+        {(data?.locations || []).length > 0 && <section className="printingActionGroup" aria-label="Location Maker Tags">
+          <h3>Location Maker Tags</h3>
+          <div className="printingHeroActions">
+            {(data?.locations || []).map(location => <button type="button" key={location.id} onClick={() => onOpenMakerTags("location", location.id)}>Maker Tags · {location.name}</button>)}
+          </div>
+        </section>}
         <section className="printingActionGroup" aria-labelledby="printing-models-heading">
           <h3 id="printing-models-heading">Models &amp; print history</h3>
           <div className="printingHeroActions">
@@ -425,6 +431,9 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
                     {printer.installed_multi_material_label && <Badge>{printer.installed_multi_material_label}</Badge>}
                     {printer.multi_material_installed && <Badge>{printer.slots.length} slots</Badge>}
                   </div>
+                  <div className="printingPrinterActions" aria-label={"Actions for " + printer.name}>
+                    <button className="printingPrinterAction" type="button" onClick={() => onOpenMakerTags("printer", printer.id)}>Maker Tags</button>
+                  </div>
                   {canChangePrinter && <div className="printingPrinterActions" aria-label={"Actions for " + printer.name}>
                     <button className="printingPrinterAction printingPrinterActionLive" type="button" onClick={() => setLivePrinter(printer)}>Live monitor</button>
                     <button className="printingPrinterAction" type="button" onClick={() => setCameraSetup({ printerId: printer.id })}>Camera setup</button>
@@ -508,7 +517,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       </div>
     </section>}
 
-    <PrintedPartsSection config={config} projects={projects || []} createJob={partJob} onCreateConsumed={() => setPartJob(null)} focusId={searchTarget?.type === "printed_parts" ? searchTarget.id : ""} refreshToken={data} />
+    <PrintedPartsSection config={config} projects={projects || []} onOpenMakerTags={onOpenMakerTags} createJob={partJob} onCreateConsumed={() => setPartJob(null)} focusId={searchTarget?.type === "printed_parts" ? searchTarget.id : ""} refreshToken={data} />
 
     {modal === "printer" && <PrinterModal manufacturers={data?.printer_manufacturers || []} models={data?.printer_catalogue_models || []} locations={data?.locations || []} onClose={() => setModal("")} onSaved={saved} />}
     {modal === "location" && <LocationModal onClose={() => setModal("")} onSaved={saved} />}
