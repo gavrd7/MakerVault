@@ -1513,3 +1513,46 @@ class WiringDiagram(TimeStampedModel):
     def __str__(self):
         return f"{self.project} — {self.name}" if self.project_id else f"Wiring Lab — {self.name}"
 
+
+
+class UserApiKey(TimeStampedModel):
+    """Owner-scoped API credential metadata; the plaintext secret is never stored."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="makervault_api_keys",
+    )
+    name = models.CharField(max_length=120)
+    identifier = models.CharField(max_length=24, unique=True, editable=False)
+    secret_digest = models.CharField(max_length=64, editable=False)
+    scopes = models.JSONField(default=list)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["owner", "revoked_at"], name="api_key_owner_status_idx")]
+
+    def clean(self):
+        super().clean()
+        from .device_api_keys import validate_scopes
+
+        try:
+            self.scopes = list(validate_scopes(self.scopes))
+        except ValueError as exc:
+            raise ValidationError({"scopes": str(exc)}) from exc
+        if not str(self.name or "").strip():
+            raise ValidationError({"name": "Enter a name for the API key."})
+        if self.expires_at is not None and self.created_at and self.expires_at <= self.created_at:
+            raise ValidationError({"expires_at": "Expiration must be after creation."})
+
+    def is_active(self, now=None):
+        from django.utils import timezone
+
+        now = now or timezone.now()
+        return bool(
+            self.owner.is_active
+            and self.revoked_at is None
+            and (self.expires_at is None or self.expires_at > now)
+        )
