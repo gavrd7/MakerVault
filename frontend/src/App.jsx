@@ -182,9 +182,9 @@ export default function App() {
     setSection("Search");
   }
 
-  function openMakerTagsForRecord(type, id) {
+  function openMakerTagsForRecord(type, id, originProjectId = null) {
     const returnTargetType = type === "reusable_spool" ? "reusable_spools" : type === "spool" ? "spools" : type;
-    setMakerTagReturn({ section, searchTarget: { type: returnTargetType, id, token: Date.now() }, projectId: type === "project" ? id : null });
+    setMakerTagReturn({ section, searchTarget: { type: returnTargetType, id, token: Date.now() }, projectId: originProjectId || (type === "project" ? id : null) });
     setMakerTagIntent({ type, id, token: Date.now() });
     setSection("Maker Tags");
   }
