@@ -110,3 +110,12 @@ All requests require the HTTP header `Authorization: Bearer <secret>` over verif
 Firmware should treat `found=false` as an unknown tag, never as an invitation to write automatically. Use this response format for initial ESP32 integration. No weighing-station endpoint is active yet.
 
 The new routes must be tested on staging before release. Avoid entering bearer secrets in shell command history or posting them in issues/logs.
+
+
+## Device registration and record selection (implementation pending staging validation)
+
+- `GET /api/device/v1/records/search/?type=inventory&q=cabinet&limit=25` — requires `inventory:read` and the owner's *current* model view permission; accepts any type supported by Maker Tags, returns owner-visible `rows` with `id`, `label`, `subtitle`. Maximum 50 returned rows; search scans a bounded initial candidate set. This is a first implementation, not final catalogue-scale pagination.
+- `POST /api/device/v1/tags/register/` — requires `tags:write` and `core.add_makertag`. Send `{"kind":"nfc","uid":"04010203040506","target_type":"inventory","target_id":"<uuid>"}`. Checks record ownership/current view permission. First registration returns HTTP 201 and `created:true`. Repeated same registration returns HTTP 200 and `created:false`, without a second audit event. Existing identity attached elsewhere returns HTTP 409; registration must not silently reassign.
+- `POST /api/device/v1/tags/assign/` — requires `tags:write` and `core.change_makertag`, same request body. Only an active tag owned by the caller can be reassigned. Successful changes return `changed:true`; repeat same assignment returns `changed:false`. Creation and reassignment reuse the browser's `_sync_rfid_tag_to_spool` and `_record_tag_event` functions.
+
+Firmware must **confirm target choice before calling either write endpoint**. No physical NFC or CFS tag memory is written by these endpoints. The tag's UID identifies the tag, but never authenticates the user or device. Test all mutation endpoints and CFS spool UID conflict behaviour on staging before firmware integration.
