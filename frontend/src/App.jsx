@@ -36,6 +36,7 @@ function formatBackupBytes(value) {
 export default function App() {
   const [section, setSection] = useState("Dashboard");
   const [makerTagIntent, setMakerTagIntent] = useState(null);
+  const [makerTagReturn, setMakerTagReturn] = useState(null);
   const [dashboard, setDashboard] = useState(null);
   const [inventory, setInventory] = useState([]);
   const [boards, setBoards] = useState([]);
@@ -182,6 +183,7 @@ export default function App() {
   }
 
   function openMakerTagsForRecord(type, id) {
+    setMakerTagReturn({ section, searchTarget });
     setMakerTagIntent({ type, id, token: Date.now() });
     setSection("Maker Tags");
   }
@@ -224,7 +226,15 @@ export default function App() {
     }
   }
 
+  function returnFromMakerTags() {
+    if (!makerTagReturn) return;
+    setSearchTarget(makerTagReturn.searchTarget || null);
+    setSection(makerTagReturn.section);
+    setMakerTagReturn(null);
+  }
+
   function navigateSection(next) {
+    setMakerTagReturn(null);
     setSearchTarget(null);
     setSection(next);
   }
@@ -232,7 +242,7 @@ export default function App() {
   function page() {
     if (section === "Dashboard") return <Dashboard dashboard={dashboard} inventory={inventory} onNavigate={navigateSection} onOpenProject={project => { setProjectTarget(project.id); setSection("Projects"); }} onOpenCamera={printer => { setSearchTarget({ type: "printers", id: printer.id, openCamera: true, token: Date.now() }); setSection("3D Printing"); }} onChanged={refreshDashboard} onOpenLive={printer => { setSearchTarget({ type: "printers", id: printer.id, openLive: true, token: Date.now() }); setSection("3D Printing"); }} />;
     if (section === "Search") return <SearchPage initialQuery={searchQuery} projects={projects} onOpenResult={openSearchResult} />;
-    if (section === "Maker Tags") return <MakerTagsPage config={config} recordIntent={makerTagIntent} onRecordIntentConsumed={() => setMakerTagIntent(null)} resolveToken={tagResolveToken} onResolveConsumed={() => { setTagResolveToken(""); const params = new URLSearchParams(window.location.search); params.delete("tag"); const query = params.toString(); window.history.replaceState({}, "", window.location.pathname + (query ? "?" + query : "") + window.location.hash); }} onChanged={refreshDashboard} onOpenTarget={openTagTarget} />;
+    if (section === "Maker Tags") return <MakerTagsPage config={config} recordIntent={makerTagIntent} onReturnToRecord={returnFromMakerTags} onRecordIntentConsumed={() => setMakerTagIntent(null)} resolveToken={tagResolveToken} onResolveConsumed={() => { setTagResolveToken(""); const params = new URLSearchParams(window.location.search); params.delete("tag"); const query = params.toString(); window.history.replaceState({}, "", window.location.pathname + (query ? "?" + query : "") + window.location.hash); }} onChanged={refreshDashboard} onOpenTarget={openTagTarget} />;
     if (section === "Interactive Wiring") return <WiringPage boards={boards} components={components} inventory={inventory} projects={projects} config={config} onOpenProject={projectId => { setProjectTarget(projectId); setSection("Projects"); }} />;
     if (section === "Inventory") return <InventoryPage inventory={inventory} setInventory={setInventory} boards={boards} components={components} projects={projects} config={config} refreshDashboard={refreshDashboard} openItemId={searchTarget?.type === "inventory" ? searchTarget.id : ""} openToken={searchTarget?.token} />;
     if (section === "Board Catalogue") return <BoardsPage boards={boards} setBoards={setBoards} components={components} projects={projects} config={config} onOpenImport={() => setImportOpen(true)} refreshDashboard={refreshDashboard} openBoardId={searchTarget?.type === "boards" ? searchTarget.id : ""} openToken={searchTarget?.token} onInventoryCreated={async (item, items = [item]) => { setInventory(rows => { const ids = new Set(items.map(entry => entry.id)); return [...rows.filter(row => !ids.has(row.id)), ...items].sort((a,b) => a.inventory_id.localeCompare(b.inventory_id)); }); await refreshDashboard(); }} />;
