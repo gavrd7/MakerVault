@@ -418,7 +418,7 @@ function ProjectDetail({ project, loading, canEdit, canDelete, onOpenMakerTags, 
         refreshInventory={refreshInventory}
       />
 
-      <PrintedPartsSection config={config} projectId={project.id} projects={[project]} />
+      <PrintedPartsSection config={config} projectId={project.id} projects={[project]} onOpenMakerTags={(type, id) => onOpenMakerTags(type, id, project.id)} />
 
       <ProjectWiringSection
         project={project}
