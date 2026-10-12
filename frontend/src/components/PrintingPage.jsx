@@ -328,14 +328,6 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
             {canAddLocation && <button type="button" onClick={() => setModal("location")}>Add location</button>}
           </div>
         </section>
-        {(data?.locations || []).length > 0 && <section className="printingActionGroup" aria-label="Location Maker Tags">
-          <details>
-            <summary>Storage / printing locations · Maker Tags</summary>
-            <div className="printingHeroActions">
-              {(data?.locations || []).map(location => <button type="button" key={location.id} onClick={() => onOpenMakerTags("location", location.id)}>Maker Tags · {location.name}</button>)}
-            </div>
-          </details>
-        </section>}
         <section className="printingActionGroup" aria-labelledby="printing-models-heading">
           <h3 id="printing-models-heading">Models &amp; print history</h3>
           <div className="printingHeroActions">
@@ -520,6 +512,33 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
     </section>}
 
     <PrintedPartsSection config={config} projects={projects || []} onOpenMakerTags={onOpenMakerTags} createJob={partJob} onCreateConsumed={() => setPartJob(null)} focusId={searchTarget?.type === "printed_parts" ? searchTarget.id : ""} refreshToken={data} />
+
+    <section className="panel printingSection">
+      <div className="panelHead">
+        <div><h3>Storage / printing locations</h3><p>Locations for printers, spools and printed parts.</p></div>
+        <div className="printingHeroActions">
+          {canAddLocation && <button type="button" onClick={() => setModal("location")}>Add location</button>}
+          <button type="button" onClick={() => setModal("locationsList")}>View all {data?.locations?.length || 0}</button>
+        </div>
+      </div>
+      <div className="printingList">
+        {(data?.locations || []).slice(0, 3).map(location => <article className="printingListRow" key={location.id}>
+          <div><strong>{location.name}</strong><small>{location.kind_label || location.kind || "Storage / printing location"}</small></div>
+          <div className="spoolRowActions"><button type="button" onClick={() => onOpenMakerTags("location", location.id)}>Maker Tags</button></div>
+        </article>)}
+        {!data?.locations?.length && <div className="printingEmptyInline">No storage or printing locations yet.</div>}
+      </div>
+    </section>
+
+    {modal === "locationsList" && <Modal title="Storage / printing locations" subtitle="All registered locations and their Maker Tag shortcuts." wide onClose={() => setModal("")}>
+      <div className="printingList">
+        {(data?.locations || []).map(location => <article className="printingListRow" key={location.id}>
+          <div><strong>{location.name}</strong><small>{location.kind_label || location.kind || "Storage / printing location"}</small></div>
+          <div className="spoolRowActions"><button type="button" onClick={() => { setModal(""); onOpenMakerTags("location", location.id); }}>Maker Tags</button></div>
+        </article>)}
+        {!data?.locations?.length && <div className="printingEmptyInline">No storage or printing locations yet.</div>}
+      </div>
+    </Modal>}
 
     {modal === "printer" && <PrinterModal manufacturers={data?.printer_manufacturers || []} models={data?.printer_catalogue_models || []} locations={data?.locations || []} onClose={() => setModal("")} onSaved={saved} />}
     {modal === "location" && <LocationModal onClose={() => setModal("")} onSaved={saved} />}
