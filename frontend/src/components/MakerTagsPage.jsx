@@ -97,7 +97,7 @@ function TagCaptureControls({ kind, value, onCapture, autoFocus = false, compact
   </div>;
 }
 
-export default function MakerTagsPage({ config, resolveToken = "", onResolveConsumed = () => {}, onChanged = () => {}, onOpenTarget = () => {} }) {
+export default function MakerTagsPage({ config, resolveToken = "", onResolveConsumed = () => {}, recordIntent = null, onRecordIntentConsumed = () => {}, onChanged = () => {}, onOpenTarget = () => {} }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
@@ -105,6 +105,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
   const [kind, setKind] = useState("");
   const [targetType, setTargetType] = useState("");
   const [addOpen, setAddOpen] = useState(false);
+  const [createTarget, setCreateTarget] = useState(null);
   const [detail, setDetail] = useState(null);
   const [editTag, setEditTag] = useState(null);
   const [resolveKind, setResolveKind] = useState("auto");
@@ -142,6 +143,27 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
       });
     return () => { cancelled = true; };
   }, [resolveToken]);
+
+  useEffect(() => {
+    if (!data || !recordIntent?.type || !recordIntent?.id) return;
+    const same = (data.rows || []).filter(tag => tag.target_type === recordIntent.type && String(tag.target_id) === String(recordIntent.id) && tag.status === "active");
+    setQuery("");
+    setKind("");
+    setStatus("active");
+    setTargetType(recordIntent.type);
+    if (same.length === 1) {
+      apiFetch("/api/tags/" + same[0].id + "/").then(result => setDetail(result.item)).catch(err => setError(err.message));
+    } else if (same.length > 1) {
+      setQuery("");
+      setError("Multiple active tags belong to this record. Select the one you want to view or print.");
+    } else if (config?.permissions?.add_maker_tag) {
+      setCreateTarget({ type: recordIntent.type, id: recordIntent.id });
+      setAddOpen(true);
+    } else {
+      setError("No active Maker Tag is assigned to this record.");
+    }
+    onRecordIntentConsumed();
+  }, [data, recordIntent?.token]);
 
   const rows = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -279,7 +301,8 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
     {addOpen && <MakerTagForm
       title="Create Maker Tag"
       data={data}
-      onClose={() => setAddOpen(false)}
+      initialTarget={createTarget}
+      onClose={() => { setAddOpen(false); setCreateTarget(null); }}
       onSaved={changed}
     />}
 
@@ -376,13 +399,13 @@ function MakerTagPrintable({ tag, size, qr, fields, preview = false }) {
   </div>;
 }
 
-function MakerTagForm({ title, data, tag = null, onClose, onSaved }) {
+function MakerTagForm({ title, data, tag = null, initialTarget = null, onClose, onSaved }) {
   const [form, setForm] = useState({
     kind: tag?.kind || "qr",
     code: tag?.code || "",
     label: tag?.label || "",
-    target_type: tag?.target_type || "inventory",
-    target_id: tag?.target_id || "",
+    target_type: tag?.target_type || initialTarget?.type || "inventory",
+    target_id: tag?.target_id || initialTarget?.id || "",
     notes: tag?.notes || "",
     status: tag?.status || "active",
     technology: tag?.technology || tag?.metadata?.technology || "",
