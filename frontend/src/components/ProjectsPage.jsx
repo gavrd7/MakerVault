@@ -132,7 +132,7 @@ function localDateIso() {
   return new Date(now.getTime() - offset).toISOString().slice(0, 10);
 }
 
-export default function ProjectsPage({ projects, setProjects, config, refreshDashboard, refreshInventory, boards, components, inventory, openProjectId, onOpenConsumed }) {
+export default function ProjectsPage({ projects, setProjects, config, refreshDashboard, refreshInventory, boards, components, inventory, openProjectId, onOpenConsumed, onOpenMakerTags = () => {} }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
@@ -296,6 +296,7 @@ export default function ProjectsPage({ projects, setProjects, config, refreshDas
       loading={loading}
       canEdit={config?.permissions?.change_project}
       canDelete={config?.permissions?.delete_project}
+      onOpenMakerTags={onOpenMakerTags}
       config={config}
       boards={boards}
       components={components}
@@ -329,7 +330,7 @@ export default function ProjectsPage({ projects, setProjects, config, refreshDas
   </div>;
 }
 
-function ProjectDetail({ project, loading, canEdit, canDelete, config, boards, components, inventory, refreshInventory, onClose, onRefresh, onUpdated, onComplete, onDeleted }) {
+function ProjectDetail({ project, loading, canEdit, canDelete, onOpenMakerTags, config, boards, components, inventory, refreshInventory, onClose, onRefresh, onUpdated, onComplete, onDeleted }) {
   const [editing, setEditing] = useState(false);
   const [coverOpen, setCoverOpen] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
@@ -378,7 +379,8 @@ function ProjectDetail({ project, loading, canEdit, canDelete, config, boards, c
 
       <div className="projectTitleActions">
         <div className="badgeRow"><PriorityBadge project={project} /><Badge tone={project.status === "active" ? "good" : project.status === "idea" ? "accent" : "neutral"}>{project.status_label}</Badge><DeadlineBadge project={project} />{(project.tags || []).map(tag => <Badge key={tag}>{tag}</Badge>)}</div>
-        {(canEdit || canDelete) && <div className="detailActions">
+        <div className="detailActions">
+          <button type="button" onClick={() => onOpenMakerTags("project", project.id)}>Maker Tags</button>
           {canEdit && !["complete", "archived"].includes(project.status) && <button className="projectCompleteButton" onClick={() => onComplete(project)}>✓ Completed</button>}
           {canEdit && <button onClick={() => setEditing(true)}>Edit</button>}
           {canEdit && <button onClick={() => setCoverOpen(true)}>Cover</button>}
@@ -386,7 +388,7 @@ function ProjectDetail({ project, loading, canEdit, canDelete, config, boards, c
           {canEdit && <button onClick={() => setFileOpen(true)}>Add file</button>}
           {canEdit && <button onClick={() => setRepositoryOpen(true)}>Add repository</button>}
           {canDelete && <button className="dangerButton" onClick={deleteProject}>Delete project</button>}
-        </div>}
+        </div>
       </div>
 
       {project.summary && <p className="projectSummary">{project.summary}</p>}
