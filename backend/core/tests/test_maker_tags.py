@@ -317,3 +317,35 @@ class MakerTagApiTests(TestCase):
         self.client.force_login(self.owner)
         self.assertEqual(self.client.delete(f"/api/tags/{other_tag.id}/").status_code, 404)
         self.assertTrue(MakerTag.objects.filter(pk=other_tag.id).exists())
+
+    def test_delete_nfc_tag_invalidates_identity(self):
+        permission = Permission.objects.get(
+            content_type__app_label="core", codename="delete_makertag"
+        )
+        self.owner.user_permissions.add(permission)
+        self.client.force_login(self.owner)
+        tag = MakerTag.objects.create(
+            owner=self.owner, kind="nfc", code="04A1B2C3",
+            target_type="inventory", target_id=self.inventory.id,
+        )
+        token = tag.public_token
+        self.assertEqual(self.client.delete(f"/api/tags/{tag.pk}/").status_code, 200)
+        self.assertFalse(MakerTag.objects.filter(pk=tag.pk).exists())
+        self.assertEqual(self.client.get(f"/api/tags/resolve/{token}/").status_code, 404)
+
+    def test_delete_rfid_tag_keeps_spool_uid_mirror(self):
+        permission = Permission.objects.get(
+            content_type__app_label="core", codename="delete_makertag"
+        )
+        self.owner.user_permissions.add(permission)
+        self.client.force_login(self.owner)
+        tag = MakerTag.objects.create(
+            owner=self.owner, kind="rfid", code="ABC123",
+            target_type="spool", target_id=self.spool.id,
+        )
+        token = tag.public_token
+        self.assertEqual(self.client.delete(f"/api/tags/{tag.pk}/").status_code, 200)
+        self.assertFalse(MakerTag.objects.filter(pk=tag.pk).exists())
+        self.assertEqual(self.client.get(f"/api/tags/resolve/{token}/").status_code, 404)
+        self.spool.refresh_from_db()
+        self.assertEqual(self.spool.rfid_uid, "ABC123")
