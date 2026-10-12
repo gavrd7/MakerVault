@@ -97,7 +97,7 @@ function TagCaptureControls({ kind, value, onCapture, autoFocus = false, compact
   </div>;
 }
 
-export default function MakerTagsPage({ config, resolveToken = "", onResolveConsumed = () => {}, recordIntent = null, onRecordIntentConsumed = () => {}, onChanged = () => {}, onOpenTarget = () => {} }) {
+export default function MakerTagsPage({ config, resolveToken = "", onResolveConsumed = () => {}, recordIntent = null, onRecordIntentConsumed = () => {}, onReturnToRecord = () => {}, onChanged = () => {}, onOpenTarget = () => {} }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
@@ -106,6 +106,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
   const [targetType, setTargetType] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [createTarget, setCreateTarget] = useState(null);
+  const [returnPending, setReturnPending] = useState(false);
   const [detail, setDetail] = useState(null);
   const [editTag, setEditTag] = useState(null);
   const [resolveKind, setResolveKind] = useState("auto");
@@ -146,6 +147,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
 
   useEffect(() => {
     if (!data || !recordIntent?.type || !recordIntent?.id) return;
+    setReturnPending(true);
     const same = (data.rows || []).filter(tag => tag.target_type === recordIntent.type && String(tag.target_id) === String(recordIntent.id) && tag.status === "active");
     setQuery("");
     setKind("");
@@ -182,6 +184,14 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
 
   const printableRows = rows.filter(tag => tag.kind === "qr" && tag.status === "active");
   const selectedPrintableRows = printableRows.filter(tag => selectedTagIds.includes(String(tag.id)));
+
+  function closeRecordTag() {
+    setDetail(null);
+    setAddOpen(false);
+    setEditTag(null);
+    setCreateTarget(null);
+    if (returnPending) { setReturnPending(false); onReturnToRecord(); }
+  }
 
   async function changed(item) {
     setAddOpen(false);
@@ -244,6 +254,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
 
     <section className="panel tagLibrary">
       <div className="tagToolbar">
+        {returnPending && <button type="button" onClick={closeRecordTag}>← Back to record</button>}
         <div>
           <strong>{data?.rows?.length || 0} Maker Tag{data?.rows?.length === 1 ? "" : "s"}</strong>
           <small>{rows.length} shown</small>
@@ -302,7 +313,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
       title="Create Maker Tag"
       data={data}
       initialTarget={createTarget}
-      onClose={() => { setAddOpen(false); setCreateTarget(null); }}
+      onClose={() => { if (returnPending) closeRecordTag(); else { setAddOpen(false); setCreateTarget(null); } }}
       onSaved={changed}
     />}
 
@@ -310,14 +321,14 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
       title={"Edit Maker Tag · " + (editTag.label || editTag.code)}
       data={data}
       tag={editTag}
-      onClose={() => setEditTag(null)}
+      onClose={() => { if (returnPending) closeRecordTag(); else setEditTag(null); }}
       onSaved={changed}
     />}
 
     {detail && <MakerTagDetail
       tag={detail}
       canEdit={Boolean(config?.permissions?.change_maker_tag)}
-      onClose={() => setDetail(null)}
+      onClose={closeRecordTag}
       onEdit={() => { setEditTag(detail); setDetail(null); }}
       onChanged={changed}
       onOpenTarget={() => onOpenTarget(detail)}
