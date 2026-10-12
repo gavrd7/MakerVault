@@ -89,3 +89,19 @@ def revoke_api_key(request, key_id):
             key.revoked_at = timezone.now()
             key.save(update_fields=["revoked_at", "updated_at"])
     return JsonResponse({"item": _metadata(key)})
+
+
+@login_required
+@require_http_methods(["DELETE"])
+def delete_api_key(request, key_id):
+    """Delete only a revoked key; active credentials must first be revoked."""
+    with transaction.atomic():
+        key = UserApiKey.objects.select_for_update().filter(
+            owner=request.user, pk=key_id,
+        ).first()
+        if key is None:
+            return _error("API key not found.", 404)
+        if key.revoked_at is None:
+            return _error("Revoke this API key before deleting it.", 409)
+        key.delete()
+    return JsonResponse({"deleted": True})
