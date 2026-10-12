@@ -76,6 +76,40 @@ class ApiKeyManagementTests(TestCase):
         )
         self.assertEqual(UserApiKey.objects.count(), 0)
 
+    def test_delete_requires_revocation_and_is_owner_scoped(self):
+        response = self.issue()
+        self.assertEqual(response.status_code, 201)
+        key_id = response.json()["item"]["id"]
+        endpoint = f"/api/account/api-keys/{key_id}/"
+
+        # A live key must never be deleted without first being revoked.
+        self.assertEqual(self.client.delete(endpoint).status_code, 409)
+        self.assertTrue(UserApiKey.objects.filter(pk=key_id).exists())
+
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.delete(endpoint).status_code, 404)
+        self.client.force_login(self.owner)
+
+        self.assertEqual(
+            self.client.post(f"/api/account/api-keys/{key_id}/revoke/").status_code, 200
+        )
+        self.assertEqual(self.client.delete(endpoint).status_code, 200)
+        self.assertFalse(UserApiKey.objects.filter(pk=key_id).exists())
+        self.assertEqual(self.client.delete(endpoint).status_code, 404)
+
+    def test_delete_requires_login_and_csrf(self):
+        response = self.issue()
+        key_id = response.json()["item"]["id"]
+        self.client.post(f"/api/account/api-keys/{key_id}/revoke/")
+        endpoint = f"/api/account/api-keys/{key_id}/"
+        self.client.logout()
+        self.assertEqual(self.client.delete(endpoint).status_code, 302)
+
+        csrf_client = Client(enforce_csrf_checks=True)
+        csrf_client.force_login(self.owner)
+        self.assertEqual(csrf_client.delete(endpoint).status_code, 403)
+        self.assertTrue(UserApiKey.objects.filter(pk=key_id).exists())
+
     def test_key_expires_and_disabled_account_loses_validity(self):
         response = self.issue(expires_in_days=None)
         key = UserApiKey.objects.get(pk=response.json()["item"]["id"])
