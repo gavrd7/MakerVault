@@ -94,3 +94,19 @@ A device can send a gross mass reading with units (grams), stable/tare/calibrati
 6. NDEF writer and weighing station integration.
 
 Do not merge a partial implementation that exposes key creation without secure storage, revocation and tests.
+
+
+## Implemented read-only wire contract (PR #140)
+
+All requests require the HTTP header `Authorization: Bearer <secret>` over verified HTTPS in deployment. Session cookies alone do not authenticate these routes.
+
+- `GET /api/device/v1/me/`: requires `tags:read`; returns `protocol`, `read_only`, `key_name`, granted `scopes` and currently available `capabilities`.
+- `POST /api/device/v1/tags/resolve/`: requires `tags:read` **and** current owner permission `core.view_makertag`. JSON: `{"kind":"nfc","uid":"04AABBCCDDEEFF"}` or `{"kind":"rfid","uid":"A1B2C3D4"}`. Kind is mandatory; UID is a 4-, 7- or 10-byte hex identifier. Colon/dash/space separators are accepted and canonicalised.
+- Response for known tag: `{"found":true,"status":"identified","kind":"nfc","uid":"04AABBCCDDEEFF","tag":{"id":"<uuid>","label":"Box tag","target":{"type":"inventory","type_label":"Inventory item","id":"<uuid>","label":"Tagged box","subtitle":"..."}}}`.
+- Response for unknown tag: `{"found":false,"status":"unregistered","kind":"nfc","uid":"04AABBCCDDEEFF"}`.
+- Invalid key/expired/revoked/disabled account: HTTP 401. Insufficient scope or missing owner model permission: HTTP 403. Malformed kind/UID: HTTP 400. Missing target for otherwise known tag: HTTP 404.
+- The above endpoint does **not** transmit raw sector data, NFC tag payload, arbitrary model fields, or credentials. No tag writes/assignments are enabled.
+
+Firmware should treat `found=false` as an unknown tag, never as an invitation to write automatically. Use this response format for initial ESP32 integration. No weighing-station endpoint is active yet.
+
+The new routes must be tested on staging before release. Avoid entering bearer secrets in shell command history or posting them in issues/logs.
