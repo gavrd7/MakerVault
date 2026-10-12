@@ -9,12 +9,16 @@ const SCOPES = [
   ["spools:weight", "Submit spool weights (reserved)"],
   ["devices:status", "Report device status (reserved)"],
 ];
+const SCOPE_NAMES = Object.fromEntries(SCOPES.map(([id, label]) => [id, label.replace(/ \\(future device API\\)| \\(reserved\\)/g, "")]));
 
 export default function ApiKeysPanel() {
   const [rows, setRows] = useState([]);
   const [name, setName] = useState("");
   const [scopes, setScopes] = useState(["tags:read"]);
   const [days, setDays] = useState("365");
+  const [editingId, setEditingId] = useState(null);
+  const [editName, setEditName] = useState("");
+  const [editScopes, setEditScopes] = useState([]);
   const [issued, setIssued] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
@@ -95,6 +99,34 @@ export default function ApiKeysPanel() {
     }
   };
 
+  const startEdit = item => {
+    setEditingId(item.id);
+    setEditName(item.name);
+    setEditScopes([...item.scopes]);
+    setError("");
+    setNotice("");
+  };
+
+  const saveEdit = async event => {
+    event.preventDefault();
+    if (!editingId || !editName.trim() || !editScopes.length) return;
+    setBusy(true);
+    setError("");
+    try {
+      await apiFetch(`/api/account/api-keys/${editingId}/`, {
+        method: "PATCH",
+        body: { name: editName.trim(), scopes: editScopes },
+      });
+      setEditingId(null);
+      setNotice("API key settings updated. The secret remains unchanged.");
+      await refresh();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const remove = async item => {
     if (!window.confirm(`Permanently delete revoked API key "${item.name}" from the list? This cannot be undone.`)) return;
     setError("");
@@ -164,14 +196,19 @@ export default function ApiKeysPanel() {
               <strong>{item.name}</strong>
               <span className={item.active ? "apiKeysStatus active" : "apiKeysStatus"}>{item.active ? "Active" : item.revoked_at ? "Revoked" : "Expired / inactive"}</span>
             </div>
-            <small>{item.prefix}…</small>
-            <small>{item.scopes.join(", ")}</small>
+            <small>Permissions: {item.scopes.map(scope => SCOPE_NAMES[scope] || scope).join(" · ")}</small>
             <small>Expires: {item.expires_at ? new Date(item.expires_at).toLocaleDateString() : "Never"}</small>
           </div>
           <div className="apiKeysRowActions">
+            {item.active && <button type="button" disabled={busy} onClick={() => startEdit(item)}>Edit</button>}
             {!item.revoked_at && <button type="button" disabled={busy} onClick={() => revoke(item)}>Revoke</button>}
             {item.revoked_at && <button type="button" disabled={busy} onClick={() => remove(item)}>Delete</button>}
           </div>
+          {editingId === item.id && <form className="apiKeysEdit" onSubmit={saveEdit}>
+            <label>Key name <input value={editName} maxLength={120} required onChange={e => setEditName(e.target.value)} /></label>
+            <fieldset className="apiKeysScopes"><legend>Permissions</legend><div className="apiKeysScopeList">{SCOPES.map(([scope, label]) => <label className="apiKeysScope" key={scope}><input type="checkbox" checked={editScopes.includes(scope)} onChange={e => setEditScopes(old => e.target.checked ? [...old, scope] : old.filter(x => x !== scope))} /><span>{label}</span></label>)}</div></fieldset>
+            <div className="apiKeysActions"><button type="submit" disabled={busy || !editName.trim() || !editScopes.length}>Save changes</button><button type="button" onClick={() => setEditingId(null)}>Cancel</button></div>
+          </form>}
         </div>)}
       </div>
       <p className="apiKeysFootnote">Revoke a key before permanently deleting its record. Deleted keys cannot be recovered.</p>
