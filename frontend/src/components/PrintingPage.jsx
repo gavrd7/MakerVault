@@ -329,10 +329,12 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
           </div>
         </section>
         {(data?.locations || []).length > 0 && <section className="printingActionGroup" aria-label="Location Maker Tags">
-          <h3>Location Maker Tags</h3>
-          <div className="printingHeroActions">
-            {(data?.locations || []).map(location => <button type="button" key={location.id} onClick={() => onOpenMakerTags("location", location.id)}>Maker Tags · {location.name}</button>)}
-          </div>
+          <details>
+            <summary>Storage / printing locations · Maker Tags</summary>
+            <div className="printingHeroActions">
+              {(data?.locations || []).map(location => <button type="button" key={location.id} onClick={() => onOpenMakerTags("location", location.id)}>Maker Tags · {location.name}</button>)}
+            </div>
+          </details>
         </section>}
         <section className="printingActionGroup" aria-labelledby="printing-models-heading">
           <h3 id="printing-models-heading">Models &amp; print history</h3>
