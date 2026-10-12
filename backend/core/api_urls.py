@@ -2,6 +2,9 @@ from django.urls import path
 from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views, device_api_views
 
 urlpatterns = [
+    path("device/v1/records/search/", device_api_views.search_records, name="api-device-records-search"),
+    path("device/v1/tags/register/", device_api_views.register_tag, name="api-device-tag-register"),
+    path("device/v1/tags/assign/", device_api_views.assign_tag, name="api-device-tag-assign"),
     path("device/v1/me/", device_api_views.device_me, name="api-device-me"),
     path("device/v1/tags/resolve/", device_api_views.resolve_tag, name="api-device-tag-resolve"),
     path("account/api-keys/", api_key_views.api_keys, name="api-account-keys"),
