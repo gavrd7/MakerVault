@@ -110,6 +110,50 @@ class ApiKeyManagementTests(TestCase):
         self.assertEqual(csrf_client.delete(endpoint).status_code, 403)
         self.assertTrue(UserApiKey.objects.filter(pk=key_id).exists())
 
+
+    def test_edit_scopes_does_not_rotate_secret_or_reveal_prefix(self):
+        response = self.issue()
+        secret = response.json()["token"]
+        key_id = response.json()["item"]["id"]
+        path = f"/api/account/api-keys/{key_id}/"
+        changed = self.client.patch(
+            path, data=json.dumps({"name": "Revised terminal", "scopes": ["tags:write"]}),
+            content_type="application/json",
+        )
+        self.assertEqual(changed.status_code, 200, changed.content)
+        key = UserApiKey.objects.get(pk=key_id)
+        self.assertEqual(key.name, "Revised terminal")
+        self.assertEqual(key.scopes, ["tags:write"])
+        self.assertTrue(verify_token(secret, key.secret_digest))
+        self.assertNotIn("token", changed.json())
+        self.assertNotIn("prefix", changed.json()["item"])
+        self.assertNotIn("prefix", self.client.get("/api/account/api-keys/").json()["rows"][0])
+
+    def test_edit_scope_validation_owner_csrf_and_revocation(self):
+        response = self.issue()
+        key_id = response.json()["item"]["id"]
+        path = f"/api/account/api-keys/{key_id}/"
+        for payload in ({"scopes": []}, {"scopes": ["admin:*"]},
+                        {"scopes": ["tags:read", "tags:read"]},
+                        {"identifier": "bad"}, {"scopes": ["tags:read"], "revoked_at": None}):
+            with self.subTest(payload=payload):
+                result = self.client.patch(path, data=json.dumps(payload), content_type="application/json")
+                self.assertEqual(result.status_code, 400, result.content)
+        self.client.force_login(self.other)
+        self.assertEqual(
+            self.client.patch(path, data=json.dumps({"scopes": ["tags:read"]}), content_type="application/json").status_code, 404
+        )
+        self.client.force_login(self.owner)
+        csrf_client = Client(enforce_csrf_checks=True)
+        csrf_client.force_login(self.owner)
+        self.assertEqual(
+            csrf_client.patch(path, data=json.dumps({"scopes": ["tags:write"]}), content_type="application/json").status_code, 403
+        )
+        self.client.post(f"/api/account/api-keys/{key_id}/revoke/")
+        self.assertEqual(
+            self.client.patch(path, data=json.dumps({"scopes": ["tags:write"]}), content_type="application/json").status_code, 409
+        )
+
     def test_key_expires_and_disabled_account_loses_validity(self):
         response = self.issue(expires_in_days=None)
         key = UserApiKey.objects.get(pk=response.json()["item"]["id"])
