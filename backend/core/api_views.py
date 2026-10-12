@@ -6802,6 +6802,7 @@ def public_config(request):
             "change_printjob": request.user.has_perm("core.change_printjob"),
             "add_maker_tag": request.user.has_perm("core.add_makertag"),
             "change_maker_tag": request.user.has_perm("core.change_makertag"),
+            "delete_maker_tag": request.user.has_perm("core.delete_makertag"),
             "add_wiring_diagram": request.user.has_perm("core.add_wiringdiagram"),
             "change_wiring_diagram": request.user.has_perm("core.change_wiringdiagram"),
             "delete_wiring_diagram": request.user.has_perm("core.delete_wiringdiagram"),
