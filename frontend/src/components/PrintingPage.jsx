@@ -155,6 +155,10 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
   const [sourceNotice, setSourceNotice] = useState("");
   const [partJob, setPartJob] = useState(null);
   const [modal, setModal] = useState("");
+  const [editingLocation, setEditingLocation] = useState(null);
+  const [deletingLocation, setDeletingLocation] = useState(null);
+  const [locationError, setLocationError] = useState("");
+  const [locationBusy, setLocationBusy] = useState(false);
   const [manageModel, setManageModel] = useState(null);
   const [managePrinter, setManagePrinter] = useState(null);
   const [livePrinter, setLivePrinter] = useState(null);
@@ -534,12 +538,33 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       <div className="printingList">
         {(data?.locations || []).map(location => <article className="printingListRow" key={location.id}>
           <div><strong>{location.name}</strong><small>{location.kind_label || location.kind || "Storage / printing location"}</small></div>
-          <div className="spoolRowActions"><button type="button" onClick={() => { setModal(""); onOpenMakerTags("location", location.id); }}>Maker Tags</button></div>
+          <div className="spoolRowActions">
+            <button type="button" onClick={() => { setModal(""); onOpenMakerTags("location", location.id); }}>Maker Tags</button>
+            {config?.permissions?.change_printing_location && <button type="button" onClick={() => { setModal(""); setEditingLocation(location); }}>Edit</button>}
+            {config?.permissions?.change_printing_location && <button type="button" className="dangerButton" onClick={() => { setLocationError(""); setDeletingLocation(location); }}>Delete</button>}
+          </div>
         </article>)}
         {!data?.locations?.length && <div className="printingEmptyInline">No storage or printing locations yet.</div>}
       </div>
     </Modal>}
 
+    {editingLocation && <LocationModal location={editingLocation} onClose={() => setEditingLocation(null)} onSaved={async () => { setEditingLocation(null); await load(); }} />}
+    {deletingLocation && <Modal title="Delete storage / printing location?" onClose={() => { if (!locationBusy) setDeletingLocation(null); }}>
+      <p>Delete <strong>{deletingLocation.name}</strong>? This cannot be undone. Locations still referenced by printers, spools or printed parts may be protected by the database.</p>
+      {locationError && <div className="formError">{locationError}</div>}
+      <div className="formActions">
+        <button type="button" disabled={locationBusy} onClick={() => setDeletingLocation(null)}>Cancel</button>
+        <button type="button" disabled={locationBusy} className="dangerButton" onClick={async () => {
+          setLocationBusy(true); setLocationError("");
+          try {
+            await apiFetch("/api/printing/locations/" + deletingLocation.id + "/", { method: "DELETE" });
+            setDeletingLocation(null);
+            await load();
+          } catch (error) { setLocationError(error.message); }
+          finally { setLocationBusy(false); }
+        }}>{locationBusy ? "Deleting…" : "Delete permanently"}</button>
+      </div>
+    </Modal>}
     {modal === "printer" && <PrinterModal manufacturers={data?.printer_manufacturers || []} models={data?.printer_catalogue_models || []} locations={data?.locations || []} onClose={() => setModal("")} onSaved={saved} />}
     {modal === "location" && <LocationModal onClose={() => setModal("")} onSaved={saved} />}
     {modal === "filament" && <FilamentModal manufacturers={data?.filament_manufacturers || []} materials={data?.common_filament_materials || []} onClose={() => setModal("")} onSaved={saved} />}
@@ -931,8 +956,8 @@ function DeletePrintingRecordModal({ title, description, warning, endpoint, onCl
 }
 
 
-function LocationModal({ onClose, onSaved }) {
-  const [form, setForm] = useState({ name: "", kind: "storage", notes: "" });
+function LocationModal({ location = null, onClose, onSaved }) {
+  const [form, setForm] = useState({ name: location?.name || "", kind: location?.kind || "storage", notes: location?.notes || "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [deleteArmed, setDeleteArmed] = useState(false);
@@ -942,7 +967,7 @@ function LocationModal({ onClose, onSaved }) {
     event.preventDefault();
     setBusy(true); setError("");
     try {
-      await apiFetch("/api/printing/locations/", { method: "POST", body: form });
+      await apiFetch(location ? "/api/printing/locations/" + location.id + "/" : "/api/printing/locations/", { method: location ? "PATCH" : "POST", body: form });
       await onSaved();
     } catch (err) {
       setError(err.message);
@@ -951,7 +976,7 @@ function LocationModal({ onClose, onSaved }) {
     }
   }
 
-  return <Modal title="Add printing location" subtitle="Create reusable storage and printer locations for spools and owned machines." onClose={onClose}>
+  return <Modal title={location ? "Edit printing location" : "Add printing location"} subtitle="Manage reusable storage and printer locations for spools and owned machines." onClose={onClose}>
     <form className="formGrid" onSubmit={submit}>
       {error && <div className="formError full">{error}</div>}
       <label>Name<input required value={form.name} onChange={e => set("name", e.target.value)} placeholder="Workshop shelf A" /></label>
