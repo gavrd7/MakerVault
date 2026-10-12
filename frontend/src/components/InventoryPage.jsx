@@ -21,7 +21,7 @@ function formatDateTime(value) {
   }
 }
 
-export default function InventoryPage({ inventory, setInventory, boards, components, projects, config, refreshDashboard, openItemId = "", openToken = null }) {
+export default function InventoryPage({ inventory, setInventory, boards, components, projects, config, refreshDashboard, onOpenMakerTags = () => {}, openItemId = "", openToken = null }) {
   const [search, setSearch] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [selected, setSelected] = useState(null);
@@ -149,6 +149,7 @@ export default function InventoryPage({ inventory, setInventory, boards, compone
       loading={loadingDetail}
       projects={projects}
       canEdit={editable}
+      onOpenMakerTags={onOpenMakerTags}
       canDelete={Boolean(config?.permissions?.delete_inventory)}
       onClose={() => setSelected(null)}
       onDeleted={async deleted => {
@@ -178,7 +179,7 @@ export default function InventoryPage({ inventory, setInventory, boards, compone
   </div>;
 }
 
-function InventoryDetail({ item, loading, projects, canEdit, canDelete, onClose, onChanged, onDeleted }) {
+function InventoryDetail({ item, loading, projects, canEdit, canDelete, onOpenMakerTags, onClose, onChanged, onDeleted }) {
   const [editing, setEditing] = useState(false);
   const [releaseOpen, setReleaseOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -197,6 +198,7 @@ function InventoryDetail({ item, loading, projects, canEdit, canDelete, onClose,
       <h2>{item.name}</h2>
     </div>
     <div className="inventoryDetailActions">
+      <button type="button" onClick={() => onOpenMakerTags("inventory", item.id)}>Maker Tags</button>
       {canEdit && <button className="primary" onClick={() => setEditing(true)}>Edit</button>}
       {canEdit && Number(item.allocated_quantity || 0) > 0 && <button onClick={() => setReleaseOpen(true)}>Release from allocation</button>}
       {canDelete && <button

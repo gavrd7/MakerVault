@@ -97,7 +97,7 @@ function TagCaptureControls({ kind, value, onCapture, autoFocus = false, compact
   </div>;
 }
 
-export default function MakerTagsPage({ config, resolveToken = "", onResolveConsumed = () => {}, onChanged = () => {}, onOpenTarget = () => {} }) {
+export default function MakerTagsPage({ config, resolveToken = "", onResolveConsumed = () => {}, recordIntent = null, onRecordIntentConsumed = () => {}, onReturnToRecord = () => {}, onChanged = () => {}, onOpenTarget = () => {} }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
@@ -105,8 +105,12 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
   const [kind, setKind] = useState("");
   const [targetType, setTargetType] = useState("");
   const [addOpen, setAddOpen] = useState(false);
+  const [createTarget, setCreateTarget] = useState(null);
+  const [returnPending, setReturnPending] = useState(false);
   const [detail, setDetail] = useState(null);
   const [editTag, setEditTag] = useState(null);
+  const [deleteTagRow, setDeleteTagRow] = useState(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [resolveKind, setResolveKind] = useState("auto");
   const [resolveCode, setResolveCode] = useState("");
   const [resolveBusy, setResolveBusy] = useState(false);
@@ -143,6 +147,28 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
     return () => { cancelled = true; };
   }, [resolveToken]);
 
+  useEffect(() => {
+    if (!data || !recordIntent?.type || !recordIntent?.id) return;
+    setReturnPending(true);
+    const same = (data.rows || []).filter(tag => tag.target_type === recordIntent.type && String(tag.target_id) === String(recordIntent.id) && tag.status === "active");
+    setQuery("");
+    setKind("");
+    setStatus("active");
+    setTargetType(recordIntent.type);
+    if (same.length === 1) {
+      apiFetch("/api/tags/" + same[0].id + "/").then(result => setDetail(result.item)).catch(err => setError(err.message));
+    } else if (same.length > 1) {
+      setQuery("");
+      setError("Multiple active tags belong to this record. Select the one you want to view or print.");
+    } else if (config?.permissions?.add_maker_tag) {
+      setCreateTarget({ type: recordIntent.type, id: recordIntent.id });
+      setAddOpen(true);
+    } else {
+      setError("No active Maker Tag is assigned to this record.");
+    }
+    onRecordIntentConsumed();
+  }, [data, recordIntent?.token]);
+
   const rows = useMemo(() => {
     const term = query.trim().toLowerCase();
     return (data?.rows || []).filter(item => {
@@ -160,6 +186,37 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
 
   const printableRows = rows.filter(tag => tag.kind === "qr" && tag.status === "active");
   const selectedPrintableRows = printableRows.filter(tag => selectedTagIds.includes(String(tag.id)));
+
+  function closeRecordTag() {
+    setDetail(null);
+    setAddOpen(false);
+    setEditTag(null);
+    setCreateTarget(null);
+    if (returnPending) { setReturnPending(false); onReturnToRecord(); }
+  }
+
+  async function deleteFromList() {
+    if (!deleteTagRow || deleteBusy) return;
+    setDeleteBusy(true);
+    setError("");
+    try {
+      await apiFetch("/api/tags/" + deleteTagRow.id + "/", { method: "DELETE" });
+      setDeleteTagRow(null);
+      await load();
+      await onChanged();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
+  async function deleted() {
+    setDetail(null);
+    await load();
+    await onChanged();
+    if (returnPending) closeRecordTag();
+  }
 
   async function changed(item) {
     setAddOpen(false);
@@ -222,6 +279,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
 
     <section className="panel tagLibrary">
       <div className="tagToolbar">
+        {returnPending && <button type="button" onClick={closeRecordTag}>← Back to record</button>}
         <div>
           <strong>{data?.rows?.length || 0} Maker Tag{data?.rows?.length === 1 ? "" : "s"}</strong>
           <small>{rows.length} shown</small>
@@ -269,17 +327,26 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
               } catch (err) { setError(err.message); }
             }}>View</button>
             {config?.permissions?.change_maker_tag && <button onClick={() => setEditTag(tag)}>Edit</button>}
+            {config?.permissions?.delete_maker_tag && <button type="button" className="dangerButton" onClick={() => setDeleteTagRow(tag)}>Delete</button>}
           </div>
         </article>)}
         {!rows.length && <div className="projectEmpty"><strong>No matching Maker Tags.</strong><span>Create a tag or change the current filters.</span></div>}
       </div>
     </section>
 
+    {deleteTagRow && <Modal title="Permanently delete Maker Tag?" onClose={() => { if (!deleteBusy) setDeleteTagRow(null); }}>
+      <p>This will permanently delete <strong>{deleteTagRow.label || deleteTagRow.code}</strong> ({deleteTagRow.code}), including its assignment history. Printed QR codes and NFC links for this tag will stop resolving. A physical NFC/RFID chip is not erased. This action cannot be undone.</p>
+      <div className="formActions">
+        <button type="button" disabled={deleteBusy} onClick={() => setDeleteTagRow(null)}>Cancel</button>
+        <button type="button" className="dangerButton" disabled={deleteBusy} onClick={deleteFromList}>{deleteBusy ? "Deleting…" : "Delete permanently"}</button>
+      </div>
+    </Modal>}
     {batchOpen && <MakerTagBatchPrint tags={selectedPrintableRows} allMatching={printableRows} onClose={() => setBatchOpen(false)} />}
     {addOpen && <MakerTagForm
       title="Create Maker Tag"
       data={data}
-      onClose={() => setAddOpen(false)}
+      initialTarget={createTarget}
+      onClose={() => { if (returnPending) closeRecordTag(); else { setAddOpen(false); setCreateTarget(null); } }}
       onSaved={changed}
     />}
 
@@ -287,14 +354,16 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
       title={"Edit Maker Tag · " + (editTag.label || editTag.code)}
       data={data}
       tag={editTag}
-      onClose={() => setEditTag(null)}
+      onClose={() => { if (returnPending) closeRecordTag(); else setEditTag(null); }}
       onSaved={changed}
     />}
 
     {detail && <MakerTagDetail
       tag={detail}
       canEdit={Boolean(config?.permissions?.change_maker_tag)}
-      onClose={() => setDetail(null)}
+      canDelete={Boolean(config?.permissions?.delete_maker_tag)}
+      onDeleted={deleted}
+      onClose={closeRecordTag}
       onEdit={() => { setEditTag(detail); setDetail(null); }}
       onChanged={changed}
       onOpenTarget={() => onOpenTarget(detail)}
@@ -376,13 +445,13 @@ function MakerTagPrintable({ tag, size, qr, fields, preview = false }) {
   </div>;
 }
 
-function MakerTagForm({ title, data, tag = null, onClose, onSaved }) {
+function MakerTagForm({ title, data, tag = null, initialTarget = null, onClose, onSaved }) {
   const [form, setForm] = useState({
     kind: tag?.kind || "qr",
     code: tag?.code || "",
     label: tag?.label || "",
-    target_type: tag?.target_type || "inventory",
-    target_id: tag?.target_id || "",
+    target_type: tag?.target_type || initialTarget?.type || "inventory",
+    target_id: tag?.target_id || initialTarget?.id || "",
     notes: tag?.notes || "",
     status: tag?.status || "active",
     technology: tag?.technology || tag?.metadata?.technology || "",
@@ -396,7 +465,7 @@ function MakerTagForm({ title, data, tag = null, onClose, onSaved }) {
   const targetRows = currentGroup?.rows || [];
 
   useEffect(() => {
-    if (form.target_id && targetRows.some(row => row.id === form.target_id)) return;
+    if (form.target_id && targetRows.some(row => String(row.id) === String(form.target_id))) return;
     setForm(current => ({ ...current, target_id: targetRows[0]?.id || "" }));
   }, [form.target_type, targetRows.length]);
 
@@ -471,7 +540,7 @@ function MakerTagForm({ title, data, tag = null, onClose, onSaved }) {
   </Modal>;
 }
 
-function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged, onOpenTarget }) {
+function MakerTagDetail({ tag, canEdit, canDelete, onDeleted, onClose, onEdit, onChanged, onOpenTarget }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const qrWrap = useRef(null);
@@ -487,6 +556,20 @@ function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged, onOpenTarget
   const safeFormat = { width: Math.min(190, Math.max(12, Number(selectedFormat.width) || 40)), height: Math.min(260, Math.max(12, Number(selectedFormat.height) || 30)), qr: Math.min(120, Math.max(10, Number(selectedFormat.qr) || 20)) };
   const qrSize = Math.min(safeFormat.qr, safeFormat.width - 4, safeFormat.height - 4);
   const scanUrl = typeof window !== "undefined" ? window.location.origin + tag.scan_path : tag.scan_path;
+
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  async function deleteTag() {
+    setBusy(true); setNotice("");
+    try {
+      await apiFetch("/api/tags/" + tag.id + "/", { method: "DELETE" });
+      await onDeleted();
+    } catch (err) {
+      setNotice(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function setStatus(status) {
     setBusy(true); setNotice("");
@@ -614,10 +697,18 @@ function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged, onOpenTarget
     <div className="formActions">
       {tag.target && <button className="primary" onClick={onOpenTarget}>Open target</button>}
       {canEdit && <button onClick={onEdit}>Edit / reassign</button>}
+      {canDelete && <button className="dangerButton" disabled={busy} onClick={() => setConfirmDelete(true)}>Delete tag</button>}
       {canEdit && (tag.status === "active"
         ? <button className="dangerButton" disabled={busy} onClick={() => setStatus("retired")}>Retire tag</button>
         : <button className="primary" disabled={busy} onClick={() => setStatus("active")}>Reactivate tag</button>)}
     </div>
+    {confirmDelete && <Modal title="Permanently delete Maker Tag?" onClose={() => setConfirmDelete(false)}>
+      <p>This permanently removes <strong>{tag.label || tag.code}</strong>, its assignment history and its QR/NFC identity in MakerVault. Any printed QR codes or written NFC links for this tag will stop resolving. This cannot be undone.</p>
+      <div className="formActions">
+        <button type="button" onClick={() => setConfirmDelete(false)} disabled={busy}>Cancel</button>
+        <button type="button" className="dangerButton" onClick={deleteTag} disabled={busy}>{busy ? "Deleting…" : "Delete permanently"}</button>
+      </div>
+    </Modal>}
   </Modal>
 
     {tag.kind === "qr" && typeof document !== "undefined" && createPortal(

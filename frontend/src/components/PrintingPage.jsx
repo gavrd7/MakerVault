@@ -149,12 +149,16 @@ function newestGeometryAnalysis(model) {
   return null;
 }
 
-export default function PrintingPage({ config, projects, searchTarget = null, onOpenConsumed }) {
+export default function PrintingPage({ config, projects, searchTarget = null, onOpenConsumed, onOpenMakerTags = () => {}, onModelLibraryBack = null }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [sourceNotice, setSourceNotice] = useState("");
   const [partJob, setPartJob] = useState(null);
   const [modal, setModal] = useState("");
+  const [editingLocation, setEditingLocation] = useState(null);
+  const [deletingLocation, setDeletingLocation] = useState(null);
+  const [locationError, setLocationError] = useState("");
+  const [locationBusy, setLocationBusy] = useState(false);
   const [manageModel, setManageModel] = useState(null);
   const [managePrinter, setManagePrinter] = useState(null);
   const [livePrinter, setLivePrinter] = useState(null);
@@ -249,6 +253,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       onOpenModels={() => setWorkspaceView("models")}
       targetReelId={searchTarget?.type === "reusable_spools" ? searchTarget.id : ""}
       targetToken={searchTarget?.token}
+      onOpenMakerTags={onOpenMakerTags}
       models={data?.models || []}
       spools={data?.spools || []}
       locations={data?.locations || []}
@@ -277,6 +282,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
 
   if (workspaceView === "spools") {
     return <SpoolInventoryPage
+      onOpenMakerTags={onOpenMakerTags}
       spools={data?.spools || []}
       filaments={data?.filaments || []}
       locations={data?.locations || []}
@@ -302,7 +308,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       canChangeModel={canChangeModel}
       canDeleteModel={canDeleteModel}
       canUpload={Boolean(config?.permissions?.add_file)}
-      onBack={() => setWorkspaceView("overview")}
+      onBack={() => { if (onModelLibraryBack && searchTarget?.type === "models") onModelLibraryBack(); else setWorkspaceView("overview"); }}
       onChanged={load}
       searchTarget={searchTarget}
     />;
@@ -423,6 +429,9 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
                     {printer.installed_multi_material_label && <Badge>{printer.installed_multi_material_label}</Badge>}
                     {printer.multi_material_installed && <Badge>{printer.slots.length} slots</Badge>}
                   </div>
+                  <div className="printingPrinterActions" aria-label={"Actions for " + printer.name}>
+                    <button className="printingPrinterAction" type="button" onClick={() => onOpenMakerTags("printer", printer.id)}>Maker Tags</button>
+                  </div>
                   {canChangePrinter && <div className="printingPrinterActions" aria-label={"Actions for " + printer.name}>
                     <button className="printingPrinterAction printingPrinterActionLive" type="button" onClick={() => setLivePrinter(printer)}>Live monitor</button>
                     <button className="printingPrinterAction" type="button" onClick={() => setCameraSetup({ printerId: printer.id })}>Camera setup</button>
@@ -506,8 +515,60 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       </div>
     </section>}
 
-    <PrintedPartsSection config={config} projects={projects || []} createJob={partJob} onCreateConsumed={() => setPartJob(null)} focusId={searchTarget?.type === "printed_parts" ? searchTarget.id : ""} refreshToken={data} />
+    <PrintedPartsSection config={config} projects={projects || []} onOpenMakerTags={onOpenMakerTags} createJob={partJob} onCreateConsumed={() => setPartJob(null)} focusId={searchTarget?.type === "printed_parts" ? searchTarget.id : ""} refreshToken={data} />
 
+    <section className="panel printingSection">
+      <div className="panelHead">
+        <div><h3>Storage / printing locations</h3><p>Locations for printers, spools and printed parts.</p></div>
+        <div className="printingHeroActions">
+          {canAddLocation && <button type="button" onClick={() => setModal("location")}>Add location</button>}
+          <button type="button" onClick={() => setModal("locationsList")}>View all {data?.locations?.length || 0}</button>
+        </div>
+      </div>
+      <div className="printingList">
+        {(data?.locations || []).slice(0, 3).map(location => <article className="printingListRow" key={location.id}>
+          <div><strong>{location.name}</strong><small>{location.kind_label || location.kind || "Storage / printing location"}</small></div>
+          <div className="spoolRowActions">
+            <button type="button" onClick={() => onOpenMakerTags("location", location.id)}>Maker Tags</button>
+            {config?.permissions?.change_printing_location && <button type="button" onClick={() => setEditingLocation(location)}>Edit</button>}
+            {config?.permissions?.change_printing_location && <button type="button" className="dangerButton" onClick={() => { setLocationError(""); setDeletingLocation(location); }}>Delete</button>}
+          </div>
+        </article>)}
+        {!data?.locations?.length && <div className="printingEmptyInline">No storage or printing locations yet.</div>}
+      </div>
+    </section>
+
+    {modal === "locationsList" && <Modal title="Storage / printing locations" subtitle="All registered locations and their Maker Tag shortcuts." wide onClose={() => setModal("")}>
+      <div className="printingList">
+        {(data?.locations || []).map(location => <article className="printingListRow" key={location.id}>
+          <div><strong>{location.name}</strong><small>{location.kind_label || location.kind || "Storage / printing location"}</small></div>
+          <div className="spoolRowActions">
+            <button type="button" onClick={() => { setModal(""); onOpenMakerTags("location", location.id); }}>Maker Tags</button>
+            {config?.permissions?.change_printing_location && <button type="button" onClick={() => { setModal(""); setEditingLocation(location); }}>Edit</button>}
+            {config?.permissions?.change_printing_location && <button type="button" className="dangerButton" onClick={() => { setLocationError(""); setDeletingLocation(location); }}>Delete</button>}
+          </div>
+        </article>)}
+        {!data?.locations?.length && <div className="printingEmptyInline">No storage or printing locations yet.</div>}
+      </div>
+    </Modal>}
+
+    {editingLocation && <LocationModal location={editingLocation} onClose={() => setEditingLocation(null)} onSaved={async () => { setEditingLocation(null); await load(); }} />}
+    {deletingLocation && <Modal title="Delete storage / printing location?" onClose={() => { if (!locationBusy) setDeletingLocation(null); }}>
+      <p>Delete <strong>{deletingLocation.name}</strong>? This cannot be undone. Locations still referenced by printers, spools or printed parts may be protected by the database.</p>
+      {locationError && <div className="formError">{locationError}</div>}
+      <div className="formActions">
+        <button type="button" disabled={locationBusy} onClick={() => setDeletingLocation(null)}>Cancel</button>
+        <button type="button" disabled={locationBusy} className="dangerButton" onClick={async () => {
+          setLocationBusy(true); setLocationError("");
+          try {
+            await apiFetch("/api/printing/locations/" + deletingLocation.id + "/", { method: "DELETE" });
+            setDeletingLocation(null);
+            await load();
+          } catch (error) { setLocationError(error.message); }
+          finally { setLocationBusy(false); }
+        }}>{locationBusy ? "Deleting…" : "Delete permanently"}</button>
+      </div>
+    </Modal>}
     {modal === "printer" && <PrinterModal manufacturers={data?.printer_manufacturers || []} models={data?.printer_catalogue_models || []} locations={data?.locations || []} onClose={() => setModal("")} onSaved={saved} />}
     {modal === "location" && <LocationModal onClose={() => setModal("")} onSaved={saved} />}
     {modal === "filament" && <FilamentModal manufacturers={data?.filament_manufacturers || []} materials={data?.common_filament_materials || []} onClose={() => setModal("")} onSaved={saved} />}
@@ -581,7 +642,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
   </div>;
 }
 
-function SpoolInventoryPage({ spools, filaments, locations, printers, currency, canAddSpool, canChangeSpool, canDeleteSpool, canChangeFilament, onBack, onChanged, searchTarget = null }) {
+function SpoolInventoryPage({ onOpenMakerTags, spools, filaments, locations, printers, currency, canAddSpool, canChangeSpool, canDeleteSpool, canChangeFilament, onBack, onChanged, searchTarget = null }) {
   const [query, setQuery] = useState("");
 
   useEffect(() => {
@@ -639,6 +700,7 @@ function SpoolInventoryPage({ spools, filaments, locations, printers, currency, 
             </Badge>
             <Badge>{spool.status_label || spool.status}</Badge>
             {(spool.external_links || []).map(link => <Badge key={link.id}>{link.provider_label}</Badge>)}
+            <button type="button" onClick={() => onOpenMakerTags("spool", spool.id)}>Maker Tags</button>
             <button type="button" onClick={() => setDetailFilament(filaments.find(item => item.id === spool.filament_id) || null)}>Filament details</button>
             {canChangeSpool && <button type="button" onClick={() => setManageSpool(spool)}>RFID / identity</button>}
             {canChangeSpool && <button type="button" onClick={() => setDryingSpool(spool)}>Drying</button>}
@@ -898,8 +960,8 @@ function DeletePrintingRecordModal({ title, description, warning, endpoint, onCl
 }
 
 
-function LocationModal({ onClose, onSaved }) {
-  const [form, setForm] = useState({ name: "", kind: "storage", notes: "" });
+function LocationModal({ location = null, onClose, onSaved }) {
+  const [form, setForm] = useState({ name: location?.name || "", kind: location?.kind || "storage", notes: location?.notes || "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [deleteArmed, setDeleteArmed] = useState(false);
@@ -909,7 +971,7 @@ function LocationModal({ onClose, onSaved }) {
     event.preventDefault();
     setBusy(true); setError("");
     try {
-      await apiFetch("/api/printing/locations/", { method: "POST", body: form });
+      await apiFetch(location ? "/api/printing/locations/" + location.id + "/" : "/api/printing/locations/", { method: location ? "PATCH" : "POST", body: form });
       await onSaved();
     } catch (err) {
       setError(err.message);
@@ -918,7 +980,7 @@ function LocationModal({ onClose, onSaved }) {
     }
   }
 
-  return <Modal title="Add printing location" subtitle="Create reusable storage and printer locations for spools and owned machines." onClose={onClose}>
+  return <Modal title={location ? "Edit printing location" : "Add printing location"} subtitle="Manage reusable storage and printer locations for spools and owned machines." onClose={onClose}>
     <form className="formGrid" onSubmit={submit}>
       {error && <div className="formError full">{error}</div>}
       <label>Name<input required value={form.name} onChange={e => set("name", e.target.value)} placeholder="Workshop shelf A" /></label>
@@ -931,7 +993,7 @@ function LocationModal({ onClose, onSaved }) {
         <option value="other">Other</option>
       </select></label>
       <label className="full">Notes<textarea rows="3" value={form.notes} onChange={e => set("notes", e.target.value)} /></label>
-      <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Saving…" : "Add location"}</button></div>
+      <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Saving…" : location ? "Save changes" : "Add location"}</button></div>
     </form>
   </Modal>;
 }
@@ -1558,7 +1620,7 @@ function PrinterModal({ manufacturers, models, locations, onClose, onSaved }) {
 
 
 
-function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, models, spools, locations, filamentProducts, materialOptions, canAdd, canChange, canDelete, canAddDesign, canChangeDesign }) {
+function ReusableSpoolsPage({ onOpenMakerTags, onBack, onOpenModels, targetReelId, targetToken, models, spools, locations, filamentProducts, materialOptions, canAdd, canChange, canDelete, canAddDesign, canChangeDesign }) {
   const [designs, setDesigns] = useState([]);
   const [manufacturerDesigns, setManufacturerDesigns] = useState([]);
   const [catalogueQuery, setCatalogueQuery] = useState("");
@@ -1945,6 +2007,7 @@ function ReusableSpoolsPage({ onBack, onOpenModels, targetReelId, targetToken, m
             {(reel.assignment_history || []).slice(0, 3).map((event, i) => <small key={i}>{new Date(event.occurred_at).toLocaleDateString()} · {event.previous_spool_code || "Empty"} → {event.new_spool_code || "Empty"}</small>)}
           </div>
           <div className="spoolRowActions">
+            <button type="button" onClick={() => onOpenMakerTags("reusable_spool", reel.id)}>Maker Tags</button>
             {canChange && <button type="button" onClick={() => startReel(reel)}>Edit</button>}
             {canDelete && <button type="button" className="dangerButton" onClick={() => remove("reel", reel)}>Delete</button>}
           </div>
