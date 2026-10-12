@@ -109,6 +109,8 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
   const [returnPending, setReturnPending] = useState(false);
   const [detail, setDetail] = useState(null);
   const [editTag, setEditTag] = useState(null);
+  const [deleteTagRow, setDeleteTagRow] = useState(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [resolveKind, setResolveKind] = useState("auto");
   const [resolveCode, setResolveCode] = useState("");
   const [resolveBusy, setResolveBusy] = useState(false);
@@ -191,6 +193,22 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
     setEditTag(null);
     setCreateTarget(null);
     if (returnPending) { setReturnPending(false); onReturnToRecord(); }
+  }
+
+  async function deleteFromList() {
+    if (!deleteTagRow || deleteBusy) return;
+    setDeleteBusy(true);
+    setError("");
+    try {
+      await apiFetch("/api/tags/" + deleteTagRow.id + "/", { method: "DELETE" });
+      setDeleteTagRow(null);
+      await load();
+      await onChanged();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDeleteBusy(false);
+    }
   }
 
   async function deleted() {
@@ -309,12 +327,20 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
               } catch (err) { setError(err.message); }
             }}>View</button>
             {config?.permissions?.change_maker_tag && <button onClick={() => setEditTag(tag)}>Edit</button>}
+            {config?.permissions?.delete_maker_tag && <button type="button" className="dangerButton" onClick={() => setDeleteTagRow(tag)}>Delete</button>}
           </div>
         </article>)}
         {!rows.length && <div className="projectEmpty"><strong>No matching Maker Tags.</strong><span>Create a tag or change the current filters.</span></div>}
       </div>
     </section>
 
+    {deleteTagRow && <Modal title="Permanently delete Maker Tag?" onClose={() => { if (!deleteBusy) setDeleteTagRow(null); }}>
+      <p>This will permanently delete <strong>{deleteTagRow.label || deleteTagRow.code}</strong> ({deleteTagRow.code}), including its assignment history. Printed QR codes and NFC links for this tag will stop resolving. A physical NFC/RFID chip is not erased. This action cannot be undone.</p>
+      <div className="formActions">
+        <button type="button" disabled={deleteBusy} onClick={() => setDeleteTagRow(null)}>Cancel</button>
+        <button type="button" className="dangerButton" disabled={deleteBusy} onClick={deleteFromList}>{deleteBusy ? "Deleting…" : "Delete permanently"}</button>
+      </div>
+    </Modal>}
     {batchOpen && <MakerTagBatchPrint tags={selectedPrintableRows} allMatching={printableRows} onClose={() => setBatchOpen(false)} />}
     {addOpen && <MakerTagForm
       title="Create Maker Tag"
