@@ -193,6 +193,13 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
     if (returnPending) { setReturnPending(false); onReturnToRecord(); }
   }
 
+  async function deleted() {
+    setDetail(null);
+    await load();
+    await onChanged();
+    if (returnPending) closeRecordTag();
+  }
+
   async function changed(item) {
     setAddOpen(false);
     setEditTag(null);
@@ -328,6 +335,8 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
     {detail && <MakerTagDetail
       tag={detail}
       canEdit={Boolean(config?.permissions?.change_maker_tag)}
+      canDelete={Boolean(config?.permissions?.delete_maker_tag)}
+      onDeleted={deleted}
       onClose={closeRecordTag}
       onEdit={() => { setEditTag(detail); setDetail(null); }}
       onChanged={changed}
@@ -505,7 +514,7 @@ function MakerTagForm({ title, data, tag = null, initialTarget = null, onClose, 
   </Modal>;
 }
 
-function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged, onOpenTarget }) {
+function MakerTagDetail({ tag, canEdit, canDelete, onDeleted, onClose, onEdit, onChanged, onOpenTarget }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const qrWrap = useRef(null);
@@ -521,6 +530,20 @@ function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged, onOpenTarget
   const safeFormat = { width: Math.min(190, Math.max(12, Number(selectedFormat.width) || 40)), height: Math.min(260, Math.max(12, Number(selectedFormat.height) || 30)), qr: Math.min(120, Math.max(10, Number(selectedFormat.qr) || 20)) };
   const qrSize = Math.min(safeFormat.qr, safeFormat.width - 4, safeFormat.height - 4);
   const scanUrl = typeof window !== "undefined" ? window.location.origin + tag.scan_path : tag.scan_path;
+
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  async function deleteTag() {
+    setBusy(true); setNotice("");
+    try {
+      await apiFetch("/api/tags/" + tag.id + "/", { method: "DELETE" });
+      await onDeleted();
+    } catch (err) {
+      setNotice(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function setStatus(status) {
     setBusy(true); setNotice("");
@@ -648,10 +671,18 @@ function MakerTagDetail({ tag, canEdit, onClose, onEdit, onChanged, onOpenTarget
     <div className="formActions">
       {tag.target && <button className="primary" onClick={onOpenTarget}>Open target</button>}
       {canEdit && <button onClick={onEdit}>Edit / reassign</button>}
+      {canDelete && <button className="dangerButton" disabled={busy} onClick={() => setConfirmDelete(true)}>Delete tag</button>}
       {canEdit && (tag.status === "active"
         ? <button className="dangerButton" disabled={busy} onClick={() => setStatus("retired")}>Retire tag</button>
         : <button className="primary" disabled={busy} onClick={() => setStatus("active")}>Reactivate tag</button>)}
     </div>
+    {confirmDelete && <Modal title="Permanently delete Maker Tag?" onClose={() => setConfirmDelete(false)}>
+      <p>This permanently removes <strong>{tag.label || tag.code}</strong>, its assignment history and its QR/NFC identity in MakerVault. Any printed QR codes or written NFC links for this tag will stop resolving. This cannot be undone.</p>
+      <div className="formActions">
+        <button type="button" onClick={() => setConfirmDelete(false)} disabled={busy}>Cancel</button>
+        <button type="button" className="dangerButton" onClick={deleteTag} disabled={busy}>{busy ? "Deleting…" : "Delete permanently"}</button>
+      </div>
+    </Modal>}
   </Modal>
 
     {tag.kind === "qr" && typeof document !== "undefined" && createPortal(
