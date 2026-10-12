@@ -1,5 +1,6 @@
 /* API key editor: avoid inheriting generic Settings label/fieldset grid rules. */
-.apiKeysPanel { display: grid; gap: 22px; min-width: 0; }
+.apiKeysPanel { display: grid; gap: 22px; min-width: 0; padding: 22px 24px 26px; box-sizing: border-box; }
+@media (max-width: 640px) { .apiKeysPanel { padding: 16px 14px 22px; } }
 .apiKeysPanel h4, .apiKeysPanel p { margin-block: 0; }
 .apiKeysIntro { display: grid; gap: 8px; }
 .apiKeysForm { display: grid; gap: 18px; min-width: 0; }
