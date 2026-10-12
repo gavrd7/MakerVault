@@ -427,7 +427,7 @@ export default function SettingsPage({ config, onBackupStarted }) {
 
     {activeTab === "account" && <section className="panel settingsPanel">
       <div className="panelHead"><div><h3>User Account</h3><p>Manage your email, password, two-factor authentication and connected accounts without leaving Settings.</p></div></div>
-      <div className="settingsAccountLinks settingsAccountSelector" role="group" aria-label="User account options">
+      <div className="settingsAccountLinks settingsAccountSelector" role="group" aria-label="User account options" style={{ padding: "14px 20px", boxSizing: "border-box" }}>
         {[
           ["Email addresses", "/accounts/email/"],
           ["Change password", "/accounts/password/change/"],
