@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.2.2 — Release preparation
+
+- Added direct Maker Tag shortcuts from inventory, projects, filament spools, reusable spools, printers, printed parts and printing/storage locations. Existing tags open directly; creation is prefilled with the target record.
+- Added contextual return navigation from Maker Tag details to the originating record and 3D Printing subsection.
+- Added permission-controlled deletion of QR, NFC and RFID Maker Tags, with confirmation and owner-scoped backend checks. Physical RFID/NFC media and separately recorded spool RFID UIDs are not erased.
+- Added a dedicated Model Library navigation entry, preserving access from 3D Printing and fixing overview navigation between the two.
+- Redesigned printing/storage locations with a compact overview, full-list modal, and Maker Tags, Edit and Delete actions in both views.
+
+**Release gate:** Merge and validate #138, pass CI, then create the v1.2.2 tag and publish the matching GHCR image.
+
+
 ## v1.2.1 — Release preparation
 
 - Expanded Maker Tags QR label printing with Compact (50 × 30 mm), Standard (70 × 50 mm), Large (100 × 70 mm), and custom label and QR dimensions.
