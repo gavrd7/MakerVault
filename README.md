@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <strong>Current stable release: v1.2.1</strong>
+  <strong>Current stable release: v1.2.2</strong>
 </p>
 
 <p align="center">
@@ -22,7 +22,7 @@
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
-**What’s new in v1.2.1:** Maker Tags now offer Compact, Standard, Large and custom-sized QR labels, selectable text fields, isolated single-label printing, batch printing for selected or all matching active QR tags, and filtering by target entity type. v1.2.0's reusable-spool catalogue and inventory improvements remain included.
+**What’s new in v1.2.2:** direct Maker Tag shortcuts from inventory, projects, filament and reusable spools, printers, printed parts and storage locations; contextual return navigation; permission-controlled QR/NFC/RFID tag deletion; a dedicated Model Library navigation entry; and improved storage-location management.
 
 
 MakerVault keeps the practical parts of a workshop connected: what you own, what a build needs, which files and wiring belong to it, which model revision you printed, and where the finished parts ended up.
