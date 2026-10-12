@@ -989,7 +989,7 @@ function LocationModal({ location = null, onClose, onSaved }) {
         <option value="other">Other</option>
       </select></label>
       <label className="full">Notes<textarea rows="3" value={form.notes} onChange={e => set("notes", e.target.value)} /></label>
-      <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Saving…" : "Add location"}</button></div>
+      <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Saving…" : location ? "Save changes" : "Add location"}</button></div>
     </form>
   </Modal>;
 }
