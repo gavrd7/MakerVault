@@ -2965,73 +2965,19 @@ a:focus-visible,
   .tagRowSelectable .tagRowActions{grid-column:3;justify-content:flex-start;flex-wrap:wrap}
 }
 
-/* Settings content gutters: retain full-bleed panel headers and separators,
-   but keep navigation and inner cards clear of the outer panel border. */
-.settingsPanel > .settingsAccountSelector {
-  margin: 14px 20px 18px;
-}
-.settingsHttpsPanel > :not(.panelHead),
-.backupStack > .settingsPanel > :not(.panelHead) {
-  margin-left: 20px;
-  margin-right: 20px;
-}
-.settingsHttpsPanel > :last-child,
-.backupStack > .settingsPanel > :last-child {
-  margin-bottom: 20px;
-}
-@media (max-width: 640px) {
-  .settingsPanel > .settingsAccountSelector {
-    margin-left: 14px;
-    margin-right: 14px;
-  }
-  .settingsHttpsPanel > :not(.panelHead),
-  .backupStack > .settingsPanel > :not(.panelHead) {
-    margin-left: 14px;
-    margin-right: 14px;
-  }
-  .settingsHttpsPanel > :last-child,
-  .backupStack > .settingsPanel > :last-child {
-    margin-bottom: 14px;
-  }
-}
-
-/* Settings final pass: inset body content while allowing full-width headers.
-   These declarations supersede earlier child-margin-only spacing. */
-.settingsHttpsPanel { padding: 0 20px 20px; }
-.settingsHttpsPanel > .panelHead { margin: 0 -20px 20px; }
-.settingsHttpsPanel > :not(.panelHead) { margin-left: 0; margin-right: 0; }
-.backupStack > .settingsPanel { padding: 0 20px 20px; }
-.backupStack > .settingsPanel > .panelHead { margin: 0 -20px 20px; }
-.backupStack > .settingsPanel > :not(.panelHead) { margin-left: 0; margin-right: 0; }
-.backupStack > .settingsPanel > .backupSummaryGrid { margin-top: 0; margin-bottom: 18px; }
+/* Settings page body spacing: shared account and backup panels. */
+.settingsPanel > .settingsAccountSelector { margin: 14px 20px 18px; }
 .settingsPanel > .settingsCallout { margin-left: 20px; margin-right: 20px; }
 .settingsPanel > .settingsAccountFrame { width: calc(100% - 40px); margin: 0 20px 20px; }
+.backupStack > .settingsPanel { padding: 0 20px 20px; }
+.backupStack > .settingsPanel > .panelHead { margin: 0 -20px 20px; }
+.backupStack > .settingsPanel > .backupSummaryGrid { margin-top: 0; margin-bottom: 18px; }
 @media (max-width: 640px) {
-  .settingsHttpsPanel, .backupStack > .settingsPanel { padding: 0 14px 14px; }
-  .settingsHttpsPanel > .panelHead, .backupStack > .settingsPanel > .panelHead { margin: 0 -14px 14px; }
+  .settingsPanel > .settingsAccountSelector { margin-left: 14px; margin-right: 14px; }
   .settingsPanel > .settingsCallout { margin-left: 14px; margin-right: 14px; }
   .settingsPanel > .settingsAccountFrame { width: calc(100% - 28px); margin: 0 14px 14px; }
-}
-
-/* HTTPS page spacing: restore intentional gaps between adjacent sections and
-   keep all controls/cards away from the panel's outer border. */
-.settingsHttpsPanel { padding-inline: 22px; padding-bottom: 24px; }
-.settingsHttpsPanel > .panelHead { margin-inline: -22px; margin-bottom: 20px; }
-.settingsHttpsPanel > .httpsModeGrid { margin-top: 0; margin-bottom: 20px; column-gap: 14px; row-gap: 14px; }
-.settingsHttpsPanel > .httpsGenerateGrid { margin-top: 0; margin-bottom: 20px; column-gap: 14px; row-gap: 14px; align-items: stretch; }
-.settingsHttpsPanel > .settingsCallout { margin-top: 0; margin-bottom: 20px; }
-.settingsHttpsPanel > .httpsSetupFlow { margin-top: 0; margin-bottom: 22px; column-gap: 14px; row-gap: 14px; }
-.settingsHttpsPanel > .httpsCertGrid { margin-top: 0; margin-bottom: 20px; column-gap: 14px; row-gap: 14px; }
-.settingsHttpsPanel > .httpsSecondaryActions { margin-top: 0; margin-bottom: 18px; }
-.settingsHttpsPanel > :last-child { margin-bottom: 0; }
-@media (max-width: 640px) {
-  .settingsHttpsPanel { padding-inline: 14px; padding-bottom: 18px; }
-  .settingsHttpsPanel > .panelHead { margin-inline: -14px; margin-bottom: 16px; }
-  .settingsHttpsPanel > .httpsModeGrid,
-  .settingsHttpsPanel > .httpsGenerateGrid,
-  .settingsHttpsPanel > .settingsCallout,
-  .settingsHttpsPanel > .httpsSetupFlow,
-  .settingsHttpsPanel > .httpsCertGrid { margin-bottom: 16px; }
+  .backupStack > .settingsPanel { padding: 0 14px 14px; }
+  .backupStack > .settingsPanel > .panelHead { margin: 0 -14px 14px; }
 }
 
 /* HTTPS layout uses an explicit body wrapper; old direct-child margin
