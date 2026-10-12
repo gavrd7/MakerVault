@@ -22,7 +22,6 @@ def _metadata(key):
     return {
         "id": str(key.id),
         "name": key.name,
-        "prefix": f"mvk_{key.identifier}",
         "scopes": key.scopes,
         "created_at": key.created_at.isoformat(),
         "expires_at": key.expires_at.isoformat() if key.expires_at else None,
@@ -105,3 +104,42 @@ def delete_api_key(request, key_id):
             return _error("Revoke this API key before deleting it.", 409)
         key.delete()
     return JsonResponse({"deleted": True})
+
+
+@login_required
+@require_http_methods(["PATCH"])
+def update_api_key(request, key_id):
+    """Update nonsecret metadata without rotating or revealing the credential."""
+    try:
+        payload = json.loads(request.body or b"{}")
+        if not isinstance(payload, dict) or not payload or set(payload) - {"name", "scopes"}:
+            return _error("Only key name and scopes may be updated.")
+        requested_scopes = (
+            list(validate_scopes(payload["scopes"])) if "scopes" in payload else None
+        )
+        requested_name = None
+        if "name" in payload:
+            requested_name = str(payload["name"] or "").strip()
+            if not 1 <= len(requested_name) <= 120:
+                return _error("Key name must contain 1–120 characters.")
+    except (ValueError, TypeError, UnicodeDecodeError):
+        return _error("Invalid key configuration.")
+
+    with transaction.atomic():
+        key = UserApiKey.objects.select_for_update().filter(
+            owner=request.user, pk=key_id,
+        ).first()
+        if key is None:
+            return _error("API key not found.", 404)
+        if not key.is_active():
+            return _error("Only active API keys can be edited.", 409)
+        changed = []
+        if requested_scopes is not None:
+            key.scopes = requested_scopes
+            changed.append("scopes")
+        if requested_name is not None:
+            key.name = requested_name
+            changed.append("name")
+        key.full_clean()
+        key.save(update_fields=changed + ["updated_at"])
+    return JsonResponse({"item": _metadata(key)})
