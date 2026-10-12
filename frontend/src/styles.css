@@ -2994,3 +2994,21 @@ a:focus-visible,
     margin-bottom: 14px;
   }
 }
+
+/* Settings final pass: inset body content while allowing full-width headers.
+   These declarations supersede earlier child-margin-only spacing. */
+.settingsHttpsPanel { padding: 0 20px 20px; }
+.settingsHttpsPanel > .panelHead { margin: 0 -20px 20px; }
+.settingsHttpsPanel > :not(.panelHead) { margin-left: 0; margin-right: 0; }
+.backupStack > .settingsPanel { padding: 0 20px 20px; }
+.backupStack > .settingsPanel > .panelHead { margin: 0 -20px 20px; }
+.backupStack > .settingsPanel > :not(.panelHead) { margin-left: 0; margin-right: 0; }
+.backupStack > .settingsPanel > .backupSummaryGrid { margin-top: 0; margin-bottom: 18px; }
+.settingsPanel > .settingsCallout { margin-left: 20px; margin-right: 20px; }
+.settingsPanel > .settingsAccountFrame { width: calc(100% - 40px); margin: 0 20px 20px; }
+@media (max-width: 640px) {
+  .settingsHttpsPanel, .backupStack > .settingsPanel { padding: 0 14px 14px; }
+  .settingsHttpsPanel > .panelHead, .backupStack > .settingsPanel > .panelHead { margin: 0 -14px 14px; }
+  .settingsPanel > .settingsCallout { margin-left: 14px; margin-right: 14px; }
+  .settingsPanel > .settingsAccountFrame { width: calc(100% - 28px); margin: 0 14px 14px; }
+}
