@@ -149,7 +149,7 @@ function newestGeometryAnalysis(model) {
   return null;
 }
 
-export default function PrintingPage({ config, projects, searchTarget = null, onOpenConsumed, onOpenMakerTags = () => {} }) {
+export default function PrintingPage({ config, projects, searchTarget = null, onOpenConsumed, onOpenMakerTags = () => {}, onModelLibraryBack = null }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [sourceNotice, setSourceNotice] = useState("");
@@ -304,7 +304,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       canChangeModel={canChangeModel}
       canDeleteModel={canDeleteModel}
       canUpload={Boolean(config?.permissions?.add_file)}
-      onBack={() => setWorkspaceView("overview")}
+      onBack={() => { if (onModelLibraryBack && searchTarget?.type === "models") onModelLibraryBack(); else setWorkspaceView("overview"); }}
       onChanged={load}
       searchTarget={searchTarget}
     />;
