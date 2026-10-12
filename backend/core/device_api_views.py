@@ -20,7 +20,7 @@ from .models import MakerTag, UserApiKey
 from .maker_tags import serialise_tag_target, resolve_tag_target, TARGETS, target_display
 from .api_views import _sync_rfid_tag_to_spool, _record_tag_event
 
-MAX_JSON_BYTES = 2048
+MAX_JSON_BYTES = 1024
 KINDS = {"nfc", "rfid"}
 
 
