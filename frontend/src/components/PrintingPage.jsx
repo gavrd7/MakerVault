@@ -528,7 +528,11 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       <div className="printingList">
         {(data?.locations || []).slice(0, 3).map(location => <article className="printingListRow" key={location.id}>
           <div><strong>{location.name}</strong><small>{location.kind_label || location.kind || "Storage / printing location"}</small></div>
-          <div className="spoolRowActions"><button type="button" onClick={() => onOpenMakerTags("location", location.id)}>Maker Tags</button></div>
+          <div className="spoolRowActions">
+            <button type="button" onClick={() => onOpenMakerTags("location", location.id)}>Maker Tags</button>
+            {config?.permissions?.change_printing_location && <button type="button" onClick={() => setEditingLocation(location)}>Edit</button>}
+            {config?.permissions?.change_printing_location && <button type="button" className="dangerButton" onClick={() => { setLocationError(""); setDeletingLocation(location); }}>Delete</button>}
+          </div>
         </article>)}
         {!data?.locations?.length && <div className="printingEmptyInline">No storage or printing locations yet.</div>}
       </div>
