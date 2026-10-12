@@ -1,7 +1,9 @@
 from django.urls import path
-from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery
+from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views
 
 urlpatterns = [
+    path("account/api-keys/", api_key_views.api_keys, name="api-account-keys"),
+    path("account/api-keys/<uuid:key_id>/revoke/", api_key_views.revoke_api_key, name="api-account-key-revoke"),
     path("printing/reusable-spool-suggestions/", reusable_spool_discovery.suggestions),
     path("printing/reusable-spool-suggestions/preview/", reusable_spool_discovery.preview_source),
     path("printing/reusable-spool-suggestions/<int:suggestion_id>/review/", reusable_spool_discovery.review_suggestion),
