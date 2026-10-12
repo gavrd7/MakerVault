@@ -2964,3 +2964,33 @@ a:focus-visible,
   .tagRow.tagRowSelectable{grid-template-columns:24px 54px minmax(0,1fr);gap:10px}
   .tagRowSelectable .tagRowActions{grid-column:3;justify-content:flex-start;flex-wrap:wrap}
 }
+
+/* Settings content gutters: retain full-bleed panel headers and separators,
+   but keep navigation and inner cards clear of the outer panel border. */
+.settingsPanel > .settingsAccountSelector {
+  margin: 14px 20px 18px;
+}
+.settingsHttpsPanel > :not(.panelHead),
+.backupStack > .settingsPanel > :not(.panelHead) {
+  margin-left: 20px;
+  margin-right: 20px;
+}
+.settingsHttpsPanel > :last-child,
+.backupStack > .settingsPanel > :last-child {
+  margin-bottom: 20px;
+}
+@media (max-width: 640px) {
+  .settingsPanel > .settingsAccountSelector {
+    margin-left: 14px;
+    margin-right: 14px;
+  }
+  .settingsHttpsPanel > :not(.panelHead),
+  .backupStack > .settingsPanel > :not(.panelHead) {
+    margin-left: 14px;
+    margin-right: 14px;
+  }
+  .settingsHttpsPanel > :last-child,
+  .backupStack > .settingsPanel > :last-child {
+    margin-bottom: 14px;
+  }
+}
