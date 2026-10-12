@@ -84,7 +84,7 @@ def resolve_tag(request):
         return _error("Provide kind and uid.", 400)
     kind = payload["kind"]
     uid = payload["uid"]
-    if kind not in KINDS or not isinstance(uid, str):
+    if not isinstance(kind, str) or kind not in KINDS or not isinstance(uid, str):
         return _error("Unsupported tag type or UID.", 400)
     compact = uid.replace(":", "").replace("-", "").replace(" ", "")
     if not (len(compact) in (8, 14, 20) and all(c in "0123456789abcdefABCDEF" for c in compact)):
