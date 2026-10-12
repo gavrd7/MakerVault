@@ -143,3 +143,11 @@ def update_api_key(request, key_id):
         key.full_clean()
         key.save(update_fields=changed + ["updated_at"])
     return JsonResponse({"item": _metadata(key)})
+
+
+@login_required
+@require_http_methods(["PATCH", "DELETE"])
+def api_key_detail(request, key_id):
+    if request.method == "PATCH":
+        return update_api_key(request, key_id)
+    return delete_api_key(request, key_id)
