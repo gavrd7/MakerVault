@@ -38,13 +38,28 @@ def allowance(group: str, identity: str, *, limit: int):
     return count <= limit, remaining
 
 
+def _auth_key(request):
+    address = request.META.get("REMOTE_ADDR") or "unknown"
+    digest = hashlib.sha256(address.encode("utf-8")).hexdigest()
+    return f"mv:device:throttle:v1:auth:{digest}:{int(time.time() // WINDOW_SECONDS)}"
+
+
 def failed_auth_blocked(request):
-    limit = _limit("MAKERVAULT_DEVICE_AUTH_FAILS_PER_MINUTE", 20)
-    return allowance("auth", request.META.get("REMOTE_ADDR") or "unknown", limit=limit)
+    try:
+        count = int(cache.get(_auth_key(request), 0))
+        return count >= _limit("MAKERVAULT_DEVICE_AUTH_FAILS_PER_MINUTE", 20), WINDOW_SECONDS - (int(time.time()) % WINDOW_SECONDS)
+    except Exception:
+        return None, WINDOW_SECONDS
 
 
 def record_failed_auth(request):
-    return failed_auth_blocked(request)
+    key = _auth_key(request)
+    try:
+        if not cache.add(key, 1, timeout=WINDOW_SECONDS + 5):
+            cache.incr(key)
+        return True
+    except Exception:
+        return False
 
 
 def device_request_allowed(identifier, *, write):
