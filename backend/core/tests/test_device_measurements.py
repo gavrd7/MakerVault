@@ -6,7 +6,7 @@ from django.contrib.auth.models import Permission
 from django.test import TestCase
 
 from core.device_api_keys import generate_token
-from core.models import DeviceWeightMeasurement, Project, UserApiKey
+from core.models import DeviceWeightMeasurement, Project, UserApiKey, FilamentProduct, Spool, ReusableSpoolDesign, ReusableSpool, MakerTag
 
 
 class DeviceMeasurementTests(TestCase):
@@ -129,3 +129,59 @@ class DeviceMeasurementTests(TestCase):
                                    HTTP_AUTHORIZATION="Bearer " + self.token)
         self.assertEqual(unknown.status_code, 200, unknown.content)
         self.assertFalse(unknown.json()["found"])
+
+    def test_spool_inventory_update_uses_linked_measured_tare(self):
+        from decimal import Decimal
+        filament = FilamentProduct.objects.create(name="PLA Weight Test", material="PLA")
+        spool = Spool.objects.create(
+            owner=self.owner, spool_id="SPL-WT-1", filament=filament,
+            remaining_weight_g=Decimal("300.00"),
+        )
+        design = ReusableSpoolDesign.objects.create(owner=self.owner, name="Refill reel", nominal_tare_g=Decimal("175.00"))
+        ReusableSpool.objects.create(
+            owner=self.owner, design=design, code="REEL-WT-1",
+            filament_spool=spool, measured_tare_g=Decimal("180.00"),
+        )
+        self.owner.user_permissions.add(Permission.objects.get(content_type__app_label="core", codename="change_spool"))
+        data = self.payload(target_type="spool", target_id=str(spool.pk),
+                            gross_weight_g="480.00", tare_weight_g="180.00",
+                            update_inventory=True)
+        preview = self.post("preview", data)
+        self.assertEqual(preview.status_code, 200, preview.content)
+        self.assertEqual(preview.json()["preview"]["known_tare"]["source"], "measured_reusable_spool")
+        self.assertEqual(preview.json()["preview"]["known_tare"]["weight_g"], "180.00")
+        confirmed = self.post("confirm", {**data, "preview_receipt": preview.json()["preview_receipt"]})
+        self.assertEqual(confirmed.status_code, 201, confirmed.content)
+        spool.refresh_from_db()
+        self.assertEqual(spool.remaining_weight_g, Decimal("300.00"))
+        record = DeviceWeightMeasurement.objects.get(request_id=data["request_id"])
+        self.assertTrue(record.updated_spool)
+        self.assertEqual(record.previous_spool_weight_g, Decimal("300.00"))
+
+    def test_spool_known_tare_mismatch_cannot_update_inventory(self):
+        from decimal import Decimal
+        filament = FilamentProduct.objects.create(name="PETG Weight Test", material="PETG")
+        spool = Spool.objects.create(owner=self.owner, spool_id="SPL-WT-2", filament=filament,
+                                     remaining_weight_g=Decimal("400.00"))
+        design = ReusableSpoolDesign.objects.create(owner=self.owner, name="Tare design",
+                                                     nominal_tare_g=Decimal("170.00"))
+        ReusableSpool.objects.create(owner=self.owner, design=design, code="REEL-WT-2", filament_spool=spool)
+        self.owner.user_permissions.add(Permission.objects.get(content_type__app_label="core", codename="change_spool"))
+        data = self.payload(target_type="spool", target_id=str(spool.pk),
+                            gross_weight_g="520.00", tare_weight_g="160.00", update_inventory=True)
+        self.assertEqual(self.post("confirm", data).status_code, 409)
+        spool.refresh_from_db()
+        self.assertEqual(spool.remaining_weight_g, Decimal("400.00"))
+        self.assertFalse(DeviceWeightMeasurement.objects.filter(target_id=spool.pk).exists())
+
+    def test_rfid_identifies_owned_spool_without_other_owner_leak(self):
+        filament = FilamentProduct.objects.create(name="RFID Test", material="PLA")
+        spool = Spool.objects.create(owner=self.owner, spool_id="SPL-WT-3", filament=filament,
+                                     rfid_uid="A1B2C3D4")
+        self.owner.user_permissions.add(Permission.objects.get(content_type__app_label="core", codename="view_spool"))
+        path = "/api/device/v1/spools/identify/"
+        result = self.client.post(path, data=json.dumps({"kind": "rfid", "uid": "A1:B2:C3:D4"}),
+                                  content_type="application/json",
+                                  HTTP_AUTHORIZATION="Bearer " + self.token)
+        self.assertEqual(result.status_code, 200, result.content)
+        self.assertEqual(result.json()["spool"]["id"], str(spool.pk))
