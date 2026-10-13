@@ -128,3 +128,17 @@ Firmware must **confirm target choice before calling either write endpoint**. No
 - Read-only searches return at most 50 results, scanning owner-owned candidates in batches; cursor pagination and indexed large-catalogue search are still future enhancements.
 - Registration/reassignment operate on MakerVault database records and must only occur after explicit on-device confirmation. Repeated identical operations are no-ops, with no extra history event.
 - **Remaining before release:** physical RC522/TFT/encoder integration, TLS certificate and hostname validation from the ESP32, network failure/retry behavior and a deployment-level rate-limit policy for bearer login failures and write calls. Neither rate limiting nor general-purpose device pairing is implemented by this PR.
+
+## Shared Redis device API throttles (PR #140)
+
+Device endpoints use MakerVault's configured shared Django Redis cache. Defaults are fixed 60-second windows:
+
+| Setting (environment variable) | Default | Key |
+| --- | ---: | --- |
+| `MAKERVAULT_DEVICE_AUTH_FAILS_PER_MINUTE` | 20 | `REMOTE_ADDR`, only invalid/revoked/expired/malformed bearer credentials |
+| `MAKERVAULT_DEVICE_READS_PER_MINUTE` | 120 | API key identifier, for read/lookup/search requests |
+| `MAKERVAULT_DEVICE_WRITES_PER_MINUTE` | 30 | API key identifier, for register/assign requests |
+
+Values may be configured with positive integers. HTTP **429** is returned when limits are exceeded, with a `Retry-After` header giving the seconds until the current window ends. The ESP32 should wait rather than retry immediately. When shared cache access fails, device requests fail closed with **503**, instead of bypassing throttling. Browser login and ordinary session API routes are unaffected.
+
+These are application-level controls and do not replace reverse-proxy request-size rules or a trusted proxy/client IP deployment policy. Authentication-failure limits use the direct `REMOTE_ADDR` value rather than untrusted forwarded headers: a shared proxy may cause multiple clients to share one budget. Configure the reverse proxy appropriately and validate the effective source address in the real deployment before relying on per-device IP isolation.
