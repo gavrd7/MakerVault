@@ -185,3 +185,59 @@ class DeviceMeasurementTests(TestCase):
                                   HTTP_AUTHORIZATION="Bearer " + self.token)
         self.assertEqual(result.status_code, 200, result.content)
         self.assertEqual(result.json()["spool"]["id"], str(spool.pk))
+
+    def test_stale_spool_preview_rejected_after_inventory_change(self):
+        from decimal import Decimal
+        filament = FilamentProduct.objects.create(name="Snapshot filament", material="PLA")
+        spool = Spool.objects.create(owner=self.owner, spool_id="SP-SNAPSHOT", filament=filament,
+                                     remaining_weight_g=Decimal("500.00"))
+        self.owner.user_permissions.add(Permission.objects.get(content_type__app_label="core", codename="change_spool"))
+        data = self.payload(target_type="spool", target_id=str(spool.pk),
+                            gross_weight_g="550.00", tare_weight_g="150.00", update_inventory=True)
+        preview = self.post("preview", data)
+        self.assertEqual(preview.status_code, 200, preview.content)
+        # Simulate another printer/device changing inventory before confirmation.
+        spool.remaining_weight_g = Decimal("420.00")
+        spool.save(update_fields=["remaining_weight_g", "updated_at"])
+        rejected = self.post("confirm", {**data, "preview_receipt": preview.json()["preview_receipt"]})
+        self.assertEqual(rejected.status_code, 409, rejected.content)
+        spool.refresh_from_db()
+        self.assertEqual(spool.remaining_weight_g, Decimal("420.00"))
+        self.assertFalse(DeviceWeightMeasurement.objects.filter(target_id=spool.pk).exists())
+        self.assertEqual(self.post("confirm", data).status_code, 201)
+
+    def test_two_previews_for_same_spool_second_becomes_stale(self):
+        from decimal import Decimal
+        filament = FilamentProduct.objects.create(name="Concurrent filament", material="PETG")
+        spool = Spool.objects.create(owner=self.owner, spool_id="SP-TWO", filament=filament,
+                                     remaining_weight_g=Decimal("500.00"))
+        self.owner.user_permissions.add(Permission.objects.get(content_type__app_label="core", codename="change_spool"))
+        first = self.payload(target_type="spool", target_id=str(spool.pk),
+                             gross_weight_g="540.00", tare_weight_g="140.00", update_inventory=True)
+        second = self.payload(target_type="spool", target_id=str(spool.pk),
+                              gross_weight_g="530.00", tare_weight_g="140.00", update_inventory=True)
+        first_preview = self.post("preview", first).json()["preview_receipt"]
+        second_preview = self.post("preview", second).json()["preview_receipt"]
+        self.assertEqual(self.post("confirm", {**first, "preview_receipt": first_preview}).status_code, 201)
+        rejected = self.post("confirm", {**second, "preview_receipt": second_preview})
+        self.assertEqual(rejected.status_code, 409, rejected.content)
+        spool.refresh_from_db()
+        self.assertEqual(spool.remaining_weight_g, Decimal("400.00"))
+        self.assertEqual(DeviceWeightMeasurement.objects.filter(target_id=spool.pk).count(), 1)
+        # Retrying the first confirmation cannot write inventory a second time.
+        retried = self.post("confirm", {**first, "preview_receipt": first_preview})
+        self.assertEqual(retried.status_code, 200, retried.content)
+
+    def test_preview_cannot_be_confirmed_with_different_device_key(self):
+        data = self.payload()
+        receipt = self.post("preview", data).json()["preview_receipt"]
+        issued = generate_token()
+        UserApiKey.objects.create(owner=self.owner, name="Other scale",
+                                  identifier=issued.identifier, secret_digest=issued.digest,
+                                  scopes=["spools:weight"])
+        response = self.client.post("/api/device/v1/measurements/confirm/",
+                                    data=json.dumps({**data, "preview_receipt": receipt}),
+                                    content_type="application/json",
+                                    HTTP_AUTHORIZATION="Bearer " + issued.plaintext)
+        self.assertEqual(response.status_code, 409, response.content)
+        self.assertEqual(DeviceWeightMeasurement.objects.count(), 0)
