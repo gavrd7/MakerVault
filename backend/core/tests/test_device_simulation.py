@@ -1,5 +1,7 @@
 """Software-only integration of independent RFID terminal and weigh station clients."""
 import json
+from unittest.mock import patch
+from django.core import signing
 from decimal import Decimal
 from uuid import uuid4
 
@@ -152,3 +154,57 @@ class SimulatedDeviceIntegrationTests(TestCase):
         }, self.scale_token)
         self.assertEqual(result.status_code, 403)
         self.assertEqual(MakerTag.objects.count(), 0)
+
+    def test_expired_preview_requires_new_preview_without_inventory_change(self):
+        reading = self.reading()
+        preview = self.preview(reading)
+        self.assertEqual(preview.status_code, 200, preview.content)
+        with patch("core.device_measurements.signing.loads",
+                   side_effect=signing.SignatureExpired("Expired test receipt")):
+            expired = self.confirm({**reading, "preview_receipt": preview.json()["preview_receipt"]})
+        self.assertEqual(expired.status_code, 409, expired.content)
+        self.spool.refresh_from_db()
+        self.assertEqual(self.spool.remaining_weight_g, Decimal("600.00"))
+        self.assertEqual(DeviceWeightMeasurement.objects.count(), 0)
+
+    def test_lost_confirmation_response_can_retry_safely(self):
+        reading = self.reading()
+        receipt = self.preview(reading).json()["preview_receipt"]
+        confirmed = {**reading, "preview_receipt": receipt}
+
+        def transport_drops_response():
+            # The API committed successfully, but its response never reached the device.
+            response = self.confirm(confirmed)
+            self.assertEqual(response.status_code, 201, response.content)
+            raise TimeoutError("Simulated client connection loss after commit")
+
+        with self.assertRaises(TimeoutError):
+            transport_drops_response()
+        retry = self.confirm(confirmed)
+        self.assertEqual(retry.status_code, 200, retry.content)
+        self.assertFalse(retry.json()["created"])
+        self.spool.refresh_from_db()
+        self.assertEqual(self.spool.remaining_weight_g, Decimal("470.00"))
+        self.assertEqual(DeviceWeightMeasurement.objects.count(), 1)
+
+    def test_rate_limited_confirm_then_retry(self):
+        reading = self.reading()
+        receipt = self.preview(reading).json()["preview_receipt"]
+        confirmed = {**reading, "preview_receipt": receipt}
+        with patch("core.device_api_views.device_request_allowed", return_value=(False, 17)):
+            limited = self.confirm(confirmed)
+        self.assertEqual(limited.status_code, 429, limited.content)
+        self.assertEqual(limited["Retry-After"], "17")
+        self.assertEqual(DeviceWeightMeasurement.objects.count(), 0)
+        accepted = self.confirm(confirmed)
+        self.assertEqual(accepted.status_code, 201, accepted.content)
+        self.assertEqual(DeviceWeightMeasurement.objects.count(), 1)
+
+    def test_temporary_throttling_service_outage_fails_closed_then_recovers(self):
+        reading = self.reading()
+        with patch("core.device_api_views.failed_auth_blocked", return_value=(None, 60)):
+            unavailable = self.preview(reading)
+        self.assertEqual(unavailable.status_code, 503, unavailable.content)
+        self.assertEqual(DeviceWeightMeasurement.objects.count(), 0)
+        healthy = self.preview(reading)
+        self.assertEqual(healthy.status_code, 200, healthy.content)
