@@ -374,7 +374,6 @@ function ProjectDetail({ project, loading, canEdit, canDelete, onOpenMakerTags, 
   return <aside className="projectDetailPane">
     <div className="projectDetailHead"><div><span className="projectEyebrow">Project workspace</span><h2>{project.name}</h2></div><button className="iconButton" onClick={onClose}>×</button></div>
     <div className="projectDetailScroll">
-      <WeightHistory targetType="project" targetId={project.id} />
       <button className="projectHero" onClick={() => project.cover_image && setViewer({ src: project.cover_image, title: project.name })}>
         {project.cover_image ? <img src={project.cover_image} alt={project.name} /> : <span>No cover image</span>}
       </button>
@@ -494,6 +493,7 @@ function ProjectDetail({ project, loading, canEdit, canDelete, onOpenMakerTags, 
       </section>
 
       {project.reference_url && <a className="detailLink" href={project.reference_url} target="_blank" rel="noreferrer">Open project reference ↗</a>}
+      <WeightHistory targetType="project" targetId={project.id} />
     </div>
 
     {editing && <ProjectFormModal title={`Edit ${project.name}`} project={project} onClose={() => setEditing(false)} onSaved={updated => { setEditing(false); onUpdated(updated); }} />}
