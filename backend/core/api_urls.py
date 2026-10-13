@@ -2,6 +2,8 @@ from django.urls import path
 from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views, device_api_views, device_measurements
 
 urlpatterns = [
+    path("device/v1/spools/identify/", device_measurements.identify_spool, name="api-device-spool-identify"),
+    path("device/v1/measurements/history/", device_measurements.measurement_history, name="api-device-measurement-history"),
     path("device/v1/measurements/preview/", device_measurements.preview_measurement, name="api-device-measurement-preview"),
     path("device/v1/measurements/confirm/", device_measurements.confirm_measurement, name="api-device-measurement-confirm"),
     path("device/v1/records/search/", device_api_views.search_records, name="api-device-records-search"),
