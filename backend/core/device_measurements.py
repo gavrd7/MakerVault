@@ -263,3 +263,34 @@ def measurement_history(request):
         }
         for record in rows
     ]})
+
+
+@require_http_methods(["GET"])
+@require_device_scope("spools:weight")
+def measurement_request_status(request, request_id):
+    """Recover a confirmed outcome after lost responses or expired previews.
+
+    Reveal only measurements created by this *same* API key; other keys
+    (including keys owned by the same user) receive the same 404 as unknown IDs.
+    """
+    owner = request.device_owner
+    record = DeviceWeightMeasurement.objects.filter(
+        owner=owner, api_key=request.device_key, request_id=request_id,
+    ).first()
+    if record is None:
+        return _error("Measurement request not found.", 404)
+    if not _check_permission(owner, record.target_type, update=record.updated_spool):
+        return _error("Insufficient record permission.", 403)
+    if _target(owner, record.target_type, record.target_id) is None:
+        return _error("Record not found.", 404)
+    data = {
+        "request_id": record.request_id, "target_type": record.target_type,
+        "target_id": record.target_id, "gross_weight_g": record.gross_weight_g,
+        "tare_weight_g": record.tare_weight_g, "update_inventory": record.updated_spool,
+    }
+    measurement = _result(data, record)
+    measurement["recorded_at"] = record.recorded_at.isoformat()
+    measurement["previous_spool_weight_g"] = (
+        str(record.previous_spool_weight_g) if record.previous_spool_weight_g is not None else None
+    )
+    return JsonResponse({"confirmed": True, "measurement": measurement})
