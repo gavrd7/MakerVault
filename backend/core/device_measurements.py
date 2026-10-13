@@ -174,3 +174,69 @@ def confirm_measurement(request):
             updated_spool=data["update_inventory"], previous_spool_weight_g=prior,
         )
     return JsonResponse({"created": True, "measurement": _result(data, record)}, status=201)
+
+
+@require_http_methods(["POST"])
+@require_device_scope("spools:weight")
+def identify_spool(request):
+    """Locate an owned spool by its active Maker Tag or legacy RFID UID."""
+    if len(request.body) > MAX_JSON_BYTES:
+        return _error("Request is too large.", 413)
+    try:
+        data = json.loads(request.body)
+    except (ValueError, UnicodeDecodeError):
+        return _error("Invalid identification payload.", 400)
+    if not isinstance(data, dict) or set(data) != {"kind", "uid"}:
+        return _error("Provide kind and uid.", 400)
+    kind, uid = data["kind"], data["uid"]
+    if not isinstance(kind, str) or kind not in ("nfc", "rfid") or not isinstance(uid, str):
+        return _error("Unsupported RFID identity.", 400)
+    compact = uid.replace(":", "").replace("-", "").replace(" ", "")
+    if len(compact) not in (8, 14, 20) or any(c not in "0123456789abcdefABCDEF" for c in compact):
+        return _error("Invalid RFID UID.", 400)
+    owner = request.device_owner
+    if not owner.has_perm("core.view_spool"):
+        return _error("Insufficient spool permission.", 403)
+    code = compact.upper()
+    tag = MakerTag.objects.filter(owner=owner, kind=kind, code=code, status="active", target_type="spool").first()
+    spool = Spool.objects.filter(owner=owner, pk=tag.target_id).first() if tag else None
+    if spool is None and kind == "rfid":
+        spool = Spool.objects.filter(owner=owner, rfid_uid=code).first()
+    if spool is None:
+        return JsonResponse({"found": False, "kind": kind, "uid": code})
+    return JsonResponse({
+        "found": True, "spool": {
+            "id": str(spool.pk), "spool_id": spool.spool_id,
+            "remaining_weight_g": str(spool.remaining_weight_g) if spool.remaining_weight_g is not None else None,
+            "known_tare": _tare_details(owner, spool),
+        },
+    })
+
+
+@require_http_methods(["GET"])
+@require_device_scope("spools:weight")
+def measurement_history(request):
+    kind, identifier = request.GET.get("target_type"), request.GET.get("target_id")
+    if kind not in TARGETS:
+        return _error("Unsupported measurement target.", 400)
+    try:
+        pk = UUID(identifier)
+    except (ValueError, TypeError, AttributeError):
+        return _error("Invalid target ID.", 400)
+    owner = request.device_owner
+    if not _check_permission(owner, kind, update=False):
+        return _error("Insufficient record permission.", 403)
+    if _target(owner, kind, pk) is None:
+        return _error("Record not found.", 404)
+    rows = DeviceWeightMeasurement.objects.filter(owner=owner, target_type=kind, target_id=pk).order_by("-recorded_at")[:25]
+    return JsonResponse({"rows": [
+        {
+            "id": str(record.pk), "recorded_at": record.recorded_at.isoformat(),
+            "gross_weight_g": str(record.gross_weight_g),
+            "tare_weight_g": str(record.tare_weight_g),
+            "net_weight_g": str(record.net_weight_g),
+            "updated_spool": record.updated_spool,
+            "previous_spool_weight_g": str(record.previous_spool_weight_g) if record.previous_spool_weight_g is not None else None,
+        }
+        for record in rows
+    ]})
