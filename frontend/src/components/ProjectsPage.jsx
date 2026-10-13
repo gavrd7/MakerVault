@@ -493,7 +493,7 @@ function ProjectDetail({ project, loading, canEdit, canDelete, onOpenMakerTags, 
       </section>
 
       {project.reference_url && <a className="detailLink" href={project.reference_url} target="_blank" rel="noreferrer">Open project reference ↗</a>}
-      <WeightHistory targetType="project" targetId={project.id} />
+      <WeightHistory targetType="project" targetId={project.id} projectStyle />
     </div>
 
     {editing && <ProjectFormModal title={`Edit ${project.name}`} project={project} onClose={() => setEditing(false)} onSaved={updated => { setEditing(false); onUpdated(updated); }} />}
