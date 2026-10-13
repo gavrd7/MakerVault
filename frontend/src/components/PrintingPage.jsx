@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { apiFetch } from "../api";
 import PrintedPartsSection from "./PrintedPartsSection";
+import WeightHistory from "./WeightHistory";
 import { printerIntent } from "./printerNavigation";
 import { PrinterCameraPreview, PrinterCameraSetupModal } from "./PrinterCameras";
 import PrinterJobControls from "./PrinterJobControls";
@@ -338,6 +339,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
             <button type="button" onClick={() => setWorkspaceView("models")}>Model library</button>
             {canAddModel && <button type="button" onClick={() => setModal("model")}>Add model</button>}
             {canAddPrintJob && <button type="button" onClick={() => setModal("print")}>Add print history</button>}
+            <button type="button" onClick={() => document.getElementById("printing-printed-parts")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Printed parts</button>
           </div>
         </section>
         <section className="printingActionGroup">
@@ -515,7 +517,9 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       </div>
     </section>}
 
+    <div id="printing-printed-parts" style={{ scrollMarginTop: 24 }}>
     <PrintedPartsSection config={config} projects={projects || []} onOpenMakerTags={onOpenMakerTags} createJob={partJob} onCreateConsumed={() => setPartJob(null)} focusId={searchTarget?.type === "printed_parts" ? searchTarget.id : ""} refreshToken={data} />
+    </div>
 
     <section className="panel printingSection">
       <div className="panelHead">
@@ -526,9 +530,9 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
         </div>
       </div>
       <div className="printingList">
-        {(data?.locations || []).slice(0, 3).map(location => <article className="printingListRow" key={location.id}>
+        {(data?.locations || []).slice(0, 3).map(location => <article className="printingListRow makerVaultAlignedRow" key={location.id}>
           <div><strong>{location.name}</strong><small>{location.kind_label || location.kind || "Storage / printing location"}</small></div>
-          <div className="spoolRowActions">
+          <div className="makerVaultRowActions">
             <button type="button" onClick={() => onOpenMakerTags("location", location.id)}>Maker Tags</button>
             {config?.permissions?.change_printing_location && <button type="button" onClick={() => setEditingLocation(location)}>Edit</button>}
             {config?.permissions?.change_printing_location && <button type="button" className="dangerButton" onClick={() => { setLocationError(""); setDeletingLocation(location); }}>Delete</button>}
@@ -661,6 +665,7 @@ function SpoolInventoryPage({ onOpenMakerTags, spools, filaments, locations, pri
   const [dryingSpool, setDryingSpool] = useState(null);
   const [detailFilament, setDetailFilament] = useState(null);
   const [deleteSpool, setDeleteSpool] = useState(null);
+  const [weightHistorySpool, setWeightHistorySpool] = useState(null);
   const term = query.trim().toLowerCase();
   const rows = newestFirst(spools).filter(spool => !term || [
     spool.spool_id, spool.rfid_uid, spool.filament, spool.manufacturer, spool.material, spool.color_name, spool.location,
@@ -701,6 +706,7 @@ function SpoolInventoryPage({ onOpenMakerTags, spools, filaments, locations, pri
             <Badge>{spool.status_label || spool.status}</Badge>
             {(spool.external_links || []).map(link => <Badge key={link.id}>{link.provider_label}</Badge>)}
             <button type="button" onClick={() => onOpenMakerTags("spool", spool.id)}>Maker Tags</button>
+            <button type="button" onClick={() => setWeightHistorySpool(spool)}>Weight History</button>
             <button type="button" onClick={() => setDetailFilament(filaments.find(item => item.id === spool.filament_id) || null)}>Filament details</button>
             {canChangeSpool && <button type="button" onClick={() => setManageSpool(spool)}>RFID / identity</button>}
             {canChangeSpool && <button type="button" onClick={() => setDryingSpool(spool)}>Drying</button>}
@@ -711,6 +717,7 @@ function SpoolInventoryPage({ onOpenMakerTags, spools, filaments, locations, pri
       </div>
     </section>
 
+    {weightHistorySpool && <Modal title={"Weight History · " + weightHistorySpool.spool_id} onClose={() => setWeightHistorySpool(null)}><WeightHistory targetType="spool" targetId={weightHistorySpool.id} /></Modal>}
     {addOpen && <SpoolModal filaments={filaments} locations={locations} printers={printers} currency={currency} onClose={() => setAddOpen(false)} onSaved={async () => { setAddOpen(false); await onChanged(); }} />}
     {dryingSpool && <SpoolDryingModal spool={dryingSpool} onClose={() => setDryingSpool(null)} onSaved={async () => { setDryingSpool(null); await onChanged(); }} />}
     {manageSpool && <SpoolIdentityModal spool={manageSpool} onClose={() => setManageSpool(null)} onSaved={async () => { setManageSpool(null); await onChanged(); }} />}
