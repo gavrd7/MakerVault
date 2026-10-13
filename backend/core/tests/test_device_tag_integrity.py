@@ -8,11 +8,12 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 
 from core.device_api_keys import generate_token
-from core.models import FilamentProduct, InventoryItem, MakerTag, MakerTagEvent, Spool, UserApiKey
+from core.models import FilamentProduct, MakerTag, MakerTagEvent, Spool, UserApiKey
 
 
 class DeviceTagIntegrityTests(TestCase):
@@ -65,7 +66,7 @@ class DeviceTagIntegrityTests(TestCase):
         # Simulate a failure after the tag row has been modified, but before
         # the legacy spool mirror can be changed.
         with patch("core.device_api_views._sync_rfid_tag_to_spool",
-                   side_effect=__import__("django").core.exceptions.ValidationError("Simulated spool conflict")):
+                   side_effect=ValidationError("Simulated spool conflict")):
             result = self.call("assign", target=self.spool2.pk)
         self.assertEqual(result.status_code, 400, result.content)
         tag = MakerTag.objects.get()
@@ -77,7 +78,6 @@ class DeviceTagIntegrityTests(TestCase):
         self.assertEqual(MakerTagEvent.objects.count(), 1)
 
     def test_failed_registration_rolls_back_tag_creation(self):
-        from django.core.exceptions import ValidationError
         with patch("core.device_api_views._sync_rfid_tag_to_spool",
                    side_effect=ValidationError("Simulated mirror conflict")):
             result = self.call("register")
