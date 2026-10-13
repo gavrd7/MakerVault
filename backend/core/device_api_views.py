@@ -1,4 +1,4 @@
-"""Isolated bearer-only, read-only protocol for MakerVault hardware clients.
+"""Isolated bearer-only protocol for MakerVault hardware clients.
 
 Never apply this authentication to existing browser/session API routes.
 """
@@ -64,10 +64,10 @@ def require_device_scope(scope):
 def device_me(request):
     return JsonResponse({
         "protocol": "makervault-device-v1",
-        "read_only": True,
+        "read_only": "tags:write" not in request.device_key.scopes,
         "key_name": request.device_key.name,
         "scopes": request.device_key.scopes,
-        "capabilities": ["tags:resolve"],
+        "capabilities": (["tags:resolve"] if "tags:read" in request.device_key.scopes else []) + (["tags:register", "tags:assign"] if "tags:write" in request.device_key.scopes else []) + (["records:search"] if "inventory:read" in request.device_key.scopes else []),
     })
 
 
@@ -96,6 +96,9 @@ def resolve_tag(request):
     tag = MakerTag.objects.filter(owner=owner, kind=kind, code=code, status="active").first()
     if tag is None:
         return JsonResponse({"found": False, "status": "unregistered", "kind": kind, "uid": code})
+    definition = TARGETS.get(tag.target_type)
+    if definition is None or not owner.has_perm(f"core.view_{definition.model._meta.model_name}"):
+        return _error("Owner is not permitted to view the tagged record.", 403)
     target = serialise_tag_target(owner, tag.target_type, tag.target_id)
     if target is None:
         return _error("The tag target is no longer available.", 404)
@@ -153,10 +156,17 @@ def search_records(request):
         return _error("Invalid result limit.", 400)
     if not 1 <= limit <= 50:
         return _error("Result limit must be between 1 and 50.", 400)
-    # Bound the number of candidate records and avoid ever exporting the full inventory.
-    candidates = definition.model.objects.filter(owner=owner).order_by("pk")[:500]
+    # Stream candidates in batches so later records remain searchable; only
+    # the requested limited number of results is ever returned to the device.
+    candidates = definition.model.objects.filter(owner=owner).order_by("pk")
+    if target_type == "inventory":
+        candidates = candidates.select_related("board__manufacturer", "component")
+    elif target_type == "spool":
+        candidates = candidates.select_related("filament__filament_manufacturer", "filament__manufacturer")
+    elif target_type == "reusable_spool":
+        candidates = candidates.select_related("design")
     matches = []
-    for obj in candidates:
+    for obj in candidates.iterator(chunk_size=200):
         row = target_display(target_type, obj)
         if not query or query in (row["label"] + " " + row["subtitle"]).casefold():
             matches.append(row)
