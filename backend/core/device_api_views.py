@@ -57,7 +57,7 @@ def require_device_scope(scope):
                 return _error("Invalid or inactive API key.", 401)
             if scope not in key.scopes:
                 return _error("API key does not allow this action.", 403)
-            write = request.method not in ("GET", "HEAD") and scope == "tags:write"
+            write = request.method not in ("GET", "HEAD") and (scope == "tags:write" or (scope == "spools:weight" and request.path.endswith("/confirm/")))
             allowed, retry = device_request_allowed(key.identifier, write=write)
             if allowed is None:
                 return _error("Device rate limiting temporarily unavailable.", 503)
