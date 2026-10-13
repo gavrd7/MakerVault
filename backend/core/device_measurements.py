@@ -1,5 +1,7 @@
 """Weigh-station preview and confirmed history; bearer-only device routes."""
 import json
+import hashlib
+from django.core import signing
 from decimal import Decimal, InvalidOperation
 from uuid import UUID
 
@@ -8,10 +10,11 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
 from .device_api_views import require_device_scope, _error, MAX_JSON_BYTES
-from .models import DeviceWeightMeasurement, Spool, PrintedPart, Project, ReusableSpool
+from .models import DeviceWeightMeasurement, Spool, PrintedPart, Project, ReusableSpool, MakerTag
 
 TARGETS = {"spool": Spool, "printed_part": PrintedPart, "project": Project}
 MAX_WEIGHT_G = Decimal("1000000.00")
+PREVIEW_TTL_SECONDS = 300
 
 
 def _parse(request):
@@ -21,7 +24,7 @@ def _parse(request):
         data = json.loads(request.body)
     except (ValueError, UnicodeDecodeError) as exc:
         raise ValueError("Invalid JSON.") from exc
-    if not isinstance(data, dict) or set(data) != {"request_id", "target_type", "target_id", "gross_weight_g", "tare_weight_g", "update_inventory"}:
+    if not isinstance(data, dict) or not {"request_id", "target_type", "target_id", "gross_weight_g", "tare_weight_g", "update_inventory"} <= set(data) or set(data) - {"request_id", "target_type", "target_id", "gross_weight_g", "tare_weight_g", "update_inventory", "preview_receipt"}:
         raise ValueError("Unexpected or missing fields.")
     if data["target_type"] not in TARGETS or not isinstance(data["update_inventory"], bool):
         raise ValueError("Unsupported target or operation.")
@@ -43,6 +46,33 @@ def _parse(request):
     if data["update_inventory"] and data["target_type"] != "spool":
         raise ValueError("Only filament spools support inventory weight updates.")
     return data
+
+
+def _preview_fingerprint(owner, data):
+    fields = {
+        "owner": owner.pk,
+        "request_id": str(data["request_id"]),
+        "target_type": data["target_type"],
+        "target_id": str(data["target_id"]),
+        "gross_weight_g": str(data["gross_weight_g"]),
+        "tare_weight_g": str(data["tare_weight_g"]),
+        "update_inventory": data["update_inventory"],
+    }
+    return hashlib.sha256(json.dumps(fields, sort_keys=True).encode()).hexdigest()
+
+
+def _tare_details(owner, target):
+    reel = ReusableSpool.objects.filter(owner=owner, filament_spool=target).select_related("design").first()
+    if reel is None:
+        return {"source": "manual", "weight_g": None, "reel_id": None}
+    tare = reel.effective_tare_g
+    return {
+        "source": "measured_reusable_spool" if reel.measured_tare_g is not None else (
+            "nominal_reusable_spool" if tare is not None else "unknown"
+        ),
+        "weight_g": str(tare) if tare is not None else None,
+        "reel_id": str(reel.pk),
+    }
 
 
 def _target(owner, kind, pk, *, lock=False):
@@ -91,7 +121,12 @@ def preview_measurement(request):
         return _error("Insufficient record permission.", 403)
     if not _target(owner, data["target_type"], data["target_id"]):
         return _error("Record not found.", 404)
-    return JsonResponse({"preview": _result(data), "requires_confirmation": True})
+    preview = _result(data)
+    if data["target_type"] == "spool":
+        spool = _target(owner, "spool", data["target_id"])
+        preview["known_tare"] = _tare_details(owner, spool)
+    receipt = signing.dumps(_preview_fingerprint(owner, data), salt="device-weigh-preview-v1")
+    return JsonResponse({"preview": preview, "preview_receipt": receipt, "expires_in_seconds": PREVIEW_TTL_SECONDS, "requires_confirmation": True})
 
 
 @require_http_methods(["POST"])
@@ -103,6 +138,15 @@ def confirm_measurement(request):
     owner = request.device_owner
     if not _check_permission(owner, data["target_type"], update=data["update_inventory"]):
         return _error("Insufficient record permission.", 403)
+    receipt = data.get("preview_receipt")
+    if not isinstance(receipt, str) or len(receipt) > 512:
+        return _error("A valid measurement preview must be confirmed.", 400)
+    try:
+        fingerprint = signing.loads(receipt, salt="device-weigh-preview-v1", max_age=PREVIEW_TTL_SECONDS)
+    except signing.BadSignature:
+        return _error("Measurement preview expired or invalid; preview again.", 409)
+    if fingerprint != _preview_fingerprint(owner, data):
+        return _error("Measurement changed after preview; preview again.", 409)
     with transaction.atomic():
         existing = DeviceWeightMeasurement.objects.filter(owner=owner, request_id=data["request_id"]).first()
         if existing:
