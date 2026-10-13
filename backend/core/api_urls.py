@@ -1,7 +1,8 @@
 from django.urls import path
-from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views, device_api_views, device_measurements
+from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views, device_api_views, device_measurements, weight_history_views
 
 urlpatterns = [
+    path("weight-history/", weight_history_views.weight_history, name="api-weight-history"),
     path("device/v1/spools/identify/", device_measurements.identify_spool, name="api-device-spool-identify"),
     path("device/v1/measurements/history/", device_measurements.measurement_history, name="api-device-measurement-history"),
     path("device/v1/measurements/preview/", device_measurements.preview_measurement, name="api-device-measurement-preview"),
