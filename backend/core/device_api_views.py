@@ -254,6 +254,8 @@ def assign_tag(request):
                 "target_type": tag.target_type, "target_id": str(tag.target_id),
             })
         return JsonResponse({"changed": True, "item": _tag_summary(tag, owner)})
+    except OverflowError:
+        return _error("Request is too large.", 413)
     except ValidationError:
         return _error("Invalid target or tag assignment, or conflicting spool UID.", 400)
     except (ValueError, TypeError):
