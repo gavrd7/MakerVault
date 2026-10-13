@@ -109,3 +109,49 @@ class DeviceTagWriteTests(TestCase):
         tag = MakerTag.objects.get(owner=self.owner, kind="nfc")
         self.assertEqual(tag.target_id, self.a.pk)
         self.assertEqual(MakerTagEvent.objects.filter(tag=tag).count(), 1)
+
+    def test_oversized_write_requests_return_413_without_changes(self):
+        for endpoint in ("register", "assign"):
+            with self.subTest(endpoint=endpoint):
+                response = self.client.post(
+                    f"/api/device/v1/tags/{endpoint}/",
+                    data="{" + "x" * 1100 + "}",
+                    content_type="application/json",
+                    HTTP_AUTHORIZATION="Bearer " + self.token,
+                )
+                self.assertEqual(response.status_code, 413, response.content)
+                self.assertEqual(response["Cache-Control"], "no-store")
+        self.assertEqual(MakerTag.objects.count(), 0)
+
+    def test_malformed_json_and_target_ids_rejected(self):
+        for endpoint in ("register", "assign"):
+            path = f"/api/device/v1/tags/{endpoint}/"
+            with self.subTest(endpoint=endpoint):
+                malformed = self.client.post(
+                    path, data="{bad json",
+                    content_type="application/json",
+                    HTTP_AUTHORIZATION="Bearer " + self.token,
+                )
+                self.assertEqual(malformed.status_code, 400, malformed.content)
+                invalid_id = self.call(path, self.payload(target_id="not-a-uuid"))
+                self.assertEqual(invalid_id.status_code, 400, invalid_id.content)
+        self.assertEqual(MakerTag.objects.count(), 0)
+
+    def test_revoked_write_key_rejected(self):
+        from django.utils import timezone
+        self.key.revoked_at = timezone.now()
+        self.key.save(update_fields=["revoked_at"])
+        response = self.call("/api/device/v1/tags/register/", self.payload())
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(MakerTag.objects.count(), 0)
+
+    def test_retired_and_foreign_tag_cannot_be_reassigned(self):
+        self.call("/api/device/v1/tags/register/", self.payload())
+        tag = MakerTag.objects.get(owner=self.owner)
+        tag.status = "retired"
+        tag.save(update_fields=["status"])
+        self.assertEqual(
+            self.call("/api/device/v1/tags/assign/", self.payload(target_id=str(self.b.pk))).status_code,
+            404,
+        )
+        self.assertEqual(MakerTagEvent.objects.filter(tag=tag).count(), 1)
