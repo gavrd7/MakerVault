@@ -113,7 +113,7 @@ def resolve_tag(request):
 
 def _scan_payload(request, *, fields):
     if len(request.body) > MAX_JSON_BYTES:
-        raise ValueError("Request is too large.")
+        raise OverflowError("Request is too large.")
     try:
         data = json.loads(request.body)
     except (ValueError, UnicodeDecodeError) as exc:
@@ -209,6 +209,8 @@ def register_tag(request):
             })
         response = JsonResponse({"created": True, "item": _tag_summary(tag, owner)}, status=201)
         return response
+    except OverflowError:
+        return _error("Request is too large.", 413)
     except ValidationError:
         return _error("Invalid target or tag assignment, or conflicting spool UID.", 400)
     except (ValueError, TypeError):
