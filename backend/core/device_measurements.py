@@ -161,8 +161,13 @@ def confirm_measurement(request):
             return _error("Record not found.", 404)
         prior = None
         if data["update_inventory"]:
-            # Never infer tare from a label or from a product's nominal filament weight.
-            # Confirmed client-supplied tare is recorded as provenance.
+            known_tare = _tare_details(owner, target)
+            if known_tare["weight_g"] is not None:
+                if data["tare_weight_g"] != Decimal(known_tare["weight_g"]):
+                    return _error("Known reusable-spool tare changed or does not match; preview again.", 409)
+            elif data["tare_weight_g"] <= 0:
+                return _error("A confirmed nonzero physical tare is required when no reusable-spool tare is known.", 400)
+            # The preview receipt binds the operator-confirmed tare, target and reading.
             prior = target.remaining_weight_g
             target.remaining_weight_g = data["gross_weight_g"] - data["tare_weight_g"]
             target.save(update_fields=["remaining_weight_g", "updated_at"])
