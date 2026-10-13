@@ -168,3 +168,9 @@ Supported initial measurement targets: `spool`, `printed_part`, `project` (a pro
 ## Browser Weight History UI (PR #140, awaiting staging tests)
 
 Normal logged-in, permission-checked endpoint `GET /api/weight-history/?target_type=spool&target_id=<uuid>&limit=3` supports `spool`, `printed_part`, and `project`, with up to 100 recent rows; unlike device routes it does **not** accept bearer-key-only authentication. The shared React `WeightHistory` component displays three recent measurements and opens a modal to see more. It is linked from spool inventory, the printed-part detail modal and project details. All results remain owner-scoped and require the current model view permission.
+
+## Phase 1 integrity hardening — awaiting staging validation
+
+Confirmed **spool inventory updates** now use an optimistic snapshot of the spool's remaining weight and `updated_at`, embedded in the signed preview receipt, and rechecked after locking the spool row in a database transaction. If another write changes the spool after preview, confirmation returns HTTP 409; the device must restart the preview flow. This prevents a stale scan from overwriting newer inventory. The preview receipt is also bound to the specific API key identifier, preventing a second device key belonging to the same user from confirming another key's preview. Retries of an already confirmed, unchanged request ID still return the original result (within the preview receipt lifetime).
+
+Added focused tests for stale weight, two competing previews, device-key binding. **These tests have been committed but not yet run on Debian staging.** Physical network/firmware retries, simultaneous database connections and production reverse-proxy TLS verification still require separate acceptance testing.
