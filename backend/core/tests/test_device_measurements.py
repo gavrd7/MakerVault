@@ -114,3 +114,18 @@ class DeviceMeasurementTests(TestCase):
             HTTP_AUTHORIZATION="Bearer " + self.token,
         )
         self.assertEqual(denied.status_code, 404)
+
+    def test_rfid_spool_identification_rejects_bad_uid_and_requires_permission(self):
+        path = "/api/device/v1/spools/identify/"
+        malformed = self.client.post(path, data=json.dumps({"kind": "rfid", "uid": "invalid"}),
+                                     content_type="application/json",
+                                     HTTP_AUTHORIZATION="Bearer " + self.token)
+        self.assertEqual(malformed.status_code, 400)
+        self.owner.user_permissions.add(
+            Permission.objects.get(content_type__app_label="core", codename="view_spool")
+        )
+        unknown = self.client.post(path, data=json.dumps({"kind": "rfid", "uid": "A1B2C3D4"}),
+                                   content_type="application/json",
+                                   HTTP_AUTHORIZATION="Bearer " + self.token)
+        self.assertEqual(unknown.status_code, 200, unknown.content)
+        self.assertFalse(unknown.json()["found"])
