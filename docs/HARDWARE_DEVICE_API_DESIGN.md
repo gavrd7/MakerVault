@@ -142,3 +142,17 @@ Device endpoints use MakerVault's configured shared Django Redis cache. Defaults
 Values may be configured with positive integers. HTTP **429** is returned when limits are exceeded, with a `Retry-After` header giving the seconds until the current window ends. The ESP32 should wait rather than retry immediately. When shared cache access fails, device requests fail closed with **503**, instead of bypassing throttling. Browser login and ordinary session API routes are unaffected.
 
 These are application-level controls and do not replace reverse-proxy request-size rules or a trusted proxy/client IP deployment policy. Authentication-failure limits use the direct `REMOTE_ADDR` value rather than untrusted forwarded headers: a shared proxy may cause multiple clients to share one budget. Configure the reverse proxy appropriately and validate the effective source address in the real deployment before relying on per-device IP isolation.
+
+## General-purpose weigh station API — initial implementation (PR #140; untested)
+
+Two bearer-authenticated `spools:weight` endpoints:
+- `POST /api/device/v1/measurements/preview/`: calculate gross minus explicit tare, return proposed weight without changing any record.
+- `POST /api/device/v1/measurements/confirm/`: persist a measurement (and optionally update remaining filament weight for a spool), with owner-permission checks and an idempotent `request_id` UUID. Reuse of a request ID with changed values returns 409.
+
+Both accept:
+```json
+{"request_id":"<uuid>","target_type":"project","target_id":"<uuid>","gross_weight_g":"152.25","tare_weight_g":"2.25","update_inventory":false}
+```
+Supported initial measurement targets: `spool`, `printed_part`, `project` (a project represents an assembly/finished product until a product catalogue exists). Decimal weight strings are in grams with at most two decimal places. Only `spool` can set `update_inventory:true`, requiring the owner's current change-spool permission. Other measurements require current model view permission. Net weight must be nonnegative and neither input may exceed 1,000,000g. Confirmed measurements store the API key identity, gross/tare/net grams, timestamp, and prior spool inventory weight. They never automatically deduct part weight from print consumption.
+
+**Important limitation:** tare is presently supplied and explicitly confirmed by the device/operator; the endpoint does not yet validate the tare against reusable-spool associations or independent scale calibration. Don't let firmware silently submit a guessed tare. In particular, physical sensor stability/calibration, per-device identity, RFID-assisted selection, weighing history UI, and catalogue-derived tare provenance remain follow-up work. These endpoints must pass staging tests and security review before use on physical devices.
