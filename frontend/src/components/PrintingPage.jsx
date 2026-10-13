@@ -530,9 +530,9 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
         </div>
       </div>
       <div className="printingList">
-        {(data?.locations || []).slice(0, 3).map(location => <article className="printingListRow" key={location.id}>
+        {(data?.locations || []).slice(0, 3).map(location => <article className="printingListRow makerVaultAlignedRow" key={location.id}>
           <div><strong>{location.name}</strong><small>{location.kind_label || location.kind || "Storage / printing location"}</small></div>
-          <div className="spoolRowActions">
+          <div className="makerVaultRowActions">
             <button type="button" onClick={() => onOpenMakerTags("location", location.id)}>Maker Tags</button>
             {config?.permissions?.change_printing_location && <button type="button" onClick={() => setEditingLocation(location)}>Edit</button>}
             {config?.permissions?.change_printing_location && <button type="button" className="dangerButton" onClick={() => { setLocationError(""); setDeletingLocation(location); }}>Delete</button>}
