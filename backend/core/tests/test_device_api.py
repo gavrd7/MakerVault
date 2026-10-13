@@ -18,6 +18,8 @@ class DeviceApiTests(TestCase):
             content_type__app_label="core", codename="view_makertag",
         )
         self.owner.user_permissions.add(self.permission)
+        self.target_permission = Permission.objects.get(content_type__app_label="core", codename="view_inventoryitem")
+        self.owner.user_permissions.add(self.target_permission)
         self.item = InventoryItem.objects.create(
             owner=self.owner, inventory_id="OTH-0401", item_type="other",
             custom_name="Tagged box", quantity=1,
@@ -82,6 +84,12 @@ class DeviceApiTests(TestCase):
         self.owner.is_active = False
         self.owner.save(update_fields=["is_active"])
         self.assertEqual(self.resolve().status_code, 401)
+
+    def test_target_view_permission_is_required(self):
+        self.owner.user_permissions.remove(self.target_permission)
+        result = self.resolve()
+        self.assertEqual(result.status_code, 403)
+        self.assertNotIn("tag", result.json())
 
     def test_invalid_payload_and_credentials(self):
         self.assertEqual(self.resolve(token="invalid").status_code, 401)
