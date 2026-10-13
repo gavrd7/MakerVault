@@ -144,7 +144,7 @@ class DeviceMeasurementTests(TestCase):
         )
         self.owner.user_permissions.add(Permission.objects.get(content_type__app_label="core", codename="change_spool"))
         data = self.payload(target_type="spool", target_id=str(spool.pk),
-                            gross_weight_g="480.00", tare_weight_g="180.00",
+                            gross_weight_g="500.00", tare_weight_g="180.00",
                             update_inventory=True)
         preview = self.post("preview", data)
         self.assertEqual(preview.status_code, 200, preview.content)
@@ -153,7 +153,7 @@ class DeviceMeasurementTests(TestCase):
         confirmed = self.post("confirm", {**data, "preview_receipt": preview.json()["preview_receipt"]})
         self.assertEqual(confirmed.status_code, 201, confirmed.content)
         spool.refresh_from_db()
-        self.assertEqual(spool.remaining_weight_g, Decimal("300.00"))
+        self.assertEqual(spool.remaining_weight_g, Decimal("320.00"))
         record = DeviceWeightMeasurement.objects.get(request_id=data["request_id"])
         self.assertTrue(record.updated_spool)
         self.assertEqual(record.previous_spool_weight_g, Decimal("300.00"))
