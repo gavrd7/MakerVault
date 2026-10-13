@@ -1,6 +1,6 @@
 # Hardware integration API: authentication and terminal contract
 
-Status: **design baseline / not implemented**  
+Status: **device API implemented and staging-tested; physical ESP32 integration pending**  
 Base: MakerVault v1.2.2  
 First consumer: ESP32-S3 RFID/NFC terminal (RC522); second: filament weighing station.
 
@@ -17,7 +17,7 @@ First consumer: ESP32-S3 RFID/NFC terminal (RC522); second: filament weighing st
 
 1. **User Account → Security → API Keys**: user-managed keys for approved integrations; creation, list metadata, revoke, optional expiry and rotation.
 2. **Settings → Connected Devices** (later): named device inventory, firmware/capabilities, owner, key association, heartbeat, pairing and revoke.
-3. **Dedicated /api/device/v1/** (later): bearer-authenticated, narrowly scoped device routes that call the same ownership checks and domain services as the browser API.
+3. **Dedicated /api/device/v1/** (implemented): bearer-authenticated, narrowly scoped device routes that call the same ownership checks and domain services as the browser API.
 4. **Terminal firmware** (separate repository): SPI RC522 reader, UI, Wi-Fi, verified TLS, secure token storage; never needs a MakerVault password or privileged session cookie.
 5. **Weighing station** (later): reuses auth and device API; sends measurements with units and calibration provenance; only explicit confirmed operations update filament weights.
 
@@ -47,9 +47,9 @@ First consumer: ESP32-S3 RFID/NFC terminal (RC522); second: filament weighing st
 
 No broad `admin:*` or unrestricted `write:*` scope. Restrict and version return payloads, do not expose every field from generic `/api/tags/` to a device.
 
-## Proposed HTTP routes (not yet implemented)
+## HTTP routes and planned extensions
 
-Browser session + CSRF, under `/api/account/keys/`:
+Browser session + CSRF, under `/api/account/api-keys/`:
 - `GET /` list safe metadata; `POST /` create and show secret once.
 - `POST /<uuid:key_id>/revoke/` revoke key with explicit confirmation.
 - Optional `POST /<uuid:key_id>/rotate/` issue replacement independently.
@@ -105,17 +105,26 @@ All requests require the HTTP header `Authorization: Bearer <secret>` over verif
 - Response for known tag: `{"found":true,"status":"identified","kind":"nfc","uid":"04AABBCCDDEEFF","tag":{"id":"<uuid>","label":"Box tag","target":{"type":"inventory","type_label":"Inventory item","id":"<uuid>","label":"Tagged box","subtitle":"..."}}}`.
 - Response for unknown tag: `{"found":false,"status":"unregistered","kind":"nfc","uid":"04AABBCCDDEEFF"}`.
 - Invalid key/expired/revoked/disabled account: HTTP 401. Insufficient scope or missing owner model permission: HTTP 403. Malformed kind/UID: HTTP 400. Missing target for otherwise known tag: HTTP 404.
-- The above endpoint does **not** transmit raw sector data, NFC tag payload, arbitrary model fields, or credentials. No tag writes/assignments are enabled.
+- The resolve endpoint does **not** transmit raw sector data, NFC tag payload, arbitrary model fields, or credentials. Writing to physical media is not supported; server-side registration and reassignment are available through separate, explicitly confirmed actions.
 
 Firmware should treat `found=false` as an unknown tag, never as an invitation to write automatically. Use this response format for initial ESP32 integration. No weighing-station endpoint is active yet.
 
 The new routes must be tested on staging before release. Avoid entering bearer secrets in shell command history or posting them in issues/logs.
 
 
-## Device registration and record selection (implementation pending staging validation)
+## Device registration and record selection (staging-tested)
 
 - `GET /api/device/v1/records/search/?type=inventory&q=cabinet&limit=25` — requires `inventory:read` and the owner's *current* model view permission; accepts any type supported by Maker Tags, returns owner-visible `rows` with `id`, `label`, `subtitle`. Maximum 50 returned rows; search streams candidates in batches so matches beyond the first 500 records are discoverable. Catalogue-scale pagination and indexed search remain future improvements.
 - `POST /api/device/v1/tags/register/` — requires `tags:write` and `core.add_makertag`. Send `{"kind":"nfc","uid":"04010203040506","target_type":"inventory","target_id":"<uuid>"}`. Checks record ownership/current view permission. First registration returns HTTP 201 and `created:true`. Repeated same registration returns HTTP 200 and `created:false`, without a second audit event. Existing identity attached elsewhere returns HTTP 409; registration must not silently reassign.
 - `POST /api/device/v1/tags/assign/` — requires `tags:write` and `core.change_makertag`, same request body. Only an active tag owned by the caller can be reassigned. Successful changes return `changed:true`; repeat same assignment returns `changed:false`. Creation and reassignment reuse the browser's `_sync_rfid_tag_to_spool` and `_record_tag_event` functions.
 
 Firmware must **confirm target choice before calling either write endpoint**. No physical NFC or CFS tag memory is written by these endpoints. The tag's UID identifies the tag, but never authenticates the user or device. Test all mutation endpoints and CFS spool UID conflict behaviour on staging before firmware integration.
+
+## Final software review notes (PR #140)
+
+- On device API routes, malformed or unsupported payloads return HTTP 400, and JSON bodies exceeding 1,024 bytes return HTTP 413 (including register and assign). Authentication and authorization failures return 401 or 403; registration conflicts return 409.
+- Bearer tokens belong in the Authorization header only. Never copy credentials into screenshots, firmware logs or URLs.
+- Tag resolution additionally checks the owner's current view permission on the linked target model.
+- Read-only searches return at most 50 results, scanning owner-owned candidates in batches; cursor pagination and indexed large-catalogue search are still future enhancements.
+- Registration/reassignment operate on MakerVault database records and must only occur after explicit on-device confirmation. Repeated identical operations are no-ops, with no extra history event.
+- **Remaining before release:** physical RC522/TFT/encoder integration, TLS certificate and hostname validation from the ESP32, network failure/retry behavior and a deployment-level rate-limit policy for bearer login failures and write calls. Neither rate limiting nor general-purpose device pairing is implemented by this PR.
