@@ -1515,6 +1515,27 @@ class WiringDiagram(TimeStampedModel):
 
 
 
+
+class DeviceWeightMeasurement(TimeStampedModel):
+    """Confirmed weighing history. A spool inventory change is optional."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="device_weight_measurements")
+    api_key = models.ForeignKey("UserApiKey", on_delete=models.SET_NULL, null=True, blank=True)
+    request_id = models.UUIDField()
+    target_type = models.CharField(max_length=24)
+    target_id = models.UUIDField()
+    gross_weight_g = models.DecimalField(max_digits=10, decimal_places=2)
+    tare_weight_g = models.DecimalField(max_digits=10, decimal_places=2)
+    net_weight_g = models.DecimalField(max_digits=10, decimal_places=2)
+    updated_spool = models.BooleanField(default=False)
+    previous_spool_weight_g = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    recorded_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["-recorded_at"]
+        constraints = [models.UniqueConstraint(fields=["owner", "request_id"], name="uniq_device_weight_request")]
+
 class UserApiKey(TimeStampedModel):
     """Owner-scoped API credential metadata; the plaintext secret is never stored."""
 
