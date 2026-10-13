@@ -208,3 +208,64 @@ class SimulatedDeviceIntegrationTests(TestCase):
         self.assertEqual(DeviceWeightMeasurement.objects.count(), 0)
         healthy = self.preview(reading)
         self.assertEqual(healthy.status_code, 200, healthy.content)
+
+    def lookup_request(self, request_id, token=None):
+        return Client().get(
+            "/api/device/v1/measurements/requests/" + str(request_id) + "/",
+            HTTP_AUTHORIZATION="Bearer " + (token or self.scale_token),
+        )
+
+    def test_recover_confirmed_request_after_lost_response_and_expired_receipt(self):
+        reading = self.reading()
+        receipt = self.preview(reading).json()["preview_receipt"]
+        confirmed = {**reading, "preview_receipt": receipt}
+        first = self.confirm(confirmed)
+        self.assertEqual(first.status_code, 201, first.content)
+        with patch("core.device_measurements.signing.loads",
+                   side_effect=signing.SignatureExpired("Expired receipt")):
+            expired = self.confirm(confirmed)
+        self.assertEqual(expired.status_code, 409, expired.content)
+        recovered = self.lookup_request(reading["request_id"])
+        self.assertEqual(recovered.status_code, 200, recovered.content)
+        self.assertTrue(recovered.json()["confirmed"])
+        result = recovered.json()["measurement"]
+        self.assertEqual(result["measurement_id"], first.json()["measurement"]["measurement_id"])
+        self.assertEqual(result["net_weight_g"], "470.00")
+        self.assertEqual(result["previous_spool_weight_g"], "600.00")
+        self.assertEqual(DeviceWeightMeasurement.objects.count(), 1)
+        self.spool.refresh_from_db()
+        self.assertEqual(self.spool.remaining_weight_g, Decimal("470.00"))
+
+    def test_unknown_request_has_no_write_side_effects(self):
+        result = self.lookup_request(uuid4())
+        self.assertEqual(result.status_code, 404, result.content)
+        self.assertEqual(DeviceWeightMeasurement.objects.count(), 0)
+        self.spool.refresh_from_db()
+        self.assertEqual(self.spool.remaining_weight_g, Decimal("600.00"))
+
+    def test_second_device_key_cannot_read_original_measurement(self):
+        reading = self.reading()
+        receipt = self.preview(reading).json()["preview_receipt"]
+        self.assertEqual(self.confirm({**reading, "preview_receipt": receipt}).status_code, 201)
+        another_key, another_token = self.new_key("Separate scale", ["spools:weight"])
+        denied = self.lookup_request(reading["request_id"], another_token)
+        self.assertEqual(denied.status_code, 404, denied.content)
+        forbidden_scope = self.lookup_request(reading["request_id"], self.terminal_token)
+        self.assertEqual(forbidden_scope.status_code, 403, forbidden_scope.content)
+        self.assertEqual(self.lookup_request(reading["request_id"]).status_code, 200)
+
+    def test_recovery_requires_active_key_and_current_permissions(self):
+        reading = self.reading()
+        receipt = self.preview(reading).json()["preview_receipt"]
+        self.assertEqual(self.confirm({**reading, "preview_receipt": receipt}).status_code, 201)
+        change_permission = Permission.objects.get(
+            content_type__app_label="core", codename="change_spool"
+        )
+        self.owner.user_permissions.remove(change_permission)
+        denied = self.lookup_request(reading["request_id"])
+        self.assertEqual(denied.status_code, 403, denied.content)
+        self.owner.user_permissions.add(change_permission)
+        self.scale_key.revoked_at = timezone.now()
+        self.scale_key.save(update_fields=["revoked_at"])
+        revoked = self.lookup_request(reading["request_id"])
+        self.assertEqual(revoked.status_code, 401, revoked.content)
