@@ -1,3 +1,4 @@
+import WeightHistory from "./WeightHistory";
 import React, { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../api";
 import { Badge, BoardImage, ImageViewer, LoadingBlock, Modal } from "./Common";
@@ -373,6 +374,7 @@ function ProjectDetail({ project, loading, canEdit, canDelete, onOpenMakerTags, 
   return <aside className="projectDetailPane">
     <div className="projectDetailHead"><div><span className="projectEyebrow">Project workspace</span><h2>{project.name}</h2></div><button className="iconButton" onClick={onClose}>×</button></div>
     <div className="projectDetailScroll">
+      <WeightHistory targetType="project" targetId={project.id} />
       <button className="projectHero" onClick={() => project.cover_image && setViewer({ src: project.cover_image, title: project.name })}>
         {project.cover_image ? <img src={project.cover_image} alt={project.name} /> : <span>No cover image</span>}
       </button>
