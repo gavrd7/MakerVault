@@ -75,3 +75,37 @@ class DeviceTagWriteTests(TestCase):
                 result = self.call("/api/device/v1/tags/register/", self.payload(uid=value))
                 self.assertEqual(result.status_code, 400, result.content)
         self.assertEqual(MakerTag.objects.count(), 0)
+
+    def test_search_finds_records_beyond_first_500_candidates(self):
+        # A record absent from the first 500 UUID-ordered candidates must
+        # still be discoverable from an ESP32 terminal.
+        from uuid import UUID
+        InventoryItem.objects.bulk_create([
+            InventoryItem(owner=self.owner, inventory_id=f"OTH-{n + 9000:05d}",
+                          item_type="other", custom_name="Generic test part",
+                          quantity=1, id=UUID(int=n + 1))
+            for n in range(501)
+        ])
+        result = self.client.get(
+            "/api/device/v1/records/search/?type=inventory&q=Cabinet&limit=25",
+            HTTP_AUTHORIZATION="Bearer " + self.token,
+        )
+        self.assertEqual(result.status_code, 200, result.content)
+        self.assertTrue(any("Cabinet" in row["label"] for row in result.json()["rows"]))
+
+    def test_search_permission_revoked(self):
+        permission = Permission.objects.get(content_type__app_label="core", codename="view_inventoryitem")
+        self.owner.user_permissions.remove(permission)
+        result = self.client.get(
+            "/api/device/v1/records/search/?type=inventory",
+            HTTP_AUTHORIZATION="Bearer " + self.token,
+        )
+        self.assertEqual(result.status_code, 403)
+
+    def test_reassignment_cannot_cross_owner(self):
+        self.assertEqual(self.call("/api/device/v1/tags/register/", self.payload()).status_code, 201)
+        result = self.call("/api/device/v1/tags/assign/", self.payload(target_id=str(self.foreign.pk)))
+        self.assertEqual(result.status_code, 400)
+        tag = MakerTag.objects.get(owner=self.owner, kind="nfc")
+        self.assertEqual(tag.target_id, self.a.pk)
+        self.assertEqual(MakerTagEvent.objects.filter(tag=tag).count(), 1)
