@@ -1,3 +1,4 @@
+import WeightHistory from "./WeightHistory";
 import React, { useEffect, useState } from "react";
 import { apiFetch } from "../api";
 import { Badge, Modal } from "./Common";
@@ -88,6 +89,7 @@ function PartModal({ part, job, options, rows, projects, projectId, canEditPrint
     }
   }
   return <Modal title={part ? "Printed part" : "Create printed parts"} onClose={onClose} wide>
+    {part && <WeightHistory targetType="printed_part" targetId={part.id} />}
     <form onSubmit={save} className="formGrid">
       {error && <div className="error full" role="alert">{error}</div>}
       {!part && <label className="full">Successful print (optional)<select disabled={!canEdit || busy} value={form.print_job_id} onChange={e => {
