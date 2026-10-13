@@ -16,6 +16,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
 from .device_api_keys import parse_identifier, verify_token
+from .device_rate_limit import failed_auth_blocked, record_failed_auth, device_request_allowed
 from .models import MakerTag, UserApiKey
 from .maker_tags import serialise_tag_target, resolve_tag_target, TARGETS, target_display
 from .api_views import _sync_rfid_tag_to_spool, _record_tag_event
@@ -36,18 +37,34 @@ def require_device_scope(scope):
         @csrf_exempt
         @wraps(view)
         def guarded(request, *args, **kwargs):
+            blocked, retry = failed_auth_blocked(request)
+            if blocked is None:
+                return _error("Device authentication temporarily unavailable.", 503)
+            if blocked:
+                response = _error("Too many failed authentication attempts.", 429)
+                response["Retry-After"] = str(retry)
+                return response
             header = request.headers.get("Authorization", "")
-            if not header.startswith("Bearer ") or header.count(" ") != 1:
-                return _error("Bearer API key required.", 401)
-            credential = header[7:]
+            credential = header[7:] if header.startswith("Bearer ") and header.count(" ") == 1 else ""
             identifier = parse_identifier(credential)
-            if identifier is None:
-                return _error("Invalid API key.", 401)
-            key = UserApiKey.objects.select_related("owner").filter(identifier=identifier).first()
+            key = (
+                UserApiKey.objects.select_related("owner").filter(identifier=identifier).first()
+                if identifier else None
+            )
             if key is None or not verify_token(credential, key.secret_digest) or not key.is_active():
+                if not record_failed_auth(request):
+                    return _error("Device authentication temporarily unavailable.", 503)
                 return _error("Invalid or inactive API key.", 401)
             if scope not in key.scopes:
                 return _error("API key does not allow this action.", 403)
+            write = request.method not in ("GET", "HEAD") and scope == "tags:write"
+            allowed, retry = device_request_allowed(key.identifier, write=write)
+            if allowed is None:
+                return _error("Device rate limiting temporarily unavailable.", 503)
+            if not allowed:
+                response = _error("Device request limit exceeded.", 429)
+                response["Retry-After"] = str(retry)
+                return response
             request.device_key = key
             request.device_owner = key.owner
             response = view(request, *args, **kwargs)
