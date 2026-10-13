@@ -3005,3 +3005,26 @@ a:focus-visible,
   .settingsHttpsPanel > .panelHead { margin: 0; }
   .settingsHttpsPanel > .httpsPanelBody { padding: 16px 14px 18px; gap: 16px; }
 }
+
+
+/* Consistent mobile-friendly right-aligned actions for printed parts and locations. */
+.printingListRow.makerVaultAlignedRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+.makerVaultAlignedRow > :first-child { min-width: 0; }
+.makerVaultRowActions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.makerVaultRowActions button { flex: 0 0 auto; }
+@media (max-width: 700px) {
+  .printingListRow.makerVaultAlignedRow { grid-template-columns: minmax(0, 1fr); }
+  .makerVaultRowActions { width: 100%; justify-content: flex-end; }
+}
