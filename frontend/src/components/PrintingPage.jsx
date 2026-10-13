@@ -339,6 +339,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
             <button type="button" onClick={() => setWorkspaceView("models")}>Model library</button>
             {canAddModel && <button type="button" onClick={() => setModal("model")}>Add model</button>}
             {canAddPrintJob && <button type="button" onClick={() => setModal("print")}>Add print history</button>}
+            <button type="button" onClick={() => document.getElementById("printing-printed-parts")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Printed parts</button>
           </div>
         </section>
         <section className="printingActionGroup">
@@ -516,7 +517,9 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       </div>
     </section>}
 
+    <div id="printing-printed-parts" style={{ scrollMarginTop: 24 }}>
     <PrintedPartsSection config={config} projects={projects || []} onOpenMakerTags={onOpenMakerTags} createJob={partJob} onCreateConsumed={() => setPartJob(null)} focusId={searchTarget?.type === "printed_parts" ? searchTarget.id : ""} refreshToken={data} />
+    </div>
 
     <section className="panel printingSection">
       <div className="panelHead">
