@@ -125,7 +125,17 @@ def preview_measurement(request):
     if data["target_type"] == "spool":
         spool = _target(owner, "spool", data["target_id"])
         preview["known_tare"] = _tare_details(owner, spool)
-    receipt = signing.dumps(_preview_fingerprint(owner, data), salt="device-weigh-preview-v1")
+    snapshot = None
+    if data["update_inventory"]:
+        snapshot = {
+            "weight_g": str(spool.remaining_weight_g) if spool.remaining_weight_g is not None else None,
+            "updated_at": spool.updated_at.isoformat(),
+        }
+    receipt = signing.dumps({
+        "fingerprint": _preview_fingerprint(owner, data),
+        "api_key": request.device_key.identifier,
+        "spool_snapshot": snapshot,
+    }, salt="device-weigh-preview-v1")
     return JsonResponse({"preview": preview, "preview_receipt": receipt, "expires_in_seconds": PREVIEW_TTL_SECONDS, "requires_confirmation": True})
 
 
@@ -142,10 +152,11 @@ def confirm_measurement(request):
     if not isinstance(receipt, str) or len(receipt) > 512:
         return _error("A valid measurement preview must be confirmed.", 400)
     try:
-        fingerprint = signing.loads(receipt, salt="device-weigh-preview-v1", max_age=PREVIEW_TTL_SECONDS)
+        receipt_data = signing.loads(receipt, salt="device-weigh-preview-v1", max_age=PREVIEW_TTL_SECONDS)
     except signing.BadSignature:
         return _error("Measurement preview expired or invalid; preview again.", 409)
-    if fingerprint != _preview_fingerprint(owner, data):
+    if (not isinstance(receipt_data, dict) or receipt_data.get("fingerprint") != _preview_fingerprint(owner, data)
+            or receipt_data.get("api_key") != request.device_key.identifier):
         return _error("Measurement changed after preview; preview again.", 409)
     with transaction.atomic():
         existing = DeviceWeightMeasurement.objects.filter(owner=owner, request_id=data["request_id"]).first()
@@ -161,6 +172,13 @@ def confirm_measurement(request):
             return _error("Record not found.", 404)
         prior = None
         if data["update_inventory"]:
+            snapshot = receipt_data.get("spool_snapshot")
+            current = {
+                "weight_g": str(target.remaining_weight_g) if target.remaining_weight_g is not None else None,
+                "updated_at": target.updated_at.isoformat(),
+            }
+            if not isinstance(snapshot, dict) or snapshot != current:
+                return _error("Spool inventory changed since preview; preview again.", 409)
             known_tare = _tare_details(owner, target)
             if known_tare["weight_g"] is not None:
                 if data["tare_weight_g"] != Decimal(known_tare["weight_g"]):
