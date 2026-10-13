@@ -34,7 +34,7 @@ export default function WeightHistory({ targetType, targetId }) {
       </div>
     </div>
   );
-  return <section className="panel" style={{ marginTop: 12 }}>
+  return <section className="panel" style={{ marginTop: 12, padding: "16px 18px" }}>
     <div className="sectionHeader"><h3>Weight History</h3>{state.total > 3 && !all && <button type="button" className="buttonSecondary" onClick={openAll}>View All ({state.total})</button>}</div>
     {error && <p className="formError">{error}</p>}
     {!state.total && !error && <p className="muted">No recorded measurements yet.</p>}
