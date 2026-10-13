@@ -178,3 +178,15 @@ Added focused tests for stale weight, two competing previews, device-key binding
 ## Real PostgreSQL concurrency regression — awaiting execution
 
 `core.tests.test_device_concurrency` uses `TransactionTestCase`, two independent threaded Django clients/connections and a barrier to overlap HTTP requests. It tests (1) concurrent registrations of the same RFID UID on two different spools, expecting one 201 and one 409 with exactly one Maker Tag/event and matching spool mirror; and (2) two signed weight previews confirmed concurrently, expecting one 201 and one 409 with one durable measurement and consistent remaining weight. Tests skip if the database backend is not PostgreSQL; staging should run them against PostgreSQL. They intentionally assert durable database outcomes, not which thread wins. This is a two-request regression test, not a production load test, and must pass on staging before claiming concurrent safety.
+
+## Software-only resilience acceptance (unverified on staging)
+
+`core.tests.test_device_simulation` now covers four additional failure modes:
+- An expired preview is rejected (409) before modifying inventory.
+- A simulated client timeout *after* successful confirmation is retried with the same request ID/receipt and returns the existing measurement without duplicate writes.
+- An HTTP 429 response with `Retry-After` leaves state unchanged; a subsequent allowed confirmation succeeds.
+- A transient cache/rate-limiter failure returns 503 (fail closed), and a later healthy preview succeeds.
+
+These are deterministic fault-injection tests around Django HTTP handlers, **not real packet loss, actual ESP32 Wi-Fi or TLS validation**. Firmware should respect `Retry-After`, preserve the exact request ID and receipt for timeouts, and request a new preview after a 409 stale/expired response. Avoid automatically retrying a confirmation as a *new* measurement. The server currently requires a non-expired receipt even for duplicate confirmation retries; firmware must reconcile uncertain confirmations after expiration using measurement history instead of assuming a failed or successful write.
+
+Final acceptance gates: run new simulation tests; full `manage.py test core --noinput -v 1` with a fresh test database; verify the frontend production build via Docker's Node builder; hardware TLS certificate verification and physical read/scale accuracy remain pending.
