@@ -22,8 +22,8 @@ export default function ConnectedDevicesPanel() {
     event.preventDefault();
     setBusy(true); setError(""); setNotice("");
     try {
-      const scopes = kind === "filament_scale" ? ["tags:read", "inventory:read"] :
-        write ? ["tags:read", "tags:write"] : ["tags:read"];
+      const scopes = kind === "filament_scale" ? ["tags:read", "inventory:read", "devices:status"] :
+        write ? ["tags:read", "tags:write", "devices:status"] : ["tags:read", "devices:status"];
       await apiFetch("/api/account/connected-devices/pair/approve/", {
         method: "POST",
         body: JSON.stringify({ name, confirmation_code: code, scopes }),
