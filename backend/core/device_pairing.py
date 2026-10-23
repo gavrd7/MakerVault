@@ -16,10 +16,11 @@ from django.views.decorators.http import require_http_methods
 from .device_api_keys import generate_token, validate_scopes
 from .device_rate_limit import allowance
 from .models import ConnectedDevice, DevicePairing, UserApiKey
+from .device_api_views import require_device_scope
 
 PAIRING_TTL = timedelta(minutes=5)
-DEVICE_SCOPES = {"rfid_terminal": {"tags:read", "tags:write", "inventory:read"},
-                 "filament_scale": {"tags:read", "inventory:read", "spools:weight"}}
+DEVICE_SCOPES = {"rfid_terminal": {"tags:read", "tags:write", "inventory:read", "devices:status"},
+                 "filament_scale": {"tags:read", "inventory:read", "spools:weight", "devices:status"}}
 
 
 def error(message, status=400):
@@ -84,7 +85,7 @@ def start_pairing(request):
             raise ValueError("Device must generate a strong random claim secret.")
     except (ValueError, TypeError, json.JSONDecodeError) as exc:
         return error(str(exc))
-    if ConnectedDevice.objects.filter(device_uid=uid).exists():
+    if ConnectedDevice.objects.filter(device_uid=uid, revoked_at__isnull=True).exists():
         return error("This device identity is already registered.", 409)
     # Expired unclaimed rows do not block new setup; claim IDs are never reused.
     with transaction.atomic():
@@ -139,10 +140,11 @@ def approve_pairing(request):
             return error("Pairing code is invalid, expired or already used.", 404)
         if claim.approved_by_id:
             return error("Device awaiting completion.", 409)
-        if ConnectedDevice.objects.filter(device_uid=claim.device_uid).exists():
-            return error("Device is already paired.", 409)
+        existing = ConnectedDevice.objects.filter(device_uid=claim.device_uid).first()
+        if existing and (existing.revoked_at is None or existing.owner_id != request.user.pk):
+            return error("Device identity is already owned.", 409)
         allowed = DEVICE_SCOPES[claim.device_type]
-        scopes = data.get("scopes", ["tags:read"])
+        scopes = data.get("scopes", ["tags:read", "devices:status"])
         try:
             scopes = list(validate_scopes(scopes))
         except ValueError as exc:
@@ -180,17 +182,27 @@ def complete_pairing(request, pairing_id):
             return error("Invalid claim proof.", 401)
         if not claim.approved_by_id or not claim.approved_by.is_active:
             return JsonResponse({"status": "pending"}, status=202)
-        if ConnectedDevice.objects.filter(device_uid=claim.device_uid).exists():
-            return error("Device is already registered.", 409)
+        existing = ConnectedDevice.objects.select_for_update().filter(device_uid=claim.device_uid).first()
+        if existing and (existing.revoked_at is None or existing.owner_id != claim.approved_by_id):
+            return error("Device identity is already owned.", 409)
         issued = generate_token()
         key = UserApiKey.objects.create(
             owner=claim.approved_by, name=claim.approved_name,
             identifier=issued.identifier, secret_digest=issued.digest, scopes=claim.approved_scopes,
         )
-        device = ConnectedDevice.objects.create(
-            owner=claim.approved_by, device_uid=claim.device_uid,
-            device_type=claim.device_type, name=claim.approved_name, api_key=key,
-        )
+        if existing:
+            existing.name = claim.approved_name
+            existing.device_type = claim.device_type
+            existing.api_key = key
+            existing.revoked_at = None
+            existing.last_seen_at = None
+            existing.save(update_fields=["name", "device_type", "api_key", "revoked_at", "last_seen_at", "updated_at"])
+            device = existing
+        else:
+            device = ConnectedDevice.objects.create(
+                owner=claim.approved_by, device_uid=claim.device_uid,
+                device_type=claim.device_type, name=claim.approved_name, api_key=key,
+            )
         claim.consumed_at = timezone.now()
         claim.save(update_fields=["consumed_at", "updated_at"])
     response = JsonResponse({"status": "paired", "device_id": str(device.id),
@@ -212,3 +224,27 @@ def revoke_device(request, device_id):
             UserApiKey.objects.filter(pk=device.api_key_id, owner=request.user,
                                       revoked_at__isnull=True).update(revoked_at=timezone.now())
     return JsonResponse({"item": describe(device)})
+
+
+@require_http_methods(["POST"])
+@require_device_scope("devices:status")
+def device_heartbeat(request):
+    """A successful authenticated heartbeat indicates API reachability, not Wi-Fi or sensor health."""
+    try:
+        info = payload(request)
+        version = info.get("firmware_version", "")
+        capabilities = info.get("capabilities", [])
+        if not isinstance(version, str) or len(version) > 80:
+            raise ValueError("Invalid firmware version.")
+        if not isinstance(capabilities, list) or len(capabilities) > 25 or any(
+            not isinstance(x, str) or len(x) > 60 for x in capabilities
+        ):
+            raise ValueError("Invalid capabilities.")
+    except (ValueError, TypeError, json.JSONDecodeError) as exc:
+        return error(str(exc))
+    updated = ConnectedDevice.objects.filter(owner=request.device_owner, api_key=request.device_key,
+                                              revoked_at__isnull=True).update(
+        last_seen_at=timezone.now(), firmware_version=version, capabilities=capabilities)
+    if not updated:
+        return error("No active connected device is bound to this credential.", 403)
+    return JsonResponse({"status": "ok"})
