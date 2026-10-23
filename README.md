@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <strong>Upcoming release: v1.2.3 (security maintenance; not yet published)</strong>
+  <strong>Upcoming release: v1.2.4 (hardware integration API; not yet published)</strong>
 </p>
 
 <p align="center">
@@ -22,7 +22,9 @@
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
-**What’s new in the upcoming v1.2.3:** Django 5.2.18, Vite 8.3.3 and Pillow 13 security dependency updates. The release is pending validation and publication.
+**What’s new in the upcoming v1.2.4:** scoped, revocable API keys for hardware clients; dedicated bearer-authenticated MakerVault device endpoints for tag resolution, record search and controlled tag operations; initial weighing-station measurement workflow and history. Device and weighing hardware validation remain separate from backend tests.
+
+**Previously in v1.2.3:** Django 5.2.18, Vite 8.3.3 and Pillow 13 security dependency updates.
 
 **Previously in v1.2.2:** direct Maker Tag shortcuts from inventory, projects, filament and reusable spools, printers, printed parts and storage locations; contextual return navigation; permission-controlled QR/NFC/RFID tag deletion; a dedicated Model Library navigation entry; and improved storage-location management.
 
