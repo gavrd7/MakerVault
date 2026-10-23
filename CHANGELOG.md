@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.2.3 — Security maintenance (release preparation)
+
+- Updated Django to 5.2.18 to address October 2026 security advisories.
+- Updated the frontend build tool Vite to 8.3.3 for its patched security release.
+- Raised Pillow to version 13 (`>=13.0.0,<14`) following the Python dependency audit finding for Pillow 12.3.0.
+- Verified PR #141 GitHub Actions backend, frontend and Docker jobs passed; staging validation of the final published image, particularly HEIC conversion and image uploads, remains required.
+
+**Release gate:** Merge this version-bump PR after CI passes, publish the v1.2.3 GHCR image through the existing release workflow, and verify the published image on staging before deploying to production.
+
+
 ## v1.2.2 — Release preparation
 
 - Added direct Maker Tag shortcuts from inventory, projects, filament spools, reusable spools, printers, printed parts and printing/storage locations. Existing tags open directly; creation is prefilled with the target record.
