@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <strong>Upcoming release: v1.2.4 (hardware integration API; not yet published)</strong>
+  <strong>Upcoming release: v1.3.0 (hardware integration API; not yet published)</strong>
 </p>
 
 <p align="center">
@@ -22,7 +22,7 @@
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
-**What’s new in the upcoming v1.2.4:** scoped, revocable API keys for hardware clients; dedicated bearer-authenticated MakerVault device endpoints for tag resolution, record search and controlled tag operations; initial weighing-station measurement workflow and history. Device and weighing hardware validation remain separate from backend tests.
+**What’s new in the upcoming v1.3.0:** scoped, revocable API keys for hardware clients; dedicated bearer-authenticated MakerVault device endpoints for tag resolution, record search and controlled tag operations; initial weighing-station measurement workflow and history. Device and weighing hardware validation remain separate from backend tests.
 
 **Previously in v1.2.3:** Django 5.2.18, Vite 8.3.3 and Pillow 13 security dependency updates.
 
