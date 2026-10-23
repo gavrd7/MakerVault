@@ -24,7 +24,7 @@ class PairingTests(TestCase):
     def approve(self, code, scopes=None):
         return self.post("/api/account/connected-devices/pair/approve/",
                          {"confirmation_code": code, "name": "Workbench Reader",
-                          "scopes": scopes or ["tags:read"]})
+                          "scopes": scopes or ["tags:read", "devices:status"]})
 
     def complete(self, pairing_id, secret=None):
         return self.post(f"/api/device/v1/pairing/{pairing_id}/complete/",
