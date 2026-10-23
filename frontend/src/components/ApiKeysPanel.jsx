@@ -4,10 +4,10 @@ import "./ApiKeysPanel.css";
 
 const SCOPES = [
   ["tags:read", "Read and identify tags"],
-  ["tags:write", "Register and assign tags (future device API)"],
-  ["inventory:read", "Read inventory records (future device API)"],
-  ["spools:weight", "Submit spool weights (reserved)"],
-  ["devices:status", "Report device status (reserved)"],
+  ["tags:write", "Register and assign tags via the device API"],
+  ["inventory:read", "Search permitted inventory records via the device API"],
+  ["spools:weight", "Submit validated spool measurements via the device API"],
+  ["devices:status", "Reserved for future device status reporting"],
 ];
 const SCOPE_NAMES = { "tags:read": "Read and identify tags", "tags:write": "Register and assign tags", "inventory:read": "Read inventory records", "spools:weight": "Record spool weights", "devices:status": "Report device status" };
 
@@ -145,7 +145,7 @@ export default function ApiKeysPanel() {
   return <div className="apiKeysPanel">
     <div className="apiKeysIntro">
       <h4>API Keys</h4>
-      <p>Create credentials for RFID terminals, weighing stations and future integrations. Device API authentication is not yet enabled.</p>
+      <p>Create scoped credentials for RFID terminals and other hardware integrations. Device API authentication is available on this build. Copy newly issued keys immediately; they are only shown once.</p>
     </div>
     {error && <p role="alert" className="error">{error}</p>}
     {notice && <p role="status" className="notice">{notice}</p>}
