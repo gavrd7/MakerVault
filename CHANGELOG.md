@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.3.0 — Hardware device API and scoped keys (release preparation)
+
+- Added user-managed API keys with explicit scopes, optional expiry, one-time token display, editing and revocation; browser login, MFA and CSRF protections remain separate from bearer authentication.
+- Added dedicated `/api/device/v1/` endpoints for authenticated device identity, RFID/NFC Maker Tag resolution and controlled registration/assignment, and permitted inventory/spool record searches.
+- Added initial filament weighing-station measurement API workflow and weight history interfaces; hardware integration and scale calibration still require real-device validation.
+- Added device authentication/rate-limit and API-key lifecycle regression coverage, including restrictions on unauthorised actions.
+- Validated PR #140 in GitHub CI and staging: authenticated device identity, unknown RFID UID resolution, read-only write rejection, revoked-key rejection, database migrations 0060/0061, and manual Inventory/Projects/3D Printing/API Keys checks.
+- Clarified API-key UI descriptions for supported device endpoints.
+
+**Release gate:** Pass CI on this release PR, merge it, create the matching `v1.3.0` Git tag, publish the GHCR image, and verify the released image on staging before upgrading production. Handheld Wi-Fi and HTTPS pairing are separately developed and not part of this container release.
+
+
 ## v1.2.3 — Security maintenance (release preparation)
 
 - Updated Django to 5.2.18 to address October 2026 security advisories.
