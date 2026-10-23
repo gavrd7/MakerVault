@@ -1578,3 +1578,38 @@ class UserApiKey(TimeStampedModel):
             and self.revoked_at is None
             and (self.expires_at is None or self.expires_at > now)
         )
+
+
+class ConnectedDevice(TimeStampedModel):
+    """Owner-bound physical device; credentials remain in UserApiKey."""
+    TYPES = [("rfid_terminal", "RFID/NFC terminal"), ("filament_scale", "Filament weighing station")]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="connected_devices")
+    device_uid = models.CharField(max_length=120, unique=True)
+    name = models.CharField(max_length=120)
+    device_type = models.CharField(max_length=24, choices=TYPES)
+    firmware_version = models.CharField(max_length=80, blank=True)
+    capabilities = models.JSONField(default=list, blank=True)
+    api_key = models.OneToOneField("UserApiKey", null=True, blank=True, on_delete=models.SET_NULL, related_name="connected_device")
+    last_seen_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["name", "created_at"]
+
+
+class DevicePairing(TimeStampedModel):
+    """Short-lived one-time pairing challenge; never store a raw claim secret."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    device_uid = models.CharField(max_length=120)
+    device_type = models.CharField(max_length=24, choices=ConnectedDevice.TYPES)
+    claim_digest = models.CharField(max_length=64)
+    confirmation_code = models.CharField(max_length=8, unique=True)
+    expires_at = models.DateTimeField()
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.CASCADE)
+    approved_name = models.CharField(max_length=120, blank=True)
+    approved_scopes = models.JSONField(default=list)
+    consumed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
