@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <strong>Current stable release: v1.2.2</strong>
+  <strong>Upcoming release: v1.2.3 (security maintenance; not yet published)</strong>
 </p>
 
 <p align="center">
@@ -22,7 +22,9 @@
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
-**What’s new in v1.2.2:** direct Maker Tag shortcuts from inventory, projects, filament and reusable spools, printers, printed parts and storage locations; contextual return navigation; permission-controlled QR/NFC/RFID tag deletion; a dedicated Model Library navigation entry; and improved storage-location management.
+**What’s new in the upcoming v1.2.3:** Django 5.2.18, Vite 8.3.3 and Pillow 13 security dependency updates. The release is pending validation and publication.
+
+**Previously in v1.2.2:** direct Maker Tag shortcuts from inventory, projects, filament and reusable spools, printers, printed parts and storage locations; contextual return navigation; permission-controlled QR/NFC/RFID tag deletion; a dedicated Model Library navigation entry; and improved storage-location management.
 
 
 MakerVault keeps the practical parts of a workshop connected: what you own, what a build needs, which files and wiring belong to it, which model revision you printed, and where the finished parts ended up.
