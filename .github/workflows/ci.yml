@@ -34,6 +34,13 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - name: Install backend dependencies
@@ -68,6 +75,7 @@ jobs:
         run: python backend/manage.py check --deploy
       - name: Django and importer tests
         env:
+          REDIS_URL: redis://redis:6379/0
           PYTHONPATH: backend
           DJANGO_SECRET_KEY: ci-only-secret-key-for-makervault-tests-0123456789
           POSTGRES_PASSWORD: ci-only-password
