@@ -1,7 +1,12 @@
 from django.urls import path
-from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views, device_api_views, device_measurements, weight_history_views
+from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views, device_api_views, device_pairing, device_measurements, weight_history_views
 
 urlpatterns = [
+    path("device/v1/pairing/start/", device_pairing.start_pairing, name="api-device-pairing-start"),
+    path("device/v1/pairing/<uuid:pairing_id>/complete/", device_pairing.complete_pairing, name="api-device-pairing-complete"),
+    path("account/connected-devices/", device_pairing.connected_devices, name="api-connected-devices"),
+    path("account/connected-devices/pair/approve/", device_pairing.approve_pairing, name="api-connected-device-approve"),
+    path("account/connected-devices/<uuid:device_id>/revoke/", device_pairing.revoke_device, name="api-connected-device-revoke"),
     path("device/v1/measurements/requests/<uuid:request_id>/", device_measurements.measurement_request_status, name="api-device-measurement-request-status"),
     path("weight-history/", weight_history_views.weight_history, name="api-weight-history"),
     path("device/v1/spools/identify/", device_measurements.identify_spool, name="api-device-spool-identify"),
