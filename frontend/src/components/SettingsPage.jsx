@@ -5,6 +5,7 @@ import AdminUsersPanel from "./AdminUsersPanel";
 import CatalogueCoveragePanel from "./CatalogueCoveragePanel";
 import BackupRestorePanel from "./BackupRestorePanel";
 import HttpsCertificatePanel from "./HttpsCertificatePanel";
+import ApiKeysPanel from "./ApiKeysPanel";
 
 const EXPERIMENTAL_PRINTER_CAPABILITIES = {
   bambu_ams: {
@@ -426,16 +427,17 @@ export default function SettingsPage({ config, onBackupStarted }) {
 
     {activeTab === "account" && <section className="panel settingsPanel">
       <div className="panelHead"><div><h3>User Account</h3><p>Manage your email, password, two-factor authentication and connected accounts without leaving Settings.</p></div></div>
-      <div className="settingsAccountLinks settingsAccountSelector" role="group" aria-label="User account options">
+      <div className="settingsAccountLinks settingsAccountSelector" role="group" aria-label="User account options" style={{ padding: "14px 20px", boxSizing: "border-box" }}>
         {[
           ["Email addresses", "/accounts/email/"],
           ["Change password", "/accounts/password/change/"],
           ["Two-factor authentication", "/accounts/2fa/"],
           ["Connected accounts", "/accounts/3rdparty/"],
+          ["API Keys", "api-keys"],
         ].map(([label, path]) => <button key={path} type="button" className={accountRoute === path ? "active" : ""} aria-pressed={accountRoute === path} onClick={() => setAccountRoute(path)}>{label}</button>)}
       </div>
       {accountRoute === "/accounts/3rdparty/" && <div className="settingsCallout"><strong>Connected accounts</strong><p>Any external identities linked to your MakerVault login will appear below. If none are linked, you can keep using your local password. Available connection options depend on configured identity providers.</p></div>}
-      <AccountSettingsFrame key={accountRoute} src={accountRoute} title="Account preferences" />
+      {accountRoute === "api-keys" ? <ApiKeysPanel /> : <AccountSettingsFrame key={accountRoute} src={accountRoute} title="Account preferences" />}
     </section>}
     {activeTab === "security" && config?.is_superuser && <section className="panel settingsPanel">
       <div className="panelHead"><div><h3>Security</h3><p>Server-wide authentication and identity-provider administration.</p></div></div>

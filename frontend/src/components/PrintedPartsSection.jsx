@@ -1,3 +1,4 @@
+import WeightHistory from "./WeightHistory";
 import React, { useEffect, useState } from "react";
 import { apiFetch } from "../api";
 import { Badge, Modal } from "./Common";
@@ -42,11 +43,13 @@ export default function PrintedPartsSection({ config, projects = [], projectId =
       <label>Find parts<input value={search} onChange={e => setSearch(e.target.value)} placeholder="Name, model, project or location" /></label>
       <label>Status<select value={status} onChange={e => setStatus(e.target.value)}><option value="">All states</option>{Object.entries(STATES).map(([key, value]) => <option key={key} value={key}>{value}</option>)}</select></label>
     </div>
-    <div className="printingList">{visible.map(part => <article className="printingListRow" key={part.id}>
+    <div className="printingList">{visible.map(part => <article className="printingListRow makerVaultAlignedRow" key={part.id}>
       <div><strong>{part.name} · {part.quantity}</strong><small>{part.project || "No project"} · {part.location || "No location"}{part.model ? ` · ${part.model} ${part.revision || ""}` : ""}</small></div>
-      <Badge tone={part.status === "installed" ? "good" : "neutral"}>{part.status_label}</Badge>
-      <button type="button" onClick={() => onOpenMakerTags("printed_part", part.id)}>Maker Tags</button>
-      <button onClick={() => open(part)}>{config?.permissions?.change_printedpart ? "Manage" : "View"}</button>
+      <div className="makerVaultRowActions">
+        <Badge tone={part.status === "installed" ? "good" : "neutral"}>{part.status_label}</Badge>
+        <button type="button" onClick={() => onOpenMakerTags("printed_part", part.id)}>Maker Tags</button>
+        <button type="button" onClick={() => open(part)}>{config?.permissions?.change_printedpart ? "Manage" : "View"}</button>
+      </div>
     </article>)}{!visible.length && <p className="muted">No retained parts match. Successful prints never add parts automatically.</p>}</div>
     {editing && options && <PartModal {...editing} options={options} rows={rows} projects={projects} projectId={projectId} canEditPrintJob={Boolean(config?.permissions?.change_printjob)} canEdit={Boolean(editing.part ? config?.permissions?.change_printedpart : config?.permissions?.add_printedpart)} onClose={() => setEditing(null)} onSaved={async () => { setEditing(null); await load(); }} />}
   </section>;
@@ -88,6 +91,7 @@ function PartModal({ part, job, options, rows, projects, projectId, canEditPrint
     }
   }
   return <Modal title={part ? "Printed part" : "Create printed parts"} onClose={onClose} wide>
+    {part && <WeightHistory targetType="printed_part" targetId={part.id} />}
     <form onSubmit={save} className="formGrid">
       {error && <div className="error full" role="alert">{error}</div>}
       {!part && <label className="full">Successful print (optional)<select disabled={!canEdit || busy} value={form.print_job_id} onChange={e => {

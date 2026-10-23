@@ -2964,3 +2964,67 @@ a:focus-visible,
   .tagRow.tagRowSelectable{grid-template-columns:24px 54px minmax(0,1fr);gap:10px}
   .tagRowSelectable .tagRowActions{grid-column:3;justify-content:flex-start;flex-wrap:wrap}
 }
+
+/* Settings page body spacing: shared account and backup panels. */
+.settingsPanel > .settingsAccountSelector { margin: 14px 20px 18px; }
+.settingsPanel > .settingsCallout { margin-left: 20px; margin-right: 20px; }
+.settingsPanel > .settingsAccountFrame { width: calc(100% - 40px); margin: 0 20px 20px; }
+.backupStack > .settingsPanel { padding: 0 20px 20px; }
+.backupStack > .settingsPanel > .panelHead { margin: 0 -20px 20px; }
+.backupStack > .settingsPanel > .backupSummaryGrid { margin-top: 0; margin-bottom: 18px; }
+@media (max-width: 640px) {
+  .settingsPanel > .settingsAccountSelector { margin-left: 14px; margin-right: 14px; }
+  .settingsPanel > .settingsCallout { margin-left: 14px; margin-right: 14px; }
+  .settingsPanel > .settingsAccountFrame { width: calc(100% - 28px); margin: 0 14px 14px; }
+  .backupStack > .settingsPanel { padding: 0 14px 14px; }
+  .backupStack > .settingsPanel > .panelHead { margin: 0 -14px 14px; }
+}
+
+/* HTTPS layout uses an explicit body wrapper; old direct-child margin
+   overrides do not apply inside it. Keep one authoritative spacing system. */
+.settingsHttpsPanel { padding: 0; }
+.settingsHttpsPanel > .panelHead { margin: 0; }
+.settingsHttpsPanel > .httpsPanelBody {
+  display: grid;
+  gap: 20px;
+  padding: 20px 22px 24px;
+  min-width: 0;
+}
+.settingsHttpsPanel .httpsPanelBody > * { min-width: 0; margin: 0; }
+.settingsHttpsPanel .httpsPanelBody > .httpsModeGrid,
+.settingsHttpsPanel .httpsPanelBody > .httpsGenerateGrid,
+.settingsHttpsPanel .httpsPanelBody > .httpsSetupFlow,
+.settingsHttpsPanel .httpsPanelBody > .httpsCertGrid {
+  column-gap: 14px;
+  row-gap: 14px;
+}
+.settingsHttpsPanel .httpsPanelBody > .settingsCallout { margin: 0; }
+.settingsHttpsPanel .httpsPanelBody .httpsGenerateGrid > * { min-width: 0; }
+@media (max-width: 640px) {
+  .settingsHttpsPanel { padding: 0; }
+  .settingsHttpsPanel > .panelHead { margin: 0; }
+  .settingsHttpsPanel > .httpsPanelBody { padding: 16px 14px 18px; gap: 16px; }
+}
+
+
+/* Consistent mobile-friendly right-aligned actions for printed parts and locations. */
+.printingListRow.makerVaultAlignedRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+.makerVaultAlignedRow > :first-child { min-width: 0; }
+.makerVaultRowActions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.makerVaultRowActions button { flex: 0 0 auto; }
+@media (max-width: 700px) {
+  .printingListRow.makerVaultAlignedRow { grid-template-columns: minmax(0, 1fr); }
+  .makerVaultRowActions { width: 100%; justify-content: flex-end; }
+}
