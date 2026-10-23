@@ -2,6 +2,7 @@ from django.urls import path
 from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views, device_api_views, device_pairing, device_measurements, weight_history_views
 
 urlpatterns = [
+    path("device/v1/heartbeat/", device_pairing.device_heartbeat, name="api-device-heartbeat"),
     path("device/v1/pairing/start/", device_pairing.start_pairing, name="api-device-pairing-start"),
     path("device/v1/pairing/<uuid:pairing_id>/complete/", device_pairing.complete_pairing, name="api-device-pairing-complete"),
     path("account/connected-devices/", device_pairing.connected_devices, name="api-connected-devices"),
