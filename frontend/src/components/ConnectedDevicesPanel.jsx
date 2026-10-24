@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { apiFetch } from "../api";
 
 export default function ConnectedDevicesPanel() {
@@ -18,12 +18,37 @@ export default function ConnectedDevicesPanel() {
   const [editName, setEditName] = useState("");
   const [editScopes, setEditScopes] = useState([]);
   const [awaiting, setAwaiting] = useState(null);
+  const pollingBusy = useRef(false);
 
   async function reload() {
     const result = await apiFetch("/api/account/connected-devices/");
     setRows(result.rows || []);
   }
   useEffect(() => { reload().catch(e => setError(e.message)); }, []);
+  // Refresh only device status data; never reload Settings or reset open forms.
+  useEffect(() => {
+    let stopped = false;
+    async function refreshStatus() {
+      if (stopped || document.hidden || pollingBusy.current) return;
+      pollingBusy.current = true;
+      try {
+        const data = await apiFetch("/api/account/connected-devices/");
+        if (!stopped) setRows(data.rows || []);
+      } catch {
+        // Keep last known state during transient outages; user actions still surface errors.
+      } finally {
+        pollingBusy.current = false;
+      }
+    }
+    const timer = window.setInterval(refreshStatus, 30000);
+    const onVisible = () => { if (!document.hidden) refreshStatus(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
   useEffect(() => {
     if (!awaiting) return undefined;
     let stopped = false;
