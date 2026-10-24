@@ -167,3 +167,19 @@ Error JSON is typically `{"error":"human-readable message"}`; treat the **HTTP s
 ### Explicit release boundary
 
 Firmware v0.4.4.2 currently uses manual API keys; it **cannot yet complete pairing v1**. The backend and UI are not production-ready merely because CI passes. Validate real physical ESP32 pairing, trusted TLS, token persistence, permission changes, heartbeat, offline recovery, expiry and revocation on staging before merging or publishing v1.3.0.
+
+
+## End-user wizard and release documentation requirements
+
+The MakerVault UI implements a four-step wizard: **(1) device type/name/permissions, (2) local Wi-Fi preparation, (3) mandatory trusted HTTPS setup and starting pairing on hardware, (4) entering the server-issued eight-digit code and awaiting completion**. It is intentionally user-driven: the server does not discover or provision an offline ESP32. Permission checkboxes default to `tags:read` and `devices:status`; tag writes and weight commits must be explicitly opted into.
+
+**HTTPS must be enabled on the MakerVault server before pairing.** In production the pairing API refuses plain HTTP. The hardware must validate the server certificate and hostname; publicly signed TLS works using normal trusted roots, and private/self-signed deployments require explicit CA/certificate trust on the device. This is a prerequisite, not an optional enhancement. An HTTP site or disabled verification is not a supported hardware pairing configuration.
+
+### Documentation publication checklist — required for v1.3.0
+
+- Update the MakerVault README with Connected Devices capabilities, pairing prerequisites, a short onboarding route, and a link to full instructions.
+- Update the separate user-guide repository with screenshots and complete end-user procedures for both MakerVault-led and terminal/phone-led onboarding: enabling HTTPS and trusting a certificate, Wi-Fi/QR/local AP bootstrap, acquiring an eight-digit code, approving read-only versus write scopes, confirming status, modifying permissions, revoking/re-pairing, and troubleshooting expired codes, TLS failures and lost credentials.
+- Document the filament weighing station as a supported device *type*, distinguishing backend availability from firmware/hardware readiness.
+- Use screenshots from the final tested UI and physical terminal only; older one-page-form screenshots are obsolete. Capture the wizard's four steps, device details/edit permissions and error/expiry states. Capture physical terminal code screen, LAN QR setup and connection detail screens once firmware pairing v1 is operational.
+- Link to the canonical v1 API contract for firmware implementers. Keep API keys in advanced/legacy integration instructions, not in the normal pairing walkthrough.
+- Do not merge PR #146 or publish v1.3.0 until documentation, automated CI, HTTPS staging pairing and real ESP32 integration are accepted.
