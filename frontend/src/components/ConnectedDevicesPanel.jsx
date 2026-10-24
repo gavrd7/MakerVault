@@ -142,6 +142,7 @@ export default function ConnectedDevicesPanel() {
           <strong>{device.name}</strong>
           <p>{device.device_type === "rfid_terminal" ? "RFID/NFC Terminal" : "Filament Weighing Station"} · {device.revoked_at ? "Unpaired" : device.online ? "Recently connected" : "Offline / not recently seen"}</p>
           <small>Device ID: {device.device_uid} · Scopes: {(device.scopes || []).join(", ") || "None"} · Last seen: {device.last_seen_at ? new Date(device.last_seen_at).toLocaleString() : "Never"}</small>
+          <p><small>Wi-Fi: {device.online ? (device.reported_status?.wifi || "Not reported") : "Unknown (offline)"} · MakerVault API: {device.online ? "Recently verified" : "Offline / no heartbeat"} · Hardware: {device.online ? (device.reported_status?.hardware || "Not reported") : "Unknown (offline)"}</small></p>
         </div>
         {!device.revoked_at && <div style={{ display: "flex", gap: 8 }}>
           <button type="button" disabled={busy} onClick={() => beginEdit(device)}>Edit</button>
