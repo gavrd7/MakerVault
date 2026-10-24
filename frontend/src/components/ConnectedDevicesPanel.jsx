@@ -11,6 +11,9 @@ export default function ConnectedDevicesPanel() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [editName, setEditName] = useState("");
+  const [editScopes, setEditScopes] = useState([]);
 
   async function reload() {
     const result = await apiFetch("/api/account/connected-devices/");
@@ -30,6 +33,41 @@ export default function ConnectedDevicesPanel() {
       });
       setAdding(false); setCode(""); setName("");
       setNotice("Approved. The device can now securely collect its one-time credential.");
+      await reload();
+    } catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+
+  const permissionOptions = {
+    rfid_terminal: [
+      ["tags:read", "Read and resolve tags"],
+      ["inventory:read", "Search inventory and spools"],
+      ["tags:write", "Register and assign tags"],
+      ["devices:status", "Update device connection status"],
+    ],
+    filament_scale: [
+      ["tags:read", "Read and resolve tags"],
+      ["inventory:read", "Search inventory and spools"],
+      ["spools:weight", "Record confirmed spool weights"],
+      ["devices:status", "Update device connection status"],
+    ],
+  };
+
+  function beginEdit(device) {
+    setEditing(device.id);
+    setEditName(device.name);
+    setEditScopes([...(device.scopes || [])]);
+    setError(""); setNotice("");
+  }
+
+  async function saveEdit(event) {
+    event.preventDefault(); setBusy(true); setError("");
+    try {
+      await apiFetch(`/api/account/connected-devices/${editing}/`, {
+        method: "PATCH", body: JSON.stringify({ name: editName, scopes: editScopes }),
+      });
+      setEditing(null);
+      setNotice("Device permissions updated. Changes take effect on its next API request.");
       await reload();
     } catch (e) { setError(e.message); }
     finally { setBusy(false); }
@@ -69,7 +107,7 @@ export default function ConnectedDevicesPanel() {
           <label>Device name <input required maxLength={120} value={name} onChange={e => setName(e.target.value)} placeholder="Workshop reader" /></label>
           <label>Eight-digit pairing code <input required inputMode="numeric" pattern="[0-9]{8}" maxLength={8} value={code} onChange={e => setCode(e.target.value.replace(/\\D/g, ""))} /></label>
         </div>
-        {kind === "rfid_terminal" && <label><input type="checkbox" checked={write} onChange={e => setWrite(e.target.checked)} /> Allow tag registration and assignment (write access)</label>}
+        {kind === "rfid_terminal" && <label style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 16 }}><input type="checkbox" checked={write} onChange={e => setWrite(e.target.checked)} /> Allow tag registration and assignment (write access)</label>}
         <p>New devices receive limited read-only scopes by default. Write permissions require explicit approval.</p>
         <button className="primary" disabled={busy || code.length !== 8 || !name.trim()}>Approve pairing</button>
       </form>
@@ -81,7 +119,26 @@ export default function ConnectedDevicesPanel() {
           <p>{device.device_type === "rfid_terminal" ? "RFID/NFC Terminal" : "Filament Weighing Station"} · {device.revoked_at ? "Unpaired" : device.online ? "Recently connected" : "Offline / not recently seen"}</p>
           <small>Device ID: {device.device_uid} · Scopes: {(device.scopes || []).join(", ") || "None"} · Last seen: {device.last_seen_at ? new Date(device.last_seen_at).toLocaleString() : "Never"}</small>
         </div>
-        {!device.revoked_at && <button type="button" disabled={busy} onClick={() => revoke(device)}>Unpair</button>}
+        {!device.revoked_at && <div style={{ display: "flex", gap: 8 }}>
+          <button type="button" disabled={busy} onClick={() => beginEdit(device)}>Edit</button>
+          <button type="button" disabled={busy} onClick={() => revoke(device)}>Unpair</button>
+        </div>}
+        {editing === device.id && <form onSubmit={saveEdit} style={{ width: "100%", paddingTop: 12 }}>
+          <h4>Edit device permissions</h4>
+          <label>Device name <input required maxLength={120} value={editName} onChange={e => setEditName(e.target.value)} /></label>
+          <div style={{ display: "grid", gap: 10, margin: "16px 0" }}>
+            {(permissionOptions[device.device_type] || []).map(([scope, label]) =>
+              <label key={scope} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <input type="checkbox" checked={editScopes.includes(scope)} onChange={e => setEditScopes(old => e.target.checked ? [...old, scope] : old.filter(x => x !== scope))} />
+                {label} <small>({scope})</small>
+              </label>)}
+          </div>
+          <p>Permissions are enforced immediately. A previously issued credential cannot gain rights beyond those selected here.</p>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="primary" disabled={busy || !editScopes.length || !editName.trim()}>Save changes</button>
+            <button type="button" onClick={() => setEditing(null)}>Cancel</button>
+          </div>
+        </form>}
       </article>)}
     </div>}
     <p>Wi-Fi connection, MakerVault API access and device health are separate statuses. Offline devices remain registered; a temporary network outage does not reopen setup mode.</p>
