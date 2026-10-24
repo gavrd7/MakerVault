@@ -243,7 +243,7 @@ def edit_device(request, device_id):
     except (ValueError, TypeError, json.JSONDecodeError) as exc:
         return error(str(exc))
     with transaction.atomic():
-        device = ConnectedDevice.objects.select_for_update().select_related("api_key").filter(
+        device = ConnectedDevice.objects.select_for_update(of=("self",)).filter(
             pk=device_id, owner=request.user, revoked_at__isnull=True
         ).first()
         if not device or not device.api_key or not device.api_key.is_active():
