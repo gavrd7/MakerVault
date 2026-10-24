@@ -147,6 +147,25 @@ class PairingTests(TestCase):
         )
         self.assertEqual(result.status_code, 400, result.content)
 
+
+    def test_device_delete_revokes_key_and_is_owner_scoped(self):
+        claim = self.start().json()
+        self.client.force_login(self.owner)
+        self.assertEqual(self.approve(claim["confirmation_code"]).status_code, 200)
+        self.client.logout()
+        key = self.complete(claim["pairing_id"]).json()["api_key"]
+        device = ConnectedDevice.objects.get()
+        path = f"/api/account/connected-devices/{device.pk}/"
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.delete(path).status_code, 404)
+        self.assertTrue(ConnectedDevice.objects.filter(pk=device.pk).exists())
+        self.client.force_login(self.owner)
+        self.assertEqual(self.client.delete(path).status_code, 200)
+        self.assertFalse(ConnectedDevice.objects.filter(pk=device.pk).exists())
+        self.assertEqual(self.client.get("/api/device/v1/me/",
+                         HTTP_AUTHORIZATION=f"Bearer {key}").status_code, 401)
+        self.assertEqual(self.client.delete(path).status_code, 404)
+
     @override_settings(DEBUG=False)
     def test_tls_required_for_claims(self):
         self.assertEqual(self.start().status_code, 403)
