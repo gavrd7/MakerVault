@@ -195,7 +195,7 @@ export default function ConnectedDevicesPanel() {
         <div className="deviceCardHeader">
           <div><h4>{device.name}</h4><span className="deviceCardType">{device.device_type === "rfid_terminal" ? "RFID/NFC Terminal" : "Filament Weighing Station"}</span></div>
           <span className={`deviceStateBadge ${device.revoked_at ? "unpaired" : device.online ? "online" : "offline"}`}>
-            {device.revoked_at ? "Unpaired" : device.online ? "Recently connected" : "Offline"}
+            {device.revoked_at ? "Unpaired" : device.online ? "Connected" : "Offline"}
           </span>
         </div>
         <div className="deviceStatusGrid">
