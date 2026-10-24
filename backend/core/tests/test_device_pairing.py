@@ -83,6 +83,40 @@ class PairingTests(TestCase):
         self.assertEqual(self.client.get("/api/account/connected-devices/").json()["rows"], [])
         self.assertEqual(self.post(f"/api/account/connected-devices/{device.id}/revoke/", {}).status_code, 404)
 
+
+    def test_edit_permissions_owner_only_and_immediate(self):
+        claim = self.start().json()
+        self.client.force_login(self.owner)
+        self.assertEqual(self.approve(claim["confirmation_code"]).status_code, 200)
+        self.client.logout()
+        credential = self.complete(claim["pairing_id"]).json()["api_key"]
+        device = ConnectedDevice.objects.get()
+        path = f"/api/account/connected-devices/{device.pk}/"
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.patch(path, json.dumps({"scopes": ["tags:write"]}),
+                                           content_type="application/json").status_code, 404)
+        self.client.force_login(self.owner)
+        self.assertEqual(self.client.patch(path, json.dumps({"scopes": ["spools:weight"]}),
+                                           content_type="application/json").status_code, 400)
+        self.assertEqual(self.client.patch(path, json.dumps({"scopes": []}),
+                                           content_type="application/json").status_code, 400)
+        response = self.client.patch(path, json.dumps({"name": "Edited reader",
+                                        "scopes": ["tags:read", "tags:write", "devices:status"]}),
+                                     content_type="application/json")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["item"]["name"], "Edited reader")
+        self.assertEqual(set(UserApiKey.objects.get(pk=device.api_key_id).scopes),
+                         {"tags:read", "tags:write", "devices:status"})
+        self.assertEqual(self.client.get("/api/device/v1/me/",
+                                        HTTP_AUTHORIZATION=f"Bearer {credential}").status_code, 200)
+        self.assertEqual(self.client.patch(path, json.dumps({"scopes": ["tags:read", "devices:status"]}),
+                                           content_type="application/json").status_code, 200)
+        me = self.client.get("/api/device/v1/me/", HTTP_AUTHORIZATION=f"Bearer {credential}")
+        self.assertTrue(me.json()["read_only"])
+        self.assertEqual(self.post(f"/api/account/connected-devices/{device.pk}/revoke/", {}).status_code, 200)
+        self.assertEqual(self.client.patch(path, json.dumps({"name": "Revived"}),
+                                           content_type="application/json").status_code, 404)
+
     @override_settings(DEBUG=False)
     def test_tls_required_for_claims(self):
         self.assertEqual(self.start().status_code, 403)
