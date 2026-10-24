@@ -58,7 +58,7 @@ def limited(request, group, identity, maximum):
 def describe(device):
     return {"id": str(device.id), "name": device.name, "device_uid": device.device_uid,
             "device_type": device.device_type, "firmware_version": device.firmware_version,
-            "capabilities": device.capabilities, "scopes": device.api_key.scopes if device.api_key else [],
+            "capabilities": device.capabilities, "reported_status": device.reported_status, "scopes": device.api_key.scopes if device.api_key else [],
             "last_seen_at": device.last_seen_at.isoformat() if device.last_seen_at else None,
             "revoked_at": device.revoked_at.isoformat() if device.revoked_at else None,
             "online": bool(device.last_seen_at and device.last_seen_at > timezone.now() - timedelta(minutes=3)
@@ -281,6 +281,12 @@ def device_heartbeat(request):
         info = payload(request)
         version = info.get("firmware_version", "")
         capabilities = info.get("capabilities", [])
+        reported = info.get("status", {})
+        if not isinstance(reported, dict) or set(reported) - {"wifi", "api", "hardware"} or any(
+            not isinstance(v, str) or v not in {"connected", "disconnected", "ok", "degraded", "error", "unknown"}
+            for v in reported.values()
+        ):
+            raise ValueError("Invalid device status.")
         if not isinstance(version, str) or len(version) > 80:
             raise ValueError("Invalid firmware version.")
         if not isinstance(capabilities, list) or len(capabilities) > 25 or any(
@@ -291,7 +297,8 @@ def device_heartbeat(request):
         return error(str(exc))
     updated = ConnectedDevice.objects.filter(owner=request.device_owner, api_key=request.device_key,
                                               revoked_at__isnull=True).update(
-        last_seen_at=timezone.now(), firmware_version=version, capabilities=capabilities)
+        last_seen_at=timezone.now(), firmware_version=version, capabilities=capabilities,
+        reported_status=reported)
     if not updated:
         return error("No active connected device is bound to this credential.", 403)
     return JsonResponse({"status": "ok"})
