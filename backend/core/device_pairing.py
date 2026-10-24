@@ -233,6 +233,25 @@ def revoke_device(request, device_id):
 
 
 @login_required
+@require_http_methods(["DELETE"])
+def delete_device(request, device_id):
+    """Permanently remove an owned device record; never leave its token usable."""
+    with transaction.atomic():
+        device = ConnectedDevice.objects.select_for_update().filter(pk=device_id, owner=request.user).first()
+        if not device:
+            return error("Device not found.", 404)
+        uid = device.device_uid
+        if device.api_key_id:
+            UserApiKey.objects.filter(pk=device.api_key_id, owner=request.user).update(revoked_at=timezone.now())
+        # Old approved claims must not be able to complete and recreate a deleted device.
+        DevicePairing.objects.filter(device_uid=uid).delete()
+        device.delete()
+    response = JsonResponse({"deleted": True})
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+@login_required
 @require_http_methods(["PATCH"])
 def edit_device(request, device_id):
     """Update a paired device and its existing scoped key without issuing a new secret."""
