@@ -128,6 +128,9 @@ def approve_pairing(request):
     try:
         data = payload(request)
         code, name = data.get("confirmation_code"), data.get("name")
+        requested_type = data.get("device_type")
+        if requested_type not in DEVICE_SCOPES:
+            raise ValueError("Select a supported device type.")
         if not isinstance(code, str) or not re.fullmatch(r"[0-9]{8}", code):
             raise ValueError("Enter the eight-digit code shown on the device.")
         if not isinstance(name, str) or not 1 <= len(name.strip()) <= 120:
@@ -140,6 +143,8 @@ def approve_pairing(request):
             return error("Pairing code is invalid, expired or already used.", 404)
         if claim.approved_by_id:
             return error("Device awaiting completion.", 409)
+        if claim.device_type != requested_type:
+            return error("Pairing code belongs to a different device type.", 409)
         existing = ConnectedDevice.objects.filter(device_uid=claim.device_uid).first()
         if existing and (existing.revoked_at is None or existing.owner_id != request.user.pk):
             return error("Device identity is already owned.", 409)
@@ -155,7 +160,8 @@ def approve_pairing(request):
         claim.approved_name = name.strip()
         claim.approved_scopes = scopes
         claim.save(update_fields=["approved_by", "approved_name", "approved_scopes", "updated_at"])
-    return JsonResponse({"approved": True, "device_type": claim.device_type})
+    return JsonResponse({"approved": True, "device_type": claim.device_type,
+                         "pairing_id": str(claim.pk), "device_uid": claim.device_uid})
 
 
 @csrf_exempt
