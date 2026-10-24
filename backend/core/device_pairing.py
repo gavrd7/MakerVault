@@ -226,6 +226,47 @@ def revoke_device(request, device_id):
     return JsonResponse({"item": describe(device)})
 
 
+@login_required
+@require_http_methods(["PATCH"])
+def edit_device(request, device_id):
+    """Update a paired device and its existing scoped key without issuing a new secret."""
+    if not request.user.is_active:
+        return error("Account is inactive.", 403)
+    try:
+        data = payload(request)
+        if not data or set(data) - {"name", "scopes"}:
+            return error("Only name and scopes may be edited.")
+        scopes = list(validate_scopes(data["scopes"])) if "scopes" in data else None
+        name = data.get("name")
+        if name is not None and (not isinstance(name, str) or not 1 <= len(name.strip()) <= 120):
+            return error("Device name must be 1–120 characters.")
+    except (ValueError, TypeError, json.JSONDecodeError) as exc:
+        return error(str(exc))
+    with transaction.atomic():
+        device = ConnectedDevice.objects.select_for_update().select_related("api_key").filter(
+            pk=device_id, owner=request.user, revoked_at__isnull=True
+        ).first()
+        if not device or not device.api_key or not device.api_key.is_active():
+            return error("Active paired device not found.", 404)
+        if scopes is not None and not set(scopes) <= DEVICE_SCOPES[device.device_type]:
+            return error("Unsupported scope for this device type.")
+        key = UserApiKey.objects.select_for_update().get(pk=device.api_key_id, owner=request.user)
+        if not key.is_active():
+            return error("Device API key is inactive.", 409)
+        if scopes is not None:
+            key.scopes = scopes
+        if name is not None:
+            device.name = name.strip()
+            key.name = device.name
+            device.save(update_fields=["name", "updated_at"])
+        key.full_clean()
+        key.save(update_fields=["scopes", "name", "updated_at"])
+        device.api_key = key
+    response = JsonResponse({"item": describe(device)})
+    response["Cache-Control"] = "no-store"
+    return response
+
+
 @require_http_methods(["POST"])
 @require_device_scope("devices:status")
 def device_heartbeat(request):
