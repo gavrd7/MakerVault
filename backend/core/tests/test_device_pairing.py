@@ -121,6 +121,32 @@ class PairingTests(TestCase):
         self.assertEqual(self.client.patch(path, json.dumps({"name": "Revived"}),
                                            content_type="application/json").status_code, 404)
 
+
+    def test_optional_heartbeat_status_and_validation(self):
+        claim = self.start().json()
+        self.client.force_login(self.owner)
+        self.assertEqual(self.approve(claim["confirmation_code"]).status_code, 200)
+        self.client.logout()
+        token = self.complete(claim["pairing_id"]).json()["api_key"]
+        headers = {"HTTP_AUTHORIZATION": "Bearer " + token}
+        result = self.client.post(
+            "/api/device/v1/heartbeat/",
+            json.dumps({"firmware_version": "0.4.4.2", "capabilities": ["rfid", "wifi"],
+                        "status": {"wifi": "connected", "api": "ok", "hardware": "degraded"}}),
+            content_type="application/json", **headers,
+        )
+        self.assertEqual(result.status_code, 200, result.content)
+        device = ConnectedDevice.objects.get()
+        device.refresh_from_db()
+        self.assertEqual(device.reported_status["hardware"], "degraded")
+        self.assertIsNotNone(device.last_seen_at)
+        result = self.client.post(
+            "/api/device/v1/heartbeat/",
+            json.dumps({"status": {"hardware": "unexpected"}}),
+            content_type="application/json", **headers,
+        )
+        self.assertEqual(result.status_code, 400, result.content)
+
     @override_settings(DEBUG=False)
     def test_tls_required_for_claims(self):
         self.assertEqual(self.start().status_code, 403)
