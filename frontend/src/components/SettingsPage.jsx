@@ -6,6 +6,7 @@ import CatalogueCoveragePanel from "./CatalogueCoveragePanel";
 import BackupRestorePanel from "./BackupRestorePanel";
 import HttpsCertificatePanel from "./HttpsCertificatePanel";
 import ApiKeysPanel from "./ApiKeysPanel";
+import ConnectedDevicesPanel from "./ConnectedDevicesPanel";
 
 const EXPERIMENTAL_PRINTER_CAPABILITIES = {
   bambu_ams: {
@@ -434,10 +435,11 @@ export default function SettingsPage({ config, onBackupStarted }) {
           ["Two-factor authentication", "/accounts/2fa/"],
           ["Connected accounts", "/accounts/3rdparty/"],
           ["API Keys", "api-keys"],
+          ["Connected Devices", "connected-devices"],
         ].map(([label, path]) => <button key={path} type="button" className={accountRoute === path ? "active" : ""} aria-pressed={accountRoute === path} onClick={() => setAccountRoute(path)}>{label}</button>)}
       </div>
       {accountRoute === "/accounts/3rdparty/" && <div className="settingsCallout"><strong>Connected accounts</strong><p>Any external identities linked to your MakerVault login will appear below. If none are linked, you can keep using your local password. Available connection options depend on configured identity providers.</p></div>}
-      {accountRoute === "api-keys" ? <ApiKeysPanel /> : <AccountSettingsFrame key={accountRoute} src={accountRoute} title="Account preferences" />}
+      {accountRoute === "api-keys" ? <ApiKeysPanel /> : accountRoute === "connected-devices" ? <ConnectedDevicesPanel /> : <AccountSettingsFrame key={accountRoute} src={accountRoute} title="Account preferences" />}
     </section>}
     {activeTab === "security" && config?.is_superuser && <section className="panel settingsPanel">
       <div className="panelHead"><div><h3>Security</h3><p>Server-wide authentication and identity-provider administration.</p></div></div>
