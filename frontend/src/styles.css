@@ -3078,3 +3078,27 @@ a:focus-visible,
 .connectedDevicesPanel .deviceWizardActions{max-width:880px;width:100%;border-top:0;padding:8px 0 0;justify-content:flex-start;margin:0}
 .connectedDevicesPanel .deviceWizardPage + .deviceWizardActions{margin-top:-4px}
 @media(max-width:700px){.connectedDevicesPanel > .deviceList{padding:14px}.connectedDevicesPanel .deviceListItem{grid-template-columns:1fr}.connectedDevicesPanel > .deviceWizard{padding:16px 14px 10px}.connectedDevicesPanel > .deviceEmptyState,.connectedDevicesPanel > .deviceFootnote{padding:14px}}
+
+/* Compact connected-device overview. */
+.connectedDevicesPanel .deviceListItem{grid-template-columns:minmax(0,1fr);gap:14px}
+.deviceCardHeader{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.deviceCardHeader h4{margin:0 0 5px;font-size:17px}
+.deviceCardType{color:#99a6b8;font-size:13px}
+.deviceStateBadge{font-size:12px;font-weight:700;border-radius:30px;padding:6px 10px;white-space:nowrap;border:1px solid #495466;color:#c9d2df}
+.deviceStateBadge.online{border-color:#345e4c;color:#b9f1d1}
+.deviceStateBadge.unpaired{color:#aab5c6}
+.deviceStatusGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.deviceStatusTile{display:grid;gap:8px;min-width:0;padding:13px;border:1px solid #29313c;border-radius:10px;background:#111820}
+.deviceStatusTile span{font-size:12px;color:#8995a7}
+.deviceStatusTile strong{font-size:13px;font-weight:650;overflow-wrap:anywhere}
+.deviceDetails{border-top:1px solid #29313c;padding-top:12px}
+.deviceDetails summary{cursor:pointer;font-weight:650;font-size:13px;color:#bcb0ff}
+.deviceDetails dl{display:grid;grid-template-columns:115px minmax(0,1fr);gap:10px;margin:14px 0 0;font-size:13px}
+.deviceDetails dt{color:#8995a7}.deviceDetails dd{margin:0;overflow-wrap:anywhere}
+.deviceScopeList{display:flex;flex-wrap:wrap;gap:6px}
+.deviceScopeList code{padding:5px 8px;border:1px solid #344052;border-radius:6px;background:#151d27;color:#dce5f2;font-size:12px}
+.deviceCardActions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
+.deviceDeleteButton{border-color:#674047;color:#ffbbc4}
+.deviceDeleteButton:hover{border-color:#a34c5d;background:#2a171c}
+@media(max-width:860px){.deviceStatusGrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:480px){.deviceStatusGrid{grid-template-columns:minmax(0,1fr)}.deviceCardHeader{flex-wrap:wrap}.deviceDetails dl{grid-template-columns:1fr;gap:5px}}
