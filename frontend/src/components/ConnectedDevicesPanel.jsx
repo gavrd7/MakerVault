@@ -4,6 +4,9 @@ import { apiFetch } from "../api";
 export default function ConnectedDevicesPanel() {
   const [rows, setRows] = useState([]);
   const [adding, setAdding] = useState(false);
+  const [step, setStep] = useState(0);
+  const [networkReady, setNetworkReady] = useState(false);
+  const [httpsReady, setHttpsReady] = useState(false);
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [initialScopes, setInitialScopes] = useState(["tags:read", "devices:status"]);
@@ -51,7 +54,7 @@ export default function ConnectedDevicesPanel() {
         body: JSON.stringify({ name, confirmation_code: code, device_type: kind, scopes }),
       });
       setAwaiting({ device_uid: result.device_uid, pairing_id: result.pairing_id });
-      setAdding(false); setCode(""); setName("");
+      setAdding(false); setStep(0); setCode(""); setName("");
       setNotice("Approved. Waiting for the device to collect and save its credential…");
       await reload();
     } catch (e) { setError(e.message); }
@@ -107,43 +110,73 @@ export default function ConnectedDevicesPanel() {
   return <section className="panel settingsPanel">
     <div className="panelHead">
       <div><h3>Connected Devices</h3><p>Manage MakerVault hardware and approve secure device pairing.</p></div>
-      <button type="button" className="primary" onClick={() => setAdding(!adding)}> {adding ? "Cancel" : "Add Device"} </button>
+      <button type="button" className="primary" onClick={() => { setAdding(!adding); setStep(0); }}> {adding ? "Cancel" : "Add Device"} </button>
     </div>
     {error && <p role="alert" className="error">{error}</p>}
     {notice && <p role="status" className="notice">{notice}</p>}
     {awaiting && <div role="status" className="notice"><strong>Waiting for device confirmation.</strong> The device must complete pairing over verified HTTPS. Refreshing the registered device list automatically. If the one-time token is lost, unpair and start again. <button type="button" onClick={() => { setAwaiting(null); reload().catch(e => setError(e.message)); }}>Stop watching</button></div>}
-    {adding && <div className="settingsPanel">
-      <h4>Connect a hardware device</h4>
-      <p><strong>MakerVault-led setup (recommended).</strong> Choose the device type, name and permissions below. Complete Wi-Fi setup on the terminal first; the server cannot discover an unnetworked ESP32.</p>
-      <p><strong>1. Prepare the connection.</strong> On a phone, join the setup Wi-Fi shown on your device and enter your home Wi-Fi credentials in its local portal. On a desktop, connect using the device's setup access point or a compatible USB setup utility. MakerVault cannot contact hardware that has not joined a network.</p>
-      <p><strong>2. Verify HTTPS.</strong> Configure the MakerVault server URL on the device and trust its certificate. For a private/self-signed certificate, install the correct CA explicitly; do not disable certificate checks.</p>
-      <p><strong>Alternative: terminal + phone.</strong> On the terminal, choose Connections → MakerVault → Pair device. Its local QR setup page helps configure the network, server URL and certificate trust. You still approve the exact same code here.</p>
-      <p><strong>3. Approve pairing.</strong> Read the eight-digit code displayed on the device. It expires after five minutes. Never enter your MakerVault password into the device.</p>
-      <form onSubmit={approve}>
+    {adding && <div className="deviceWizard">
+      <div className="deviceWizardProgress" aria-label="Pairing wizard progress">
+        {["Device & permissions", "Network setup", "Secure pairing", "Approve"].map((label, index) =>
+          <div key={label} className={`deviceWizardProgressItem ${index === step ? "current" : index < step ? "done" : ""}`}>
+            <span className="deviceWizardNumber">{index + 1}</span><span>{label}</span>
+          </div>)}
+      </div>
+      {step === 0 && <div className="deviceWizardPage">
+        <h4>1. Choose your device</h4>
+        <p>Select the hardware you want to connect. These settings will be submitted when you approve the device's pairing code.</p>
         <div className="formGrid">
-          <label>Device type
-            <select value={kind} onChange={e => { setKind(e.target.value); setInitialScopes(["tags:read", "devices:status"]); }}>
-              <option value="rfid_terminal">RFID/NFC terminal</option>
-              <option value="filament_scale">Filament weighing station</option>
-            </select>
-          </label>
-          <label>Device name <input required maxLength={120} value={name} onChange={e => setName(e.target.value)} placeholder="Workshop reader" /></label>
-          <label>Eight-digit pairing code <input required inputMode="numeric" pattern="[0-9]{8}" maxLength={8} value={code} onChange={e => setCode(e.target.value.split("").filter(char => char >= "0" && char <= "9").join(""))} /></label>
+          <label>Device type<select value={kind} onChange={e => { setKind(e.target.value); setInitialScopes(["tags:read", "devices:status"]); }}>
+            <option value="rfid_terminal">RFID/NFC terminal</option><option value="filament_scale">Filament weighing station</option>
+          </select></label>
+          <label>Device name<input required maxLength={120} value={name} onChange={e => setName(e.target.value)} placeholder="Workshop reader" /></label>
         </div>
-        <fieldset style={{ border: 0, padding: "12px 0", margin: "8px 0" }}>
-          <legend><strong>Device permissions</strong></legend>
-          <div style={{ display: "grid", gap: 10 }}>
-            {(permissionOptions[kind] || []).map(([scope, label]) =>
-              <label key={scope} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <input type="checkbox" checked={initialScopes.includes(scope)}
-                  onChange={e => setInitialScopes(old => e.target.checked ? [...old, scope] : old.filter(x => x !== scope))} />
-                {label} <small>({scope})</small>
-              </label>)}
+        <fieldset className="devicePermissionGroup"><legend>Permissions</legend>
+          <p>Read-only tag access and connection reporting are enabled by default. Additional access is optional.</p>
+          <div className="devicePermissionList">
+            {(permissionOptions[kind] || []).map(([scope, label]) => <label key={scope} className="devicePermissionOption">
+              <input type="checkbox" checked={initialScopes.includes(scope)} onChange={e => setInitialScopes(old =>
+                e.target.checked ? [...old, scope] : old.filter(item => item !== scope))} />
+              <span className="devicePermissionText"><strong>{label}</strong><small>{scope}{scope === "tags:write" || scope === "spools:weight" ? " · Write access" : ""}</small></span>
+            </label>)}
           </div>
         </fieldset>
-        <p>New devices receive limited read-only scopes by default. Write permissions require explicit approval.</p>
-        <button className="primary" disabled={busy || code.length !== 8 || !name.trim() || !initialScopes.length}>Approve pairing</button>
-      </form>
+      </div>}
+      {step === 1 && <div className="deviceWizardPage">
+        <h4>2. Connect the device to Wi-Fi</h4>
+        <p>MakerVault cannot connect to or discover hardware that has not joined a network.</p>
+        <div className="deviceWizardInfo">
+          <strong>Already connected?</strong><p>Use your terminal's saved Wi-Fi connection and continue.</p>
+          <strong>Using a phone?</strong><p>On the terminal, open its Connections setup and use the LAN QR webpage, or start its temporary setup Wi-Fi when offline. Enter Wi-Fi credentials locally on the device.</p>
+          <strong>Desktop setup</strong><p>Use the hardware's local configuration page or a compatible USB setup helper, if available.</p>
+        </div>
+        <label className="devicePermissionOption"><input type="checkbox" checked={networkReady} onChange={e => setNetworkReady(e.target.checked)} /><span>My device is connected to a usable network.</span></label>
+      </div>}
+      {step === 2 && <div className="deviceWizardPage">
+        <h4>3. Enable verified HTTPS</h4>
+        <div className="deviceWizardRequirement"><strong>HTTPS is required to pair devices.</strong><p>Enable HTTPS for MakerVault before continuing. Both the browser approval and the terminal's API connection must use secure HTTPS.</p></div>
+        <p>Configure the MakerVault HTTPS URL in your terminal. Publicly trusted certificates normally work automatically; for self-signed/private certificates, explicitly install the trusted CA or certificate on the device. Never disable TLS verification.</p>
+        <p>Then open <strong>Connections → MakerVault → Pair device</strong> on the terminal. It will request and display an eight-digit code from MakerVault. The terminal + phone method uses the same pairing API and approval below.</p>
+        <label className="devicePermissionOption"><input type="checkbox" checked={httpsReady} onChange={e => setHttpsReady(e.target.checked)} /><span>MakerVault HTTPS is enabled and the device trusts its certificate.</span></label>
+      </div>}
+      {step === 3 && <div className="deviceWizardPage">
+        <h4>4. Approve the pairing code</h4>
+        <p>Enter the server-issued eight-digit code displayed on the device. The code expires after five minutes. Never type your MakerVault password or a permanent API key into the device.</p>
+        <form id="devicePairApproval" onSubmit={approve}>
+          <label className="deviceWizardCodeLabel">Eight-digit pairing code
+            <input required autoComplete="off" inputMode="numeric" pattern="[0-9]{8}" maxLength={8} value={code}
+              onChange={e => setCode(e.target.value.split("").filter(char => char >= "0" && char <= "9").join(""))} placeholder="00000000" />
+          </label>
+          <p><strong>Device:</strong> {name.trim()} ({kind === "rfid_terminal" ? "RFID/NFC terminal" : "Filament weighing station"})</p>
+          <p><strong>Permissions:</strong> {initialScopes.join(", ")}</p>
+          <p>After approval, MakerVault will watch for the terminal to complete pairing and store its credential.</p>
+        </form>
+      </div>}
+      <div className="deviceWizardActions">
+        <button type="button" disabled={busy} onClick={() => { if (step === 0) { setAdding(false); } else { setStep(step - 1); } }}>{step === 0 ? "Cancel" : "Back"}</button>
+        {step < 3 ? <button type="button" className="primary" disabled={busy || (step === 0 && (!name.trim() || !initialScopes.length)) || (step === 1 && !networkReady) || (step === 2 && !httpsReady)} onClick={() => setStep(step + 1)}>Continue</button> :
+          <button form="devicePairApproval" className="primary" disabled={busy || code.length !== 8 || !name.trim() || !initialScopes.length}>Approve pairing</button>}
+      </div>
     </div>}
     {rows.length === 0 ? <p>No devices paired yet.</p> : <div className="settingsList">
       {rows.map(device => <article key={device.id} className="settingsListItem">
@@ -160,9 +193,9 @@ export default function ConnectedDevicesPanel() {
         {editing === device.id && <form onSubmit={saveEdit} style={{ width: "100%", paddingTop: 12 }}>
           <h4>Edit device permissions</h4>
           <label>Device name <input required maxLength={120} value={editName} onChange={e => setEditName(e.target.value)} /></label>
-          <div style={{ display: "grid", gap: 10, margin: "16px 0" }}>
+          <div className="devicePermissionList">
             {(permissionOptions[device.device_type] || []).map(([scope, label]) =>
-              <label key={scope} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <label key={scope} className="devicePermissionOption">
                 <input type="checkbox" checked={editScopes.includes(scope)} onChange={e => setEditScopes(old => e.target.checked ? [...old, scope] : old.filter(x => x !== scope))} />
                 {label} <small>({scope})</small>
               </label>)}
