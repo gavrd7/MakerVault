@@ -14,12 +14,32 @@ export default function ConnectedDevicesPanel() {
   const [editing, setEditing] = useState(null);
   const [editName, setEditName] = useState("");
   const [editScopes, setEditScopes] = useState([]);
+  const [awaiting, setAwaiting] = useState(null);
 
   async function reload() {
     const result = await apiFetch("/api/account/connected-devices/");
     setRows(result.rows || []);
   }
   useEffect(() => { reload().catch(e => setError(e.message)); }, []);
+  useEffect(() => {
+    if (!awaiting) return undefined;
+    let stopped = false;
+    async function check() {
+      try {
+        const data = await apiFetch("/api/account/connected-devices/");
+        if (stopped) return;
+        setRows(data.rows || []);
+        const paired = (data.rows || []).find(device => device.device_uid === awaiting.device_uid && !device.revoked_at);
+        if (paired) {
+          setAwaiting(null);
+          setNotice(`${paired.name} has completed pairing. Waiting for its first heartbeat to report API connectivity.`);
+        }
+      } catch (e) { if (!stopped) setError(e.message); }
+    }
+    check();
+    const timer = window.setInterval(check, 3000);
+    return () => { stopped = true; window.clearInterval(timer); };
+  }, [awaiting]);
 
   async function approve(event) {
     event.preventDefault();
@@ -27,12 +47,13 @@ export default function ConnectedDevicesPanel() {
     try {
       const scopes = kind === "filament_scale" ? ["tags:read", "inventory:read", "devices:status"] :
         write ? ["tags:read", "tags:write", "devices:status"] : ["tags:read", "devices:status"];
-      await apiFetch("/api/account/connected-devices/pair/approve/", {
+      const result = await apiFetch("/api/account/connected-devices/pair/approve/", {
         method: "POST",
-        body: JSON.stringify({ name, confirmation_code: code, scopes }),
+        body: JSON.stringify({ name, confirmation_code: code, device_type: kind, scopes }),
       });
+      setAwaiting({ device_uid: result.device_uid, pairing_id: result.pairing_id });
       setAdding(false); setCode(""); setName("");
-      setNotice("Approved. The device can now securely collect its one-time credential.");
+      setNotice("Approved. Waiting for the device to collect and save its credential…");
       await reload();
     } catch (e) { setError(e.message); }
     finally { setBusy(false); }
@@ -91,10 +112,13 @@ export default function ConnectedDevicesPanel() {
     </div>
     {error && <p role="alert" className="error">{error}</p>}
     {notice && <p role="status" className="notice">{notice}</p>}
+    {awaiting && <div role="status" className="notice"><strong>Waiting for device confirmation.</strong> The device must complete pairing over verified HTTPS. Refreshing the registered device list automatically. If the one-time token is lost, unpair and start again. <button type="button" onClick={() => { setAwaiting(null); reload().catch(e => setError(e.message)); }}>Stop watching</button></div>}
     {adding && <div className="settingsPanel">
       <h4>Connect a hardware device</h4>
+      <p><strong>MakerVault-led setup (recommended).</strong> Choose the device type, name and permissions below. Complete Wi-Fi setup on the terminal first; the server cannot discover an unnetworked ESP32.</p>
       <p><strong>1. Prepare the connection.</strong> On a phone, join the setup Wi-Fi shown on your device and enter your home Wi-Fi credentials in its local portal. On a desktop, connect using the device's setup access point or a compatible USB setup utility. MakerVault cannot contact hardware that has not joined a network.</p>
       <p><strong>2. Verify HTTPS.</strong> Configure the MakerVault server URL on the device and trust its certificate. For a private/self-signed certificate, install the correct CA explicitly; do not disable certificate checks.</p>
+      <p><strong>Alternative: terminal + phone.</strong> On the terminal, choose Connections → MakerVault → Pair device. Its local QR setup page helps configure the network, server URL and certificate trust. You still approve the exact same code here.</p>
       <p><strong>3. Approve pairing.</strong> Read the eight-digit code displayed on the device. It expires after five minutes. Never enter your MakerVault password into the device.</p>
       <form onSubmit={approve}>
         <div className="formGrid">
