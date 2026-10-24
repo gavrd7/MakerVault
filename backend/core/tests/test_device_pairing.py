@@ -23,7 +23,7 @@ class PairingTests(TestCase):
 
     def approve(self, code, scopes=None):
         return self.post("/api/account/connected-devices/pair/approve/",
-                         {"confirmation_code": code, "name": "Workbench Reader",
+                         {"confirmation_code": code, "device_type": "rfid_terminal", "name": "Workbench Reader",
                           "scopes": scopes or ["tags:read", "devices:status"]})
 
     def complete(self, pairing_id, secret=None):
@@ -37,7 +37,11 @@ class PairingTests(TestCase):
         self.assertNotIn(self.proof, str(DevicePairing.objects.get(pk=claim["pairing_id"]).__dict__))
         self.assertEqual(self.complete(claim["pairing_id"]).status_code, 202)
         self.client.force_login(self.owner)
-        self.assertEqual(self.approve(claim["confirmation_code"]).status_code, 200)
+        self.assertEqual(self.post("/api/account/connected-devices/pair/approve/", {"confirmation_code": claim["confirmation_code"], "device_type": "filament_scale", "name": "Wrong device", "scopes": ["tags:read"]}).status_code, 409)
+        approval = self.approve(claim["confirmation_code"])
+        self.assertEqual(approval.status_code, 200)
+        self.assertEqual(approval.json()["device_uid"], "maker-terminal-001")
+        self.assertEqual(approval.json()["pairing_id"], claim["pairing_id"])
         self.client.logout()
         result = self.complete(claim["pairing_id"])
         self.assertEqual(result.status_code, 200, result.content)
