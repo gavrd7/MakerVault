@@ -132,13 +132,13 @@ POST /api/device/v1/heartbeat/
 Authorization: Bearer <stored-api-key>
 Content-Type: application/json
 
-{"firmware_version":"0.4.4.2","capabilities":["rfid","nfc","wifi"]}
+{"firmware_version":"0.4.4.2","capabilities":["rfid","nfc","wifi"],"status":{"wifi":"connected","api":"ok","hardware":"ok"}}
 ```
 
-200: `{"status":"ok"}`. Requires `devices:status`; `firmware_version` up to 80 characters and `capabilities` an array of at most 25 strings of at most 60 characters each. Heartbeat updates server API last-seen; it does **not** establish Wi-Fi strength or hardware readiness.
+200: `{"status":"ok"}`. Requires `devices:status`; `firmware_version` up to 80 characters and `capabilities` an array of at most 25 strings of at most 60 characters each. Heartbeat updates server API last-seen; it does **not** independently establish Wi-Fi strength or hardware readiness. The optional `status` object reports device-observed `wifi`, `api`, and `hardware` state (each value `connected`, `disconnected`, `ok`, `degraded`, `error`, or `unknown`). These are device-reported observations, not server attestations; when offline or stale the UI shows them as unknown. Omitting `status` is compatible with initial pairing-v1 firmware and records no reported state.
 
 **Owner-management endpoints** (authenticated browser session + CSRF on mutations):
-- `GET /api/account/connected-devices/` → `{"rows":[...],"device_types":["rfid_terminal","filament_scale"]}`; rows include `id`, `name`, `device_uid`, `device_type`, `scopes`, `firmware_version`, `capabilities`, `last_seen_at`, `revoked_at`, `online`.
+- `GET /api/account/connected-devices/` → `{"rows":[...],"device_types":["rfid_terminal","filament_scale"]}`; rows include `id`, `name`, `device_uid`, `device_type`, `scopes`, `firmware_version`, `capabilities`, `reported_status`, `last_seen_at`, `revoked_at`, `online`.
 - `PATCH /api/account/connected-devices/{device_id}/` → `{"name":"Workshop reader","scopes":["tags:read","devices:status","tags:write"]}`; 200 `{"item":{...}}`, effective on subsequent device requests. The underlying credential remains the same. Scope must belong to the paired device type; never silently grant write access.
 - `POST /api/account/connected-devices/{device_id}/revoke/` → 200 `{"item":{...}}`. The Bearer key is revoked immediately.
 - A revoked device can re-pair only with fresh claim credentials and owner approval. An existing active device identity cannot be claimed again, and an identity revoked by **another owner** cannot be acquired.
