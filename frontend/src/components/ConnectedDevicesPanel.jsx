@@ -96,6 +96,18 @@ export default function ConnectedDevicesPanel() {
     finally { setBusy(false); }
   }
 
+  async function remove(device) {
+    if (!window.confirm(`Permanently delete "${device.name}" from Connected Devices? Its API key will be revoked and its saved device record removed. This cannot be undone; pairing again will require a new code.`)) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      await apiFetch(`/api/account/connected-devices/${device.id}/`, { method: "DELETE" });
+      if (editing === device.id) setEditing(null);
+      setNotice(`${device.name} was permanently deleted.`);
+      await reload();
+    } catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+
   async function revoke(device) {
     if (!window.confirm(`Unpair ${device.name}? Its API credential will be revoked immediately.`)) return;
     setBusy(true); setError("");
@@ -180,16 +192,30 @@ export default function ConnectedDevicesPanel() {
     </div>}
     {rows.length === 0 ? <p className="deviceEmptyState">No devices paired yet.</p> : <div className="settingsList deviceList">
       {rows.map(device => <article key={device.id} className="settingsListItem deviceListItem">
-        <div>
-          <strong>{device.name}</strong>
-          <p>{device.device_type === "rfid_terminal" ? "RFID/NFC Terminal" : "Filament Weighing Station"} · {device.revoked_at ? "Unpaired" : device.online ? "Recently connected" : "Offline / not recently seen"}</p>
-          <small>Device ID: {device.device_uid} · Scopes: {(device.scopes || []).join(", ") || "None"} · Last seen: {device.last_seen_at ? new Date(device.last_seen_at).toLocaleString() : "Never"}</small>
-          <p><small>Wi-Fi: {device.online ? (device.reported_status?.wifi || "Not reported") : "Unknown (offline)"} · MakerVault API: {device.online ? "Recently verified" : "Offline / no heartbeat"} · Hardware: {device.online ? (device.reported_status?.hardware || "Not reported") : "Unknown (offline)"}</small></p>
+        <div className="deviceCardHeader">
+          <div><h4>{device.name}</h4><span className="deviceCardType">{device.device_type === "rfid_terminal" ? "RFID/NFC Terminal" : "Filament Weighing Station"}</span></div>
+          <span className={`deviceStateBadge ${device.revoked_at ? "unpaired" : device.online ? "online" : "offline"}`}>
+            {device.revoked_at ? "Unpaired" : device.online ? "Recently connected" : "Offline"}
+          </span>
         </div>
-        {!device.revoked_at && <div style={{ display: "flex", gap: 8 }}>
-          <button type="button" disabled={busy} onClick={() => beginEdit(device)}>Edit</button>
-          <button type="button" disabled={busy} onClick={() => revoke(device)}>Unpair</button>
-        </div>}
+        <div className="deviceStatusGrid">
+          <div className="deviceStatusTile"><span>Wi-Fi</span><strong>{device.online ? (device.reported_status?.wifi || "Not reported") : "Unknown"}</strong></div>
+          <div className="deviceStatusTile"><span>MakerVault API</span><strong>{device.revoked_at ? "Revoked" : device.online ? "Recently verified" : "No recent heartbeat"}</strong></div>
+          <div className="deviceStatusTile"><span>Hardware</span><strong>{device.online ? (device.reported_status?.hardware || "Not reported") : "Unknown"}</strong></div>
+          <div className="deviceStatusTile"><span>Last heartbeat</span><strong>{device.last_seen_at ? new Date(device.last_seen_at).toLocaleString() : "Never"}</strong></div>
+        </div>
+        <details className="deviceDetails"><summary>Device details and permissions</summary>
+          <dl><dt>Device ID</dt><dd>{device.device_uid}</dd><dt>Firmware</dt><dd>{device.firmware_version || "Not reported"}</dd><dt>Permissions</dt>
+            <dd><div className="deviceScopeList">{(device.scopes || []).map(scope => <code key={scope}>{scope}</code>)}</div></dd>
+          </dl>
+        </details>
+        <div className="deviceCardActions">
+          {!device.revoked_at && <>
+            <button type="button" disabled={busy} onClick={() => beginEdit(device)}>Edit</button>
+            <button type="button" disabled={busy} onClick={() => revoke(device)}>Unpair</button>
+          </>}
+          <button type="button" className="deviceDeleteButton" disabled={busy} onClick={() => remove(device)}>Delete</button>
+        </div>
         {editing === device.id && <form onSubmit={saveEdit} style={{ width: "100%", paddingTop: 12 }}>
           <h4>Edit device permissions</h4>
           <label>Device name <input required maxLength={120} value={editName} onChange={e => setEditName(e.target.value)} /></label>
