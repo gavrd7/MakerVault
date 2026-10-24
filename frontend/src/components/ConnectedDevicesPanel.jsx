@@ -6,7 +6,7 @@ export default function ConnectedDevicesPanel() {
   const [adding, setAdding] = useState(false);
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
-  const [write, setWrite] = useState(false);
+  const [initialScopes, setInitialScopes] = useState(["tags:read", "devices:status"]);
   const [kind, setKind] = useState("rfid_terminal");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -45,8 +45,7 @@ export default function ConnectedDevicesPanel() {
     event.preventDefault();
     setBusy(true); setError(""); setNotice("");
     try {
-      const scopes = kind === "filament_scale" ? ["tags:read", "inventory:read", "devices:status"] :
-        write ? ["tags:read", "tags:write", "devices:status"] : ["tags:read", "devices:status"];
+      const scopes = initialScopes;
       const result = await apiFetch("/api/account/connected-devices/pair/approve/", {
         method: "POST",
         body: JSON.stringify({ name, confirmation_code: code, device_type: kind, scopes }),
@@ -123,7 +122,7 @@ export default function ConnectedDevicesPanel() {
       <form onSubmit={approve}>
         <div className="formGrid">
           <label>Device type
-            <select value={kind} onChange={e => setKind(e.target.value)}>
+            <select value={kind} onChange={e => { setKind(e.target.value); setInitialScopes(["tags:read", "devices:status"]); }}>
               <option value="rfid_terminal">RFID/NFC terminal</option>
               <option value="filament_scale">Filament weighing station</option>
             </select>
@@ -131,9 +130,19 @@ export default function ConnectedDevicesPanel() {
           <label>Device name <input required maxLength={120} value={name} onChange={e => setName(e.target.value)} placeholder="Workshop reader" /></label>
           <label>Eight-digit pairing code <input required inputMode="numeric" pattern="[0-9]{8}" maxLength={8} value={code} onChange={e => setCode(e.target.value.split("").filter(char => char >= "0" && char <= "9").join(""))} /></label>
         </div>
-        {kind === "rfid_terminal" && <label style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 16 }}><input type="checkbox" checked={write} onChange={e => setWrite(e.target.checked)} /> Allow tag registration and assignment (write access)</label>}
+        <fieldset style={{ border: 0, padding: "12px 0", margin: "8px 0" }}>
+          <legend><strong>Device permissions</strong></legend>
+          <div style={{ display: "grid", gap: 10 }}>
+            {(permissionOptions[kind] || []).map(([scope, label]) =>
+              <label key={scope} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <input type="checkbox" checked={initialScopes.includes(scope)}
+                  onChange={e => setInitialScopes(old => e.target.checked ? [...old, scope] : old.filter(x => x !== scope))} />
+                {label} <small>({scope})</small>
+              </label>)}
+          </div>
+        </fieldset>
         <p>New devices receive limited read-only scopes by default. Write permissions require explicit approval.</p>
-        <button className="primary" disabled={busy || code.length !== 8 || !name.trim()}>Approve pairing</button>
+        <button className="primary" disabled={busy || code.length !== 8 || !name.trim() || !initialScopes.length}>Approve pairing</button>
       </form>
     </div>}
     {rows.length === 0 ? <p>No devices paired yet.</p> : <div className="settingsList">
