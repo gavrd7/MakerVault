@@ -1590,6 +1590,7 @@ class ConnectedDevice(TimeStampedModel):
     device_type = models.CharField(max_length=24, choices=TYPES)
     firmware_version = models.CharField(max_length=80, blank=True)
     capabilities = models.JSONField(default=list, blank=True)
+    reported_status = models.JSONField(default=dict, blank=True)
     api_key = models.OneToOneField("UserApiKey", null=True, blank=True, on_delete=models.SET_NULL, related_name="connected_device")
     last_seen_at = models.DateTimeField(null=True, blank=True)
     revoked_at = models.DateTimeField(null=True, blank=True)
