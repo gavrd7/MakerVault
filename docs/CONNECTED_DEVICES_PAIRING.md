@@ -188,3 +188,20 @@ The MakerVault UI implements a four-step wizard: **(1) device type/name/permissi
 ## Connected Devices live status refresh
 
 While the Connected Devices panel is open, the browser refreshes its device list/heartbeat information every 30 seconds without reloading the Settings page or resetting the active wizard and edit form. Polling pauses when the browser tab is hidden and resumes when it becomes visible again. The server still determines Connected versus Offline from the authenticated heartbeat (three-minute recency window), rather than inferring reachability from the browser's presence. Firmware must keep heartbeats running while its home screen is displayed.
+
+
+## Physical ESP32-S3 acceptance evidence — 2026-10-24 (firmware v0.5.1.8)
+
+Staging environment: MakerVault HTTPS on port 8443, issued under the private MakerVault Local CA. Protocol remains `makervault-device-v1`. Results below are hands-on observations reported by the hardware tester, not automated CI results.
+
+**Passed:** eight-digit account-approved pairing, one-time device credential persistence, reboot and Wi-Fi recovery, autonomous home-screen heartbeats, permission changes including `tags:write`, rename/unpair/re-pair/delete, invalid and expired code rejection, blocked HTTPS port and restoration without re-pair, and server certificate reissue under the same trusted Local CA.
+
+**Private CA rejection, passed:** An unrelated independent OpenSSL CA was imported as the terminal's trusted custom CA while the MakerVault server certificate remained unchanged. The firmware's manual Test HTTPS operation reported **TCP/TLS: Certificate rejected**, no HTTP API response, and native mbedTLS `-9984` (`-0x2700`, X.509 verification failure). This is positive evidence of trust-chain enforcement for that tested request, not just an HTTP connection failure.
+
+**Recovery, passed:** Restoring the correct MakerVault Local CA without re-pairing resulted in **TCP/TLS: Verified** and **API: Authenticated** with the existing stored credential; a reboot also reauthenticated successfully.
+
+**Remaining firmware acceptance:** (1) explicitly demonstrate certificate hostname mismatch rejection while reaching the same staging server; (2) confirm missing custom CA rejection with TLS-specific evidence (a prior blank-CA attempt only returned generic HTTP -1); (3) verify stale diagnostics clear after failed-then-successful manual HTTPS testing without reboot (planned firmware v0.5.1.9); and (4) complete the separately scoped end-to-end tag-operation firmware milestone. Hostname/missing-CA tests must not be misreported as passed until evidenced.
+
+The stale diagnostic is a **firmware UI state bug**, not a demonstrated backend/TLS verification failure; track the correction in MakerVault-Hardware. Do not move firmware code into this PR.
+
+**Release gate remains closed:** update illustrated user guide and both READMEs, run CI on latest PR head, confirm 30-second Connected Devices refresh on staging, complete remaining security diagnostics, and obtain final hardware acceptance before merging PR #146 or publishing v1.3.0.
