@@ -140,7 +140,7 @@ Content-Type: application/json
 **Owner-management endpoints** (authenticated browser session + CSRF on mutations):
 - `GET /api/account/connected-devices/` → `{"rows":[...],"device_types":["rfid_terminal","filament_scale"]}`; rows include `id`, `name`, `device_uid`, `device_type`, `scopes`, `firmware_version`, `capabilities`, `reported_status`, `last_seen_at`, `revoked_at`, `online`.
 - `PATCH /api/account/connected-devices/{device_id}/` → `{"name":"Workshop reader","scopes":["tags:read","devices:status","tags:write"]}`; 200 `{"item":{...}}`, effective on subsequent device requests. The underlying credential remains the same. Scope must belong to the paired device type; never silently grant write access.
-- `POST /api/account/connected-devices/{device_id}/revoke/` → 200 `{"item":{...}}`. The Bearer key is revoked immediately.
+- `POST /api/account/connected-devices/{device_id}/revoke/` → 200 `{"item":{...}}`. The Bearer key is revoked immediately, but the device record remains as unpaired.\n- `DELETE /api/account/connected-devices/{device_id}/` → 200 `{"deleted":true}`. After user confirmation, revoke the bound key, remove pending/old pairing claims for the UID and permanently delete the owned device record; 404 for an unknown or another owner’s device. The physical terminal must pair again using a new code.
 - A revoked device can re-pair only with fresh claim credentials and owner approval. An existing active device identity cannot be claimed again, and an identity revoked by **another owner** cannot be acquired.
 
 ### Response status handling
