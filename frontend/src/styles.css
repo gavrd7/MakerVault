@@ -3060,3 +3060,21 @@ a:focus-visible,
 .deviceWizardActions{display:flex;justify-content:flex-end;gap:10px;padding-top:16px;border-top:1px solid #29313c}
 @media(max-width:800px){.deviceWizard{padding:18px 15px}.deviceWizardProgress{grid-template-columns:repeat(2,minmax(0,1fr))}.deviceWizardPage .formGrid{grid-template-columns:1fr}}
 @media(max-width:480px){.deviceWizardProgressItem{font-size:11px;padding:8px}.deviceWizardPage h4{font-size:17px}}
+
+/* Connected Devices panel uses the same in-panel padding as other settings pages. */
+.connectedDevicesPanel > .notice,.connectedDevicesPanel > .error{margin:16px 20px}
+.connectedDevicesPanel > .deviceEmptyState,.connectedDevicesPanel > .deviceFootnote{margin:0;padding:16px 22px;line-height:1.55;color:#aeb8c7}
+.connectedDevicesPanel > .deviceEmptyState{padding-bottom:8px}
+.connectedDevicesPanel > .deviceList{display:grid;gap:12px;padding:18px 22px 8px;min-width:0}
+.connectedDevicesPanel .deviceListItem{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:start;border:1px solid #29313c;border-radius:12px;background:#0d131a;padding:18px;min-width:0}
+.connectedDevicesPanel .deviceListItem > div:first-child{min-width:0;overflow-wrap:anywhere}
+.connectedDevicesPanel .deviceListItem p{line-height:1.55;margin:8px 0}
+.connectedDevicesPanel .deviceListItem small{display:inline-block;color:#8995a7;line-height:1.65;overflow-wrap:anywhere}
+.connectedDevicesPanel .deviceListItem > form{grid-column:1/-1;display:grid;gap:12px;border-top:1px solid #29313c;padding-top:16px!important}
+.connectedDevicesPanel .deviceListItem > form > label{display:grid;gap:7px}
+.connectedDevicesPanel > .deviceWizard{padding:22px 24px 12px;gap:16px}
+.connectedDevicesPanel .deviceWizardProgress{margin-bottom:2px}
+.connectedDevicesPanel .deviceWizardPage{padding:8px 0 0}
+.connectedDevicesPanel .deviceWizardActions{max-width:880px;width:100%;border-top:0;padding:8px 0 0;justify-content:flex-start;margin:0}
+.connectedDevicesPanel .deviceWizardPage + .deviceWizardActions{margin-top:-4px}
+@media(max-width:700px){.connectedDevicesPanel > .deviceList{padding:14px}.connectedDevicesPanel .deviceListItem{grid-template-columns:1fr}.connectedDevicesPanel > .deviceWizard{padding:16px 14px 10px}.connectedDevicesPanel > .deviceEmptyState,.connectedDevicesPanel > .deviceFootnote{padding:14px}}
