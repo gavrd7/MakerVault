@@ -35,7 +35,7 @@ export default function ConnectedDevicesPanel() {
         const paired = (data.rows || []).find(device => device.device_uid === awaiting.device_uid && !device.revoked_at);
         if (paired) {
           setAwaiting(null);
-          setNotice(`${paired.name} has completed pairing. Waiting for its first heartbeat to report API connectivity.`);
+          setNotice(`${paired.name} has completed pairing. ${paired.last_seen_at ? "Its heartbeat has also been received." : "Awaiting its first heartbeat; check that the terminal saved its key and started heartbeat requests."}`);
         }
       } catch (e) { if (!stopped) setError(e.message); }
     }
@@ -107,7 +107,7 @@ export default function ConnectedDevicesPanel() {
     finally { setBusy(false); }
   }
 
-  return <section className="panel settingsPanel">
+  return <section className="panel settingsPanel connectedDevicesPanel">
     <div className="panelHead">
       <div><h3>Connected Devices</h3><p>Manage MakerVault hardware and approve secure device pairing.</p></div>
       <button type="button" className="primary" onClick={() => { setAdding(!adding); setStep(0); }}> {adding ? "Cancel" : "Add Device"} </button>
@@ -178,8 +178,8 @@ export default function ConnectedDevicesPanel() {
           <button form="devicePairApproval" className="primary" disabled={busy || code.length !== 8 || !name.trim() || !initialScopes.length}>Approve pairing</button>}
       </div>
     </div>}
-    {rows.length === 0 ? <p>No devices paired yet.</p> : <div className="settingsList">
-      {rows.map(device => <article key={device.id} className="settingsListItem">
+    {rows.length === 0 ? <p className="deviceEmptyState">No devices paired yet.</p> : <div className="settingsList deviceList">
+      {rows.map(device => <article key={device.id} className="settingsListItem deviceListItem">
         <div>
           <strong>{device.name}</strong>
           <p>{device.device_type === "rfid_terminal" ? "RFID/NFC Terminal" : "Filament Weighing Station"} · {device.revoked_at ? "Unpaired" : device.online ? "Recently connected" : "Offline / not recently seen"}</p>
@@ -208,6 +208,6 @@ export default function ConnectedDevicesPanel() {
         </form>}
       </article>)}
     </div>}
-    <p>Wi-Fi connection, MakerVault API access and device health are separate statuses. Offline devices remain registered; a temporary network outage does not reopen setup mode.</p>
+    <p className="deviceFootnote">Wi-Fi connection, MakerVault API access and device health are separate statuses. Offline devices remain registered; a temporary network outage does not reopen setup mode.</p>
   </section>;
 }
