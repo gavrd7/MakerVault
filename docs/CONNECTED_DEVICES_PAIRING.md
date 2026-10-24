@@ -183,3 +183,8 @@ The MakerVault UI implements a four-step wizard: **(1) device type/name/permissi
 - Use screenshots from the final tested UI and physical terminal only; older one-page-form screenshots are obsolete. Capture the wizard's four steps, device details/edit permissions and error/expiry states. Capture physical terminal code screen, LAN QR setup and connection detail screens once firmware pairing v1 is operational.
 - Link to the canonical v1 API contract for firmware implementers. Keep API keys in advanced/legacy integration instructions, not in the normal pairing walkthrough.
 - Do not merge PR #146 or publish v1.3.0 until documentation, automated CI, HTTPS staging pairing and real ESP32 integration are accepted.
+
+
+## Connected Devices live status refresh
+
+While the Connected Devices panel is open, the browser refreshes its device list/heartbeat information every 30 seconds without reloading the Settings page or resetting the active wizard and edit form. Polling pauses when the browser tab is hidden and resumes when it becomes visible again. The server still determines Connected versus Offline from the authenticated heartbeat (three-minute recency window), rather than inferring reachability from the browser's presence. Firmware must keep heartbeats running while its home screen is displayed.
