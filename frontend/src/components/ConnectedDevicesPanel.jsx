@@ -129,7 +129,7 @@ export default function ConnectedDevicesPanel() {
             </select>
           </label>
           <label>Device name <input required maxLength={120} value={name} onChange={e => setName(e.target.value)} placeholder="Workshop reader" /></label>
-          <label>Eight-digit pairing code <input required inputMode="numeric" pattern="[0-9]{8}" maxLength={8} value={code} onChange={e => setCode(e.target.value.replace(/\\D/g, ""))} /></label>
+          <label>Eight-digit pairing code <input required inputMode="numeric" pattern="[0-9]{8}" maxLength={8} value={code} onChange={e => setCode(e.target.value.split("").filter(char => char >= "0" && char <= "9").join(""))} /></label>
         </div>
         {kind === "rfid_terminal" && <label style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 16 }}><input type="checkbox" checked={write} onChange={e => setWrite(e.target.checked)} /> Allow tag registration and assignment (write access)</label>}
         <p>New devices receive limited read-only scopes by default. Write permissions require explicit approval.</p>
