@@ -233,7 +233,13 @@ def revoke_device(request, device_id):
 
 
 @login_required
-@require_http_methods(["DELETE"])
+@require_http_methods(["PATCH", "DELETE"])
+def device_detail(request, device_id):
+    if request.method == "PATCH":
+        return edit_device(request, device_id)
+    return delete_device(request, device_id)
+
+
 def delete_device(request, device_id):
     """Permanently remove an owned device record; never leave its token usable."""
     with transaction.atomic():
