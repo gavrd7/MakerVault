@@ -8,6 +8,7 @@ import json
 from datetime import timedelta
 from functools import wraps
 
+from django.conf import settings
 from django.http import JsonResponse
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
@@ -37,6 +38,10 @@ def require_device_scope(scope):
         @csrf_exempt
         @wraps(view)
         def guarded(request, *args, **kwargs):
+            # Never evaluate bearer credentials on an insecure production request.
+            # request.is_secure() honours Django's configured trusted proxy TLS header.
+            if not request.is_secure() and not settings.DEBUG:
+                return _error("HTTPS required for device API credentials.", 403)
             blocked, retry = failed_auth_blocked(request)
             if blocked is None:
                 return _error("Device authentication temporarily unavailable.", 503)
