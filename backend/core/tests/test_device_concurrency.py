@@ -12,12 +12,15 @@ from uuid import uuid4
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.db import connections
-from django.test import Client, TransactionTestCase
+from django.test import Client, TransactionTestCase, override_settings
 
 from core.device_api_keys import generate_token
 from core.models import DeviceWeightMeasurement, FilamentProduct, MakerTag, MakerTagEvent, Spool, UserApiKey
 
 
+# These legacy behavioural tests use Django's non-TLS test client;
+# production TLS enforcement is covered separately in test_device_api.py.
+@override_settings(DEBUG=True)
 class PostgreSQLDeviceConcurrencyTests(TransactionTestCase):
     def setUp(self):
         if connections["default"].vendor != "postgresql":
