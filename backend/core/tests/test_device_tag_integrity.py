@@ -10,12 +10,15 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from core.device_api_keys import generate_token
 from core.models import FilamentProduct, MakerTag, MakerTagEvent, Spool, UserApiKey
 
 
+# These legacy behavioural tests use Django's non-TLS test client;
+# production TLS enforcement is covered separately in test_device_api.py.
+@override_settings(DEBUG=True)
 class DeviceTagIntegrityTests(TestCase):
     def setUp(self):
         User = get_user_model()
