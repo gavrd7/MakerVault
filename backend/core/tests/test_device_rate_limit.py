@@ -12,6 +12,9 @@ from core.models import InventoryItem, UserApiKey
 
 
 @override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "device-ratelimit-tests"}})
+# These legacy behavioural tests use Django's non-TLS test client;
+# production TLS enforcement is covered separately in test_device_api.py.
+@override_settings(DEBUG=True)
 class DeviceRateLimitTests(TestCase):
     def setUp(self):
         cache.clear()
