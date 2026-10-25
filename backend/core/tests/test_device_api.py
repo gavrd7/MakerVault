@@ -9,6 +9,9 @@ from core.device_api_keys import generate_token
 from core.models import InventoryItem, MakerTag, UserApiKey
 
 
+# These legacy behavioural tests use Django's non-TLS test client;
+# production TLS enforcement is covered separately in test_device_api.py.
+@override_settings(DEBUG=True)
 class DeviceApiTests(TestCase):
     def setUp(self):
         User = get_user_model()
