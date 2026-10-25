@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.utils import timezone
 
 from core.device_api_keys import generate_token
@@ -17,6 +17,9 @@ from core.models import (
 )
 
 
+# These legacy behavioural tests use Django's non-TLS test client;
+# production TLS enforcement is covered separately in test_device_api.py.
+@override_settings(DEBUG=True)
 class SimulatedDeviceIntegrationTests(TestCase):
     def setUp(self):
         self.owner = get_user_model().objects.create_user(username="sim-device-owner", password="test")

@@ -3,12 +3,15 @@ from uuid import uuid4
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from core.device_api_keys import generate_token
 from core.models import DeviceWeightMeasurement, Project, UserApiKey, FilamentProduct, Spool, ReusableSpoolDesign, ReusableSpool, MakerTag
 
 
+# These legacy behavioural tests use Django's non-TLS test client;
+# production TLS enforcement is covered separately in test_device_api.py.
+@override_settings(DEBUG=True)
 class DeviceMeasurementTests(TestCase):
     def setUp(self):
         self.owner = get_user_model().objects.create_user(username="weigh-owner", password="test")

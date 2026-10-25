@@ -2,13 +2,16 @@ import json
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from core.device_api_keys import generate_token
 from core.models import InventoryItem, MakerTag, UserApiKey
 
 
+# These legacy behavioural tests use Django's non-TLS test client;
+# production TLS enforcement is covered separately in test_device_api.py.
+@override_settings(DEBUG=True)
 class DeviceApiTests(TestCase):
     def setUp(self):
         User = get_user_model()
@@ -113,3 +116,39 @@ class DeviceApiTests(TestCase):
         )
         self.other.user_permissions.add(self.permission)
         self.assertFalse(self.resolve(token=other_token.plaintext).json()["found"])
+
+
+    @override_settings(DEBUG=False)
+    def test_bearer_api_requires_https_in_production(self):
+        # Both valid and invalid credentials are refused before bearer parsing.
+        plain = self.client.get("/api/device/v1/me/", HTTP_AUTHORIZATION="Bearer " + self.token)
+        self.assertEqual(plain.status_code, 403, plain.content)
+        self.assertEqual(plain.json()["error"], "HTTPS required for device API credentials.")
+        self.assertEqual(plain["Cache-Control"], "no-store")
+        self.assertEqual(self.client.get("/api/device/v1/me/").status_code, 403)
+        # A verified HTTPS request is still accepted with the same key.
+        secure = self.client.get("/api/device/v1/me/", secure=True, HTTP_AUTHORIZATION="Bearer " + self.token)
+        self.assertEqual(secure.status_code, 200, secure.content)
+        insecure_tag = self.client.post(
+            "/api/device/v1/tags/resolve/",
+            data=json.dumps({"kind": "nfc", "uid": "04AABBCCDDEEFF"}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer " + self.token,
+        )
+        self.assertEqual(insecure_tag.status_code, 403)
+
+    @override_settings(DEBUG=False, SECURE_PROXY_SSL_HEADER=("HTTP_X_FORWARDED_PROTO", "https"))
+    def test_trusted_proxy_https_header_is_accepted(self):
+        # The header is trustworthy only behind a configured proxy which
+        # strips client-supplied forwarding headers.
+        result = self.client.get(
+            "/api/device/v1/me/",
+            HTTP_X_FORWARDED_PROTO="https",
+            HTTP_AUTHORIZATION="Bearer " + self.token,
+        )
+        self.assertEqual(result.status_code, 200, result.content)
+        self.assertEqual(
+            self.client.get("/api/device/v1/me/", HTTP_X_FORWARDED_PROTO="http",
+                            HTTP_AUTHORIZATION="Bearer " + self.token).status_code,
+            403,
+        )
