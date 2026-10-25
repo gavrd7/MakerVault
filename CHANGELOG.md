@@ -1,15 +1,18 @@
 # Changelog
 
-## v1.3.0 — Hardware device API and scoped keys (release preparation)
+## v1.3.0 — Connected Devices and secure hardware pairing (release candidate)
 
-- Added user-managed API keys with explicit scopes, optional expiry, one-time token display, editing and revocation; browser login, MFA and CSRF protections remain separate from bearer authentication.
-- Added dedicated `/api/device/v1/` endpoints for authenticated device identity, RFID/NFC Maker Tag resolution and controlled registration/assignment, and permitted inventory/spool record searches.
-- Added initial filament weighing-station measurement API workflow and weight history interfaces; hardware integration and scale calibration still require real-device validation.
-- Added device authentication/rate-limit and API-key lifecycle regression coverage, including restrictions on unauthorised actions.
-- Validated PR #140 in GitHub CI and staging: authenticated device identity, unknown RFID UID resolution, read-only write rejection, revoked-key rejection, database migrations 0060/0061, and manual Inventory/Projects/3D Printing/API Keys checks.
-- Clarified API-key UI descriptions for supported device endpoints.
+- Added Connected Devices under Settings → User Account, with named hardware registrations, scoped permissions, firmware and heartbeat status, editable permissions, unpairing and deletion.
+- Added an eight-digit, browser-approved pairing protocol for RFID/NFC terminals and future weighing stations. Codes expire after five minutes; a strong private device claim authorises one-time credential delivery after owner approval.
+- Added automatically refreshing device status cards, with separate Wi-Fi, MakerVault API, hardware health and last-heartbeat information.
+- Extended the v1.3 hardware device API with scoped, revocable keys, tag UID resolution/registration/assignment, owned record search, and weighing-station measurement and weight-history workflows.
+- Enforced HTTPS for production bearer-authenticated device API endpoints; added insecure-request and trusted reverse-proxy regression coverage. Pairing endpoints also require HTTPS.
+- Added migrations 0060–0063 and expanded backend/frontend tests; the final Connected Devices PR #146 passed GitHub backend, frontend and Docker checks, with physical RFID/NFC terminal pairing, heartbeat and TLS checks completed on staging.
+- Published an illustrated Connected Devices user-guide chapter with phone Wi-Fi/server setup, trusted certificate setup, pairing, permissions, device status and troubleshooting.
 
-**Release gate:** Pass CI on this release PR, merge it, create the matching `v1.3.0` Git tag, publish the GHCR image, and verify the released image on staging before upgrading production. Handheld Wi-Fi and HTTPS pairing are separately developed and not part of this container release.
+**Scope notes:** The tested handheld firmware reads physical RFID/NFC tag UIDs, but on-device MakerVault record lookup, tag writing and Creality CFS payload decoding are not yet implemented. The weighing-station backend is an initial foundation and does not indicate calibrated hardware readiness. Handheld firmware source publication and version-label correction are tracked separately.
+
+**Release gate:** Create the `v1.3.0` tag only after this documentation finalisation is merged and CI passes. Publish the matching GHCR image, validate its migrations and basic functionality on staging, then back up and upgrade production. Do not label the release published before those steps finish.
 
 
 ## v1.2.3 — Security maintenance (release preparation)

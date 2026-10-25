@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <strong>Upcoming release: v1.3.0 (hardware integration API; not yet published)</strong>
+  <strong>Release candidate: v1.3.0 (publication pending)</strong>
 </p>
 
 <p align="center">
@@ -22,7 +22,21 @@
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
-**What’s new in the upcoming v1.3.0:** scoped, revocable hardware API keys; Connected Devices management and an account-approved eight-digit pairing wizard for RFID/NFC terminals and future weighing stations; live device heartbeat/health reporting, editable permissions, unpairing and permanent deletion; tag resolution and controlled operations; initial weighing-station measurement workflow. Physical device validation remains a release requirement.\n\n### Connected Devices — hardware onboarding (v1.3.0 preview)\n\n**HTTPS is required.** Enable HTTPS on MakerVault and ensure the hardware validates the server certificate and hostname. Publicly trusted certificates use standard CA trust; private/self-signed installations require explicitly trusted CA/certificate material on the device. Never disable TLS verification to make pairing work.\n\n1. Sign in and open **Settings → User Account → Connected Devices → Add Device**.\n2. Choose a device type and name, then review scopes. The default is minimal read-only tag and status access; registration/write permissions require explicit selection.\n3. Follow the four-step wizard to connect the device to Wi-Fi using its own local setup flow. MakerVault cannot discover an unnetworked device.\n4. On the terminal select **Connections → MakerVault → Pair device**. It displays a server-issued eight-digit pairing code valid for five minutes. Enter the code in the MakerVault wizard; the device automatically receives and stores its one-time API credential.\n5. Once paired, use Connected Devices to inspect connection/heartbeat status, edit permissions, unpair (revoke access while retaining the record) or delete (permanently remove the registration and revoke credentials). The status cards refresh every 30 seconds while the browser panel is visible.\n\n**Alternative phone setup:** The terminal's QR/local setup webpage can configure Wi-Fi, server URL and trusted certificates first; pairing still uses the same MakerVault approval process. Manually supplied API keys remain available for advanced integrations, not normal onboarding. An offline device may reconnect with its saved credentials without re-pairing.\n\nFirmware implementers: [canonical pairing protocol v1 and HTTP contract](docs/CONNECTED_DEVICES_PAIRING.md). Full illustrated end-user setup/troubleshooting documentation is being prepared in the [MakerVault user guide](https://gavrd7.github.io/MakerVault-docs/) and must be finished before release.
+**What’s new in the v1.3.0 release candidate:** scoped, revocable hardware API keys; Connected Devices management and an account-approved eight-digit pairing wizard for RFID/NFC terminals and future weighing stations; live device heartbeat/health reporting, editable permissions, unpairing and permanent deletion; tag resolution and controlled operations; initial weighing-station measurement workflow. Physical device validation remains a release requirement.
+
+### Connected Devices — hardware onboarding (v1.3.0 preview)
+
+**HTTPS is required.** Enable HTTPS on MakerVault and ensure the hardware validates the server certificate and hostname. Publicly trusted certificates use standard CA trust; private/self-signed installations require explicitly trusted CA/certificate material on the device. Never disable TLS verification to make pairing work.
+
+1. Sign in and open **Settings → User Account → Connected Devices → Add Device**.
+2. Choose a device type and name, then review scopes. The default is minimal read-only tag and status access; registration/write permissions require explicit selection.
+3. Follow the four-step wizard to connect the device to Wi-Fi using its own local setup flow. MakerVault cannot discover an unnetworked device.
+4. On the terminal select **Connections → MakerVault → Pair device**. It displays a server-issued eight-digit pairing code valid for five minutes. Enter the code in the MakerVault wizard; the device automatically receives and stores its one-time API credential.
+5. Once paired, use Connected Devices to inspect connection/heartbeat status, edit permissions, unpair (revoke access while retaining the record) or delete (permanently remove the registration and revoke credentials). The status cards refresh every 30 seconds while the browser panel is visible.
+
+**Alternative phone setup:** The terminal's QR/local setup webpage can configure Wi-Fi, server URL and trusted certificates first; pairing still uses the same MakerVault approval process. Manually supplied API keys remain available for advanced integrations, not normal onboarding. An offline device may reconnect with its saved credentials without re-pairing.
+
+Firmware implementers: [canonical pairing protocol v1 and HTTP contract](docs/CONNECTED_DEVICES_PAIRING.md). The [illustrated MakerVault user guide](https://gavrd7.github.io/MakerVault-docs/) includes terminal setup, pairing, permissions and troubleshooting.
 
 **Previously in v1.2.3:** Django 5.2.18, Vite 8.3.3 and Pillow 13 security dependency updates.
 
