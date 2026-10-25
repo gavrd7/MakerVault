@@ -1,7 +1,12 @@
 from django.urls import path
-from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views, device_api_views, device_pairing, device_measurements, weight_history_views
+from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views, device_api_views, device_pairing, device_measurements, device_tag_registration, weight_history_views
 
 urlpatterns = [
+    path("device/tag-registration/", device_tag_registration.begin, name="api-device-tag-registration-begin"),
+    path("device/tag-registration/<uuid:registration_id>/", device_tag_registration.status, name="api-device-tag-registration-status"),
+    path("device/tag-registration/<uuid:registration_id>/cancel/", device_tag_registration.cancel, name="api-device-tag-registration-cancel"),
+    path("device/v1/tag-registration/pending/", device_tag_registration.device_pending, name="api-device-tag-registration-pending"),
+    path("device/v1/tag-registration/<uuid:registration_id>/complete/", device_tag_registration.device_complete, name="api-device-tag-registration-complete"),
     path("device/v1/heartbeat/", device_pairing.device_heartbeat, name="api-device-heartbeat"),
     path("device/v1/pairing/start/", device_pairing.start_pairing, name="api-device-pairing-start"),
     path("device/v1/pairing/<uuid:pairing_id>/complete/", device_pairing.complete_pairing, name="api-device-pairing-complete"),
