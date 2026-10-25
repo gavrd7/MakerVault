@@ -22,6 +22,13 @@
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
+
+## Related MakerVault repositories
+
+- **[MakerVault](https://github.com/gavrd7/MakerVault)** — self-hosted application, Docker deployment and releases.
+- **[MakerVault User Guide](https://gavrd7.github.io/MakerVault-docs/)** ([documentation source](https://github.com/gavrd7/MakerVault-docs)) — installation, configuration and usage guides.
+- **[MakerVault-Hardware](https://github.com/gavrd7/MakerVault-Hardware)** — RFID/NFC handheld firmware, wiring, printable enclosure files and future connected hardware.
+
 **What’s new in the v1.3.0 release candidate:** scoped, revocable hardware API keys; Connected Devices management and an account-approved eight-digit pairing wizard for RFID/NFC terminals and future weighing stations; live device heartbeat/health reporting, editable permissions, unpairing and permanent deletion; tag resolution and controlled operations; initial weighing-station measurement workflow. Physical device validation remains a release requirement.
 
 ### Connected Devices — hardware onboarding (v1.3.0 preview)
