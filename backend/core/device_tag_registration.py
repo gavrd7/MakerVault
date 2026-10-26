@@ -58,6 +58,8 @@ def begin(request):
         kind = data["target_type"]
         if kind not in SUPPORTED:
             raise ValueError("Unsupported target type.")
+        import uuid
+        device_id = uuid.UUID(str(data["device_id"]))
         target = resolve_tag_target(request.user, kind, data["target_id"])
         definition = TARGETS[kind]
         if not request.user.has_perm("core.add_makertag") or not request.user.has_perm(
@@ -68,7 +70,7 @@ def begin(request):
         return failure("Invalid registration request.")
     with transaction.atomic():
         device = ConnectedDevice.objects.select_for_update().select_related("api_key").filter(
-            pk=data["device_id"], owner=request.user, device_type="rfid_terminal", revoked_at__isnull=True
+            pk=device_id, owner=request.user, device_type="rfid_terminal", revoked_at__isnull=True
         ).first()
         if not device or not device.api_key or not device.api_key.is_active():
             return failure("Active paired RFID terminal not found.", 404)
