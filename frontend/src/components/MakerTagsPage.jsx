@@ -3,6 +3,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { createPortal } from "react-dom";
 import { apiFetch } from "../api";
 import { Badge, LoadingBlock, Modal } from "./Common";
+import TerminalTagRegistration from "./TerminalTagRegistration";
 
 function targetLabel(tag) {
   if (!tag?.target) return "Target unavailable";
@@ -105,6 +106,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
   const [kind, setKind] = useState("");
   const [targetType, setTargetType] = useState("");
   const [addOpen, setAddOpen] = useState(false);
+  const [terminalOpen, setTerminalOpen] = useState(false);
   const [createTarget, setCreateTarget] = useState(null);
   const [returnPending, setReturnPending] = useState(false);
   const [detail, setDetail] = useState(null);
@@ -253,6 +255,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
       </div>
       <div className="printingHeroActions">
         {config?.permissions?.add_maker_tag && <button className="primary" onClick={() => setAddOpen(true)}>Add Maker Tag</button>}
+        {config?.permissions?.add_maker_tag && <button type="button" onClick={() => setTerminalOpen(true)}>Use RFID terminal</button>}
         <button onClick={load}>Refresh</button>
         <button disabled={!printableRows.length} onClick={() => setBatchOpen(true)}>Print labels</button>
       </div>
@@ -333,6 +336,8 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
         {!rows.length && <div className="projectEmpty"><strong>No matching Maker Tags.</strong><span>Create a tag or change the current filters.</span></div>}
       </div>
     </section>
+
+    {terminalOpen && <TerminalTagRegistration groups={data?.targets} initialTarget={createTarget} onClose={() => setTerminalOpen(false)} onCompleted={async () => { await load(); await onChanged(); }} />}
 
     {deleteTagRow && <Modal title="Permanently delete Maker Tag?" onClose={() => { if (!deleteBusy) setDeleteTagRow(null); }}>
       <p>This will permanently delete <strong>{deleteTagRow.label || deleteTagRow.code}</strong> ({deleteTagRow.code}), including its assignment history. Printed QR codes and NFC links for this tag will stop resolving. A physical NFC/RFID chip is not erased. This action cannot be undone.</p>
