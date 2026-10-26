@@ -105,3 +105,55 @@ class ConnectedTagRegistrationTests(TestCase):
         self.assertEqual(DeviceTagRegistration.objects.get(pk=rid).state, "pending")
         existing.refresh_from_db()
         self.assertEqual(existing.target_id, self.item.pk)
+
+    def test_wrong_paired_terminal_cannot_poll_or_complete(self):
+        rid = self.start().json()["id"]
+        second_token = generate_token()
+        other_key = UserApiKey.objects.create(
+            owner=self.owner, name="Second terminal", identifier=second_token.identifier,
+            secret_digest=second_token.digest, scopes=["tags:write"],
+        )
+        ConnectedDevice.objects.create(
+            owner=self.owner, device_uid="second-rfid-terminal-149", name="Second terminal",
+            device_type="rfid_terminal", api_key=other_key,
+        )
+        pending = self.client.get(
+            "/api/device/v1/tag-registration/pending/",
+            HTTP_AUTHORIZATION="Bearer " + second_token.plaintext,
+        )
+        self.assertEqual(pending.status_code, 200)
+        self.assertIsNone(pending.json()["registration"])
+        self.assertEqual(self.complete(rid, token=second_token.plaintext).status_code, 404)
+        self.assertEqual(DeviceTagRegistration.objects.get(pk=rid).state, "pending")
+
+    def test_revocation_blocks_pending_and_completion(self):
+        rid = self.start().json()["id"]
+        self.device.revoked_at = timezone.now()
+        self.device.save(update_fields=["revoked_at"])
+        response = self.client.get(
+            "/api/device/v1/tag-registration/pending/",
+            HTTP_AUTHORIZATION="Bearer " + self.token,
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(self.complete(rid).status_code, 403)
+
+    def test_browser_mutation_requires_csrf(self):
+        from django.test import Client
+        csrf_client = Client(enforce_csrf_checks=True)
+        csrf_client.force_login(self.owner)
+        response = csrf_client.post(
+            "/api/device/tag-registration/",
+            data=json.dumps({"device_id": str(self.device.pk), "target_type": "inventory",
+                             "target_id": str(self.item.pk)}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(DeviceTagRegistration.objects.exists())
+
+    @override_settings(DEBUG=False)
+    def test_device_credentials_rejected_over_plain_http_in_production(self):
+        response = self.client.get(
+            "/api/device/v1/tag-registration/pending/",
+            HTTP_AUTHORIZATION="Bearer " + self.token,
+        )
+        self.assertEqual(response.status_code, 403)
