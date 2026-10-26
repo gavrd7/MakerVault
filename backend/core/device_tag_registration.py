@@ -148,7 +148,7 @@ def device_complete(request, registration_id):
     except (ValueError, TypeError):
         return failure("Invalid scanned tag.")
     with transaction.atomic():
-        item = DeviceTagRegistration.objects.select_for_update().select_related("tag").filter(
+        item = DeviceTagRegistration.objects.select_for_update(of=("self",)).select_related("tag").filter(
             pk=registration_id, device=device, owner=request.device_owner
         ).first()
         if not item:
