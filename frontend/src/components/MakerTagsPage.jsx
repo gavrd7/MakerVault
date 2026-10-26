@@ -220,6 +220,12 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
     if (returnPending) closeRecordTag();
   }
 
+  function useTerminalForRecord(target) {
+    setAddOpen(false);
+    setCreateTarget(target);
+    setTerminalOpen(true);
+  }
+
   async function changed(item) {
     setAddOpen(false);
     setEditTag(null);
@@ -337,7 +343,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
       </div>
     </section>
 
-    {terminalOpen && <TerminalTagRegistration groups={data?.targets} initialTarget={createTarget} onClose={() => setTerminalOpen(false)} onCompleted={async () => { await load(); await onChanged(); }} />}
+    {terminalOpen && <TerminalTagRegistration groups={data?.targets} initialTarget={createTarget} onClose={() => { setTerminalOpen(false); setCreateTarget(null); }} onCompleted={async () => { await load(); await onChanged(); }} />}
 
     {deleteTagRow && <Modal title="Permanently delete Maker Tag?" onClose={() => { if (!deleteBusy) setDeleteTagRow(null); }}>
       <p>This will permanently delete <strong>{deleteTagRow.label || deleteTagRow.code}</strong> ({deleteTagRow.code}), including its assignment history. Printed QR codes and NFC links for this tag will stop resolving. A physical NFC/RFID chip is not erased. This action cannot be undone.</p>
@@ -352,7 +358,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
       data={data}
       initialTarget={createTarget}
       onClose={() => { if (returnPending) closeRecordTag(); else { setAddOpen(false); setCreateTarget(null); } }}
-      onSaved={changed}
+      onSaved={changed} onUseTerminal={useTerminalForRecord}
     />}
 
     {editTag && <MakerTagForm
@@ -450,7 +456,7 @@ function MakerTagPrintable({ tag, size, qr, fields, preview = false }) {
   </div>;
 }
 
-function MakerTagForm({ title, data, tag = null, initialTarget = null, onClose, onSaved }) {
+function MakerTagForm({ title, data, tag = null, initialTarget = null, onClose, onSaved, onUseTerminal }) {
   const [form, setForm] = useState({
     kind: tag?.kind || "qr",
     code: tag?.code || "",
@@ -500,6 +506,7 @@ function MakerTagForm({ title, data, tag = null, initialTarget = null, onClose, 
   }
 
   return <Modal title={title} subtitle="One physical identity can be reassigned over time while MakerVault keeps an audit trail." onClose={onClose} wide>
+    {!tag && onUseTerminal && <div className="notice"><strong>Have a paired RFID/NFC terminal?</strong> Scan a physical Maker Tag instead of entering its UID. <button type="button" onClick={() => onUseTerminal({ type: form.target_type, id: form.target_id })} disabled={!["inventory", "spool"].includes(form.target_type) || !form.target_id}>Use RFID terminal</button></div>}
     <form className="formGrid" onSubmit={submit}>
       {error && <div className="formError full">{error}</div>}
       <label>Tag type<select value={form.kind} onChange={e => set("kind", e.target.value)}>
