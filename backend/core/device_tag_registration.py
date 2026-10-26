@@ -1,5 +1,6 @@
 """Secure browser-to-paired-terminal Maker Tag registration workflow."""
 import json
+import uuid
 from datetime import timedelta
 
 from django.conf import settings
@@ -58,7 +59,6 @@ def begin(request):
         kind = data["target_type"]
         if kind not in SUPPORTED:
             raise ValueError("Unsupported target type.")
-        import uuid
         device_id = uuid.UUID(str(data["device_id"]))
         target = resolve_tag_target(request.user, kind, data["target_id"])
         definition = TARGETS[kind]
@@ -165,18 +165,18 @@ def device_complete(request, registration_id):
         ):
             return failure("Target access denied.", 403)
         try:
-            target = resolve_tag_target(request.device_owner, item.target_type, item.target_id)
-            if MakerTag.objects.select_for_update().filter(kind=data["kind"], code=data["uid"]).exists():
-                return failure("This physical tag is already registered.", 409)
-            tag = MakerTag(owner=request.device_owner, kind=data["kind"], code=data["uid"],
-                           target_type=item.target_type, target_id=target.pk)
-            tag.full_clean()
-            tag.save()
-            _sync_rfid_tag_to_spool(tag)
-            _record_tag_event(tag, request.device_owner, "created",
-                              "Registered from a paired RFID terminal.", {
-                                  "device_id": str(device.pk), "request_id": str(item.pk)
-                              })
+            # Savepoint keeps a failed tag insert from poisoning the enclosing\n            # transaction (including on PostgreSQL unique constraint errors).\n            with transaction.atomic():\n                target = resolve_tag_target(request.device_owner, item.target_type, item.target_id)
+                if MakerTag.objects.select_for_update().filter(kind=data["kind"], code=data["uid"]).exists():
+                    return failure("This physical tag is already registered.", 409)
+                tag = MakerTag(owner=request.device_owner, kind=data["kind"], code=data["uid"],
+                               target_type=item.target_type, target_id=target.pk)
+                tag.full_clean()
+                tag.save()
+                _sync_rfid_tag_to_spool(tag)
+                _record_tag_event(tag, request.device_owner, "created",
+                                  "Registered from a paired RFID terminal.", {
+                                      "device_id": str(device.pk), "request_id": str(item.pk)
+                                  })
         except (ValidationError, ValueError):
             return failure("Tag identity or target conflicts with another record.", 409)
         except IntegrityError:
