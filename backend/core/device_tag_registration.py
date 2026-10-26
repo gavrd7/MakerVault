@@ -165,7 +165,10 @@ def device_complete(request, registration_id):
         ):
             return failure("Target access denied.", 403)
         try:
-            # Savepoint keeps a failed tag insert from poisoning the enclosing\n            # transaction (including on PostgreSQL unique constraint errors).\n            with transaction.atomic():\n                target = resolve_tag_target(request.device_owner, item.target_type, item.target_id)
+            # Savepoint keeps a failed tag insert from poisoning the enclosing
+            # transaction (including on PostgreSQL unique constraint errors).
+            with transaction.atomic():
+                target = resolve_tag_target(request.device_owner, item.target_type, item.target_id)
                 if MakerTag.objects.select_for_update().filter(kind=data["kind"], code=data["uid"]).exists():
                     return failure("This physical tag is already registered.", 409)
                 tag = MakerTag(owner=request.device_owner, kind=data["kind"], code=data["uid"],
