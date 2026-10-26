@@ -69,7 +69,7 @@ def begin(request):
     except (ValueError, TypeError, ValidationError, KeyError, json.JSONDecodeError):
         return failure("Invalid registration request.")
     with transaction.atomic():
-        device = ConnectedDevice.objects.select_for_update().select_related("api_key").filter(
+        device = ConnectedDevice.objects.select_for_update(of=("self",)).select_related("api_key").filter(
             pk=device_id, owner=request.user, device_type="rfid_terminal", revoked_at__isnull=True
         ).first()
         if not device or not device.api_key or not device.api_key.is_active():
