@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { apiFetch } from "../api";
 import { Modal } from "./Common";
 import "./TerminalTagRegistration.css";
@@ -15,6 +15,8 @@ function TerminalSymbol() {
 }
 
 export default function TerminalTagRegistration({ groups, initialTarget, onClose, onCompleted }) {
+  const onCompletedRef = useRef(onCompleted);
+  onCompletedRef.current = onCompleted;
   const targets = (groups || []).filter(group => ["inventory", "spool"].includes(group.type));
   const [devices, setDevices] = useState([]);
   const [deviceId, setDeviceId] = useState("");
@@ -57,7 +59,7 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
         if (!active) return;
         setRegistration(next);
         setSeconds(Math.max(0, Math.ceil((new Date(next.expires_at).getTime() - Date.now()) / 1000)));
-        if (next.state === "completed") onCompleted?.();
+        if (next.state === "completed") onCompletedRef.current?.();
       } catch (err) {
         if (active) setError(err.message);
       }
@@ -65,7 +67,7 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
     tick();
     const timer = window.setInterval(tick, 2000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [registration?.id, registration?.state, onCompleted]);
+  }, [registration?.id, registration?.state]);
 
   async function begin(event) {
     event.preventDefault();
