@@ -107,8 +107,9 @@ class DeviceApiTests(TestCase):
             413,
         )
 
-    def test_cross_owner_isolation_and_nonmatching_technology(self):
-        self.assertFalse(self.resolve(kind="rfid").json()["found"])
+    def test_cross_owner_isolation_with_unified_radio_identity(self):
+        # Legacy NFC and RFID values now identify the same physical UID.
+        self.assertTrue(self.resolve(kind="rfid").json()["found"])
         other_token = generate_token()
         UserApiKey.objects.create(
             owner=self.other, name="Other reader", identifier=other_token.identifier,
