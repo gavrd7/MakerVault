@@ -116,7 +116,10 @@ def resolve_tag(request):
     if not (len(compact) in (8, 14, 20) and all(c in "0123456789abcdefABCDEF" for c in compact)):
         return _error("UID must be a 4, 7 or 10-byte hexadecimal value.", 400)
     code = compact.upper()
-    tag = radio_tag_matches(MakerTag.objects.filter(owner=owner, status="active"), kind, code).first()
+    matches = list(radio_tag_matches(MakerTag.objects.filter(owner=owner, status="active"), kind, code)[:2])
+    if len(matches) > 1:
+        return _error("Multiple legacy radio tags share this UID; resolve the conflict before scanning.", 409)
+    tag = matches[0] if matches else None
     if tag is None:
         return JsonResponse({"found": False, "status": "unregistered", "kind": kind, "uid": code})
     definition = TARGETS.get(tag.target_type)
