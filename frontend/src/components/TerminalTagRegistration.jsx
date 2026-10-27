@@ -3,14 +3,23 @@ import { apiFetch } from "../api";
 import { Modal } from "./Common";
 import "./TerminalTagRegistration.css";
 
+function MakerVaultMark({ className = "" }) {
+  // Reuse the app's existing branded asset, cropped to its square symbol.
+  return <span className={"terminalBrandMark " + className}><img src="/static/core/makervault-logo.jpg" alt="" /></span>;
+}
+
 function TerminalSymbol() {
   return <div className="terminalScanArt" aria-hidden="true">
     <div className="terminalScanDevice">
-      <div className="terminalScanScreen"><span>⌁</span><small>SCAN TAG</small></div>
+      <div className="terminalScanScreen"><MakerVaultMark className="terminalScreenMark" /><small>SCAN TAG</small></div>
       <div className="terminalScanControls"><i /><b /><b /></div>
     </div>
-    <div className="terminalScanWaves"><span /><span /><span /></div>
-    <div className="terminalScanTag">⌁</div>
+    <svg className="terminalScanWaves" viewBox="0 0 100 120" fill="none" aria-hidden="true">
+      <path className="terminalScanWave waveOne" d="M 12 42 A 22 22 0 0 1 12 78" />
+      <path className="terminalScanWave waveTwo" d="M 20 25 A 43 43 0 0 1 20 95" />
+      <path className="terminalScanWave waveThree" d="M 28 9 A 62 62 0 0 1 28 111" />
+    </svg>
+    <div className="terminalScanTag"><MakerVaultMark className="terminalTagMark" /></div>
   </div>;
 }
 
