@@ -175,7 +175,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
     const term = query.trim().toLowerCase();
     return (data?.rows || []).filter(item => {
       if (status && item.status !== status) return false;
-      if (kind && item.kind !== kind) return false;
+      if (kind && !(kind === "radio" ? (item.kind === "nfc" || item.kind === "rfid") : item.kind === kind)) return false;
       if (targetType && item.target_type !== targetType) return false;
       if (!term) return true;
       const haystack = [
@@ -296,7 +296,8 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
         <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search tags, targets or identities…" />
         <select value={kind} onChange={e => setKind(e.target.value)}>
           <option value="">All tag types</option>
-          {(data?.kinds || []).map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+          <option value="qr">QR code</option>
+          <option value="radio">RFID / NFC</option>
         </select>
         <select value={targetType} aria-label="Filter by target type" onChange={e => setTargetType(e.target.value)}>
           <option value="">All target types</option>
@@ -510,7 +511,9 @@ function MakerTagForm({ title, data, tag = null, initialTarget = null, onClose, 
     <form className="formGrid" onSubmit={submit}>
       {error && <div className="formError full">{error}</div>}
       <label>Tag type<select value={form.kind} onChange={e => set("kind", e.target.value)}>
-        {(data?.kinds || []).map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+        <option value="qr">QR code</option>
+        <option value="nfc">RFID / NFC</option>
+        {form.kind === "rfid" && <option value="rfid">RFID (legacy record)</option>}
       </select></label>
       <label>Identity code
         {form.kind === "qr"
