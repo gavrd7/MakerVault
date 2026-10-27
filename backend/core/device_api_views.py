@@ -21,6 +21,7 @@ from .device_rate_limit import failed_auth_blocked, record_failed_auth, device_r
 from .models import MakerTag, UserApiKey
 from .maker_tags import serialise_tag_target, resolve_tag_target, TARGETS, target_display
 from .api_views import _sync_rfid_tag_to_spool, _record_tag_event
+from .radio_tag_identity import radio_tag_matches
 
 MAX_JSON_BYTES = 1024
 KINDS = {"nfc", "rfid"}
@@ -115,7 +116,7 @@ def resolve_tag(request):
     if not (len(compact) in (8, 14, 20) and all(c in "0123456789abcdefABCDEF" for c in compact)):
         return _error("UID must be a 4, 7 or 10-byte hexadecimal value.", 400)
     code = compact.upper()
-    tag = MakerTag.objects.filter(owner=owner, kind=kind, code=code, status="active").first()
+    tag = radio_tag_matches(MakerTag.objects.filter(owner=owner, status="active"), kind, code).first()
     if tag is None:
         return JsonResponse({"found": False, "status": "unregistered", "kind": kind, "uid": code})
     definition = TARGETS.get(tag.target_type)
@@ -210,9 +211,7 @@ def register_tag(request):
         if not owner.has_perm(f"core.view_{definition.model._meta.model_name}"):
             return _error("Owner is not permitted to view the selected record.", 403)
         with transaction.atomic():
-            existing = MakerTag.objects.select_for_update().filter(
-                kind=data["kind"], code=data["uid"],
-            ).first()
+            existing = radio_tag_matches(MakerTag.objects.select_for_update(), data["kind"], data["uid"]).first()
             if existing:
                 if existing.owner_id == owner.pk and existing.status == "active" and (
                     existing.target_type == data["target_type"] and existing.target_id == target.pk
@@ -254,10 +253,7 @@ def assign_tag(request):
         if not owner.has_perm(f"core.view_{definition.model._meta.model_name}"):
             return _error("Owner is not permitted to view the selected record.", 403)
         with transaction.atomic():
-            tag = MakerTag.objects.select_for_update().filter(
-                owner=owner, kind=data["kind"], code=data["uid"],
-                status="active",
-            ).first()
+            tag = radio_tag_matches(MakerTag.objects.select_for_update().filter(owner=owner, status="active"), data["kind"], data["uid"]).first()
             if not tag:
                 return _error("An active owned tag was not found. Register it first.", 404)
             if tag.target_type == data["target_type"] and tag.target_id == target.pk:
