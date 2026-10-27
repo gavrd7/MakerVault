@@ -106,6 +106,29 @@ class ConnectedTagRegistrationTests(TestCase):
         existing.refresh_from_db()
         self.assertEqual(existing.target_id, self.item.pk)
 
+    def test_nfc_and_rfid_kinds_share_one_physical_uid(self):
+        # A UID registered through the legacy RFID option must not be
+        # registered again as an NFC tag through the connected terminal.
+        existing = MakerTag.objects.create(
+            owner=self.owner, kind="rfid", code="04AABBCCDDEEFF",
+            target_type="inventory", target_id=self.item.pk,
+        )
+        rid = self.start().json()["id"]
+        response = self.complete(rid)
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(MakerTag.objects.filter(code=existing.code).count(), 1)
+
+    def test_cross_kind_retry_is_idempotent(self):
+        rid = self.start().json()["id"]
+        self.assertEqual(self.complete(rid).status_code, 201)
+        response = self.client.post(
+            f"/api/device/v1/tag-registration/{rid}/complete/",
+            data=json.dumps({"kind": "rfid", "uid": "04AABBCCDDEEFF"}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer " + self.token,
+        )
+        self.assertEqual(response.status_code, 200)
+
     def test_wrong_paired_terminal_cannot_poll_or_complete(self):
         rid = self.start().json()["id"]
         second_token = generate_token()
