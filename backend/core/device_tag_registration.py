@@ -15,6 +15,7 @@ from .device_api_views import require_device_scope, _scan_payload, _tag_summary
 from .models import ConnectedDevice, DeviceTagRegistration, MakerTag
 from .maker_tags import TARGETS, resolve_tag_target, serialise_tag_target
 from .api_views import _sync_rfid_tag_to_spool, _record_tag_event
+from .radio_tag_identity import radio_tag_matches
 
 TTL = timedelta(minutes=5)
 SUPPORTED = {"inventory", "spool"}
@@ -154,7 +155,7 @@ def device_complete(request, registration_id):
         if not item:
             return failure("Registration not found.", 404)
         if item.state == "completed":
-            if item.tag and item.tag.kind == data["kind"] and item.tag.code == data["uid"]:
+            if item.tag and item.tag.kind in ("nfc", "rfid") and data["kind"] in ("nfc", "rfid") and item.tag.code == data["uid"]:
                 return JsonResponse(summary(item))
             return failure("Registration was already completed with another tag.", 409)
         if item.state != "pending" or item.expires_at <= timezone.now():
@@ -169,7 +170,7 @@ def device_complete(request, registration_id):
             # transaction (including on PostgreSQL unique constraint errors).
             with transaction.atomic():
                 target = resolve_tag_target(request.device_owner, item.target_type, item.target_id)
-                if MakerTag.objects.select_for_update().filter(kind=data["kind"], code=data["uid"]).exists():
+                if radio_tag_matches(MakerTag.objects.select_for_update(), data["kind"], data["uid"]).exists():
                     return failure("This physical tag is already registered.", 409)
                 tag = MakerTag(owner=request.device_owner, kind=data["kind"], code=data["uid"],
                                target_type=item.target_type, target_id=target.pk)
