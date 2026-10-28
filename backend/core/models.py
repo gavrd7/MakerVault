@@ -1366,7 +1366,7 @@ class MakerTag(TimeStampedModel):
         related_name="makervault_tags",
     )
     public_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
-    short_id = models.CharField(max_length=8, unique=True, null=True, blank=True, editable=False)
+    short_id = models.CharField(max_length=8, unique=True, blank=True, editable=False)
     kind = models.CharField(max_length=16, choices=KINDS, default="qr")
     code = models.CharField(max_length=255)
     label = models.CharField(max_length=200, blank=True)
