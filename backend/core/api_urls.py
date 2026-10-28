@@ -11,6 +11,7 @@ urlpatterns = [
     path("device/tag-registration/", device_tag_registration.begin, name="api-device-tag-registration-begin"),
     path("device/tag-registration/<uuid:registration_id>/", device_tag_registration.status, name="api-device-tag-registration-status"),
     path("device/tag-registration/<uuid:registration_id>/cancel/", device_tag_registration.cancel, name="api-device-tag-registration-cancel"),
+    path("device/v1/tag-registration/<uuid:registration_id>/status/", device_tag_registration.device_status, name="api-device-tag-registration-device-status"),
     path("device/v1/tag-registration/<uuid:registration_id>/cancel/", device_tag_registration.device_cancel, name="api-device-tag-registration-device-cancel"),
     path("device/v1/tag-registration/pending/", device_tag_registration.device_pending, name="api-device-tag-registration-pending"),
     path("device/v1/tag-registration/<uuid:registration_id>/complete/", device_tag_registration.device_complete, name="api-device-tag-registration-complete"),
