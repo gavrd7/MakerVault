@@ -135,7 +135,7 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
           </div>
         </form>}
         {registration && <div className="terminalTagProgress" role="status" aria-live="polite">
-          <strong>{registration.state === "completed" ? "Maker Tag linked successfully" : registration.state === "pending" ? "Waiting for terminal scan…" : registration.state === "expired" ? "Scan request expired" : "Registration cancelled"}</strong>
+          <strong>{registration.state === "completed" ? "Maker Tag linked successfully" : registration.state === "pending" ? "Request sent — waiting for terminal…" : registration.state === "expired" ? "Scan request expired" : "Registration cancelled"}</strong>
           <p>{registration.target?.label || "Selected record"}</p>
           <p>Terminal: {selectedDevice?.name || "Paired handheld"}</p>
           {registration.state === "pending" && <p className="terminalTagCountdown">Time remaining: {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}</p>}
