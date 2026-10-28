@@ -65,12 +65,14 @@ def target_display(target_type: str, obj) -> dict:
             "id": str(obj.id),
             "label": obj.display_name,
             "subtitle": f"{obj.inventory_id} · {obj.get_status_display()}",
+            "record_code": obj.inventory_id,
         }
     if target_type == "spool":
         return {
             "id": str(obj.id),
             "label": obj.spool_id,
             "subtitle": str(obj.filament),
+            "record_code": obj.spool_id,
         }
     if target_type == "reusable_spool":
         return {"id": str(obj.id), "label": obj.code, "subtitle": obj.design.name}
