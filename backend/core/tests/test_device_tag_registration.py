@@ -305,6 +305,13 @@ class ConnectedTagRegistrationTests(TestCase):
         self.assertEqual(MakerTag.objects.count(), 1)
         event = MakerTagEvent.objects.get(tag=existing, event_type="reassigned")
         self.assertEqual(event.details["previous"]["target_id"], str(self.item.pk))
+        self.assertIn("Connected registration item", event.details["previous_label"])
+        self.assertIn("Replacement item", event.details["new_label"])
+        from core.maker_tags import serialise_tag
+        history = serialise_tag(existing, include_events=True)["events"]
+        move = next(entry for entry in history if entry["event_type"] == "reassigned")
+        self.assertIn("OTH-1491", move["summary"])
+        self.assertIn("OTH-1492", move["summary"])
         self.assertEqual(self.complete(rid).status_code, 200)
 
     def test_reassignment_confirmation_cannot_be_replayed_for_another_tag(self):
