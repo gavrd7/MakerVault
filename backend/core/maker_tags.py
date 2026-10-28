@@ -133,7 +133,7 @@ def serialise_tag(tag: MakerTag, *, include_events: bool = False) -> dict:
     payload = {
         "id": str(tag.id),
         "public_token": str(tag.public_token),
-        "maker_tag_id": f"MV-{tag.public_token.hex[:8].upper()}",
+        "maker_tag_id": f"MV-{tag.short_id}",
         "kind": tag.kind,
         "kind_label": tag.get_kind_display(),
         "code": tag.code,
