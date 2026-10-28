@@ -197,7 +197,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
       if (targetType && item.target_type !== targetType) return false;
       if (!term) return true;
       const haystack = [
-        item.label, item.code, item.kind_label, item.status_label, item.technology_label,
+        item.label, item.code, item.maker_tag_id, item.kind_label, item.status_label, item.technology_label,
         item.target?.label, item.target?.subtitle, item.target?.type_label,
       ].filter(Boolean).join(" ").toLowerCase();
       return haystack.includes(term);
@@ -342,11 +342,12 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
           <div className="tagIdentityMark">{tag.kind === "qr" ? "QR" : tag.kind === "nfc" ? "NFC" : "RFID"}</div>
           <div className="tagRowMain">
             <div className="tagRowTitle">
-              <strong>{tag.label || tag.code}</strong>
+              <strong>{tag.label || tag.maker_tag_id || tag.code}</strong>
               <Badge tone={kindTone(tag.kind)}>{tag.kind_label}</Badge>
               {tag.status === "retired" && <Badge>Retired</Badge>}
             </div>
-            <code>{tag.code}</code>
+            <code>{tag.maker_tag_id || tag.code}</code>
+            {tag.kind !== "qr" && <small>Physical UID: <code>{tag.code}</code></small>}
             <small>{tag.target?.type_label || tag.target_type} · {targetLabel(tag)}{tag.technology ? " · " + tag.technology_label : ""}</small>
           </div>
           <div className="tagRowActions">
@@ -654,13 +655,14 @@ function MakerTagDetail({ tag, canEdit, canDelete, onDeleted, onClose, onEdit, o
     window.print();
   }
 
-  return <><Modal title={tag.label || tag.code} subtitle="Maker Tag identity and assignment history." onClose={onClose} wide>
+  return <><Modal title={tag.label || tag.maker_tag_id || tag.code} subtitle="Maker Tag identity and assignment history." onClose={onClose} wide>
 
     {notice && <div className={notice.toLowerCase().includes("blocked") ? "formError" : "notice"}>{notice}</div>}
     <div className="tagDetailGrid">
       <div className="tagDetailIdentity">
         <Badge tone={kindTone(tag.kind)}>{tag.kind_label}</Badge>
-        <h3>{tag.code}</h3>
+        <h3>{tag.maker_tag_id || tag.code}</h3>
+        {tag.kind !== "qr" && <p>Physical tag UID: <code>{tag.code}</code></p>}
         <p>{tag.target?.type_label || tag.target_type}</p>
         <strong>{targetLabel(tag)}</strong>
         {(tag.kind === "nfc" || tag.kind === "rfid") && <small>Reader technology: {tag.technology_label || "Auto / unspecified"}</small>}
