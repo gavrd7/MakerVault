@@ -3102,3 +3102,27 @@ a:focus-visible,
 .deviceDeleteButton:hover{border-color:#a34c5d;background:#2a171c}
 @media(max-width:860px){.deviceStatusGrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:480px){.deviceStatusGrid{grid-template-columns:minmax(0,1fr)}.deviceCardHeader{flex-wrap:wrap}.deviceDetails dl{grid-template-columns:1fr;gap:5px}}
+
+
+/* Maker Tags: one coherent scan-method row followed by a compact identity form. */
+.tagResolvePanel{display:grid;grid-template-columns:minmax(220px,.6fr) minmax(0,1.4fr);gap:24px;align-items:center}
+.tagResolvePanel>div{align-content:center;gap:7px}
+.tagResolvePanel form.tagResolveForm{display:block;min-width:0}
+.tagResolveControls{min-width:0;display:grid;gap:10px}
+.tagResolveScanMethods{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.tagResolveScanMethods button{min-height:42px;padding:8px 12px;white-space:normal;text-align:center}
+.tagResolveInputRow{display:grid;grid-template-columns:minmax(130px,180px) minmax(0,1fr) auto;gap:10px;align-items:center}
+.tagResolveInputRow select,.tagResolveInputRow input,.tagResolveInputRow button{width:100%;min-width:0;height:42px;min-height:42px;margin:0}
+.tagResolveInputRow button{width:auto;padding:0 18px}
+.tagResolveHelp{font-size:11px;line-height:1.45;color:#8390a2}
+.tagResolveControls .tagCaptureNotice{color:#a995ff;font-size:12px}
+@media(max-width:980px){
+  .tagResolvePanel{grid-template-columns:1fr;gap:16px}
+}
+@media(max-width:600px){
+  .tagResolveScanMethods{grid-template-columns:1fr}
+  .tagResolveInputRow{grid-template-columns:minmax(0,1fr) auto}
+  .tagResolveInputRow select{grid-column:1/-1}
+  .tagResolveInputRow input{grid-column:1}
+  .tagResolveInputRow button{grid-column:2}
+}

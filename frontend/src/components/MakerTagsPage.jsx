@@ -3,6 +3,8 @@ import { QRCodeSVG } from "qrcode.react";
 import { createPortal } from "react-dom";
 import { apiFetch } from "../api";
 import { Badge, LoadingBlock, Modal } from "./Common";
+import TerminalTagRegistration from "./TerminalTagRegistration";
+import TerminalTagLookup from "./TerminalTagLookup";
 
 function targetLabel(tag) {
   if (!tag?.target) return "Target unavailable";
@@ -32,9 +34,9 @@ function ndefRecordText(record) {
   }
 }
 
-function TagCaptureControls({ kind, value, onCapture, autoFocus = false, compact = false }) {
+function TagCaptureControls({ kind, value, onCapture, autoFocus = false, compact = false, kindSelector = null, resolveAction = null, onTerminalScan = null }) {
   const inputRef = useRef(null);
-  const phoneNfcMode = kind === "nfc" || kind === "auto";
+  const phoneNfcMode = kind === "nfc" || kind === "radio" || kind === "auto";
   const [nfcBusy, setNfcBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const capability = nfcCapability();
@@ -78,20 +80,36 @@ function TagCaptureControls({ kind, value, onCapture, autoFocus = false, compact
     }
   }
 
-  return <div className={"tagCaptureControls" + (compact ? " compact" : "")}>
+  const entryInput = <input
+    ref={inputRef}
+    value={value}
+    onChange={e => onCapture(e.target.value)}
+    onKeyDown={e => { if (!compact && e.key === "Enter") e.preventDefault(); }}
+    placeholder={kind === "qr" ? "QR identity code…" : "Scan/paste reader identity, UID or EPC…"}
+    aria-label="Tag identity"
+    autoComplete="off"
+    autoCapitalize="none"
+    spellCheck={false}
+  />;
+  if (compact) return <div className="tagResolveControls">
+    <div className="tagResolveScanMethods">
+      {phoneNfcMode && <button type="button" onClick={scanNfc} disabled={nfcBusy}>{nfcBusy ? "Waiting for NFC…" : "Scan with phone NFC"}</button>}
+      <button type="button" onClick={onTerminalScan}>Scan with MakerVault terminal</button>
+    </div>
+    <div className="tagResolveInputRow">
+      {kindSelector}
+      {entryInput}
+      {resolveAction}
+    </div>
+    <small className="tagResolveHelp">Enter or scan a UID, EPC or QR identity. USB/OTG readers can type directly into the field.</small>
+    {notice && <small className="tagCaptureNotice">{notice}</small>}
+  </div>;
+  return <div className="tagCaptureControls">
     {phoneNfcMode && <button type="button" onClick={scanNfc} disabled={nfcBusy}>{nfcBusy ? "Waiting for NFC…" : "Scan with phone NFC"}</button>}
-    <input
-      ref={inputRef}
-      value={value}
-      onChange={e => onCapture(e.target.value)}
-      onKeyDown={e => { if (!compact && e.key === "Enter") e.preventDefault(); }}
-      placeholder={kind === "qr" ? "QR identity code…" : "Scan/paste reader identity, UID or EPC…"}
-      autoComplete="off"
-      autoCapitalize="none"
-      spellCheck={false}
-    />
-    {(kind === "nfc" || kind === "rfid" || kind === "auto") && <small>
-      MakerVault accepts the stable identity emitted by the reader rather than requiring a particular chip family. USB/OTG keyboard readers can scan directly into this field. {phoneNfcMode && (capability.supported ? "This browser also supports direct NDEF-compatible NFC capture." : capability.reason)}
+    {entryInput}
+    {(kind === "nfc" || kind === "rfid" || kind === "radio" || kind === "auto") && <small>
+      MakerVault accepts the stable identity emitted by a reader. USB/OTG readers can enter it directly.
+      {phoneNfcMode && (capability.supported ? " This browser supports direct NFC capture." : capability.reason)}
     </small>}
     {notice && <small className="tagCaptureNotice">{notice}</small>}
   </div>;
@@ -105,6 +123,8 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
   const [kind, setKind] = useState("");
   const [targetType, setTargetType] = useState("");
   const [addOpen, setAddOpen] = useState(false);
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [lookupOpen, setLookupOpen] = useState(false);
   const [createTarget, setCreateTarget] = useState(null);
   const [returnPending, setReturnPending] = useState(false);
   const [detail, setDetail] = useState(null);
@@ -173,11 +193,11 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
     const term = query.trim().toLowerCase();
     return (data?.rows || []).filter(item => {
       if (status && item.status !== status) return false;
-      if (kind && item.kind !== kind) return false;
+      if (kind && !(kind === "radio" ? (item.kind === "nfc" || item.kind === "rfid") : item.kind === kind)) return false;
       if (targetType && item.target_type !== targetType) return false;
       if (!term) return true;
       const haystack = [
-        item.label, item.code, item.kind_label, item.status_label, item.technology_label,
+        item.label, item.code, item.maker_tag_id, item.kind_label, item.status_label, item.technology_label,
         item.target?.label, item.target?.subtitle, item.target?.type_label,
       ].filter(Boolean).join(" ").toLowerCase();
       return haystack.includes(term);
@@ -218,6 +238,12 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
     if (returnPending) closeRecordTag();
   }
 
+  function useTerminalForRecord(target) {
+    setAddOpen(false);
+    setCreateTarget(target);
+    setTerminalOpen(true);
+  }
+
   async function changed(item) {
     setAddOpen(false);
     setEditTag(null);
@@ -231,7 +257,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
     if (!resolveCode.trim()) return;
     setResolveBusy(true); setError("");
     try {
-      const params = new URLSearchParams({ kind: resolveKind, code: resolveCode.trim() });
+      const params = new URLSearchParams({ kind: resolveKind === "radio" ? "auto" : resolveKind, code: resolveCode.trim() });
       const result = await apiFetch("/api/tags/resolve/?" + params.toString());
       setDetail(result.item);
       setResolveCode("");
@@ -253,6 +279,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
       </div>
       <div className="printingHeroActions">
         {config?.permissions?.add_maker_tag && <button className="primary" onClick={() => setAddOpen(true)}>Add Maker Tag</button>}
+        {config?.permissions?.add_maker_tag && <button type="button" onClick={() => setTerminalOpen(true)}>Use RFID terminal</button>}
         <button onClick={load}>Refresh</button>
         <button disabled={!printableRows.length} onClick={() => setBatchOpen(true)}>Print labels</button>
       </div>
@@ -263,17 +290,19 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
     <section className="panel tagResolvePanel">
       <div>
         <strong>Resolve a physical tag</strong>
-        <small>Scan or paste any stable code supplied by a compatible phone or PC reader. Auto-detect searches NFC, RFID and QR identities.</small>
+        <small>Scan a tag with your phone or paired terminal, or enter its identity manually.</small>
       </div>
-      <form onSubmit={resolveIdentity}>
-        <select value={resolveKind} onChange={e => setResolveKind(e.target.value)}>
-          <option value="auto">Auto-detect reader identity</option>
-          <option value="rfid">RFID</option>
-          <option value="nfc">NFC</option>
-          <option value="qr">QR identity code</option>
-        </select>
-        <TagCaptureControls kind={resolveKind} value={resolveCode} onCapture={setResolveCode} autoFocus compact />
-        <button className="primary" disabled={!resolveCode.trim() || resolveBusy}>{resolveBusy ? "Resolving…" : "Resolve"}</button>
+      <form onSubmit={resolveIdentity} className="tagResolveForm">
+        <TagCaptureControls
+          kind={resolveKind} value={resolveCode} onCapture={setResolveCode} autoFocus compact
+          onTerminalScan={() => setLookupOpen(true)}
+          kindSelector={<select aria-label="Tag identity type" value={resolveKind} onChange={e => setResolveKind(e.target.value)}>
+            <option value="auto">Auto-detect</option>
+            <option value="radio">RFID / NFC</option>
+            <option value="qr">QR code</option>
+          </select>}
+          resolveAction={<button type="submit" className="primary" disabled={!resolveCode.trim() || resolveBusy}>{resolveBusy ? "Resolving…" : "Resolve"}</button>}
+        />
       </form>
     </section>
 
@@ -287,7 +316,8 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
         <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search tags, targets or identities…" />
         <select value={kind} onChange={e => setKind(e.target.value)}>
           <option value="">All tag types</option>
-          {(data?.kinds || []).map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+          <option value="qr">QR code</option>
+          <option value="radio">RFID / NFC</option>
         </select>
         <select value={targetType} aria-label="Filter by target type" onChange={e => setTargetType(e.target.value)}>
           <option value="">All target types</option>
@@ -312,11 +342,12 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
           <div className="tagIdentityMark">{tag.kind === "qr" ? "QR" : tag.kind === "nfc" ? "NFC" : "RFID"}</div>
           <div className="tagRowMain">
             <div className="tagRowTitle">
-              <strong>{tag.label || tag.code}</strong>
+              <strong>{tag.label || tag.maker_tag_id || tag.code}</strong>
               <Badge tone={kindTone(tag.kind)}>{tag.kind_label}</Badge>
               {tag.status === "retired" && <Badge>Retired</Badge>}
             </div>
-            <code>{tag.code}</code>
+            <code>{tag.maker_tag_id || tag.code}</code>
+            {tag.kind !== "qr" && <small>Physical UID: <code>{tag.code}</code></small>}
             <small>{tag.target?.type_label || tag.target_type} · {targetLabel(tag)}{tag.technology ? " · " + tag.technology_label : ""}</small>
           </div>
           <div className="tagRowActions">
@@ -334,6 +365,9 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
       </div>
     </section>
 
+    {lookupOpen && <TerminalTagLookup onClose={() => setLookupOpen(false)} onFound={async id => { try { const result = await apiFetch("/api/tags/" + id + "/"); setDetail(result.item); } catch (err) { setError(err.message); } }} />}
+    {terminalOpen && <TerminalTagRegistration groups={data?.targets} initialTarget={createTarget} onClose={() => { setTerminalOpen(false); setCreateTarget(null); }} onCompleted={async () => { await load(); await onChanged(); }} />}
+
     {deleteTagRow && <Modal title="Permanently delete Maker Tag?" onClose={() => { if (!deleteBusy) setDeleteTagRow(null); }}>
       <p>This will permanently delete <strong>{deleteTagRow.label || deleteTagRow.code}</strong> ({deleteTagRow.code}), including its assignment history. Printed QR codes and NFC links for this tag will stop resolving. A physical NFC/RFID chip is not erased. This action cannot be undone.</p>
       <div className="formActions">
@@ -347,7 +381,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
       data={data}
       initialTarget={createTarget}
       onClose={() => { if (returnPending) closeRecordTag(); else { setAddOpen(false); setCreateTarget(null); } }}
-      onSaved={changed}
+      onSaved={changed} onUseTerminal={useTerminalForRecord}
     />}
 
     {editTag && <MakerTagForm
@@ -445,7 +479,7 @@ function MakerTagPrintable({ tag, size, qr, fields, preview = false }) {
   </div>;
 }
 
-function MakerTagForm({ title, data, tag = null, initialTarget = null, onClose, onSaved }) {
+function MakerTagForm({ title, data, tag = null, initialTarget = null, onClose, onSaved, onUseTerminal }) {
   const [form, setForm] = useState({
     kind: tag?.kind || "qr",
     code: tag?.code || "",
@@ -495,10 +529,13 @@ function MakerTagForm({ title, data, tag = null, initialTarget = null, onClose, 
   }
 
   return <Modal title={title} subtitle="One physical identity can be reassigned over time while MakerVault keeps an audit trail." onClose={onClose} wide>
+    {!tag && onUseTerminal && <div className="notice"><strong>Have a paired RFID/NFC terminal?</strong> Scan a physical Maker Tag instead of entering its UID. <button type="button" onClick={() => onUseTerminal({ type: form.target_type, id: form.target_id })} disabled={!["inventory", "spool"].includes(form.target_type) || !form.target_id}>Use RFID terminal</button></div>}
     <form className="formGrid" onSubmit={submit}>
       {error && <div className="formError full">{error}</div>}
       <label>Tag type<select value={form.kind} onChange={e => set("kind", e.target.value)}>
-        {(data?.kinds || []).map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+        <option value="qr">QR code</option>
+        <option value="nfc">RFID / NFC</option>
+        {form.kind === "rfid" && <option value="rfid">RFID (legacy record)</option>}
       </select></label>
       <label>Identity code
         {form.kind === "qr"
@@ -618,13 +655,14 @@ function MakerTagDetail({ tag, canEdit, canDelete, onDeleted, onClose, onEdit, o
     window.print();
   }
 
-  return <><Modal title={tag.label || tag.code} subtitle="Maker Tag identity and assignment history." onClose={onClose} wide>
+  return <><Modal title={tag.label || tag.maker_tag_id || tag.code} subtitle="Maker Tag identity and assignment history." onClose={onClose} wide>
 
     {notice && <div className={notice.toLowerCase().includes("blocked") ? "formError" : "notice"}>{notice}</div>}
     <div className="tagDetailGrid">
       <div className="tagDetailIdentity">
         <Badge tone={kindTone(tag.kind)}>{tag.kind_label}</Badge>
-        <h3>{tag.code}</h3>
+        <h3>{tag.maker_tag_id || tag.code}</h3>
+        {tag.kind !== "qr" && <p>Physical tag UID: <code>{tag.code}</code></p>}
         <p>{tag.target?.type_label || tag.target_type}</p>
         <strong>{targetLabel(tag)}</strong>
         {(tag.kind === "nfc" || tag.kind === "rfid") && <small>Reader technology: {tag.technology_label || "Auto / unspecified"}</small>}

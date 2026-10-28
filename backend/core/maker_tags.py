@@ -65,12 +65,14 @@ def target_display(target_type: str, obj) -> dict:
             "id": str(obj.id),
             "label": obj.display_name,
             "subtitle": f"{obj.inventory_id} · {obj.get_status_display()}",
+            "record_code": obj.inventory_id,
         }
     if target_type == "spool":
         return {
             "id": str(obj.id),
             "label": obj.spool_id,
             "subtitle": str(obj.filament),
+            "record_code": obj.spool_id,
         }
     if target_type == "reusable_spool":
         return {"id": str(obj.id), "label": obj.code, "subtitle": obj.design.name}
@@ -127,10 +129,39 @@ def tag_target_options(owner) -> list[dict]:
     return groups
 
 
+def reassignment_description(tag, event):
+    """Render reassignment history using stored snapshots when available."""
+    if event.event_type != "reassigned":
+        return event.summary
+    details = event.details or {}
+    previous = details.get("previous") or {}
+    old_type = previous.get("target_type")
+    old_id = previous.get("target_id")
+    new_type = details.get("new_target_type")
+    new_id = details.get("new_target_id")
+    if not (old_type and old_id and new_type and new_id):
+        return event.summary
+
+    def describe(kind, pk, snapshot):
+        label = snapshot or ""
+        if not label:
+            target = serialise_tag_target(tag.owner, kind, pk)
+            if target:
+                label = target.get("label", "")
+                code = target.get("record_code", "")
+                if code:
+                    label += f" ({code})"
+        return label or f"{TARGETS[kind].label if kind in TARGETS else kind}: {pk}"
+
+    return (describe(old_type, old_id, details.get("previous_label")) +
+            " → " + describe(new_type, new_id, details.get("new_label")))
+
+
 def serialise_tag(tag: MakerTag, *, include_events: bool = False) -> dict:
     payload = {
         "id": str(tag.id),
         "public_token": str(tag.public_token),
+        "maker_tag_id": f"MV-{tag.short_id}",
         "kind": tag.kind,
         "kind_label": tag.get_kind_display(),
         "code": tag.code,
@@ -158,7 +189,7 @@ def serialise_tag(tag: MakerTag, *, include_events: bool = False) -> dict:
                 "id": str(event.id),
                 "event_type": event.event_type,
                 "event_label": event.get_event_type_display(),
-                "summary": event.summary,
+                "summary": reassignment_description(tag, event),
                 "details": event.details or {},
                 "changed_by": event.changed_by.get_username() if event.changed_by else "",
                 "created_at": event.created_at.isoformat(),
