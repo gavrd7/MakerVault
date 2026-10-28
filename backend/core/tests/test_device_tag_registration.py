@@ -180,3 +180,67 @@ class ConnectedTagRegistrationTests(TestCase):
             HTTP_AUTHORIZATION="Bearer " + self.token,
         )
         self.assertEqual(response.status_code, 403)
+
+    def test_terminal_lookup_does_not_create_or_change_tag(self):
+        known = MakerTag.objects.create(
+            owner=self.owner, kind="nfc", code="04AABBCCDDEEFF",
+            target_type="inventory", target_id=self.item.pk,
+        )
+        created = self.client.post(
+            "/api/device/tag-lookup/",
+            data=json.dumps({"device_id": str(self.device.pk)}),
+            content_type="application/json",
+        )
+        self.assertEqual(created.status_code, 201, created.content)
+        lookup_id = created.json()["id"]
+        pending = self.client.get(
+            "/api/device/v1/tag-lookup/pending/",
+            HTTP_AUTHORIZATION="Bearer " + self.token,
+        )
+        self.assertEqual(pending.status_code, 200)
+        self.assertEqual(pending.json()["lookup"]["id"], lookup_id)
+        complete = self.client.post(
+            f"/api/device/v1/tag-lookup/{lookup_id}/complete/",
+            data=json.dumps({"kind": "rfid", "uid": "04AABBCCDDEEFF"}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer " + self.token,
+        )
+        self.assertEqual(complete.status_code, 201, complete.content)
+        self.assertTrue(complete.json()["found"])
+        self.assertEqual(complete.json()["tag"]["id"], str(known.pk))
+        self.assertEqual(MakerTag.objects.count(), 1)
+        self.assertEqual(self.client.get(f"/api/device/tag-lookup/{lookup_id}/").json()["state"], "completed")
+
+    def test_terminal_lookup_unknown_uid_and_cancel(self):
+        created = self.client.post(
+            "/api/device/tag-lookup/",
+            data=json.dumps({"device_id": str(self.device.pk)}),
+            content_type="application/json",
+        )
+        self.assertEqual(created.status_code, 201, created.content)
+        lookup_id = created.json()["id"]
+        complete = self.client.post(
+            f"/api/device/v1/tag-lookup/{lookup_id}/complete/",
+            data=json.dumps({"kind": "nfc", "uid": "04AABBCCDDEEFF"}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer " + self.token,
+        )
+        self.assertEqual(complete.status_code, 201)
+        self.assertFalse(complete.json()["found"])
+        self.assertEqual(MakerTag.objects.count(), 0)
+        other = self.client.post(
+            "/api/device/tag-lookup/",
+            data=json.dumps({"device_id": str(self.device.pk)}),
+            content_type="application/json",
+        )
+        self.assertEqual(other.status_code, 201)
+        second_id = other.json()["id"]
+        self.assertEqual(self.client.post(f"/api/device/tag-lookup/{second_id}/cancel/").status_code, 200)
+        rejected = self.client.post(
+            f"/api/device/v1/tag-lookup/{second_id}/complete/",
+            data=json.dumps({"kind": "nfc", "uid": "04AABBCCDDEEFF"}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer " + self.token,
+        )
+        self.assertEqual(rejected.status_code, 410)
+
