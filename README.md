@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <strong>Release candidate: v1.3.0 (publication pending)</strong>
+  <strong>Latest application release: v1.4.0</strong>
 </p>
 
 <p align="center">
@@ -29,9 +29,9 @@
 - **[MakerVault User Guide](https://gavrd7.github.io/MakerVault-docs/)** ([documentation source](https://github.com/gavrd7/MakerVault-docs)) — installation, configuration and usage guides.
 - **[MakerVault-Hardware](https://github.com/gavrd7/MakerVault-Hardware)** — RFID/NFC handheld firmware, wiring, printable enclosure files and future connected hardware.
 
-**What’s new in the v1.3.0 release candidate:** scoped, revocable hardware API keys; Connected Devices management and an account-approved eight-digit pairing wizard for RFID/NFC terminals and future weighing stations; live device heartbeat/health reporting, editable permissions, unpairing and permanent deletion; tag resolution and controlled operations; initial weighing-station measurement workflow. Physical device validation remains a release requirement.
+**Previously in v1.3.0:** scoped, revocable hardware API keys; Connected Devices management and an account-approved eight-digit pairing wizard for RFID/NFC terminals and future weighing stations; live device heartbeat/health reporting, editable permissions, unpairing and permanent deletion; tag resolution and controlled operations; initial weighing-station measurement workflow. Physical device validation remains a release requirement.
 
-### Connected Devices — hardware onboarding (v1.3.0 preview)
+### Connected Devices — hardware onboarding (introduced in v1.3.0)
 
 **HTTPS is required.** Enable HTTPS on MakerVault and ensure the hardware validates the server certificate and hostname. Publicly trusted certificates use standard CA trust; private/self-signed installations require explicitly trusted CA/certificate material on the device. Never disable TLS verification to make pairing work.
 
@@ -49,6 +49,8 @@ Firmware implementers: [canonical pairing protocol v1 and HTTP contract](docs/CO
 
 **Previously in v1.2.2:** direct Maker Tag shortcuts from inventory, projects, filament and reusable spools, printers, printed parts and storage locations; contextual return navigation; permission-controlled QR/NFC/RFID tag deletion; a dedicated Model Library navigation entry; and improved storage-location management.
 
+
+**New in v1.4.0 — connected RFID/NFC Maker Tags:** Pair a compatible terminal running firmware v0.6.0 to look up physical tag UIDs, register tags against inventory and spools, and explicitly reassign existing identities with on-device confirmation. Short `MV-XXXXXXXX` identities survive reassignment; audit history records old and new targets. Browser and terminal cancellation and interrupted-session recovery are supported. **Tag-memory writes, NDEF and Creality CFS payload writes are not implemented.** See the [Maker Tags user guide](https://gavrd7.github.io/MakerVault-docs/using/maker-tags/) and [hardware firmware](https://github.com/gavrd7/MakerVault-Hardware).
 
 MakerVault keeps the practical parts of a workshop connected: what you own, what a build needs, which files and wiring belong to it, which model revision you printed, and where the finished parts ended up.
 
