@@ -133,7 +133,7 @@ def resolve_tag(request):
         "status": "identified",
         "kind": kind,
         "uid": code,
-        "tag": {"id": str(tag.pk), "label": tag.label, "target": target},
+        "tag": {"id": str(tag.pk), "label": tag.label, "maker_tag_id": f"MV-{tag.public_token.hex[:8].upper()}", "target": target},
     })
 
 
