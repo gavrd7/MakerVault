@@ -32,6 +32,7 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
   const [targetType, setTargetType] = useState(initialTarget?.type && ["inventory", "spool"].includes(initialTarget.type) ? initialTarget.type : "inventory");
   const [targetId, setTargetId] = useState(initialTarget?.id || "");
   const [registration, setRegistration] = useState(null);
+  const [pendingRegistration, setPendingRegistration] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [seconds, setSeconds] = useState(300);
@@ -53,6 +54,34 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
       .catch(err => { if (active) setError(err.message); });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (!deviceId || registration) return undefined;
+    let active = true;
+    apiFetch("/api/device/tag-registration/pending/?device_id=" + encodeURIComponent(deviceId))
+      .then(result => { if (active) setPendingRegistration(result.registration); })
+      .catch(err => { if (active) setError(err.message); });
+    return () => { active = false; };
+  }, [deviceId, registration]);
+
+  function resumePending() {
+    if (!pendingRegistration) return;
+    setRegistration(pendingRegistration);
+    setPendingRegistration(null);
+    setError("");
+  }
+
+  async function cancelPending() {
+    if (!pendingRegistration || busy) return;
+    setBusy(true); setError("");
+    try {
+      await apiFetch("/api/device/tag-registration/" + pendingRegistration.id + "/cancel/", { method: "POST" });
+      setPendingRegistration(null);
+    } catch (err) {
+      if (err.status === 409) setPendingRegistration(null);
+      else setError("Unable to cancel previous registration: " + err.message);
+    } finally { setBusy(false); }
+  }
 
   useEffect(() => {
     if (targetId && rows.some(row => String(row.id) === String(targetId))) return;
@@ -80,7 +109,7 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
 
   async function begin(event) {
     event.preventDefault();
-    if (!deviceId || !targetId || busy) return;
+    if (!deviceId || !targetId || busy || pendingRegistration) return;
     setBusy(true); setError("");
     try {
       const item = await apiFetch("/api/device/tag-registration/", {
@@ -129,9 +158,17 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
             </select>
           </label>
           <p className="terminalTagHint full">Select a record and terminal. The handheld will ask for confirmation before MakerVault saves the scanned UID.</p>
+          {pendingRegistration && <div className="full" role="status">
+            <strong>Unfinished terminal registration</strong>
+            <p>A previous request for {pendingRegistration.target?.label || "another record"} is still active on this terminal.</p>
+            <div className="modalActions">
+              <button type="button" onClick={resumePending} disabled={busy}>Resume previous request</button>
+              <button type="button" onClick={cancelPending} disabled={busy}>Cancel previous request</button>
+            </div>
+          </div>}
           <div className="modalActions full">
             <button type="button" onClick={close}>Cancel</button>
-            <button type="submit" className="primary" disabled={busy || !deviceId || !targetId}>{busy ? "Starting…" : "Use terminal to add"}</button>
+            <button type="submit" className="primary" disabled={busy || !!pendingRegistration || !deviceId || !targetId}>{busy ? "Starting…" : "Use terminal to add"}</button>
           </div>
         </form>}
         {registration && <div className="terminalTagProgress" role="status" aria-live="polite">
