@@ -15,9 +15,9 @@ function TerminalSymbol() {
       <div className="terminalScanControls"><i /><b /><b /></div>
     </div>
     <svg className="terminalScanWaves" viewBox="0 0 100 120" fill="none" aria-hidden="true">
-      <path className="terminalScanWave waveOne" d="M 12 42 A 22 22 0 0 1 12 78" />
-      <path className="terminalScanWave waveTwo" d="M 20 25 A 43 43 0 0 1 20 95" />
-      <path className="terminalScanWave waveThree" d="M 28 9 A 62 62 0 0 1 28 111" />
+      <path className="terminalScanWave waveOne" d="M 8 43 Q 27 60 8 77" />
+      <path className="terminalScanWave waveTwo" d="M 34 30 Q 64 60 34 90" />
+      <path className="terminalScanWave waveThree" d="M 60 18 Q 104 60 60 102" />
     </svg>
     <div className="terminalScanTag"><MakerVaultMark className="terminalTagMark" /></div>
   </div>;
