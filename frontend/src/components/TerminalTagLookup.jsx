@@ -80,7 +80,7 @@ export default function TerminalTagLookup({ onClose, onFound }) {
             <button type="button" className="primary" onClick={begin} disabled={!deviceId || busy}>{busy ? "Starting…" : "Start scanning"}</button>
           </div>
         </> : <div className="terminalTagProgress" role="status" aria-live="polite">
-          {session.state === "pending" && <><strong>Waiting for tag scan…</strong><p>Hold a tag against your paired terminal. This request expires after five minutes.</p></>}
+          {session.state === "pending" && <><strong>Request sent to MakerVault terminal</strong><p>Waiting for the handheld to receive the request. When its screen says “Present a tag”, hold the tag against the reader. The request expires after five minutes.</p></>}
           {session.state === "completed" && <>
             <strong>{session.found ? "Maker Tag found" : "Unregistered tag"}</strong>
             <p>UID: <code>{session.uid}</code></p>
