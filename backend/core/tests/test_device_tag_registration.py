@@ -337,3 +337,34 @@ class ConnectedTagRegistrationTests(TestCase):
         self.assertEqual(response.status_code, 409)
         self.assertIn("Already assigned", response.json()["error"])
         self.assertNotIn("reassign_token", response.json())
+
+    def test_browser_can_resume_and_cancel_an_abandoned_registration(self):
+        rid = self.start().json()["id"]
+        pending = self.client.get(
+            "/api/device/tag-registration/pending/?device_id=" + str(self.device.pk)
+        )
+        self.assertEqual(pending.status_code, 200, pending.content)
+        self.assertEqual(pending.json()["registration"]["id"], rid)
+        self.assertEqual(self.start().status_code, 409)
+        cancelled = self.client.post(f"/api/device/tag-registration/{rid}/cancel/")
+        self.assertEqual(cancelled.status_code, 200)
+        empty = self.client.get(
+            "/api/device/tag-registration/pending/?device_id=" + str(self.device.pk)
+        )
+        self.assertIsNone(empty.json()["registration"])
+        self.assertEqual(self.start().status_code, 201)
+
+    def test_handheld_back_cancels_only_its_own_request(self):
+        rid = self.start().json()["id"]
+        denied = self.client.post(
+            f"/api/device/v1/tag-registration/{rid}/cancel/"
+        )
+        self.assertEqual(denied.status_code, 401)
+        result = self.client.post(
+            f"/api/device/v1/tag-registration/{rid}/cancel/",
+            HTTP_AUTHORIZATION="Bearer " + self.token,
+        )
+        self.assertEqual(result.status_code, 200, result.content)
+        self.assertEqual(result.json()["state"], "cancelled")
+        self.assertEqual(self.complete(rid).status_code, 410)
+        self.assertEqual(MakerTag.objects.count(), 0)
