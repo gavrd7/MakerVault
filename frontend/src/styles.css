@@ -3104,21 +3104,25 @@ a:focus-visible,
 @media(max-width:480px){.deviceStatusGrid{grid-template-columns:minmax(0,1fr)}.deviceCardHeader{flex-wrap:wrap}.deviceDetails dl{grid-template-columns:1fr;gap:5px}}
 
 
-/* Maker Tags: compact, consistent resolve controls. Avoid stretching form buttons
-   to the height of helper text or stacking scanners in a narrow grid cell. */
-.tagResolvePanel{grid-template-columns:minmax(190px,.65fr) minmax(0,1.35fr)}
-.tagResolvePanel form{display:grid;grid-template-columns:minmax(150px,190px) minmax(0,1fr) auto;align-items:start;gap:10px}
-.tagResolvePanel form>select,.tagResolvePanel form>button{height:42px;min-height:42px;align-self:start;white-space:nowrap;padding:0 14px}
-.tagResolvePanel form>.tagCaptureControls{grid-column:2;grid-row:1 / span 2;min-width:0;width:100%;max-width:none}
-.tagResolvePanel form>.tagCaptureControls.compact{grid-template-columns:minmax(0,1fr);min-width:0}
-.tagResolvePanel form>.tagResolveTerminalButton{grid-column:2;grid-row:3;justify-self:start}
-.tagResolvePanel form>.primary{grid-column:3;grid-row:1}
-.tagResolvePanel form .tagCaptureControls>button{height:42px;min-height:42px}
-.tagResolvePanel form .tagCaptureControls>input{height:42px;min-height:42px}
-@media(max-width:1050px){
-  .tagResolvePanel{grid-template-columns:1fr}
+/* Maker Tags: one coherent scan-method row followed by a compact identity form. */
+.tagResolvePanel{display:grid;grid-template-columns:minmax(220px,.6fr) minmax(0,1.4fr);gap:24px;align-items:center}
+.tagResolvePanel>div{align-content:center;gap:7px}
+.tagResolvePanel form.tagResolveForm{display:block;min-width:0}
+.tagResolveControls{min-width:0;display:grid;gap:10px}
+.tagResolveScanMethods{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.tagResolveScanMethods button{min-height:42px;padding:8px 12px;white-space:normal;text-align:center}
+.tagResolveInputRow{display:grid;grid-template-columns:minmax(130px,180px) minmax(0,1fr) auto;gap:10px;align-items:center}
+.tagResolveInputRow select,.tagResolveInputRow input,.tagResolveInputRow button{width:100%;min-width:0;height:42px;min-height:42px;margin:0}
+.tagResolveInputRow button{width:auto;padding:0 18px}
+.tagResolveHelp{font-size:11px;line-height:1.45;color:#8390a2}
+.tagResolveControls .tagCaptureNotice{color:#a995ff;font-size:12px}
+@media(max-width:980px){
+  .tagResolvePanel{grid-template-columns:1fr;gap:16px}
 }
-@media(max-width:700px){
-  .tagResolvePanel form{grid-template-columns:minmax(0,1fr);align-items:start}
-  .tagResolvePanel form>select,.tagResolvePanel form>.tagCaptureControls,.tagResolvePanel form>.tagResolveTerminalButton,.tagResolvePanel form>.primary{grid-column:1;grid-row:auto;width:100%;min-width:0}
+@media(max-width:600px){
+  .tagResolveScanMethods{grid-template-columns:1fr}
+  .tagResolveInputRow{grid-template-columns:minmax(0,1fr) auto}
+  .tagResolveInputRow select{grid-column:1/-1}
+  .tagResolveInputRow input{grid-column:1}
+  .tagResolveInputRow button{grid-column:2}
 }
