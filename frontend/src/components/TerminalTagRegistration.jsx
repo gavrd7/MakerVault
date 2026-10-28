@@ -33,6 +33,7 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
   const [targetId, setTargetId] = useState(initialTarget?.id || "");
   const [registration, setRegistration] = useState(null);
   const [pendingRegistration, setPendingRegistration] = useState(null);
+  const [checkingPending, setCheckingPending] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [seconds, setSeconds] = useState(300);
@@ -58,9 +59,11 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
   useEffect(() => {
     if (!deviceId || registration) return undefined;
     let active = true;
+    setCheckingPending(true);
     apiFetch("/api/device/tag-registration/pending/?device_id=" + encodeURIComponent(deviceId))
       .then(result => { if (active) setPendingRegistration(result.registration); })
-      .catch(err => { if (active) setError(err.message); });
+      .catch(err => { if (active) setError(err.message); })
+      .finally(() => { if (active) setCheckingPending(false); });
     return () => { active = false; };
   }, [deviceId, registration]);
 
@@ -95,6 +98,12 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
       try {
         const next = await apiFetch("/api/device/tag-registration/" + registration.id + "/");
         if (!active) return;
+        if (next.state === "cancelled" || next.state === "expired") {
+          setRegistration(null);
+          setPendingRegistration(null);
+          setError(next.state === "cancelled" ? "Registration cancelled on the terminal." : "Registration request expired.");
+          return;
+        }
         setRegistration(next);
         setSeconds(Math.max(0, Math.ceil((new Date(next.expires_at).getTime() - Date.now()) / 1000)));
         if (next.state === "completed") onCompletedRef.current?.();
@@ -117,7 +126,17 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
       });
       setRegistration(item);
       setSeconds(Math.max(0, Math.ceil((new Date(item.expires_at).getTime() - Date.now()) / 1000)));
-    } catch (err) { setError(err.message); }
+    } catch (err) {
+      if (err.status === 409) {
+        try {
+          const found = await apiFetch("/api/device/tag-registration/pending/?device_id=" + encodeURIComponent(deviceId));
+          if (found.registration) {
+            setPendingRegistration(found.registration);
+            setError("");
+          } else setError(err.message);
+        } catch (lookupError) { setError(lookupError.message); }
+      } else setError(err.message);
+    }
     finally { setBusy(false); }
   }
 
@@ -158,6 +177,7 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
             </select>
           </label>
           <p className="terminalTagHint full">Select a record and terminal. The handheld will ask for confirmation before MakerVault saves the scanned UID.</p>
+          {checkingPending && <p className="terminalTagHint full">Checking for an unfinished registration…</p>}
           {pendingRegistration && <div className="full" role="status">
             <strong>Unfinished terminal registration</strong>
             <p>A previous request for {pendingRegistration.target?.label || "another record"} is still active on this terminal.</p>
@@ -168,7 +188,7 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
           </div>}
           <div className="modalActions full">
             <button type="button" onClick={close}>Cancel</button>
-            <button type="submit" className="primary" disabled={busy || !!pendingRegistration || !deviceId || !targetId}>{busy ? "Starting…" : "Use terminal to add"}</button>
+            <button type="submit" className="primary" disabled={busy || checkingPending || !!pendingRegistration || !deviceId || !targetId}>{busy ? "Starting…" : "Use terminal to add"}</button>
           </div>
         </form>}
         {registration && <div className="terminalTagProgress" role="status" aria-live="polite">
