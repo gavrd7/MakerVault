@@ -1620,6 +1620,26 @@ class DeviceTagRegistration(TimeStampedModel):
         indexes = [models.Index(fields=["device", "state", "expires_at"], name="tag_reg_device_state_idx")]
 
 
+class DeviceTagLookup(TimeStampedModel):
+    """Short-lived, read-only scan request bound to an owner and paired terminal."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="device_tag_lookups")
+    device = models.ForeignKey("ConnectedDevice", on_delete=models.CASCADE, related_name="tag_lookups")
+    state = models.CharField(max_length=12, default="pending", choices=[
+        ("pending", "Pending"), ("completed", "Completed"), ("cancelled", "Cancelled"),
+    ])
+    expires_at = models.DateTimeField()
+    completed_at = models.DateTimeField(null=True, blank=True)
+    tag = models.ForeignKey("MakerTag", null=True, blank=True, on_delete=models.SET_NULL)
+    scanned_uid = models.CharField(max_length=24, blank=True)
+    found = models.BooleanField(null=True, default=None)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["device", "state", "expires_at"], name="tag_look_device_state_idx")]
+
+
 class DevicePairing(TimeStampedModel):
     """Short-lived one-time pairing challenge; never store a raw claim secret."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
