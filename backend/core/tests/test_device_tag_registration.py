@@ -1,5 +1,6 @@
 """Security and lifecycle tests for connected RFID terminal registration."""
 import json
+from unittest.mock import patch
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
@@ -251,3 +252,20 @@ class ConnectedTagRegistrationTests(TestCase):
         )
         self.assertEqual(rejected.status_code, 410)
 
+
+    def test_short_id_collision_retries_without_changing_physical_uids(self):
+        with patch("core.models.secrets.token_hex", side_effect=[
+            "0123abcd", "0123abcd", "9876fedc"
+        ]):
+            first = MakerTag.objects.create(
+                owner=self.owner, kind="nfc", code="0477A1A2772681",
+                target_type="inventory", target_id=self.item.pk,
+            )
+            second = MakerTag.objects.create(
+                owner=self.owner, kind="nfc", code="04AABBCCDDEEFF",
+                target_type="inventory", target_id=self.item.pk,
+            )
+        self.assertEqual(first.short_id, "0123ABCD")
+        self.assertEqual(second.short_id, "9876FEDC")
+        self.assertEqual(first.code, "0477A1A2772681")
+        self.assertEqual(second.code, "04AABBCCDDEEFF")
