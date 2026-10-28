@@ -368,3 +368,27 @@ class ConnectedTagRegistrationTests(TestCase):
         self.assertEqual(result.json()["state"], "cancelled")
         self.assertEqual(self.complete(rid).status_code, 410)
         self.assertEqual(MakerTag.objects.count(), 0)
+
+    def test_terminal_status_reflects_browser_cancellation(self):
+        rid = self.start().json()["id"]
+        url = f"/api/device/v1/tag-registration/{rid}/status/"
+        active = self.client.get(url, HTTP_AUTHORIZATION="Bearer " + self.token)
+        self.assertEqual(active.status_code, 200, active.content)
+        self.assertEqual(active.json()["state"], "pending")
+        self.assertEqual(self.client.post(f"/api/device/tag-registration/{rid}/cancel/").status_code, 200)
+        cancelled = self.client.get(url, HTTP_AUTHORIZATION="Bearer " + self.token)
+        self.assertEqual(cancelled.status_code, 200)
+        self.assertEqual(cancelled.json()["state"], "cancelled")
+
+    def test_unpaired_credentials_cannot_inspect_terminal_registration_status(self):
+        rid = self.start().json()["id"]
+        rogue = generate_token()
+        UserApiKey.objects.create(
+            owner=self.owner, name="Rogue", identifier=rogue.identifier,
+            secret_digest=rogue.digest, scopes=["tags:write"],
+        )
+        status = self.client.get(
+            f"/api/device/v1/tag-registration/{rid}/status/",
+            HTTP_AUTHORIZATION="Bearer " + rogue.plaintext,
+        )
+        self.assertEqual(status.status_code, 403)
