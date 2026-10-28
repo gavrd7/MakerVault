@@ -1,8 +1,9 @@
 import re
 import uuid
+import secrets
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, IntegrityError, transaction
 from django.utils import timezone
 from django.utils.text import slugify
 from .validators import validate_maker_file
@@ -1365,6 +1366,7 @@ class MakerTag(TimeStampedModel):
         related_name="makervault_tags",
     )
     public_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    short_id = models.CharField(max_length=8, unique=True, null=True, blank=True, editable=False)
     kind = models.CharField(max_length=16, choices=KINDS, default="qr")
     code = models.CharField(max_length=255)
     label = models.CharField(max_length=200, blank=True)
@@ -1427,7 +1429,20 @@ class MakerTag(TimeStampedModel):
 
     def save(self, *args, **kwargs):
         self.code = self.normalise_code(self.kind, self.code)
-        super().save(*args, **kwargs)
+        # Existing Maker Tags retain their allocated short identity. New
+        # records retry a database-enforced collision in an inner savepoint.
+        if self.short_id or not self._state.adding:
+            return super().save(*args, **kwargs)
+        for attempt in range(10):
+            self.short_id = secrets.token_hex(4).upper()
+            try:
+                with transaction.atomic():
+                    return super().save(*args, **kwargs)
+            except IntegrityError as exc:
+                # Only retry the short ID collision. Other integrity failures
+                # must propagate rather than being disguised.
+                if "short_id" not in str(exc).lower() or attempt == 9:
+                    raise
 
     def __str__(self):
         return self.label or f"{self.get_kind_display()} {self.code}"
