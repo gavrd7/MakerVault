@@ -29,6 +29,6 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name="makertag",
             name="short_id",
-            field=models.CharField(editable=False, max_length=8, unique=True),
+            field=models.CharField(blank=True, editable=False, max_length=8, unique=True),
         ),
     ]
