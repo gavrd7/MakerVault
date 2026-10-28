@@ -269,3 +269,71 @@ class ConnectedTagRegistrationTests(TestCase):
         self.assertEqual(second.short_id, "9876FEDC")
         self.assertEqual(first.code, "0477A1A2772681")
         self.assertEqual(second.code, "04AABBCCDDEEFF")
+
+    def test_reassignment_requires_second_confirmation_and_preserves_identity(self):
+        from core.models import MakerTagEvent
+        second = InventoryItem.objects.create(
+            owner=self.owner, inventory_id="OTH-1492", item_type="other",
+            custom_name="Replacement item", quantity=1,
+        )
+        existing = MakerTag.objects.create(
+            owner=self.owner, kind="nfc", code="04AABBCCDDEEFF",
+            target_type="inventory", target_id=self.item.pk,
+        )
+        rid = self.start(target_id=str(second.pk)).json()["id"]
+        denied = self.complete(rid)
+        self.assertEqual(denied.status_code, 403)
+        self.owner.user_permissions.add(Permission.objects.get(
+            content_type__app_label="core", codename="change_makertag"
+        ))
+        preview = self.complete(rid)
+        self.assertEqual(preview.status_code, 409, preview.content)
+        self.assertTrue(preview.json()["reassign_required"])
+        existing.refresh_from_db()
+        self.assertEqual(existing.target_id, self.item.pk)
+        self.assertEqual(MakerTagEvent.objects.filter(tag=existing, event_type="reassigned").count(), 0)
+        token = preview.json()["reassign_token"]
+        confirmed = self.client.post(
+            f"/api/device/v1/tag-registration/{rid}/complete/",
+            data=json.dumps({"kind": "nfc", "uid": existing.code, "reassign_token": token}),
+            content_type="application/json", HTTP_AUTHORIZATION="Bearer " + self.token,
+        )
+        self.assertEqual(confirmed.status_code, 201, confirmed.content)
+        existing.refresh_from_db()
+        self.assertEqual(existing.target_id, second.pk)
+        self.assertEqual(existing.short_id, MakerTag.objects.get(pk=existing.pk).short_id)
+        self.assertEqual(MakerTag.objects.count(), 1)
+        event = MakerTagEvent.objects.get(tag=existing, event_type="reassigned")
+        self.assertEqual(event.details["previous"]["target_id"], str(self.item.pk))
+        self.assertEqual(self.complete(rid).status_code, 200)
+
+    def test_reassignment_confirmation_cannot_be_replayed_for_another_tag(self):
+        second = InventoryItem.objects.create(
+            owner=self.owner, inventory_id="OTH-1493", item_type="other",
+            custom_name="Other target", quantity=1,
+        )
+        MakerTag.objects.create(owner=self.owner, kind="nfc", code="04AABBCCDDEEFF",
+                                target_type="inventory", target_id=self.item.pk)
+        MakerTag.objects.create(owner=self.owner, kind="nfc", code="04112233445566",
+                                target_type="inventory", target_id=self.item.pk)
+        self.owner.user_permissions.add(Permission.objects.get(
+            content_type__app_label="core", codename="change_makertag"
+        ))
+        rid = self.start(target_id=str(second.pk)).json()["id"]
+        token = self.complete(rid).json()["reassign_token"]
+        wrong = self.client.post(
+            f"/api/device/v1/tag-registration/{rid}/complete/",
+            data=json.dumps({"kind": "nfc", "uid": "04112233445566", "reassign_token": token}),
+            content_type="application/json", HTTP_AUTHORIZATION="Bearer " + self.token,
+        )
+        self.assertEqual(wrong.status_code, 409)
+        self.assertEqual(MakerTag.objects.filter(target_id=second.pk).count(), 0)
+
+    def test_reassigning_same_target_is_a_noop(self):
+        MakerTag.objects.create(owner=self.owner, kind="nfc", code="04AABBCCDDEEFF",
+                                target_type="inventory", target_id=self.item.pk)
+        rid = self.start().json()["id"]
+        response = self.complete(rid)
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("Already assigned", response.json()["error"])
+        self.assertNotIn("reassign_token", response.json())
