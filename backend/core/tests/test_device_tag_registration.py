@@ -64,6 +64,13 @@ class ConnectedTagRegistrationTests(TestCase):
         self.assertEqual(self.complete(rid).status_code, 200)
         self.assertEqual(self.complete(rid, uid="04AABBCCDDEE00").status_code, 409)
         self.assertEqual(MakerTag.objects.filter(owner=self.owner, code="04AABBCCDDEEFF").count(), 1)
+        tag = MakerTag.objects.get(owner=self.owner, code="04AABBCCDDEEFF")
+        from core.maker_tags import serialise_tag
+        details = serialise_tag(tag)
+        self.assertEqual(details["maker_tag_id"], "MV-" + tag.public_token.hex[:16].upper())
+        self.assertEqual(details["code"], "04AABBCCDDEEFF")
+        self.assertEqual(details["kind"], "nfc")
+        self.assertEqual(MakerTag.objects.filter(owner=self.owner, code=tag.code).count(), 1)
         self.assertEqual(self.client.get(f"/api/device/tag-registration/{rid}/").json()["state"], "completed")
 
     def test_cancel_and_expiry(self):
