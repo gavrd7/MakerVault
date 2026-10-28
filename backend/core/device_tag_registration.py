@@ -5,6 +5,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.core import signing
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.http import JsonResponse
@@ -143,7 +144,11 @@ def device_complete(request, registration_id):
     if not request.device_owner.has_perm("core.add_makertag"):
         return failure("Insufficient tag permissions.", 403)
     try:
-        data = _scan_payload(request, fields={"kind", "uid"})
+        raw = json.loads(request.body)
+        confirm = raw.get("reassign_token") if isinstance(raw, dict) else None
+        data = _scan_payload(request, fields={"kind", "uid", "reassign_token"} if confirm is not None else {"kind", "uid"})
+        if confirm is not None and (not isinstance(confirm, str) or len(confirm) > 1024):
+            raise ValueError("Invalid reassignment confirmation.")
     except OverflowError:
         return failure("Request too large.", 413)
     except (ValueError, TypeError):
@@ -170,17 +175,59 @@ def device_complete(request, registration_id):
             # transaction (including on PostgreSQL unique constraint errors).
             with transaction.atomic():
                 target = resolve_tag_target(request.device_owner, item.target_type, item.target_id)
-                if radio_tag_matches(MakerTag.objects.select_for_update(), data["kind"], data["uid"]).exists():
-                    return failure("This physical tag is already registered.", 409)
-                tag = MakerTag(owner=request.device_owner, kind=data["kind"], code=data["uid"],
-                               target_type=item.target_type, target_id=target.pk)
-                tag.full_clean()
-                tag.save()
-                _sync_rfid_tag_to_spool(tag)
-                _record_tag_event(tag, request.device_owner, "created",
-                                  "Registered from a paired RFID terminal.", {
-                                      "device_id": str(device.pk), "request_id": str(item.pk)
-                                  })
+                existing = radio_tag_matches(MakerTag.objects.select_for_update(), data["kind"], data["uid"]).first()
+                if existing:
+                    if existing.owner_id != request.device_owner.pk:
+                        return failure("This tag cannot be reassigned.", 409)
+                    if existing.target_type == item.target_type and existing.target_id == target.pk:
+                        return failure("Already assigned to this item.", 409)
+                    if not request.device_owner.has_perm("core.change_makertag"):
+                        return failure("Tag reassignment requires edit permission.", 403)
+                    binding = [str(item.pk), str(device.pk), str(existing.pk), data["uid"],
+                               item.target_type, str(target.pk)]
+                    if confirm is None:
+                        token = signing.dumps(binding, salt="makervault-terminal-reassign")
+                        response = JsonResponse({
+                            "error": "Already registered. Reassign this tag?",
+                            "reassign_required": True, "reassign_token": token,
+                            "current_label": serialise_tag_target(
+                                request.device_owner, existing.target_type, existing.target_id
+                            ).get("label", "Existing record"),
+                        }, status=409)
+                        response["Cache-Control"] = "no-store"
+                        return response
+                    try:
+                        confirmed = signing.loads(confirm, salt="makervault-terminal-reassign", max_age=90)
+                    except signing.BadSignature:
+                        return failure("Reassignment confirmation expired or invalid.", 409)
+                    if confirmed != binding:
+                        return failure("Reassignment confirmation does not match this tag.", 409)
+                    previous = {"kind": existing.kind, "code": existing.code,
+                                "target_type": existing.target_type, "target_id": str(existing.target_id)}
+                    existing.target_type = item.target_type
+                    existing.target_id = target.pk
+                    existing.full_clean()
+                    existing.save()
+                    _sync_rfid_tag_to_spool(existing, previous=previous)
+                    _record_tag_event(existing, request.device_owner, "reassigned",
+                                      "Reassigned from a paired RFID terminal.", {
+                                          "previous": previous, "new_target_type": item.target_type,
+                                          "new_target_id": str(target.pk),
+                                          "device_id": str(device.pk), "request_id": str(item.pk)
+                                      })
+                    tag = existing
+                elif confirm is not None:
+                    return failure("The previously scanned tag is no longer registered.", 409)
+                else:
+                    tag = MakerTag(owner=request.device_owner, kind=data["kind"], code=data["uid"],
+                                   target_type=item.target_type, target_id=target.pk)
+                    tag.full_clean()
+                    tag.save()
+                    _sync_rfid_tag_to_spool(tag)
+                    _record_tag_event(tag, request.device_owner, "created",
+                                      "Registered from a paired RFID terminal.", {
+                                          "device_id": str(device.pk), "request_id": str(item.pk)
+                                      })
         except (ValidationError, ValueError):
             return failure("Tag identity or target conflicts with another record.", 409)
         except IntegrityError:
