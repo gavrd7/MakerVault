@@ -67,7 +67,7 @@ class ConnectedTagRegistrationTests(TestCase):
         tag = MakerTag.objects.get(owner=self.owner, code="04AABBCCDDEEFF")
         from core.maker_tags import serialise_tag
         details = serialise_tag(tag)
-        self.assertEqual(details["maker_tag_id"], "MV-" + tag.public_token.hex[:8].upper())
+        self.assertEqual(details["maker_tag_id"], "MV-" + tag.short_id)
         self.assertEqual(details["code"], "04AABBCCDDEEFF")
         self.assertEqual(details["kind"], "nfc")
         self.assertEqual(MakerTag.objects.filter(owner=self.owner, code=tag.code).count(), 1)
