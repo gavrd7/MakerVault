@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { apiFetch } from "../api";
 import { Badge, LoadingBlock, Modal } from "./Common";
 import TerminalTagRegistration from "./TerminalTagRegistration";
+import TerminalTagLookup from "./TerminalTagLookup";
 
 function targetLabel(tag) {
   if (!tag?.target) return "Target unavailable";
@@ -107,6 +108,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
   const [targetType, setTargetType] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [terminalOpen, setTerminalOpen] = useState(false);
+  const [lookupOpen, setLookupOpen] = useState(false);
   const [createTarget, setCreateTarget] = useState(null);
   const [returnPending, setReturnPending] = useState(false);
   const [detail, setDetail] = useState(null);
@@ -281,6 +283,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
           <option value="qr">QR identity code</option>
         </select>
         <TagCaptureControls kind={resolveKind} value={resolveCode} onCapture={setResolveCode} autoFocus compact />
+        <button type="button" onClick={() => setLookupOpen(true)} className="tagResolveTerminalButton">Scan with MakerVault terminal</button>
         <button className="primary" disabled={!resolveCode.trim() || resolveBusy}>{resolveBusy ? "Resolving…" : "Resolve"}</button>
       </form>
     </section>
@@ -343,6 +346,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
       </div>
     </section>
 
+    {lookupOpen && <TerminalTagLookup onClose={() => setLookupOpen(false)} onFound={async id => { try { const result = await apiFetch("/api/tags/" + id + "/"); setDetail(result.item); } catch (err) { setError(err.message); } }} />}
     {terminalOpen && <TerminalTagRegistration groups={data?.targets} initialTarget={createTarget} onClose={() => { setTerminalOpen(false); setCreateTarget(null); }} onCompleted={async () => { await load(); await onChanged(); }} />}
 
     {deleteTagRow && <Modal title="Permanently delete Maker Tag?" onClose={() => { if (!deleteBusy) setDeleteTagRow(null); }}>
