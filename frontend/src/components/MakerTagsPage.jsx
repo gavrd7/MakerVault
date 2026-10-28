@@ -34,7 +34,7 @@ function ndefRecordText(record) {
   }
 }
 
-function TagCaptureControls({ kind, value, onCapture, autoFocus = false, compact = false }) {
+function TagCaptureControls({ kind, value, onCapture, autoFocus = false, compact = false, kindSelector = null, resolveAction = null, onTerminalScan = null }) {
   const inputRef = useRef(null);
   const phoneNfcMode = kind === "nfc" || kind === "radio" || kind === "auto";
   const [nfcBusy, setNfcBusy] = useState(false);
@@ -80,20 +80,36 @@ function TagCaptureControls({ kind, value, onCapture, autoFocus = false, compact
     }
   }
 
-  return <div className={"tagCaptureControls" + (compact ? " compact" : "")}>
+  const entryInput = <input
+    ref={inputRef}
+    value={value}
+    onChange={e => onCapture(e.target.value)}
+    onKeyDown={e => { if (!compact && e.key === "Enter") e.preventDefault(); }}
+    placeholder={kind === "qr" ? "QR identity code…" : "Scan/paste reader identity, UID or EPC…"}
+    aria-label="Tag identity"
+    autoComplete="off"
+    autoCapitalize="none"
+    spellCheck={false}
+  />;
+  if (compact) return <div className="tagResolveControls">
+    <div className="tagResolveScanMethods">
+      {phoneNfcMode && <button type="button" onClick={scanNfc} disabled={nfcBusy}>{nfcBusy ? "Waiting for NFC…" : "Scan with phone NFC"}</button>}
+      <button type="button" onClick={onTerminalScan}>Scan with MakerVault terminal</button>
+    </div>
+    <div className="tagResolveInputRow">
+      {kindSelector}
+      {entryInput}
+      {resolveAction}
+    </div>
+    <small className="tagResolveHelp">Enter or scan a UID, EPC or QR identity. USB/OTG readers can type directly into the field.</small>
+    {notice && <small className="tagCaptureNotice">{notice}</small>}
+  </div>;
+  return <div className="tagCaptureControls">
     {phoneNfcMode && <button type="button" onClick={scanNfc} disabled={nfcBusy}>{nfcBusy ? "Waiting for NFC…" : "Scan with phone NFC"}</button>}
-    <input
-      ref={inputRef}
-      value={value}
-      onChange={e => onCapture(e.target.value)}
-      onKeyDown={e => { if (!compact && e.key === "Enter") e.preventDefault(); }}
-      placeholder={kind === "qr" ? "QR identity code…" : "Scan/paste reader identity, UID or EPC…"}
-      autoComplete="off"
-      autoCapitalize="none"
-      spellCheck={false}
-    />
+    {entryInput}
     {(kind === "nfc" || kind === "rfid" || kind === "radio" || kind === "auto") && <small>
-      MakerVault accepts the stable identity emitted by the reader rather than requiring a particular chip family. USB/OTG keyboard readers can scan directly into this field. {phoneNfcMode && (capability.supported ? "This browser also supports direct NDEF-compatible NFC capture." : capability.reason)}
+      MakerVault accepts the stable identity emitted by a reader. USB/OTG readers can enter it directly.
+      {phoneNfcMode && (capability.supported ? " This browser supports direct NFC capture." : capability.reason)}
     </small>}
     {notice && <small className="tagCaptureNotice">{notice}</small>}
   </div>;
@@ -276,15 +292,17 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
         <strong>Resolve a physical tag</strong>
         <small>Scan a tag with your phone or paired terminal, or enter its identity manually.</small>
       </div>
-      <form onSubmit={resolveIdentity}>
-        <select value={resolveKind} onChange={e => setResolveKind(e.target.value)}>
-          <option value="auto">Auto-detect reader identity</option>
-          <option value="radio">RFID / NFC</option>
-          <option value="qr">QR identity code</option>
-        </select>
-        <TagCaptureControls kind={resolveKind} value={resolveCode} onCapture={setResolveCode} autoFocus compact />
-        <button type="button" onClick={() => setLookupOpen(true)} className="tagResolveTerminalButton">Scan with MakerVault terminal</button>
-        <button className="primary" disabled={!resolveCode.trim() || resolveBusy}>{resolveBusy ? "Resolving…" : "Resolve"}</button>
+      <form onSubmit={resolveIdentity} className="tagResolveForm">
+        <TagCaptureControls
+          kind={resolveKind} value={resolveCode} onCapture={setResolveCode} autoFocus compact
+          onTerminalScan={() => setLookupOpen(true)}
+          kindSelector={<select aria-label="Tag identity type" value={resolveKind} onChange={e => setResolveKind(e.target.value)}>
+            <option value="auto">Auto-detect</option>
+            <option value="radio">RFID / NFC</option>
+            <option value="qr">QR code</option>
+          </select>}
+          resolveAction={<button type="submit" className="primary" disabled={!resolveCode.trim() || resolveBusy}>{resolveBusy ? "Resolving…" : "Resolve"}</button>}
+        />
       </form>
     </section>
 
