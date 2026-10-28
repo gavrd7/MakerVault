@@ -1,7 +1,12 @@
 from django.urls import path
-from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views, device_api_views, device_pairing, device_measurements, device_tag_registration, weight_history_views
+from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views, device_api_views, device_pairing, device_measurements, device_tag_registration, device_tag_lookup, weight_history_views
 
 urlpatterns = [
+    path("device/tag-lookup/", device_tag_lookup.begin, name="api-device-tag-lookup-begin"),
+    path("device/tag-lookup/<uuid:lookup_id>/", device_tag_lookup.status, name="api-device-tag-lookup-status"),
+    path("device/tag-lookup/<uuid:lookup_id>/cancel/", device_tag_lookup.cancel, name="api-device-tag-lookup-cancel"),
+    path("device/v1/tag-lookup/pending/", device_tag_lookup.pending, name="api-device-tag-lookup-pending"),
+    path("device/v1/tag-lookup/<uuid:lookup_id>/complete/", device_tag_lookup.complete, name="api-device-tag-lookup-complete"),
     path("device/tag-registration/", device_tag_registration.begin, name="api-device-tag-registration-begin"),
     path("device/tag-registration/<uuid:registration_id>/", device_tag_registration.status, name="api-device-tag-registration-status"),
     path("device/tag-registration/<uuid:registration_id>/cancel/", device_tag_registration.cancel, name="api-device-tag-registration-cancel"),
