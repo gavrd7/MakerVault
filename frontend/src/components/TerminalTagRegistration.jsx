@@ -8,7 +8,7 @@ function MakerVaultMark({ className = "" }) {
   return <span className={"terminalBrandMark " + className}><img src="/static/core/makervault-logo.jpg" alt="" /></span>;
 }
 
-function TerminalSymbol() {
+export function TerminalArtwork() {
   return <div className="terminalScanArt" aria-hidden="true">
     <div className="terminalScanDevice">
       <div className="terminalScanScreen"><MakerVaultMark className="terminalScreenMark" /><small>SCAN TAG</small></div>
@@ -108,7 +108,7 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
 
   return <Modal title="Add Maker Tag with terminal" subtitle="Scan a physical tag with a paired MakerVault handheld." onClose={close} wide className="terminalTagModal">
     <div className="terminalTagLayout">
-      <TerminalSymbol />
+      <TerminalArtwork />
       <div className="terminalTagContent">
         {!registration && <form onSubmit={begin} className="formGrid">
           <label className="full">Connected terminal
