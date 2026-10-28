@@ -135,6 +135,24 @@ def browser_pending(request):
     return response
 
 
+
+@require_http_methods(["GET"])
+@require_device_scope("tags:write")
+def device_status(request, registration_id):
+    device = paired_device(request)
+    if not device:
+        return failure("Active paired RFID terminal required.", 403)
+    item = DeviceTagRegistration.objects.select_related("tag").filter(
+        pk=registration_id, device=device, owner=request.device_owner
+    ).first()
+    if not item:
+        return failure("Registration not found.", 404)
+    response = JsonResponse({"id": str(item.pk),
+                            "state": "expired" if item.state == "pending" and item.expires_at <= timezone.now() else item.state})
+    response["Cache-Control"] = "no-store"
+    return response
+
+
 @require_http_methods(["POST"])
 @require_device_scope("tags:write")
 def device_cancel(request, registration_id):
