@@ -260,6 +260,13 @@ def device_complete(request, registration_id):
                         return failure("Reassignment confirmation does not match this tag.", 409)
                     previous = {"kind": existing.kind, "code": existing.code,
                                 "target_type": existing.target_type, "target_id": str(existing.target_id)}
+                    old_view = serialise_tag_target(request.device_owner, existing.target_type, existing.target_id) or {}
+                    new_view = serialise_tag_target(request.device_owner, item.target_type, target.pk) or {}
+                    def label_snapshot(info):
+                        name, code = info.get("label", ""), info.get("record_code", "")
+                        return f"{name} ({code})" if code else name
+                    previous_label = label_snapshot(old_view)
+                    new_label = label_snapshot(new_view)
                     existing.target_type = item.target_type
                     existing.target_id = target.pk
                     existing.full_clean()
@@ -267,7 +274,8 @@ def device_complete(request, registration_id):
                     _sync_rfid_tag_to_spool(existing, previous=previous)
                     _record_tag_event(existing, request.device_owner, "reassigned",
                                       "Reassigned from a paired RFID terminal.", {
-                                          "previous": previous, "new_target_type": item.target_type,
+                                          "previous": previous, "previous_label": previous_label,
+                                          "new_label": new_label, "new_target_type": item.target_type,
                                           "new_target_id": str(target.pk),
                                           "device_id": str(device.pk), "request_id": str(item.pk)
                                       })
