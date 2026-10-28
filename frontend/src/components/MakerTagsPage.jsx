@@ -35,7 +35,7 @@ function ndefRecordText(record) {
 
 function TagCaptureControls({ kind, value, onCapture, autoFocus = false, compact = false }) {
   const inputRef = useRef(null);
-  const phoneNfcMode = kind === "nfc" || kind === "auto";
+  const phoneNfcMode = kind === "nfc" || kind === "radio" || kind === "auto";
   const [nfcBusy, setNfcBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const capability = nfcCapability();
@@ -91,7 +91,7 @@ function TagCaptureControls({ kind, value, onCapture, autoFocus = false, compact
       autoCapitalize="none"
       spellCheck={false}
     />
-    {(kind === "nfc" || kind === "rfid" || kind === "auto") && <small>
+    {(kind === "nfc" || kind === "rfid" || kind === "radio" || kind === "auto") && <small>
       MakerVault accepts the stable identity emitted by the reader rather than requiring a particular chip family. USB/OTG keyboard readers can scan directly into this field. {phoneNfcMode && (capability.supported ? "This browser also supports direct NDEF-compatible NFC capture." : capability.reason)}
     </small>}
     {notice && <small className="tagCaptureNotice">{notice}</small>}
@@ -239,7 +239,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
     if (!resolveCode.trim()) return;
     setResolveBusy(true); setError("");
     try {
-      const params = new URLSearchParams({ kind: resolveKind, code: resolveCode.trim() });
+      const params = new URLSearchParams({ kind: resolveKind === "radio" ? "auto" : resolveKind, code: resolveCode.trim() });
       const result = await apiFetch("/api/tags/resolve/?" + params.toString());
       setDetail(result.item);
       setResolveCode("");
@@ -272,13 +272,12 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
     <section className="panel tagResolvePanel">
       <div>
         <strong>Resolve a physical tag</strong>
-        <small>Scan or paste any stable code supplied by a compatible phone or PC reader. Auto-detect searches NFC, RFID and QR identities.</small>
+        <small>Scan a tag with your phone or paired terminal, or enter its identity manually.</small>
       </div>
       <form onSubmit={resolveIdentity}>
         <select value={resolveKind} onChange={e => setResolveKind(e.target.value)}>
           <option value="auto">Auto-detect reader identity</option>
-          <option value="rfid">RFID</option>
-          <option value="nfc">NFC</option>
+          <option value="radio">RFID / NFC</option>
           <option value="qr">QR identity code</option>
         </select>
         <TagCaptureControls kind={resolveKind} value={resolveCode} onCapture={setResolveCode} autoFocus compact />
