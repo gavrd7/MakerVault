@@ -116,6 +116,44 @@ def cancel(request, registration_id):
     return JsonResponse(summary(item))
 
 
+
+@login_required
+@require_http_methods(["GET"])
+def browser_pending(request):
+    try:
+        device_id = uuid.UUID(request.GET.get("device_id", ""))
+    except (ValueError, TypeError):
+        return failure("Invalid terminal.")
+    device = ConnectedDevice.objects.filter(pk=device_id, owner=request.user, device_type="rfid_terminal", revoked_at__isnull=True).first()
+    if not device:
+        return failure("Terminal not found.", 404)
+    item = DeviceTagRegistration.objects.select_related("tag").filter(
+        owner=request.user, device=device, state="pending", expires_at__gt=timezone.now()
+    ).order_by("-created_at").first()
+    response = JsonResponse({"registration": summary(item) if item else None})
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+@require_http_methods(["POST"])
+@require_device_scope("tags:write")
+def device_cancel(request, registration_id):
+    device = paired_device(request)
+    if not device:
+        return failure("Active paired RFID terminal required.", 403)
+    with transaction.atomic():
+        item = DeviceTagRegistration.objects.select_for_update().filter(
+            pk=registration_id, device=device, owner=request.device_owner
+        ).first()
+        if not item:
+            return failure("Registration not found.", 404)
+        if item.state != "pending" or item.expires_at <= timezone.now():
+            return failure("Registration is no longer pending.", 409)
+        item.state = "cancelled"
+        item.save(update_fields=["state", "updated_at"])
+    return JsonResponse(summary(item))
+
+
 def paired_device(request):
     return ConnectedDevice.objects.filter(
         owner=request.device_owner, api_key=request.device_key,
