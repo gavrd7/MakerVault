@@ -740,10 +740,8 @@ function MakerTagDetail({ tag, initialWrite = false, canEdit, canDelete, onDelet
           {canEdit && <button type="button" onClick={() => { setNdefOpen(false); setTerminalNdefOpen(true); setNotice(""); }}>Write / overwrite NFC tag</button>}
           {canEdit && "NDEFReader" in window && <button type="button" onClick={() => { setNdefOpen(!ndefOpen); setNdefPreview(null); }}>Use phone NFC instead</button>}
           {ndefOpen && <div className="tagNdefWritePanel">
-            <p>Both methods write the same stable MakerVault NDEF URL. You can write a blank NTAG215 or explicitly overwrite a writable existing MakerVault URL. Confirm the target tag before writing.</p>
-            <button type="button" onClick={() => { setNdefOpen(false); setTerminalNdefOpen(true); }}>Use MakerVault Terminal</button>
+            <p>Use your phone to write the same MakerVault NFC link. Confirm the tag before writing.</p>
             {"NDEFReader" in window && <>
-              <strong>Or write using browser NFC</strong>
               <div className="tagNdefWritePanel">
               <p>The default address is the one used to open MakerVault. An override only applies to this write.</p>
               <label>Optional address override
