@@ -280,7 +280,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
       </div>
       <div className="printingHeroActions">
         {config?.permissions?.add_maker_tag && <button className="primary" onClick={() => setAddOpen(true)}>Add Maker Tag</button>}
-        {config?.permissions?.add_maker_tag && <button type="button" onClick={() => setTerminalOpen(true)}>Use RFID terminal</button>}
+        {/* Terminal scanning is available inside Add Maker Tag, not a second registration entry point. */}
         <button onClick={load}>Refresh</button>
         <button disabled={!printableRows.length} onClick={() => setBatchOpen(true)}>Print labels</button>
       </div>
@@ -530,7 +530,7 @@ function MakerTagForm({ title, data, tag = null, initialTarget = null, onClose, 
   }
 
   return <Modal title={title} subtitle="One physical identity can be reassigned over time while MakerVault keeps an audit trail." onClose={onClose} wide>
-    {!tag && onUseTerminal && <div className="notice"><strong>Have a paired RFID/NFC terminal?</strong> Scan a physical Maker Tag instead of entering its UID. <button type="button" onClick={() => onUseTerminal({ type: form.target_type, id: form.target_id })} disabled={!["inventory", "spool"].includes(form.target_type) || !form.target_id}>Use RFID terminal</button></div>}
+    {!tag && onUseTerminal && <div className="notice"><strong>Scan using your RFID/NFC terminal</strong> Register the scanned UID to the selected record, then write the standard MakerVault NFC link from the resulting tag details when supported. <button type="button" onClick={() => onUseTerminal({ type: form.target_type, id: form.target_id })} disabled={!["inventory", "spool"].includes(form.target_type) || !form.target_id}>Use RFID terminal</button></div>}
     <form className="formGrid" onSubmit={submit}>
       {error && <div className="formError full">{error}</div>}
       <label>Tag type<select value={form.kind} onChange={e => set("kind", e.target.value)}>
