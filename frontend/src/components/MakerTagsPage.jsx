@@ -210,6 +210,8 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
   const selectedPrintableRows = printableRows.filter(tag => selectedTagIds.includes(String(tag.id)));
 
   function closeRecordTag() {
+    // A terminal registration/reassignment may have changed the list while this modal was open.
+    void load();
     setPromptTagWrite(false);
     setDetail(null);
     setAddOpen(false);
@@ -534,7 +536,7 @@ function MakerTagForm({ title, data, tag = null, initialTarget = null, onClose, 
   }
 
   return <Modal title={title} subtitle="One physical identity can be reassigned over time while MakerVault keeps an audit trail." onClose={onClose} wide>
-    {!tag && onUseTerminal && <div className="notice"><strong>Scan using your RFID/NFC terminal</strong> Register the scanned UID to the selected record, then write the standard MakerVault NFC link from the resulting tag details when supported. <button type="button" onClick={() => onUseTerminal({ type: form.target_type, id: form.target_id })} disabled={!["inventory", "spool"].includes(form.target_type) || !form.target_id}>Use RFID terminal</button></div>}
+    {!tag && onUseTerminal && <div className="notice"><strong>Scan using your RFID/NFC terminal</strong> Scan and assign the tag, then continue directly to writing its MakerVault NFC link. <button type="button" onClick={() => onUseTerminal({ type: form.target_type, id: form.target_id })} disabled={!["inventory", "spool"].includes(form.target_type) || !form.target_id}>Use MakerVault Terminal</button></div>}
     <form className="formGrid" onSubmit={submit}>
       {error && <div className="formError full">{error}</div>}
       <label>Tag type<select value={form.kind} onChange={e => set("kind", e.target.value)}>
@@ -563,12 +565,6 @@ function MakerTagForm({ title, data, tag = null, initialTarget = null, onClose, 
       {tag && <label>Status<select value={form.status} onChange={e => set("status", e.target.value)}><option value="active">Active</option><option value="retired">Retired</option></select></label>}
       <label className={tag ? "" : "full"}>Notes<textarea rows="4" value={form.notes} onChange={e => set("notes", e.target.value)} placeholder="Optional physical label/location notes…" /></label>
 
-      {(form.kind === "nfc" || form.kind === "rfid") && <div className="settingsCallout full">
-        <strong>Broad reader compatibility</strong>
-        <p>MakerVault stores the stable value your reader supplies and does not require one specific NFC/RFID chip family. Android browsers with Web NFC can capture supported NDEF-compatible tags directly. iPhone/iPad can open a MakerVault NDEF URL with the normal system NFC reader, while USB/Bluetooth/OTG readers on phones or PCs can paste UID, EPC or vendor reader codes into the identity field.</p>
-        <p>Hardware still determines what can actually be scanned: an iPhone cannot expose every low-frequency/UHF tag or arbitrary raw UID to a web page, but those tags can still be used through a compatible external reader.</p>
-      </div>}
-
       {form.kind === "rfid" && form.target_type === "spool" && <div className="settingsCallout full">
         <strong>Spool RFID compatibility</strong>
         <p>Conventional hexadecimal RFID UIDs are mirrored to the spool's legacy RFID field for CFS/current integrations. Other reader identities remain valid Maker Tags without being forced into that legacy UID field.</p>
@@ -589,8 +585,8 @@ function MakerTagDetail({ tag, initialWrite = false, canEdit, canDelete, onDelet
   const [customSize, setCustomSize] = useState({ width: 40, height: 30, qr: 20 });
   const [textOptions, setTextOptions] = useState({ title: true, code: true, target: true });
   const [labelFormat, setLabelFormat] = useState("standard");
-  const [ndefOpen, setNdefOpen] = useState(initialWrite);
-  const [terminalNdefOpen, setTerminalNdefOpen] = useState(false);
+  const [ndefOpen, setNdefOpen] = useState(false);
+  const [terminalNdefOpen, setTerminalNdefOpen] = useState(initialWrite);
   const [ndefOverride, setNdefOverride] = useState("");
   const [ndefPreview, setNdefPreview] = useState(null);
   const labelFormats = {
@@ -746,7 +742,7 @@ function MakerTagDetail({ tag, initialWrite = false, canEdit, canDelete, onDelet
           </button>}
           {ndefOpen && <div className="tagNdefWritePanel">
             <p>Both methods write the same stable MakerVault NDEF URL. You can write a blank NTAG215 or explicitly overwrite a writable existing MakerVault URL. Confirm the target tag before writing.</p>
-            <button type="button" onClick={() => { setNdefOpen(false); setTerminalNdefOpen(true); }}>Use paired ESP32-S3 terminal</button>
+            <button type="button" onClick={() => { setNdefOpen(false); setTerminalNdefOpen(true); }}>Use MakerVault Terminal</button>
             {"NDEFReader" in window && <>
               <strong>Or write using browser NFC</strong>
               <div className="tagNdefWritePanel">
