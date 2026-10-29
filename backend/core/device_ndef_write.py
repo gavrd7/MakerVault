@@ -72,7 +72,7 @@ def begin(request):
     except (ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
         return error(str(exc) or "Invalid request.")
     with transaction.atomic():
-        device = ConnectedDevice.objects.select_for_update().select_related("api_key").filter(
+        device = ConnectedDevice.objects.select_for_update(of=("self",)).select_related("api_key").filter(
             pk=device_id, owner=request.user, device_type="rfid_terminal",
             revoked_at__isnull=True,
         ).first()
