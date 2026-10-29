@@ -737,12 +737,15 @@ function MakerTagDetail({ tag, canEdit, canDelete, onDeleted, onClose, onEdit, o
         {tag.kind === "nfc" && <>
           <code>{window.location.origin + "/t/" + tag.maker_tag_id + "/"}</code>
           <button onClick={() => copy(window.location.origin + "/t/" + tag.maker_tag_id + "/", "MakerVault scan link")}>Copy MakerVault scan link</button>
-          {canEdit && <button type="button" onClick={() => setTerminalNdefOpen(true)}>Write with paired terminal</button>}
-          {"NDEFReader" in window && <>
-            <button disabled={busy} onClick={() => { setNdefOpen(!ndefOpen); setNdefPreview(null); setNotice(""); }}>
-              {ndefOpen ? "Close NFC writing" : "Write MakerVault link to NFC"}
-            </button>
-            {ndefOpen && <div className="tagNdefWritePanel">
+          {canEdit && <button type="button" onClick={() => { setNdefOpen(!ndefOpen); setNdefPreview(null); setNotice(""); }}>
+            {ndefOpen ? "Close NFC writer" : "Write / overwrite NFC tag"}
+          </button>}
+          {ndefOpen && <div className="tagNdefWritePanel">
+            <p>Both methods write the same stable MakerVault NDEF URL. You can write a blank NTAG215 or explicitly overwrite a writable existing MakerVault URL. Confirm the target tag before writing.</p>
+            <button type="button" onClick={() => { setNdefOpen(false); setTerminalNdefOpen(true); }}>Use paired ESP32-S3 terminal</button>
+            {"NDEFReader" in window && <>
+              <strong>Or write using browser NFC</strong>
+              <div className="tagNdefWritePanel">
               <p>The default address is the one used to open MakerVault. An override only applies to this write.</p>
               <label>Optional address override
                 <input type="url" value={ndefOverride} placeholder={window.location.origin}
@@ -759,9 +762,10 @@ function MakerTagDetail({ tag, canEdit, canDelete, onDeleted, onClose, onEdit, o
                   {busy ? "Waiting for tag…" : "Confirm and write to NFC"}
                 </button>
               </>}
-            </div>}
-          </>}
-          <small>A standard NDEF URL opens the current Maker Tag assignment from a compatible phone. Writing needs a compatible Web NFC browser; the paired terminal workflow is being developed separately.</small>
+              </div>
+            </>}
+          </div>}
+          <small>One standard MakerVault URL identifies the tag for both compatible phones and the ESP32-S3 terminal. Tag content is not duplicated from inventory; linked record details are resolved in MakerVault.</small>
         </>}
       </div>}
     </div>
