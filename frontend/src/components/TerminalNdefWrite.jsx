@@ -9,6 +9,8 @@ export default function TerminalNdefWrite({ tag, onClose }) {
   const [devices, setDevices] = useState([]);
   const [deviceId, setDeviceId] = useState("");
   const [override, setOverride] = useState("");
+  const [showOverride, setShowOverride] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(true);
   const [preview, setPreview] = useState(null);
   const [request, setRequest] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -46,20 +48,33 @@ export default function TerminalNdefWrite({ tag, onClose }) {
     return () => { live = false; window.clearInterval(timer); };
   }, [request?.id, request?.state]);
 
-  async function check() {
-    setBusy(true); setError(""); setPreview(null);
-    try {
-      const next = await apiFetch("/api/tags/" + tag.id + "/ndef-preview/", {
-        method: "POST",
-        body: { origin: window.location.origin, override: override.trim() },
-      });
-      if (active.current) setPreview(next);
-    } catch (err) { if (active.current) setError(err.message); }
-    finally { if (active.current) setBusy(false); }
-  }
+  // Preview automatically, including after a user changes the optional address.
+  // Discard stale responses so an earlier address can never authorize Send.
+  useEffect(() => {
+    if (request) return undefined;
+    let current = true;
+    setPreview(null);
+    setPreviewLoading(true);
+    setError("");
+    const refresh = async () => {
+      try {
+        const next = await apiFetch("/api/tags/" + tag.id + "/ndef-preview/", {
+          method: "POST",
+          body: { origin: window.location.origin, override: override.trim() },
+        });
+        if (current) setPreview(next);
+      } catch (err) {
+        if (current) setError(err.message);
+      } finally {
+        if (current) setPreviewLoading(false);
+      }
+    };
+    refresh();
+    return () => { current = false; };
+  }, [tag.id, override, !!request]);
 
   async function begin() {
-    if (!preview || !deviceId) return;
+    if (!preview || !deviceId || previewLoading || busy || request) return;
     setBusy(true); setError("");
     try {
       const result = await apiFetch("/api/device/ndef-write/", {
@@ -101,16 +116,19 @@ export default function TerminalNdefWrite({ tag, onClose }) {
             {devices.map(device => <option key={device.id} value={device.id}>{device.name}{device.online ? " · Connected" : " · Offline"}</option>)}
           </select>
         </label>
-        <label>Optional URL address override
+        <button type="button" className="terminalNdefOverrideToggle" onClick={() => setShowOverride(value => !value)} disabled={busy}>
+          {showOverride ? "Hide address override" : "Override address"}
+        </button>
+        {showOverride && <label>Alternative MakerVault address
           <input type="url" value={override} placeholder={window.location.origin}
             onChange={event => { setOverride(event.target.value); setPreview(null); }} disabled={busy}/>
-        </label>
+        </label>}
         <div className="terminalNdefPreview" aria-live="polite">
           <strong>URL preview</strong>
           {preview ? <>
             <code>{preview.url}</code>
             {preview.local_address_warning && <small role="status">This address may only be reachable on the same LAN or VPN.</small>}
-          </> : <p>Preview the address before sending it to the terminal.</p>}
+          </> : <p>{previewLoading ? "Checking URL…" : "No valid URL available."}</p>}
         </div>
         <p className="terminalNdefHint">The ESP32-S3 must verify the tag UID, request physical confirmation and read back the written URL.</p>
       </>}
@@ -122,8 +140,7 @@ export default function TerminalNdefWrite({ tag, onClose }) {
         {request.state === "completed" && <small>Check the link independently using your phone.</small>}
       </div>}
       <div className="terminalNdefActions">
-        <button type="button" disabled={busy || !!request} onClick={check}>Preview URL</button>
-        <button type="button" className="primary" disabled={busy || !deviceId || !preview || !!request} onClick={begin}>Send to terminal</button>
+        <button type="button" className="primary" disabled={busy || previewLoading || !deviceId || !preview || !!request} onClick={begin}>Send to terminal</button>
         <button type="button" disabled={busy} onClick={request?.state === "pending" ? cancel : onClose}>
           {request?.state === "pending" ? "Cancel request" : "Close"}
         </button>
