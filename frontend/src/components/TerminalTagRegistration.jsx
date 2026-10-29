@@ -24,7 +24,9 @@ export function TerminalArtwork() {
   </div>;
 }
 
-export default function TerminalTagRegistration({ groups, initialTarget, onClose, onCompleted }) {
+export default function TerminalTagRegistration({ groups, initialTarget, onClose, onCompleted, onRegistered }) {
+  const onRegisteredRef = useRef(onRegistered);
+  onRegisteredRef.current = onRegistered;
   const onCompletedRef = useRef(onCompleted);
   onCompletedRef.current = onCompleted;
   const targets = (groups || []).filter(group => ["inventory", "spool"].includes(group.type));
@@ -115,6 +117,7 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
             const response = await apiFetch("/api/tags/" + next.tag.id + "/");
             if (!active) return;
             const fullTag = response.item;
+            onRegisteredRef.current?.(fullTag);
             // This NFC-capable terminal registration leads directly to writing,
             // without a second independently initiated task in the browser.
             if (fullTag?.kind === "nfc") setWriteTag(fullTag);
