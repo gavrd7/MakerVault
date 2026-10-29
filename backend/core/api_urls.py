@@ -1,5 +1,5 @@
 from django.urls import path
-from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views, device_api_views, device_pairing, device_measurements, device_tag_registration, device_tag_lookup, weight_history_views, tag_ndef
+from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views, device_api_views, device_pairing, device_measurements, device_tag_registration, device_tag_lookup, weight_history_views, tag_ndef, device_ndef_write
 
 urlpatterns = [
     path("device/tag-lookup/", device_tag_lookup.begin, name="api-device-tag-lookup-begin"),
@@ -15,6 +15,11 @@ urlpatterns = [
     path("device/v1/tag-registration/<uuid:registration_id>/cancel/", device_tag_registration.device_cancel, name="api-device-tag-registration-device-cancel"),
     path("device/v1/tag-registration/pending/", device_tag_registration.device_pending, name="api-device-tag-registration-pending"),
     path("device/v1/tag-registration/<uuid:registration_id>/complete/", device_tag_registration.device_complete, name="api-device-tag-registration-complete"),
+    path("device/ndef-write/", device_ndef_write.begin, name="api-ndef-write-begin"),
+    path("device/ndef-write/<uuid:write_id>/", device_ndef_write.status, name="api-ndef-write-status"),
+    path("device/ndef-write/<uuid:write_id>/cancel/", device_ndef_write.cancel, name="api-ndef-write-cancel"),
+    path("device/v1/ndef-write/pending/", device_ndef_write.device_pending, name="api-device-ndef-write-pending"),
+    path("device/v1/ndef-write/<uuid:write_id>/complete/", device_ndef_write.device_complete, name="api-device-ndef-write-complete"),
     path("device/v1/heartbeat/", device_pairing.device_heartbeat, name="api-device-heartbeat"),
     path("device/v1/pairing/start/", device_pairing.start_pairing, name="api-device-pairing-start"),
     path("device/v1/pairing/<uuid:pairing_id>/complete/", device_pairing.complete_pairing, name="api-device-pairing-complete"),
