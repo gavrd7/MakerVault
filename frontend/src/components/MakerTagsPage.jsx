@@ -584,6 +584,9 @@ function MakerTagDetail({ tag, canEdit, canDelete, onDeleted, onClose, onEdit, o
   const [customSize, setCustomSize] = useState({ width: 40, height: 30, qr: 20 });
   const [textOptions, setTextOptions] = useState({ title: true, code: true, target: true });
   const [labelFormat, setLabelFormat] = useState("standard");
+  const [ndefOpen, setNdefOpen] = useState(false);
+  const [ndefOverride, setNdefOverride] = useState("");
+  const [ndefPreview, setNdefPreview] = useState(null);
   const labelFormats = {
     standard: { name: "Standard label · 70 × 50 mm", width: 70, height: 50, qr: 25 },
     compact: { name: "Compact label · 50 × 30 mm", width: 50, height: 30, qr: 19 },
@@ -632,17 +635,38 @@ function MakerTagDetail({ tag, canEdit, canDelete, onDeleted, onClose, onEdit, o
     }
   }
 
+  async function previewNfcLink() {
+    setBusy(true); setNotice(""); setNdefPreview(null);
+    try {
+      const result = await apiFetch("/api/tags/" + tag.id + "/ndef-preview/", {
+        method: "POST",
+        body: { origin: window.location.origin, override: ndefOverride.trim() },
+      });
+      setNdefPreview(result);
+    } catch (err) {
+      setNotice(err?.message || "Could not preview NDEF URL.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function writeNfcLink() {
     const capability = nfcCapability();
     if (!capability.supported) {
       setNotice(capability.reason);
       return;
     }
+    if (!ndefPreview?.url) {
+      setNotice("Preview and confirm the URL first.");
+      return;
+    }
     setBusy(true); setNotice("Hold a writable NFC tag near the phone…");
     try {
       const writer = new window.NDEFReader();
-      await writer.write({ records: [{ recordType: "url", data: scanUrl }] });
-      setNotice("MakerVault scan link written to the NFC tag. Phones can now tap it to open this record.");
+      await writer.write({ records: [{ recordType: "url", data: ndefPreview.url }] });
+      setNotice("NDEF write completed. Scan the tag again to verify its URL.");
+      setNdefOpen(false);
+      setNdefPreview(null);
     } catch (err) {
       setNotice(err?.message || "The NFC tag could not be written.");
     } finally {
@@ -709,10 +733,32 @@ function MakerTagDetail({ tag, canEdit, canDelete, onDeleted, onClose, onEdit, o
         <code>{tag.code}</code>
         <button onClick={() => copy(tag.code, "Tag identity")}>Copy identity</button>
         {tag.kind === "nfc" && <>
-          <code>{scanUrl}</code>
-          <button onClick={() => copy(scanUrl, "MakerVault scan link")}>Copy MakerVault scan link</button>
-          {"NDEFReader" in window && <button disabled={busy} onClick={writeNfcLink}>{busy ? "Waiting for tag…" : "Write MakerVault link to NFC"}</button>}
-          <small>Writing the MakerVault URL as NDEF lets compatible phones—including iPhone—tap the tag and open MakerVault without browser access to the tag UID.</small>
+          <code>{window.location.origin + "/t/" + tag.maker_tag_id + "/"}</code>
+          <button onClick={() => copy(window.location.origin + "/t/" + tag.maker_tag_id + "/", "MakerVault scan link")}>Copy MakerVault scan link</button>
+          {"NDEFReader" in window && <>
+            <button disabled={busy} onClick={() => { setNdefOpen(!ndefOpen); setNdefPreview(null); setNotice(""); }}>
+              {ndefOpen ? "Close NFC writing" : "Write MakerVault link to NFC"}
+            </button>
+            {ndefOpen && <div className="tagNdefWritePanel">
+              <p>The default address is the one used to open MakerVault. An override only applies to this write.</p>
+              <label>Optional address override
+                <input type="url" value={ndefOverride} placeholder={window.location.origin}
+                  onChange={event => { setNdefOverride(event.target.value); setNdefPreview(null); }}
+                  disabled={busy} />
+              </label>
+              <button type="button" disabled={busy} onClick={previewNfcLink}>
+                {busy ? "Checking…" : "Preview NFC URL"}
+              </button>
+              {ndefPreview && <>
+                <p><strong>URL to write:</strong> <code>{ndefPreview.url}</code></p>
+                {ndefPreview.local_address_warning && <small role="status">This address may only work for phones connected to the same network or VPN.</small>}
+                <button type="button" className="primary" disabled={busy} onClick={writeNfcLink}>
+                  {busy ? "Waiting for tag…" : "Confirm and write to NFC"}
+                </button>
+              </>}
+            </div>}
+          </>}
+          <small>A standard NDEF URL opens the current Maker Tag assignment from a compatible phone. Writing needs a compatible Web NFC browser; the paired terminal workflow is being developed separately.</small>
         </>}
       </div>}
     </div>
