@@ -6,4 +6,4 @@
 .terminalTagContent .modalActions > button{margin:0}
 
 /* UID uses the same readable body size as the other lookup details. */
-.terminalTagProgress .terminalTagUid code{font-size:inherit;font-weight:500;letter-spacing:.015em;overflow-wrap:anywhere;color:inherit}
+.terminalTagProgress .terminalTagUid span{font:inherit;color:inherit;overflow-wrap:anywhere}
