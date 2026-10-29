@@ -20,6 +20,7 @@ urlpatterns = [
     path("device/ndef-write/<uuid:write_id>/cancel/", device_ndef_write.cancel, name="api-ndef-write-cancel"),
     path("device/v1/ndef-write/pending/", device_ndef_write.device_pending, name="api-device-ndef-write-pending"),
     path("device/v1/ndef-write/<uuid:write_id>/status/", device_ndef_write.device_status, name="api-device-ndef-write-status"),
+    path("device/v1/ndef-write/<uuid:write_id>/cancel/", device_ndef_write.device_cancel, name="api-device-ndef-write-cancel"),
     path("device/v1/ndef-write/<uuid:write_id>/complete/", device_ndef_write.device_complete, name="api-device-ndef-write-complete"),
     path("device/v1/heartbeat/", device_pairing.device_heartbeat, name="api-device-heartbeat"),
     path("device/v1/pairing/start/", device_pairing.start_pairing, name="api-device-pairing-start"),
