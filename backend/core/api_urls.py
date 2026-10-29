@@ -1,5 +1,5 @@
 from django.urls import path
-from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views, device_api_views, device_pairing, device_measurements, device_tag_registration, device_tag_lookup, weight_history_views
+from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views, device_api_views, device_pairing, device_measurements, device_tag_registration, device_tag_lookup, weight_history_views, tag_ndef
 
 urlpatterns = [
     path("device/tag-lookup/", device_tag_lookup.begin, name="api-device-tag-lookup-begin"),
@@ -61,6 +61,7 @@ urlpatterns = [
     path("tags/", api_views.maker_tags, name="api-maker-tags"),
     path("tags/resolve/", api_views.maker_tag_resolve_code, name="api-maker-tag-resolve-code"),
     path("tags/resolve/<uuid:public_token>/", api_views.maker_tag_resolve_token, name="api-maker-tag-resolve-token"),
+    path("tags/<uuid:tag_id>/ndef-preview/", tag_ndef.ndef_preview, name="api-maker-tag-ndef-preview"),
     path("tags/<uuid:tag_id>/", api_views.maker_tag_detail, name="api-maker-tag-detail"),
     path("inventory/", api_views.inventory, name="api-inventory"),
     path("printing/", api_views.printing_overview, name="api-printing-overview"),
