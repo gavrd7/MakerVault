@@ -159,6 +159,31 @@ def device_pending(request):
     return response
 
 
+@require_http_methods(["GET"])
+@require_device_scope("tags:write")
+def device_status(request, write_id):
+    """Terminal must recheck cancellation/expiry immediately before any write."""
+    device = paired(request)
+    if not device:
+        return error("Active paired terminal required.", 403)
+    item = DeviceNdefWrite.objects.select_related("tag").filter(
+        pk=write_id, owner=request.device_owner, device=device
+    ).first()
+    if not item:
+        return error("NFC write request not found.", 404)
+    # A changed/retired tag or changed UID invalidates the queued operation.
+    response = present(item)
+    if response["state"] == "pending" and (
+        item.tag.status != "active" or item.tag.owner_id != request.device_owner.pk or
+        item.tag.kind != "nfc" or
+        MakerTag.normalise_code("nfc", item.tag.code) != item.expected_uid
+    ):
+        response["state"] = "invalid"
+    result = JsonResponse(response)
+    result["Cache-Control"] = "no-store"
+    return result
+
+
 @require_http_methods(["POST"])
 @require_device_scope("tags:write")
 def device_complete(request, write_id):
