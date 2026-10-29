@@ -130,6 +130,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
   const [returnPending, setReturnPending] = useState(false);
   const [detail, setDetail] = useState(null);
   const [editTag, setEditTag] = useState(null);
+  const [promptTagWrite, setPromptTagWrite] = useState(false);
   const [deleteTagRow, setDeleteTagRow] = useState(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [resolveKind, setResolveKind] = useState("auto");
@@ -209,6 +210,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
   const selectedPrintableRows = printableRows.filter(tag => selectedTagIds.includes(String(tag.id)));
 
   function closeRecordTag() {
+    setPromptTagWrite(false);
     setDetail(null);
     setAddOpen(false);
     setEditTag(null);
@@ -245,7 +247,8 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
     setTerminalOpen(true);
   }
 
-  async function changed(item) {
+  async function changed(item, offerWrite = false) {
+    setPromptTagWrite(Boolean(offerWrite && item?.kind === "nfc"));
     setAddOpen(false);
     setEditTag(null);
     if (item) setDetail(item);
@@ -382,7 +385,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
       data={data}
       initialTarget={createTarget}
       onClose={() => { if (returnPending) closeRecordTag(); else { setAddOpen(false); setCreateTarget(null); } }}
-      onSaved={changed} onUseTerminal={useTerminalForRecord}
+      onSaved={item => changed(item, true)} onUseTerminal={useTerminalForRecord}
     />}
 
     {editTag && <MakerTagForm
@@ -395,6 +398,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
 
     {detail && <MakerTagDetail
       tag={detail}
+      initialWrite={promptTagWrite}
       canEdit={Boolean(config?.permissions?.change_maker_tag)}
       canDelete={Boolean(config?.permissions?.delete_maker_tag)}
       onDeleted={deleted}
@@ -578,14 +582,14 @@ function MakerTagForm({ title, data, tag = null, initialTarget = null, onClose, 
   </Modal>;
 }
 
-function MakerTagDetail({ tag, canEdit, canDelete, onDeleted, onClose, onEdit, onChanged, onOpenTarget }) {
+function MakerTagDetail({ tag, initialWrite = false, canEdit, canDelete, onDeleted, onClose, onEdit, onChanged, onOpenTarget }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const qrWrap = useRef(null);
   const [customSize, setCustomSize] = useState({ width: 40, height: 30, qr: 20 });
   const [textOptions, setTextOptions] = useState({ title: true, code: true, target: true });
   const [labelFormat, setLabelFormat] = useState("standard");
-  const [ndefOpen, setNdefOpen] = useState(false);
+  const [ndefOpen, setNdefOpen] = useState(initialWrite);
   const [terminalNdefOpen, setTerminalNdefOpen] = useState(false);
   const [ndefOverride, setNdefOverride] = useState("");
   const [ndefPreview, setNdefPreview] = useState(null);
