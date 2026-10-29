@@ -13,8 +13,8 @@ class NdefPreviewTests(TestCase):
         User = get_user_model()
         self.owner = User.objects.create_user(username="ndef-owner", password="test-password")
         self.other = User.objects.create_user(username="ndef-other", password="test-password")
-        perm = Permission.objects.get(content_type__app_label="core", codename="change_makertag")
-        self.owner.user_permissions.add(perm)
+        perm = Permission.objects.filter(content_type__app_label="core", codename__in=["change_makertag", "view_inventoryitem"])
+        self.owner.user_permissions.add(*perm)
         self.item = InventoryItem.objects.create(
             owner=self.owner, inventory_id="OTH-5511", item_type="other",
             custom_name="Tag preview item", quantity=1
