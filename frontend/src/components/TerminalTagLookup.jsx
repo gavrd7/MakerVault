@@ -83,7 +83,7 @@ export default function TerminalTagLookup({ onClose, onFound }) {
           {session.state === "pending" && <><strong>Request sent to MakerVault terminal</strong><p>Waiting for the handheld to receive the request. When its screen says “Present a tag”, hold the tag against the reader. The request expires after five minutes.</p></>}
           {session.state === "completed" && <>
             <strong>{session.found ? "Maker Tag found" : "Unregistered tag"}</strong>
-            <p>UID: <code>{session.uid}</code></p>
+            <p className="terminalTagUid">UID: <code>{session.uid}</code></p>
             {session.tag && <><p>{session.tag.label || session.tag.target?.label}</p><p>{session.tag.target?.subtitle}</p></>}
             {session.tag && <button type="button" className="primary" onClick={() => { onFound(session.tag.id); onClose(); }}>Open Maker Tag</button>}
           </>}
