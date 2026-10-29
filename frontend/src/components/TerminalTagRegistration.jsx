@@ -106,7 +106,7 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
         }
         setRegistration(next);
         setSeconds(Math.max(0, Math.ceil((new Date(next.expires_at).getTime() - Date.now()) / 1000)));
-        if (next.state === "completed") onCompletedRef.current?.();
+        if (next.state === "completed") onCompletedRef.current?.(next.tag);
       } catch (err) {
         if (active) setError(err.message);
       }
