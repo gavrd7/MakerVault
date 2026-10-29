@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { apiFetch } from "../api";
 import { Badge, LoadingBlock, Modal } from "./Common";
 import TerminalTagRegistration from "./TerminalTagRegistration";
+import TerminalNdefWrite from "./TerminalNdefWrite";
 import TerminalTagLookup from "./TerminalTagLookup";
 
 function targetLabel(tag) {
@@ -585,6 +586,7 @@ function MakerTagDetail({ tag, canEdit, canDelete, onDeleted, onClose, onEdit, o
   const [textOptions, setTextOptions] = useState({ title: true, code: true, target: true });
   const [labelFormat, setLabelFormat] = useState("standard");
   const [ndefOpen, setNdefOpen] = useState(false);
+  const [terminalNdefOpen, setTerminalNdefOpen] = useState(false);
   const [ndefOverride, setNdefOverride] = useState("");
   const [ndefPreview, setNdefPreview] = useState(null);
   const labelFormats = {
@@ -735,6 +737,7 @@ function MakerTagDetail({ tag, canEdit, canDelete, onDeleted, onClose, onEdit, o
         {tag.kind === "nfc" && <>
           <code>{window.location.origin + "/t/" + tag.maker_tag_id + "/"}</code>
           <button onClick={() => copy(window.location.origin + "/t/" + tag.maker_tag_id + "/", "MakerVault scan link")}>Copy MakerVault scan link</button>
+          {canEdit && <button type="button" onClick={() => setTerminalNdefOpen(true)}>Write with paired terminal</button>}
           {"NDEFReader" in window && <>
             <button disabled={busy} onClick={() => { setNdefOpen(!ndefOpen); setNdefPreview(null); setNotice(""); }}>
               {ndefOpen ? "Close NFC writing" : "Write MakerVault link to NFC"}
@@ -795,6 +798,7 @@ function MakerTagDetail({ tag, canEdit, canDelete, onDeleted, onClose, onEdit, o
     </Modal>}
   </Modal>
 
+    {terminalNdefOpen && <TerminalNdefWrite tag={tag} onClose={() => setTerminalNdefOpen(false)} />}
     {tag.kind === "qr" && typeof document !== "undefined" && createPortal(
       <div className="makerTagPrintPage" aria-hidden="true">
         <div className="makerTagPrintLabel" style={{ width: safeFormat.width + "mm", height: safeFormat.height + "mm" }}>
