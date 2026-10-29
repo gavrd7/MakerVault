@@ -372,7 +372,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
     </section>
 
     {lookupOpen && <TerminalTagLookup onClose={() => setLookupOpen(false)} onFound={async id => { try { const result = await apiFetch("/api/tags/" + id + "/"); setDetail(result.item); } catch (err) { setError(err.message); } }} />}
-    {terminalOpen && <TerminalTagRegistration groups={data?.targets} initialTarget={createTarget} onClose={() => { setTerminalOpen(false); setCreateTarget(null); }} onCompleted={async tag => { await load(); await onChanged(); if (tag?.id) { const response = await apiFetch("/api/tags/" + tag.id + "/"); const fullTag = response.item; if (fullTag) { setTerminalOpen(false); setPromptTagWrite(fullTag.kind === "nfc"); setDetail(fullTag); } } }} />}
+    {terminalOpen && <TerminalTagRegistration groups={data?.targets} initialTarget={createTarget} onClose={() => { setTerminalOpen(false); setCreateTarget(null); }} onRegistered={() => { void load(); void onChanged(); }} onCompleted={async tag => { await load(); await onChanged(); if (tag?.id) { const response = await apiFetch("/api/tags/" + tag.id + "/"); const fullTag = response.item; if (fullTag) { setTerminalOpen(false); setPromptTagWrite(fullTag.kind === "nfc"); setDetail(fullTag); } } }} />}
 
     {deleteTagRow && <Modal title="Permanently delete Maker Tag?" onClose={() => { if (!deleteBusy) setDeleteTagRow(null); }}>
       <p>This will permanently delete <strong>{deleteTagRow.label || deleteTagRow.code}</strong> ({deleteTagRow.code}), including its assignment history. Printed QR codes and NFC links for this tag will stop resolving. A physical NFC/RFID chip is not erased. This action cannot be undone.</p>
@@ -737,9 +737,8 @@ function MakerTagDetail({ tag, initialWrite = false, canEdit, canDelete, onDelet
         {tag.kind === "nfc" && <>
           <code>{window.location.origin + "/t/" + tag.maker_tag_id + "/"}</code>
           <button onClick={() => copy(window.location.origin + "/t/" + tag.maker_tag_id + "/", "MakerVault scan link")}>Copy MakerVault scan link</button>
-          {canEdit && <button type="button" onClick={() => { setNdefOpen(!ndefOpen); setNdefPreview(null); setNotice(""); }}>
-            {ndefOpen ? "Close NFC writer" : "Write / overwrite NFC tag"}
-          </button>}
+          {canEdit && <button type="button" onClick={() => { setNdefOpen(false); setTerminalNdefOpen(true); setNotice(""); }}>Write / overwrite NFC tag</button>}
+          {canEdit && "NDEFReader" in window && <button type="button" onClick={() => { setNdefOpen(!ndefOpen); setNdefPreview(null); }}>Use phone NFC instead</button>}
           {ndefOpen && <div className="tagNdefWritePanel">
             <p>Both methods write the same stable MakerVault NDEF URL. You can write a blank NTAG215 or explicitly overwrite a writable existing MakerVault URL. Confirm the target tag before writing.</p>
             <button type="button" onClick={() => { setNdefOpen(false); setTerminalNdefOpen(true); }}>Use MakerVault Terminal</button>
