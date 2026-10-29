@@ -14,6 +14,8 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 
 from .models import MakerTag
+from .maker_tags import TARGETS, resolve_tag_target
+from django.core.exceptions import ValidationError
 
 _HOST_LABEL = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
 
@@ -43,6 +45,8 @@ def _base_origin(value):
         if len(hostname) > 253 or not all(_HOST_LABEL.fullmatch(x) for x in hostname.rstrip(".").split(".")):
             raise ValueError("Invalid hostname.")
     authority = parts.netloc.rstrip("/")
+    if hostname.endswith(".") or "%" in authority or authority.count("@"):
+        raise ValueError("Invalid hostname.")
     return f"{parts.scheme}://{authority}", hostname, port
 
 
@@ -66,6 +70,13 @@ def ndef_preview(request, tag_id):
     ).first()
     if not tag:
         return JsonResponse({"error": "Active NFC Maker Tag not found."}, status=404)
+    definition = TARGETS.get(tag.target_type)
+    if not definition or not request.user.has_perm(f"core.view_{definition.model._meta.model_name}"):
+        return JsonResponse({"error": "Tag target not accessible."}, status=404)
+    try:
+        resolve_tag_target(request.user, tag.target_type, tag.target_id)
+    except ValidationError:
+        return JsonResponse({"error": "Tag target not accessible."}, status=404)
     if len(request.body) > 1024:
         return JsonResponse({"error": "Request too large."}, status=413)
     try:
