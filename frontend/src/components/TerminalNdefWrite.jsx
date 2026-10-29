@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { apiFetch } from "../api";
 import { Modal } from "./Common";
+import "./TerminalNdefWrite.css";
 
 // Terminal-mediated NDEF writes are deliberately capability gated: firmware
 // v0.6.1 does not advertise ntag215_ndef_write and must never receive requests.
@@ -90,8 +91,8 @@ export default function TerminalNdefWrite({ tag, onClose }) {
   }
 
   return <Modal title="Write MakerVault NFC link" subtitle="Write a standard NDEF URL using a paired RFID terminal." onClose={request?.state === "pending" ? cancel : onClose} wide>
-    <div className="formGrid">
-      <p>Tag <strong>{tag.maker_tag_id}</strong> · UID <code>{tag.code}</code></p>
+    <div className="terminalNdefStack">
+      <div className="terminalNdefIdentity">Tag <strong>{tag.maker_tag_id}</strong> <span>·</span> UID <code>{tag.code}</code></div>
       {error && <div className="formError" role="alert">{error}</div>}
       {!request && <>
         <label>Paired terminal
@@ -104,22 +105,25 @@ export default function TerminalNdefWrite({ tag, onClose }) {
           <input type="url" value={override} placeholder={window.location.origin}
             onChange={event => { setOverride(event.target.value); setPreview(null); }} disabled={busy}/>
         </label>
-        <button type="button" disabled={busy} onClick={check}>Preview URL</button>
-        {preview && <>
-          <p><strong>Exact URL:</strong> <code>{preview.url}</code></p>
-          {preview.local_address_warning && <p role="status">This address may only be reachable on the same LAN or VPN.</p>}
-          <p>The terminal must confirm the physical UID, ask for confirmation and verify its memory after writing. Scanning a tag alone never writes to it.</p>
-          <button type="button" className="primary" disabled={busy || !deviceId} onClick={begin}>Send to terminal</button>
-        </>}
+        <div className="terminalNdefPreview" aria-live="polite">
+          <strong>URL preview</strong>
+          {preview ? <>
+            <code>{preview.url}</code>
+            {preview.local_address_warning && <small role="status">This address may only be reachable on the same LAN or VPN.</small>}
+          </> : <p>Preview the address before sending it to the terminal.</p>}
+        </div>
+        <p className="terminalNdefHint">The ESP32-S3 must verify the tag UID, request physical confirmation and read back the written URL.</p>
       </>}
-      {request && <>
-        <p><strong>Status:</strong> {request.state === "pending" ? "Waiting for terminal confirmation" :
-           request.state === "completed" ? "Terminal reported verified write" : request.state}</p>
-        <p><code>{request.url}</code></p>
-        {request.state === "pending" && <p>Expires at {new Date(request.expires_at).toLocaleTimeString()}.</p>}
-        {request.state === "completed" && <p>Tap the tag using your phone to confirm it opens the intended MakerVault instance.</p>}
-      </>}
-      <div className="formActions">
+      {request && <div className="terminalNdefPreview" aria-live="polite">
+        <strong>{request.state === "pending" ? "Waiting for terminal confirmation" :
+          request.state === "completed" ? "Terminal reported verified write" : "Write request: " + request.state}</strong>
+        <code>{request.url}</code>
+        {request.state === "pending" && <small>Expires at {new Date(request.expires_at).toLocaleTimeString()}.</small>}
+        {request.state === "completed" && <small>Check the link independently using your phone.</small>}
+      </div>}
+      <div className="terminalNdefActions">
+        <button type="button" disabled={busy || !!request} onClick={check}>Preview URL</button>
+        <button type="button" className="primary" disabled={busy || !deviceId || !preview || !!request} onClick={begin}>Send to terminal</button>
         <button type="button" disabled={busy} onClick={request?.state === "pending" ? cancel : onClose}>
           {request?.state === "pending" ? "Cancel request" : "Close"}
         </button>
