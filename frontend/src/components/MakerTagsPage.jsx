@@ -370,7 +370,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
     </section>
 
     {lookupOpen && <TerminalTagLookup onClose={() => setLookupOpen(false)} onFound={async id => { try { const result = await apiFetch("/api/tags/" + id + "/"); setDetail(result.item); } catch (err) { setError(err.message); } }} />}
-    {terminalOpen && <TerminalTagRegistration groups={data?.targets} initialTarget={createTarget} onClose={() => { setTerminalOpen(false); setCreateTarget(null); }} onCompleted={async tag => { await load(); await onChanged(); if (tag?.id) { setTerminalOpen(false); setPromptTagWrite(tag.kind === "nfc"); setDetail(tag); } }} />}
+    {terminalOpen && <TerminalTagRegistration groups={data?.targets} initialTarget={createTarget} onClose={() => { setTerminalOpen(false); setCreateTarget(null); }} onCompleted={async tag => { await load(); await onChanged(); if (tag?.id) { const response = await apiFetch("/api/tags/" + tag.id + "/"); const fullTag = response.item; if (fullTag) { setTerminalOpen(false); setPromptTagWrite(fullTag.kind === "nfc"); setDetail(fullTag); } } }} />}
 
     {deleteTagRow && <Modal title="Permanently delete Maker Tag?" onClose={() => { if (!deleteBusy) setDeleteTagRow(null); }}>
       <p>This will permanently delete <strong>{deleteTagRow.label || deleteTagRow.code}</strong> ({deleteTagRow.code}), including its assignment history. Printed QR codes and NFC links for this tag will stop resolving. A physical NFC/RFID chip is not erased. This action cannot be undone.</p>
