@@ -8,6 +8,8 @@
 .terminalNdefPreview p{margin:0;color:var(--muted,#a2a9b8)}
 .terminalNdefPreview small,.terminalNdefHint{color:var(--muted,#a2a9b8);line-height:1.5}
 .terminalNdefHint{margin:0;font-size:.9rem}
-.terminalNdefActions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:4px}
+.terminalNdefActions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:4px}
 .terminalNdefActions button{width:100%;min-height:44px;margin:0}
 @media(max-width:600px){.terminalNdefActions{grid-template-columns:1fr}}
+
+.terminalNdefOverrideToggle{align-self:flex-start;min-height:36px;margin:0}
