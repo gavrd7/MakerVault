@@ -112,6 +112,18 @@ class DeviceNdefWriteTests(TestCase):
         self.tag.save(update_fields=["status"])
         self.assertEqual(self.start().status_code, 400)
 
+    def test_device_status_detects_cancel_and_changed_uid(self):
+        pk = self.start().json()["id"]
+        url = f"/api/device/v1/ndef-write/{pk}/status/"
+        headers = {"HTTP_AUTHORIZATION": "Bearer " + self.token}
+        self.assertEqual(self.client.get(url, **headers).json()["state"], "pending")
+        self.tag.code = "04AABBCCDDFFEE"
+        self.tag.save(update_fields=["code"])
+        self.assertEqual(self.client.get(url, **headers).json()["state"], "invalid")
+        self.assertEqual(self.client.post(f"/api/device/ndef-write/{pk}/cancel/").status_code, 200)
+        self.assertEqual(self.client.get(url, **headers).json()["state"], "cancelled")
+        self.assertEqual(self.client.get(url).status_code, 401)
+
     def test_reassignment_preserves_url_and_changed_uid_blocks_complete(self):
         pk = self.start().json()["id"]
         self.tag.code = "04AABBCCDDFFEE"
