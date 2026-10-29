@@ -186,6 +186,26 @@ def device_status(request, write_id):
 
 @require_http_methods(["POST"])
 @require_device_scope("tags:write")
+def device_cancel(request, write_id):
+    """Physical Back button cancels the same bounded operation as the browser."""
+    device = paired(request)
+    if not device:
+        return error("Active paired terminal required.", 403)
+    with transaction.atomic():
+        item = DeviceNdefWrite.objects.select_for_update(of=("self",)).select_related("tag").filter(
+            pk=write_id, owner=request.device_owner, device=device
+        ).first()
+        if not item:
+            return error("NFC write request not found.", 404)
+        if item.state != "pending" or item.expires_at <= timezone.now():
+            return error("NFC write is no longer pending.", 409)
+        item.state = "cancelled"
+        item.save(update_fields=["state", "updated_at"])
+    return JsonResponse(present(item))
+
+
+@require_http_methods(["POST"])
+@require_device_scope("tags:write")
 def device_complete(request, write_id):
     device = paired(request)
     if not device:
