@@ -1,0 +1,13 @@
+.terminalNdefStack{display:flex;flex-direction:column;gap:18px;min-width:0}
+.terminalNdefStack label{display:flex;flex-direction:column;gap:8px;min-width:0}
+.terminalNdefStack label select,.terminalNdefStack label input{width:100%;box-sizing:border-box}
+.terminalNdefIdentity{display:flex;flex-wrap:wrap;gap:6px;align-items:baseline}
+.terminalNdefIdentity code{font-size:inherit;overflow-wrap:anywhere}
+.terminalNdefPreview{display:flex;flex-direction:column;gap:10px;min-width:0;padding:16px;border:1px solid var(--border,#343b4a);border-radius:12px;background:rgba(127,127,127,.045)}
+.terminalNdefPreview code{overflow-wrap:anywhere;white-space:normal;font-size:.9rem}
+.terminalNdefPreview p{margin:0;color:var(--muted,#a2a9b8)}
+.terminalNdefPreview small,.terminalNdefHint{color:var(--muted,#a2a9b8);line-height:1.5}
+.terminalNdefHint{margin:0;font-size:.9rem}
+.terminalNdefActions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:4px}
+.terminalNdefActions button{width:100%;min-height:44px;margin:0}
+@media(max-width:600px){.terminalNdefActions{grid-template-columns:1fr}}
