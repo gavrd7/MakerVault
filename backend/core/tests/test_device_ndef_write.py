@@ -112,6 +112,18 @@ class DeviceNdefWriteTests(TestCase):
         self.tag.save(update_fields=["status"])
         self.assertEqual(self.start().status_code, 400)
 
+    def test_device_cancel_is_bound_to_same_paired_terminal(self):
+        pk = self.start().json()["id"]
+        url = f"/api/device/v1/ndef-write/{pk}/cancel/"
+        self.assertEqual(self.client.post(url).status_code, 401)
+        rogue = generate_token()
+        UserApiKey.objects.create(owner=self.owner, name="Other key",
+                                  identifier=rogue.identifier,
+                                  secret_digest=rogue.digest, scopes=["tags:write"])
+        self.assertEqual(self.client.post(url, HTTP_AUTHORIZATION="Bearer " + rogue.plaintext).status_code, 403)
+        self.assertEqual(self.client.post(url, HTTP_AUTHORIZATION="Bearer " + self.token).json()["state"], "cancelled")
+        self.assertEqual(self.finish(pk).status_code, 410)
+
     def test_device_status_detects_cancel_and_changed_uid(self):
         pk = self.start().json()["id"]
         url = f"/api/device/v1/ndef-write/{pk}/status/"
