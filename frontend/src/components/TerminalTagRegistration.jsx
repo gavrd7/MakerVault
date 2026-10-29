@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { apiFetch } from "../api";
 import { Modal } from "./Common";
+import TerminalNdefWrite from "./TerminalNdefWrite";
 import "./TerminalTagRegistration.css";
 
 function MakerVaultMark({ className = "" }) {
@@ -32,6 +33,8 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
   const [targetType, setTargetType] = useState(initialTarget?.type && ["inventory", "spool"].includes(initialTarget.type) ? initialTarget.type : "inventory");
   const [targetId, setTargetId] = useState(initialTarget?.id || "");
   const [registration, setRegistration] = useState(null);
+  const [writeTag, setWriteTag] = useState(null);
+  const handoffStarted = useRef(false);
   const [pendingRegistration, setPendingRegistration] = useState(null);
   const [checkingPending, setCheckingPending] = useState(false);
   const [error, setError] = useState("");
@@ -153,6 +156,11 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
     }
     onClose();
   }
+
+  if (writeTag) return <TerminalNdefWrite tag={writeTag} onClose={() => {
+    onCompletedRef.current?.(null);
+    onClose();
+  }} />;
 
   return <Modal title="Add Maker Tag with terminal" subtitle="Scan a physical tag with a paired MakerVault handheld." onClose={close} wide className="terminalTagModal">
     <div className="terminalTagLayout">
