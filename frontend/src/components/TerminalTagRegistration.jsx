@@ -109,7 +109,23 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
         }
         setRegistration(next);
         setSeconds(Math.max(0, Math.ceil((new Date(next.expires_at).getTime() - Date.now()) / 1000)));
-        if (next.state === "completed") onCompletedRef.current?.(next.tag);
+        if (next.state === "completed" && !handoffStarted.current) {
+          handoffStarted.current = true;
+          try {
+            const response = await apiFetch("/api/tags/" + next.tag.id + "/");
+            if (!active) return;
+            const fullTag = response.item;
+            // This NFC-capable terminal registration leads directly to writing,
+            // without a second independently initiated task in the browser.
+            if (fullTag?.kind === "nfc") setWriteTag(fullTag);
+            else onCompletedRef.current?.(fullTag);
+          } catch (err) {
+            if (active) {
+              handoffStarted.current = false;
+              setError("Tag saved, but could not open writing: " + err.message);
+            }
+          }
+        }
       } catch (err) {
         if (active) setError(err.message);
       }
