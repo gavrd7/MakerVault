@@ -58,8 +58,17 @@ def begin(request):
         return failure("HTTPS required.", 403)
     try:
         data = payload(request)
-        if set(data) != {"device_id", "target_type", "target_id"}:
-            raise ValueError("Provide device_id, target_type and target_id.")
+        basic = {"device_id", "target_type", "target_id"}
+        extended = basic | {"origin", "override"}
+        if set(data) not in (basic, extended):
+            raise ValueError("Provide valid device, target and optional NFC address.")
+        chosen_origin = ""
+        if set(data) == extended:
+            source, _, _ = _base_origin(data["origin"])
+            header, _, _ = _base_origin(request.headers.get("Origin", ""))
+            if source != header:
+                raise ValueError("Browser origin mismatch.")
+            chosen_origin, _, _ = _base_origin(data["override"] or source)
         kind = data["target_type"]
         if kind not in SUPPORTED:
             raise ValueError("Unsupported target type.")
@@ -86,7 +95,8 @@ def begin(request):
             return failure("The terminal already has a pending registration.", 409)
         item = DeviceTagRegistration.objects.create(
             owner=request.user, device=device, target_type=kind,
-            target_id=target.pk, expires_at=timezone.now() + TTL
+            target_id=target.pk, ndef_origin=chosen_origin,
+            expires_at=timezone.now() + TTL
         )
     return JsonResponse(summary(item), status=201)
 
