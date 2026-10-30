@@ -49,6 +49,7 @@ def summary(item):
             "target": serialise_tag_target(item.owner, item.target_type, item.target_id),
             "tag": _tag_summary(item.tag, item.owner) if item.tag_id and item.tag else None,
             "tag_kind": item.tag.kind if item.tag_id and item.tag else "",
+            "tag_uid": item.tag.code if item.tag_id and item.tag else "",
             "ndef_write": {"id": str(item.ndef_write.pk), "state": "expired" if item.ndef_write.state == "pending" and item.ndef_write.expires_at <= timezone.now() else item.ndef_write.state, "url": item.ndef_write.url} if item.ndef_write_id and item.ndef_write else None,
             "ndef_write_id": str(item.ndef_write_id) if item.ndef_write_id else "",
             "ndef_url": item.ndef_write.url if item.ndef_write_id and item.ndef_write else "",
