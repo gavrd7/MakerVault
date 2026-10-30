@@ -47,10 +47,10 @@ Firmware implementers: [canonical pairing protocol v1 and HTTP contract](docs/CO
 
 **Previously in v1.2.3:** Django 5.2.18, Vite 8.3.3 and Pillow 13 security dependency updates.
 
-**Previously in v1.2.2:** direct Maker Tag shortcuts from inventory, projects, filament and reusable spools, printers, printed parts and storage locations; contextual return navigation; permission-controlled QR/NFC/RFID tag deletion; a dedicated Model Library navigation entry; and improved storage-location management.
+**Previously in v1.2.2:** direct MakerTag shortcuts from inventory, projects, filament and reusable spools, printers, printed parts and storage locations; contextual return navigation; permission-controlled QR/NFC/RFID tag deletion; a dedicated Model Library navigation entry; and improved storage-location management.
 
 
-**New in v1.4.0 — connected RFID/NFC Maker Tags:** Pair a compatible terminal running firmware v0.6.0 to look up physical tag UIDs, register tags against inventory and spools, and explicitly reassign existing identities with on-device confirmation. Short `MV-XXXXXXXX` identities survive reassignment; audit history records old and new targets. Browser and terminal cancellation and interrupted-session recovery are supported. **Tag-memory writes, NDEF and Creality CFS payload writes are not implemented.** See the [Maker Tags user guide](https://gavrd7.github.io/MakerVault-docs/using/maker-tags/) and [hardware firmware](https://github.com/gavrd7/MakerVault-Hardware).
+**New in v1.4.0 — connected RFID/NFC MakerTags:** Pair a compatible terminal running firmware v0.6.0 to look up physical tag UIDs, register tags against inventory and spools, and explicitly reassign existing identities with on-device confirmation. Short `MV-XXXXXXXX` identities survive reassignment; audit history records old and new targets. Browser and terminal cancellation and interrupted-session recovery are supported. **Tag-memory writes, NDEF and Creality CFS payload writes are not implemented.** See the [MakerTags user guide](https://gavrd7.github.io/MakerVault-docs/using/maker-tags/) and [hardware firmware](https://github.com/gavrd7/MakerVault-Hardware).
 
 MakerVault keeps the practical parts of a workshop connected: what you own, what a build needs, which files and wiring belong to it, which model revision you printed, and where the finished parts ended up.
 
@@ -118,11 +118,11 @@ This also sets an important support expectation: investigation, fixes and future
 | Projects and BOMs | Build notes, images, files, repository links, cost rollups and quantity-aware allocation from owned stock |
 | Files | Standalone or project-linked assets, immutable version history, authenticated downloads and encrypted private uploads |
 | Search | Universal search with filters and navigation to matching records |
-| Maker Tags | QR, NFC and RFID identities, printable QR labels, record resolution and reassignment history |
+| MakerTags | QR, NFC and RFID identities, printable QR labels, record resolution and reassignment history |
 | Interactive Wiring | Project or standalone diagrams with catalogue-aware pins, editable connections, basic electrical checks and JSON/SVG export |
 | Models | STL/3MF viewing, thumbnails, revisions, local geometry and mesh analysis, printer-fit checks, orientation guidance and supported slicer metadata |
 | 3D Printing | Owned printers, physical spools, multi-material slots, print history, material/cost analytics and optional live integrations |
-| Printed parts | Explicitly retained physical part batches, project/location/state tracking, replacements and Maker Tags |
+| Printed parts | Explicitly retained physical part batches, project/location/state tracking, replacements and MakerTags |
 
 Catalogue definitions describe a product; inventory records describe the physical items you own. Personal workspaces are owner-scoped while reference catalogues are shared. Projects are not shared team folders.
 
