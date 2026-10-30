@@ -13,7 +13,8 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from .device_api_views import require_device_scope, _scan_payload, _tag_summary
-from .models import ConnectedDevice, DeviceTagRegistration, MakerTag
+from .models import ConnectedDevice, DeviceTagRegistration, DeviceNdefWrite, MakerTag
+from .tag_ndef import _base_origin
 from .maker_tags import TARGETS, resolve_tag_target, serialise_tag_target
 from .api_views import _sync_rfid_tag_to_spool, _record_tag_event
 from .radio_tag_identity import radio_tag_matches
@@ -46,7 +47,8 @@ def summary(item):
     return {"id": str(item.pk), "state": state, "expires_at": item.expires_at.isoformat(),
             "device_id": str(item.device_id),
             "target": serialise_tag_target(item.owner, item.target_type, item.target_id),
-            "tag": _tag_summary(item.tag, item.owner) if item.tag_id and item.tag else None}
+            "tag": _tag_summary(item.tag, item.owner) if item.tag_id and item.tag else None,
+            "ndef_write": {"id": str(item.ndef_write.pk), "state": item.ndef_write.state, "url": item.ndef_write.url} if item.ndef_write_id and item.ndef_write else None}
 
 
 @login_required
@@ -92,7 +94,7 @@ def begin(request):
 @login_required
 @require_http_methods(["GET"])
 def status(request, registration_id):
-    item = DeviceTagRegistration.objects.select_related("tag").filter(
+    item = DeviceTagRegistration.objects.select_related("tag", "ndef_write").filter(
         pk=registration_id, owner=request.user
     ).first()
     return JsonResponse(summary(item)) if item else failure("Registration not found.", 404)
