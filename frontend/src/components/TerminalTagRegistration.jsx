@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { apiFetch } from "../api";
 import { Modal } from "./Common";
-import TerminalNdefWrite from "./TerminalNdefWrite";
 import "./TerminalTagRegistration.css";
 
 function MakerVaultMark({ className = "" }) {
@@ -35,8 +34,9 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
   const [targetType, setTargetType] = useState(initialTarget?.type && ["inventory", "spool"].includes(initialTarget.type) ? initialTarget.type : "inventory");
   const [targetId, setTargetId] = useState(initialTarget?.id || "");
   const [registration, setRegistration] = useState(null);
-  const [writeTag, setWriteTag] = useState(null);
+
   const handoffStarted = useRef(false);
+  const registeredNotified = useRef(false);
   const [pendingRegistration, setPendingRegistration] = useState(null);
   const [checkingPending, setCheckingPending] = useState(false);
   const [error, setError] = useState("");
@@ -97,7 +97,7 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
   }, [targetType, rows, targetId]);
 
   useEffect(() => {
-    if (!registration || registration.state !== "pending") return undefined;
+    if (!registration || (registration.state !== "pending" && registration.ndef_write?.state !== "pending")) return undefined;
     let active = true;
     const tick = async () => {
       try {
@@ -111,23 +111,19 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
         }
         setRegistration(next);
         setSeconds(Math.max(0, Math.ceil((new Date(next.expires_at).getTime() - Date.now()) / 1000)));
-        if (next.state === "completed" && !handoffStarted.current) {
-          handoffStarted.current = true;
+        if (next.state === "completed" && next.tag?.id && !registeredNotified.current) {
+          registeredNotified.current = true;
           try {
             const response = await apiFetch("/api/tags/" + next.tag.id + "/");
-            if (!active) return;
-            const fullTag = response.item;
-            onRegisteredRef.current?.(fullTag);
-            // This NFC-capable terminal registration leads directly to writing,
-            // without a second independently initiated task in the browser.
-            if (fullTag?.kind === "nfc") setWriteTag(fullTag);
-            else onCompletedRef.current?.(fullTag);
+            if (active) onRegisteredRef.current?.(response.item);
           } catch (err) {
-            if (active) {
-              handoffStarted.current = false;
-              setError("Tag saved, but could not open writing: " + err.message);
-            }
+            if (active) setError("Assignment saved; list refresh failed: " + err.message);
           }
+        }
+        if (next.state === "completed" && (!next.ndef_write || next.ndef_write.state !== "pending") && !handoffStarted.current) {
+          handoffStarted.current = true;
+          if (next.ndef_write?.state === "completed" || !next.ndef_write) onCompletedRef.current?.(null);
+          else setError("MakerTag assigned, but NFC verification did not complete.");
         }
       } catch (err) {
         if (active) setError(err.message);
@@ -144,7 +140,7 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
     setBusy(true); setError("");
     try {
       const item = await apiFetch("/api/device/tag-registration/", {
-        method: "POST", body: { device_id: deviceId, target_type: targetType, target_id: targetId }
+        method: "POST", body: { device_id: deviceId, target_type: targetType, target_id: targetId, origin: window.location.origin, override: "" }
       });
       setRegistration(item);
       setSeconds(Math.max(0, Math.ceil((new Date(item.expires_at).getTime() - Date.now()) / 1000)));
@@ -176,10 +172,6 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
     onClose();
   }
 
-  if (writeTag) return <TerminalNdefWrite tag={writeTag} onClose={() => {
-    onCompletedRef.current?.(null);
-    onClose();
-  }} />;
 
   return <Modal title="Add MakerTag with terminal" subtitle="Scan a physical tag with a paired MakerVault handheld." onClose={close} wide className="terminalTagModal">
     <div className="terminalTagLayout">
@@ -219,10 +211,11 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
           </div>
         </form>}
         {registration && <div className="terminalTagProgress" role="status" aria-live="polite">
-          <strong>{registration.state === "completed" ? "MakerTag linked successfully" : registration.state === "pending" ? "Request sent — waiting for terminal…" : registration.state === "expired" ? "Scan request expired" : "Registration cancelled"}</strong>
+          <strong>{registration.state === "completed" && registration.ndef_write?.state === "pending" ? "Keep tag in place — writing NFC link" : registration.state === "completed" ? "MakerTag linked successfully" : registration.state === "pending" ? "Request sent — waiting for terminal…" : registration.state === "expired" ? "Scan request expired" : "Registration cancelled"}</strong>
           <p>{registration.target?.label || "Selected record"}</p>
           <p>Terminal: {selectedDevice?.name || "Paired handheld"}</p>
           {registration.state === "pending" && <p className="terminalTagCountdown">Time remaining: {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}</p>}
+          {registration.ndef_write && <p>NFC link: <code style={{overflowWrap:"anywhere"}}>{registration.ndef_write.url}</code></p>}
           {registration.state === "completed" && <p>UID: <code>{registration.tag?.id ? "Registration confirmed" : "Saved"}</code></p>}
           <div className="modalActions">
             <button type="button" onClick={close} disabled={busy}>{registration.state === "pending" ? "Cancel registration" : "Close"}</button>
