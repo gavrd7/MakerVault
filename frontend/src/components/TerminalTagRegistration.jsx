@@ -33,6 +33,8 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
   const [deviceId, setDeviceId] = useState("");
   const [targetType, setTargetType] = useState(initialTarget?.type && ["inventory", "spool"].includes(initialTarget.type) ? initialTarget.type : "inventory");
   const [targetId, setTargetId] = useState(initialTarget?.id || "");
+  const [addressOverride, setAddressOverride] = useState("");
+  const [showAddressOverride, setShowAddressOverride] = useState(false);
   const [registration, setRegistration] = useState(null);
 
   const handoffStarted = useRef(false);
@@ -140,7 +142,7 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
     setBusy(true); setError("");
     try {
       const item = await apiFetch("/api/device/tag-registration/", {
-        method: "POST", body: { device_id: deviceId, target_type: targetType, target_id: targetId, origin: window.location.origin, override: "" }
+        method: "POST", body: { device_id: deviceId, target_type: targetType, target_id: targetId, origin: window.location.origin, override: addressOverride.trim() }
       });
       setRegistration(item);
       setSeconds(Math.max(0, Math.ceil((new Date(item.expires_at).getTime() - Date.now()) / 1000)));
@@ -195,7 +197,18 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
               {rows.map(row => <option key={row.id} value={row.id}>{row.label} {row.subtitle ? "· " + row.subtitle : ""}</option>)}
             </select>
           </label>
-          <p className="terminalTagHint full">Select a record and terminal. The handheld will ask for confirmation before MakerVault saves the scanned UID.</p>
+          <div className="full" style={{display:"flex",flexDirection:"column",gap:8}}>
+            <strong>NFC link</strong>
+            <small>The permanent MakerTag URL will be generated automatically using {addressOverride.trim() || window.location.origin}.</small>
+            <button type="button" onClick={() => setShowAddressOverride(open => !open)} disabled={busy} style={{alignSelf:"flex-start"}}>
+              {showAddressOverride ? "Hide address override" : "Override address"}
+            </button>
+            {showAddressOverride && <label>Alternative MakerVault address
+              <input type="url" value={addressOverride} placeholder={window.location.origin}
+                onChange={event => setAddressOverride(event.target.value)} disabled={busy} />
+            </label>}
+          </div>
+          <p className="terminalTagHint full">Present the tag once, confirm on the terminal and keep it in place until the NFC link is verified.</p>
           {checkingPending && <p className="terminalTagHint full">Checking for an unfinished registration…</p>}
           {pendingRegistration && <div className="full" role="status">
             <strong>Unfinished terminal registration</strong>
