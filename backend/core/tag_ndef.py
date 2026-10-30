@@ -69,7 +69,7 @@ def ndef_preview(request, tag_id):
         pk=tag_id, owner=request.user, status="active", kind="nfc"
     ).first()
     if not tag:
-        return JsonResponse({"error": "Active NFC Maker Tag not found."}, status=404)
+        return JsonResponse({"error": "Active NFC MakerTag not found."}, status=404)
     definition = TARGETS.get(tag.target_type)
     if not definition or not request.user.has_perm(f"core.view_{definition.model._meta.model_name}"):
         return JsonResponse({"error": "Tag target not accessible."}, status=404)
