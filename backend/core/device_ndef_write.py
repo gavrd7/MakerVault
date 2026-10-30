@@ -231,7 +231,7 @@ def device_complete(request, write_id):
         if item.state != "pending" or item.expires_at <= timezone.now():
             return error("Request cancelled or expired.", 410)
         if item.tag.owner_id != request.device_owner.pk or item.tag.status != "active" or item.tag.kind != "nfc":
-            return error("Maker Tag changed or retired.", 409)
+            return error("MakerTag changed or retired.", 409)
         if MakerTag.normalise_code("nfc", item.tag.code) != item.expected_uid:
             return error("Physical tag identity changed.", 409)
         if uid != item.expected_uid or verified_url != item.url:
