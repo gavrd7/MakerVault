@@ -127,6 +127,54 @@ class ConnectedTagRegistrationTests(TestCase):
         self.assertEqual(result.status_code, 400)
         self.assertFalse(DeviceTagRegistration.objects.exists())
 
+    def test_reassignment_preflight_uses_one_physical_confirmation(self):
+        change = Permission.objects.get(content_type__app_label="core", codename="change_makertag")
+        self.owner.user_permissions.add(change)
+        tag = MakerTag.objects.create(
+            owner=self.owner, kind="nfc", code="04AABBCCDDEEFF",
+            target_type="inventory", target_id=self.item.pk,
+        )
+        other_item = InventoryItem.objects.create(
+            owner=self.owner, inventory_id="OTH-1492", item_type="other",
+            custom_name="Other target", quantity=1,
+        )
+        start = self.start(target_id=str(other_item.pk))
+        self.assertEqual(start.status_code, 201, start.content)
+        rid = start.json()["id"]
+        probe = self.client.post(
+            f"/api/device/v1/tag-registration/{rid}/probe/",
+            data=json.dumps({"kind": "nfc", "uid": tag.code}),
+            content_type="application/json", HTTP_AUTHORIZATION="Bearer " + self.token,
+        )
+        self.assertEqual(probe.status_code, 200, probe.content)
+        token = probe.json()["reassign_token"]
+        self.assertTrue(probe.json()["reassign_required"])
+        confirm = self.client.post(
+            f"/api/device/v1/tag-registration/{rid}/complete/",
+            data=json.dumps({"kind": "nfc", "uid": tag.code, "reassign_token": token}),
+            content_type="application/json", HTTP_AUTHORIZATION="Bearer " + self.token,
+        )
+        self.assertEqual(confirm.status_code, 201, confirm.content)
+        tag.refresh_from_db()
+        self.assertEqual(tag.target_id, other_item.pk)
+        self.assertEqual(confirm.json()["state"], "completed")
+
+    def test_preflight_does_not_change_existing_assignment(self):
+        tag = MakerTag.objects.create(
+            owner=self.owner, kind="nfc", code="04AABBCCDDEEFF",
+            target_type="inventory", target_id=self.item.pk,
+        )
+        rid = self.start().json()["id"]
+        response = self.client.post(
+            f"/api/device/v1/tag-registration/{rid}/probe/",
+            data=json.dumps({"kind": "nfc", "uid": tag.code}),
+            content_type="application/json", HTTP_AUTHORIZATION="Bearer " + self.token,
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertTrue(response.json()["already_assigned"])
+        self.assertFalse(response.json()["reassign_required"])
+        self.assertEqual(DeviceTagRegistration.objects.get(pk=rid).state, "pending")
+
     def test_cancel_and_expiry(self):
         rid = self.start().json()["id"]
         self.assertEqual(self.client.post(f"/api/device/tag-registration/{rid}/cancel/").status_code, 200)
