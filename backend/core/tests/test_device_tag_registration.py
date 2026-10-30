@@ -89,6 +89,44 @@ class ConnectedTagRegistrationTests(TestCase):
             tag.refresh_from_db()
             self.assertEqual(tag.events.count(), previous_count)
 
+    def test_single_session_queues_server_authorized_ndef_write(self):
+        from core.models import DeviceNdefWrite
+        change = Permission.objects.get(content_type__app_label="core", codename="change_makertag")
+        self.owner.user_permissions.add(change)
+        self.device.capabilities = ["ntag215_ndef_write"]
+        self.device.save(update_fields=["capabilities"])
+        origin = "http://192.168.1.125:8000"
+        data = {"device_id": str(self.device.pk), "target_type": "inventory",
+                "target_id": str(self.item.pk), "origin": origin, "override": ""}
+        started = self.client.post("/api/device/tag-registration/",
+                                   data=json.dumps(data), content_type="application/json",
+                                   HTTP_ORIGIN=origin)
+        self.assertEqual(started.status_code, 201, started.content)
+        rid = started.json()["id"]
+        assigned = self.complete(rid)
+        self.assertEqual(assigned.status_code, 201, assigned.content)
+        self.assertEqual(assigned.json()["state"], "completed")
+        self.assertTrue(assigned.json()["ndef_write_id"])
+        request = DeviceNdefWrite.objects.get(pk=assigned.json()["ndef_write_id"])
+        self.assertEqual(request.expected_uid, "04AABBCCDDEEFF")
+        self.assertEqual(request.url, f"{origin}/t/MV-{request.tag.short_id}/")
+        self.assertEqual(assigned.json()["ndef_write"]["state"], "pending")
+        self.assertEqual(self.client.get(f"/api/device/tag-registration/{rid}/").json()["ndef_write"]["id"], str(request.pk))
+        done = self.client.post(f"/api/device/v1/ndef-write/{request.pk}/complete/",
+                                data=json.dumps({"uid": request.expected_uid, "verified_url": request.url}),
+                                content_type="application/json", HTTP_AUTHORIZATION="Bearer " + self.token)
+        self.assertEqual(done.status_code, 200, done.content)
+        self.assertEqual(self.client.get(f"/api/device/tag-registration/{rid}/").json()["ndef_write"]["state"], "completed")
+
+    def test_combined_session_rejects_spoofed_browser_origin(self):
+        data = {"device_id": str(self.device.pk), "target_type": "inventory",
+                "target_id": str(self.item.pk), "origin": "https://vault.example.com", "override": ""}
+        result = self.client.post("/api/device/tag-registration/",
+                                  data=json.dumps(data), content_type="application/json",
+                                  HTTP_ORIGIN="https://different.example.com")
+        self.assertEqual(result.status_code, 400)
+        self.assertFalse(DeviceTagRegistration.objects.exists())
+
     def test_cancel_and_expiry(self):
         rid = self.start().json()["id"]
         self.assertEqual(self.client.post(f"/api/device/tag-registration/{rid}/cancel/").status_code, 200)
