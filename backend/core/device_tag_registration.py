@@ -184,6 +184,26 @@ def device_cancel(request, registration_id):
     return JsonResponse(summary(item))
 
 
+def attach_ndef_write(item, device, tag):
+    """Queue one authorised NDEF operation during confirmed assignment."""
+    if not item.ndef_origin or tag.kind != "nfc" or len(tag.code) != 14:
+        return
+    if "ntag215_ndef_write" not in (device.capabilities or []):
+        return
+    url = f"{item.ndef_origin}/t/MV-{tag.short_id}/"
+    if len(url.encode("utf-8")) > 240:
+        return
+    if DeviceNdefWrite.objects.filter(
+        device=device, state="pending", expires_at__gt=timezone.now()
+    ).exists():
+        return
+    item.ndef_write = DeviceNdefWrite.objects.create(
+        owner=item.owner, device=device, tag=tag, url=url,
+        expected_uid=MakerTag.normalise_code("nfc", tag.code),
+        expires_at=timezone.now() + TTL,
+    )
+
+
 def paired_device(request):
     return ConnectedDevice.objects.filter(
         owner=request.device_owner, api_key=request.device_key,
@@ -252,7 +272,8 @@ def device_complete(request, registration_id):
                         item.tag = tag
                         item.state = "completed"
                         item.completed_at = timezone.now()
-                        item.save(update_fields=["tag", "state", "completed_at", "updated_at"])
+                        attach_ndef_write(item, device, tag)
+                        item.save(update_fields=["tag", "state", "completed_at", "ndef_write", "updated_at"])
                         return JsonResponse(summary(item), status=200)
                     if not request.device_owner.has_perm("core.change_makertag"):
                         return failure("Tag reassignment requires edit permission.", 403)
@@ -316,5 +337,6 @@ def device_complete(request, registration_id):
         item.tag = tag
         item.state = "completed"
         item.completed_at = timezone.now()
-        item.save(update_fields=["tag", "state", "completed_at", "updated_at"])
+        attach_ndef_write(item, device, tag)
+        item.save(update_fields=["tag", "state", "completed_at", "ndef_write", "updated_at"])
     return JsonResponse(summary(item), status=201)
