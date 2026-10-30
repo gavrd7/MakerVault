@@ -48,7 +48,10 @@ def summary(item):
             "device_id": str(item.device_id),
             "target": serialise_tag_target(item.owner, item.target_type, item.target_id),
             "tag": _tag_summary(item.tag, item.owner) if item.tag_id and item.tag else None,
-            "ndef_write": {"id": str(item.ndef_write.pk), "state": item.ndef_write.state, "url": item.ndef_write.url} if item.ndef_write_id and item.ndef_write else None}
+            "ndef_write": {"id": str(item.ndef_write.pk), "state": item.ndef_write.state, "url": item.ndef_write.url} if item.ndef_write_id and item.ndef_write else None,
+            "ndef_write_id": str(item.ndef_write_id) if item.ndef_write_id else "",
+            "ndef_url": item.ndef_write.url if item.ndef_write_id and item.ndef_write else "",
+            "ndef_tag_id": f"MV-{item.tag.short_id}" if item.ndef_write_id and item.tag_id else ""}
 
 
 @login_required
