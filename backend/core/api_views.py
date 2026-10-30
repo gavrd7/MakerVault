@@ -1,6 +1,5 @@
 import hashlib
 import json
-import base64
 import plistlib
 import uuid
 import re
