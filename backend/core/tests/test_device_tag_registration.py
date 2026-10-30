@@ -210,8 +210,8 @@ class ConnectedTagRegistrationTests(TestCase):
             target_type="inventory", target_id=self.item.pk,
         )
         rid = self.start().json()["id"]
-        self.assertEqual(self.complete(rid).status_code, 409)
-        self.assertEqual(DeviceTagRegistration.objects.get(pk=rid).state, "pending")
+        self.assertEqual(self.complete(rid).status_code, 200)
+        self.assertEqual(DeviceTagRegistration.objects.get(pk=rid).state, "completed")
         existing.refresh_from_db()
         self.assertEqual(existing.target_id, self.item.pk)
 
@@ -224,7 +224,9 @@ class ConnectedTagRegistrationTests(TestCase):
         )
         rid = self.start().json()["id"]
         response = self.complete(rid)
-        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.status_code, 200)
+        existing.refresh_from_db()
+        self.assertEqual(existing.kind, "rfid")
         self.assertEqual(MakerTag.objects.filter(code=existing.code).count(), 1)
 
     def test_cross_kind_retry_is_idempotent(self):
@@ -442,8 +444,8 @@ class ConnectedTagRegistrationTests(TestCase):
                                 target_type="inventory", target_id=self.item.pk)
         rid = self.start().json()["id"]
         response = self.complete(rid)
-        self.assertEqual(response.status_code, 409)
-        self.assertIn("Already assigned", response.json()["error"])
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["state"], "completed")
         self.assertNotIn("reassign_token", response.json())
 
     def test_browser_can_resume_and_cancel_an_abandoned_registration(self):
