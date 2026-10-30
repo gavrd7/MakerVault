@@ -236,7 +236,12 @@ def device_complete(request, registration_id):
                     if existing.owner_id != request.device_owner.pk:
                         return failure("This tag cannot be reassigned.", 409)
                     if existing.target_type == item.target_type and existing.target_id == target.pk:
-                        return failure("Already assigned to this item.", 409)
+                        tag = existing
+                        item.tag = tag
+                        item.state = "completed"
+                        item.completed_at = timezone.now()
+                        item.save(update_fields=["tag", "state", "completed_at", "updated_at"])
+                        return JsonResponse(summary(item), status=200)
                     if not request.device_owner.has_perm("core.change_makertag"):
                         return failure("Tag reassignment requires edit permission.", 403)
                     binding = [str(item.pk), str(device.pk), str(existing.pk), data["uid"],
