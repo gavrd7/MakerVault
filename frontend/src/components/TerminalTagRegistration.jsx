@@ -245,7 +245,7 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
           <p>Terminal: {selectedDevice?.name || "Paired handheld"}</p>
           {registration.state === "pending" && <p className="terminalTagCountdown">Time remaining: {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}</p>}
           {registration.ndef_write && <p>NFC link: <code style={{overflowWrap:"anywhere"}}>{registration.ndef_write.url}</code></p>}
-          {registration.state === "completed" && <p>UID: <code>{registration.tag?.id ? "Registration confirmed" : "Saved"}</code></p>}
+          {registration.state === "completed" && registration.tag_uid && <p>UID: <span>{registration.tag_uid}</span></p>}
           <div className="modalActions">
             <button type="button" onClick={close} disabled={busy}>{registration.state === "pending" ? "Cancel registration" : registration.ndef_write?.state === "pending" ? "Cancel NFC write" : "Close"}</button>
           </div>
