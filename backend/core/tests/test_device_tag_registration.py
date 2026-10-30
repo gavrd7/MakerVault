@@ -74,6 +74,21 @@ class ConnectedTagRegistrationTests(TestCase):
         self.assertEqual(MakerTag.objects.filter(owner=self.owner, code=tag.code).count(), 1)
         self.assertEqual(self.client.get(f"/api/device/tag-registration/{rid}/").json()["state"], "completed")
 
+    def test_repeat_assignment_same_target_is_idempotent(self):
+        initial_id = self.start().json()["id"]
+        self.assertEqual(self.complete(initial_id).status_code, 201)
+        tag = MakerTag.objects.get(owner=self.owner, code="04AABBCCDDEEFF")
+        previous_count = tag.events.count() if hasattr(tag, "events") else None
+        second_id = self.start().json()["id"]
+        response = self.complete(second_id)
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["state"], "completed")
+        self.assertEqual(response.json()["tag"]["id"], str(tag.pk))
+        self.assertEqual(MakerTag.objects.filter(owner=self.owner, code=tag.code).count(), 1)
+        if previous_count is not None:
+            tag.refresh_from_db()
+            self.assertEqual(tag.events.count(), previous_count)
+
     def test_cancel_and_expiry(self):
         rid = self.start().json()["id"]
         self.assertEqual(self.client.post(f"/api/device/tag-registration/{rid}/cancel/").status_code, 200)
