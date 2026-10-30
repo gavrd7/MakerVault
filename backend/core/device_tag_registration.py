@@ -92,6 +92,9 @@ def begin(request):
             return failure("Active paired RFID terminal not found.", 404)
         if "tags:write" not in device.api_key.scopes:
             return failure("The selected device requires tags:write permission.", 403)
+        if chosen_origin and ("ntag215_ndef_write" not in (device.capabilities or []) or
+                              not request.user.has_perm("core.change_makertag")):
+            return failure("This terminal or account cannot complete NFC programming.", 403)
         if DeviceTagRegistration.objects.filter(
             device=device, state="pending", expires_at__gt=timezone.now()
         ).exists():
