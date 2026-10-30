@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import tempfile
+import plistlib
 from unittest.mock import patch
 
 from cryptography import x509
@@ -111,3 +112,25 @@ class HttpsCertificateApiTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 403)
+
+    def test_ios_profile_contains_current_public_ca_only(self):
+        generate_local_certificate(["192.168.1.50"])
+        self.client.force_login(self.admin)
+        result = self.client.get("/api/settings/https/download-ios-profile/")
+        self.assertEqual(result.status_code, 200)
+        self.assertIn("mobileconfig", result["Content-Disposition"])
+        self.assertEqual(result["Content-Type"], "application/x-apple-aspen-config")
+        profile = plistlib.loads(result.content)
+        self.assertEqual(profile["PayloadType"], "Configuration")
+        payload = profile["PayloadContent"][0]
+        self.assertEqual(payload["PayloadType"], "com.apple.security.root")
+        ca = x509.load_pem_x509_certificate(paths()["ca_cert"].read_bytes())
+        from cryptography.hazmat.primitives import serialization
+        self.assertEqual(payload["PayloadContent"], ca.public_bytes(serialization.Encoding.DER))
+        self.assertNotIn(paths()["ca_key"].read_bytes(), result.content)
+
+    def test_ios_profile_requires_superuser_and_existing_ca(self):
+        self.client.force_login(self.user)
+        self.assertEqual(self.client.get("/api/settings/https/download-ios-profile/").status_code, 403)
+        self.client.force_login(self.admin)
+        self.assertEqual(self.client.get("/api/settings/https/download-ios-profile/").status_code, 404)
