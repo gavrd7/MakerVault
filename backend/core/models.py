@@ -1629,6 +1629,8 @@ class DeviceTagRegistration(TimeStampedModel):
     expires_at = models.DateTimeField()
     completed_at = models.DateTimeField(null=True, blank=True)
     tag = models.ForeignKey("MakerTag", null=True, blank=True, on_delete=models.SET_NULL)
+    ndef_origin = models.CharField(max_length=220, blank=True, default="")
+    ndef_write = models.ForeignKey("DeviceNdefWrite", null=True, blank=True, on_delete=models.SET_NULL)
 
     class Meta:
         ordering = ["-created_at"]
