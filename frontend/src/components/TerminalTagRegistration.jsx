@@ -162,6 +162,22 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
 
   async function close() {
     if (busy) return;
+    if (registration?.ndef_write?.state === "pending") {
+      setBusy(true);
+      setError("");
+      try {
+        await apiFetch("/api/device/ndef-write/" + registration.ndef_write.id + "/cancel/", {method:"POST"});
+      } catch (err) {
+        if (err.status !== 409) {
+          setError("Unable to cancel NFC writing: " + err.message);
+          setBusy(false);
+          return;
+        }
+      }
+      setBusy(false);
+      onClose();
+      return;
+    }
     if (registration?.state === "pending") {
       setBusy(true);
       try {
@@ -231,7 +247,7 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
           {registration.ndef_write && <p>NFC link: <code style={{overflowWrap:"anywhere"}}>{registration.ndef_write.url}</code></p>}
           {registration.state === "completed" && <p>UID: <code>{registration.tag?.id ? "Registration confirmed" : "Saved"}</code></p>}
           <div className="modalActions">
-            <button type="button" onClick={close} disabled={busy}>{registration.state === "pending" ? "Cancel registration" : "Close"}</button>
+            <button type="button" onClick={close} disabled={busy}>{registration.state === "pending" ? "Cancel registration" : registration.ndef_write?.state === "pending" ? "Cancel NFC write" : "Close"}</button>
           </div>
         </div>}
         {error && <div className="formError" role="alert">{error}</div>}
