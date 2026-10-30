@@ -497,6 +497,7 @@ function MakerTagForm({ title, data, tag = null, initialTarget = null, onClose, 
     status: tag?.status || "active",
     technology: tag?.technology || tag?.metadata?.technology || "",
   });
+  const [manualIdentity, setManualIdentity] = useState(Boolean(tag));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const set = (key, value) => setForm(current => ({ ...current, [key]: value }));
@@ -535,8 +536,9 @@ function MakerTagForm({ title, data, tag = null, initialTarget = null, onClose, 
     }
   }
 
-  return <Modal title={title} subtitle="One physical identity can be reassigned over time while MakerVault keeps an audit trail." onClose={onClose} wide>
-    {!tag && onUseTerminal && <div className="notice"><strong>Scan using your RFID/NFC terminal</strong> Scan and assign the tag, then continue directly to writing its MakerVault NFC link. <button type="button" onClick={() => onUseTerminal({ type: form.target_type, id: form.target_id })} disabled={!["inventory", "spool"].includes(form.target_type) || !form.target_id}>Use MakerVault Terminal</button></div>}
+  const terminalFirst = !tag && form.kind === "nfc" && !manualIdentity && Boolean(onUseTerminal);
+
+  return <Modal title={title} subtitle="Choose a record and how to identify its physical tag." onClose={onClose} wide>
     <form className="formGrid" onSubmit={submit}>
       {error && <div className="formError full">{error}</div>}
       <label>Tag type<select value={form.kind} onChange={e => set("kind", e.target.value)}>
@@ -544,12 +546,12 @@ function MakerTagForm({ title, data, tag = null, initialTarget = null, onClose, 
         <option value="nfc">RFID / NFC</option>
         {form.kind === "rfid" && <option value="rfid">RFID (legacy record)</option>}
       </select></label>
-      <label>Identity code
+      {(form.kind === "qr" || !terminalFirst) && <label className={form.kind === "qr" ? "" : "full"}>Identity code
         {form.kind === "qr"
           ? <input value={form.code} onChange={e => set("code", e.target.value)} placeholder="Leave blank to generate" />
           : <TagCaptureControls kind={form.kind} value={form.code} onCapture={value => set("code", value)} autoFocus={!tag} />}
-      </label>
-      {(form.kind === "nfc" || form.kind === "rfid") && <label className="full">Tag / reader technology (optional)<select value={form.technology} onChange={e => set("technology", e.target.value)}>
+      </label>}
+      {(form.kind === "nfc" || form.kind === "rfid") && !terminalFirst && <label className="full">Tag / reader technology (optional)<select value={form.technology} onChange={e => set("technology", e.target.value)}>
         {(data?.technologies || []).map(item => <option key={item.value || "auto"} value={item.value}>{item.label}</option>)}
       </select></label>}
       <label className="full">Label<input value={form.label} onChange={e => set("label", e.target.value)} placeholder="e.g. Loft server ESP32, Black ABS spool" /></label>
@@ -563,16 +565,23 @@ function MakerTagForm({ title, data, tag = null, initialTarget = null, onClose, 
       </select></label>
 
       {tag && <label>Status<select value={form.status} onChange={e => set("status", e.target.value)}><option value="active">Active</option><option value="retired">Retired</option></select></label>}
-      <label className={tag ? "" : "full"}>Notes<textarea rows="4" value={form.notes} onChange={e => set("notes", e.target.value)} placeholder="Optional physical label/location notes…" /></label>
+      {!terminalFirst && <label className={tag ? "" : "full"}>Notes<textarea rows="4" value={form.notes} onChange={e => set("notes", e.target.value)} placeholder="Optional physical label/location notes…" /></label>}
 
       {form.kind === "rfid" && form.target_type === "spool" && <div className="settingsCallout full">
         <strong>Spool RFID compatibility</strong>
         <p>Conventional hexadecimal RFID UIDs are mirrored to the spool's legacy RFID field for CFS/current integrations. Other reader identities remain valid MakerTags without being forced into that legacy UID field.</p>
       </div>}
 
+      {terminalFirst && <div className="full" style={{display:"flex",flexDirection:"column",gap:10}}>
+        <strong>MakerVault Terminal</strong>
+        <small>Scan and assign your NFC tag using the connected terminal.</small>
+        <button type="button" className="primary" disabled={busy || !form.target_id || !["inventory","spool"].includes(form.target_type)}
+          onClick={() => onUseTerminal({type:form.target_type,id:form.target_id})}>Use MakerVault Terminal</button>
+        <button type="button" onClick={() => setManualIdentity(true)}>Enter identity manually or use phone NFC</button>
+      </div>}
       <div className="formActions full">
         <button type="button" onClick={onClose}>Cancel</button>
-        <button className="primary" disabled={busy || !form.target_id}>{busy ? "Saving…" : tag ? "Save changes" : "Create tag"}</button>
+        {!terminalFirst && <button className="primary" disabled={busy || !form.target_id}>{busy ? "Saving…" : tag ? "Save changes" : "Create MakerTag"}</button>}
       </div>
     </form>
   </Modal>;
