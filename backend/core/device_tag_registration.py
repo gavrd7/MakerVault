@@ -231,6 +231,45 @@ def device_pending(request):
 
 @require_http_methods(["POST"])
 @require_device_scope("tags:write")
+def device_probe(request, registration_id):
+    """Read-only preflight: show any existing assignment before physical confirmation."""
+    device = paired_device(request)
+    if not device:
+        return failure("Active paired terminal required.", 403)
+    try:
+        data = _scan_payload(request, fields={"kind", "uid"})
+    except OverflowError:
+        return failure("Request too large.", 413)
+    except (ValueError, TypeError):
+        return failure("Invalid scanned tag.")
+    item = DeviceTagRegistration.objects.filter(
+        pk=registration_id, device=device, owner=request.device_owner,
+        state="pending", expires_at__gt=timezone.now()
+    ).first()
+    if not item:
+        return failure("Registration not pending.", 410)
+    target = resolve_tag_target(request.device_owner, item.target_type, item.target_id)
+    existing = radio_tag_matches(MakerTag.objects.all(), data["kind"], data["uid"]).first()
+    if not existing:
+        return JsonResponse({"reassign_required": False, "already_assigned": False})
+    if existing.owner_id != request.device_owner.pk:
+        return failure("This tag cannot be reassigned.", 409)
+    if existing.target_type == item.target_type and existing.target_id == target.pk:
+        return JsonResponse({"reassign_required": False, "already_assigned": True})
+    if not request.device_owner.has_perm("core.change_makertag"):
+        return failure("Reassignment requires edit permission.", 403)
+    binding = [str(item.pk), str(device.pk), str(existing.pk), data["uid"],
+               item.target_type, str(target.pk)]
+    token = signing.dumps(binding, salt="makervault-terminal-reassign")
+    old = serialise_tag_target(request.device_owner, existing.target_type, existing.target_id) or {}
+    response = JsonResponse({"reassign_required": True, "reassign_token": token,
+                             "current_label": old.get("label", "Existing record")})
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+@require_http_methods(["POST"])
+@require_device_scope("tags:write")
 def device_complete(request, registration_id):
     device = paired_device(request)
     if not device:
