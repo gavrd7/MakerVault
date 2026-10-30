@@ -186,7 +186,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
       setCreateTarget({ type: recordIntent.type, id: recordIntent.id });
       setAddOpen(true);
     } else {
-      setError("No active Maker Tag is assigned to this record.");
+      setError("No active MakerTag is assigned to this record.");
     }
     onRecordIntentConsumed();
   }, [data, recordIntent?.token]);
@@ -274,18 +274,18 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
     }
   }
 
-  if (!data && !error) return <LoadingBlock label="Loading Maker Tags…" />;
+  if (!data && !error) return <LoadingBlock label="Loading MakerTags…" />;
 
   return <div className="tagStack">
     <section className="panel tagHero">
       <div>
         <span className="settingsEyebrow">Physical identity</span>
-        <h2>Maker Tags</h2>
+        <h2>MakerTags</h2>
         <p>Attach QR, NFC and RFID identities to physical MakerVault records. Tags stay owner-scoped and can be reassigned or retired without losing their history.</p>
       </div>
       <div className="printingHeroActions">
-        {config?.permissions?.add_maker_tag && <button className="primary" onClick={() => setAddOpen(true)}>Add Maker Tag</button>}
-        {/* Terminal scanning is available inside Add Maker Tag, not a second registration entry point. */}
+        {config?.permissions?.add_maker_tag && <button className="primary" onClick={() => setAddOpen(true)}>Add MakerTag</button>}
+        {/* Terminal scanning is available inside Add MakerTag, not a second registration entry point. */}
         <button onClick={load}>Refresh</button>
         <button disabled={!printableRows.length} onClick={() => setBatchOpen(true)}>Print labels</button>
       </div>
@@ -316,7 +316,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
       <div className="tagToolbar">
         {returnPending && <button type="button" onClick={closeRecordTag}>← Back to record</button>}
         <div>
-          <strong>{data?.rows?.length || 0} Maker Tag{data?.rows?.length === 1 ? "" : "s"}</strong>
+          <strong>{data?.rows?.length || 0} MakerTags</strong>
           <small>{rows.length} shown</small>
         </div>
         <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search tags, targets or identities…" />
@@ -367,14 +367,14 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
             {config?.permissions?.delete_maker_tag && <button type="button" className="dangerButton" onClick={() => setDeleteTagRow(tag)}>Delete</button>}
           </div>
         </article>)}
-        {!rows.length && <div className="projectEmpty"><strong>No matching Maker Tags.</strong><span>Create a tag or change the current filters.</span></div>}
+        {!rows.length && <div className="projectEmpty"><strong>No matching MakerTags.</strong><span>Create a tag or change the current filters.</span></div>}
       </div>
     </section>
 
     {lookupOpen && <TerminalTagLookup onClose={() => setLookupOpen(false)} onFound={async id => { try { const result = await apiFetch("/api/tags/" + id + "/"); setDetail(result.item); } catch (err) { setError(err.message); } }} />}
     {terminalOpen && <TerminalTagRegistration groups={data?.targets} initialTarget={createTarget} onClose={() => { setTerminalOpen(false); setCreateTarget(null); }} onRegistered={() => { void load(); void onChanged(); }} onCompleted={async tag => { await load(); await onChanged(); if (tag?.id) { const response = await apiFetch("/api/tags/" + tag.id + "/"); const fullTag = response.item; if (fullTag) { setTerminalOpen(false); setPromptTagWrite(fullTag.kind === "nfc"); setDetail(fullTag); } } }} />}
 
-    {deleteTagRow && <Modal title="Permanently delete Maker Tag?" onClose={() => { if (!deleteBusy) setDeleteTagRow(null); }}>
+    {deleteTagRow && <Modal title="Permanently delete MakerTag?" onClose={() => { if (!deleteBusy) setDeleteTagRow(null); }}>
       <p>This will permanently delete <strong>{deleteTagRow.label || deleteTagRow.code}</strong> ({deleteTagRow.code}), including its assignment history. Printed QR codes and NFC links for this tag will stop resolving. A physical NFC/RFID chip is not erased. This action cannot be undone.</p>
       <div className="formActions">
         <button type="button" disabled={deleteBusy} onClick={() => setDeleteTagRow(null)}>Cancel</button>
@@ -383,7 +383,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
     </Modal>}
     {batchOpen && <MakerTagBatchPrint tags={selectedPrintableRows} allMatching={printableRows} onClose={() => setBatchOpen(false)} />}
     {addOpen && <MakerTagForm
-      title="Create Maker Tag"
+      title="Create MakerTag"
       data={data}
       initialTarget={createTarget}
       onClose={() => { if (returnPending) closeRecordTag(); else { setAddOpen(false); setCreateTarget(null); } }}
@@ -391,7 +391,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
     />}
 
     {editTag && <MakerTagForm
-      title={"Edit Maker Tag · " + (editTag.label || editTag.code)}
+      title={"Edit MakerTag · " + (editTag.label || editTag.code)}
       data={data}
       tag={editTag}
       onClose={() => { if (returnPending) closeRecordTag(); else setEditTag(null); }}
@@ -432,7 +432,7 @@ function MakerTagBatchPrint({ tags, allMatching, onClose }) {
   const perSheet = columns * rowsPerSheet;
   const pages = Array.from({ length: Math.ceil(batch.length / perSheet) }, (_, i) => batch.slice(i * perSheet, (i + 1) * perSheet));
   return <>
-    <Modal title="Print Maker Tag labels" subtitle="Print active QR tags using a shared sheet layout." wide onClose={onClose}>
+    <Modal title="Print MakerTag labels" subtitle="Print active QR tags using a shared sheet layout." wide onClose={onClose}>
       <div className="tagBatchSettings">
         <label>Tags to print<select value={scope} onChange={e => setScope(e.target.value)}>
           <option value="selected" disabled={!tags.length}>Selected ({tags.length})</option>
@@ -567,7 +567,7 @@ function MakerTagForm({ title, data, tag = null, initialTarget = null, onClose, 
 
       {form.kind === "rfid" && form.target_type === "spool" && <div className="settingsCallout full">
         <strong>Spool RFID compatibility</strong>
-        <p>Conventional hexadecimal RFID UIDs are mirrored to the spool's legacy RFID field for CFS/current integrations. Other reader identities remain valid Maker Tags without being forced into that legacy UID field.</p>
+        <p>Conventional hexadecimal RFID UIDs are mirrored to the spool's legacy RFID field for CFS/current integrations. Other reader identities remain valid MakerTags without being forced into that legacy UID field.</p>
       </div>}
 
       <div className="formActions full">
@@ -681,7 +681,7 @@ function MakerTagDetail({ tag, initialWrite = false, canEdit, canDelete, onDelet
     window.print();
   }
 
-  return <><Modal title={tag.label || tag.maker_tag_id || tag.code} subtitle="Maker Tag identity and assignment history." onClose={onClose} wide>
+  return <><Modal title={tag.label || tag.maker_tag_id || tag.code} subtitle="MakerTag identity and assignment history." onClose={onClose} wide>
 
     {notice && <div className={notice.toLowerCase().includes("blocked") ? "formError" : "notice"}>{notice}</div>}
     <div className="tagDetailGrid">
@@ -790,7 +790,7 @@ function MakerTagDetail({ tag, initialWrite = false, canEdit, canDelete, onDelet
         ? <button className="dangerButton" disabled={busy} onClick={() => setStatus("retired")}>Retire tag</button>
         : <button className="primary" disabled={busy} onClick={() => setStatus("active")}>Reactivate tag</button>)}
     </div>
-    {confirmDelete && <Modal title="Permanently delete Maker Tag?" onClose={() => setConfirmDelete(false)}>
+    {confirmDelete && <Modal title="Permanently delete MakerTag?" onClose={() => setConfirmDelete(false)}>
       <p>This permanently removes <strong>{tag.label || tag.code}</strong>, its assignment history and its QR/NFC identity in MakerVault. Any printed QR codes or written NFC links for this tag will stop resolving. This cannot be undone.</p>
       <div className="formActions">
         <button type="button" onClick={() => setConfirmDelete(false)} disabled={busy}>Cancel</button>
