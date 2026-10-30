@@ -554,7 +554,7 @@ function MakerTagForm({ title, data, tag = null, initialTarget = null, onClose, 
       {(form.kind === "nfc" || form.kind === "rfid") && !terminalFirst && <label className="full">Tag / reader technology (optional)<select value={form.technology} onChange={e => set("technology", e.target.value)}>
         {(data?.technologies || []).map(item => <option key={item.value || "auto"} value={item.value}>{item.label}</option>)}
       </select></label>}
-      <label className="full">Label<input value={form.label} onChange={e => set("label", e.target.value)} placeholder="e.g. Loft server ESP32, Black ABS spool" /></label>
+      {!terminalFirst && <label className="full">Label<input value={form.label} onChange={e => set("label", e.target.value)} placeholder="e.g. Loft server ESP32, Black ABS spool" /></label>}
 
       <label>Target type<select value={form.target_type} onChange={e => set("target_type", e.target.value)}>
         {groups.map(group => <option key={group.type} value={group.type}>{group.label}</option>)}
