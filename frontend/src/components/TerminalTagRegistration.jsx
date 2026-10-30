@@ -124,8 +124,8 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
         }
         if (next.state === "completed" && (!next.ndef_write || next.ndef_write.state !== "pending") && !handoffStarted.current) {
           handoffStarted.current = true;
-          if (next.ndef_write?.state === "completed" || !next.ndef_write) onCompletedRef.current?.(null);
-          else setError("MakerTag assigned, but NFC verification did not complete.");
+          if (next.ndef_write?.state === "completed" || (next.tag_kind !== "nfc" && !next.ndef_write)) onCompletedRef.current?.(null);
+          else setError(next.ndef_write ? "MakerTag assigned, but NFC verification did not complete." : "MakerTag assigned, but no NFC write was authorised. The physical tag may not contain a MakerVault link.");
         }
       } catch (err) {
         if (active) setError(err.message);
@@ -240,7 +240,7 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
           </div>
         </form>}
         {registration && <div className="terminalTagProgress" role="status" aria-live="polite">
-          <strong>{registration.state === "completed" && registration.ndef_write?.state === "pending" ? "Keep tag in place — writing NFC link" : registration.state === "completed" ? "MakerTag linked successfully" : registration.state === "pending" ? "Request sent — waiting for terminal…" : registration.state === "expired" ? "Scan request expired" : "Registration cancelled"}</strong>
+          <strong>{registration.state === "completed" && registration.ndef_write?.state === "pending" ? "Keep tag in place — writing NFC link" : registration.state === "completed" && registration.tag_kind === "nfc" && registration.ndef_write?.state !== "completed" ? "MakerTag assigned — NFC verification incomplete" : registration.state === "completed" ? "MakerTag ready" : registration.state === "pending" ? "Request sent — waiting for terminal…" : registration.state === "expired" ? "Scan request expired" : "Registration cancelled"}</strong>
           <p>{registration.target?.label || "Selected record"}</p>
           <p>Terminal: {selectedDevice?.name || "Paired handheld"}</p>
           {registration.state === "pending" && <p className="terminalTagCountdown">Time remaining: {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}</p>}
