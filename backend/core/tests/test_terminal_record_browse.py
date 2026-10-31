@@ -33,8 +33,8 @@ class TerminalRecordBrowseTests(TestCase):
     def browse(self, params):
         req = self.factory.get("/api/device/v1/records/browse/", params)
         req.device_owner = self.owner
-        # Unwrap GET and bearer decorators; test only the view's filtering/paging.
-        view = browse_records.__wrapped__.__wrapped__
+        # Unwrap HTTP method, CSRF-exempt and bearer decorators; test only the view's filtering/paging.
+        view = browse_records.__wrapped__.__wrapped__.__wrapped__
         # Isolate ordering/paging from role permission evaluation; the
         # separate denial test ensures missing view permission fails closed.
         with patch.object(self.owner, "has_perm", return_value=True):
@@ -65,7 +65,7 @@ class TerminalRecordBrowseTests(TestCase):
         )
         req = self.factory.get("/api/device/v1/records/browse/", {"type": "location"})
         req.device_owner = ordinary
-        response = browse_records.__wrapped__.__wrapped__(req)
+        response = browse_records.__wrapped__.__wrapped__.__wrapped__(req)
         self.assertEqual(response.status_code, 403)
 
     def test_no_records_after_last_letter_and_duplicate_names(self):
