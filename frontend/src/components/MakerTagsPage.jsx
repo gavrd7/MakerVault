@@ -771,7 +771,7 @@ function MakerTagDetail({ tag, initialWrite = false, canEdit, canDelete, onDelet
               </div>
             </>}
           </div>}
-          <small>One standard MakerVault URL identifies the tag for both compatible phones and the ESP32-S3 terminal. Tag content is not duplicated from inventory; linked record details are resolved in MakerVault.</small>
+          <small>One standard MakerVault URL identifies the tag for both compatible phones and the MakerVault Terminal. Tag content is not duplicated from inventory; linked record details are resolved in MakerVault.</small>
         </>}
       </div>}
     </div>
