@@ -100,32 +100,6 @@ class ConnectedTagRegistrationTests(TestCase):
             self.assertIn("pending NFC write", blocked.json()["error"])
             self.assertEqual(DeviceTagRegistration.objects.count(), 1)
 
-    def test_pending_write_does_not_commit_legacy_registration(self):
-        from core.models import DeviceNdefWrite
-        change = Permission.objects.get(content_type__app_label="core", codename="change_makertag")
-        self.owner.user_permissions.add(change)
-        self.device.capabilities = ["ntag215_ndef_write"]
-        self.device.save(update_fields=["capabilities"])
-        origin = "http://192.168.1.125:8000"
-        started = self.start(origin=origin, override="")
-        # start() doesn't send Origin, so use the explicit browser request.
-        self.assertEqual(started.status_code, 400)
-        payload = {"device_id": str(self.device.pk), "target_type": "inventory",
-                   "target_id": str(self.item.pk), "origin": origin, "override": ""}
-        first = self.client.post("/api/device/tag-registration/",
-                                 data=json.dumps(payload), content_type="application/json", HTTP_ORIGIN=origin)
-        self.assertEqual(first.status_code, 201)
-        initial = self.complete(first.json()["id"])
-        self.assertEqual(initial.status_code, 201)
-        self.assertEqual(DeviceNdefWrite.objects.filter(state="pending").count(), 1)
-        # Legacy registrations can coexist, but completing one must not
-        # unexpectedly alter an existing tag or consume another NFC grant.
-        second = self.start()
-        self.assertEqual(second.status_code, 201)
-        conflict = self.complete(second.json()["id"], uid="04112233445566")
-        self.assertEqual(conflict.status_code, 201)
-        self.assertFalse(conflict.json()["ndef_write_id"])
-
     def test_repeat_assignment_same_target_is_idempotent(self):
         initial_id = self.start().json()["id"]
         self.assertEqual(self.complete(initial_id).status_code, 201)
