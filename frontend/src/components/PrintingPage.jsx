@@ -432,7 +432,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
                     {printer.multi_material_installed && <Badge>{printer.slots.length} slots</Badge>}
                   </div>
                   <div className="printingPrinterActions" aria-label={"Actions for " + printer.name}>
-                    <button className="printingPrinterAction" type="button" onClick={() => onOpenMakerTags("printer", printer.id)}>Maker Tags</button>
+                    <button className="printingPrinterAction" type="button" onClick={() => onOpenMakerTags("printer", printer.id)}>MakerTags</button>
                   </div>
                   {canChangePrinter && <div className="printingPrinterActions" aria-label={"Actions for " + printer.name}>
                     <button className="printingPrinterAction printingPrinterActionLive" type="button" onClick={() => setLivePrinter(printer)}>Live monitor</button>
@@ -533,7 +533,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
         {(data?.locations || []).slice(0, 3).map(location => <article className="printingListRow makerVaultAlignedRow" key={location.id}>
           <div><strong>{location.name}</strong><small>{location.kind_label || location.kind || "Storage / printing location"}</small></div>
           <div className="makerVaultRowActions">
-            <button type="button" onClick={() => onOpenMakerTags("location", location.id)}>Maker Tags</button>
+            <button type="button" onClick={() => onOpenMakerTags("location", location.id)}>MakerTags</button>
             {config?.permissions?.change_printing_location && <button type="button" onClick={() => setEditingLocation(location)}>Edit</button>}
             {config?.permissions?.change_printing_location && <button type="button" className="dangerButton" onClick={() => { setLocationError(""); setDeletingLocation(location); }}>Delete</button>}
           </div>
@@ -542,12 +542,12 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       </div>
     </section>
 
-    {modal === "locationsList" && <Modal title="Storage / printing locations" subtitle="All registered locations and their Maker Tag shortcuts." wide onClose={() => setModal("")}>
+    {modal === "locationsList" && <Modal title="Storage / printing locations" subtitle="All registered locations and their MakerTag shortcuts." wide onClose={() => setModal("")}>
       <div className="printingList">
         {(data?.locations || []).map(location => <article className="printingListRow" key={location.id}>
           <div><strong>{location.name}</strong><small>{location.kind_label || location.kind || "Storage / printing location"}</small></div>
           <div className="spoolRowActions">
-            <button type="button" onClick={() => { setModal(""); onOpenMakerTags("location", location.id); }}>Maker Tags</button>
+            <button type="button" onClick={() => { setModal(""); onOpenMakerTags("location", location.id); }}>MakerTags</button>
             {config?.permissions?.change_printing_location && <button type="button" onClick={() => { setModal(""); setEditingLocation(location); }}>Edit</button>}
             {config?.permissions?.change_printing_location && <button type="button" className="dangerButton" onClick={() => { setLocationError(""); setDeletingLocation(location); }}>Delete</button>}
           </div>
@@ -705,7 +705,7 @@ function SpoolInventoryPage({ onOpenMakerTags, spools, filaments, locations, pri
             </Badge>
             <Badge>{spool.status_label || spool.status}</Badge>
             {(spool.external_links || []).map(link => <Badge key={link.id}>{link.provider_label}</Badge>)}
-            <button type="button" onClick={() => onOpenMakerTags("spool", spool.id)}>Maker Tags</button>
+            <button type="button" onClick={() => onOpenMakerTags("spool", spool.id)}>MakerTags</button>
             <button type="button" onClick={() => setWeightHistorySpool(spool)}>Weight History</button>
             <button type="button" onClick={() => setDetailFilament(filaments.find(item => item.id === spool.filament_id) || null)}>Filament details</button>
             {canChangeSpool && <button type="button" onClick={() => setManageSpool(spool)}>RFID / identity</button>}
@@ -2014,7 +2014,7 @@ function ReusableSpoolsPage({ onOpenMakerTags, onBack, onOpenModels, targetReelI
             {(reel.assignment_history || []).slice(0, 3).map((event, i) => <small key={i}>{new Date(event.occurred_at).toLocaleDateString()} · {event.previous_spool_code || "Empty"} → {event.new_spool_code || "Empty"}</small>)}
           </div>
           <div className="spoolRowActions">
-            <button type="button" onClick={() => onOpenMakerTags("reusable_spool", reel.id)}>Maker Tags</button>
+            <button type="button" onClick={() => onOpenMakerTags("reusable_spool", reel.id)}>MakerTags</button>
             {canChange && <button type="button" onClick={() => startReel(reel)}>Edit</button>}
             {canDelete && <button type="button" className="dangerButton" onClick={() => remove("reel", reel)}>Delete</button>}
           </div>
