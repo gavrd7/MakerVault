@@ -20,55 +20,51 @@ function CertSummary({ title, cert }) {
   </div>;
 }
 
-function TrustInstructions() {
-  return <div className="httpsTrustHelp">
-    <div className="httpsTrustHelpIntro">
-      <strong>Trust the MakerVault Local CA on this device</strong>
-      <p>The downloaded CA certificate is public and safe to install on devices you control. Never copy or export the Local CA private key from the MakerVault server.</p>
-    </div>
-    <div className="httpsTrustPlatforms">
-      <details>
-        <summary>iPhone / iPad</summary>
-        <ol>
-          <li>Download <strong>MakerVault Local CA</strong> from this page and open the downloaded certificate.</li>
-          <li>Install the downloaded configuration profile when iOS/iPadOS prompts you.</li>
-          <li>Open <strong>Settings → General → About → Certificate Trust Settings</strong>.</li>
-          <li>Enable full trust for <strong>MakerVault Local CA</strong>, then return to the HTTPS address and reload it.</li>
-        </ol>
-      </details>
-      <details>
-        <summary>Windows</summary>
-        <ol>
-          <li>Download the CA certificate and open it.</li>
-          <li>Choose <strong>Install Certificate</strong> and place it in <strong>Trusted Root Certification Authorities</strong> for the intended user or computer.</li>
-          <li>Close and reopen the browser, then open MakerVault's HTTPS address again.</li>
-        </ol>
-      </details>
-      <details>
-        <summary>macOS</summary>
-        <ol>
-          <li>Download the CA certificate and add it to Keychain Access.</li>
-          <li>Open the imported <strong>MakerVault Local CA</strong> certificate and set its trust to <strong>Always Trust</strong>.</li>
-          <li>Authenticate the change when macOS asks, then reopen the browser.</li>
-        </ol>
-      </details>
-      <details>
-        <summary>Android</summary>
-        <ol>
-          <li>Download the CA certificate to the device.</li>
-          <li>Use Android's security/credentials settings to install a <strong>CA certificate</strong>. Menu wording varies by manufacturer and Android version.</li>
-          <li>Return to the browser and reload MakerVault's HTTPS address.</li>
-        </ol>
-      </details>
-      <details>
-        <summary>Linux</summary>
-        <ol>
-          <li>Download the CA certificate.</li>
-          <li>On Debian/Ubuntu-family systems, copy it to <code>/usr/local/share/ca-certificates/MakerVault-Local-CA.crt</code> and run <code>sudo update-ca-certificates</code>.</li>
-          <li>Restart the browser. If a browser uses its own certificate store, import the CA there as a trusted authority too.</li>
-        </ol>
-      </details>
-    </div>
+const installGuides = [
+  { name: "iOS / iPadOS", steps: [
+    "Download the iOS Profile using Safari. In Settings, select Profile Downloaded (or General → VPN & Device Management) and install MakerVault Local CA.",
+    "Open Settings → General → About → Certificate Trust Settings and enable full trust for MakerVault Local CA.",
+    "Open your full https:// MakerVault address (including its port) in Safari. The hostname or IP address must match the server certificate.",
+  ] },
+  { name: "Android", steps: [
+    "Download the CA Certificate (.crt), not the iOS profile.",
+    "Open Settings → Security & privacy → More security settings → Encryption & credentials → Install a certificate → CA certificate (wording varies). Select the downloaded file.",
+    "Some Android apps do not trust user-installed CAs; browser and application behaviour varies by version and app.",
+  ] },
+  { name: "Windows", steps: [
+    "Download the CA Certificate (.crt) and open it. Choose Install Certificate.",
+    "Choose Current User (or Local Machine if administering the device), then Place all certificates in the following store → Trusted Root Certification Authorities.",
+    "Restart Edge/Chrome. Firefox and Floorp may require Settings → Privacy & Security → Certificates → View Certificates → Authorities → Import, or enabling enterprise roots.",
+  ] },
+  { name: "macOS", steps: [
+    "Download the CA Certificate (.crt) and import it into Keychain Access (login or System as appropriate).",
+    "Open the imported certificate, expand Trust, set When using this certificate to Always Trust and authenticate the change.",
+    "Restart Safari. Firefox/other browsers may require their own certificate authority trust configuration.",
+  ] },
+  { name: "Linux", steps: [
+    "Download the CA Certificate (.crt). On Debian/Ubuntu, copy the PEM certificate to /usr/local/share/ca-certificates/MakerVault-Local-CA.crt and run sudo update-ca-certificates.",
+    "On Fedora/RHEL, copy the certificate to /etc/pki/ca-trust/source/anchors/ then run sudo update-ca-trust.",
+    "Restart the browser. Firefox and Floorp can use their own Authorities import under Settings → Privacy & Security → Certificates.",
+  ] },
+];
+
+function TrustInstructions({ onClose }) {
+  const [platform, setPlatform] = useState(0);
+  useEffect(() => {
+    const handleKey = event => { if (event.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [onClose]);
+  return <div className="httpsGuideOverlay" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
+    <section className="httpsGuideModal" role="dialog" aria-modal="true" aria-labelledby="https-guide-title">
+      <div className="panelHead"><div><h3 id="https-guide-title">Install MakerVault Local CA</h3><p>Choose your platform to see how to trust your instance.</p></div><button type="button" className="account-button" aria-label="Close installation instructions" onClick={onClose}>×</button></div>
+      <div className="httpsGuideTabs" role="tablist" aria-label="Operating system">
+        {installGuides.map((guide, index) => <button type="button" key={guide.name} role="tab" aria-selected={platform === index} className={platform === index ? "account-button selected" : "account-button"} onClick={() => setPlatform(index)}>{guide.name}</button>)}
+      </div>
+      <ol className="httpsGuideSteps">{installGuides[platform].steps.map(step => <li key={step}>{step}</li>)}</ol>
+      <p className="httpsGuideCaution">Only trust a CA from your own MakerVault instance. Neither download includes the CA private key. Use HTTPS and verify that the server certificate covers the hostname or IP address used.</p>
+      <div className="settingsActions"><button type="button" className="account-button" onClick={onClose}>Close</button></div>
+    </section>
   </div>;
 }
 
@@ -78,6 +74,7 @@ export default function HttpsCertificatePanel() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [showInstallGuide, setShowInstallGuide] = useState(false);
 
   async function load() {
     setError("");
@@ -187,7 +184,11 @@ export default function HttpsCertificatePanel() {
           <h4>Download the Local CA</h4>
           <p>This is the public trust certificate for devices that should recognise your MakerVault HTTPS identity.</p>
           {state.local_ca_available
-            ? <a className="account-button" href="/api/settings/https/download-ca/">Download MakerVault Local CA</a>
+            ? <div className="httpsDownloadActions">
+                <a className="account-button" href="/api/settings/https/download-ca/">Download CA Certificate</a>
+                <a className="account-button" href="/api/settings/https/download-ios-profile/">Download iOS Profile</a>
+                <button className="account-button" type="button" onClick={() => setShowInstallGuide(true)}>Installation instructions</button>
+              </div>
             : <small>Generate the local certificate first.</small>}
         </div>
       </article>
@@ -212,7 +213,7 @@ export default function HttpsCertificatePanel() {
       </article>
     </div>
 
-    {state.local_ca_available && <TrustInstructions />}
+    {showInstallGuide && <TrustInstructions onClose={() => setShowInstallGuide(false)} />}
 
     <div className="settingsActions httpsSecondaryActions">
       {state.server_certificate_available && <a className="account-button" href="/api/settings/https/download-server-cert/">Download server certificate</a>}

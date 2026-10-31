@@ -1,5 +1,7 @@
 import hashlib
 import json
+import plistlib
+import uuid
 import re
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -14,7 +16,7 @@ from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Q, Sum
 from django.db.models.deletion import ProtectedError
-from django.http import FileResponse, JsonResponse
+from django.http import FileResponse, HttpResponse, JsonResponse
 from django.utils import timezone
 from django.utils.text import slugify
 from django.views.decorators.http import require_http_methods
@@ -1643,6 +1645,52 @@ def admin_https_download_ca(request):
         content_type="application/x-x509-ca-cert",
     )
     response["Cache-Control"] = "no-store"
+    return response
+
+
+@login_required
+@require_http_methods(["GET"])
+def admin_https_download_ios_profile(request):
+    denied = _superuser_required(request)
+    if denied:
+        return denied
+    ca_path = https_certificate_paths()["ca_cert"]
+    if not ca_path.is_file():
+        return _error("No MakerVault local CA certificate has been generated.", status=404)
+    try:
+        from cryptography import x509
+        from cryptography.hazmat.primitives import serialization
+        certificate = x509.load_pem_x509_certificate(ca_path.read_bytes())
+        der = certificate.public_bytes(serialization.Encoding.DER)
+    except (ValueError, OSError):
+        return _error("The MakerVault Local CA certificate cannot be read.", status=500)
+    # Identifiers are stable for the same CA; changing the CA produces a distinct profile.
+    import hashlib
+    fingerprint = hashlib.sha256(der).hexdigest()
+    profile_id = f"org.makervault.local-ca.{fingerprint[:24]}"
+    profile = {
+        "PayloadContent": [{
+            "PayloadContent": der,
+            "PayloadDescription": "Trust the MakerVault Local CA on this device.",
+            "PayloadDisplayName": "MakerVault Local CA",
+            "PayloadIdentifier": profile_id + ".certificate",
+            "PayloadType": "com.apple.security.root",
+            "PayloadUUID": str(uuid.uuid5(uuid.NAMESPACE_URL, profile_id + ".certificate")).upper(),
+            "PayloadVersion": 1,
+        }],
+        "PayloadDescription": "Installs the public MakerVault Local CA certificate. Enable full trust in iOS Certificate Trust Settings after installation.",
+        "PayloadDisplayName": "MakerVault Local CA",
+        "PayloadIdentifier": profile_id,
+        "PayloadOrganization": "MakerVault",
+        "PayloadRemovalDisallowed": False,
+        "PayloadType": "Configuration",
+        "PayloadUUID": str(uuid.uuid5(uuid.NAMESPACE_URL, profile_id)).upper(),
+        "PayloadVersion": 1,
+    }
+    response = HttpResponse(plistlib.dumps(profile), content_type="application/x-apple-aspen-config")
+    response["Content-Disposition"] = 'attachment; filename="MakerVault-Local-CA.mobileconfig"'
+    response["Cache-Control"] = "no-store"
+    response["X-Content-Type-Options"] = "nosniff"
     return response
 
 

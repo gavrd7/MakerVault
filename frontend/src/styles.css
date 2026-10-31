@@ -3126,3 +3126,13 @@ a:focus-visible,
   .tagResolveInputRow input{grid-column:1}
   .tagResolveInputRow button{grid-column:2}
 }
+
+/* HTTPS platform installation guide */
+.httpsDownloadActions { display: flex; flex-wrap: wrap; align-items: center; gap: .65rem; }
+.httpsGuideOverlay { position: fixed; inset: 0; z-index: 1100; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; padding: 1rem; }
+.httpsGuideModal { width: min(700px,100%); max-height: min(85vh,850px); overflow-y: auto; border-radius: 16px; padding: 1.5rem; background: var(--surface, #141b25); color: var(--text, #f1f5f9); border: 1px solid var(--border, #455161); box-shadow: 0 18px 70px #0009; }
+.httpsGuideTabs { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1.25rem 0; }
+.httpsGuideTabs .selected { outline: 2px solid currentColor; }
+.httpsGuideSteps { padding-left: 1.5rem; line-height: 1.65; }
+.httpsGuideSteps li { margin-bottom: .8rem; }
+.httpsGuideCaution { font-size: .9rem; opacity: .85; border-top: 1px solid var(--border, #455161); padding-top: 1rem; }
