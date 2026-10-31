@@ -37,6 +37,7 @@ urlpatterns = [
     path("device/v1/measurements/preview/", device_measurements.preview_measurement, name="api-device-measurement-preview"),
     path("device/v1/measurements/confirm/", device_measurements.confirm_measurement, name="api-device-measurement-confirm"),
     path("device/v1/records/search/", device_api_views.search_records, name="api-device-records-search"),
+    path("device/v1/records/browse/", device_api_views.browse_records, name="api-device-records-browse"),
     path("device/v1/tags/register/", device_api_views.register_tag, name="api-device-tag-register"),
     path("device/v1/tags/assign/", device_api_views.assign_tag, name="api-device-tag-assign"),
     path("device/v1/me/", device_api_views.device_me, name="api-device-me"),
