@@ -82,10 +82,10 @@ export default function TerminalTagLookup({ onClose, onFound }) {
         </> : <div className="terminalTagProgress" role="status" aria-live="polite">
           {session.state === "pending" && <><strong>Request sent to MakerVault terminal</strong><p>Waiting for the handheld to receive the request. When its screen says “Present a tag”, hold the tag against the reader. The request expires after five minutes.</p></>}
           {session.state === "completed" && <>
-            <strong>{session.found ? "Maker Tag found" : "Unregistered tag"}</strong>
-            <p>UID: <code>{session.uid}</code></p>
+            <strong>{session.found ? "MakerTag found" : "Unregistered tag"}</strong>
+            <p className="terminalTagUid">UID: <span>{session.uid}</span></p>
             {session.tag && <><p>{session.tag.label || session.tag.target?.label}</p><p>{session.tag.target?.subtitle}</p></>}
-            {session.tag && <button type="button" className="primary" onClick={() => { onFound(session.tag.id); onClose(); }}>Open Maker Tag</button>}
+            {session.tag && <button type="button" className="primary" onClick={() => { onFound(session.tag.id); onClose(); }}>Open MakerTag</button>}
           </>}
           {session.state === "expired" && <strong>Scan request expired.</strong>}
           {session.state === "cancelled" && <strong>Scan cancelled.</strong>}

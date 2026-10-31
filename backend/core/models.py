@@ -1629,6 +1629,8 @@ class DeviceTagRegistration(TimeStampedModel):
     expires_at = models.DateTimeField()
     completed_at = models.DateTimeField(null=True, blank=True)
     tag = models.ForeignKey("MakerTag", null=True, blank=True, on_delete=models.SET_NULL)
+    ndef_origin = models.CharField(max_length=220, blank=True, default="")
+    ndef_write = models.ForeignKey("DeviceNdefWrite", null=True, blank=True, on_delete=models.SET_NULL)
 
     class Meta:
         ordering = ["-created_at"]
@@ -1653,6 +1655,26 @@ class DeviceTagLookup(TimeStampedModel):
     class Meta:
         ordering = ["-created_at"]
         indexes = [models.Index(fields=["device", "state", "expires_at"], name="tag_look_device_state_idx")]
+
+
+class DeviceNdefWrite(TimeStampedModel):
+    """Explicit browser-approved NFC URL write to a particular paired terminal."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="device_ndef_writes")
+    device = models.ForeignKey("ConnectedDevice", on_delete=models.CASCADE, related_name="ndef_writes")
+    tag = models.ForeignKey("MakerTag", on_delete=models.CASCADE, related_name="ndef_writes")
+    expected_uid = models.CharField(max_length=24)
+    url = models.CharField(max_length=300)
+    state = models.CharField(max_length=12, default="pending", choices=[
+        ("pending", "Pending"), ("completed", "Completed"), ("cancelled", "Cancelled"),
+    ])
+    expires_at = models.DateTimeField()
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["device", "state", "expires_at"], name="ndef_device_state_idx")]
 
 
 class DevicePairing(TimeStampedModel):

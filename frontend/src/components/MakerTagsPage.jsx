@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { apiFetch } from "../api";
 import { Badge, LoadingBlock, Modal } from "./Common";
 import TerminalTagRegistration from "./TerminalTagRegistration";
+import TerminalNdefWrite from "./TerminalNdefWrite";
 import TerminalTagLookup from "./TerminalTagLookup";
 
 function targetLabel(tag) {
@@ -129,6 +130,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
   const [returnPending, setReturnPending] = useState(false);
   const [detail, setDetail] = useState(null);
   const [editTag, setEditTag] = useState(null);
+  const [promptTagWrite, setPromptTagWrite] = useState(false);
   const [deleteTagRow, setDeleteTagRow] = useState(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [resolveKind, setResolveKind] = useState("auto");
@@ -184,7 +186,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
       setCreateTarget({ type: recordIntent.type, id: recordIntent.id });
       setAddOpen(true);
     } else {
-      setError("No active Maker Tag is assigned to this record.");
+      setError("No active MakerTag is assigned to this record.");
     }
     onRecordIntentConsumed();
   }, [data, recordIntent?.token]);
@@ -208,6 +210,9 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
   const selectedPrintableRows = printableRows.filter(tag => selectedTagIds.includes(String(tag.id)));
 
   function closeRecordTag() {
+    // A terminal registration/reassignment may have changed the list while this modal was open.
+    void load();
+    setPromptTagWrite(false);
     setDetail(null);
     setAddOpen(false);
     setEditTag(null);
@@ -244,7 +249,8 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
     setTerminalOpen(true);
   }
 
-  async function changed(item) {
+  async function changed(item, offerWrite = false) {
+    setPromptTagWrite(Boolean(offerWrite && item?.kind === "nfc"));
     setAddOpen(false);
     setEditTag(null);
     if (item) setDetail(item);
@@ -268,18 +274,18 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
     }
   }
 
-  if (!data && !error) return <LoadingBlock label="Loading Maker Tags…" />;
+  if (!data && !error) return <LoadingBlock label="Loading MakerTags…" />;
 
   return <div className="tagStack">
     <section className="panel tagHero">
       <div>
         <span className="settingsEyebrow">Physical identity</span>
-        <h2>Maker Tags</h2>
+        <h2>MakerTags</h2>
         <p>Attach QR, NFC and RFID identities to physical MakerVault records. Tags stay owner-scoped and can be reassigned or retired without losing their history.</p>
       </div>
       <div className="printingHeroActions">
-        {config?.permissions?.add_maker_tag && <button className="primary" onClick={() => setAddOpen(true)}>Add Maker Tag</button>}
-        {config?.permissions?.add_maker_tag && <button type="button" onClick={() => setTerminalOpen(true)}>Use RFID terminal</button>}
+        {config?.permissions?.add_maker_tag && <button className="primary" onClick={() => setAddOpen(true)}>Add MakerTag</button>}
+        {/* Terminal scanning is available inside Add MakerTag, not a second registration entry point. */}
         <button onClick={load}>Refresh</button>
         <button disabled={!printableRows.length} onClick={() => setBatchOpen(true)}>Print labels</button>
       </div>
@@ -310,7 +316,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
       <div className="tagToolbar">
         {returnPending && <button type="button" onClick={closeRecordTag}>← Back to record</button>}
         <div>
-          <strong>{data?.rows?.length || 0} Maker Tag{data?.rows?.length === 1 ? "" : "s"}</strong>
+          <strong>{data?.rows?.length || 0} MakerTags</strong>
           <small>{rows.length} shown</small>
         </div>
         <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search tags, targets or identities…" />
@@ -361,14 +367,14 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
             {config?.permissions?.delete_maker_tag && <button type="button" className="dangerButton" onClick={() => setDeleteTagRow(tag)}>Delete</button>}
           </div>
         </article>)}
-        {!rows.length && <div className="projectEmpty"><strong>No matching Maker Tags.</strong><span>Create a tag or change the current filters.</span></div>}
+        {!rows.length && <div className="projectEmpty"><strong>No matching MakerTags.</strong><span>Create a tag or change the current filters.</span></div>}
       </div>
     </section>
 
     {lookupOpen && <TerminalTagLookup onClose={() => setLookupOpen(false)} onFound={async id => { try { const result = await apiFetch("/api/tags/" + id + "/"); setDetail(result.item); } catch (err) { setError(err.message); } }} />}
-    {terminalOpen && <TerminalTagRegistration groups={data?.targets} initialTarget={createTarget} onClose={() => { setTerminalOpen(false); setCreateTarget(null); }} onCompleted={async () => { await load(); await onChanged(); }} />}
+    {terminalOpen && <TerminalTagRegistration groups={data?.targets} initialTarget={createTarget} onClose={() => { setTerminalOpen(false); setCreateTarget(null); }} onRegistered={tag => { if (tag?.id) setData(current => current ? ({ ...current, rows: (current.rows || []).some(row => row.id === tag.id) ? current.rows.map(row => row.id === tag.id ? { ...row, ...tag } : row) : [tag, ...current.rows] }) : current); void load(); void onChanged(); }} onCompleted={async tag => { await load(); await onChanged(); if (tag?.id) { const response = await apiFetch("/api/tags/" + tag.id + "/"); const fullTag = response.item; if (fullTag) { setTerminalOpen(false); setPromptTagWrite(fullTag.kind === "nfc"); setDetail(fullTag); } } }} />}
 
-    {deleteTagRow && <Modal title="Permanently delete Maker Tag?" onClose={() => { if (!deleteBusy) setDeleteTagRow(null); }}>
+    {deleteTagRow && <Modal title="Permanently delete MakerTag?" onClose={() => { if (!deleteBusy) setDeleteTagRow(null); }}>
       <p>This will permanently delete <strong>{deleteTagRow.label || deleteTagRow.code}</strong> ({deleteTagRow.code}), including its assignment history. Printed QR codes and NFC links for this tag will stop resolving. A physical NFC/RFID chip is not erased. This action cannot be undone.</p>
       <div className="formActions">
         <button type="button" disabled={deleteBusy} onClick={() => setDeleteTagRow(null)}>Cancel</button>
@@ -377,15 +383,15 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
     </Modal>}
     {batchOpen && <MakerTagBatchPrint tags={selectedPrintableRows} allMatching={printableRows} onClose={() => setBatchOpen(false)} />}
     {addOpen && <MakerTagForm
-      title="Create Maker Tag"
+      title="Create MakerTag"
       data={data}
       initialTarget={createTarget}
       onClose={() => { if (returnPending) closeRecordTag(); else { setAddOpen(false); setCreateTarget(null); } }}
-      onSaved={changed} onUseTerminal={useTerminalForRecord}
+      onSaved={item => changed(item, true)} onUseTerminal={useTerminalForRecord}
     />}
 
     {editTag && <MakerTagForm
-      title={"Edit Maker Tag · " + (editTag.label || editTag.code)}
+      title={"Edit MakerTag · " + (editTag.label || editTag.code)}
       data={data}
       tag={editTag}
       onClose={() => { if (returnPending) closeRecordTag(); else setEditTag(null); }}
@@ -394,6 +400,7 @@ export default function MakerTagsPage({ config, resolveToken = "", onResolveCons
 
     {detail && <MakerTagDetail
       tag={detail}
+      initialWrite={promptTagWrite}
       canEdit={Boolean(config?.permissions?.change_maker_tag)}
       canDelete={Boolean(config?.permissions?.delete_maker_tag)}
       onDeleted={deleted}
@@ -425,7 +432,7 @@ function MakerTagBatchPrint({ tags, allMatching, onClose }) {
   const perSheet = columns * rowsPerSheet;
   const pages = Array.from({ length: Math.ceil(batch.length / perSheet) }, (_, i) => batch.slice(i * perSheet, (i + 1) * perSheet));
   return <>
-    <Modal title="Print Maker Tag labels" subtitle="Print active QR tags using a shared sheet layout." wide onClose={onClose}>
+    <Modal title="Print MakerTag labels" subtitle="Print active QR tags using a shared sheet layout." wide onClose={onClose}>
       <div className="tagBatchSettings">
         <label>Tags to print<select value={scope} onChange={e => setScope(e.target.value)}>
           <option value="selected" disabled={!tags.length}>Selected ({tags.length})</option>
@@ -490,6 +497,7 @@ function MakerTagForm({ title, data, tag = null, initialTarget = null, onClose, 
     status: tag?.status || "active",
     technology: tag?.technology || tag?.metadata?.technology || "",
   });
+  const [manualIdentity, setManualIdentity] = useState(Boolean(tag));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const set = (key, value) => setForm(current => ({ ...current, [key]: value }));
@@ -528,8 +536,9 @@ function MakerTagForm({ title, data, tag = null, initialTarget = null, onClose, 
     }
   }
 
-  return <Modal title={title} subtitle="One physical identity can be reassigned over time while MakerVault keeps an audit trail." onClose={onClose} wide>
-    {!tag && onUseTerminal && <div className="notice"><strong>Have a paired RFID/NFC terminal?</strong> Scan a physical Maker Tag instead of entering its UID. <button type="button" onClick={() => onUseTerminal({ type: form.target_type, id: form.target_id })} disabled={!["inventory", "spool"].includes(form.target_type) || !form.target_id}>Use RFID terminal</button></div>}
+  const terminalFirst = !tag && form.kind === "nfc" && !manualIdentity && Boolean(onUseTerminal);
+
+  return <Modal title={title} subtitle="Choose a record and how to identify its physical tag." onClose={onClose} wide>
     <form className="formGrid" onSubmit={submit}>
       {error && <div className="formError full">{error}</div>}
       <label>Tag type<select value={form.kind} onChange={e => set("kind", e.target.value)}>
@@ -537,15 +546,15 @@ function MakerTagForm({ title, data, tag = null, initialTarget = null, onClose, 
         <option value="nfc">RFID / NFC</option>
         {form.kind === "rfid" && <option value="rfid">RFID (legacy record)</option>}
       </select></label>
-      <label>Identity code
+      {(form.kind === "qr" || !terminalFirst) && <label className={form.kind === "qr" ? "" : "full"}>Identity code
         {form.kind === "qr"
           ? <input value={form.code} onChange={e => set("code", e.target.value)} placeholder="Leave blank to generate" />
           : <TagCaptureControls kind={form.kind} value={form.code} onCapture={value => set("code", value)} autoFocus={!tag} />}
-      </label>
-      {(form.kind === "nfc" || form.kind === "rfid") && <label className="full">Tag / reader technology (optional)<select value={form.technology} onChange={e => set("technology", e.target.value)}>
+      </label>}
+      {(form.kind === "nfc" || form.kind === "rfid") && !terminalFirst && <label className="full">Tag / reader technology (optional)<select value={form.technology} onChange={e => set("technology", e.target.value)}>
         {(data?.technologies || []).map(item => <option key={item.value || "auto"} value={item.value}>{item.label}</option>)}
       </select></label>}
-      <label className="full">Label<input value={form.label} onChange={e => set("label", e.target.value)} placeholder="e.g. Loft server ESP32, Black ABS spool" /></label>
+      {!terminalFirst && <label className="full">Label<input value={form.label} onChange={e => set("label", e.target.value)} placeholder="e.g. Loft server ESP32, Black ABS spool" /></label>}
 
       <label>Target type<select value={form.target_type} onChange={e => set("target_type", e.target.value)}>
         {groups.map(group => <option key={group.type} value={group.type}>{group.label}</option>)}
@@ -556,34 +565,39 @@ function MakerTagForm({ title, data, tag = null, initialTarget = null, onClose, 
       </select></label>
 
       {tag && <label>Status<select value={form.status} onChange={e => set("status", e.target.value)}><option value="active">Active</option><option value="retired">Retired</option></select></label>}
-      <label className={tag ? "" : "full"}>Notes<textarea rows="4" value={form.notes} onChange={e => set("notes", e.target.value)} placeholder="Optional physical label/location notes…" /></label>
-
-      {(form.kind === "nfc" || form.kind === "rfid") && <div className="settingsCallout full">
-        <strong>Broad reader compatibility</strong>
-        <p>MakerVault stores the stable value your reader supplies and does not require one specific NFC/RFID chip family. Android browsers with Web NFC can capture supported NDEF-compatible tags directly. iPhone/iPad can open a MakerVault NDEF URL with the normal system NFC reader, while USB/Bluetooth/OTG readers on phones or PCs can paste UID, EPC or vendor reader codes into the identity field.</p>
-        <p>Hardware still determines what can actually be scanned: an iPhone cannot expose every low-frequency/UHF tag or arbitrary raw UID to a web page, but those tags can still be used through a compatible external reader.</p>
-      </div>}
+      {!terminalFirst && <label className={tag ? "" : "full"}>Notes<textarea rows="4" value={form.notes} onChange={e => set("notes", e.target.value)} placeholder="Optional physical label/location notes…" /></label>}
 
       {form.kind === "rfid" && form.target_type === "spool" && <div className="settingsCallout full">
         <strong>Spool RFID compatibility</strong>
-        <p>Conventional hexadecimal RFID UIDs are mirrored to the spool's legacy RFID field for CFS/current integrations. Other reader identities remain valid Maker Tags without being forced into that legacy UID field.</p>
+        <p>Conventional hexadecimal RFID UIDs are mirrored to the spool's legacy RFID field for CFS/current integrations. Other reader identities remain valid MakerTags without being forced into that legacy UID field.</p>
       </div>}
 
+      {terminalFirst && <div className="full" style={{display:"flex",flexDirection:"column",gap:10}}>
+        <strong>MakerVault Terminal</strong>
+        <small>Scan and assign your NFC tag using the connected terminal.</small>
+        <button type="button" className="primary" disabled={busy || !form.target_id || !["inventory","spool"].includes(form.target_type)}
+          onClick={() => onUseTerminal({type:form.target_type,id:form.target_id})}>Use MakerVault Terminal</button>
+        <button type="button" onClick={() => setManualIdentity(true)}>Enter identity manually or use phone NFC</button>
+      </div>}
       <div className="formActions full">
         <button type="button" onClick={onClose}>Cancel</button>
-        <button className="primary" disabled={busy || !form.target_id}>{busy ? "Saving…" : tag ? "Save changes" : "Create tag"}</button>
+        {!terminalFirst && <button className="primary" disabled={busy || !form.target_id}>{busy ? "Saving…" : tag ? "Save changes" : "Create MakerTag"}</button>}
       </div>
     </form>
   </Modal>;
 }
 
-function MakerTagDetail({ tag, canEdit, canDelete, onDeleted, onClose, onEdit, onChanged, onOpenTarget }) {
+function MakerTagDetail({ tag, initialWrite = false, canEdit, canDelete, onDeleted, onClose, onEdit, onChanged, onOpenTarget }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const qrWrap = useRef(null);
   const [customSize, setCustomSize] = useState({ width: 40, height: 30, qr: 20 });
   const [textOptions, setTextOptions] = useState({ title: true, code: true, target: true });
   const [labelFormat, setLabelFormat] = useState("standard");
+  const [ndefOpen, setNdefOpen] = useState(false);
+  const [terminalNdefOpen, setTerminalNdefOpen] = useState(initialWrite);
+  const [ndefOverride, setNdefOverride] = useState("");
+  const [ndefPreview, setNdefPreview] = useState(null);
   const labelFormats = {
     standard: { name: "Standard label · 70 × 50 mm", width: 70, height: 50, qr: 25 },
     compact: { name: "Compact label · 50 × 30 mm", width: 50, height: 30, qr: 19 },
@@ -632,17 +646,38 @@ function MakerTagDetail({ tag, canEdit, canDelete, onDeleted, onClose, onEdit, o
     }
   }
 
+  async function previewNfcLink() {
+    setBusy(true); setNotice(""); setNdefPreview(null);
+    try {
+      const result = await apiFetch("/api/tags/" + tag.id + "/ndef-preview/", {
+        method: "POST",
+        body: { origin: window.location.origin, override: ndefOverride.trim() },
+      });
+      setNdefPreview(result);
+    } catch (err) {
+      setNotice(err?.message || "Could not preview NDEF URL.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function writeNfcLink() {
     const capability = nfcCapability();
     if (!capability.supported) {
       setNotice(capability.reason);
       return;
     }
+    if (!ndefPreview?.url) {
+      setNotice("Preview and confirm the URL first.");
+      return;
+    }
     setBusy(true); setNotice("Hold a writable NFC tag near the phone…");
     try {
       const writer = new window.NDEFReader();
-      await writer.write({ records: [{ recordType: "url", data: scanUrl }] });
-      setNotice("MakerVault scan link written to the NFC tag. Phones can now tap it to open this record.");
+      await writer.write({ records: [{ recordType: "url", data: ndefPreview.url }] });
+      setNotice("NDEF write completed. Scan the tag again to verify its URL.");
+      setNdefOpen(false);
+      setNdefPreview(null);
     } catch (err) {
       setNotice(err?.message || "The NFC tag could not be written.");
     } finally {
@@ -655,7 +690,7 @@ function MakerTagDetail({ tag, canEdit, canDelete, onDeleted, onClose, onEdit, o
     window.print();
   }
 
-  return <><Modal title={tag.label || tag.maker_tag_id || tag.code} subtitle="Maker Tag identity and assignment history." onClose={onClose} wide>
+  return <><Modal title={tag.label || tag.maker_tag_id || tag.code} subtitle="MakerTag identity and assignment history." onClose={onClose} wide>
 
     {notice && <div className={notice.toLowerCase().includes("blocked") ? "formError" : "notice"}>{notice}</div>}
     <div className="tagDetailGrid">
@@ -709,10 +744,34 @@ function MakerTagDetail({ tag, canEdit, canDelete, onDeleted, onClose, onEdit, o
         <code>{tag.code}</code>
         <button onClick={() => copy(tag.code, "Tag identity")}>Copy identity</button>
         {tag.kind === "nfc" && <>
-          <code>{scanUrl}</code>
-          <button onClick={() => copy(scanUrl, "MakerVault scan link")}>Copy MakerVault scan link</button>
-          {"NDEFReader" in window && <button disabled={busy} onClick={writeNfcLink}>{busy ? "Waiting for tag…" : "Write MakerVault link to NFC"}</button>}
-          <small>Writing the MakerVault URL as NDEF lets compatible phones—including iPhone—tap the tag and open MakerVault without browser access to the tag UID.</small>
+          <code>{window.location.origin + "/t/" + tag.maker_tag_id + "/"}</code>
+          <button onClick={() => copy(window.location.origin + "/t/" + tag.maker_tag_id + "/", "MakerVault scan link")}>Copy MakerVault scan link</button>
+          {canEdit && <button type="button" onClick={() => { setNdefOpen(false); setTerminalNdefOpen(true); setNotice(""); }}>Write / overwrite NFC tag</button>}
+          {canEdit && "NDEFReader" in window && <button type="button" onClick={() => { setNdefOpen(!ndefOpen); setNdefPreview(null); }}>Use phone NFC instead</button>}
+          {ndefOpen && <div className="tagNdefWritePanel">
+            <p>Use your phone to write the same MakerVault NFC link. Confirm the tag before writing.</p>
+            {"NDEFReader" in window && <>
+              <div className="tagNdefWritePanel">
+              <p>The default address is the one used to open MakerVault. An override only applies to this write.</p>
+              <label>Optional address override
+                <input type="url" value={ndefOverride} placeholder={window.location.origin}
+                  onChange={event => { setNdefOverride(event.target.value); setNdefPreview(null); }}
+                  disabled={busy} />
+              </label>
+              <button type="button" disabled={busy} onClick={previewNfcLink}>
+                {busy ? "Checking…" : "Preview NFC URL"}
+              </button>
+              {ndefPreview && <>
+                <p><strong>URL to write:</strong> <code>{ndefPreview.url}</code></p>
+                {ndefPreview.local_address_warning && <small role="status">This address may only work for phones connected to the same network or VPN.</small>}
+                <button type="button" className="primary" disabled={busy} onClick={writeNfcLink}>
+                  {busy ? "Waiting for tag…" : "Confirm and write to NFC"}
+                </button>
+              </>}
+              </div>
+            </>}
+          </div>}
+          <small>One standard MakerVault URL identifies the tag for both compatible phones and the MakerVault Terminal. Tag content is not duplicated from inventory; linked record details are resolved in MakerVault.</small>
         </>}
       </div>}
     </div>
@@ -740,7 +799,7 @@ function MakerTagDetail({ tag, canEdit, canDelete, onDeleted, onClose, onEdit, o
         ? <button className="dangerButton" disabled={busy} onClick={() => setStatus("retired")}>Retire tag</button>
         : <button className="primary" disabled={busy} onClick={() => setStatus("active")}>Reactivate tag</button>)}
     </div>
-    {confirmDelete && <Modal title="Permanently delete Maker Tag?" onClose={() => setConfirmDelete(false)}>
+    {confirmDelete && <Modal title="Permanently delete MakerTag?" onClose={() => setConfirmDelete(false)}>
       <p>This permanently removes <strong>{tag.label || tag.code}</strong>, its assignment history and its QR/NFC identity in MakerVault. Any printed QR codes or written NFC links for this tag will stop resolving. This cannot be undone.</p>
       <div className="formActions">
         <button type="button" onClick={() => setConfirmDelete(false)} disabled={busy}>Cancel</button>
@@ -749,6 +808,7 @@ function MakerTagDetail({ tag, canEdit, canDelete, onDeleted, onClose, onEdit, o
     </Modal>}
   </Modal>
 
+    {terminalNdefOpen && <TerminalNdefWrite tag={tag} onClose={() => setTerminalNdefOpen(false)} />}
     {tag.kind === "qr" && typeof document !== "undefined" && createPortal(
       <div className="makerTagPrintPage" aria-hidden="true">
         <div className="makerTagPrintLabel" style={{ width: safeFormat.width + "mm", height: safeFormat.height + "mm" }}>

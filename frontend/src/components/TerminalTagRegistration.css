@@ -4,3 +4,6 @@
 .terminalTagContent .modalActions{display:flex;align-items:center;flex-wrap:wrap;gap:12px}
 .terminalTagContent .formGrid > .modalActions{margin-top:6px}
 .terminalTagContent .modalActions > button{margin:0}
+
+/* UID uses the same readable body size as the other lookup details. */
+.terminalTagProgress .terminalTagUid span{font:inherit;color:inherit;overflow-wrap:anywhere}

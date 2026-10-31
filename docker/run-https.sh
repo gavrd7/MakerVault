@@ -4,7 +4,8 @@ set -euo pipefail
 mode="${MAKERVAULT_HTTPS_ENABLED:-auto}"
 cert="${MAKERVAULT_TLS_CERT_FILE:-/app/keys/tls/cert.pem}"
 key="${MAKERVAULT_TLS_KEY_FILE:-/app/keys/tls/key.pem}"
-workers="${HTTPS_WEB_CONCURRENCY:-1}"
+workers="${HTTPS_WEB_CONCURRENCY:-2}"
+threads="${HTTPS_WEB_THREADS:-4}"
 timeout="${GUNICORN_TIMEOUT:-120}"
 
 case "${mode,,}" in
@@ -32,6 +33,8 @@ echo "Starting MakerVault native HTTPS listener on 8443."
 exec gosu makervault gunicorn makervault.wsgi:application \
   --bind 0.0.0.0:8443 \
   --workers "$workers" \
+  --worker-class gthread \
+  --threads "$threads" \
   --timeout "$timeout" \
   --certfile "$cert" \
   --keyfile "$key" \

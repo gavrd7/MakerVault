@@ -74,6 +74,133 @@ class ConnectedTagRegistrationTests(TestCase):
         self.assertEqual(MakerTag.objects.filter(owner=self.owner, code=tag.code).count(), 1)
         self.assertEqual(self.client.get(f"/api/device/tag-registration/{rid}/").json()["state"], "completed")
 
+    def test_pending_ndef_write_blocks_new_registration_before_assignment(self):
+        from core.models import DeviceNdefWrite
+        change = Permission.objects.get(content_type__app_label="core", codename="change_makertag")
+        self.owner.user_permissions.add(change)
+        self.device.capabilities = ["ntag215_ndef_write"]
+        self.device.save(update_fields=["capabilities"])
+        origin = "http://192.168.1.125:8000"
+        data = {"origin": origin, "override": ""}
+        with self.settings(DEBUG=True):
+            def start_nfc():
+                payload = {"device_id": str(self.device.pk), "target_type": "inventory",
+                           "target_id": str(self.item.pk), **data}
+                return self.client.post("/api/device/tag-registration/",
+                                        data=json.dumps(payload), content_type="application/json",
+                                        HTTP_ORIGIN=origin)
+            started = start_nfc()
+            self.assertEqual(started.status_code, 201, started.content)
+            finished = self.complete(started.json()["id"])
+            self.assertEqual(finished.status_code, 201, finished.content)
+            self.assertTrue(finished.json()["ndef_write_id"])
+            self.assertEqual(DeviceNdefWrite.objects.filter(state="pending").count(), 1)
+            blocked = start_nfc()
+            self.assertEqual(blocked.status_code, 409, blocked.content)
+            self.assertIn("pending NFC write", blocked.json()["error"])
+            self.assertEqual(DeviceTagRegistration.objects.count(), 1)
+
+    def test_repeat_assignment_same_target_is_idempotent(self):
+        initial_id = self.start().json()["id"]
+        self.assertEqual(self.complete(initial_id).status_code, 201)
+        tag = MakerTag.objects.get(owner=self.owner, code="04AABBCCDDEEFF")
+        previous_count = tag.events.count() if hasattr(tag, "events") else None
+        second_id = self.start().json()["id"]
+        response = self.complete(second_id)
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["state"], "completed")
+        self.assertEqual(response.json()["tag"]["id"], str(tag.pk))
+        self.assertEqual(MakerTag.objects.filter(owner=self.owner, code=tag.code).count(), 1)
+        if previous_count is not None:
+            tag.refresh_from_db()
+            self.assertEqual(tag.events.count(), previous_count)
+
+    def test_single_session_queues_server_authorized_ndef_write(self):
+        from core.models import DeviceNdefWrite
+        change = Permission.objects.get(content_type__app_label="core", codename="change_makertag")
+        self.owner.user_permissions.add(change)
+        self.device.capabilities = ["ntag215_ndef_write"]
+        self.device.save(update_fields=["capabilities"])
+        origin = "http://192.168.1.125:8000"
+        data = {"device_id": str(self.device.pk), "target_type": "inventory",
+                "target_id": str(self.item.pk), "origin": origin, "override": ""}
+        started = self.client.post("/api/device/tag-registration/",
+                                   data=json.dumps(data), content_type="application/json",
+                                   HTTP_ORIGIN=origin)
+        self.assertEqual(started.status_code, 201, started.content)
+        rid = started.json()["id"]
+        assigned = self.complete(rid)
+        self.assertEqual(assigned.status_code, 201, assigned.content)
+        self.assertEqual(assigned.json()["state"], "completed")
+        self.assertTrue(assigned.json()["ndef_write_id"])
+        request = DeviceNdefWrite.objects.get(pk=assigned.json()["ndef_write_id"])
+        self.assertEqual(request.expected_uid, "04AABBCCDDEEFF")
+        self.assertEqual(request.url, f"{origin}/t/MV-{request.tag.short_id}/")
+        self.assertEqual(assigned.json()["ndef_write"]["state"], "pending")
+        self.assertEqual(self.client.get(f"/api/device/tag-registration/{rid}/").json()["ndef_write"]["id"], str(request.pk))
+        done = self.client.post(f"/api/device/v1/ndef-write/{request.pk}/complete/",
+                                data=json.dumps({"uid": request.expected_uid, "verified_url": request.url}),
+                                content_type="application/json", HTTP_AUTHORIZATION="Bearer " + self.token)
+        self.assertEqual(done.status_code, 200, done.content)
+        self.assertEqual(self.client.get(f"/api/device/tag-registration/{rid}/").json()["ndef_write"]["state"], "completed")
+
+    def test_combined_session_rejects_spoofed_browser_origin(self):
+        data = {"device_id": str(self.device.pk), "target_type": "inventory",
+                "target_id": str(self.item.pk), "origin": "https://vault.example.com", "override": ""}
+        result = self.client.post("/api/device/tag-registration/",
+                                  data=json.dumps(data), content_type="application/json",
+                                  HTTP_ORIGIN="https://different.example.com")
+        self.assertEqual(result.status_code, 400)
+        self.assertFalse(DeviceTagRegistration.objects.exists())
+
+    def test_reassignment_preflight_uses_one_physical_confirmation(self):
+        change = Permission.objects.get(content_type__app_label="core", codename="change_makertag")
+        self.owner.user_permissions.add(change)
+        tag = MakerTag.objects.create(
+            owner=self.owner, kind="nfc", code="04AABBCCDDEEFF",
+            target_type="inventory", target_id=self.item.pk,
+        )
+        other_item = InventoryItem.objects.create(
+            owner=self.owner, inventory_id="OTH-1492", item_type="other",
+            custom_name="Other target", quantity=1,
+        )
+        start = self.start(target_id=str(other_item.pk))
+        self.assertEqual(start.status_code, 201, start.content)
+        rid = start.json()["id"]
+        probe = self.client.post(
+            f"/api/device/v1/tag-registration/{rid}/probe/",
+            data=json.dumps({"kind": "nfc", "uid": tag.code}),
+            content_type="application/json", HTTP_AUTHORIZATION="Bearer " + self.token,
+        )
+        self.assertEqual(probe.status_code, 200, probe.content)
+        token = probe.json()["reassign_token"]
+        self.assertTrue(probe.json()["reassign_required"])
+        confirm = self.client.post(
+            f"/api/device/v1/tag-registration/{rid}/complete/",
+            data=json.dumps({"kind": "nfc", "uid": tag.code, "reassign_token": token}),
+            content_type="application/json", HTTP_AUTHORIZATION="Bearer " + self.token,
+        )
+        self.assertEqual(confirm.status_code, 201, confirm.content)
+        tag.refresh_from_db()
+        self.assertEqual(tag.target_id, other_item.pk)
+        self.assertEqual(confirm.json()["state"], "completed")
+
+    def test_preflight_does_not_change_existing_assignment(self):
+        tag = MakerTag.objects.create(
+            owner=self.owner, kind="nfc", code="04AABBCCDDEEFF",
+            target_type="inventory", target_id=self.item.pk,
+        )
+        rid = self.start().json()["id"]
+        response = self.client.post(
+            f"/api/device/v1/tag-registration/{rid}/probe/",
+            data=json.dumps({"kind": "nfc", "uid": tag.code}),
+            content_type="application/json", HTTP_AUTHORIZATION="Bearer " + self.token,
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertTrue(response.json()["already_assigned"])
+        self.assertFalse(response.json()["reassign_required"])
+        self.assertEqual(DeviceTagRegistration.objects.get(pk=rid).state, "pending")
+
     def test_cancel_and_expiry(self):
         rid = self.start().json()["id"]
         self.assertEqual(self.client.post(f"/api/device/tag-registration/{rid}/cancel/").status_code, 200)
@@ -109,8 +236,8 @@ class ConnectedTagRegistrationTests(TestCase):
             target_type="inventory", target_id=self.item.pk,
         )
         rid = self.start().json()["id"]
-        self.assertEqual(self.complete(rid).status_code, 409)
-        self.assertEqual(DeviceTagRegistration.objects.get(pk=rid).state, "pending")
+        self.assertEqual(self.complete(rid).status_code, 200)
+        self.assertEqual(DeviceTagRegistration.objects.get(pk=rid).state, "completed")
         existing.refresh_from_db()
         self.assertEqual(existing.target_id, self.item.pk)
 
@@ -123,7 +250,9 @@ class ConnectedTagRegistrationTests(TestCase):
         )
         rid = self.start().json()["id"]
         response = self.complete(rid)
-        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.status_code, 200)
+        existing.refresh_from_db()
+        self.assertEqual(existing.kind, "rfid")
         self.assertEqual(MakerTag.objects.filter(code=existing.code).count(), 1)
 
     def test_cross_kind_retry_is_idempotent(self):
@@ -341,8 +470,8 @@ class ConnectedTagRegistrationTests(TestCase):
                                 target_type="inventory", target_id=self.item.pk)
         rid = self.start().json()["id"]
         response = self.complete(rid)
-        self.assertEqual(response.status_code, 409)
-        self.assertIn("Already assigned", response.json()["error"])
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["state"], "completed")
         self.assertNotIn("reassign_token", response.json())
 
     def test_browser_can_resume_and_cancel_an_abandoned_registration(self):

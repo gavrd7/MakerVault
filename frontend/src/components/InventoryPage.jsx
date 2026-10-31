@@ -198,7 +198,7 @@ function InventoryDetail({ item, loading, projects, canEdit, canDelete, onOpenMa
       <h2>{item.name}</h2>
     </div>
     <div className="inventoryDetailActions">
-      <button type="button" onClick={() => onOpenMakerTags("inventory", item.id)}>Maker Tags</button>
+      <button type="button" onClick={() => onOpenMakerTags("inventory", item.id)}>MakerTags</button>
       {canEdit && <button className="primary" onClick={() => setEditing(true)}>Edit</button>}
       {canEdit && Number(item.allocated_quantity || 0) > 0 && <button onClick={() => setReleaseOpen(true)}>Release from allocation</button>}
       {canDelete && <button

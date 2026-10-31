@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.admin.views.decorators import staff_member_required
 from django.urls import include, path
-from core import views, oidc_views, setup_views
+from core import views, oidc_views, setup_views, tag_links
 
 # Do not allow Django admin's standalone password login to bypass the allauth/MFA flow.
 admin.site.login = staff_member_required(admin.site.login, login_url="/accounts/login/")
@@ -25,6 +25,7 @@ urlpatterns = [
     path("accounts/security/oidc/<int:app_id>/delete/", oidc_views.oidc_provider_delete, name="oidc-provider-delete"),
     path("accounts/", include("allauth.urls")),
     path("api/", include("core.api_urls")),
+    path("t/<str:maker_tag_id>/", tag_links.maker_tag_link, name="maker-tag-link"),
     path("legal/license/", lambda request: legal_text("LICENSE"), name="legal-license"),
     path("legal/third-party-notices/", lambda request: legal_text("THIRD_PARTY_NOTICES.md"), name="third-party-notices"),
     path("healthz/", views.healthz, name="healthz"),

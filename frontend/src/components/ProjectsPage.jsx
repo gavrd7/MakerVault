@@ -381,7 +381,7 @@ function ProjectDetail({ project, loading, canEdit, canDelete, onOpenMakerTags, 
       <div className="projectTitleActions">
         <div className="badgeRow"><PriorityBadge project={project} /><Badge tone={project.status === "active" ? "good" : project.status === "idea" ? "accent" : "neutral"}>{project.status_label}</Badge><DeadlineBadge project={project} />{(project.tags || []).map(tag => <Badge key={tag}>{tag}</Badge>)}</div>
         <div className="detailActions">
-          <button type="button" onClick={() => onOpenMakerTags("project", project.id)}>Maker Tags</button>
+          <button type="button" onClick={() => onOpenMakerTags("project", project.id)}>MakerTags</button>
           {canEdit && !["complete", "archived"].includes(project.status) && <button className="projectCompleteButton" onClick={() => onComplete(project)}>✓ Completed</button>}
           {canEdit && <button onClick={() => setEditing(true)}>Edit</button>}
           {canEdit && <button onClick={() => setCoverOpen(true)}>Cover</button>}
