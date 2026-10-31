@@ -51,6 +51,67 @@ class ConnectedTagRegistrationTests(TestCase):
             HTTP_AUTHORIZATION="Bearer " + (token or self.token),
         )
 
+    def terminal_begin(self, **overrides):
+        data = {"target_type": "inventory", "target_id": str(self.item.pk)}
+        data.update(overrides)
+        return self.client.post(
+            "/api/device/v1/tag-registration/begin/", data=json.dumps(data),
+            content_type="application/json", secure=True,
+            HTTP_AUTHORIZATION="Bearer " + self.token,
+        )
+
+    def enable_terminal_begin(self):
+        self.owner.user_permissions.add(
+            Permission.objects.get(content_type__app_label="core", codename="change_makertag")
+        )
+        self.key.scopes = list(self.key.scopes) + ["inventory:read"]
+        self.key.save(update_fields=["scopes"])
+        self.device.capabilities = ["ntag215_ndef_write"]
+        self.device.save(update_fields=["capabilities"])
+
+    def test_terminal_begin_and_verified_ndef_handoff(self):
+        from core.models import DeviceNdefWrite
+        self.enable_terminal_begin()
+        created = self.terminal_begin()
+        self.assertEqual(created.status_code, 201, created.content)
+        rid = created.json()["id"]
+        item = DeviceTagRegistration.objects.get(pk=rid)
+        self.assertEqual(item.ndef_origin, "https://testserver")
+        self.assertEqual(item.owner_id, self.owner.pk)
+        self.assertEqual(self.terminal_begin().status_code, 409)
+        finished = self.complete(rid)
+        self.assertEqual(finished.status_code, 201, finished.content)
+        write = DeviceNdefWrite.objects.get(pk=finished.json()["ndef_write_id"])
+        self.assertEqual(write.expected_uid, "04AABBCCDDEEFF")
+        self.assertEqual(write.url, f"https://testserver/t/MV-{write.tag.short_id}/")
+
+    def test_terminal_begin_rejects_wrong_scope_and_foreign_record(self):
+        self.enable_terminal_begin()
+        self.key.scopes = ["tags:write"]
+        self.key.save(update_fields=["scopes"])
+        self.assertEqual(self.terminal_begin().status_code, 403)
+        self.assertFalse(DeviceTagRegistration.objects.exists())
+        self.key.scopes = ["tags:write", "inventory:read"]
+        self.key.save(update_fields=["scopes"])
+        foreign = InventoryItem.objects.create(
+            owner=self.other, inventory_id="OTH-FOREIGN", item_type="other",
+            custom_name="Private", quantity=1,
+        )
+        self.assertEqual(self.terminal_begin(target_id=str(foreign.pk)).status_code, 400)
+        self.assertFalse(DeviceTagRegistration.objects.exists())
+
+    def test_terminal_begin_requires_capability_and_permissions(self):
+        self.enable_terminal_begin()
+        self.device.capabilities = []
+        self.device.save(update_fields=["capabilities"])
+        self.assertEqual(self.terminal_begin().status_code, 403)
+        self.device.capabilities = ["ntag215_ndef_write"]
+        self.device.save(update_fields=["capabilities"])
+        perm = Permission.objects.get(content_type__app_label="core", codename="change_makertag")
+        self.owner.user_permissions.remove(perm)
+        self.assertEqual(self.terminal_begin().status_code, 403)
+        self.assertFalse(DeviceTagRegistration.objects.exists())
+
     def test_create_poll_complete_and_retry(self):
         created = self.start()
         self.assertEqual(created.status_code, 201, created.content)
