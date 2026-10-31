@@ -101,6 +101,10 @@ def begin(request):
             device=device, state="pending", expires_at__gt=timezone.now()
         ).exists():
             return failure("The terminal already has a pending registration.", 409)
+        if chosen_origin and DeviceNdefWrite.objects.filter(
+            device=device, state="pending", expires_at__gt=timezone.now()
+        ).exists():
+            return failure("The terminal already has a pending NFC write. Complete or cancel it before starting another MakerTag.", 409)
         item = DeviceTagRegistration.objects.create(
             owner=request.user, device=device, target_type=kind,
             target_id=target.pk, ndef_origin=chosen_origin,
@@ -300,6 +304,13 @@ def device_complete(request, registration_id):
             return failure("Registration was already completed with another tag.", 409)
         if item.state != "pending" or item.expires_at <= timezone.now():
             return failure("Registration cancelled or expired.", 410)
+        # Check the NFC grant slot BEFORE committing a new assignment or
+        # reassignment. Otherwise the UID can move while NFC programming has
+        # no grant and the browser waits for an operation that cannot start.
+        if item.ndef_origin and DeviceNdefWrite.objects.filter(
+            device=device, state="pending", expires_at__gt=timezone.now()
+        ).exists():
+            return failure("Another NFC write is pending. Complete or cancel it before assigning this tag.", 409)
         definition = TARGETS.get(item.target_type)
         if not definition or not request.device_owner.has_perm(
             f"core.view_{definition.model._meta.model_name}"
