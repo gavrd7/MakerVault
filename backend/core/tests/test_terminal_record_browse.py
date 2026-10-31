@@ -51,6 +51,26 @@ class TerminalRecordBrowseTests(TestCase):
         _, data = self.browse({"type": "location", "letter": "Y"})
         self.assertEqual([x["label"] for x in data["rows"]], ["Zebra"])
 
+    def test_permission_denial(self):
+        ordinary = get_user_model().objects.create_user(
+            username="browse-no-permission", password="unused-password"
+        )
+        req = self.factory.get("/api/device/v1/records/browse/", {"type": "location"})
+        req.device_owner = ordinary
+        response = browse_records.__wrapped__.__wrapped__(req)
+        self.assertEqual(response.status_code, 403)
+
+    def test_no_records_after_last_letter_and_duplicate_names(self):
+        PrintingLocation.objects.create(owner=self.owner, name="maple")
+        status, data = self.browse({"type": "location", "letter": "M", "limit": "2"})
+        self.assertEqual(status, 200)
+        self.assertEqual(len(data["rows"]), 2)
+        self.assertTrue(data["has_more"])
+        _, second = self.browse({"type": "location", "letter": "M", "limit": "2", "offset": "2"})
+        self.assertEqual([row["label"] for row in second["rows"]], ["Moon", "Zebra"])
+        _, empty = self.browse({"type": "location", "letter": "Z", "offset": "5"})
+        self.assertEqual(empty["rows"], [])
+
     def test_invalid_parameters_and_empty_results(self):
         for params in [
             {"type": "location", "limit": "0"},
