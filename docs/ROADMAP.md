@@ -98,6 +98,15 @@ These are not delivered capabilities or mandatory additions to the v1.0 scope:
 
 Printer maintenance logs, schedules and reminders were removed from the planned milestone at the owner's request. Camera development replaced that scope; maintenance is not silently reintroduced here.
 
+## Future FDM workflow — G-code and local slicing (unscheduled)
+
+Two independently deliverable linked features agreed on 30 October 2026. Neither is committed to the next release or the current MakerTags/connected-hardware milestones:
+
+1. **[G-code Library and explicit Print Submission (#155)](https://github.com/gavrd7/MakerVault/issues/155):** Upload, preview, organise and associate G-code with models/projects/print history. Offer separate, permission-checked upload and explicit print-start where printer adapters support them. Validate formats, printer readiness, permissions and failures. No automatic spool-stock deduction on slice/upload.
+2. **[Self-Hosted Multi-Engine FDM Slicer (#156)](https://github.com/gavrd7/MakerVault/issues/156):** One responsive MakerVault Slicer UI and one optional local slicing service with individually installable, pinned and isolated engine versions. Evaluate OrcaSlicer and PrusaSlicer first; subsequently Creality Print, Bambu Studio, CuraEngine, ElegooSlicer, Snapmaker Orca and Anycubic Slicer Next, subject to validated headless CLI operation, licensing and profile support. Support printer/plate/nozzle, engine-specific filament/process profiles linked to physical MakerVault inventory, and searchable Basic/Simple/Advanced settings; model manipulation and multimaterial incrementally.
+
+**Design principles:** Slicing computation runs only on the self-hoster's own infrastructure, not MakerVault-hosted cloud infrastructure; the main application remains operable without the optional restricted worker. Reuse existing file, model, filament and printer infrastructure. The SimplyPrint mobile multi-engine UX is a functional reference, not a request to reproduce its UI. Start G-code work first; defer slicer implementation until current hardware/MakerTags work is stable.
+
 ## Post-v1 exploration — optional hardware tag reader
 
 Explore an ESP32-based NFC/RFID companion using common reader hardware, resolving existing Maker Tags over the LAN. Device enrolment, least-privilege authentication and revocation must precede reader-initiated changes. Consider an enclosure/reference build and Home Assistant interoperability without making dedicated hardware compulsory.
