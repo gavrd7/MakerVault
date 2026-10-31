@@ -112,6 +112,9 @@ export default function TerminalTagRegistration({ groups, initialTarget, onClose
           return;
         }
         setRegistration(next);
+        if (next.state === "completed" && next.ndef_write?.state === "expired") {
+          setError("MakerTag assigned, but the NFC write request expired. The physical tag may not contain its MakerVault link.");
+        }
         setSeconds(Math.max(0, Math.ceil((new Date(next.expires_at).getTime() - Date.now()) / 1000)));
         if (next.state === "completed" && next.tag?.id && !registeredNotified.current) {
           registeredNotified.current = true;
