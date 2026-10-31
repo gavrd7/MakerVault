@@ -3,6 +3,7 @@
 Bearer scope and TLS enforcement remain covered by the existing device API suite.
 """
 import json
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
@@ -34,7 +35,10 @@ class TerminalRecordBrowseTests(TestCase):
         req.device_owner = self.owner
         # Unwrap GET and bearer decorators; test only the view's filtering/paging.
         view = browse_records.__wrapped__.__wrapped__
-        response = view(req)
+        # Isolate ordering/paging from role permission evaluation; the
+        # separate denial test ensures missing view permission fails closed.
+        with patch.object(self.owner, "has_perm", return_value=True):
+            response = view(req)
         return response.status_code, json.loads(response.content)
 
     def test_sorted_small_pages_and_owner_isolation(self):
