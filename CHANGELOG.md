@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.4.5 — MakerTags NFC writing and HTTPS resilience
+
+- Added a single-confirmation MakerTags workflow for paired MakerVault Terminals: scan a compatible NTAG215, review reassignment when necessary, commit UID assignment, write a stable NFC Forum URL, read back the physical tag, and report verified completion.
+- Added owner-scoped short links (`/t/MV-XXXXXXXX/`) that resolve the current assigned record without rewriting the physical tag after reassignment; URL generation retains the active HTTPS origin, including non-default ports, with optional override.
+- Protected NFC writing through device permissions, exact UID and URL checks, lock/capability checks, short-lived server grants, explicit confirmation, cancellation and expiry handling. Generic RFID tags remain UID-only and their existing memory is not rewritten.
+- Improved MakerTags naming, responsive filters, inventory/project/printed-parts entry points, and separated assigned-only status from NFC write verification.
+- Improved native HTTPS availability with a configurable threaded Gunicorn listener (`HTTPS_WEB_CONCURRENCY`, default 2; `HTTPS_WEB_THREADS`, default 4) to prevent one stalled request blocking the entire listener.
+- Requires compatible MakerVault Terminal firmware v0.7 with the experimental writer enabled in the supplied verified firmware build; older terminals retain read-only/UID assignment behaviour.
+
+
 ## v1.3.0 — Connected Devices and secure hardware pairing (release candidate)
 
 - Added Connected Devices under Settings → User Account, with named hardware registrations, scoped permissions, firmware and heartbeat status, editable permissions, unpairing and deletion.
