@@ -47,7 +47,7 @@ export default function PrintedPartsSection({ config, projects = [], projectId =
       <div><strong>{part.name} · {part.quantity}</strong><small>{part.project || "No project"} · {part.location || "No location"}{part.model ? ` · ${part.model} ${part.revision || ""}` : ""}</small></div>
       <div className="makerVaultRowActions">
         <Badge tone={part.status === "installed" ? "good" : "neutral"}>{part.status_label}</Badge>
-        <button type="button" onClick={() => onOpenMakerTags("printed_part", part.id)}>Maker Tags</button>
+        <button type="button" onClick={() => onOpenMakerTags("printed_part", part.id)}>MakerTags</button>
         <button type="button" onClick={() => open(part)}>{config?.permissions?.change_printedpart ? "Manage" : "View"}</button>
       </div>
     </article>)}{!visible.length && <p className="muted">No retained parts match. Successful prints never add parts automatically.</p>}</div>
