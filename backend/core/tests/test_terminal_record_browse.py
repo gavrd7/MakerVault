@@ -5,6 +5,7 @@ Bearer scope and TLS enforcement remain covered by the existing device API suite
 import json
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.test import RequestFactory, TestCase
 
 from core.device_api_views import browse_records
@@ -14,11 +15,14 @@ from core.models import PrintingLocation
 class TerminalRecordBrowseTests(TestCase):
     def setUp(self):
         User = get_user_model()
-        self.owner = User.objects.create_superuser(
+        self.owner = User.objects.create_user(
             username="browse-owner", email="browse-owner@example.test", password="unused-password"
         )
-        self.other = User.objects.create_superuser(
+        self.other = User.objects.create_user(
             username="browse-other", email="browse-other@example.test", password="unused-password"
+        )
+        self.owner.user_permissions.add(
+            Permission.objects.get(content_type__app_label="core", codename="view_printinglocation")
         )
         for name in ["Zebra", "Maple", "Apple", "Moon", "banana"]:
             PrintingLocation.objects.create(owner=self.owner, name=name)
