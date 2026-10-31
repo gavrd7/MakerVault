@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <strong>Latest application release: v1.4.0</strong>
+  <strong>Latest application release: v1.4.5</strong>
 </p>
 
 <p align="center">
@@ -29,7 +29,7 @@
 - **[MakerVault User Guide](https://gavrd7.github.io/MakerVault-docs/)** ([documentation source](https://github.com/gavrd7/MakerVault-docs)) — installation, configuration and usage guides.
 - **[MakerVault-Hardware](https://github.com/gavrd7/MakerVault-Hardware)** — RFID/NFC handheld firmware, wiring, printable enclosure files and future connected hardware.
 
-**Previously in v1.3.0:** scoped, revocable hardware API keys; Connected Devices management and an account-approved eight-digit pairing wizard for RFID/NFC terminals and future weighing stations; live device heartbeat/health reporting, editable permissions, unpairing and permanent deletion; tag resolution and controlled operations; initial weighing-station measurement workflow. Physical device validation remains a release requirement.
+**New in v1.4.5:** MakerTags single-scan NTAG215 assignment and verified NFC link writing through the paired MakerVault Terminal, stable `/t/MV-XXXXXXXX/` URLs, explicit cancellation/expiry handling, and a more resilient threaded native HTTPS listener. **Previously in v1.3.0:** scoped, revocable hardware API keys; Connected Devices management and an account-approved eight-digit pairing wizard for RFID/NFC terminals and future weighing stations; live device heartbeat/health reporting, editable permissions, unpairing and permanent deletion; tag resolution and controlled operations; initial weighing-station measurement workflow. Physical device validation remains a release requirement.
 
 ### Connected Devices — hardware onboarding (introduced in v1.3.0)
 
