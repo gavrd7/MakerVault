@@ -153,6 +153,7 @@ urlpatterns = [
     path("settings/https/", api_views.admin_https_settings, name="api-admin-https-settings"),
     path("settings/https/generate-local/", api_views.admin_https_generate_local, name="api-admin-https-generate-local"),
     path("settings/https/download-ca/", api_views.admin_https_download_ca, name="api-admin-https-download-ca"),
+    path("settings/https/download-ios-profile/", api_views.admin_https_download_ios_profile, name="api-admin-https-download-ios-profile"),
     path("settings/https/download-server-cert/", api_views.admin_https_download_server_cert, name="api-admin-https-download-server-cert"),
     path("settings/users/", api_views.admin_users, name="api-admin-users"),
     path("settings/users/<int:user_id>/", api_views.admin_user_detail, name="api-admin-user-detail"),
