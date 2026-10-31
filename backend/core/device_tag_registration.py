@@ -113,6 +113,66 @@ def begin(request):
     return JsonResponse(summary(item), status=201)
 
 
+@require_http_methods(["POST"])
+@require_device_scope("tags:write")
+def device_begin(request):
+    """Create a terminal-initiated registration using the existing guarded lifecycle.
+
+    The paired HTTPS endpoint supplies the NFC URL origin, since this workflow
+    has no browser origin to trust. Never accept arbitrary device-supplied URLs.
+    """
+    owner = request.device_owner
+    if "inventory:read" not in request.device_key.scopes:
+        return failure("Device requires inventory:read permission.", 403)
+    if not owner.has_perm("core.add_makertag") or not owner.has_perm("core.change_makertag"):
+        return failure("Tag create and reassignment permissions required.", 403)
+    try:
+        data = payload(request)
+        if set(data) != {"target_type", "target_id"}:
+            raise ValueError("Invalid registration request.")
+        kind = data["target_type"]
+        if kind not in TARGETS:
+            raise ValueError("Unsupported target type.")
+        definition = TARGETS[kind]
+        if not owner.has_perm(f"core.view_{definition.model._meta.model_name}"):
+            return failure("Target access denied.", 403)
+        target = resolve_tag_target(owner, kind, data["target_id"])
+        origin, _, _ = _base_origin(request.build_absolute_uri("/").rstrip("/"))
+    except (ValueError, TypeError, ValidationError, KeyError, json.JSONDecodeError):
+        return failure("Invalid target or HTTPS origin.")
+    with transaction.atomic():
+        device = ConnectedDevice.objects.select_for_update(of=("self",)).select_related(
+            "api_key"
+        ).filter(
+            owner=owner, api_key=request.device_key, device_type="rfid_terminal",
+            revoked_at__isnull=True,
+        ).first()
+        if not device or not device.api_key or not device.api_key.is_active():
+            return failure("Active paired terminal required.", 403)
+        if "ntag215_ndef_write" not in (device.capabilities or []):
+            return failure("Terminal requires verified NFC writing capability.", 403)
+        if DeviceTagRegistration.objects.filter(
+            device=device, state="pending", expires_at__gt=timezone.now()
+        ).exists():
+            return failure("Another registration is pending.", 409)
+        if DeviceNdefWrite.objects.filter(
+            device=device, state="pending", expires_at__gt=timezone.now()
+        ).exists():
+            return failure("Another NFC operation is pending.", 409)
+        from .models import DeviceTagLookup
+        if DeviceTagLookup.objects.filter(
+            device=device, state="pending", expires_at__gt=timezone.now()
+        ).exists():
+            return failure("Terminal already has another operation.", 409)
+        item = DeviceTagRegistration.objects.create(
+            owner=owner, device=device, target_type=kind, target_id=target.pk,
+            ndef_origin=origin, expires_at=timezone.now() + TTL,
+        )
+    response = JsonResponse(summary(item), status=201)
+    response["Cache-Control"] = "no-store"
+    return response
+
+
 @login_required
 @require_http_methods(["GET"])
 def status(request, registration_id):
