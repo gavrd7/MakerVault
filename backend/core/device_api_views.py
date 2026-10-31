@@ -189,7 +189,7 @@ def browse_records(request):
     if not (1 <= limit <= 20) or not (0 <= offset <= 100000):
         return _error("Page parameters out of range.", 400)
     letter = request.GET.get("letter", "").strip().upper()
-    if letter and letter not in "#ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+    if letter and (len(letter) != 1 or letter not in "#ABCDEFGHIJKLMNOPQRSTUVWXYZ"):
         return _error("Invalid alphabet jump letter.", 400)
 
     records = definition.model.objects.filter(owner=owner)
