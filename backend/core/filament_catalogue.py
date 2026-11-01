@@ -400,19 +400,19 @@ def populate_missing_filament_variants(*, limit=150):
         str(row.get("color_name") or "").casefold(),
         str(row.get("external_id") or ""),
     ))
-    known = set(CatalogSource.objects.filter(
-        source_type__in=["spoolmandb", "filament_supplement"],
-        filament_products__isnull=False,
-    ).values_list("external_id", flat=True))
+    known = set(FilamentProduct.objects.filter(
+        source__isnull=False,
+    ).values_list("source__source_type", "source__external_id"))
     missing = [
         row for row in catalogue if row.get("external_id") and
         row.get("name") and row.get("material") and
-        row.get("manufacturer") and str(row["external_id"]) not in known
+        row.get("manufacturer") and
+        (str(row.get("source_type") or "spoolmandb"), str(row["external_id"])) not in known
     ]
     created = 0
     for row in missing[:limit]:
         external_id = str(row["external_id"])
-        source_type = "filament_supplement" if external_id.startswith("supplement:") else "spoolmandb"
+        source_type = str(row.get("source_type") or "spoolmandb")[:32]
         with transaction.atomic():
             maker, _ = FilamentManufacturer.objects.get_or_create(
                 name=str(row["manufacturer"])[:255]
