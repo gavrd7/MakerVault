@@ -639,7 +639,17 @@ function IntegrationReviewRow({ review, spools, filaments, busy, onResolve }) {
   const [customName, setCustomName] = useState(review.remote?.name || "");
   const [customColor, setCustomColor] = useState(review.remote?.color_hex || "");
 
-  const familyName = filament => [filament.manufacturer || filament.filament_manufacturer || "", filament.name || filament.display_name || "", filament.material || ""].join(" · ").trim();
+  const familyName = filament => {
+    const colour = String(filament.color_name || "").trim();
+    let name = String(filament.name || filament.display_name || "").trim();
+    // Some upstream product records embed their colour in the name.
+    // Group those variants under one product without losing their colour choice.
+    if (colour) {
+      const suffix = new RegExp("(?:\\s*[-–—]\\s*|\\s+)"+colour.replace(/[.*+?^${}()|[\\]\\]/g, "\\  const familyName = filament => [filament.manufacturer || filament.filament_manufacturer || "", filament.name || filament.display_name || "", filament.material || ""].join(" · ").trim();")+"$", "i");
+      name = name.replace(suffix, "").trim() || name;
+    }
+    return [filament.manufacturer || "", name, filament.material || ""].join(" · ").trim();
+  };
   const families = [...new Map(filaments.map(f => [familyName(f), familyName(f)])).values()].sort((a,b) => a.localeCompare(b));
   const variants = filaments.filter(f => familyName(f) === familyChoice);
   const [spoolChoice, setSpoolChoice] = useState(review.spool_candidates?.[0]?.id || "");
