@@ -2319,6 +2319,8 @@ function ReusableSpoolsPage({ onOpenMakerTags, onBack, onOpenModels, targetReelI
 
 function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFilament, canAddFilament, onBack, onChanged, searchTarget = null }) {
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(100);
   const [addFilamentOpen, setAddFilamentOpen] = useState(false);
 
   useEffect(() => {
@@ -2336,11 +2338,34 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
   const [editFilament, setEditFilament] = useState(null);
   const [imageFilament, setImageFilament] = useState(null);
   const term = query.trim().toLowerCase();
-  const rows = newestFirst(filaments).filter(item => !term || [
+  const filtered = newestFirst(filaments).filter(item => !term || [
     item.display_name, item.name, item.manufacturer, item.material, item.color_name,
     item.finish, item.pattern, item.source,
   ].filter(Boolean).join(" ").toLowerCase().includes(term));
 
+  // Existing duplicate catalogue entries stay in the database so linked spools
+  // and manually edited metadata are not destroyed. Show one representative
+  // per identical manufacturer, product, material and colour in this list.
+  const seen = new Set();
+  const rows = filtered.filter(item => {
+    const key = [
+      item.manufacturer, item.name, item.material,
+      item.color_hex || item.color_name || "",
+    ].map(value => String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "")).join("|");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const visibleRows = rows.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const titleFor = item => {
+    const maker = String(item.manufacturer || "").trim();
+    let name = String(item.name || "").trim();
+    if (maker && name.toLowerCase().startsWith(maker.toLowerCase()))
+      name = name.slice(maker.length).replace(/^[-–—\\s]+/, "").trim();
+    return [maker, name].filter(Boolean).join(" · ");
+  };
   return <div className="printingStack">
     <section className="panel printingLibraryHero">
       <div>
@@ -2357,17 +2382,18 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
     <section className="panel printingSection">
       <div className="printingLibraryToolbar">
         <div><strong>{filaments.length} filament product{filaments.length === 1 ? "" : "s"}</strong><small>{rows.length !== filaments.length ? rows.length + " matching" : "Newest updated first"}</small></div>
-        <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search manufacturer, product, material, colour or source…" />
+        <input value={query} onChange={e => {setQuery(e.target.value);setPage(1);}} placeholder="Search manufacturer, product, material, colour or source…" />
+        <label>Per page <select value={pageSize} onChange={e => {setPageSize(Number(e.target.value));setPage(1);}}><option value={50}>50</option><option value={100}>100</option><option value={250}>250</option></select></label>
       </div>
       <div className="printingList">
-        {rows.map(item => <article className={"printingListRow printingLibraryRow" + (searchTarget?.id === item.id ? " searchTargetRow" : "")} id={"filament-search-target-" + item.id} key={item.id}>
+        {visibleRows.map(item => <article className={"printingListRow printingLibraryRow" + (searchTarget?.id === item.id ? " searchTargetRow" : "")} id={"filament-search-target-" + item.id} key={item.id}>
           {item.image
             ? <img className="filamentLibraryThumb" src={item.image} alt="" loading="lazy" />
             : <span className={"printingSwatch filamentPreview-" + (item.transparency || "opaque")} style={filamentSwatchStyle(item)} />}
           <div>
-            <strong>{item.display_name || item.name}</strong>
-            <small>{[item.manufacturer, item.material, item.color_name].filter(Boolean).join(" · ")}</small>
-            <small>{item.diameter_mm || "?"} mm · {grams(item.nominal_weight_g)} nominal{item.density_g_cm3 ? " · " + item.density_g_cm3 + " g/cm³" : ""} · {item.source || "Manual"}</small>
+            <strong>{titleFor(item)}</strong>
+            <small>{[item.material, item.color_name || item.color_hex, item.color_name && item.color_hex ? item.color_hex : ""].filter(Boolean).join(" · ")}</small>
+            <small>{item.diameter_mm || "?"} mm{item.source ? " · " + item.source : ""}</small>
             {(item.product_url || item.tds_url || item.sds_url) && <small className="filamentSourceLinks">
               {item.product_url && <a href={item.product_url} target="_blank" rel="noreferrer">Product</a>}
               {item.tds_url && <a href={item.tds_url} target="_blank" rel="noreferrer">TDS</a>}
@@ -2386,6 +2412,11 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
           </div>
         </article>)}
         {!rows.length && <div className="printingEmptyInline">{term ? "No filament products match this search." : "No saved filament products yet."}</div>}
+      </div>
+      <div className="formActions" aria-label="Filament library pagination">
+        <span>Page {safePage} of {pageCount} · {rows.length} distinct displayed products</span>
+        <button type="button" disabled={safePage === 1} onClick={() => setPage(v => Math.max(1, v-1))}>Previous</button>
+        <button type="button" disabled={safePage === pageCount} onClick={() => setPage(v => Math.min(pageCount, v+1))}>Next</button>
       </div>
     </section>
 
