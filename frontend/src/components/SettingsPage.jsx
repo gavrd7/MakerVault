@@ -636,6 +636,7 @@ function IntegrationReviewRow({ review, spools, filaments, busy, onResolve }) {
   const [familyChoice, setFamilyChoice] = useState("");
   const [filamentChoice, setFilamentChoice] = useState("");
   const [confirmed, setConfirmed] = useState(false);
+  const [variantPickerOpen, setVariantPickerOpen] = useState(false);
   const [customName, setCustomName] = useState(review.remote?.name || "");
   const [customColor, setCustomColor] = useState(review.remote?.color_hex || "");
 
@@ -718,10 +719,23 @@ function IntegrationReviewRow({ review, spools, filaments, busy, onResolve }) {
         {families.map(name => <option key={name} value={name}>{name}</option>)}
         <option value="__detected__">Use exact Spoolman description (new filament)</option>
       </select></label>
-      {familyChoice && familyChoice !== "__detected__" && <label>Colour / variant<select value={filamentChoice} onChange={e => {setFilamentChoice(e.target.value);setConfirmed(false);}}>
-        <option value="">{matching.length ? "Matching colour available — choose…" : "Choose exact colour…"}</option>
-        {uniqueVariants.map(f => <option key={f.id} value={f.id}>{colorLabel(f)} · {f.color_hex || "No hex"}{matching.some(m => m.id === f.id) ? " · Exact hex" : (nearest?.id === f.id ? " · Closest hex (verify)" : "")}</option>)}
-      </select></label>}
+      {familyChoice && familyChoice !== "__detected__" && <div className="integrationVariantPicker">
+        <span>Colour / variant</span>
+        <button type="button" className="integrationVariantTrigger" onClick={() => setVariantPickerOpen(v => !v)} aria-expanded={variantPickerOpen}>
+          {filamentChoice ? <>
+            <span className="printingSwatch" style={{backgroundColor:uniqueVariants.find(v=>String(v.id)===String(filamentChoice))?.color_hex || "#777"}} aria-hidden="true"/>
+            <span>{colorLabel(uniqueVariants.find(v=>String(v.id)===String(filamentChoice)) || {})} · {uniqueVariants.find(v=>String(v.id)===String(filamentChoice))?.color_hex || "No hex"}</span>
+          </> : <span>{matching.length ? "Exact colour match available — choose…" : "Choose exact colour…"}</span>}
+          <span aria-hidden="true">⌄</span>
+        </button>
+        {variantPickerOpen && <div className="integrationVariantList" role="group" aria-label="Choose filament colour">
+          {uniqueVariants.map(f => <button type="button" key={f.id} className={String(filamentChoice)===String(f.id)?"selected":""} onClick={() => {setFilamentChoice(f.id);setVariantPickerOpen(false);setConfirmed(false);}}>
+            <span className="printingSwatch" style={{backgroundColor:f.color_hex || "#777"}} aria-hidden="true"/>
+            <span>{colorLabel(f)} · {f.color_hex || "No hex"}</span>
+            <small>{matching.some(m=>m.id===f.id)?"Exact hex":nearest?.id===f.id?"Closest hex (verify)":""}</small>
+          </button>)}
+        </div>}
+      </div>}
       {familyChoice === "__detected__" && <>
         <label>Filament name override<input value={customName} maxLength={255} onChange={e => { setCustomName(e.target.value); setConfirmed(false); }} /></label>
         <label>Colour override (hex)<input value={customColor} placeholder="#ffbf49" pattern="#[0-9a-fA-F]{6}" onChange={e => { setCustomColor(e.target.value); setConfirmed(false); }} /></label>
