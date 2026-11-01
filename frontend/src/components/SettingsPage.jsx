@@ -666,7 +666,8 @@ function IntegrationReviewRow({ review, spools, filaments, busy, onResolve }) {
     const name = String(f.name || "").trim();
     const family = familyName(f).split(" · ")[1];
     if (name && name !== family) {
-      const remainder = name.replace(new RegExp("^" + family.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&") + "\\s*[-–—]?\\s*", "i"), "").trim();
+      const remainder = name.toLowerCase().startsWith(family.toLowerCase())
+        ? name.slice(family.length).replace(/^[-–—\\s]+/, "").trim() : name;
       if (remainder) return remainder;
       if (/^3d[- ]fuel$/i.test(f.manufacturer || "")) return name;
     }
