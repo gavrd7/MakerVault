@@ -659,7 +659,20 @@ function IntegrationReviewRow({ review, spools, filaments, busy, onResolve }) {
   const families = [...new Set(filaments.map(familyName))].sort((a,b) => a.localeCompare(b));
   const variants = filaments.filter(f => familyName(f) === familyChoice);
   const remoteHex = String(review.remote?.color_hex || "").replace(/^#/, "").toLowerCase();
-  const matching = variants.filter(f => remoteHex && String(f.color_hex || "").replace(/^#/, "").toLowerCase() === remoteHex);
+  const colorDistance = hex => {
+    const clean = String(hex || "").replace(/^#/, "").toLowerCase();
+    if (!/^[0-9a-f]{6}$/.test(clean) || !/^[0-9a-f]{6}$/.test(remoteHex)) return Infinity;
+    return [0, 2, 4].reduce((total, i) => {
+      const d = parseInt(clean.slice(i, i + 2), 16) - parseInt(remoteHex.slice(i, i + 2), 16);
+      return total + d * d;
+    }, 0);
+  };
+  const rankedVariants = [...variants].sort((a, b) =>
+    colorDistance(a.color_hex) - colorDistance(b.color_hex) ||
+    String(a.color_name || a.name || "").localeCompare(String(b.color_name || b.name || ""))
+  );
+  const matching = rankedVariants.filter(f => colorDistance(f.color_hex) === 0);
+  const nearest = rankedVariants.find(f => Number.isFinite(colorDistance(f.color_hex)));
   const colorLabel = f => {
     const explicit = String(f.color_name || "").trim();
     if (explicit) return explicit;
@@ -710,7 +723,7 @@ function IntegrationReviewRow({ review, spools, filaments, busy, onResolve }) {
       </select></label>
       {familyChoice && familyChoice !== "__detected__" && <label>Colour / variant<select value={filamentChoice} onChange={e => {setFilamentChoice(e.target.value);setConfirmed(false);}}>
         <option value="">{matching.length ? "Matching colour available — choose…" : "Choose exact colour…"}</option>
-        {variants.map(f => <option key={f.id} value={f.id}>{colorLabel(f)} · {f.color_hex || "No hex"}{matching.some(m => m.id === f.id) ? " · Hex matches Spoolman" : ""}</option>)}
+        {rankedVariants.map(f => <option key={f.id} value={f.id}>{colorLabel(f)} · {f.color_hex || "No hex"}{matching.some(m => m.id === f.id) ? " · Exact hex" : (nearest?.id === f.id ? " · Closest hex (verify)" : "")}</option>)}
       </select></label>}
       {familyChoice === "__detected__" && <>
         <label>Filament name override<input value={customName} maxLength={255} onChange={e => { setCustomName(e.target.value); setConfirmed(false); }} /></label>
