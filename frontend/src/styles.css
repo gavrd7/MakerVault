@@ -3153,3 +3153,14 @@ a:focus-visible,
 .filamentGroupedVariant { display:flex; align-items:center; gap:12px; min-height:34px; }
 .filamentGroupedVariant > span:nth-child(2) { flex:1; }
 .filamentGroupedVariant .printingSwatch { flex:none; }
+
+.integrationVariantPicker {display:flex;flex-direction:column;gap:8px;min-width:0;position:relative}
+.integrationVariantPicker > span:first-child {font-size:14px}
+.integrationVariantTrigger {width:100%;display:flex;align-items:center;gap:10px;text-align:left;min-height:46px}
+.integrationVariantTrigger > span:nth-child(2) {flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.integrationVariantList {position:absolute;z-index:20;top:100%;left:0;right:0;max-height:320px;overflow:auto;background:#101820;border:1px solid #48536b;border-radius:12px;box-shadow:0 12px 32px #0008;padding:5px}
+.integrationVariantList button {display:flex;align-items:center;gap:10px;width:100%;min-height:38px;padding:6px 10px;background:transparent;border:0;border-radius:7px;text-align:left;color:inherit}
+.integrationVariantList button:hover,.integrationVariantList button.selected {background:#2a3343}
+.integrationVariantList button > span:nth-child(2) {flex:1}
+.integrationVariantList button > small {opacity:.7}
+.integrationVariantPicker .printingSwatch {display:inline-block;min-width:20px;width:20px;height:20px;flex:none;border-radius:6px;border:1px solid #ffffff36}
