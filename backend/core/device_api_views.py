@@ -12,6 +12,8 @@ from django.conf import settings
 from django.http import JsonResponse
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
+from django.db.models import Case, CharField, F, Q, Value, When
+from django.db.models.functions import Lower
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
@@ -162,6 +164,72 @@ def _tag_summary(tag, owner):
         "label": tag.label,
         "target": serialise_tag_target(owner, tag.target_type, tag.target_id),
     }
+
+
+@require_http_methods(["GET"])
+@require_device_scope("inventory:read")
+def browse_records(request):
+    """Small, server-sorted pages for the 128x128 terminal; no full inventory transfer.
+
+    `letter` selects the first records starting at or after that letter.
+    `offset` supports previous/next within that alphabetically ordered subset.
+    """
+    owner = request.device_owner
+    target_type = request.GET.get("type", "")
+    if target_type not in TARGETS:
+        return _error("Choose a supported record type.", 400)
+    definition = TARGETS[target_type]
+    if not owner.has_perm(f"core.view_{definition.model._meta.model_name}"):
+        return _error("Owner is not permitted to view these records.", 403)
+    try:
+        limit = int(request.GET.get("limit", "12"))
+        offset = int(request.GET.get("offset", "0"))
+    except ValueError:
+        return _error("Invalid page parameters.", 400)
+    if not (1 <= limit <= 20) or not (0 <= offset <= 100000):
+        return _error("Page parameters out of range.", 400)
+    letter = request.GET.get("letter", "").strip().upper()
+    if letter and (len(letter) != 1 or letter not in "#ABCDEFGHIJKLMNOPQRSTUVWXYZ"):
+        return _error("Invalid alphabet jump letter.", 400)
+
+    records = definition.model.objects.filter(owner=owner)
+    # Match target_display labels rather than displaying a different sort order.
+    if target_type == "inventory":
+        records = records.select_related("board", "component").annotate(
+            _terminal_label=Case(
+                When(~Q(custom_name=""), then=F("custom_name")),
+                When(board__isnull=False, then=F("board__name")),
+                When(component__isnull=False, then=F("component__name")),
+                default=F("inventory_id"), output_field=CharField(),
+            )
+        )
+    elif target_type == "spool":
+        records = records.select_related("filament").annotate(_terminal_label=F("spool_id"))
+    elif target_type == "reusable_spool":
+        records = records.select_related("design").annotate(_terminal_label=F("code"))
+    elif target_type == "printed_part":
+        records = records.annotate(_terminal_label=F("name"))
+    else:
+        records = records.annotate(_terminal_label=F("name"))
+
+    records = records.annotate(_terminal_sort=Lower("_terminal_label"))
+    if letter == "#":
+        records = records.exclude(_terminal_sort__regex=r"^[a-z]")
+    elif letter:
+        records = records.filter(_terminal_sort__gte=letter.lower())
+    records = records.order_by("_terminal_sort", "pk")
+    chunk = list(records[offset:offset + limit + 1])
+    rows = [target_display(target_type, obj) for obj in chunk[:limit]]
+    response = JsonResponse({
+        "type": target_type,
+        "letter": letter,
+        "offset": offset,
+        "rows": rows,
+        "has_more": len(chunk) > limit,
+        "next_offset": offset + len(rows) if len(chunk) > limit else None,
+    })
+    response["Cache-Control"] = "no-store"
+    return response
 
 
 @require_http_methods(["GET"])

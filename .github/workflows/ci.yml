@@ -16,7 +16,6 @@ concurrency:
 
 jobs:
   backend:
-    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     container: python:3.13-bookworm
@@ -84,7 +83,6 @@ jobs:
         run: python backend/manage.py test core.tests -v 2
 
   frontend:
-    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     container: node:22-bookworm
