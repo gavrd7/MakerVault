@@ -2356,7 +2356,7 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
       name = name.slice(0, -colour.length).replace(/[-–—\s]+$/, "").trim();
     // Some catalogues encode a shade in the name but leave color_name empty.
     // An explicit spaced dash is a reliable delimiter (unlike PETG-CF).
-    const shadeSuffix = !colour && name.match(/\\s+[-–—]\\s+([^-–—]+)$/);
+    const shadeSuffix = !colour && name.match(/\s+[-–—]\s+([^-–—]+)$/);
     if (shadeSuffix) name = name.slice(0, -shadeSuffix[0].length).trim();
     if (/^3d[- ]fuel$/i.test(maker) && /^pla\+?$/i.test(item.material || "")) name = item.material;
     if (maker && name.toLowerCase().startsWith(maker.toLowerCase()))
