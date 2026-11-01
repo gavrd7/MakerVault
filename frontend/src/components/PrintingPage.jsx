@@ -169,11 +169,15 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
   const [claimSlot, setClaimSlot] = useState(null);
   const [workspaceView, setWorkspaceView] = useState("overview");
 
-  async function load() {
+  async function load(options = {}) {
+    const includeFilaments = options?.includeFilaments !== false;
     setError("");
     try {
-      const fresh = await apiFetch("/api/printing/");
-      setData(fresh);
+      const fresh = await apiFetch("/api/printing/" + (includeFilaments ? "" : "?include_filaments=0"));
+      setData(previous => includeFilaments ? fresh : {
+        ...fresh,
+        filaments: previous?.filaments || [],
+      });
       return fresh;
     } catch (err) {
       setError(err.message);
@@ -185,7 +189,9 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
 
   useEffect(() => {
     if (workspaceView !== "overview") return undefined;
-    const timer = window.setInterval(load, 15000);
+    // Keep printer telemetry current without reloading 14k+ immutable catalogue
+    // records every 15 seconds.
+    const timer = window.setInterval(() => load({includeFilaments:false}), 15000);
     return () => window.clearInterval(timer);
   }, [workspaceView]);
 
