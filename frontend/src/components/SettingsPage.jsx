@@ -640,21 +640,38 @@ function IntegrationReviewRow({ review, spools, filaments, busy, onResolve }) {
   const [customColor, setCustomColor] = useState(review.remote?.color_hex || "");
 
   const familyName = filament => {
+    const maker = String(filament.manufacturer || "").trim();
+    const material = String(filament.material || "").trim();
+    let name = String(filament.name || "").trim();
     const colour = String(filament.color_name || "").trim();
-    let name = String(filament.name || filament.display_name || "").trim();
-    if (colour) {
-      // Strip an exact trailing colour suffix without interpreting user values as regex.
-      const lowered = name.toLocaleLowerCase();
-      const lc = colour.toLocaleLowerCase();
-      if (lowered.endsWith(lc)) {
-        const lead = name.slice(0, name.length - colour.length);
-        if (/[-–—\\s]$/.test(lead)) name = lead.replace(/[-–—\\s]+$/, "").trim();
-      }
-    }
-    return [filament.manufacturer || "", name, filament.material || ""].join(" · ").trim();
+    const cleanSuffix = value => {
+      if (!value || !name.toLocaleLowerCase().endsWith(value.toLocaleLowerCase())) return;
+      const head = name.slice(0, -value.length);
+      if (/[-–—\\s]$/.test(head)) name = head.replace(/[-–—\\s]+$/, "").trim();
+    };
+    cleanSuffix(colour);
+    // 3D-Fuel's upstream colour records often use only the shade as the
+    // product title. They all belong to the same PLA+ family.
+    if (/^3d[- ]fuel$/i.test(maker) && /^pla\\+?$/i.test(material))
+      name = material;
+    return [maker, name || material, material].join(" · ");
   };
-  const families = [...new Map(filaments.map(f => [familyName(f), familyName(f)])).values()].sort((a,b) => a.localeCompare(b));
+  const families = [...new Set(filaments.map(familyName))].sort((a,b) => a.localeCompare(b));
   const variants = filaments.filter(f => familyName(f) === familyChoice);
+  const remoteHex = String(review.remote?.color_hex || "").replace(/^#/, "").toLowerCase();
+  const matching = variants.filter(f => remoteHex && String(f.color_hex || "").replace(/^#/, "").toLowerCase() === remoteHex);
+  const colorLabel = f => {
+    const explicit = String(f.color_name || "").trim();
+    if (explicit) return explicit;
+    const name = String(f.name || "").trim();
+    const family = familyName(f).split(" · ")[1];
+    if (name && name !== family) {
+      const remainder = name.replace(new RegExp("^" + family.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&") + "\\s*[-–—]?\\s*", "i"), "").trim();
+      if (remainder) return remainder;
+      if (/^3d[- ]fuel$/i.test(f.manufacturer || "")) return name;
+    }
+    return f.color_hex || "Colour not named";
+  };
   const [spoolChoice, setSpoolChoice] = useState(review.spool_candidates?.[0]?.id || "");
   const remote = review.remote || {};
 
@@ -691,8 +708,8 @@ function IntegrationReviewRow({ review, spools, filaments, busy, onResolve }) {
         <option value="__detected__">Use exact Spoolman description (new filament)</option>
       </select></label>
       {familyChoice && familyChoice !== "__detected__" && <label>Colour / variant<select value={filamentChoice} onChange={e => {setFilamentChoice(e.target.value);setConfirmed(false);}}>
-        <option value="">Choose exact colour…</option>
-        {variants.map(f => <option key={f.id} value={f.id}>{f.color_name || "Unnamed colour"} · {f.color_hex || "No hex"} · {f.display_name || f.name}</option>)}
+        <option value="">{matching.length ? "Matching colour available — choose…" : "Choose exact colour…"}</option>
+        {variants.map(f => <option key={f.id} value={f.id}>{colorLabel(f)} · {f.color_hex || "No hex"}{matching.some(m => m.id === f.id) ? " · Hex matches Spoolman" : ""}</option>)}
       </select></label>}
       {familyChoice === "__detected__" && <>
         <label>Filament name override<input value={customName} maxLength={255} onChange={e => { setCustomName(e.target.value); setConfirmed(false); }} /></label>
