@@ -3,288 +3,114 @@
 </p>
 
 <h1 align="center">MakerVault</h1>
-
 <p align="center"><strong>Your workshop, organised.</strong></p>
-
-<p align="center">
-  A self-hosted workspace for electronics inventory, projects, files and 3D printing.
-</p>
-
-<p align="center">
-  <strong>Latest application release: v1.4.6</strong>
-</p>
-
+<p align="center">A self-hosted workspace for electronics, making and 3D printing — from the parts you own to the things you build.</p>
+<p align="center"><strong>Current application version: v1.4.6</strong></p>
 <p align="center">
   <a href="https://gavrd7.github.io/MakerVault-docs/">User guide</a> ·
-  <a href="docs/guide/getting-started/install.md">Installation</a> ·
-  <a href="https://github.com/gavrd7/MakerVault-docs">Guide source</a> ·
-  <a href="docs/ROADMAP.md">Roadmap</a> ·
-  <a href="CHANGELOG.md">Changelog</a>
+  <a href="docs/guide/getting-started/install.md">Install</a> ·
+  <a href="docs/ROADMAP.md">Detailed roadmap</a> ·
+  <a href="CHANGELOG.md">Changelog</a> ·
+  <a href="https://github.com/gavrd7/MakerVault-Hardware">Hardware</a>
 </p>
 
+## Why MakerVault?
 
-## Related MakerVault repositories
+Maker projects rarely live in one place. Components end up in boxes and spreadsheets, model revisions in folders, filament in a separate tracker and build notes scattered across apps. **MakerVault connects your physical workshop with its digital records** so you can find what you own, see what a project needs, and keep track of what you made.
 
-- **[MakerVault](https://github.com/gavrd7/MakerVault)** — self-hosted application, Docker deployment and releases.
-- **[MakerVault User Guide](https://gavrd7.github.io/MakerVault-docs/)** ([documentation source](https://github.com/gavrd7/MakerVault-docs)) — installation, configuration and usage guides.
-- **[MakerVault-Hardware](https://github.com/gavrd7/MakerVault-Hardware)** — RFID/NFC handheld firmware, wiring, printable enclosure files and future connected hardware.
-
-**Previously in v1.4.5:** MakerTags single-scan NTAG215 assignment and verified NFC link writing through the paired MakerVault Terminal, stable `/t/MV-XXXXXXXX/` URLs, explicit cancellation/expiry handling, and a more resilient threaded native HTTPS listener. **Previously in v1.3.0:** scoped, revocable hardware API keys; Connected Devices management and an account-approved eight-digit pairing wizard for RFID/NFC terminals and future weighing stations; live device heartbeat/health reporting, editable permissions, unpairing and permanent deletion; tag resolution and controlled operations; initial weighing-station measurement workflow. Physical device validation remains a release requirement.
-
-### Connected Devices — hardware onboarding (introduced in v1.3.0)
-
-**HTTPS is required.** Enable HTTPS on MakerVault and ensure the hardware validates the server certificate and hostname. Publicly trusted certificates use standard CA trust; private/self-signed installations require explicitly trusted CA/certificate material on the device. Never disable TLS verification to make pairing work.
-
-1. Sign in and open **Settings → User Account → Connected Devices → Add Device**.
-2. Choose a device type and name, then review scopes. The default is minimal read-only tag and status access; registration/write permissions require explicit selection.
-3. Follow the four-step wizard to connect the device to Wi-Fi using its own local setup flow. MakerVault cannot discover an unnetworked device.
-4. On the terminal select **Connections → MakerVault → Pair device**. It displays a server-issued eight-digit pairing code valid for five minutes. Enter the code in the MakerVault wizard; the device automatically receives and stores its one-time API credential.
-5. Once paired, use Connected Devices to inspect connection/heartbeat status, edit permissions, unpair (revoke access while retaining the record) or delete (permanently remove the registration and revoke credentials). The status cards refresh every 30 seconds while the browser panel is visible.
-
-**Alternative phone setup:** The terminal's QR/local setup webpage can configure Wi-Fi, server URL and trusted certificates first; pairing still uses the same MakerVault approval process. Manually supplied API keys remain available for advanced integrations, not normal onboarding. An offline device may reconnect with its saved credentials without re-pairing.
-
-Firmware implementers: [canonical pairing protocol v1 and HTTP contract](docs/CONNECTED_DEVICES_PAIRING.md). The [illustrated MakerVault user guide](https://gavrd7.github.io/MakerVault-docs/) includes terminal setup, pairing, permissions and troubleshooting.
-
-**Previously in v1.2.3:** Django 5.2.18, Vite 8.3.3 and Pillow 13 security dependency updates.
-
-**Previously in v1.2.2:** direct MakerTag shortcuts from inventory, projects, filament and reusable spools, printers, printed parts and storage locations; contextual return navigation; permission-controlled QR/NFC/RFID tag deletion; a dedicated Model Library navigation entry; and improved storage-location management.
-
-
-**New in v1.4.0 — connected RFID/NFC MakerTags:** Pair a compatible terminal running firmware v0.6.0 to look up physical tag UIDs, register tags against inventory and spools, and explicitly reassign existing identities with on-device confirmation. Short `MV-XXXXXXXX` identities survive reassignment; audit history records old and new targets. Browser and terminal cancellation and interrupted-session recovery are supported. **Tag-memory writes, NDEF and Creality CFS payload writes are not implemented.** See the [MakerTags user guide](https://gavrd7.github.io/MakerVault-docs/using/maker-tags/) and [hardware firmware](https://github.com/gavrd7/MakerVault-Hardware).
-
-MakerVault keeps the practical parts of a workshop connected: what you own, what a build needs, which files and wiring belong to it, which model revision you printed, and where the finished parts ended up.
-
-## First-run administrator setup (introduced in v1.0.5)
-
-On a **fresh installation with no superuser**, opening MakerVault's normal URL redirects to the first-run setup wizard automatically. The server operator obtains a short-lived token (valid for 30 minutes) from the Docker host, then creates the first administrator in the browser with username, email, password and confirmation. The wizard includes a password-visibility checkbox and matching feedback. It closes automatically once any superuser exists; existing installations continue to the standard sign-in page.
-
-Using standard Compose in your deployment directory, obtain the one-time token with:
-
-```bash
-sudo docker compose exec -u makervault makervault python manage.py first_run_token
-```
-
-Use the same `-p` and `-f` options as your original `docker compose up` command when using a custom project or build override. **Never publish or share the token.** Leave `MAKERVAULT_ADMIN_PASSWORD` empty if you want to create the administrator in the GUI; the existing environment-based initial admin mechanism and Django's `createsuperuser` remain available as alternatives. The first-run wizard cannot be used to reset an existing administrator's password; instead use `python manage.py changepassword YOUR_ADMIN_USERNAME` in the running container.
-
-The web interface no longer waits for initial catalogue seeding or OrcaSlicer printer-model enrichment to finish. These tasks run under the supervised background process; catalogue entries may populate shortly after the interface becomes available.
-
-## Development and validation model
-
-MakerVault is an **AI-coded project**. The application codebase has been produced entirely through AI systems working under human direction rather than by a human programmer writing the implementation by hand.
-
-The human maintainer is responsible for the product side of the project: feature ideas, priorities and design decisions; hands-on acceptance checks; bug discovery; practical testing; and deciding whether changes are good enough to merge and release.
-
-This also sets an important support expectation: investigation, fixes and future development depend on the capabilities of the available AI tooling, the quality of reproducible reports, and human validation of the resulting changes. AI-generated code and automated CI are not treated as substitutes for real-world testing.
-
-
-## A look at MakerVault
+- **Self-hosted and private:** run on your own Docker server, with your database and files under your control; no MakerVault cloud subscription required.
+- **One connected workflow:** link components, inventory, projects, bills of materials, models, prints and finished parts rather than maintaining separate lists.
+- **Useful on the workbench:** responsive desktop/mobile UI, QR/RFID/NFC MakerTags and optional connected hardware.
+- **Built for real stock:** track physical quantities, locations and allocations separately from reference catalogues.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/gavrd7/MakerVault-docs/main/docs/guide/assets/screenshots/dashboard-overview.png" alt="MakerVault dashboard" width="92%">
+  <img src="https://raw.githubusercontent.com/gavrd7/MakerVault-docs/main/docs/guide/assets/screenshots/dashboard-overview.png" alt="MakerVault dashboard overview" width="92%">
 </p>
 
-<p align="center"><em>Dashboard overview — projects, inventory, printing and workshop activity in one place.</em></p>
+## Features available now
 
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <img src="https://raw.githubusercontent.com/gavrd7/MakerVault-docs/main/docs/guide/assets/screenshots/printing-overview.png" alt="MakerVault 3D printing overview">
-      <br><strong>3D printing</strong><br>
-      Printers, spools, models, live integrations and print history.
-    </td>
-    <td width="50%" valign="top">
-      <img src="https://raw.githubusercontent.com/gavrd7/MakerVault-docs/main/docs/guide/assets/screenshots/interactive-wiring.png" alt="MakerVault Interactive Wiring">
-      <br><strong>Interactive Wiring</strong><br>
-      Build diagrams with catalogue-aware pins and electrical checks.
-    </td>
-  </tr>
-  <tr>
-    <td colspan="2" align="center">
-      <a href="https://gavrd7.github.io/MakerVault-docs/">Explore the MakerVault administration and HTTPS documentation</a>
-      <br><strong>Self-hosting without hiding the hard parts</strong><br>
-      Native HTTPS, Local CA guidance, backups, recovery and security settings are built into the application.
-    </td>
-  </tr>
-</table>
-
-> The screenshots above come from the public, sanitised MakerVault user guide. See the [published guide](https://gavrd7.github.io/MakerVault-docs/) for walkthroughs and more screenshots, or visit the [documentation repository](https://github.com/gavrd7/MakerVault-docs) to contribute guide improvements.
-
-## What you can do
-
-| Workspace | Current capabilities |
+| Area | What MakerVault offers |
 | --- | --- |
-| Catalogues | Boards, generic components, printers and filament products; technical specifications, images, provenance, matching and scheduled enrichment |
-| Inventory | Physical stock, generated IDs, quantities, locations, condition, purchase information, lifecycle history and available/allocated quantities |
-| Projects and BOMs | Build notes, images, files, repository links, cost rollups and quantity-aware allocation from owned stock |
-| Files | Standalone or project-linked assets, immutable version history, authenticated downloads and encrypted private uploads |
-| Search | Universal search with filters and navigation to matching records |
-| MakerTags | QR, NFC and RFID identities, printable QR labels, record resolution and reassignment history |
-| Interactive Wiring | Project or standalone diagrams with catalogue-aware pins, editable connections, basic electrical checks and JSON/SVG export |
-| Models | STL/3MF viewing, thumbnails, revisions, local geometry and mesh analysis, printer-fit checks, orientation guidance and supported slicer metadata |
-| 3D Printing | Owned printers, physical spools, multi-material slots, print history, material/cost analytics and optional live integrations |
-| Printed parts | Explicitly retained physical part batches, project/location/state tracking, replacements and MakerTags |
+| **Inventory and catalogues** | Electronic boards and components, searchable reference specifications and images, physical item IDs, quantities, locations, condition and provenance-aware catalogue enrichment |
+| **Projects and bills of materials** | Project workspaces, notes, files, build information, BOMs, quantity-aware stock allocation and cost tracking |
+| **Wiring Lab** | Interactive wiring diagrams, catalogue-aware pin selection, basic electrical checks and JSON/SVG export |
+| **Files and 3D models** | Private files with version history, STL/3MF viewing and analysis, model revisions, printer-fit and orientation assistance |
+| **3D printers and materials** | Printer inventory, filament products, physical spools, reusable spool hardware, printed parts, print history and material/cost reporting |
+| **Live integrations** | Optional local printer monitoring and compatible camera feeds, plus supported printer controls and Spoolman integration where configured |
+| **MakerTags** | Printable QR labels, stable `MV-XXXXXXXX` identities, RFID/NFC UID association, reassignment history and verified NTAG215 URLs |
+| **Connected Devices** | Certificate-verified HTTPS pairing, device permissions and heartbeats; with **MakerVault Terminal v0.8**, browse records and create MakerTags directly on the handheld |
+| **Search and administration** | Universal search, role-based access, optional OIDC/MFA, account quotas, backups, guarded restore and catalogue-maintenance tools |
 
-Catalogue definitions describe a product; inventory records describe the physical items you own. Personal workspaces are owner-scoped while reference catalogues are shared. Projects are not shared team folders.
+**Compatibility notes:** Printer support and available controls vary by manufacturer, firmware and connection method. Some adapters are monitoring-only or have limited real-hardware validation; see the [user guide](https://gavrd7.github.io/MakerVault-docs/) and [hardware-validation issue](https://github.com/gavrd7/MakerVault/issues/37). MakerVault does not automatically deduct physical spool stock from every estimated print.
 
-The interface works on desktop, tablet and mobile. Local accounts, MFA, optional OpenID Connect, role-based permissions and administrator storage quotas are included.
+### Where the pieces connect
 
-## Live printers and cameras
+An inventory item can be allocated to a project BOM. A model and its revisions can be associated with a build; a recorded print can produce a tracked physical part. A MakerTag on a box, spool or printed object can bring you back to its current record. These links make the system more useful than isolated inventory or printer dashboards.
 
-MakerVault works without a cloud printer account. Direct monitoring, filament synchronisation and camera configuration are separate features.
+## Get started
 
-| Connection | Implemented capability and validation boundary |
-| --- | --- |
-| Creality local | Printer/job telemetry and compatible CFS context. K1 and K2 connection/monitoring have been owner-tested. |
-| Moonraker / Klipper | Printer/job telemetry, standard numbered extruders and active-tool reporting. K1 monitoring has been owner-tested. |
-| OctoPrint | Local printer/job monitoring; representative hardware validation remains open. |
-| Bambu Lab local | Experimental monitoring and AMS/AMS Lite observations; hardware validation pending. |
-| PrusaLink | Experimental local printer/job monitoring; hardware validation pending. |
-| Anycubic LAN | Experimental Kobra 3/S1-generation monitoring and ACE observations; hardware validation pending. |
-| FlashForge local | Experimental compatible local API monitoring and material-station observations; hardware validation pending. |
-| Elegoo, QIDI, Sovol, Snapmaker U1 and Voron | Moonraker-based profiles for compatible firmware, not blanket support for every model from those manufacturers. |
-| Spoolman / SimplyPrint | Optional inventory synchronisation or read-only service imports; SimplyPrint requires suitable account/API access. |
+MakerVault runs as a Docker Compose stack with the application, PostgreSQL and Redis. The normal installation pulls a prebuilt image from **GHCR**, so you do not need to compile the application yourself. Start with the complete [Linux installation guide](docs/guide/getting-started/install.md) or [Windows / Docker Desktop / WSL2 guide](docs/guide/getting-started/windows.md).
 
-Pause, Resume and confirmed Cancel are available as **per-source opt-in controls** for Creality, Moonraker and OctoPrint. Monitoring success does not validate controls; hardware checks remain separate. Start print, motion, heating and raw G-code control are outside this implementation.
-
-Configured cameras appear automatically on visible dashboard and printer cards. The last configured camera is the default; the compact viewer provides fullscreen access, while setup stays in a separate dialog. Hidden/off-screen feeds pause. **K1 and K2 playback and the compact layout have been owner-confirmed.**
-
-HTTP snapshot/MJPEG sources provide refreshed images at approximately one frame per second. Creality K2 WebRTC is ingested by MakerVault's loopback-only go2rtc helper and exposed to signed-in users as same-origin HLS/fMP4, so no dedicated camera media port or direct browser-to-printer route is required. Discovery supports Moonraker, OctoPrint, applicable PrusaLink APIs and recognised manufacturer HTTP URLs. Native Bambu camera transport, cloud camera access, generic user-configurable RTSP/HLS relaying and separate camera hosts are not implemented.
-
-[Camera setup and limitations](docs/guide/integrations/printer-cameras.md) · [Printer controls](docs/guide/integrations/printer-controls.md) · [Hardware validation](docs/guide/integrations/printer-adapter-validation.md) · [Outstanding tests](https://github.com/gavrd7/MakerVault/issues/37)
-
-## Filament catalogue, accounting and printed parts
-
-MakerVault's filament catalogue is a merged reference layer rather than a copy of one upstream service. SpoolmanDB remains the primary public catalogue, with verified manufacturer-backed supplemental entries and technical data used to fill genuine coverage gaps. Saved filament products can be **matched, rematched or unmatched** from the catalogue; user-entered values remain authoritative, and newer matches keep a pre-match snapshot so an unmatch can restore the previous state. Spool Inventory shows **✓ Matched** or **Unmatched** at a glance for the shared filament product behind each physical spool.
-
-Catalogue matching is optional. An unmatched filament remains a normal usable MakerVault record, and MakerVault does not invent a match merely to remove the badge.
-
-Print history and filament accounting do not require saving a model or retaining a printed part. **Part creation is explicit and is never automatic by default.**
-
-MakerVault can use supported plain-G-code gram metadata and Moonraker extrusion/metadata estimates. Estimates retain their source; manual usage rows take precedence. Missing measurements remain **Not recorded**, rather than being invented from print duration or CFS percentages. Whole-file estimates count only after successful completion.
-
-Recorded material rows can estimate cost from spool purchase data, with manual overrides and separate currency totals. Automatic job estimates do **not** deduct physical-spool inventory or invent per-spool allocation, purge/waste amounts or material cost.
-
-[Print history and usage](docs/guide/using/print-history.md) · [Printed parts](docs/guide/using/printed-parts.md)
-
-## Install
-
-MakerVault uses Docker Compose and the pre-built MakerVault image from **GitHub Container Registry (GHCR)**. A dedicated Linux host remains the preferred always-on server deployment, but Windows users can also install MakerVault with **Docker Desktop**, **Docker Desktop + WSL2 integration**, or **Docker Engine directly inside WSL2**.
-
-[Linux installation](docs/guide/getting-started/install.md) · [Windows / Docker Desktop / WSL2 installation](docs/guide/getting-started/windows.md)
-
-The step-by-step guides assume no previous MakerVault experience and explain the host-specific differences.
+For a new Linux installation:
 
 ```bash
 git clone https://github.com/gavrd7/MakerVault.git
 cd MakerVault
 python3 scripts/generate_env_secrets.py
-```
-
-The default Compose file pulls:
-
-```text
-ghcr.io/gavrd7/makervault:latest
-```
-
-No application compilation is required on the server for the normal install.
-
-For a **new installation**, edit `.env` before starting:
-
-- The setup script generates independent `DJANGO_SECRET_KEY` and `POSTGRES_PASSWORD` values automatically, retaining existing values if run again.
-- Add your server hostname/IP to `DJANGO_ALLOWED_HOSTS` and its full URL to `DJANGO_CSRF_TRUSTED_ORIGINS`.
-- Select timezone, currency and persistent storage locations.
-- For direct LAN access, use `TRUST_PROXY_HEADERS=false` and `ALLAUTH_TRUSTED_PROXY_COUNT=0`.
-- Keep local registration disabled unless you deliberately need it.
-
-```bash
+# Review .env: allowed hosts, trusted origins, storage, timezone and currency
 sudo docker compose config --quiet
 sudo docker compose pull
 sudo docker compose up -d
 sudo docker compose ps
 ```
 
-On a new installation, open MakerVault in your browser to use the first-run administrator wizard. Retrieve its short-lived setup token from the server:
+The supplied Compose configuration normally uses `ghcr.io/gavrd7/makervault:latest`. For first-time setup, open the server's configured address (default `http://SERVER-IP:8765`) and follow the administrator wizard. Retrieve the one-time setup token with:
 
 ```bash
 sudo docker compose exec -u makervault makervault python manage.py first_run_token
 ```
 
-Enter the token in the browser setup screen, create your administrator account, then sign in. See [First sign-in](docs/guide/getting-started/first-sign-in.md) for recovery and alternative setup methods.
+Follow the [first sign-in guide](docs/guide/getting-started/first-sign-in.md) for the full process. **Configure and protect HTTPS** before connecting hardware, especially with a private CA. [Connected Devices guide](docs/guide/using/connected-devices.md)
 
-Open `http://SERVER-IP:8765`. The host port is configurable through `MAKERVAULT_PORT`; the container listens on port 8000. There is no universal default login.
+For existing installations, **back up first**, then update your checkout and Compose images as documented in the [installation guide](docs/guide/getting-started/install.md) and [backup guide](docs/guide/administration/backup.md). A version rollback may require restoring data, not simply changing the image tag.
 
-**Existing installation?** Preserve your current `.env`, secrets and storage. Follow the [update guide](docs/guide/administration/updates.md), not the new-install steps.
+## Roadmap
 
-[Windows / Docker Desktop / WSL2](docs/guide/getting-started/windows.md) · [Environment settings](docs/guide/getting-started/environment.md) · [Storage choices](docs/guide/getting-started/storage.md) · [HTTPS/reverse proxy](docs/guide/advanced/reverse-proxy.md) · [OIDC](docs/guide/advanced/oidc.md)
+A concise view of what's delivered and where MakerVault may go next. Checkmarks refer to implemented functionality, **not** universal compatibility with every printer or hardware model. The [detailed roadmap](docs/ROADMAP.md), [issues](https://github.com/gavrd7/MakerVault/issues) and [changelog](CHANGELOG.md) provide scope, validation notes and release history.
 
-## Deployment and data
+### Available
 
-The default Compose stack has three persistent containers:
+- [x] Self-hosted Docker deployment, first-run setup, account security and managed backup/restore
+- [x] Electronic component/board catalogues, physical inventory and storage locations
+- [x] Projects, BOMs, stock allocation, files and version history
+- [x] Interactive Wiring Lab and searchable workshop records
+- [x] 3D model library, STL/3MF previews, analysis and print history
+- [x] Filament products, physical/reusable spools, printed parts and cost tracking
+- [x] Optional live printer integrations, monitoring, cameras and supported controls
+- [x] MakerTags with QR, RFID/NFC association and verified NTAG215 URL writing
+- [x] Connected Devices pairing and terminal-first MakerTag creation (Terminal v0.8)
 
-- **makervault:** Django/Gunicorn, the compiled React frontend and Celery worker/beat.
-- **postgres:** PostgreSQL application data.
-- **redis:** queue/cache and background-work state.
+### Planned / under evaluation
 
+- [ ] **G-code Library and explicit print submission:** organise and preview uploaded G-code and send supported jobs to compatible printers with explicit user control ([issue #155](https://github.com/gavrd7/MakerVault/issues/155))
+- [ ] **Self-hosted multi-engine FDM slicing:** optional local slicing service and one MakerVault UI, subject to engine, CLI and licence evaluation
+- [ ] **MakerVault Weigh Station:** connected scale/RFID hardware with a removable printable platform (hardware development)
+- [ ] **Read-only CFS material-tag decoding** on the MakerVault Terminal and inventory matching; **not** CFS rewriting or automatic printer database sync
+- [ ] Expanded real-hardware validation and compatibility for printer/camera adapters ([issue #37](https://github.com/gavrd7/MakerVault/issues/37))
+- [ ] User-selectable appearance themes and palettes ([issue #124](https://github.com/gavrd7/MakerVault/issues/124))
 
-PostgreSQL and Redis do not publish host ports by default. MakerVault serves HTTP on the configured app port and can optionally expose a separate native HTTPS listener (default 8443) with a supplied or MakerVault-managed self-signed certificate; reverse-proxy HTTPS remains the recommended domain/public deployment. Managed backup creation runs inside the existing MakerVault worker; restore uses guarded one-off commands from the same MakerVault image. Application code is built into the image. Named volumes and absolute-path bind mounts are supported for media, encryption keys, PostgreSQL, Redis, managed backups and optional native-TLS identity.
+These are roadmap intentions, not promises for the next release.
 
-Private uploaded files use authenticated AES-256-GCM encryption at rest with opaque object names. The default key is stored separately from media. This does not mean the database, deployment configuration or every secret is encrypted by the private-file storage feature.
+## Project and documentation
 
-**Back up the database, media, matching encryption key and deployment configuration together.** Media without its key cannot recover encrypted uploads. Superusers can create, verify, download and manage a single recovery bundle from **Settings → Backup & restore**. A guarded restore helper handles same-server recovery and downloaded bundles on a replacement host without giving the web process Docker control. Synthetic recovery is exercised in CI, and a representative real-installation backup was restored successfully on a separate clean host during the v1.0 release rehearsal.
+- **[MakerVault User Guide](https://gavrd7.github.io/MakerVault-docs/)** ([source](https://github.com/gavrd7/MakerVault-docs)) — installation, daily use, administration and troubleshooting.
+- **[MakerVault-Hardware](https://github.com/gavrd7/MakerVault-Hardware)** — terminal firmware, 3D-printable enclosure, wiring and future connected hardware.
+- **[Changelog](CHANGELOG.md)** — release-by-release features and fixes.
+- **[Detailed roadmap](docs/ROADMAP.md)** — delivered milestones, implementation constraints and outstanding validation.
+- **[Contributing](CONTRIBUTING.md)** · **[Security](SECURITY.md)** — project contribution and vulnerability guidance.
 
-[Backup and recovery](docs/guide/administration/backup.md) · [Accounts and quotas](docs/guide/administration/accounts.md)
+**Development approach:** MakerVault is an AI-coded project developed under human direction. The maintainer owns product decisions and physical acceptance testing; automated checks and AI-generated code are not substitutes for real-world validation.
 
-## Update an existing deployment
+**Data and security:** Database, media, encryption keys and configuration require coordinated backups. Private-file encryption does not encrypt the entire database or every secret. Do not expose a development environment, untrusted printer integration or provisioning portal directly to the internet.
 
-Back up first, then run these commands from your MakerVault checkout:
-
-```bash
-git fetch --prune origin
-git switch main
-git pull --ff-only origin main
-sudo docker compose pull
-sudo docker compose up -d
-sudo docker compose ps
-```
-
-The default image is `ghcr.io/gavrd7/makervault:latest`. You can pin a release without editing Compose by setting `MAKERVAULT_IMAGE=ghcr.io/gavrd7/makervault:1.1.0` in `.env`.
-
-Prefer to build the application yourself? The repository retains the Dockerfile and provides `compose.build.yaml`:
-
-```bash
-sudo docker compose -f compose.yaml -f compose.build.yaml up -d --build
-```
-
-That source-build path uses the same database, Redis, media, key and backup storage as the pre-built image path.
-
-Startup applies migrations and idempotent setup tasks. Read the changelog and update guide before changing versions. A database migration is not guaranteed to be reversible by simply switching to an older image.
-
-Install MakerVault wherever you keep self-hosted application source, for example `~/apps/MakerVault` or `/srv/makervault/app`. Persistent data should use the storage locations configured in `.env`.
-
-## Reference data and background work
-
-Administrator settings provide scheduled catalogue maintenance and manual refresh, plus separate integration synchronisation controls. Board/component data, OrcaSlicer printer profiles and the merged MakerVault filament catalogue carry provenance and may have incomplete fields. Filament enrichment can combine SpoolmanDB, verified supplemental manufacturer records and authoritative product/TDS data while preserving manual corrections. Missing values or an **Unmatched** filament are not proof that the record is unusable.
-
-Catalogue media can be locally cached or retained as external references where redistribution is inappropriate. Third-party images keep their original source, licence and attribution; they are not relicensed as MakerVault software.
-
-[Catalogue guide](docs/guide/using/catalogue.md) · [Maintenance](docs/guide/administration/catalogue-updates.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
-
-## Project status and development
-
-**v1.2.1** is the current stable MakerVault release. It retains browser-based first-run administrator setup, consolidated account/security management, role-based access controls, safe environment secret generation, and faster access to the web interface while catalogue seeding and OrcaSlicer enrichment continue in the background. The v1.0.4 project priorities and deadline improvements remain included. Experimental printer hardware remains subject to its documented validation boundaries.
-
-Pull-request CI checks backend tests, frontend tests/build, migrations, dependency/static security and the production Docker image. The guide has its own strict build/link checks. CI passing does not substitute for hardware, deployment or restore testing.
-
-[Roadmap and release gates](docs/ROADMAP.md) · [Git workflow](docs/GIT_WORKFLOW.md) · [Guide maintenance](docs/GUIDE_MAINTENANCE.md)
-
-## Licence
-
-MakerVault software is **AGPL-3.0-or-later**. See [LICENSE](LICENSE). Third-party media retains its own licence and attribution, also available in the application's About page.
-
-## New in v1.4.6 — terminal-initiated MakerTag creation (firmware v0.8)
-
-With MakerVault v1.4.6 and [MakerVault Terminal firmware v0.8](https://github.com/gavrd7/MakerVault-Hardware), you can create and assign MakerTags **directly on the handheld**, without starting the operation in a browser. Navigate **Home → MakerTags → Add MakerTag**, choose a record type and browse server-side alphabetic pages. Supported categories are **Inventory, Location, Printed Part, Printer, Project, Reusable Spool and Spool**. Entries include their MakerVault record IDs; hold the encoder to open the A–Z jump selector for long lists.
-
-Pair the terminal via **Settings → User Account → Connected Devices** with verified HTTPS and the required **inventory:read** and **tags:write** scopes; the account also needs permissions to view the selected record and create/change MakerTags. Present the intended tag and confirm its assignment. A supported, writable **NTAG215** can receive the permanent `/t/MV-XXXXXXXX/` NFC link following physical verification. If the tag already carries a valid unrelated HTTP(S) NFC URL, its replacement requires an **additional explicit on-device confirmation**; **Back** preserves the original link. Unrecognised NDEF, locked/protected tags, UID substitutions, expired grants and cancelled writes must not be overwritten. Incomplete NFC writes can be retried without allocating a new MakerTag identity.
-
-**Scope:** Generic MIFARE Classic/Creality CFS tags can be associated by UID but **CFS material decoding, CFS payload writing and automatic printer database synchronisation are not part of v0.8**. See the [MakerTags user guide](https://gavrd7.github.io/MakerVault-docs/using/maker-tags/) and [Terminal firmware acceptance notes](https://github.com/gavrd7/MakerVault-Hardware/blob/main/docs/terminal-v0.8-browser-acceptance.md). This workflow is included in the MakerVault v1.4.6 release source and supported by firmware v0.8.
+**Licence:** MakerVault-authored code is licensed under the [GNU Affero General Public License v3](LICENSE); third-party content retains its own licensing and attribution.
