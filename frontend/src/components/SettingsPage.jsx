@@ -644,47 +644,40 @@ function IntegrationReviewRow({ review, spools, filaments, busy, onResolve }) {
     const material = String(filament.material || "").trim();
     let name = String(filament.name || "").trim();
     const colour = String(filament.color_name || "").trim();
-    const cleanSuffix = value => {
-      if (!value || !name.toLocaleLowerCase().endsWith(value.toLocaleLowerCase())) return;
-      const head = name.slice(0, -value.length);
-      if (/[-–—\\s]$/.test(head)) name = head.replace(/[-–—\\s]+$/, "").trim();
-    };
-    cleanSuffix(colour);
-    // 3D-Fuel's upstream colour records often use only the shade as the
-    // product title. They all belong to the same PLA+ family.
-    if (/^3d[- ]fuel$/i.test(maker) && /^pla\\+?$/i.test(material))
-      name = material;
+    if (colour && name.toLowerCase().endsWith(colour.toLowerCase()))
+      name = name.slice(0, -colour.length).replace(/[-–—\s]+$/, "").trim();
+    // Sources sometimes name a colour as the entire product title.
+    // For these records the material is the product family.
+    if (/^3d[- ]fuel$/i.test(maker) && /^pla\+?$/i.test(material)) name = material;
     return [maker, name || material, ...(name && name.toLowerCase() !== material.toLowerCase() ? [material] : [])].join(" · ");
   };
   const families = [...new Set(filaments.map(familyName))].sort((a,b) => a.localeCompare(b));
-  const variants = filaments.filter(f => familyName(f) === familyChoice);
   const remoteHex = String(review.remote?.color_hex || "").replace(/^#/, "").toLowerCase();
-  const colorDistance = hex => {
-    const clean = String(hex || "").replace(/^#/, "").toLowerCase();
-    if (!/^[0-9a-f]{6}$/.test(clean) || !/^[0-9a-f]{6}$/.test(remoteHex)) return Infinity;
-    return [0, 2, 4].reduce((total, i) => {
-      const d = parseInt(clean.slice(i, i + 2), 16) - parseInt(remoteHex.slice(i, i + 2), 16);
-      return total + d * d;
-    }, 0);
+  const variants = filaments.filter(f => familyName(f) === familyChoice);
+  const hexDistance = hex => {
+    const value = String(hex || "").replace(/^#/, "").toLowerCase();
+    if (!/^[0-9a-f]{6}$/.test(value) || !/^[0-9a-f]{6}$/.test(remoteHex)) return Infinity;
+    return [0,2,4].reduce((sum,i) => {
+      const d = parseInt(value.slice(i,i+2),16) - parseInt(remoteHex.slice(i,i+2),16);
+      return sum + d*d;
+    },0);
   };
-  const rankedVariants = [...variants].sort((a, b) =>
-    colorDistance(a.color_hex) - colorDistance(b.color_hex) ||
-    String(a.color_name || a.name || "").localeCompare(String(b.color_name || b.name || ""))
-  );
-  const matching = rankedVariants.filter(f => colorDistance(f.color_hex) === 0);
-  const nearest = rankedVariants.find(f => Number.isFinite(colorDistance(f.color_hex)));
+  const rankedVariants = [...variants].sort((a,b) => hexDistance(a.color_hex)-hexDistance(b.color_hex));
+  const uniqueVariants = rankedVariants.filter((f,i,all) => all.findIndex(other =>
+    String(other.color_hex || "").toLowerCase() === String(f.color_hex || "").toLowerCase() &&
+    String(other.color_name || "").toLowerCase() === String(f.color_name || "").toLowerCase()
+  ) === i);
+  const matching = uniqueVariants.filter(f => hexDistance(f.color_hex) === 0);
+  const nearest = uniqueVariants.find(f => Number.isFinite(hexDistance(f.color_hex)));
   const colorLabel = f => {
-    const explicit = String(f.color_name || "").trim();
-    if (explicit) return explicit;
+    if (String(f.color_name || "").trim()) return f.color_name;
     const name = String(f.name || "").trim();
-    const family = familyName(f).split(" · ")[1];
-    if (name && name !== family) {
-      const remainder = name.toLowerCase().startsWith(family.toLowerCase())
-        ? name.slice(family.length).replace(/^[-–—\\s]+/, "").trim() : name;
-      if (remainder) return remainder;
-      if (/^3d[- ]fuel$/i.test(f.manufacturer || "")) return name;
-    }
-    return f.color_hex || "Colour not named";
+    const familyProduct = familyName(f).split(" · ")[1] || "";
+    if (name.toLowerCase().startsWith(familyProduct.toLowerCase())) {
+      const suffix = name.slice(familyProduct.length).replace(/^[-–—\s]+/, "").trim();
+      if (suffix) return suffix;
+    } else if (name && name.toLowerCase() !== familyProduct.toLowerCase()) return name;
+    return "Colour " + (f.color_hex || "not specified");
   };
   const [spoolChoice, setSpoolChoice] = useState(review.spool_candidates?.[0]?.id || "");
   const remote = review.remote || {};
@@ -723,7 +716,7 @@ function IntegrationReviewRow({ review, spools, filaments, busy, onResolve }) {
       </select></label>
       {familyChoice && familyChoice !== "__detected__" && <label>Colour / variant<select value={filamentChoice} onChange={e => {setFilamentChoice(e.target.value);setConfirmed(false);}}>
         <option value="">{matching.length ? "Matching colour available — choose…" : "Choose exact colour…"}</option>
-        {rankedVariants.map(f => <option key={f.id} value={f.id}>{colorLabel(f)} · {f.color_hex || "No hex"}{matching.some(m => m.id === f.id) ? " · Exact hex" : (nearest?.id === f.id ? " · Closest hex (verify)" : "")}</option>)}
+        {uniqueVariants.map(f => <option key={f.id} value={f.id}>{colorLabel(f)} · {f.color_hex || "No hex"}{matching.some(m => m.id === f.id) ? " · Exact hex" : (nearest?.id === f.id ? " · Closest hex (verify)" : "")}</option>)}
       </select></label>}
       {familyChoice === "__detected__" && <>
         <label>Filament name override<input value={customName} maxLength={255} onChange={e => { setCustomName(e.target.value); setConfirmed(false); }} /></label>
