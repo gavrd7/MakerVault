@@ -383,6 +383,23 @@ def seed_starter_filament_catalogue(*, limit=STARTER_FILAMENT_LIMIT):
 
 
 
+def filament_variant_key(manufacturer, name, material, color_hex, color_name=""):
+    """Conservative identity for imported variants, independent of upstream IDs.
+
+    A known hex colour distinguishes variants. A named colour is retained when
+    no hex is available, so genuinely different colours are not combined.
+    """
+    import re
+    def clean(value):
+        return re.sub(r"[^a-z0-9]+", "", str(value or "").casefold())
+    title = str(name or "").strip()
+    colour = str(color_name or "").strip()
+    if colour and title.casefold().endswith(colour.casefold()):
+        title = title[:-len(colour)].rstrip(" -–—")
+    return (clean(manufacturer), clean(title), clean(material),
+            clean(color_hex) or clean(colour))
+
+
 def populate_missing_filament_variants(*, limit=150):
     """Incrementally add missing colour variants from the sourced catalogue.
 
@@ -409,8 +426,30 @@ def populate_missing_filament_variants(*, limit=150):
         row.get("manufacturer") and
         (str(row.get("source_type") or "spoolmandb"), str(row["external_id"])) not in known
     ]
+    # Prevent duplicate material/colour rows even when upstream IDs differ.
+    # Do not delete or rewrite existing records, which may be referenced by spools.
+    existing_variants = set(
+        filament_variant_key(
+            item.filament_manufacturer.name if item.filament_manufacturer_id
+            else item.manufacturer.name if item.manufacturer_id else "",
+            item.name, item.material, item.color_hex, item.color_name
+        )
+        for item in FilamentProduct.objects.select_related(
+            "filament_manufacturer", "manufacturer"
+        ).all().iterator()
+    )
     created = 0
-    for row in missing[:limit]:
+    skipped_duplicates = 0
+    for row in missing:
+        key = filament_variant_key(
+            row["manufacturer"], row["name"], row["material"],
+            row.get("color_hex"), row.get("color_name")
+        )
+        if key in existing_variants:
+            skipped_duplicates += 1
+            continue
+        if created >= limit:
+            break
         external_id = str(row["external_id"])
         source_type = str(row.get("source_type") or "spoolmandb")[:32]
         with transaction.atomic():
@@ -439,8 +478,10 @@ def populate_missing_filament_variants(*, limit=150):
                 },
             )
             created += 1
-    return {"status": "limit-reached" if len(missing) > limit else "complete",
-            "created": created, "pending_before": len(missing)}
+            existing_variants.add(key)
+    return {"status": "limit-reached" if created >= limit and len(missing) > created + skipped_duplicates else "complete",
+            "created": created, "skipped_duplicates": skipped_duplicates,
+            "pending_before": len(missing)}
 
 
 
