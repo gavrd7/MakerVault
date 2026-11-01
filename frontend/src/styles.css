@@ -3136,3 +3136,8 @@ a:focus-visible,
 .httpsGuideSteps { padding-left: 1.5rem; line-height: 1.65; }
 .httpsGuideSteps li { margin-bottom: .8rem; }
 .httpsGuideCaution { font-size: .9rem; opacity: .85; border-top: 1px solid var(--border, #455161); padding-top: 1rem; }
+
+/* Filament detail colour preview: contained, centered and never clipped by the hero border. */
+.filamentCatalogueHero:has(.filamentNoImage){height:auto;min-height:155px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.filamentCatalogueHero .filamentNoImage{min-height:155px;box-sizing:border-box;padding:20px;width:100%;height:auto}
+.filamentCatalogueHero .filamentNoImage .printingSwatch{display:block;flex:none;width:72px;height:72px;min-width:72px;min-height:72px;max-width:72px;max-height:72px;box-sizing:border-box;margin:0 auto;border-radius:16px}
