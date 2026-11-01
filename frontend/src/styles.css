@@ -3141,3 +3141,15 @@ a:focus-visible,
 .filamentCatalogueHero:has(.filamentNoImage){height:auto;min-height:155px;display:flex;align-items:center;justify-content:center;overflow:hidden}
 .filamentCatalogueHero .filamentNoImage{min-height:155px;box-sizing:border-box;padding:20px;width:100%;height:auto}
 .filamentCatalogueHero .filamentNoImage .printingSwatch{display:block;flex:none;width:72px;height:72px;min-width:72px;min-height:72px;max-width:72px;max-height:72px;box-sizing:border-box;margin:0 auto;border-radius:16px}
+
+/* Filament catalogue: readable toolbar controls and compact expanded variants. */
+.printingLibraryToolbar { display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px; }
+.printingLibraryToolbar > div:first-child { min-width:180px; }
+.printingLibraryToolbar > input { flex:1 1 250px; min-width:180px; }
+.printingLibraryToolbar > label { display:flex; flex-direction:column; gap:7px; min-width:112px; font-size:12px; }
+.printingLibraryToolbar > label select { min-height:36px; }
+.printingLibraryToolbar > .filamentPageSize { min-width:90px; }
+.filamentGroupedVariants { display:grid; gap:8px; margin-top:12px; max-height:380px; overflow:auto; }
+.filamentGroupedVariant { display:flex; align-items:center; gap:12px; min-height:34px; }
+.filamentGroupedVariant > span:nth-child(2) { flex:1; }
+.filamentGroupedVariant .printingSwatch { flex:none; }
