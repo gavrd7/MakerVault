@@ -45,6 +45,17 @@ class FilamentCatalogueTests(TestCase):
         )
         self.client.force_login(self.user)
 
+    def test_lightweight_printing_overview_skips_filament_serialisation(self):
+        FilamentProduct.objects.create(name="Integration sample", material="PLA",
+                                       color_name="Blue", color_hex="#2255AA")
+        full = self.client.get("/api/printing/")
+        self.assertEqual(full.status_code, 200)
+        self.assertTrue(full.json()["filaments"])
+        light = self.client.get("/api/printing/?include_filaments=0")
+        self.assertEqual(light.status_code, 200)
+        self.assertEqual(light.json()["filaments"], [])
+        self.assertGreaterEqual(light.json()["summary"]["filaments"], 1)
+
     def sample_catalogue_item(self):
         return {
             "external_id": "example_pla_rainbow_1000_175_p",
