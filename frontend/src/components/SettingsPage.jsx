@@ -646,6 +646,10 @@ function IntegrationReviewRow({ review, spools, filaments, busy, onResolve }) {
     const colour = String(filament.color_name || "").trim();
     if (colour && name.toLowerCase().endsWith(colour.toLowerCase()))
       name = name.slice(0, -colour.length).replace(/[-–—\s]+$/, "").trim();
+    // Some catalogues encode a shade in the name but leave color_name empty.
+    // An explicit spaced dash is a reliable delimiter (unlike PETG-CF).
+    const shadeSuffix = !colour && name.match(/\\s+[-–—]\\s+([^-–—]+)$/);
+    if (shadeSuffix) name = name.slice(0, -shadeSuffix[0].length).trim();
     // Sources sometimes name a colour as the entire product title.
     // For these records the material is the product family.
     if (/^3d[- ]fuel$/i.test(maker) && /^pla\+?$/i.test(material)) name = material;
