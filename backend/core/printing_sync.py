@@ -202,6 +202,11 @@ def _spoolman_filament_score(snapshot: dict, filament: FilamentProduct) -> int:
 
     remote_color = str(snapshot.get("color_hex") or "").casefold()
     local_color = str(filament.color_hex or "").casefold()
+    # Colour is an identity constraint, not merely a minor scoring bonus.
+    # A pink remote spool must never auto-link to an otherwise identical
+    # yellow product because no other catalogue variant exists yet.
+    if remote_color and local_color and remote_color != local_color:
+        return 0
     if remote_color and local_color and remote_color == local_color:
         score += 15
 
