@@ -3,10 +3,12 @@ import json
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.test import RequestFactory, TestCase
+from django.test import RequestFactory, TestCase, override_settings
 
 from core.device_cfs_lookup import spool_by_rfid
-from core.models import FilamentProduct, Spool
+from core.models import FilamentProduct, Spool, UserApiKey
+from core.device_api_keys import generate_token
+from django.contrib.auth.models import Permission
 
 
 class ReadOnlyCfsLookupTests(TestCase):
@@ -73,3 +75,38 @@ class ReadOnlyCfsLookupTests(TestCase):
     def test_permission_denial(self):
         status, _ = self.query({"uid": "04AABBCC"}, permission=False)
         self.assertEqual(status, 403)
+
+
+@override_settings(DEBUG=True)
+class ReadOnlyCfsBearerTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.owner = User.objects.create_user(username="cfs-bearer-owner")
+        self.owner.user_permissions.add(Permission.objects.get(
+            content_type__app_label="core", codename="view_spool"
+        ))
+        generated = generate_token()
+        self.token = generated.plaintext
+        self.key = UserApiKey.objects.create(
+            owner=self.owner, name="CFS terminal",
+            identifier=generated.identifier, secret_digest=generated.digest,
+            scopes=["inventory:read"],
+        )
+
+    def lookup(self, token=None):
+        return self.client.get(
+            "/api/device/v1/spools/by-rfid/?uid=04AABBCC",
+            HTTP_AUTHORIZATION="Bearer " + (token or self.token),
+        )
+
+    def test_inventory_scope_required_and_session_cookie_is_not_a_bearer(self):
+        self.assertEqual(self.lookup().status_code, 200)
+        self.key.scopes = ["tags:read"]
+        self.key.save(update_fields=["scopes"])
+        self.assertEqual(self.lookup().status_code, 403)
+        self.key.scopes = ["inventory:read"]
+        self.key.save(update_fields=["scopes"])
+        self.owner.user_permissions.clear()
+        self.assertEqual(self.lookup().status_code, 403)
+        self.client.force_login(self.owner)
+        self.assertEqual(self.client.get("/api/device/v1/spools/by-rfid/?uid=04AABBCC").status_code, 401)
