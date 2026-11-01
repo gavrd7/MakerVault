@@ -44,6 +44,20 @@ class FilamentVariantPopulationTests(TestCase):
         self.assertEqual(FilamentProduct.objects.count(), 2)
 
     @patch("core.filament_catalogue.get_filament_catalogue")
+    def test_different_source_ids_same_variant_do_not_make_duplicates(self, upstream):
+        upstream.return_value = [
+            sample("sunlu-yellow-source-1", "Yellow"),
+            sample("sunlu-yellow-source-2", "Yellow"),
+            sample("sunlu-pink-source-1", "Pink"),
+        ]
+        result = populate_missing_filament_variants(limit=20)
+        self.assertEqual(result["created"], 2)
+        self.assertEqual(result["skipped_duplicates"], 1)
+        self.assertEqual(FilamentProduct.objects.count(), 2)
+        result = populate_missing_filament_variants(limit=20)
+        self.assertEqual(result["created"], 0)
+
+    @patch("core.filament_catalogue.get_filament_catalogue")
     def test_does_not_overwrite_manual_product_changes(self, upstream):
         upstream.return_value = [sample("sunlu-petg-yellow", "Yellow")]
         populate_missing_filament_variants()
