@@ -682,7 +682,7 @@ function IntegrationReviewRow({ review, spools, filaments, busy, onResolve }) {
       const suffix = name.slice(familyProduct.length).replace(/^[-–—\s]+/, "").trim();
       if (suffix) return suffix;
     } else if (name && name.toLowerCase() !== familyProduct.toLowerCase()) return name;
-    return "Colour " + (f.color_hex || "not specified");
+    return "";
   };
   const [spoolChoice, setSpoolChoice] = useState(review.spool_candidates?.[0]?.id || "");
   const remote = review.remote || {};
@@ -724,14 +724,14 @@ function IntegrationReviewRow({ review, spools, filaments, busy, onResolve }) {
         <button type="button" className="integrationVariantTrigger" onClick={() => setVariantPickerOpen(v => !v)} aria-expanded={variantPickerOpen}>
           {filamentChoice ? <>
             <span className="printingSwatch" style={{backgroundColor:uniqueVariants.find(v=>String(v.id)===String(filamentChoice))?.color_hex || "#777"}} aria-hidden="true"/>
-            <span>{colorLabel(uniqueVariants.find(v=>String(v.id)===String(filamentChoice)) || {})} · {uniqueVariants.find(v=>String(v.id)===String(filamentChoice))?.color_hex || "No hex"}</span>
+            <span>{colorLabel(uniqueVariants.find(v=>String(v.id)===String(filamentChoice)) || {}) ? colorLabel(uniqueVariants.find(v=>String(v.id)===String(filamentChoice)) || {}) + " · " : ""}{uniqueVariants.find(v=>String(v.id)===String(filamentChoice))?.color_hex || "No hex"}</span>
           </> : <span>{matching.length ? "Exact colour match available — choose…" : "Choose exact colour…"}</span>}
           <span aria-hidden="true">⌄</span>
         </button>
         {variantPickerOpen && <div className="integrationVariantList" role="group" aria-label="Choose filament colour">
           {uniqueVariants.map(f => <button type="button" key={f.id} className={String(filamentChoice)===String(f.id)?"selected":""} onClick={() => {setFilamentChoice(f.id);setVariantPickerOpen(false);setConfirmed(false);}}>
             <span className="printingSwatch" style={{backgroundColor:f.color_hex || "#777"}} aria-hidden="true"/>
-            <span>{colorLabel(f)} · {f.color_hex || "No hex"}</span>
+            <span>{colorLabel(f) ? colorLabel(f) + " · " : ""}{f.color_hex || "No hex"}</span>
             <small>{matching.some(m=>m.id===f.id)?"Exact hex":nearest?.id===f.id?"Closest hex (verify)":""}</small>
           </button>)}
         </div>}
