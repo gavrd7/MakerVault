@@ -632,8 +632,13 @@ function IntegrationReviewModal({ state, busyId, onClose, onResolve }) {
 
 
 function IntegrationReviewRow({ review, spools, filaments, busy, onResolve }) {
-  const suggestedFilament = review.filament_candidates?.[0]?.id || "";
-  const [filamentChoice, setFilamentChoice] = useState(suggestedFilament || "__detected__");
+  // No automatic choice: accepting a different colour would create a misleading duplicate.
+  const [familyChoice, setFamilyChoice] = useState("");
+  const [filamentChoice, setFilamentChoice] = useState("");
+  const [confirmed, setConfirmed] = useState(false);
+  const familyName = filament => [filament.manufacturer || filament.filament_manufacturer || "", filament.name || filament.display_name || "", filament.material || ""].join(" · ").trim();
+  const families = [...new Map(filaments.map(f => [familyName(f), familyName(f)])).values()].sort((a,b) => a.localeCompare(b));
+  const variants = filaments.filter(f => familyName(f) === familyChoice);
   const [spoolChoice, setSpoolChoice] = useState(review.spool_candidates?.[0]?.id || "");
   const remote = review.remote || {};
 
@@ -664,14 +669,20 @@ function IntegrationReviewRow({ review, spools, filaments, busy, onResolve }) {
     </div>
 
     <div className="integrationReviewChoices">
-      <label>Import as a new spool using<select value={filamentChoice} onChange={e => setFilamentChoice(e.target.value)}>
-        <option value="__detected__">Create filament from detected Spoolman data</option>
-        {filaments.map(filament => <option key={filament.id} value={filament.id}>{filament.display_name} · {filament.material}</option>)}
+      <label>Filament product<select value={familyChoice} onChange={e => { setFamilyChoice(e.target.value); setFilamentChoice(""); setConfirmed(false); }}>
+        <option value="">Choose manufacturer and product…</option>
+        {families.map(name => <option key={name} value={name}>{name}</option>)}
+        <option value="__detected__">Use exact Spoolman description (new filament)</option>
       </select></label>
-      <button className="primary" type="button" disabled={busy} onClick={() => onResolve({
-        action: "create",
-        filament_id: filamentChoice === "__detected__" ? "" : filamentChoice,
-      })}>Import as new spool</button>
+      {familyChoice && familyChoice !== "__detected__" && <label>Colour / variant<select value={filamentChoice} onChange={e => {setFilamentChoice(e.target.value);setConfirmed(false);}}>
+        <option value="">Choose exact colour…</option>
+        {variants.map(f => <option key={f.id} value={f.id}>{f.color_name || "Unnamed colour"} · {f.color_hex || "No hex"} · {f.display_name || f.name}</option>)}
+      </select></label>}
+      {familyChoice === "__detected__" && <small>Creates a separate filament using the original Spoolman product and colour. Use only if no correct MakerVault variant exists.</small>}
+      <label><input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} /> I have checked the material and colour against Spoolman</label>
+      <button className="primary" type="button" disabled={busy || !confirmed || !familyChoice || (familyChoice !== "__detected__" && !filamentChoice)} onClick={() => onResolve({
+        action: "create", filament_id: familyChoice === "__detected__" ? "" : filamentChoice,
+      })}>Import confirmed spool</button>
     </div>
 
     <div className="integrationReviewFooter">
