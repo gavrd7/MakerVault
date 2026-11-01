@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../api";
 import PrintedPartsSection from "./PrintedPartsSection";
 import WeightHistory from "./WeightHistory";
@@ -2380,10 +2380,11 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
     }
     return ["black","white","grey","gray","red","orange","yellow","green","blue","purple","pink","brown","silver"].find(c=>name.includes(c)) || "Other";
   };
-  const manufacturersList = [...new Set(filaments.map(f=>f.manufacturer).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-  const materialList = [...new Set(filaments.map(f=>f.material).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const manufacturersList = useMemo(() => [...new Set(filaments.map(f=>f.manufacturer).filter(Boolean))].sort((a,b)=>a.localeCompare(b)),[filaments]);
+  const materialList = useMemo(() => [...new Set(filaments.map(f=>f.material).filter(Boolean))].sort((a,b)=>a.localeCompare(b)),[filaments]);
   const colourList = ["Black","White","Grey","Red","Orange","Yellow","Green","Cyan","Blue","Purple","Pink","Brown","Silver","Other"];
   const term = query.trim().toLowerCase();
+  const {filtered,rows} = useMemo(() => {
   const filtered = filaments.filter(item =>
     (!manufacturerFilter || item.manufacturer === manufacturerFilter) &&
     (!materialFilter || item.material === materialFilter) &&
@@ -2402,6 +2403,8 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
     a.material.localeCompare(b.material) || a.maker.localeCompare(b.maker) || a.name.localeCompare(b.name) :
     sortOrder==="product" ? a.name.localeCompare(b.name) || a.maker.localeCompare(b.maker) :
     a.maker.localeCompare(b.maker) || a.name.localeCompare(b.name));
+  return {filtered,rows};
+  },[filaments,term,manufacturerFilter,materialFilter,colourFilter,sortOrder]);
   const pageCount = Math.max(1,Math.ceil(rows.length/pageSize));
   const safePage = Math.min(page,pageCount);
   const visibleRows = rows.slice((safePage-1)*pageSize,safePage*pageSize);
