@@ -715,7 +715,7 @@ function SpoolInventoryPage({ onOpenMakerTags, spools, filaments, locations, pri
             <button type="button" onClick={() => onOpenMakerTags("spool", spool.id)}>MakerTags</button>
             <button type="button" onClick={() => setWeightHistorySpool(spool)}>Weight History</button>
             <button type="button" onClick={() => setDetailFilament(filaments.find(item => item.id === spool.filament_id) || null)}>Filament details</button>
-            {canChangeSpool && <button type="button" onClick={() => setEditSpool(spool)}>Edit spool</button>}
+            {canChangeSpool && <button type="button" onClick={() => setEditSpool(spool)}>View / Edit</button>}
             {canChangeSpool && <button type="button" onClick={() => setManageSpool(spool)}>RFID / identity</button>}
             {canChangeSpool && <button type="button" onClick={() => setDryingSpool(spool)}>Drying</button>}
             {canDeleteSpool && <button className="dangerButton" type="button" onClick={() => setDeleteSpool(spool)}>Delete</button>}
@@ -791,6 +791,7 @@ function SpoolEditModal({ spool, filaments, onClose, onSaved }) {
     location: spool.location || "",
     notes: spool.notes || "",
   });
+  const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const set = (field, value) => setForm(old => ({ ...old, [field]: value }));
@@ -805,10 +806,12 @@ function SpoolEditModal({ spool, filaments, onClose, onSaved }) {
     } catch (err) { setError(err.message); }
     finally { setBusy(false); }
   }
-  return <Modal title={"Edit physical spool · " + spool.spool_id}
+  return <Modal title={"Physical spool · " + spool.spool_id}
     subtitle="Changes affect this physical spool only. The shared filament catalogue entry is not modified."
     onClose={onClose} wide>
     <form className="formGrid" onSubmit={save}>
+      {!editing && <div className="settingsCallout full"><strong>{spool.filament}</strong><p>{spool.notes || "No notes recorded."}</p></div>}
+      <fieldset className="full" disabled={!editing} style={{display:"contents"}}>
       {error && <div className="formError full">{error}</div>}
       <label className="full">Filament product<select value={form.filament_id} required onChange={e => set("filament_id",e.target.value)}>
         <option value="">Choose product and colour…</option>
@@ -822,7 +825,8 @@ function SpoolEditModal({ spool, filaments, onClose, onSaved }) {
       <label>Remaining weight (g)<input type="number" min="0" step="0.01" value={form.remaining_weight_g} onChange={e => set("remaining_weight_g",e.target.value)} /></label>
       <label>Purchase cost<input type="number" min="0" step="0.01" value={form.purchase_cost} onChange={e => set("purchase_cost",e.target.value)} /></label>
       <label className="full">Notes<textarea value={form.notes} onChange={e => set("notes",e.target.value)} /></label>
-      <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Saving…" : "Save spool"}</button></div>
+      </fieldset>
+      <div className="formActions full"><button type="button" onClick={onClose}>Close</button>{editing ? <button className="primary" disabled={busy}>{busy ? "Saving…" : "Save spool"}</button> : <button type="button" className="primary" onClick={()=>setEditing(true)}>Edit spool</button>}</div>
     </form>
   </Modal>;
 }
