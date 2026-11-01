@@ -642,11 +642,14 @@ function IntegrationReviewRow({ review, spools, filaments, busy, onResolve }) {
   const familyName = filament => {
     const colour = String(filament.color_name || "").trim();
     let name = String(filament.name || filament.display_name || "").trim();
-    // Some upstream product records embed their colour in the name.
-    // Group those variants under one product without losing their colour choice.
     if (colour) {
-      const suffix = new RegExp("(?:\\s*[-–—]\\s*|\\s+)"+colour.replace(/[.*+?^${}()|[\\]\\]/g, "\\  const familyName = filament => [filament.manufacturer || filament.filament_manufacturer || "", filament.name || filament.display_name || "", filament.material || ""].join(" · ").trim();")+"$", "i");
-      name = name.replace(suffix, "").trim() || name;
+      // Strip an exact trailing colour suffix without interpreting user values as regex.
+      const lowered = name.toLocaleLowerCase();
+      const lc = colour.toLocaleLowerCase();
+      if (lowered.endsWith(lc)) {
+        const lead = name.slice(0, name.length - colour.length);
+        if (/[-–—\\s]$/.test(lead)) name = lead.replace(/[-–—\\s]+$/, "").trim();
+      }
     }
     return [filament.manufacturer || "", name, filament.material || ""].join(" · ").trim();
   };
