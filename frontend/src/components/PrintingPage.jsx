@@ -2321,6 +2321,11 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
+  const [manufacturerFilter, setManufacturerFilter] = useState("");
+  const [materialFilter, setMaterialFilter] = useState("");
+  const [colourFilter, setColourFilter] = useState("");
+  const [sortOrder, setSortOrder] = useState("manufacturer");
+  const [expandedFamilies, setExpandedFamilies] = useState({});
   const [addFilamentOpen, setAddFilamentOpen] = useState(false);
 
   useEffect(() => {
@@ -2337,35 +2342,69 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
   const [detailFilament, setDetailFilament] = useState(null);
   const [editFilament, setEditFilament] = useState(null);
   const [imageFilament, setImageFilament] = useState(null);
-  const term = query.trim().toLowerCase();
-  const filtered = newestFirst(filaments).filter(item => !term || [
-    item.display_name, item.name, item.manufacturer, item.material, item.color_name,
-    item.finish, item.pattern, item.source,
-  ].filter(Boolean).join(" ").toLowerCase().includes(term));
-
-  // Existing duplicate catalogue entries stay in the database so linked spools
-  // and manually edited metadata are not destroyed. Show one representative
-  // per identical manufacturer, product, material and colour in this list.
-  const seen = new Set();
-  const rows = filtered.filter(item => {
-    const key = [
-      item.manufacturer, item.name, item.material,
-      item.color_hex || item.color_name || "",
-    ].map(value => String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "")).join("|");
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
-  const safePage = Math.min(page, pageCount);
-  const visibleRows = rows.slice((safePage - 1) * pageSize, safePage * pageSize);
-  const titleFor = item => {
+  const familyName = item => {
     const maker = String(item.manufacturer || "").trim();
+    const colour = String(item.color_name || "").trim();
     let name = String(item.name || "").trim();
+    if (colour && name.toLowerCase().endsWith(colour.toLowerCase()))
+      name = name.slice(0, -colour.length).replace(/[-–—\s]+$/, "").trim();
+    if (/^3d[- ]fuel$/i.test(maker) && /^pla\+?$/i.test(item.material || "")) name = item.material;
     if (maker && name.toLowerCase().startsWith(maker.toLowerCase()))
-      name = name.slice(maker.length).replace(/^[-–—\\s]+/, "").trim();
-    return [maker, name].filter(Boolean).join(" · ");
+      name = name.slice(maker.length).replace(/^[-–—\s]+/, "").trim();
+    return name || item.material || "Unnamed product";
   };
+  const colourFamily = item => {
+    const name = String(item.color_name || "").toLowerCase();
+    const hex = String(item.color_hex || "").replace("#","").trim();
+    if (/^[0-9a-f]{6}$/i.test(hex)) {
+      const [r,g,b] = [0,2,4].map(i => parseInt(hex.slice(i,i+2),16)/255);
+      const max = Math.max(r,g,b), min = Math.min(r,g,b), delta = max-min;
+      if (max < .16) return "Black";
+      if (min > .84 && delta < .12) return "White";
+      if (delta < .13) return "Grey";
+      let hue = 0;
+      if (delta) {
+        if (max === r) hue = ((g-b)/delta)%6;
+        else if (max === g) hue = (b-r)/delta+2;
+        else hue = (r-g)/delta+4;
+      }
+      hue = (hue*60+360)%360;
+      if (hue < 15 || hue >= 345) return "Red";
+      if (hue < 45) return "Orange";
+      if (hue < 70) return "Yellow";
+      if (hue < 165) return "Green";
+      if (hue < 195) return "Cyan";
+      if (hue < 255) return "Blue";
+      if (hue < 290) return "Purple";
+      return "Pink";
+    }
+    return ["black","white","grey","gray","red","orange","yellow","green","blue","purple","pink","brown","silver"].find(c=>name.includes(c)) || "Other";
+  };
+  const manufacturersList = [...new Set(filaments.map(f=>f.manufacturer).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const materialList = [...new Set(filaments.map(f=>f.material).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const colourList = ["Black","White","Grey","Red","Orange","Yellow","Green","Cyan","Blue","Purple","Pink","Brown","Silver","Other"];
+  const term = query.trim().toLowerCase();
+  const filtered = filaments.filter(item =>
+    (!manufacturerFilter || item.manufacturer === manufacturerFilter) &&
+    (!materialFilter || item.material === materialFilter) &&
+    (!colourFilter || colourFamily(item).toLowerCase() === colourFilter.toLowerCase()) &&
+    (!term || [item.display_name,item.name,item.manufacturer,item.material,item.color_name,item.color_hex,item.source]
+      .filter(Boolean).join(" ").toLowerCase().includes(term)));
+  const groups = new Map();
+  for (const item of filtered) {
+    const key = [item.manufacturer,familyName(item),item.material].map(v=>String(v||"").trim().toLowerCase()).join("|");
+    if (!groups.has(key)) groups.set(key,{maker:item.manufacturer || "Unknown",name:familyName(item),material:item.material,variants:[],seen:new Set()});
+    const group=groups.get(key);
+    const variantKey=[item.color_hex,item.color_name].map(v=>String(v||"").trim().toLowerCase()).join("|");
+    if (!group.seen.has(variantKey)) {group.variants.push(item);group.seen.add(variantKey);}
+  }
+  const rows = [...groups.values()].sort((a,b)=>sortOrder==="material" ?
+    a.material.localeCompare(b.material) || a.maker.localeCompare(b.maker) || a.name.localeCompare(b.name) :
+    sortOrder==="product" ? a.name.localeCompare(b.name) || a.maker.localeCompare(b.maker) :
+    a.maker.localeCompare(b.maker) || a.name.localeCompare(b.name));
+  const pageCount = Math.max(1,Math.ceil(rows.length/pageSize));
+  const safePage = Math.min(page,pageCount);
+  const visibleRows = rows.slice((safePage-1)*pageSize,safePage*pageSize);
   return <div className="printingStack">
     <section className="panel printingLibraryHero">
       <div>
@@ -2381,36 +2420,34 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
 
     <section className="panel printingSection">
       <div className="printingLibraryToolbar">
-        <div><strong>{filaments.length} filament product{filaments.length === 1 ? "" : "s"}</strong><small>{rows.length !== filaments.length ? rows.length + " matching" : "Newest updated first"}</small></div>
-        <input value={query} onChange={e => {setQuery(e.target.value);setPage(1);}} placeholder="Search manufacturer, product, material, colour or source…" />
-        <label>Per page <select value={pageSize} onChange={e => {setPageSize(Number(e.target.value));setPage(1);}}><option value={50}>50</option><option value={100}>100</option><option value={250}>250</option></select></label>
+        <div><strong>{rows.length} filament products</strong><small>{filtered.length} colour records · {filaments.length} saved records</small></div>
+        <input value={query} onChange={e=>{setQuery(e.target.value);setPage(1);}} placeholder="Search manufacturer, product, material or colour…" />
+        <label>Manufacturer <select value={manufacturerFilter} onChange={e=>{setManufacturerFilter(e.target.value);setPage(1);}}><option value="">All</option>{manufacturersList.map(v=><option key={v}>{v}</option>)}</select></label>
+        <label>Material <select value={materialFilter} onChange={e=>{setMaterialFilter(e.target.value);setPage(1);}}><option value="">All</option>{materialList.map(v=><option key={v}>{v}</option>)}</select></label>
+        <label>Colour <select value={colourFilter} onChange={e=>{setColourFilter(e.target.value);setPage(1);}}><option value="">All</option>{colourList.map(v=><option key={v}>{v}</option>)}</select></label>
+        <label>Sort by <select value={sortOrder} onChange={e=>setSortOrder(e.target.value)}><option value="manufacturer">Manufacturer A–Z</option><option value="product">Product A–Z</option><option value="material">Material A–Z</option></select></label>
+        <label className="filamentPageSize">Per page <select value={pageSize} onChange={e=>{setPageSize(Number(e.target.value));setPage(1);}}><option value={50}>50</option><option value={100}>100</option><option value={250}>250</option></select></label>
       </div>
       <div className="printingList">
-        {visibleRows.map(item => <article className={"printingListRow printingLibraryRow" + (searchTarget?.id === item.id ? " searchTargetRow" : "")} id={"filament-search-target-" + item.id} key={item.id}>
-          {item.image
-            ? <img className="filamentLibraryThumb" src={item.image} alt="" loading="lazy" />
-            : <span className={"printingSwatch filamentPreview-" + (item.transparency || "opaque")} style={filamentSwatchStyle(item)} />}
-          <div>
-            <strong>{titleFor(item)}</strong>
-            <small>{[item.material, item.color_name || item.color_hex, item.color_name && item.color_hex ? item.color_hex : ""].filter(Boolean).join(" · ")}</small>
-            <small>{item.diameter_mm || "?"} mm{item.source ? " · " + item.source : ""}</small>
-            {(item.product_url || item.tds_url || item.sds_url) && <small className="filamentSourceLinks">
-              {item.product_url && <a href={item.product_url} target="_blank" rel="noreferrer">Product</a>}
-              {item.tds_url && <a href={item.tds_url} target="_blank" rel="noreferrer">TDS</a>}
-              {item.sds_url && <a href={item.sds_url} target="_blank" rel="noreferrer">SDS</a>}
-            </small>}
-          </div>
-          <div className="printingBadges">
-            {item.spool_type && <Badge>{item.spool_type}</Badge>}
-            {item.is_refill && <Badge>Refill</Badge>}
-            {item.country_of_origin && <Badge>{item.country_of_origin}</Badge>}
-            {item.transparency && item.transparency !== "opaque" && <Badge>{item.transparency_label || item.transparency}</Badge>}
-            {item.glow && <Badge>Glow</Badge>}
-            <button type="button" onClick={() => setDetailFilament(item)}>Details</button>
-            {canChangeFilament && <button type="button" onClick={() => setImageFilament(item)}>Image</button>}
-            {canChangeFilament && <button type="button" onClick={() => setEditFilament(item)}>Edit</button>}
-          </div>
-        </article>)}
+        {visibleRows.map(group => {
+          const key=[group.maker,group.name,group.material].join("|");
+          const open=Boolean(expandedFamilies[key]);
+          const preview=group.variants[0];
+          return <article className="printingListRow printingLibraryRow" key={key}>
+            <span className={"printingSwatch filamentPreview-"+(preview.transparency||"opaque")} style={filamentSwatchStyle(preview)}/>
+            <div>
+              <strong>{group.maker} · {group.name}</strong>
+              <small>{group.material} · {group.variants.length} colour variant{group.variants.length===1?"":"s"}</small>
+              {open && <div className="filamentGroupedVariants">{group.variants.map(item=><div key={item.id} className="filamentGroupedVariant">
+                <span className="printingSwatch" style={filamentSwatchStyle(item)}/>
+                <span>{item.color_name || item.color_hex || "Unspecified colour"}{item.color_name && item.color_hex ? " · "+item.color_hex : ""}</span>
+                <button type="button" onClick={()=>setDetailFilament(item)}>Details</button>
+                {canChangeFilament && <button type="button" onClick={()=>setEditFilament(item)}>Edit</button>}
+              </div>)}</div>}
+            </div>
+            <div className="printingBadges"><button type="button" onClick={()=>setExpandedFamilies(v=>({...v,[key]:!v[key]}))}>{open?"Hide colours":"View colours"}</button></div>
+          </article>;
+        })}
         {!rows.length && <div className="printingEmptyInline">{term ? "No filament products match this search." : "No saved filament products yet."}</div>}
       </div>
       <div className="formActions" aria-label="Filament library pagination">
