@@ -662,6 +662,7 @@ function SpoolInventoryPage({ onOpenMakerTags, spools, filaments, locations, pri
   }, [spools.length, searchTarget?.token, searchTarget?.id]);
   const [addOpen, setAddOpen] = useState(false);
   const [manageSpool, setManageSpool] = useState(null);
+  const [editSpool, setEditSpool] = useState(null);
   const [dryingSpool, setDryingSpool] = useState(null);
   const [detailFilament, setDetailFilament] = useState(null);
   const [deleteSpool, setDeleteSpool] = useState(null);
@@ -708,6 +709,7 @@ function SpoolInventoryPage({ onOpenMakerTags, spools, filaments, locations, pri
             <button type="button" onClick={() => onOpenMakerTags("spool", spool.id)}>MakerTags</button>
             <button type="button" onClick={() => setWeightHistorySpool(spool)}>Weight History</button>
             <button type="button" onClick={() => setDetailFilament(filaments.find(item => item.id === spool.filament_id) || null)}>Filament details</button>
+            {canChangeSpool && <button type="button" onClick={() => setEditSpool(spool)}>Edit spool</button>}
             {canChangeSpool && <button type="button" onClick={() => setManageSpool(spool)}>RFID / identity</button>}
             {canChangeSpool && <button type="button" onClick={() => setDryingSpool(spool)}>Drying</button>}
             {canDeleteSpool && <button className="dangerButton" type="button" onClick={() => setDeleteSpool(spool)}>Delete</button>}
@@ -720,6 +722,7 @@ function SpoolInventoryPage({ onOpenMakerTags, spools, filaments, locations, pri
     {weightHistorySpool && <Modal title={"Weight History · " + weightHistorySpool.spool_id} onClose={() => setWeightHistorySpool(null)}><WeightHistory targetType="spool" targetId={weightHistorySpool.id} /></Modal>}
     {addOpen && <SpoolModal filaments={filaments} locations={locations} printers={printers} currency={currency} onClose={() => setAddOpen(false)} onSaved={async () => { setAddOpen(false); await onChanged(); }} />}
     {dryingSpool && <SpoolDryingModal spool={dryingSpool} onClose={() => setDryingSpool(null)} onSaved={async () => { setDryingSpool(null); await onChanged(); }} />}
+    {editSpool && <SpoolEditModal spool={editSpool} filaments={filaments} onClose={() => setEditSpool(null)} onSaved={async () => { setEditSpool(null); await onChanged(); }} />}
     {manageSpool && <SpoolIdentityModal spool={manageSpool} onClose={() => setManageSpool(null)} onSaved={async () => { setManageSpool(null); await onChanged(); }} />}
     {detailFilament && <FilamentDetailsModal
       filament={detailFilament}
@@ -771,6 +774,52 @@ function SpoolDryingModal({ spool, onClose, onSaved }) {
   </Modal>;
 }
 
+
+function SpoolEditModal({ spool, filaments, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    filament_id: spool.filament_id || "",
+    status: spool.status || "sealed",
+    initial_weight_g: spool.initial_weight_g ?? "",
+    remaining_weight_g: spool.remaining_weight_g ?? "",
+    purchase_cost: spool.purchase_cost ?? "",
+    location: spool.location || "",
+    notes: spool.notes || "",
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const set = (field, value) => setForm(old => ({ ...old, [field]: value }));
+  async function save(event) {
+    event.preventDefault();
+    setBusy(true); setError("");
+    try {
+      await apiFetch("/api/printing/spools/" + spool.id + "/", {
+        method: "PATCH", body: form,
+      });
+      await onSaved();
+    } catch (err) { setError(err.message); }
+    finally { setBusy(false); }
+  }
+  return <Modal title={"Edit physical spool · " + spool.spool_id}
+    subtitle="Changes affect this physical spool only. The shared filament catalogue entry is not modified."
+    onClose={onClose} wide>
+    <form className="formGrid" onSubmit={save}>
+      {error && <div className="formError full">{error}</div>}
+      <label className="full">Filament product<select value={form.filament_id} required onChange={e => set("filament_id",e.target.value)}>
+        <option value="">Choose product and colour…</option>
+        {filaments.map(f => <option value={f.id} key={f.id}>{f.display_name || f.name} · {f.material} · {f.color_name || f.color_hex || "Colour unknown"}</option>)}
+      </select><small>Selecting a different product links only this spool to that product, rather than editing other spools.</small></label>
+      <label>Status<select value={form.status} onChange={e => set("status",e.target.value)}>
+        {["sealed","open","drying","empty","retired"].map(x => <option key={x} value={x}>{x}</option>)}
+      </select></label>
+      <label>Custom location<input value={form.location} onChange={e => set("location",e.target.value)} placeholder="Only used when not assigned to a printer/storage location" /></label>
+      <label>Initial weight (g)<input type="number" min="0" step="0.01" value={form.initial_weight_g} onChange={e => set("initial_weight_g",e.target.value)} /></label>
+      <label>Remaining weight (g)<input type="number" min="0" step="0.01" value={form.remaining_weight_g} onChange={e => set("remaining_weight_g",e.target.value)} /></label>
+      <label>Purchase cost<input type="number" min="0" step="0.01" value={form.purchase_cost} onChange={e => set("purchase_cost",e.target.value)} /></label>
+      <label className="full">Notes<textarea value={form.notes} onChange={e => set("notes",e.target.value)} /></label>
+      <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Saving…" : "Save spool"}</button></div>
+    </form>
+  </Modal>;
+}
 
 function SpoolIdentityModal({ spool, onClose, onSaved }) {
   const [rfidUid, setRfidUid] = useState(spool.rfid_uid || "");
