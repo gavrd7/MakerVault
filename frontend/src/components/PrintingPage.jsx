@@ -2770,6 +2770,7 @@ function FilamentEditModal({ filament, manufacturers, materials, onClose, onSave
 
 
 function FilamentCatalogueMatchModal({ filament, onClose, onApplied }) {
+  const [createManual, setCreateManual] = useState(false);
   const [rows, setRows] = useState([]);
   const [selected, setSelected] = useState("");
   const [busy, setBusy] = useState(true);
@@ -2809,6 +2810,14 @@ function FilamentCatalogueMatchModal({ filament, onClose, onApplied }) {
     }
   }
 
+  if (createManual) return <FilamentModal
+    manufacturers={filament.manufacturer ? [{name:filament.manufacturer}] : []}
+    materials={filament.material ? [filament.material] : []}
+    initialFilament={filament}
+    onClose={() => setCreateManual(false)}
+    onSaved={() => onApplied(null)}
+  />;
+
   return <Modal
     title={"Match catalogue · " + (filament.display_name || filament.name)}
     subtitle="MakerVault ranks likely known products. Review the manufacturer, material, colour and technical data before applying a match."
@@ -2818,7 +2827,7 @@ function FilamentCatalogueMatchModal({ filament, onClose, onApplied }) {
     <div className="formGrid">
       {error && <div className="formError full">{error}</div>}
       {busy && <div className="printingEmptyInline full">Searching the filament catalogue…</div>}
-      {!busy && !rows.length && <div className="settingsCallout full"><strong>No confident catalogue candidates found</strong><p>You can keep this filament as a manual record and try again later as the catalogue grows.</p></div>}
+      {!busy && !rows.length && <div className="settingsCallout full"><strong>No confident catalogue candidates found</strong><p>Edit a new filament based on this record and save it independently to the library, without having to leave the matching flow.</p><button type="button" onClick={() => setCreateManual(true)}>Edit and save as new filament</button></div>}
       {!busy && rows.length > 0 && <div className="filamentMatchList full" role="radiogroup" aria-label="Catalogue matches">
         {rows.map(row => {
           const active = selected === row.external_id;
@@ -2869,17 +2878,17 @@ const FILAMENT_COLOUR_PALETTE = [
   ["Beige", "#d7c7a3"], ["Gold", "#c9a227"], ["Copper", "#b87333"], ["Natural", "#e8dfc8"],
 ];
 
-function FilamentModal({ manufacturers, materials, onClose, onSaved }) {
+function FilamentModal({ manufacturers, materials, onClose, onSaved, initialFilament = null }) {
   const [form, setForm] = useState({
-    manufacturer_name: manufacturers[0]?.name || "",
-    name: "",
-    material: materials[0] || "PLA",
-    color_name: "",
-    color_hex: "#777777",
-    color_hexes: [],
-    transparency: "opaque",
-    diameter_mm: "1.75",
-    nominal_weight_g: "1000",
+    manufacturer_name: initialFilament?.manufacturer || manufacturers[0]?.name || "",
+    name: initialFilament?.name || "",
+    material: initialFilament?.material || materials[0] || "PLA",
+    color_name: initialFilament?.color_name || "",
+    color_hex: initialFilament?.color_hex || "#777777",
+    color_hexes: initialFilament?.color_hexes || [],
+    transparency: initialFilament?.transparency || "opaque",
+    diameter_mm: initialFilament?.diameter_mm || "1.75",
+    nominal_weight_g: initialFilament?.nominal_weight_g || "1000",
     catalogue_external_id: "",
   });
   const [meta, setMeta] = useState({ manufacturers: [], materials: [] });
@@ -2990,7 +2999,7 @@ function FilamentModal({ manufacturers, materials, onClose, onSaved }) {
     }
   }
 
-  return <Modal title="Add filament product" subtitle="Choose a known manufacturer/product from the open catalogue or create a fully custom filament." onClose={onClose} wide>
+  return <Modal title={initialFilament ? "Edit and save new filament" : "Add filament product"} subtitle={initialFilament ? "Create a new library entry using corrected values. The existing entry stays unchanged." : "Choose a known manufacturer/product from the open catalogue or create a fully custom filament."} onClose={onClose} wide>
     <form className="formGrid" onSubmit={submit}>
       {error && <div className="formError full">{error}</div>}
       <label>Manufacturer<select value={customManufacturer ? "__custom__" : form.manufacturer_name} onChange={e => {
