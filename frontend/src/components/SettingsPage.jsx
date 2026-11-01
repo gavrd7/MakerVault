@@ -654,7 +654,7 @@ function IntegrationReviewRow({ review, spools, filaments, busy, onResolve }) {
     // product title. They all belong to the same PLA+ family.
     if (/^3d[- ]fuel$/i.test(maker) && /^pla\\+?$/i.test(material))
       name = material;
-    return [maker, name || material, material].join(" · ");
+    return [maker, name || material, ...(name && name.toLowerCase() !== material.toLowerCase() ? [material] : [])].join(" · ");
   };
   const families = [...new Set(filaments.map(familyName))].sort((a,b) => a.localeCompare(b));
   const variants = filaments.filter(f => familyName(f) === familyChoice);
