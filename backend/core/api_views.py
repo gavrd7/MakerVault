@@ -4608,12 +4608,12 @@ def printing_overview(request):
         },
         "printers": [_serialise_printer(printer) for printer in printers],
         "spools": [_serialise_spool(spool) for spool in spools],
-        "filaments": [
+        "filaments": ([
             _serialise_filament_product(item)
             for item in FilamentProduct.objects.select_related(
                 "manufacturer", "filament_manufacturer", "source"
             ).all()
-        ],
+        ] if request.GET.get("include_filaments") != "0" else []),
         "printer_manufacturers": [
             {"id": str(item.id), "name": item.name, "website": item.website}
             for item in PrinterManufacturer.objects.order_by("name")
