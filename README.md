@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <strong>Latest application release: v1.4.5</strong>
+  <strong>Latest application release: v1.4.6</strong>
 </p>
 
 <p align="center">
@@ -29,7 +29,7 @@
 - **[MakerVault User Guide](https://gavrd7.github.io/MakerVault-docs/)** ([documentation source](https://github.com/gavrd7/MakerVault-docs)) — installation, configuration and usage guides.
 - **[MakerVault-Hardware](https://github.com/gavrd7/MakerVault-Hardware)** — RFID/NFC handheld firmware, wiring, printable enclosure files and future connected hardware.
 
-**New in v1.4.5:** MakerTags single-scan NTAG215 assignment and verified NFC link writing through the paired MakerVault Terminal, stable `/t/MV-XXXXXXXX/` URLs, explicit cancellation/expiry handling, and a more resilient threaded native HTTPS listener. **Previously in v1.3.0:** scoped, revocable hardware API keys; Connected Devices management and an account-approved eight-digit pairing wizard for RFID/NFC terminals and future weighing stations; live device heartbeat/health reporting, editable permissions, unpairing and permanent deletion; tag resolution and controlled operations; initial weighing-station measurement workflow. Physical device validation remains a release requirement.
+**Previously in v1.4.5:** MakerTags single-scan NTAG215 assignment and verified NFC link writing through the paired MakerVault Terminal, stable `/t/MV-XXXXXXXX/` URLs, explicit cancellation/expiry handling, and a more resilient threaded native HTTPS listener. **Previously in v1.3.0:** scoped, revocable hardware API keys; Connected Devices management and an account-approved eight-digit pairing wizard for RFID/NFC terminals and future weighing stations; live device heartbeat/health reporting, editable permissions, unpairing and permanent deletion; tag resolution and controlled operations; initial weighing-station measurement workflow. Physical device validation remains a release requirement.
 
 ### Connected Devices — hardware onboarding (introduced in v1.3.0)
 
@@ -281,10 +281,10 @@ Pull-request CI checks backend tests, frontend tests/build, migrations, dependen
 
 MakerVault software is **AGPL-3.0-or-later**. See [LICENSE](LICENSE). Third-party media retains its own licence and attribution, also available in the application's About page.
 
-## Terminal-initiated MakerTag creation (paired firmware v0.8)
+## New in v1.4.6 — terminal-initiated MakerTag creation (firmware v0.8)
 
-With the corresponding MakerVault server changes and [MakerVault Terminal firmware v0.8](https://github.com/gavrd7/MakerVault-Hardware), you can create and assign MakerTags **directly on the handheld**, without starting the operation in a browser. Navigate **Home → MakerTags → Add MakerTag**, choose a record type and browse server-side alphabetic pages. Supported categories are **Inventory, Location, Printed Part, Printer, Project, Reusable Spool and Spool**. Entries include their MakerVault record IDs; hold the encoder to open the A–Z jump selector for long lists.
+With MakerVault v1.4.6 and [MakerVault Terminal firmware v0.8](https://github.com/gavrd7/MakerVault-Hardware), you can create and assign MakerTags **directly on the handheld**, without starting the operation in a browser. Navigate **Home → MakerTags → Add MakerTag**, choose a record type and browse server-side alphabetic pages. Supported categories are **Inventory, Location, Printed Part, Printer, Project, Reusable Spool and Spool**. Entries include their MakerVault record IDs; hold the encoder to open the A–Z jump selector for long lists.
 
 Pair the terminal via **Settings → User Account → Connected Devices** with verified HTTPS and the required **inventory:read** and **tags:write** scopes; the account also needs permissions to view the selected record and create/change MakerTags. Present the intended tag and confirm its assignment. A supported, writable **NTAG215** can receive the permanent `/t/MV-XXXXXXXX/` NFC link following physical verification. If the tag already carries a valid unrelated HTTP(S) NFC URL, its replacement requires an **additional explicit on-device confirmation**; **Back** preserves the original link. Unrecognised NDEF, locked/protected tags, UID substitutions, expired grants and cancelled writes must not be overwritten. Incomplete NFC writes can be retried without allocating a new MakerTag identity.
 
-**Scope:** Generic MIFARE Classic/Creality CFS tags can be associated by UID but **CFS material decoding, CFS payload writing and automatic printer database synchronisation are not part of v0.8**. See the [MakerTags user guide](https://gavrd7.github.io/MakerVault-docs/using/maker-tags/) and [Terminal firmware acceptance notes](https://github.com/gavrd7/MakerVault-Hardware/blob/main/docs/terminal-v0.8-browser-acceptance.md). This feature is introduced by PR #161; it should not be represented as part of the already-published v1.4.5 image until a new application build is released.
+**Scope:** Generic MIFARE Classic/Creality CFS tags can be associated by UID but **CFS material decoding, CFS payload writing and automatic printer database synchronisation are not part of v0.8**. See the [MakerTags user guide](https://gavrd7.github.io/MakerVault-docs/using/maker-tags/) and [Terminal firmware acceptance notes](https://github.com/gavrd7/MakerVault-Hardware/blob/main/docs/terminal-v0.8-browser-acceptance.md). This workflow is included in the MakerVault v1.4.6 release source and supported by firmware v0.8.
