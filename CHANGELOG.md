@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.4.6 — Terminal-first MakerTag creation
+
+- Added paired MakerVault Terminal v0.8 support for starting MakerTag registration on the handheld without a browser, browsing server-sorted record categories with paginated results and an A–Z letter jump.
+- Added scoped, owner-isolated device endpoints for record browsing and terminal-initiated registration, retaining HTTPS, `inventory:read`, `tags:write` and applicable account permissions.
+- Supported explicit confirmation when replacing a recognisable foreign HTTP(S) NFC URL; Back preserves the original, and unsafe, malformed, locked, cancelled or expired operations fail closed.
+- Preserved stable MakerTag identities across reassignment and recovery after incomplete NFC writes; generic RFID/MIFARE Classic remains UID-only.
+- Creality CFS material decoding, payload writing and printer database synchronisation remain out of scope.
+
+
 ## v1.4.5 — MakerTags NFC writing and HTTPS resilience
 
 - Added a single-confirmation MakerTags workflow for paired MakerVault Terminals: scan a compatible NTAG215, review reassignment when necessary, commit UID assignment, write a stable NFC Forum URL, read back the physical tag, and report verified completion.
