@@ -4232,6 +4232,7 @@ def _serialise_spool(spool):
         "purchase_cost": _float(spool.purchase_cost),
         "currency": spool.currency,
         "cost_per_g": _float(_spool_cost_per_g(spool)),
+        "notes": spool.notes,
         "status": spool.status,
         "status_label": spool.get_status_display(),
         "location": placement,
