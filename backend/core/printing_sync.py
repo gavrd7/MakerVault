@@ -391,6 +391,8 @@ def resolve_spoolman_review(
     *,
     spool_id: str | None = None,
     filament_id: str | None = None,
+    override_name: str | None = None,
+    override_color_hex: str | None = None,
 ) -> dict:
     if setting.provider != "spoolman":
         raise PrintingSyncError("Review resolution is not implemented for this integration yet.")
@@ -435,7 +437,21 @@ def resolve_spoolman_review(
             if not filament:
                 raise PrintingSyncError("Selected MakerVault filament was not found.")
         if filament is None:
+            # Overrides only create a new filament; never rewrite a shared
+            # catalogue product or a different physical spool.
+            if override_name is not None:
+                name = str(override_name).strip()
+                if not name or len(name) > 255:
+                    raise PrintingSyncError("Enter a filament name (maximum 255 characters).")
+                snapshot["name"] = name
+            if override_color_hex is not None:
+                colour = str(override_color_hex).strip()
+                if colour and not re.fullmatch(r"#[0-9a-fA-F]{6}", colour):
+                    raise PrintingSyncError("Enter a six-digit hex colour, such as #ffbf49.")
+                snapshot["color_hex"] = colour.lower()
             filament = _create_filament_from_spoolman(snapshot)
+        elif override_name is not None or override_color_hex is not None:
+            raise PrintingSyncError("Choose a new filament before supplying custom details.")
         location = _spoolman_location(snapshot.get("location"), setting.owner)
         spool = _create_spool_with_generated_id(
             owner=setting.owner,
