@@ -382,6 +382,68 @@ def seed_starter_filament_catalogue(*, limit=STARTER_FILAMENT_LIMIT):
     return {"status": "complete", "selected": len(selected), "created": created}
 
 
+
+def populate_missing_filament_variants(*, limit=150):
+    """Incrementally add missing colour variants from the sourced catalogue.
+
+    A scheduled call adds at most `limit` products, then may continue in a
+    later worker task. Existing products and manual changes are never updated
+    here; normal enrichment handles already-imported rows.
+    """
+    from django.db import transaction
+    from .models import CatalogSource, FilamentManufacturer, FilamentProduct
+
+    limit = max(1, min(int(limit), 300))
+    catalogue = sorted(get_filament_catalogue(), key=lambda row: (
+        str(row.get("manufacturer") or "").casefold(),
+        str(row.get("name") or "").casefold(),
+        str(row.get("color_name") or "").casefold(),
+        str(row.get("external_id") or ""),
+    ))
+    known = set(CatalogSource.objects.filter(
+        source_type__in=["spoolmandb", "filament_supplement"],
+        filament_products__isnull=False,
+    ).values_list("external_id", flat=True))
+    missing = [
+        row for row in catalogue if row.get("external_id") and
+        row.get("name") and row.get("material") and
+        row.get("manufacturer") and str(row["external_id"]) not in known
+    ]
+    created = 0
+    for row in missing[:limit]:
+        external_id = str(row["external_id"])
+        source_type = "filament_supplement" if external_id.startswith("supplement:") else "spoolmandb"
+        with transaction.atomic():
+            maker, _ = FilamentManufacturer.objects.get_or_create(
+                name=str(row["manufacturer"])[:255]
+            )
+            source, _ = CatalogSource.objects.get_or_create(
+                source_type=source_type, external_id=external_id,
+                defaults={
+                    "name": (f"{row['manufacturer']} — {row['name']}")[:200],
+                    "url": row.get("source_url") or DEFAULT_SPOOLMANDB_URL,
+                    "raw_metadata": {"record": row.get("raw") or {}},
+                },
+            )
+            if FilamentProduct.objects.filter(source=source).exists():
+                continue
+            FilamentProduct.objects.create(
+                source=source, filament_manufacturer=maker,
+                name=str(row["name"])[:255], material=str(row["material"])[:80],
+                color_name=str(row.get("color_name") or "")[:120],
+                color_hex=row.get("color_hex") or "",
+                color_hexes=row.get("color_hexes") or [],
+                profile_data={
+                    "source": "SpoolmanDB" if source_type == "spoolmandb" else "MakerVault supplement",
+                    "external_catalogue_id": external_id,
+                },
+            )
+            created += 1
+    return {"status": "limit-reached" if len(missing) > limit else "complete",
+            "created": created, "pending_before": len(missing)}
+
+
+
 def refresh_imported_filament_products(*, force_catalogue=False, limit=None, cursor=None):
     """Refresh saved SpoolmanDB-backed products without overwriting user edits.
 
