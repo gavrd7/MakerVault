@@ -636,6 +636,9 @@ function IntegrationReviewRow({ review, spools, filaments, busy, onResolve }) {
   const [familyChoice, setFamilyChoice] = useState("");
   const [filamentChoice, setFilamentChoice] = useState("");
   const [confirmed, setConfirmed] = useState(false);
+  const [customName, setCustomName] = useState(review.remote?.name || "");
+  const [customColor, setCustomColor] = useState(review.remote?.color_hex || "");
+
   const familyName = filament => [filament.manufacturer || filament.filament_manufacturer || "", filament.name || filament.display_name || "", filament.material || ""].join(" · ").trim();
   const families = [...new Map(filaments.map(f => [familyName(f), familyName(f)])).values()].sort((a,b) => a.localeCompare(b));
   const variants = filaments.filter(f => familyName(f) === familyChoice);
@@ -678,10 +681,15 @@ function IntegrationReviewRow({ review, spools, filaments, busy, onResolve }) {
         <option value="">Choose exact colour…</option>
         {variants.map(f => <option key={f.id} value={f.id}>{f.color_name || "Unnamed colour"} · {f.color_hex || "No hex"} · {f.display_name || f.name}</option>)}
       </select></label>}
-      {familyChoice === "__detected__" && <small>Creates a separate filament using the original Spoolman product and colour. Use only if no correct MakerVault variant exists.</small>}
+      {familyChoice === "__detected__" && <>
+        <label>Filament name override<input value={customName} maxLength={255} onChange={e => { setCustomName(e.target.value); setConfirmed(false); }} /></label>
+        <label>Colour override (hex)<input value={customColor} placeholder="#ffbf49" pattern="#[0-9a-fA-F]{6}" onChange={e => { setCustomColor(e.target.value); setConfirmed(false); }} /></label>
+        <small>Creates a separate filament with the confirmed name and colour. Neither existing spools nor catalogue entries are changed.</small>
+      </>}
       <label><input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} /> I have checked the material and colour against Spoolman</label>
-      <button className="primary" type="button" disabled={busy || !confirmed || !familyChoice || (familyChoice !== "__detected__" && !filamentChoice)} onClick={() => onResolve({
+      <button className="primary" type="button" disabled={busy || !confirmed || !familyChoice || (familyChoice !== "__detected__" && !filamentChoice) || (familyChoice === "__detected__" && (!customName.trim() || (customColor && !/^#[0-9a-fA-F]{6}$/.test(customColor))))} onClick={() => onResolve({
         action: "create", filament_id: familyChoice === "__detected__" ? "" : filamentChoice,
+        ...(familyChoice === "__detected__" ? {override_name: customName.trim(), override_color_hex: customColor.trim()} : {}),
       })}>Import confirmed spool</button>
     </div>
 
