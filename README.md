@@ -280,3 +280,11 @@ Pull-request CI checks backend tests, frontend tests/build, migrations, dependen
 ## Licence
 
 MakerVault software is **AGPL-3.0-or-later**. See [LICENSE](LICENSE). Third-party media retains its own licence and attribution, also available in the application's About page.
+
+## Terminal-initiated MakerTag creation (paired firmware v0.8)
+
+With the corresponding MakerVault server changes and [MakerVault Terminal firmware v0.8](https://github.com/gavrd7/MakerVault-Hardware), you can create and assign MakerTags **directly on the handheld**, without starting the operation in a browser. Navigate **Home → MakerTags → Add MakerTag**, choose a record type and browse server-side alphabetic pages. Supported categories are **Inventory, Location, Printed Part, Printer, Project, Reusable Spool and Spool**. Entries include their MakerVault record IDs; hold the encoder to open the A–Z jump selector for long lists.
+
+Pair the terminal via **Settings → User Account → Connected Devices** with verified HTTPS and the required **inventory:read** and **tags:write** scopes; the account also needs permissions to view the selected record and create/change MakerTags. Present the intended tag and confirm its assignment. A supported, writable **NTAG215** can receive the permanent `/t/MV-XXXXXXXX/` NFC link following physical verification. If the tag already carries a valid unrelated HTTP(S) NFC URL, its replacement requires an **additional explicit on-device confirmation**; **Back** preserves the original link. Unrecognised NDEF, locked/protected tags, UID substitutions, expired grants and cancelled writes must not be overwritten. Incomplete NFC writes can be retried without allocating a new MakerTag identity.
+
+**Scope:** Generic MIFARE Classic/Creality CFS tags can be associated by UID but **CFS material decoding, CFS payload writing and automatic printer database synchronisation are not part of v0.8**. See the [MakerTags user guide](https://gavrd7.github.io/MakerVault-docs/using/maker-tags/) and [Terminal firmware acceptance notes](https://github.com/gavrd7/MakerVault-Hardware/blob/main/docs/terminal-v0.8-browser-acceptance.md). This feature is introduced by PR #161; it should not be represented as part of the already-published v1.4.5 image until a new application build is released.
