@@ -3871,6 +3871,8 @@ def printing_integration_review_resolve(request, provider, external_id):
             str(payload.get("action") or "").strip(),
             spool_id=payload.get("spool_id"),
             filament_id=payload.get("filament_id"),
+            override_name=payload.get("override_name"),
+            override_color_hex=payload.get("override_color_hex"),
         )
         item.refresh_from_db()
         return JsonResponse({
