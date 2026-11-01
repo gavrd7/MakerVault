@@ -61,7 +61,7 @@ class ReadOnlyCfsLookupTests(TestCase):
         self.assertTrue(data["found"])
         self.assertEqual(data["spool"]["spool_id"], "SPL-001")
         self.assertEqual(data["spool"]["material"], "PLA")
-        self.assertEqual(data["spool"]["remaining_weight_g"], "450")
+        self.assertEqual(data["spool"]["remaining_weight_g"], "450.00")
         status, hidden = self.query({"uid": "11223344"})
         self.assertEqual(status, 200)
         self.assertFalse(hidden["found"])
