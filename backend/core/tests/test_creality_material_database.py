@@ -58,6 +58,34 @@ class CrealityMaterialDatabaseTests(TestCase):
             content_type="application/json",
         ).status_code, 403)
 
+
+
+    def test_discovery_requires_change_permission(self):
+        self.owner.user_permissions.clear()
+        with patch("core.creality_material_database.discover_creality_host_key") as discover:
+            response = self.client.post(self.url, data=json.dumps({"action": "discover-key"}),
+                                        content_type="application/json")
+        self.assertEqual(response.status_code, 403)
+        discover.assert_not_called()
+
+    def test_discovery_returns_key_without_saving_it(self):
+        with patch("core.creality_material_database.discover_creality_host_key") as discover:
+            discover.return_value = {"algorithm": "ssh-ed25519", "fingerprint": "SHA256:example"}
+            response = self.client.post(self.url, data=json.dumps({"action": "discover-key"}),
+                                        content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["host_key"]["fingerprint"], "SHA256:example")
+        self.connection.refresh_from_db()
+        self.assertNotIn("material_ssh_fingerprint", self.connection.config or {})
+
+    def test_ed25519_negotiation_disables_rsa(self):
+        from core.creality_material_database import _ed25519_only_options
+        blocked = _ed25519_only_options()["keys"]
+        self.assertIn("ssh-rsa", blocked)
+        self.assertIn("rsa-sha2-256", blocked)
+        self.assertIn("rsa-sha2-512", blocked)
+        self.assertNotIn("ssh-ed25519", blocked)
+
     def test_owner_isolation(self):
         self.client.force_login(self.other)
         self.assertEqual(self.client.get(self.url).status_code, 404)
