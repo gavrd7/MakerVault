@@ -1,3 +1,4 @@
+from .creality_material_database import MaterialDatabaseError, pull_creality_material_database
 from .filament_manufacturers import resolve_filament_manufacturer
 import hashlib
 import json
@@ -4296,12 +4297,13 @@ def _serialise_printer_connection(connection):
     safe_config = {
         key: value
         for key, value in (connection.config or {}).items()
-        if key not in {"api_key", "token", "password", "access_code", "check_code", "cameras"}
+        if key not in {"api_key", "token", "password", "access_code", "check_code", "cameras", "material_ssh_password", "material_database_snapshot"}
     }
     safe_config["api_key_configured"] = bool(str((connection.config or {}).get("api_key") or "").strip())
     safe_config["access_code_configured"] = bool(str((connection.config or {}).get("access_code") or "").strip())
     safe_config["password_configured"] = bool(str((connection.config or {}).get("password") or "").strip())
     safe_config["check_code_configured"] = bool(str((connection.config or {}).get("check_code") or "").strip())
+    safe_config["material_ssh_password_configured"] = bool((connection.config or {}).get("material_ssh_password"))
     capabilities = dict(connection.capabilities or (definition.capabilities if definition else {}))
     snapshot = connection.last_snapshot or {}
     metadata = snapshot.get("source_metadata") or {}
@@ -5524,6 +5526,64 @@ def printing_printer_connection_detail(request, printer_id, connection_id):
         return _error(str(exc))
     except PrinterConnectionError as exc:
         return _error(str(exc))
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def printing_printer_material_database(request, printer_id, connection_id):
+    connection = PrinterConnection.objects.select_related("printer").filter(
+        pk=connection_id, printer_id=printer_id, printer__owner=request.user,
+        adapter="creality_local",
+    ).first()
+    if not connection:
+        return _error("Creality printer connection not found.", status=404)
+    if request.method == "GET":
+        return JsonResponse({"summary": _material_database_summary(connection)})
+    denied = _require_permission(request, "core.change_printer")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        action = payload.get("action")
+        if action == "configure":
+            if set(payload) - {"action", "username", "password", "fingerprint", "scheduled"}:
+                return _error("Unsupported material database setting.")
+            config = dict(connection.config or {})
+            if "username" in payload:
+                config["material_ssh_user"] = str(payload["username"]).strip()[:100]
+            if payload.get("password"):
+                config["material_ssh_password"] = str(payload["password"])
+            if "fingerprint" in payload:
+                config["material_ssh_fingerprint"] = str(payload["fingerprint"]).strip()[:120]
+            if "scheduled" in payload:
+                if not isinstance(payload["scheduled"], bool):
+                    return _error("Scheduled sync must be true or false.")
+                config["material_database_scheduled"] = payload["scheduled"]
+            connection.config = config
+            connection.save(update_fields=["config", "updated_at"])
+            return JsonResponse({"summary": _material_database_summary(connection)})
+        if action != "pull" or set(payload) != {"action"}:
+            return _error("Choose a read-only pull or configure action.")
+        result = pull_creality_material_database(connection)
+        return JsonResponse({"result": result, "summary": _material_database_summary(connection)})
+    except MaterialDatabaseError as exc:
+        return _error(str(exc), status=502)
+    except (ValueError, ValidationError) as exc:
+        return _error(str(exc))
+
+
+def _material_database_summary(connection):
+    config = connection.config or {}
+    snapshot = config.get("material_database_snapshot")
+    return {
+        "synced_at": config.get("material_database_synced_at"),
+        "top_level_items": len(snapshot) if isinstance(snapshot, (dict, list)) else None,
+        "scheduled": config.get("material_database_scheduled") is True,
+        "username": config.get("material_ssh_user") or "",
+        "fingerprint": config.get("material_ssh_fingerprint") or "",
+        "password_configured": bool(config.get("material_ssh_password")),
+        "read_only": True,
+    }
 
 
 @login_required
