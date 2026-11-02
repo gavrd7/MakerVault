@@ -126,7 +126,7 @@ def _scp_read_database(client, remote_path):
     channel = client.get_transport().open_session(timeout=10)
     try:
         channel.settimeout(15)
-        channel.exec_command("scp -f " + remote_path)  # hard-coded, read-only source path
+        channel.exec_command("scp -f " + remote_path)  # nosec B601 - allowlisted constant path; SCP source-only
         channel.sendall(bytes([0]))  # SCP protocol initial acknowledgement
         size = _read_scp_header(channel)
         channel.sendall(bytes([0]))  # acknowledge file header
