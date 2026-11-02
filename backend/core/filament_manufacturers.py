@@ -15,7 +15,7 @@ def resolve_filament_manufacturer(name):
     if existing:
         # Stable selection: prefer an existing ID with the most linked products,
         # then oldest UUID ordering; never silently delete or relink user data.
-        return sorted(existing, key=lambda row: (row.name != cleaned, str(row.pk)))[0]
+        return sorted(existing, key=lambda row: (row.name.casefold() != cleaned.casefold(), row.name != row.name.upper(), str(row.pk)))[0]
     try:
         with transaction.atomic():
             return FilamentManufacturer.objects.create(name=cleaned)
