@@ -6,6 +6,7 @@ the only authoritative inventory match.
 """
 import re
 
+from django.db.models import Q
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
@@ -33,7 +34,7 @@ def spool_by_rfid(request):
     # Never match by material name/colour: CFS tags are user-programmable and
     # multiple physical spools can share the same filament metadata.
     spool = (
-        Spool.objects.filter(owner=owner, rfid_uid=uid)
+        Spool.objects.filter(owner=owner).filter(Q(rfid_uid=uid) | Q(rfid_uid_secondary=uid))
         .select_related("filament").first()
     )
     if spool is None:
