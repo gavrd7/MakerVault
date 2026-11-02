@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .filament_manufacturers import resolve_filament_manufacturer
+
 import asyncio
 import json
 import logging
@@ -202,6 +204,11 @@ def _spoolman_filament_score(snapshot: dict, filament: FilamentProduct) -> int:
 
     remote_color = str(snapshot.get("color_hex") or "").casefold()
     local_color = str(filament.color_hex or "").casefold()
+    # Colour is an identity constraint, not merely a minor scoring bonus.
+    # A pink remote spool must never auto-link to an otherwise identical
+    # yellow product because no other catalogue variant exists yet.
+    if remote_color and local_color and remote_color != local_color:
+        return 0
     if remote_color and local_color and remote_color == local_color:
         score += 15
 
@@ -224,9 +231,7 @@ def _rank_spoolman_filaments(snapshot: dict) -> list[tuple[int, FilamentProduct]
 
 def _create_filament_from_spoolman(snapshot: dict) -> FilamentProduct:
     maker_name = snapshot.get("vendor") or "Generic"
-    maker = FilamentManufacturer.objects.filter(name__iexact=maker_name).first()
-    if maker is None:
-        maker = FilamentManufacturer.objects.create(name=maker_name)
+    maker = resolve_filament_manufacturer(maker_name)
     profile = {
         "spoolman": {
             "filament_id": snapshot.get("filament_external_id", ""),
@@ -391,6 +396,8 @@ def resolve_spoolman_review(
     *,
     spool_id: str | None = None,
     filament_id: str | None = None,
+    override_name: str | None = None,
+    override_color_hex: str | None = None,
 ) -> dict:
     if setting.provider != "spoolman":
         raise PrintingSyncError("Review resolution is not implemented for this integration yet.")
@@ -435,7 +442,21 @@ def resolve_spoolman_review(
             if not filament:
                 raise PrintingSyncError("Selected MakerVault filament was not found.")
         if filament is None:
+            # Overrides only create a new filament; never rewrite a shared
+            # catalogue product or a different physical spool.
+            if override_name is not None:
+                name = str(override_name).strip()
+                if not name or len(name) > 255:
+                    raise PrintingSyncError("Enter a filament name (maximum 255 characters).")
+                snapshot["name"] = name
+            if override_color_hex is not None:
+                colour = str(override_color_hex).strip()
+                if colour and not re.fullmatch(r"#[0-9a-fA-F]{6}", colour):
+                    raise PrintingSyncError("Enter a six-digit hex colour, such as #ffbf49.")
+                snapshot["color_hex"] = colour.lower()
             filament = _create_filament_from_spoolman(snapshot)
+        elif override_name is not None or override_color_hex is not None:
+            raise PrintingSyncError("Choose a new filament before supplying custom details.")
         location = _spoolman_location(snapshot.get("location"), setting.owner)
         spool = _create_spool_with_generated_id(
             owner=setting.owner,

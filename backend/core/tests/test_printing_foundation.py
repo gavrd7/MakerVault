@@ -13,6 +13,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from core.filament_catalogue import normalise_spoolmandb_row
+from core.filament_manufacturers import resolve_filament_manufacturer
 from core.tasks import printing_integrations_tick
 
 from core.models import (
@@ -36,6 +37,23 @@ from core.models import (
 )
 
 
+class ManufacturerIdentityTests(TestCase):
+    def test_reuse_existing_regardless_of_case(self):
+        maker = FilamentManufacturer.objects.create(name="eSun")
+        self.assertEqual(resolve_filament_manufacturer("eSUN").pk, maker.pk)
+        self.assertEqual(resolve_filament_manufacturer("ESUN").pk, maker.pk)
+        self.assertEqual(FilamentManufacturer.objects.filter(name__iexact="esun").count(), 1)
+
+    def test_database_rejects_case_only_aliases(self):
+        from django.db import IntegrityError, transaction
+
+        FilamentManufacturer.objects.create(name="Sunlu")
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                FilamentManufacturer.objects.create(name="SUNLU")
+        self.assertEqual(FilamentManufacturer.objects.filter(name__iexact="sunlu").count(), 1)
+
+
 class FilamentCatalogueTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_superuser(
@@ -44,6 +62,17 @@ class FilamentCatalogueTests(TestCase):
             password="test-password",
         )
         self.client.force_login(self.user)
+
+    def test_lightweight_printing_overview_skips_filament_serialisation(self):
+        FilamentProduct.objects.create(name="Integration sample", material="PLA",
+                                       color_name="Blue", color_hex="#2255AA")
+        full = self.client.get("/api/printing/")
+        self.assertEqual(full.status_code, 200)
+        self.assertTrue(full.json()["filaments"])
+        light = self.client.get("/api/printing/?include_filaments=0")
+        self.assertEqual(light.status_code, 200)
+        self.assertEqual(light.json()["filaments"], [])
+        self.assertGreaterEqual(light.json()["summary"]["filaments"], 1)
 
     def sample_catalogue_item(self):
         return {
@@ -181,6 +210,22 @@ class PrintingFoundationTests(TestCase):
             model="K2",
             nozzle_mm="0.4",
         )
+
+    def test_physical_spool_notes_survive_patch_and_reload(self):
+        endpoint = f"/api/printing/spools/{self.spool.id}/"
+        response = self.client.patch(
+            endpoint,
+            data='{"notes":"Drawer A - test note"}',
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["item"]["notes"], "Drawer A - test note")
+        self.spool.refresh_from_db()
+        self.assertEqual(self.spool.notes, "Drawer A - test note")
+        overview = self.client.get("/api/printing/")
+        self.assertEqual(overview.status_code, 200, overview.content)
+        saved = next(row for row in overview.json()["spools"] if row["id"] == str(self.spool.id))
+        self.assertEqual(saved["notes"], "Drawer A - test note")
 
     def test_public_config_exposes_printer_delete_permission(self):
         response = self.client.get("/api/config/")

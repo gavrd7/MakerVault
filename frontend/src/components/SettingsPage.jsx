@@ -1,3 +1,4 @@
+import { filamentFamily, filamentFamilyKey, filamentVariantLabel, buildFilamentFamilyIndex } from "./filamentFamilies";
 import React, { useEffect, useState } from "react";
 import { apiFetch } from "../api";
 import { Badge, LoadingBlock, Modal } from "./Common";
@@ -632,8 +633,40 @@ function IntegrationReviewModal({ state, busyId, onClose, onResolve }) {
 
 
 function IntegrationReviewRow({ review, spools, filaments, busy, onResolve }) {
-  const suggestedFilament = review.filament_candidates?.[0]?.id || "";
-  const [filamentChoice, setFilamentChoice] = useState(suggestedFilament || "__detected__");
+  // No automatic choice: accepting a different colour would create a misleading duplicate.
+  const [familyChoice, setFamilyChoice] = useState("");
+  const [filamentChoice, setFilamentChoice] = useState("");
+  const [confirmed, setConfirmed] = useState(false);
+  const [variantPickerOpen, setVariantPickerOpen] = useState(false);
+  const [customName, setCustomName] = useState(review.remote?.name || "");
+  const [customColor, setCustomColor] = useState(review.remote?.color_hex || "");
+
+  const familyName = filament => {
+    const family = filamentFamily(filament);
+    return [family.manufacturer, family.product, ...(family.product.toLowerCase() === family.material.toLowerCase() ? [] : [family.material])].join(" · ");
+  };
+  const familyIndex = useMemo(() => buildFilamentFamilyIndex(filaments), [filaments]);
+  const familyChoices = new Map();
+  filaments.forEach(f => { const matched = familyIndex.get(String(f.id)); const key = matched?.key || filamentFamilyKey(f); const family = matched?.family; const label = family ? [family.manufacturer, family.product, ...(family.product.toLowerCase() === family.material.toLowerCase() ? [] : [family.material])].join(" · ") : familyName(f); if (!familyChoices.has(key)) familyChoices.set(key,label); });
+  const families = [...familyChoices.entries()].sort((a,b) => a[1].localeCompare(b[1]));
+  const remoteHex = String(review.remote?.color_hex || "").replace(/^#/, "").toLowerCase();
+  const variants = filaments.filter(f => (familyIndex.get(String(f.id))?.key || filamentFamilyKey(f)) === familyChoice);
+  const hexDistance = hex => {
+    const value = String(hex || "").replace(/^#/, "").toLowerCase();
+    if (!/^[0-9a-f]{6}$/.test(value) || !/^[0-9a-f]{6}$/.test(remoteHex)) return Infinity;
+    return [0,2,4].reduce((sum,i) => {
+      const d = parseInt(value.slice(i,i+2),16) - parseInt(remoteHex.slice(i,i+2),16);
+      return sum + d*d;
+    },0);
+  };
+  const rankedVariants = [...variants].sort((a,b) => hexDistance(a.color_hex)-hexDistance(b.color_hex));
+  const uniqueVariants = rankedVariants.filter((f,i,all) => all.findIndex(other =>
+    String(other.color_hex || "").toLowerCase() === String(f.color_hex || "").toLowerCase() &&
+    String(other.color_name || "").toLowerCase() === String(f.color_name || "").toLowerCase()
+  ) === i);
+  const matching = uniqueVariants.filter(f => hexDistance(f.color_hex) === 0);
+  const nearest = uniqueVariants.find(f => Number.isFinite(hexDistance(f.color_hex)));
+  const colorLabel = f => filamentVariantLabel(f);
   const [spoolChoice, setSpoolChoice] = useState(review.spool_candidates?.[0]?.id || "");
   const remote = review.remote || {};
 
@@ -664,14 +697,38 @@ function IntegrationReviewRow({ review, spools, filaments, busy, onResolve }) {
     </div>
 
     <div className="integrationReviewChoices">
-      <label>Import as a new spool using<select value={filamentChoice} onChange={e => setFilamentChoice(e.target.value)}>
-        <option value="__detected__">Create filament from detected Spoolman data</option>
-        {filaments.map(filament => <option key={filament.id} value={filament.id}>{filament.display_name} · {filament.material}</option>)}
+      <label>Filament product<select value={familyChoice} onChange={e => { setFamilyChoice(e.target.value); setFilamentChoice(""); setConfirmed(false); }}>
+        <option value="">Choose manufacturer and product…</option>
+        {families.map(([key,name]) => <option key={key} value={key}>{name}</option>)}
+        <option value="__detected__">Use exact Spoolman description (new filament)</option>
       </select></label>
-      <button className="primary" type="button" disabled={busy} onClick={() => onResolve({
-        action: "create",
-        filament_id: filamentChoice === "__detected__" ? "" : filamentChoice,
-      })}>Import as new spool</button>
+      {familyChoice && familyChoice !== "__detected__" && <div className="integrationVariantPicker">
+        <span>Colour / variant</span>
+        <button type="button" className="integrationVariantTrigger" onClick={() => setVariantPickerOpen(v => !v)} aria-expanded={variantPickerOpen}>
+          {filamentChoice ? <>
+            <span className="printingSwatch" style={{backgroundColor:uniqueVariants.find(v=>String(v.id)===String(filamentChoice))?.color_hex || "#777"}} aria-hidden="true"/>
+            <span>{colorLabel(uniqueVariants.find(v=>String(v.id)===String(filamentChoice)) || {}) ? colorLabel(uniqueVariants.find(v=>String(v.id)===String(filamentChoice)) || {}) + " · " : ""}{uniqueVariants.find(v=>String(v.id)===String(filamentChoice))?.color_hex || "No hex"}</span>
+          </> : <span>{matching.length ? "Exact colour match available — choose…" : "Choose exact colour…"}</span>}
+          <span aria-hidden="true">⌄</span>
+        </button>
+        {variantPickerOpen && <div className="integrationVariantList" role="group" aria-label="Choose filament colour">
+          {uniqueVariants.map(f => <button type="button" key={f.id} className={String(filamentChoice)===String(f.id)?"selected":""} onClick={() => {setFilamentChoice(f.id);setVariantPickerOpen(false);setConfirmed(false);}}>
+            <span className="printingSwatch" style={{backgroundColor:f.color_hex || "#777"}} aria-hidden="true"/>
+            <span>{colorLabel(f) ? colorLabel(f) + " · " : ""}{f.color_hex || "No hex"}</span>
+            <small>{matching.some(m=>m.id===f.id)?"Exact hex":nearest?.id===f.id?"Closest hex (verify)":""}</small>
+          </button>)}
+        </div>}
+      </div>}
+      {familyChoice === "__detected__" && <>
+        <label>Filament name override<input value={customName} maxLength={255} onChange={e => { setCustomName(e.target.value); setConfirmed(false); }} /></label>
+        <label>Colour override (hex)<input value={customColor} placeholder="#ffbf49" pattern="#[0-9a-fA-F]{6}" onChange={e => { setCustomColor(e.target.value); setConfirmed(false); }} /></label>
+        <small>Creates a separate filament with the confirmed name and colour. Neither existing spools nor catalogue entries are changed.</small>
+      </>}
+      <label><input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} /> I have checked the material and colour against Spoolman</label>
+      <button className="primary" type="button" disabled={busy || !confirmed || !familyChoice || (familyChoice !== "__detected__" && !filamentChoice) || (familyChoice === "__detected__" && (!customName.trim() || (customColor && !/^#[0-9a-fA-F]{6}$/.test(customColor))))} onClick={() => onResolve({
+        action: "create", filament_id: familyChoice === "__detected__" ? "" : filamentChoice,
+        ...(familyChoice === "__detected__" ? {override_name: customName.trim(), override_color_hex: customColor.trim()} : {}),
+      })}>Import confirmed spool</button>
     </div>
 
     <div className="integrationReviewFooter">

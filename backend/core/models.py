@@ -4,6 +4,7 @@ import secrets
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models, IntegrityError, transaction
+from django.db.models.functions import Lower
 from django.utils import timezone
 from django.utils.text import slugify
 from .validators import validate_maker_file
@@ -482,6 +483,7 @@ class FilamentManufacturer(TimeStampedModel):
 
     class Meta:
         ordering = ["name"]
+        constraints = [models.UniqueConstraint(Lower("name"), name="unique_filament_manufacturer_casefold")]
 
     def __str__(self):
         return self.name

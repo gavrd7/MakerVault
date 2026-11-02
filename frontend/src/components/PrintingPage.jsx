@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import { filamentFamily, filamentFamilyKey, filamentVariantLabel, buildFilamentFamilyIndex } from "./filamentFamilies";
+import React, { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../api";
 import PrintedPartsSection from "./PrintedPartsSection";
 import WeightHistory from "./WeightHistory";
@@ -169,11 +170,15 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
   const [claimSlot, setClaimSlot] = useState(null);
   const [workspaceView, setWorkspaceView] = useState("overview");
 
-  async function load() {
+  async function load(options = {}) {
+    const includeFilaments = options?.includeFilaments !== false;
     setError("");
     try {
-      const fresh = await apiFetch("/api/printing/");
-      setData(fresh);
+      const fresh = await apiFetch("/api/printing/" + (includeFilaments ? "" : "?include_filaments=0"));
+      setData(previous => includeFilaments ? fresh : {
+        ...fresh,
+        filaments: previous?.filaments || [],
+      });
       return fresh;
     } catch (err) {
       setError(err.message);
@@ -185,7 +190,9 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
 
   useEffect(() => {
     if (workspaceView !== "overview") return undefined;
-    const timer = window.setInterval(load, 15000);
+    // Keep printer telemetry current without reloading 14k+ immutable catalogue
+    // records every 15 seconds.
+    const timer = window.setInterval(() => load({includeFilaments:false}), 15000);
     return () => window.clearInterval(timer);
   }, [workspaceView]);
 
@@ -662,6 +669,7 @@ function SpoolInventoryPage({ onOpenMakerTags, spools, filaments, locations, pri
   }, [spools.length, searchTarget?.token, searchTarget?.id]);
   const [addOpen, setAddOpen] = useState(false);
   const [manageSpool, setManageSpool] = useState(null);
+  const [editSpool, setEditSpool] = useState(null);
   const [dryingSpool, setDryingSpool] = useState(null);
   const [detailFilament, setDetailFilament] = useState(null);
   const [deleteSpool, setDeleteSpool] = useState(null);
@@ -708,6 +716,7 @@ function SpoolInventoryPage({ onOpenMakerTags, spools, filaments, locations, pri
             <button type="button" onClick={() => onOpenMakerTags("spool", spool.id)}>MakerTags</button>
             <button type="button" onClick={() => setWeightHistorySpool(spool)}>Weight History</button>
             <button type="button" onClick={() => setDetailFilament(filaments.find(item => item.id === spool.filament_id) || null)}>Filament details</button>
+            {canChangeSpool && <button type="button" onClick={() => setEditSpool(spool)}>View / Edit</button>}
             {canChangeSpool && <button type="button" onClick={() => setManageSpool(spool)}>RFID / identity</button>}
             {canChangeSpool && <button type="button" onClick={() => setDryingSpool(spool)}>Drying</button>}
             {canDeleteSpool && <button className="dangerButton" type="button" onClick={() => setDeleteSpool(spool)}>Delete</button>}
@@ -720,6 +729,7 @@ function SpoolInventoryPage({ onOpenMakerTags, spools, filaments, locations, pri
     {weightHistorySpool && <Modal title={"Weight History · " + weightHistorySpool.spool_id} onClose={() => setWeightHistorySpool(null)}><WeightHistory targetType="spool" targetId={weightHistorySpool.id} /></Modal>}
     {addOpen && <SpoolModal filaments={filaments} locations={locations} printers={printers} currency={currency} onClose={() => setAddOpen(false)} onSaved={async () => { setAddOpen(false); await onChanged(); }} />}
     {dryingSpool && <SpoolDryingModal spool={dryingSpool} onClose={() => setDryingSpool(null)} onSaved={async () => { setDryingSpool(null); await onChanged(); }} />}
+    {editSpool && <SpoolEditModal spool={editSpool} filaments={filaments} onClose={() => setEditSpool(null)} onSaved={async () => { setEditSpool(null); await onChanged(); }} />}
     {manageSpool && <SpoolIdentityModal spool={manageSpool} onClose={() => setManageSpool(null)} onSaved={async () => { setManageSpool(null); await onChanged(); }} />}
     {detailFilament && <FilamentDetailsModal
       filament={detailFilament}
@@ -771,6 +781,65 @@ function SpoolDryingModal({ spool, onClose, onSaved }) {
   </Modal>;
 }
 
+
+function SpoolEditModal({ spool, filaments, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    filament_id: spool.filament_id || "",
+    status: spool.status || "sealed",
+    initial_weight_g: spool.initial_weight_g ?? "",
+    remaining_weight_g: spool.remaining_weight_g ?? "",
+    purchase_cost: spool.purchase_cost ?? "",
+    location: spool.location || "",
+    notes: spool.notes || "",
+  });
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const set = (field, value) => setForm(old => ({ ...old, [field]: value }));
+  async function save(event) {
+    event.preventDefault();
+    if (!editing) return;
+    setBusy(true); setError("");
+    try {
+      await apiFetch("/api/printing/spools/" + spool.id + "/", {
+        method: "PATCH", body: form,
+      });
+      await onSaved();
+    } catch (err) { setError(err.message); }
+    finally { setBusy(false); }
+  }
+  return <Modal title={"Physical spool · " + spool.spool_id}
+    subtitle="Changes affect this physical spool only. The shared filament catalogue entry is not modified."
+    onClose={onClose} wide>
+    {!editing ? <div className="formGrid">
+      <div className="settingsCallout full"><strong>{spool.filament}</strong><p>{[spool.manufacturer,spool.material,spool.color_name || spool.color_hex].filter(Boolean).join(" · ")}</p></div>
+      <div className="full"><strong>Status:</strong> {spool.status_label || spool.status}</div>
+      <div className="full"><strong>Location:</strong> {spool.location || "Not assigned"}</div>
+      <div className="full"><strong>Initial weight:</strong> {spool.initial_weight_g ?? "—"} g</div>
+      <div className="full"><strong>Remaining weight:</strong> {spool.remaining_weight_g ?? "—"} g</div>
+      <div className="full"><strong>Purchase cost:</strong> {spool.purchase_cost ?? "—"} {spool.currency || ""}</div>
+      <div className="full"><strong>Notes:</strong> {spool.notes || "No notes recorded."}</div>
+      <div className="formActions full"><button type="button" onClick={onClose}>Close</button><button type="button" className="primary" onClick={() => setEditing(true)}>Edit spool</button></div>
+    </div> : <form className="formGrid" onSubmit={save}>
+      <fieldset className="spoolEditFields">
+      {error && <div className="formError full">{error}</div>}
+      <label className="full">Filament product<select value={form.filament_id} required onChange={e => set("filament_id",e.target.value)}>
+        <option value="">Choose product and colour…</option>
+        {filaments.map(f => <option value={f.id} key={f.id}>{f.display_name || f.name} · {f.material} · {f.color_name || f.color_hex || "Colour unknown"}</option>)}
+      </select><small>Selecting a different product links only this spool to that product, rather than editing other spools.</small></label>
+      <label>Status<select value={form.status} onChange={e => set("status",e.target.value)}>
+        {["sealed","open","drying","empty","retired"].map(x => <option key={x} value={x}>{x}</option>)}
+      </select></label>
+      <label>Custom location<input value={form.location} onChange={e => set("location",e.target.value)} placeholder="Only used when not assigned to a printer/storage location" /></label>
+      <label>Initial weight (g)<input type="number" min="0" step="0.01" value={form.initial_weight_g} onChange={e => set("initial_weight_g",e.target.value)} /></label>
+      <label>Remaining weight (g)<input type="number" min="0" step="0.01" value={form.remaining_weight_g} onChange={e => set("remaining_weight_g",e.target.value)} /></label>
+      <label>Purchase cost<input type="number" min="0" step="0.01" value={form.purchase_cost} onChange={e => set("purchase_cost",e.target.value)} /></label>
+      <label className="full">Notes<textarea value={form.notes} onChange={e => set("notes",e.target.value)} /></label>
+      </fieldset>
+      <div className="formActions full"><button type="button" onClick={() => setEditing(false)} disabled={busy}>Cancel editing</button><button type="submit" className="primary" disabled={busy}>{busy ? "Saving…" : "Save spool"}</button></div>
+    </form>}
+  </Modal>;
+}
 
 function SpoolIdentityModal({ spool, onClose, onSaved }) {
   const [rfidUid, setRfidUid] = useState(spool.rfid_uid || "");
@@ -2270,6 +2339,13 @@ function ReusableSpoolsPage({ onOpenMakerTags, onBack, onOpenModels, targetReelI
 
 function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFilament, canAddFilament, onBack, onChanged, searchTarget = null }) {
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(100);
+  const [manufacturerFilter, setManufacturerFilter] = useState("");
+  const [materialFilter, setMaterialFilter] = useState("");
+  const [colourFilter, setColourFilter] = useState("");
+  const [sortOrder, setSortOrder] = useState("manufacturer");
+  const [expandedFamilies, setExpandedFamilies] = useState({});
   const [addFilamentOpen, setAddFilamentOpen] = useState(false);
 
   useEffect(() => {
@@ -2286,12 +2362,64 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
   const [detailFilament, setDetailFilament] = useState(null);
   const [editFilament, setEditFilament] = useState(null);
   const [imageFilament, setImageFilament] = useState(null);
+  const familyName = item => filamentFamily(item).product;
+  const colourFamily = item => {
+    const name = String(item.color_name || "").toLowerCase();
+    const hex = String(item.color_hex || "").replace("#","").trim();
+    if (/^[0-9a-f]{6}$/i.test(hex)) {
+      const [r,g,b] = [0,2,4].map(i => parseInt(hex.slice(i,i+2),16)/255);
+      const max = Math.max(r,g,b), min = Math.min(r,g,b), delta = max-min;
+      if (max < .16) return "Black";
+      if (min > .84 && delta < .12) return "White";
+      if (delta < .13) return "Grey";
+      let hue = 0;
+      if (delta) {
+        if (max === r) hue = ((g-b)/delta)%6;
+        else if (max === g) hue = (b-r)/delta+2;
+        else hue = (r-g)/delta+4;
+      }
+      hue = (hue*60+360)%360;
+      if (hue < 15 || hue >= 345) return "Red";
+      if (hue < 45) return "Orange";
+      if (hue < 70) return "Yellow";
+      if (hue < 165) return "Green";
+      if (hue < 195) return "Cyan";
+      if (hue < 255) return "Blue";
+      if (hue < 290) return "Purple";
+      return "Pink";
+    }
+    return ["black","white","grey","gray","red","orange","yellow","green","blue","purple","pink","brown","silver"].find(c=>name.includes(c)) || "Other";
+  };
+  const familyIndex = useMemo(() => buildFilamentFamilyIndex(filaments), [filaments]);
+  const manufacturersList = useMemo(() => [...new Set(filaments.map(f=>f.manufacturer).filter(Boolean))].sort((a,b)=>a.localeCompare(b)),[filaments]);
+  const materialList = useMemo(() => [...new Set(filaments.map(f=>f.material).filter(Boolean))].sort((a,b)=>a.localeCompare(b)),[filaments]);
+  const colourList = ["Black","White","Grey","Red","Orange","Yellow","Green","Cyan","Blue","Purple","Pink","Brown","Silver","Other"];
   const term = query.trim().toLowerCase();
-  const rows = newestFirst(filaments).filter(item => !term || [
-    item.display_name, item.name, item.manufacturer, item.material, item.color_name,
-    item.finish, item.pattern, item.source,
-  ].filter(Boolean).join(" ").toLowerCase().includes(term));
-
+  const {filtered,rows} = useMemo(() => {
+  const filtered = filaments.filter(item =>
+    (!manufacturerFilter || item.manufacturer === manufacturerFilter) &&
+    (!materialFilter || item.material === materialFilter) &&
+    (!colourFilter || colourFamily(item).toLowerCase() === colourFilter.toLowerCase()) &&
+    (!term || [item.display_name,item.name,item.manufacturer,item.material,item.color_name,item.color_hex,item.source]
+      .filter(Boolean).join(" ").toLowerCase().includes(term)));
+  const groups = new Map();
+  for (const item of filtered) {
+    const resolved = familyIndex.get(String(item.id));
+    const key = resolved?.key || filamentFamilyKey(item);
+    if (!groups.has(key)) groups.set(key,{maker:resolved?.family.manufacturer || item.manufacturer || "Unknown",name:resolved?.family.product || familyName(item),material:item.material,variants:[],seen:new Set()});
+    const group=groups.get(key);
+    const variantKey=[item.color_hex,filamentVariantLabel(item)].map(v=>String(v||"").trim().toLowerCase()).join("|");
+    if (!group.seen.has(variantKey)) {group.variants.push(item);group.seen.add(variantKey);}
+  }
+  const rows = [...groups.values()].sort((a,b)=>sortOrder==="material" ?
+    a.material.localeCompare(b.material) || a.maker.localeCompare(b.maker) || a.name.localeCompare(b.name) :
+    sortOrder==="product" ? a.name.localeCompare(b.name) || a.maker.localeCompare(b.maker) :
+    a.maker.localeCompare(b.maker) || a.name.localeCompare(b.name));
+  return {filtered,rows};
+  },[filaments,familyIndex,term,manufacturerFilter,materialFilter,colourFilter,sortOrder]);
+  const pageCount = Math.max(1,Math.ceil(rows.length/pageSize));
+  const safePage = Math.min(page,pageCount);
+  const visibleRows = rows.slice((safePage-1)*pageSize,safePage*pageSize);
   return <div className="printingStack">
     <section className="panel printingLibraryHero">
       <div>
@@ -2307,36 +2435,40 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
 
     <section className="panel printingSection">
       <div className="printingLibraryToolbar">
-        <div><strong>{filaments.length} filament product{filaments.length === 1 ? "" : "s"}</strong><small>{rows.length !== filaments.length ? rows.length + " matching" : "Newest updated first"}</small></div>
-        <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search manufacturer, product, material, colour or source…" />
+        <div><strong>{rows.length} filament products</strong><small>{filtered.length} colour records · {filaments.length} saved records</small></div>
+        <input value={query} onChange={e=>{setQuery(e.target.value);setPage(1);}} placeholder="Search manufacturer, product, material or colour…" />
+        <label>Manufacturer <select value={manufacturerFilter} onChange={e=>{setManufacturerFilter(e.target.value);setPage(1);}}><option value="">All</option>{manufacturersList.map(v=><option key={v}>{v}</option>)}</select></label>
+        <label>Material <select value={materialFilter} onChange={e=>{setMaterialFilter(e.target.value);setPage(1);}}><option value="">All</option>{materialList.map(v=><option key={v}>{v}</option>)}</select></label>
+        <label>Colour <select value={colourFilter} onChange={e=>{setColourFilter(e.target.value);setPage(1);}}><option value="">All</option>{colourList.map(v=><option key={v}>{v}</option>)}</select></label>
+        <label>Sort by <select value={sortOrder} onChange={e=>setSortOrder(e.target.value)}><option value="manufacturer">Manufacturer A–Z</option><option value="product">Product A–Z</option><option value="material">Material A–Z</option></select></label>
+        <label className="filamentPageSize">Per page <select value={pageSize} onChange={e=>{setPageSize(Number(e.target.value));setPage(1);}}><option value={50}>50</option><option value={100}>100</option><option value={250}>250</option></select></label>
       </div>
       <div className="printingList">
-        {rows.map(item => <article className={"printingListRow printingLibraryRow" + (searchTarget?.id === item.id ? " searchTargetRow" : "")} id={"filament-search-target-" + item.id} key={item.id}>
-          {item.image
-            ? <img className="filamentLibraryThumb" src={item.image} alt="" loading="lazy" />
-            : <span className={"printingSwatch filamentPreview-" + (item.transparency || "opaque")} style={filamentSwatchStyle(item)} />}
-          <div>
-            <strong>{item.display_name || item.name}</strong>
-            <small>{[item.manufacturer, item.material, item.color_name].filter(Boolean).join(" · ")}</small>
-            <small>{item.diameter_mm || "?"} mm · {grams(item.nominal_weight_g)} nominal{item.density_g_cm3 ? " · " + item.density_g_cm3 + " g/cm³" : ""} · {item.source || "Manual"}</small>
-            {(item.product_url || item.tds_url || item.sds_url) && <small className="filamentSourceLinks">
-              {item.product_url && <a href={item.product_url} target="_blank" rel="noreferrer">Product</a>}
-              {item.tds_url && <a href={item.tds_url} target="_blank" rel="noreferrer">TDS</a>}
-              {item.sds_url && <a href={item.sds_url} target="_blank" rel="noreferrer">SDS</a>}
-            </small>}
-          </div>
-          <div className="printingBadges">
-            {item.spool_type && <Badge>{item.spool_type}</Badge>}
-            {item.is_refill && <Badge>Refill</Badge>}
-            {item.country_of_origin && <Badge>{item.country_of_origin}</Badge>}
-            {item.transparency && item.transparency !== "opaque" && <Badge>{item.transparency_label || item.transparency}</Badge>}
-            {item.glow && <Badge>Glow</Badge>}
-            <button type="button" onClick={() => setDetailFilament(item)}>Details</button>
-            {canChangeFilament && <button type="button" onClick={() => setImageFilament(item)}>Image</button>}
-            {canChangeFilament && <button type="button" onClick={() => setEditFilament(item)}>Edit</button>}
-          </div>
-        </article>)}
+        {visibleRows.map(group => {
+          const key=[group.maker,group.name,group.material].join("|");
+          const open=Boolean(expandedFamilies[key]);
+          const preview=group.variants[0];
+          return <article className="printingListRow printingLibraryRow" key={key}>
+            <span className={"printingSwatch filamentPreview-"+(preview.transparency||"opaque")} style={filamentSwatchStyle(preview)}/>
+            <div>
+              <strong>{group.maker} · {group.name}</strong>
+              <small>{group.material} · {group.variants.length} colour variant{group.variants.length===1?"":"s"}</small>
+              {open && <div className="filamentGroupedVariants">{group.variants.map(item=><div key={item.id} className="filamentGroupedVariant">
+                <span className="printingSwatch" style={filamentSwatchStyle(item)}/>
+                <span>{filamentVariantLabel(item) || item.color_hex || "Unspecified colour"}{item.color_name && item.color_hex ? " · "+item.color_hex : ""}</span>
+                <button type="button" onClick={()=>setDetailFilament(item)}>Details</button>
+                {canChangeFilament && <button type="button" onClick={()=>setEditFilament(item)}>Edit</button>}
+              </div>)}</div>}
+            </div>
+            <div className="printingBadges"><button type="button" onClick={()=>setExpandedFamilies(v=>({...v,[key]:!v[key]}))}>{open?"Hide colours":"View colours"}</button></div>
+          </article>;
+        })}
         {!rows.length && <div className="printingEmptyInline">{term ? "No filament products match this search." : "No saved filament products yet."}</div>}
+      </div>
+      <div className="formActions" aria-label="Filament library pagination">
+        <span>Page {safePage} of {pageCount} · {rows.length} distinct displayed products</span>
+        <button type="button" disabled={safePage === 1} onClick={() => setPage(v => Math.max(1, v-1))}>Previous</button>
+        <button type="button" disabled={safePage === pageCount} onClick={() => setPage(v => Math.min(pageCount, v+1))}>Next</button>
       </div>
     </section>
 
@@ -2646,6 +2778,7 @@ function FilamentEditModal({ filament, manufacturers, materials, onClose, onSave
 
 
 function FilamentCatalogueMatchModal({ filament, onClose, onApplied }) {
+  const [createManual, setCreateManual] = useState(false);
   const [rows, setRows] = useState([]);
   const [selected, setSelected] = useState("");
   const [busy, setBusy] = useState(true);
@@ -2685,6 +2818,14 @@ function FilamentCatalogueMatchModal({ filament, onClose, onApplied }) {
     }
   }
 
+  if (createManual) return <FilamentModal
+    manufacturers={filament.manufacturer ? [{name:filament.manufacturer}] : []}
+    materials={filament.material ? [filament.material] : []}
+    initialFilament={filament}
+    onClose={() => setCreateManual(false)}
+    onSaved={() => onApplied(null)}
+  />;
+
   return <Modal
     title={"Match catalogue · " + (filament.display_name || filament.name)}
     subtitle="MakerVault ranks likely known products. Review the manufacturer, material, colour and technical data before applying a match."
@@ -2694,7 +2835,7 @@ function FilamentCatalogueMatchModal({ filament, onClose, onApplied }) {
     <div className="formGrid">
       {error && <div className="formError full">{error}</div>}
       {busy && <div className="printingEmptyInline full">Searching the filament catalogue…</div>}
-      {!busy && !rows.length && <div className="settingsCallout full"><strong>No confident catalogue candidates found</strong><p>You can keep this filament as a manual record and try again later as the catalogue grows.</p></div>}
+      {!busy && !rows.length && <div className="settingsCallout full"><strong>No confident catalogue candidates found</strong><p>Edit a new filament based on this record and save it independently to the library, without having to leave the matching flow.</p><button type="button" onClick={() => setCreateManual(true)}>Edit and save as new filament</button></div>}
       {!busy && rows.length > 0 && <div className="filamentMatchList full" role="radiogroup" aria-label="Catalogue matches">
         {rows.map(row => {
           const active = selected === row.external_id;
@@ -2728,6 +2869,7 @@ function FilamentCatalogueMatchModal({ filament, onClose, onApplied }) {
         <strong>Applying a match is conservative</strong>
         <p>MakerVault links the catalogue source and fills missing metadata. Existing manual identity/colour values are retained. Manufacturer product pages and technical data sheets are then checked for higher-authority print temperatures and related technical data where available.</p>
       </div>
+      <button type="button" className="full" onClick={() => setCreateManual(true)}>No suitable match? Edit and save as new filament</button>
       <div className="formActions full">
         <button type="button" onClick={onClose} disabled={applying}>Cancel</button>
         <button type="button" className="primary" disabled={busy || applying || !selected} onClick={applyMatch}>{applying ? "Applying…" : "Apply selected match"}</button>
@@ -2745,17 +2887,17 @@ const FILAMENT_COLOUR_PALETTE = [
   ["Beige", "#d7c7a3"], ["Gold", "#c9a227"], ["Copper", "#b87333"], ["Natural", "#e8dfc8"],
 ];
 
-function FilamentModal({ manufacturers, materials, onClose, onSaved }) {
+function FilamentModal({ manufacturers, materials, onClose, onSaved, initialFilament = null }) {
   const [form, setForm] = useState({
-    manufacturer_name: manufacturers[0]?.name || "",
-    name: "",
-    material: materials[0] || "PLA",
-    color_name: "",
-    color_hex: "#777777",
-    color_hexes: [],
-    transparency: "opaque",
-    diameter_mm: "1.75",
-    nominal_weight_g: "1000",
+    manufacturer_name: initialFilament?.manufacturer || manufacturers[0]?.name || "",
+    name: initialFilament?.name || "",
+    material: initialFilament?.material || materials[0] || "PLA",
+    color_name: initialFilament?.color_name || "",
+    color_hex: initialFilament?.color_hex || "#777777",
+    color_hexes: initialFilament?.color_hexes || [],
+    transparency: initialFilament?.transparency || "opaque",
+    diameter_mm: initialFilament?.diameter_mm || "1.75",
+    nominal_weight_g: initialFilament?.nominal_weight_g || "1000",
     catalogue_external_id: "",
   });
   const [meta, setMeta] = useState({ manufacturers: [], materials: [] });
@@ -2866,7 +3008,7 @@ function FilamentModal({ manufacturers, materials, onClose, onSaved }) {
     }
   }
 
-  return <Modal title="Add filament product" subtitle="Choose a known manufacturer/product from the open catalogue or create a fully custom filament." onClose={onClose} wide>
+  return <Modal title={initialFilament ? "Edit and save new filament" : "Add filament product"} subtitle={initialFilament ? "Create a new library entry using corrected values. The existing entry stays unchanged." : "Choose a known manufacturer/product from the open catalogue or create a fully custom filament."} onClose={onClose} wide>
     <form className="formGrid" onSubmit={submit}>
       {error && <div className="formError full">{error}</div>}
       <label>Manufacturer<select value={customManufacturer ? "__custom__" : form.manufacturer_name} onChange={e => {
