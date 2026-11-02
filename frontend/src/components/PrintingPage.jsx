@@ -2362,7 +2362,8 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
     // An explicit spaced dash is a reliable delimiter (unlike PETG-CF).
     const shadeSuffix = !colour && name.match(/\s+[-–—]\s+([^-–—]+)$/);
     if (shadeSuffix) name = name.slice(0, -shadeSuffix[0].length).trim();
-    if (/^3d[- ]fuel$/i.test(maker) && /^pla\+?$/i.test(item.material || "")) name = item.material;
+    if (/^sunlu$/i.test(maker) && /^2\\.0\\s+/i.test(name)) name = "2.0";
+    if (/^3d[- ]fuel$/i.test(maker) && /^pla\\+?$/i.test(item.material || "")) name = item.material;
     if (maker && name.toLowerCase().startsWith(maker.toLowerCase()))
       name = name.slice(maker.length).replace(/^[-–—\s]+/, "").trim();
     return name || item.material || "Unnamed product";
@@ -2871,6 +2872,7 @@ function FilamentCatalogueMatchModal({ filament, onClose, onApplied }) {
         <strong>Applying a match is conservative</strong>
         <p>MakerVault links the catalogue source and fills missing metadata. Existing manual identity/colour values are retained. Manufacturer product pages and technical data sheets are then checked for higher-authority print temperatures and related technical data where available.</p>
       </div>
+      <button type="button" className="full" onClick={() => setCreateManual(true)}>No suitable match? Edit and save as new filament</button>
       <div className="formActions full">
         <button type="button" onClick={onClose} disabled={applying}>Cancel</button>
         <button type="button" className="primary" disabled={busy || applying || !selected} onClick={applyMatch}>{applying ? "Applying…" : "Apply selected match"}</button>
