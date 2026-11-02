@@ -843,6 +843,9 @@ function SpoolEditModal({ spool, filaments, onClose, onSaved }) {
 
 function SpoolIdentityModal({ spool, onClose, onSaved }) {
   const [rfidUid, setRfidUid] = useState(spool.rfid_uid || "");
+  const [secondaryUid, setSecondaryUid] = useState(spool.rfid_uid_secondary || "");
+  const [tagCount, setTagCount] = useState(spool.rfid_uid_secondary ? 2 : 1);
+  const [scanSlot, setScanSlot] = useState(1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [terminals, setTerminals] = useState([]);
@@ -876,7 +879,8 @@ function SpoolIdentityModal({ spool, onClose, onSaved }) {
         if (result.state === "completed") {
           setScanRequest(null);
           if (result.uid && /^[0-9A-F]{8}(?:[0-9A-F]{6})?(?:[0-9A-F]{6})?$/.test(result.uid.replace(/[:-]/g, "").toUpperCase())) {
-            setRfidUid(result.uid.replace(/[:-]/g, "").toUpperCase());
+            const uid = result.uid.replace(/[:-]/g, "").toUpperCase();
+            if (scanSlot === 2) setSecondaryUid(uid); else setRfidUid(uid);
             setScanNotice("Tag scanned. Confirm this is the correct physical spool, then save its RFID identity.");
           } else {
             setError("The terminal did not return a valid RFID UID.");
@@ -924,11 +928,15 @@ function SpoolIdentityModal({ spool, onClose, onSaved }) {
   async function submit(event) {
     event.preventDefault();
     if (scanRequest) return;
+    if (tagCount === 2 && rfidUid.trim() && rfidUid.trim().toUpperCase() === secondaryUid.trim().toUpperCase()) {
+      setError("Tag 1 and Tag 2 must have different UIDs.");
+      return;
+    }
     setBusy(true); setError("");
     try {
       await apiFetch("/api/printing/spools/" + spool.id + "/", {
         method: "PATCH",
-        body: { rfid_uid: rfidUid.trim().toUpperCase() },
+        body: { rfid_uid: rfidUid.trim().toUpperCase(), rfid_uid_secondary: tagCount === 2 ? secondaryUid.trim().toUpperCase() : "" },
       });
       await onSaved();
     } catch (err) {
@@ -949,10 +957,24 @@ function SpoolIdentityModal({ spool, onClose, onSaved }) {
         <strong>{spool.filament}</strong>
         <p>{[spool.manufacturer, spool.material, spool.color_name].filter(Boolean).join(" · ") || "Filament"}</p>
       </div>
-      <label className="full">RFID tag ID<input value={rfidUid} onChange={e => { setRfidUid(e.target.value.toUpperCase()); setScanNotice(""); }} placeholder="Optional physical tag ID" /><small>Each non-empty tag ID can belong to only one MakerVault spool.</small></label>
+      <label className="full">Number of physical RFID tags
+        <select value={tagCount} disabled={Boolean(scanRequest) || busy} onChange={e => setTagCount(Number(e.target.value))}>
+          <option value={1}>1 tag</option>
+          <option value={2}>2 tags (one on each side)</option>
+        </select>
+      </label>
+      <label className="full">RFID tag 1<input value={rfidUid} onChange={e => { setRfidUid(e.target.value.toUpperCase()); setScanNotice(""); }} placeholder="Physical tag UID — side 1" /></label>
+      {tagCount === 2 && <label className="full">RFID tag 2<input value={secondaryUid} onChange={e => { setSecondaryUid(e.target.value.toUpperCase()); setScanNotice(""); }} placeholder="Physical tag UID — side 2" /></label>}
+      <small className="full">Both UIDs identify the same physical spool. Each tag UID must be unique across MakerVault.</small>
       <div className="settingsCallout full" style={{display:"grid", gap:12}}>
         <strong>Scan tag using MakerVault Terminal</strong>
-        <small>Read the tag attached to this physical spool. Scanning fills the UID field; nothing is assigned until you select Save RFID identity.</small>
+        <small>Scan either side separately. Each scan fills the selected UID field; nothing is assigned until you save.</small>
+        <label>Scan into
+          <select value={scanSlot} disabled={Boolean(scanRequest) || busy} onChange={e => setScanSlot(Number(e.target.value))}>
+            <option value={1}>Tag 1</option>
+            {tagCount === 2 && <option value={2}>Tag 2</option>}
+          </select>
+        </label>
         {terminals.length ? <div style={{display:"flex", gap:12, flexWrap:"wrap", alignItems:"end"}}>
           <label style={{flex:"1 1 180px"}}>Paired terminal
             <select value={selectedTerminal} disabled={Boolean(scanRequest) || busy} onChange={e => setSelectedTerminal(e.target.value)}>
