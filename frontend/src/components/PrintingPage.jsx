@@ -1091,6 +1091,7 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [materialSettings, setMaterialSettings] = useState({});
+  const [materialFeedback, setMaterialFeedback] = useState({});
 
   async function loadConnections() {
     try {
@@ -1241,20 +1242,28 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
   }
   async function materialDatabaseAction(connection, action) {
     if (busy) return;
-    setBusy("material-" + connection.id); setError(""); setNotice("");
+    const id = connection.id;
+    const settings = materialForm(connection);
+    setMaterialFeedback(prev => ({...prev, [id]: null}));
+    setError(""); setNotice("");
+    if (action === "configure" && !/^SHA256:[A-Za-z0-9+/]{43}=?$/.test(settings.fingerprint.trim())) {
+      setMaterialFeedback(prev => ({...prev, [id]: {type: "error", message: "Enter the verified SHA256 host-key fingerprint (SHA256:…), not the SSH public key."}}));
+      return;
+    }
+    setBusy("material-" + id);
     try {
-      const url = "/api/printing/printers/" + printer.id + "/connections/" + connection.id + "/material-database/";
+      const url = "/api/printing/printers/" + printer.id + "/connections/" + id + "/material-database/";
       const result = await apiFetch(url, {method: "POST", body: action === "configure"
-        ? {action, ...materialForm(connection)} : {action: "pull"}});
+        ? {action, ...settings, fingerprint: settings.fingerprint.trim()} : {action: "pull"}});
       if (action === "configure") {
         updateMaterialForm(connection, {password: ""});
-        setNotice("Read-only material database settings saved.");
+        setMaterialFeedback(prev => ({...prev, [id]: {type: "success", message: "Read-only material database settings saved."}}));
       } else {
-        setNotice("Printer material database copied to MakerVault (read-only). " + result.result.top_level_items + " top-level JSON entries.");
+        setMaterialFeedback(prev => ({...prev, [id]: {type: "success", message: "Printer material database copied to MakerVault (read-only). " + result.result.top_level_items + " top-level JSON entries."}}));
       }
       await loadConnections();
     } catch(err) {
-      setError(err.message);
+      setMaterialFeedback(prev => ({...prev, [id]: {type: "error", message: err.message}}));
     } finally {
       setBusy("");
     }
@@ -1417,6 +1426,7 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
           </div>}
           {connection.adapter === "creality_local" && <div className="settingsCallout">
             <strong>Printer material database</strong>
+            {materialFeedback[connection.id] && <div className={materialFeedback[connection.id].type === "error" ? "formError" : "notice"} role={materialFeedback[connection.id].type === "error" ? "alert" : "status"}>{materialFeedback[connection.id].message}</div>}
             <p>Import a read-only copy of material_database.json from this printer. This does not update the printer or automatically add materials to the shared Filament Library.</p>
             <label>SSH username<input value={materialForm(connection).username} autoComplete="username" onChange={e => updateMaterialForm(connection, {username: e.target.value})} /></label>
             <label>SSH password<input type="password" autoComplete="new-password" value={materialForm(connection).password} placeholder={connection.config?.material_ssh_password_configured ? "Saved — leave blank to retain" : "Printer SSH password"} onChange={e => updateMaterialForm(connection, {password: e.target.value})} /></label>
