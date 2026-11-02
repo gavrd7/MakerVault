@@ -6133,7 +6133,7 @@ def printing_spool_detail(request, spool_id):
                 return _error("Each physical tag must have a different UID.", status=400)
             for uid in (primary_uid, secondary_uid):
                 if uid and Spool.objects.filter(owner=request.user).exclude(pk=item.pk).filter(
-                    models.Q(rfid_uid=uid) | models.Q(rfid_uid_secondary=uid)
+                    Q(rfid_uid=uid) | Q(rfid_uid_secondary=uid)
                 ).exists():
                     return _error("That RFID tag ID is already assigned to another MakerVault spool.", status=409)
             item.rfid_uid = primary_uid
