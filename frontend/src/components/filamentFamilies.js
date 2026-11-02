@@ -48,3 +48,81 @@ export function filamentFamilyKey(item) {
 export function filamentVariantLabel(item) {
   return String(item.color_name || "").trim() || colourFromName(item) || "";
 }
+
+/**
+ * Detect candidate families using the whole catalogue, rather than assuming
+ * that a shade always appears at the end of a product name. Matching is
+ * display-only: never mutates source variants or their associated spools.
+ *
+ * Conservative threshold: within the same manufacturer AND material, two
+ * names must share at least two significant tokens and differ by exactly one
+ * extra token per name. Their shared tokens must comprise >= 2/3 of the
+ * longer name. This catches "Line Cherry" / "Lemon Line", but deliberately
+ * leaves ambiguous short names as separate products.
+ */
+const tokens = value => norm(value).match(/[a-z0-9]+(?:[.+-][a-z0-9]+)*/g) || [];
+const signature = words => [...words].sort().join("|");
+const compatible = (a,b) => norm(a.manufacturer)===norm(b.manufacturer) && norm(a.material)===norm(b.material);
+export function buildFilamentFamilyIndex(filaments) {
+  const result = new Map();
+  const groups = new Map();
+  for (const item of filaments) {
+    const family = filamentFamily(item);
+    const k = filamentFamilyKey(item);
+    result.set(String(item.id), {key:k, family, shade:filamentVariantLabel(item)});
+    if (!groups.has(k)) groups.set(k,[]);
+    groups.get(k).push(item);
+  }
+  // Canonicalise word order for already-known shade removal.
+  const tokenGroups = new Map();
+  for(const [key,items] of groups) {
+    const family = filamentFamily(items[0]);
+    const sig = [norm(family.manufacturer),norm(family.material),signature(tokens(family.product))].join("|");
+    if (!tokenGroups.has(sig)) tokenGroups.set(sig,[]);
+    tokenGroups.get(sig).push(key);
+  }
+  for(const keys of tokenGroups.values()) {
+    if(keys.length<2) continue;
+    const chosen=keys.slice().sort((a,b)=>a.length-b.length || a.localeCompare(b))[0];
+    for(const k of keys) for(const item of groups.get(k)) result.get(String(item.id)).key=chosen;
+  }
+  // Detect previously unknown shade words by agreement across independent
+  // product descriptions. The differing word must be different on each side.
+  const candidates=new Map();
+  for(const [key,items] of groups){
+    const f=filamentFamily(items[0]);
+    const words=tokens(f.product);
+    if(words.length<3) continue;
+    for(let i=0;i<words.length;i++){
+      const remainder=words.filter((_,n)=>n!==i);
+      if(remainder.length<2) continue;
+      const sig=[norm(f.manufacturer),norm(f.material),signature(remainder)].join("|");
+      if(!candidates.has(sig)) candidates.set(sig,[]);
+      candidates.get(sig).push({key,removed:words[i],remainder});
+    }
+  }
+  const assigned=new Set();
+  for(const matches of candidates.values()){
+    const unique=[...new Map(matches.map(x=>[x.key,x])).values()];
+    if(unique.length<2 || new Set(unique.map(x=>x.removed)).size<2) continue;
+    // Prevent generic descriptions where changing one token changes the
+    // product line. Require distinct exact-colour hex variants as evidence.
+    const evidence=new Set(unique.flatMap(x=>groups.get(x.key).map(v=>norm(v.color_hex))).filter(Boolean));
+    if(evidence.size<2) continue;
+    const keys=unique.map(x=>x.key);
+    if(keys.some(k=>assigned.has(k))) continue;
+    const representative=unique.slice().sort((a,b)=>a.key.localeCompare(b.key))[0];
+    const exemplar=filamentFamily(groups.get(representative.key)[0]);
+    const family={...exemplar,product:representative.remainder.join(" ")};
+    const canonical=[norm(family.manufacturer),norm(family.product),norm(family.material)].join("|");
+    for(const match of unique) {
+      assigned.add(match.key);
+      for(const item of groups.get(match.key)) {
+        const entry=result.get(String(item.id));
+        entry.key=canonical; entry.family=family;
+        entry.shade=entry.shade || match.removed;
+      }
+    }
+  }
+  return result;
+}
