@@ -89,6 +89,7 @@ urlpatterns = [
     path("printing/printers/<uuid:printer_id>/", api_views.printing_printer_detail, name="api-printing-printer-detail"),
     path("printing/printers/<uuid:printer_id>/connections/", api_views.printing_printer_connections, name="api-printing-printer-connections"),
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/", api_views.printing_printer_connection_detail, name="api-printing-printer-connection-detail"),
+    path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/material-database/", api_views.printing_printer_material_database, name="api-printing-printer-material-database"),
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/refresh/", api_views.printing_printer_connection_refresh, name="api-printing-printer-connection-refresh"),
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/control/", api_views.printing_printer_connection_control, name="api-printing-printer-connection-control"),
     path("printing/spools/", api_views.printing_spools, name="api-printing-spools"),
