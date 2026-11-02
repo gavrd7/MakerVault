@@ -74,3 +74,77 @@ class CrealityMaterialDatabaseTests(TestCase):
             )
         self.assertEqual(response.status_code, 502)
         self.assertEqual(self.connection.material_database_copy.payload, {"stored": ["PLA"]})
+
+
+class ScpReaderTests(TestCase):
+    """Exercise SCP source-mode framing without touching a printer."""
+
+    def _channel(self, response):
+        from unittest.mock import MagicMock
+        channel = MagicMock()
+        chunks = [response[i:i + 1] for i in range(len(response))]
+        channel.recv.side_effect = lambda n: chunks.pop(0) if chunks else b""
+        client = MagicMock()
+        client.get_transport.return_value.open_session.return_value = channel
+        return client, channel
+
+    def test_scp_pull_is_read_only_and_bounded(self):
+        from core.creality_material_database import _scp_read_database
+        payload = b'{"materials":[{"id":"PLA"}]}'
+        frame = b"C0644 " + str(len(payload)).encode() + b" material_database.json\n" + payload + b"\x00"
+        client, channel = self._channel(frame)
+        result = _scp_read_database(client, "/mnt/UDISK/creality/userdata/box/material_database.json")
+        self.assertEqual(result, payload)
+        channel.exec_command.assert_called_once_with(
+            "scp -f /mnt/UDISK/creality/userdata/box/material_database.json"
+        )
+        self.assertEqual(channel.sendall.call_count, 3)
+        self.assertEqual([args.args[0] for args in channel.sendall.call_args_list], [b"\x00"] * 3)
+        channel.close.assert_called_once()
+
+    def test_scp_rejects_truncated_file(self):
+        from core.creality_material_database import _scp_read_database
+        client, channel = self._channel(b"C0644 10 material_database.json\nabc")
+        with self.assertRaisesRegex(MaterialDatabaseError, "ended before"):
+            _scp_read_database(client, "/fixed/material_database.json")
+        channel.close.assert_called_once()
+
+    def test_scp_rejects_oversize_before_acknowledging_file(self):
+        from core.creality_material_database import _scp_read_database, MAX_DATABASE_BYTES
+        header = b"C0644 " + str(MAX_DATABASE_BYTES + 1).encode() + b" material_database.json\n"
+        client, channel = self._channel(header)
+        with self.assertRaisesRegex(MaterialDatabaseError, "5 MB"):
+            _scp_read_database(client, "/fixed/material_database.json")
+        channel.sendall.assert_called_once_with(b"\x00")
+        channel.close.assert_called_once()
+
+    def test_scp_rejects_unexpected_filename(self):
+        from core.creality_material_database import _scp_read_database
+        client, _ = self._channel(b"C0644 3 other.json\nabc\x00")
+        with self.assertRaisesRegex(MaterialDatabaseError, "unexpected filename"):
+            _scp_read_database(client, "/fixed/material_database.json")
+
+    def test_scp_rejects_remote_file_error_without_exposing_text(self):
+        from core.creality_material_database import _scp_read_database
+        client, _ = self._channel(b"\x01secret-detail\n")
+        with self.assertRaises(MaterialDatabaseError) as raised:
+            _scp_read_database(client, "/fixed/material_database.json")
+        self.assertNotIn("secret-detail", str(raised.exception))
+
+    def test_ssh_authentication_error_is_specific(self):
+        import paramiko
+        from unittest.mock import MagicMock
+        from core.creality_material_database import pull_creality_material_database
+        connection = MagicMock()
+        connection.adapter = "creality_local"
+        connection.enabled = True
+        connection.config = {"material_ssh_user": "root", "material_ssh_password": "private",
+                             "material_ssh_fingerprint": "SHA256:example"}
+        connection.endpoint_url = "ws://192.0.2.44:9999"
+        connection.printer.model = "K2"
+        with patch("core.creality_material_database.paramiko.SSHClient") as factory:
+            factory.return_value.connect.side_effect = paramiko.AuthenticationException("private")
+            with self.assertRaisesRegex(MaterialDatabaseError, "authentication failed") as raised:
+                pull_creality_material_database(connection)
+            self.assertNotIn("private", str(raised.exception))
+            factory.return_value.close.assert_called_once()
