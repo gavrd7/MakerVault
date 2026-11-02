@@ -1,4 +1,4 @@
-import { filamentFamily, filamentFamilyKey, filamentVariantLabel } from "./filamentFamilies";
+import { filamentFamily, filamentFamilyKey, filamentVariantLabel, buildFilamentFamilyIndex } from "./filamentFamilies";
 import React, { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../api";
 import PrintedPartsSection from "./PrintedPartsSection";
@@ -2390,6 +2390,7 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
     }
     return ["black","white","grey","gray","red","orange","yellow","green","blue","purple","pink","brown","silver"].find(c=>name.includes(c)) || "Other";
   };
+  const familyIndex = useMemo(() => buildFilamentFamilyIndex(filaments), [filaments]);
   const manufacturersList = useMemo(() => [...new Set(filaments.map(f=>f.manufacturer).filter(Boolean))].sort((a,b)=>a.localeCompare(b)),[filaments]);
   const materialList = useMemo(() => [...new Set(filaments.map(f=>f.material).filter(Boolean))].sort((a,b)=>a.localeCompare(b)),[filaments]);
   const colourList = ["Black","White","Grey","Red","Orange","Yellow","Green","Cyan","Blue","Purple","Pink","Brown","Silver","Other"];
@@ -2403,8 +2404,9 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
       .filter(Boolean).join(" ").toLowerCase().includes(term)));
   const groups = new Map();
   for (const item of filtered) {
-    const key = filamentFamilyKey(item);
-    if (!groups.has(key)) groups.set(key,{maker:item.manufacturer || "Unknown",name:familyName(item),material:item.material,variants:[],seen:new Set()});
+    const resolved = familyIndex.get(String(item.id));
+    const key = resolved?.key || filamentFamilyKey(item);
+    if (!groups.has(key)) groups.set(key,{maker:resolved?.family.manufacturer || item.manufacturer || "Unknown",name:resolved?.family.product || familyName(item),material:item.material,variants:[],seen:new Set()});
     const group=groups.get(key);
     const variantKey=[item.color_hex,filamentVariantLabel(item)].map(v=>String(v||"").trim().toLowerCase()).join("|");
     if (!group.seen.has(variantKey)) {group.variants.push(item);group.seen.add(variantKey);}
@@ -2414,7 +2416,7 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
     sortOrder==="product" ? a.name.localeCompare(b.name) || a.maker.localeCompare(b.maker) :
     a.maker.localeCompare(b.maker) || a.name.localeCompare(b.name));
   return {filtered,rows};
-  },[filaments,term,manufacturerFilter,materialFilter,colourFilter,sortOrder]);
+  },[filaments,familyIndex,term,manufacturerFilter,materialFilter,colourFilter,sortOrder]);
   const pageCount = Math.max(1,Math.ceil(rows.length/pageSize));
   const safePage = Math.min(page,pageCount);
   const visibleRows = rows.slice((safePage-1)*pageSize,safePage*pageSize);
