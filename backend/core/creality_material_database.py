@@ -93,7 +93,7 @@ def _read_scp_header(channel):
     header = bytearray()
     for _ in range(512):
         byte = _recv_exact(channel, 1)
-        if byte == b"\\n":
+        if byte == bytes([10]):
             break
         header.extend(byte)
     else:
@@ -127,13 +127,13 @@ def _scp_read_database(client, remote_path):
     try:
         channel.settimeout(15)
         channel.exec_command("scp -f " + remote_path)  # hard-coded, read-only source path
-        channel.sendall(b"\\x00")  # SCP protocol initial acknowledgement
+        channel.sendall(bytes([0]))  # SCP protocol initial acknowledgement
         size = _read_scp_header(channel)
-        channel.sendall(b"\\x00")  # acknowledge file header
+        channel.sendall(bytes([0]))  # acknowledge file header
         payload = _recv_exact(channel, size)
-        if _recv_exact(channel, 1) != b"\\x00":
+        if _recv_exact(channel, 1) != bytes([0]):
             raise MaterialDatabaseError("Printer SCP reported an incomplete file transfer.")
-        channel.sendall(b"\\x00")  # final acknowledgement
+        channel.sendall(bytes([0]))  # final acknowledgement
         return payload
     finally:
         channel.close()
