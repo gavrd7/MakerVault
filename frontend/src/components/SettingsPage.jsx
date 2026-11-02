@@ -1,4 +1,4 @@
-import { filamentFamily, filamentFamilyKey, filamentVariantLabel } from "./filamentFamilies";
+import { filamentFamily, filamentFamilyKey, filamentVariantLabel, buildFilamentFamilyIndex } from "./filamentFamilies";
 import React, { useEffect, useState } from "react";
 import { apiFetch } from "../api";
 import { Badge, LoadingBlock, Modal } from "./Common";
@@ -645,11 +645,12 @@ function IntegrationReviewRow({ review, spools, filaments, busy, onResolve }) {
     const family = filamentFamily(filament);
     return [family.manufacturer, family.product, ...(family.product.toLowerCase() === family.material.toLowerCase() ? [] : [family.material])].join(" · ");
   };
+  const familyIndex = useMemo(() => buildFilamentFamilyIndex(filaments), [filaments]);
   const familyChoices = new Map();
-  filaments.forEach(f => { const key = filamentFamilyKey(f); if (!familyChoices.has(key)) familyChoices.set(key, familyName(f)); });
+  filaments.forEach(f => { const matched = familyIndex.get(String(f.id)); const key = matched?.key || filamentFamilyKey(f); const family = matched?.family; const label = family ? [family.manufacturer, family.product, ...(family.product.toLowerCase() === family.material.toLowerCase() ? [] : [family.material])].join(" · ") : familyName(f); if (!familyChoices.has(key)) familyChoices.set(key,label); });
   const families = [...familyChoices.entries()].sort((a,b) => a[1].localeCompare(b[1]));
   const remoteHex = String(review.remote?.color_hex || "").replace(/^#/, "").toLowerCase();
-  const variants = filaments.filter(f => filamentFamilyKey(f) === familyChoice);
+  const variants = filaments.filter(f => (familyIndex.get(String(f.id))?.key || filamentFamilyKey(f)) === familyChoice);
   const hexDistance = hex => {
     const value = String(hex || "").replace(/^#/, "").toLowerCase();
     if (!/^[0-9a-f]{6}$/.test(value) || !/^[0-9a-f]{6}$/.test(remoteHex)) return Infinity;
