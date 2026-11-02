@@ -1,3 +1,4 @@
+from .filament_manufacturers import resolve_filament_manufacturer
 import hashlib
 import json
 import plistlib
@@ -1334,14 +1335,14 @@ def _resolve_filament_manufacturer(payload):
 
     name = str(payload.get("manufacturer_name") or "").strip()
     if name:
-        maker, _ = FilamentManufacturer.objects.get_or_create(name=name)
+        maker, _ = (resolve_filament_manufacturer(name), False)
         return maker
 
     legacy_id = payload.get("manufacturer_id")
     if legacy_id:
         legacy = Manufacturer.objects.filter(pk=legacy_id).first()
         if legacy:
-            maker, _ = FilamentManufacturer.objects.get_or_create(name=legacy.name)
+            maker, _ = (resolve_filament_manufacturer(legacy.name), False)
             return maker
         maker = FilamentManufacturer.objects.filter(pk=legacy_id).first()
         if maker:
@@ -4965,9 +4966,7 @@ def printing_filament_catalogue_import(request):
         payload = _read_json(request)
         data = get_spoolmandb_item(payload.get("external_id"))
 
-        manufacturer, _ = FilamentManufacturer.objects.get_or_create(
-            name=data["manufacturer"] or "Generic"
-        )
+        manufacturer, _ = (resolve_filament_manufacturer(data["manufacturer"] or "Generic"), False)
         source_type = str(data.get("source_type") or "spoolmandb").strip() or "spoolmandb"
         source_name = str(data.get("source_name") or "SpoolmanDB").strip() or "SpoolmanDB"
         source, _ = CatalogSource.objects.update_or_create(
