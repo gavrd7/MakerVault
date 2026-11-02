@@ -13,6 +13,7 @@ import paramiko
 from django.utils import timezone
 
 from .printer_connectivity import normalise_creality_endpoint
+from .models import PrinterMaterialDatabaseSnapshot
 
 MAX_DATABASE_BYTES = 5 * 1024 * 1024
 MATERIAL_DATABASE_PATHS = {
@@ -85,10 +86,11 @@ def pull_creality_material_database(connection):
         client.close()
     # Cache the exact printer-side JSON separately from MakerVault's filament
     # products: no new manufacturer, colour or spool is guessed or written.
-    cfg["material_database_snapshot"] = catalog
-    cfg["material_database_synced_at"] = timezone.now().isoformat()
-    connection.config = cfg
-    connection.save(update_fields=["config", "updated_at"])
-    return {"synced_at": cfg["material_database_synced_at"],
+    copied_at = timezone.now()
+    PrinterMaterialDatabaseSnapshot.objects.update_or_create(
+        connection=connection,
+        defaults={"payload": catalog, "synced_at": copied_at, "byte_size": len(payload)},
+    )
+    return {"synced_at": copied_at.isoformat(),
             "top_level_items": len(catalog), "bytes": len(payload),
             "scope": "read-only-printer-material-database"}
