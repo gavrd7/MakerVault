@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .filament_manufacturers import resolve_filament_manufacturer
 
 import hashlib
 from decimal import Decimal
@@ -357,7 +358,7 @@ def seed_starter_filament_catalogue(*, limit=STARTER_FILAMENT_LIMIT):
                 source__source_type="spoolmandb", source__external_id=external_id,
             ).exists():
                 continue
-            maker, _ = FilamentManufacturer.objects.get_or_create(name=row["manufacturer"])
+            maker, _ = (resolve_filament_manufacturer(row["manufacturer"]), False)
             source, _ = CatalogSource.objects.get_or_create(
                 source_type="spoolmandb", external_id=external_id,
                 defaults={
@@ -380,6 +381,107 @@ def seed_starter_filament_catalogue(*, limit=STARTER_FILAMENT_LIMIT):
             )
             created += 1
     return {"status": "complete", "selected": len(selected), "created": created}
+
+
+
+def filament_variant_key(manufacturer, name, material, color_hex, color_name=""):
+    """Conservative identity for imported variants, independent of upstream IDs.
+
+    A known hex colour distinguishes variants. A named colour is retained when
+    no hex is available, so genuinely different colours are not combined.
+    """
+    import re
+    def clean(value):
+        return re.sub(r"[^a-z0-9]+", "", str(value or "").casefold())
+    title = str(name or "").strip()
+    colour = str(color_name or "").strip()
+    if colour and title.casefold().endswith(colour.casefold()):
+        title = title[:-len(colour)].rstrip(" -–—")
+    return (clean(manufacturer), clean(title), clean(material),
+            clean(color_hex) or clean(colour))
+
+
+def populate_missing_filament_variants(*, limit=150):
+    """Incrementally add missing colour variants from the sourced catalogue.
+
+    A scheduled call adds at most `limit` products, then may continue in a
+    later worker task. Existing products and manual changes are never updated
+    here; normal enrichment handles already-imported rows.
+    """
+    from django.db import transaction
+    from .models import CatalogSource, FilamentManufacturer, FilamentProduct
+
+    limit = max(1, min(int(limit), 300))
+    catalogue = sorted(get_filament_catalogue(), key=lambda row: (
+        str(row.get("manufacturer") or "").casefold(),
+        str(row.get("name") or "").casefold(),
+        str(row.get("color_name") or "").casefold(),
+        str(row.get("external_id") or ""),
+    ))
+    known = set(FilamentProduct.objects.filter(
+        source__isnull=False,
+    ).values_list("source__source_type", "source__external_id"))
+    missing = [
+        row for row in catalogue if row.get("external_id") and
+        row.get("name") and row.get("material") and
+        row.get("manufacturer") and
+        (str(row.get("source_type") or "spoolmandb"), str(row["external_id"])) not in known
+    ]
+    # Prevent duplicate material/colour rows even when upstream IDs differ.
+    # Do not delete or rewrite existing records, which may be referenced by spools.
+    existing_variants = set(
+        filament_variant_key(
+            item.filament_manufacturer.name if item.filament_manufacturer_id
+            else item.manufacturer.name if item.manufacturer_id else "",
+            item.name, item.material, item.color_hex, item.color_name
+        )
+        for item in FilamentProduct.objects.select_related(
+            "filament_manufacturer", "manufacturer"
+        ).all().iterator()
+    )
+    created = 0
+    skipped_duplicates = 0
+    for row in missing:
+        key = filament_variant_key(
+            row["manufacturer"], row["name"], row["material"],
+            row.get("color_hex"), row.get("color_name")
+        )
+        if key in existing_variants:
+            skipped_duplicates += 1
+            continue
+        if created >= limit:
+            break
+        external_id = str(row["external_id"])
+        source_type = str(row.get("source_type") or "spoolmandb")[:32]
+        with transaction.atomic():
+            maker, _ = (resolve_filament_manufacturer(str(row["manufacturer"])[:200]), False)
+            source, _ = CatalogSource.objects.get_or_create(
+                source_type=source_type, external_id=external_id,
+                defaults={
+                    "name": (f"{row['manufacturer']} — {row['name']}")[:200],
+                    "url": row.get("source_url") or DEFAULT_SPOOLMANDB_URL,
+                    "raw_metadata": {"record": row.get("raw") or {}},
+                },
+            )
+            if FilamentProduct.objects.filter(source=source).exists():
+                continue
+            FilamentProduct.objects.create(
+                source=source, filament_manufacturer=maker,
+                name=str(row["name"])[:255], material=str(row["material"])[:80],
+                color_name=str(row.get("color_name") or "")[:120],
+                color_hex=row.get("color_hex") or "",
+                color_hexes=row.get("color_hexes") or [],
+                profile_data={
+                    "source": "SpoolmanDB" if source_type == "spoolmandb" else "MakerVault supplement",
+                    "external_catalogue_id": external_id,
+                },
+            )
+            created += 1
+            existing_variants.add(key)
+    return {"status": "limit-reached" if created >= limit and len(missing) > created + skipped_duplicates else "complete",
+            "created": created, "skipped_duplicates": skipped_duplicates,
+            "pending_before": len(missing)}
+
 
 
 def refresh_imported_filament_products(*, force_catalogue=False, limit=None, cursor=None):
@@ -680,7 +782,7 @@ def apply_catalogue_match_to_filament(filament, external_id):
             },
         },
     )
-    maker, _ = FilamentManufacturer.objects.get_or_create(name=row["manufacturer"] or "Generic")
+    maker, _ = (resolve_filament_manufacturer(row["manufacturer"] or "Generic"), False)
 
     profile = dict(filament.profile_data or {})
     restore_snapshot = _catalogue_match_restore_snapshot(filament)

@@ -3136,3 +3136,40 @@ a:focus-visible,
 .httpsGuideSteps { padding-left: 1.5rem; line-height: 1.65; }
 .httpsGuideSteps li { margin-bottom: .8rem; }
 .httpsGuideCaution { font-size: .9rem; opacity: .85; border-top: 1px solid var(--border, #455161); padding-top: 1rem; }
+
+/* Filament detail colour preview: contained, centered and never clipped by the hero border. */
+.filamentCatalogueHero:has(.filamentNoImage){height:auto;min-height:155px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.filamentCatalogueHero .filamentNoImage{min-height:155px;box-sizing:border-box;padding:20px;width:100%;height:auto}
+.filamentCatalogueHero .filamentNoImage .printingSwatch{display:block;flex:none;width:72px;height:72px;min-width:72px;min-height:72px;max-width:72px;max-height:72px;box-sizing:border-box;margin:0 auto;border-radius:16px}
+
+/* Filament catalogue: readable toolbar controls and compact expanded variants. */
+.printingLibraryToolbar { display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px; }
+.printingLibraryToolbar > div:first-child { min-width:180px; }
+.printingLibraryToolbar > input { flex:1 1 250px; min-width:180px; }
+.printingLibraryToolbar > label { display:flex; flex-direction:column; gap:7px; min-width:112px; font-size:12px; }
+.printingLibraryToolbar > label select { min-height:36px; }
+.printingLibraryToolbar > .filamentPageSize { min-width:90px; }
+.filamentGroupedVariants { display:grid; gap:8px; margin-top:12px; max-height:380px; overflow:auto; }
+.filamentGroupedVariant { display:flex; align-items:center; gap:12px; min-height:34px; }
+.filamentGroupedVariant > span:nth-child(2) { flex:1; }
+.filamentGroupedVariant .printingSwatch { flex:none; }
+
+.integrationVariantPicker {display:flex;flex-direction:column;gap:8px;min-width:0;position:relative}
+.integrationVariantPicker > span:first-child {font-size:14px}
+.integrationVariantTrigger {width:100%;display:flex;align-items:center;gap:10px;text-align:left;min-height:46px}
+.integrationVariantTrigger > span:nth-child(2) {flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.integrationVariantList {position:absolute;z-index:20;top:100%;left:0;right:0;max-height:320px;overflow:auto;background:#101820;border:1px solid #48536b;border-radius:12px;box-shadow:0 12px 32px #0008;padding:5px}
+.integrationVariantList button {display:flex;align-items:center;gap:10px;width:100%;min-height:38px;padding:6px 10px;background:transparent;border:0;border-radius:7px;text-align:left;color:inherit}
+.integrationVariantList button:hover,.integrationVariantList button.selected {background:#2a3343}
+.integrationVariantList button > span:nth-child(2) {flex:1}
+.integrationVariantList button > small {opacity:.7}
+.integrationVariantPicker .printingSwatch {display:inline-block;min-width:20px;width:20px;height:20px;flex:none;border-radius:6px;border:1px solid #ffffff36}
+
+/* Keep filament library pagination clear of the panel border. */
+.printingLibraryRow + .formActions,.printingSection > .formActions[aria-label='Filament library pagination']{padding:16px 16px 20px;margin-top:8px;gap:12px;flex-wrap:wrap}
+
+/* Spool view/edit uses a real fieldset, with a stable two-column edit layout. */
+.spoolEditFields { grid-column:1/-1; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; padding:0; border:0; min-width:0; }
+.spoolEditFields > .full { grid-column:1/-1; }
+.spoolEditFields label { min-width:0; }
+@media(max-width:680px){.spoolEditFields{grid-template-columns:minmax(0,1fr)}}

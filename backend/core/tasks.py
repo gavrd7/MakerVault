@@ -13,7 +13,7 @@ from .component_reference_enrichment import enrich_component_reference_links
 from .models import CatalogueMaintenanceSettings, PrinterConnection, PrintingIntegrationSetting
 from .orcaslicer_catalogue import OrcaCatalogueError, sync_orcaslicer_printer_catalogue
 from .printing_sync import PrintingSyncError, sync_printing_integration
-from .filament_catalogue import FilamentCatalogueError, refresh_imported_filament_products, seed_starter_filament_catalogue
+from .filament_catalogue import FilamentCatalogueError, refresh_imported_filament_products, seed_starter_filament_catalogue, populate_missing_filament_variants
 from .printer_connectivity import POLLERS, PrinterConnectionError, poll_connection
 
 
@@ -172,9 +172,25 @@ def seed_starter_filament_catalogue_task(self):
         result = seed_starter_filament_catalogue()
     except FilamentCatalogueError as exc:
         return {"status": "error", "error": str(exc)}
-    # Refresh only after the starter rows exist; avoid a race with an empty
-    # catalogue on first startup. The refresh task continues in bounded batches.
-    enrich_filament_catalogue_task.delay(force_catalogue=False)
+    # Populate the missing product/colour variants in bounded background
+    # batches. Refresh existing records after the initial population.
+    populate_filament_variants_task.delay()
+    return result
+
+
+@shared_task(bind=True, acks_late=True)
+def populate_filament_variants_task(self):
+    """Fill missing products without altering existing user-managed records."""
+    if backup_in_progress():
+        return {"status": "backup-in-progress"}
+    try:
+        result = populate_missing_filament_variants(limit=150)
+    except FilamentCatalogueError as exc:
+        return {"status": "error", "error": str(exc)}
+    if result["status"] == "limit-reached":
+        self.apply_async(countdown=20)
+    else:
+        enrich_filament_catalogue_task.delay(force_catalogue=False)
     return result
 
 
