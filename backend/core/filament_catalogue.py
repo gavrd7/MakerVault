@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .filament_manufacturers import resolve_filament_manufacturer
 
 import hashlib
 from decimal import Decimal
@@ -357,7 +358,7 @@ def seed_starter_filament_catalogue(*, limit=STARTER_FILAMENT_LIMIT):
                 source__source_type="spoolmandb", source__external_id=external_id,
             ).exists():
                 continue
-            maker, _ = FilamentManufacturer.objects.get_or_create(name=row["manufacturer"])
+            maker, _ = (resolve_filament_manufacturer(row["manufacturer"]), False)
             source, _ = CatalogSource.objects.get_or_create(
                 source_type="spoolmandb", external_id=external_id,
                 defaults={
@@ -453,9 +454,7 @@ def populate_missing_filament_variants(*, limit=150):
         external_id = str(row["external_id"])
         source_type = str(row.get("source_type") or "spoolmandb")[:32]
         with transaction.atomic():
-            maker, _ = FilamentManufacturer.objects.get_or_create(
-                name=str(row["manufacturer"])[:255]
-            )
+            maker, _ = (resolve_filament_manufacturer(str(row["manufacturer"])[:200]), False)
             source, _ = CatalogSource.objects.get_or_create(
                 source_type=source_type, external_id=external_id,
                 defaults={
@@ -783,7 +782,7 @@ def apply_catalogue_match_to_filament(filament, external_id):
             },
         },
     )
-    maker, _ = FilamentManufacturer.objects.get_or_create(name=row["manufacturer"] or "Generic")
+    maker, _ = (resolve_filament_manufacturer(row["manufacturer"] or "Generic"), False)
 
     profile = dict(filament.profile_data or {})
     restore_snapshot = _catalogue_match_restore_snapshot(filament)
