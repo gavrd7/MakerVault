@@ -1067,6 +1067,21 @@ class PrinterConnection(TimeStampedModel):
         return f"{self.printer} · {self.get_adapter_display()}"
 
 
+class PrinterMaterialDatabaseSnapshot(TimeStampedModel):
+    """Read-only copy of a printer's saved material database.
+
+    Kept separate from live printer connection configuration so telemetry
+    polling does not repeatedly load the (potentially large) catalogue.
+    """
+    connection = models.OneToOneField(
+        PrinterConnection, on_delete=models.CASCADE,
+        related_name="material_database_copy",
+    )
+    payload = models.JSONField(default=dict)
+    synced_at = models.DateTimeField()
+    byte_size = models.PositiveIntegerField(default=0)
+
+
 class PrinterControlRequest(TimeStampedModel):
     """Persistent command receipt prevents resending an uncertain request."""
 
