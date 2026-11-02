@@ -1,7 +1,7 @@
-"""Creality material database mirror: bounded, read-only SSH/SFTP fetch.
+"""Read-only, size-bounded Creality material database mirror via SSH/SCP.
 
-The live printer's material_database.json is never changed. Unlike CFS slot
-telemetry this reads its saved catalogue. No write-capable SSH command is sent.
+Only SCP source mode (scp -f) is used; no printer writes or catalogue imports.
+The remote path is a hard-coded constant, never supplied by a request.
 """
 import base64
 import hashlib
@@ -33,8 +33,71 @@ class _PinnedHostKey(paramiko.MissingHostKeyPolicy):
     def missing_host_key(self, client, hostname, key):
         digest = base64.b64encode(hashlib.sha256(key.asbytes()).digest()).decode().rstrip("=")
         if "SHA256:" + digest != self.fingerprint:
-            raise paramiko.SSHException("Printer SSH host key does not match the configured fingerprint.")
+            raise MaterialDatabaseError("Printer SSH host key does not match the verified fingerprint.")
         client.get_host_keys().add(hostname, key.get_name(), key)
+
+
+def _recv_exact(channel, count):
+    """Receive only the requested number of bytes; reject short/truncated transfers."""
+    chunks = []
+    remaining = count
+    while remaining:
+        data = channel.recv(min(65536, remaining))
+        if not data:
+            raise MaterialDatabaseError("Printer SCP transfer ended before the declared file size.")
+        chunks.append(data)
+        remaining -= len(data)
+    return b"".join(chunks)
+
+
+def _read_scp_header(channel):
+    header = bytearray()
+    for _ in range(512):
+        byte = _recv_exact(channel, 1)
+        if byte == b"\\n":
+            break
+        header.extend(byte)
+    else:
+        raise MaterialDatabaseError("Printer SCP response header is too long.")
+    if not header:
+        raise MaterialDatabaseError("Printer SCP returned an empty response.")
+    if header[0] in (1, 2):
+        # Never surface the remote stderr/error text, which is untrusted.
+        raise MaterialDatabaseError("Printer SCP could not open the material database file.")
+    parts = bytes(header).split(b" ", 2)
+    if len(parts) != 3 or parts[0] != b"C0644" and not (
+        len(parts[0]) == 5 and parts[0].startswith(b"C") and all(
+            digit in b"01234567" for digit in parts[0][1:]
+        )
+    ):
+        raise MaterialDatabaseError("Printer SCP returned an invalid file header.")
+    if not parts[1].isdigit():
+        raise MaterialDatabaseError("Printer SCP returned an invalid file length.")
+    size = int(parts[1])
+    if size > MAX_DATABASE_BYTES:
+        raise MaterialDatabaseError("Printer material database exceeds the 5 MB read limit.")
+    if size == 0:
+        raise MaterialDatabaseError("Printer material database is empty.")
+    if parts[2] != b"material_database.json":
+        raise MaterialDatabaseError("Printer SCP returned an unexpected filename.")
+    return size
+
+
+def _scp_read_database(client, remote_path):
+    channel = client.get_transport().open_session(timeout=10)
+    try:
+        channel.settimeout(15)
+        channel.exec_command("scp -f " + remote_path)  # hard-coded, read-only source path
+        channel.sendall(b"\\x00")  # SCP protocol initial acknowledgement
+        size = _read_scp_header(channel)
+        channel.sendall(b"\\x00")  # acknowledge file header
+        payload = _recv_exact(channel, size)
+        if _recv_exact(channel, 1) != b"\\x00":
+            raise MaterialDatabaseError("Printer SCP reported an incomplete file transfer.")
+        channel.sendall(b"\\x00")  # final acknowledgement
+        return payload
+    finally:
+        channel.close()
 
 
 def pull_creality_material_database(connection):
@@ -51,41 +114,37 @@ def pull_creality_material_database(connection):
         raise MaterialDatabaseError("The Creality connection has no valid printer host.")
     remote_path = MATERIAL_DATABASE_PATHS["k1" if connection.printer.model.lower().startswith("k1") else "other"]
     client = paramiko.SSHClient()
-    # No system-host-key fallback or auto-add. Always verify the pinned key.
+    # Ignore system known_hosts; accept only the explicitly pinned fingerprint.
     client.set_missing_host_key_policy(_PinnedHostKey(fingerprint))
     try:
-        client.connect(
-            hostname=host, port=22, username=user, password=password,
-            timeout=6, auth_timeout=6, banner_timeout=6, look_for_keys=False,
-            allow_agent=False,
-        )
         try:
-            with client.open_sftp() as sftp:
-                if sftp.stat(remote_path).st_size > MAX_DATABASE_BYTES:
-                    raise MaterialDatabaseError("Printer material database is too large to import safely.")
-                with sftp.open(remote_path, "rb") as remote:
-                    payload = remote.read(MAX_DATABASE_BYTES + 1)
-        except (paramiko.SSHException, OSError):
-            # Some Creality SSH builds implement SCP but no SFTP subsystem.
-            # The remote command uses only a hard-coded path from the constant\n            # mapping above, never a user-controlled shell argument.
-            stdin, stdout, stderr = client.exec_command("cat " + remote_path, timeout=10)  # nosec B601
-            stdin.close()
-            payload = stdout.read(MAX_DATABASE_BYTES + 1)
-            if len(payload) > MAX_DATABASE_BYTES:
-                raise MaterialDatabaseError("Printer material database is too large to import safely.")
-            if stdout.channel.recv_exit_status() != 0:
-                raise MaterialDatabaseError("Printer material database could not be read.")
-        if len(payload) > MAX_DATABASE_BYTES:
-            raise MaterialDatabaseError("Printer material database exceeded the 5 MB read limit.")
-        catalog = json.loads(payload.decode("utf-8-sig"))
+            client.connect(
+                hostname=host, port=22, username=user, password=password,
+                timeout=6, auth_timeout=6, banner_timeout=6, look_for_keys=False,
+                allow_agent=False,
+            )
+        except paramiko.AuthenticationException as exc:
+            raise MaterialDatabaseError("Printer SSH authentication failed; check the saved username and password.") from exc
+        except MaterialDatabaseError:
+            raise
+        except (paramiko.SSHException, OSError, socket.error) as exc:
+            raise MaterialDatabaseError("Could not establish the printer SSH connection or negotiate its host key.") from exc
+        try:
+            payload = _scp_read_database(client, remote_path)
+        except MaterialDatabaseError:
+            raise
+        except (paramiko.SSHException, OSError, socket.error, EOFError) as exc:
+            raise MaterialDatabaseError("Printer SCP retrieval failed; check SCP support and the database path.") from exc
+        try:
+            catalog = json.loads(payload.decode("utf-8-sig"))
+        except (UnicodeError, ValueError) as exc:
+            raise MaterialDatabaseError("Printer material database is not valid UTF-8 JSON.") from exc
         if not isinstance(catalog, (dict, list)):
             raise MaterialDatabaseError("The printer material database has an unsupported JSON root.")
-    except (paramiko.SSHException, socket.error, OSError, UnicodeError, ValueError) as exc:
-        raise MaterialDatabaseError("Could not read the printer material database; check SSH access, host key and file path.") from exc
     finally:
         client.close()
-    # Cache the exact printer-side JSON separately from MakerVault's filament
-    # products: no new manufacturer, colour or spool is guessed or written.
+
+    # Only update the cached copy after validating the complete transfer.
     copied_at = timezone.now()
     PrinterMaterialDatabaseSnapshot.objects.update_or_create(
         connection=connection,
