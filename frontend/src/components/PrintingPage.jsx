@@ -811,9 +811,17 @@ function SpoolEditModal({ spool, filaments, onClose, onSaved }) {
   return <Modal title={"Physical spool · " + spool.spool_id}
     subtitle="Changes affect this physical spool only. The shared filament catalogue entry is not modified."
     onClose={onClose} wide>
-    <form className="formGrid" onSubmit={save}>
-      {!editing && <div className="settingsCallout full"><strong>{spool.filament}</strong><p>{spool.notes || "No notes recorded."}</p></div>}
-      <fieldset className="spoolEditFields" disabled={!editing}>
+    {!editing ? <div className="formGrid">
+      <div className="settingsCallout full"><strong>{spool.filament}</strong><p>{[spool.manufacturer,spool.material,spool.color_name || spool.color_hex].filter(Boolean).join(" · ")}</p></div>
+      <div className="full"><strong>Status:</strong> {spool.status_label || spool.status}</div>
+      <div className="full"><strong>Location:</strong> {spool.location || "Not assigned"}</div>
+      <div className="full"><strong>Initial weight:</strong> {spool.initial_weight_g ?? "—"} g</div>
+      <div className="full"><strong>Remaining weight:</strong> {spool.remaining_weight_g ?? "—"} g</div>
+      <div className="full"><strong>Purchase cost:</strong> {spool.purchase_cost ?? "—"} {spool.currency || ""}</div>
+      <div className="full"><strong>Notes:</strong> {spool.notes || "No notes recorded."}</div>
+      <div className="formActions full"><button type="button" onClick={onClose}>Close</button><button type="button" className="primary" onClick={() => setEditing(true)}>Edit spool</button></div>
+    </div> : <form className="formGrid" onSubmit={save}>
+      <fieldset className="spoolEditFields">
       {error && <div className="formError full">{error}</div>}
       <label className="full">Filament product<select value={form.filament_id} required onChange={e => set("filament_id",e.target.value)}>
         <option value="">Choose product and colour…</option>
@@ -828,8 +836,8 @@ function SpoolEditModal({ spool, filaments, onClose, onSaved }) {
       <label>Purchase cost<input type="number" min="0" step="0.01" value={form.purchase_cost} onChange={e => set("purchase_cost",e.target.value)} /></label>
       <label className="full">Notes<textarea value={form.notes} onChange={e => set("notes",e.target.value)} /></label>
       </fieldset>
-      <div className="formActions full"><button type="button" onClick={onClose}>Close</button>{editing ? <button type="submit" className="primary" disabled={busy}>{busy ? "Saving…" : "Save spool"}</button> : <button type="button" className="primary" onClick={event=>{event.preventDefault();setEditing(true);}}>Edit spool</button>}</div>
-    </form>
+      <div className="formActions full"><button type="button" onClick={() => setEditing(false)} disabled={busy}>Cancel editing</button><button type="submit" className="primary" disabled={busy}>{busy ? "Saving…" : "Save spool"}</button></div>
+    </form>}
   </Modal>;
 }
 
