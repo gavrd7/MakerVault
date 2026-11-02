@@ -697,6 +697,7 @@ class Spool(TimeStampedModel):
     spool_id = models.CharField(max_length=40)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="makervault_spools")
     rfid_uid = models.CharField(max_length=255, blank=True, default="", db_index=True)
+    rfid_uid_secondary = models.CharField(max_length=255, blank=True, default="", db_index=True)
     filament = models.ForeignKey(FilamentProduct, on_delete=models.PROTECT, related_name="spools")
     initial_weight_g = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     remaining_weight_g = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
@@ -726,11 +727,15 @@ class Spool(TimeStampedModel):
                 condition=~models.Q(rfid_uid=""),
                 name="unique_nonblank_spool_rfid_uid",
             ),
+            models.UniqueConstraint(fields=["rfid_uid_secondary"], condition=~models.Q(rfid_uid_secondary=""), name="uniq_nonblank_spool_rfid_second"),
         ]
 
     def clean(self):
         super().clean()
         self.rfid_uid = str(self.rfid_uid or "").strip().upper()
+        self.rfid_uid_secondary = str(self.rfid_uid_secondary or "").strip().upper()
+        if self.rfid_uid and self.rfid_uid == self.rfid_uid_secondary:
+            raise ValidationError({"rfid_uid_secondary": "The two tag IDs must be different."})
         if self.storage_location_id and self.owner_id and self.storage_location.owner_id != self.owner_id:
             raise ValidationError({"storage_location": "Selected location belongs to a different user."})
         if self.assigned_printer_id and self.owner_id and self.assigned_printer.owner_id != self.owner_id:
@@ -740,6 +745,7 @@ class Spool(TimeStampedModel):
 
     def save(self, *args, **kwargs):
         self.rfid_uid = str(self.rfid_uid or "").strip().upper()
+        self.rfid_uid_secondary = str(self.rfid_uid_secondary or "").strip().upper()
         super().save(*args, **kwargs)
 
     def __str__(self):
