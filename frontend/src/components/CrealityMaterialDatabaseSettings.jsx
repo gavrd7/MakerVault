@@ -74,8 +74,7 @@ export default function CrealityMaterialDatabaseSettings() {
         setFeedback({type: "success", message: "Printer database settings saved."});
         await loadConnections(selected);
       } else {
-        setFeedback({type: "success", message: "Read-only printer database copy complete. " +
-          result.result.top_level_items + " top-level JSON entries retrieved."});
+        setFeedback({type: "success", message: "Material database synced successfully"});
         await loadConnections(selected);
       }
     } catch (err) {
