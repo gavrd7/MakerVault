@@ -7,6 +7,7 @@ import base64
 import hashlib
 import json
 import socket
+import re
 from urllib.parse import urlparse
 
 import paramiko
@@ -35,6 +36,44 @@ class _PinnedHostKey(paramiko.MissingHostKeyPolicy):
         if "SHA256:" + digest != self.fingerprint:
             raise MaterialDatabaseError("Printer SSH host key does not match the verified fingerprint.")
         client.get_host_keys().add(hostname, key.get_name(), key)
+
+
+def _ed25519_only_options():
+    # OpenWrt Dropbear exposes both RSA and ED25519. Without this,
+    # Paramiko can negotiate RSA even when the user pinned ED25519.
+    return {"keys": [
+        "ssh-rsa", "rsa-sha2-256", "rsa-sha2-512",
+        "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521",
+        "ssh-dss", "ssh-ed448",
+    ]}
+
+
+def discover_creality_host_key(connection):
+    """Inspect a printer's ED25519 host key without authentication or persistence.
+
+    The unverified fingerprint MUST be confirmed by the user before saving it.
+    """
+    if connection.adapter != "creality_local" or not connection.enabled:
+        raise MaterialDatabaseError("Only enabled Creality connections can inspect SSH host keys.")
+    host = urlparse(normalise_creality_endpoint(connection.endpoint_url)).hostname
+    if not host:
+        raise MaterialDatabaseError("The Creality connection has no valid printer host.")
+    transport = None
+    try:
+        sock = socket.create_connection((host, 22), timeout=6)
+        transport = paramiko.Transport(sock, disabled_algorithms=_ed25519_only_options())
+        transport.banner_timeout = 6
+        transport.start_client(timeout=6)
+        key = transport.get_remote_server_key()
+        if key.get_name() != "ssh-ed25519":
+            raise MaterialDatabaseError("The printer did not offer an ED25519 host key.")
+        digest = base64.b64encode(hashlib.sha256(key.asbytes()).digest()).decode().rstrip("=")
+        return {"algorithm": "ssh-ed25519", "fingerprint": "SHA256:" + digest}
+    except (paramiko.SSHException, socket.error, OSError, EOFError) as exc:
+        raise MaterialDatabaseError("Could not retrieve the printer's ED25519 SSH host key.") from exc
+    finally:
+        if transport is not None:
+            transport.close()
 
 
 def _recv_exact(channel, count):
@@ -121,7 +160,7 @@ def pull_creality_material_database(connection):
             client.connect(
                 hostname=host, port=22, username=user, password=password,
                 timeout=6, auth_timeout=6, banner_timeout=6, look_for_keys=False,
-                allow_agent=False,
+                allow_agent=False, disabled_algorithms=_ed25519_only_options(),
             )
         except paramiko.AuthenticationException as exc:
             raise MaterialDatabaseError("Printer SSH authentication failed; check the saved username and password.") from exc
