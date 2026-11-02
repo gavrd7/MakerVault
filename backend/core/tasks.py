@@ -15,6 +15,7 @@ from .orcaslicer_catalogue import OrcaCatalogueError, sync_orcaslicer_printer_ca
 from .printing_sync import PrintingSyncError, sync_printing_integration
 from .filament_catalogue import FilamentCatalogueError, refresh_imported_filament_products, seed_starter_filament_catalogue, populate_missing_filament_variants
 from .printer_connectivity import POLLERS, PrinterConnectionError, poll_connection
+from .creality_material_database import MaterialDatabaseError, pull_creality_material_database
 
 
 @shared_task
@@ -455,3 +456,34 @@ def live_printer_connections_tick():
         "count": len(due),
     }
 
+
+
+@shared_task
+def scheduled_creality_material_database_tick():
+    """Opt-in read-only printer database pulls, never changes printer state.
+
+    Runs hourly, but each connection is refreshed at most once per 24 hours.
+    A failure is isolated per printer and does not clear its last good copy.
+    """
+    if backup_in_progress():
+        return {"status": "backup-in-progress", "checked": 0}
+    now = timezone.now()
+    checked = 0
+    failed = 0
+    connections = PrinterConnection.objects.filter(adapter="creality_local", enabled=True)
+    for connection in connections.iterator():
+        config = connection.config or {}
+        if config.get("material_database_scheduled") is not True:
+            continue
+        timestamp = config.get("material_database_synced_at")
+        if timestamp:
+            from django.utils.dateparse import parse_datetime
+            parsed = parse_datetime(timestamp)
+            if parsed is not None and parsed >= now - timedelta(hours=24):
+                continue
+        try:
+            pull_creality_material_database(connection)
+            checked += 1
+        except MaterialDatabaseError:
+            failed += 1
+    return {"checked": checked, "failed": failed}
