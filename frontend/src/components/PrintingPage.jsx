@@ -1090,6 +1090,7 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [materialSettings, setMaterialSettings] = useState({});
 
   async function loadConnections() {
     try {
@@ -1221,6 +1222,38 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
       await loadConnections();
       await onChanged();
     } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  function materialForm(connection) {
+    return materialSettings[connection.id] || {
+      username: connection.config?.material_ssh_user || "",
+      password: "",
+      fingerprint: connection.config?.material_ssh_fingerprint || "",
+      scheduled: Boolean(connection.config?.material_database_scheduled),
+    };
+  }
+  function updateMaterialForm(connection, patch) {
+    setMaterialSettings(prev => ({...prev, [connection.id]: {...materialForm(connection), ...patch}}));
+  }
+  async function materialDatabaseAction(connection, action) {
+    if (busy) return;
+    setBusy("material-" + connection.id); setError(""); setNotice("");
+    try {
+      const url = "/api/printing/printers/" + printer.id + "/connections/" + connection.id + "/material-database/";
+      const result = await apiFetch(url, {method: "POST", body: action === "configure"
+        ? {action, ...materialForm(connection)} : {action: "pull"}});
+      if (action === "configure") {
+        updateMaterialForm(connection, {password: ""});
+        setNotice("Read-only material database settings saved.");
+      } else {
+        setNotice("Printer material database copied to MakerVault (read-only). " + result.result.top_level_items + " top-level JSON entries.");
+      }
+      await loadConnections();
+    } catch(err) {
       setError(err.message);
     } finally {
       setBusy("");
@@ -1381,6 +1414,19 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
             <label className="printerControlsToggle"><input type="checkbox" checked={connection.controls.enabled} disabled={Boolean(busy)} onChange={() => toggleControls(connection)} /><span>Allow Pause, Resume and Cancel</span></label>
             <small>{connection.controls.enabled ? "Controls enabled for this source. Actions require a current active job." : "Read-only monitoring. Enable controls for this source to act on a print."}</small>
             <PrinterJobControls printer={printer} connection={connection} canControl={data.can_control} disabled={Boolean(busy)} onChanged={async () => { await loadConnections(); await onChanged(); }} />
+          </div>}
+          {connection.adapter === "creality_local" && <div className="settingsCallout">
+            <strong>Printer material database</strong>
+            <p>Import a read-only copy of material_database.json from this printer. This does not update the printer or automatically add materials to the shared Filament Library.</p>
+            <label>SSH username<input value={materialForm(connection).username} autoComplete="username" onChange={e => updateMaterialForm(connection, {username: e.target.value})} /></label>
+            <label>SSH password<input type="password" autoComplete="new-password" value={materialForm(connection).password} placeholder={connection.config?.material_ssh_password_configured ? "Saved — leave blank to retain" : "Printer SSH password"} onChange={e => updateMaterialForm(connection, {password: e.target.value})} /></label>
+            <label>SSH host-key fingerprint (SHA256)<input value={materialForm(connection).fingerprint} placeholder="SHA256:..." onChange={e => updateMaterialForm(connection, {fingerprint: e.target.value})} /></label>
+            <label><input type="checkbox" checked={materialForm(connection).scheduled} onChange={e => updateMaterialForm(connection, {scheduled: e.target.checked})} /> Enable automatic read-only sync (daily)</label>
+            <div className="settingsActions compact">
+              <button type="button" disabled={Boolean(busy)} onClick={() => materialDatabaseAction(connection, "configure")}>Save database settings</button>
+              <button type="button" disabled={Boolean(busy) || !connection.enabled} onClick={() => materialDatabaseAction(connection, "pull")}>Sync from printer now</button>
+            </div>
+            <small>Scheduled: {connection.config?.material_database_scheduled ? "Enabled" : "Off"} · Last copy: {connection.config?.material_database_synced_at ? formatDate(connection.config.material_database_synced_at) : "Never"}</small>
           </div>}
           <div className="settingsActions compact">
             <button type="button" disabled={busy === connection.id || !connection.enabled || !connection.supported} onClick={() => refreshConnection(connection)}>{busy === connection.id ? "Working…" : "Refresh"}</button>
