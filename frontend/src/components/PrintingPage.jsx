@@ -798,6 +798,7 @@ function SpoolEditModal({ spool, filaments, onClose, onSaved }) {
   const set = (field, value) => setForm(old => ({ ...old, [field]: value }));
   async function save(event) {
     event.preventDefault();
+    if (!editing) return;
     setBusy(true); setError("");
     try {
       await apiFetch("/api/printing/spools/" + spool.id + "/", {
@@ -812,7 +813,7 @@ function SpoolEditModal({ spool, filaments, onClose, onSaved }) {
     onClose={onClose} wide>
     <form className="formGrid" onSubmit={save}>
       {!editing && <div className="settingsCallout full"><strong>{spool.filament}</strong><p>{spool.notes || "No notes recorded."}</p></div>}
-      <fieldset className="full" disabled={!editing} style={{display:"contents"}}>
+      <fieldset className="spoolEditFields" disabled={!editing}>
       {error && <div className="formError full">{error}</div>}
       <label className="full">Filament product<select value={form.filament_id} required onChange={e => set("filament_id",e.target.value)}>
         <option value="">Choose product and colour…</option>
@@ -827,7 +828,7 @@ function SpoolEditModal({ spool, filaments, onClose, onSaved }) {
       <label>Purchase cost<input type="number" min="0" step="0.01" value={form.purchase_cost} onChange={e => set("purchase_cost",e.target.value)} /></label>
       <label className="full">Notes<textarea value={form.notes} onChange={e => set("notes",e.target.value)} /></label>
       </fieldset>
-      <div className="formActions full"><button type="button" onClick={onClose}>Close</button>{editing ? <button className="primary" disabled={busy}>{busy ? "Saving…" : "Save spool"}</button> : <button type="button" className="primary" onClick={()=>setEditing(true)}>Edit spool</button>}</div>
+      <div className="formActions full"><button type="button" onClick={onClose}>Close</button>{editing ? <button type="submit" className="primary" disabled={busy}>{busy ? "Saving…" : "Save spool"}</button> : <button type="button" className="primary" onClick={event=>{event.preventDefault();setEditing(true);}}>Edit spool</button>}</div>
     </form>
   </Modal>;
 }
