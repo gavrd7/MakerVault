@@ -110,3 +110,53 @@ class ReadOnlyCfsBearerTests(TestCase):
         self.assertEqual(self.lookup().status_code, 403)
         self.client.force_login(self.owner)
         self.assertEqual(self.client.get("/api/device/v1/spools/by-rfid/?uid=04AABBCC").status_code, 401)
+
+
+class CfsMaterialLookupTests(TestCase):
+    def setUp(self):
+        from core.models import Printer, PrinterConnection, PrinterMaterialDatabaseSnapshot
+        from django.utils import timezone
+        self.owner = get_user_model().objects.create_user(username="materials-owner")
+        self.other = get_user_model().objects.create_user(username="materials-other")
+        printer = Printer.objects.create(owner=self.owner, name="K2", model="K2")
+        connection = PrinterConnection.objects.create(
+            printer=printer, adapter="creality_local", enabled=True,
+            endpoint_url="ws://192.0.2.10:9999"
+        )
+        PrinterMaterialDatabaseSnapshot.objects.create(
+            connection=connection,
+            payload={"result": {"list": [{"base": {
+                "id": "07001", "brand": "Creality", "name": "CR-ABS",
+            }}, {"base": {"id": "10437", "brand": "eSUN", "name": "PLA Basic"}}]}},
+            synced_at=timezone.now(), byte_size=100,
+        )
+        self.factory = RequestFactory()
+
+    def query(self, material_id, owner=None, extra=None, permitted=True):
+        from core.device_cfs_lookup import material_by_id
+        request = self.factory.get("/api/device/v1/cfs/material/",
+                                   {"id": material_id, **(extra or {})})
+        request.device_owner = owner or self.owner
+        view = material_by_id.__wrapped__.__wrapped__.__wrapped__
+        with patch.object(request.device_owner, "has_perm", return_value=permitted):
+            response = view(request)
+        return response.status_code, json.loads(response.content)
+
+    def test_exact_material_code_and_leading_zero(self):
+        status, result = self.query("07001")
+        self.assertEqual(status, 200)
+        self.assertTrue(result["found"])
+        self.assertEqual(result["id"], "07001")
+        self.assertEqual(result["name"], "CR-ABS")
+        self.assertEqual(result["manufacturer"], "Creality")
+        self.assertNotIn("spool", result)
+
+    def test_unknown_code_and_owner_isolation(self):
+        self.assertEqual(self.query("99999")[1]["status"], "unmatched")
+        self.assertEqual(self.query("07001", owner=self.other)[1]["status"], "unmatched")
+
+    def test_validation_and_permissions(self):
+        for code in ("7001", "070001", "ABCDE", "../.."):
+            self.assertEqual(self.query(code)[0], 400)
+        self.assertEqual(self.query("07001", extra={"uid": "11223344"})[0], 400)
+        self.assertEqual(self.query("07001", permitted=False)[0], 403)
