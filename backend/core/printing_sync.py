@@ -1,5 +1,6 @@
-from .filament_manufacturers import resolve_filament_manufacturer
 from __future__ import annotations
+
+from .filament_manufacturers import resolve_filament_manufacturer
 
 import asyncio
 import json
