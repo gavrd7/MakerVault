@@ -1,3 +1,4 @@
+import { filamentFamily, filamentFamilyKey, filamentVariantLabel } from "./filamentFamilies";
 import React, { useEffect, useState } from "react";
 import { apiFetch } from "../api";
 import { Badge, LoadingBlock, Modal } from "./Common";
@@ -641,20 +642,8 @@ function IntegrationReviewRow({ review, spools, filaments, busy, onResolve }) {
   const [customColor, setCustomColor] = useState(review.remote?.color_hex || "");
 
   const familyName = filament => {
-    const maker = String(filament.manufacturer || "").trim();
-    const material = String(filament.material || "").trim();
-    let name = String(filament.name || "").trim();
-    const colour = String(filament.color_name || "").trim();
-    if (colour && name.toLowerCase().endsWith(colour.toLowerCase()))
-      name = name.slice(0, -colour.length).replace(/[-–—\s]+$/, "").trim();
-    // Some catalogues encode a shade in the name but leave color_name empty.
-    // An explicit spaced dash is a reliable delimiter (unlike PETG-CF).
-    const shadeSuffix = !colour && name.match(/\s+[-–—]\s+([^-–—]+)$/);
-    if (shadeSuffix) name = name.slice(0, -shadeSuffix[0].length).trim();
-    // Sources sometimes name a colour as the entire product title.
-    // For these records the material is the product family.
-    if (/^3d[- ]fuel$/i.test(maker) && /^pla\+?$/i.test(material)) name = material;
-    return [maker, name || material, ...(name && name.toLowerCase() !== material.toLowerCase() ? [material] : [])].join(" · ");
+    const family = filamentFamily(filament);
+    return [family.manufacturer, family.product, ...(family.product.toLowerCase() === family.material.toLowerCase() ? [] : [family.material])].join(" · ");
   };
   const families = [...new Set(filaments.map(familyName))].sort((a,b) => a.localeCompare(b));
   const remoteHex = String(review.remote?.color_hex || "").replace(/^#/, "").toLowerCase();
@@ -674,16 +663,7 @@ function IntegrationReviewRow({ review, spools, filaments, busy, onResolve }) {
   ) === i);
   const matching = uniqueVariants.filter(f => hexDistance(f.color_hex) === 0);
   const nearest = uniqueVariants.find(f => Number.isFinite(hexDistance(f.color_hex)));
-  const colorLabel = f => {
-    if (String(f.color_name || "").trim()) return f.color_name;
-    const name = String(f.name || "").trim();
-    const familyProduct = familyName(f).split(" · ")[1] || "";
-    if (name.toLowerCase().startsWith(familyProduct.toLowerCase())) {
-      const suffix = name.slice(familyProduct.length).replace(/^[-–—\s]+/, "").trim();
-      if (suffix) return suffix;
-    } else if (name && name.toLowerCase() !== familyProduct.toLowerCase()) return name;
-    return "";
-  };
+  const colorLabel = f => filamentVariantLabel(f);
   const [spoolChoice, setSpoolChoice] = useState(review.spool_candidates?.[0]?.id || "");
   const remote = review.remote || {};
 
