@@ -44,12 +44,14 @@ class ManufacturerIdentityTests(TestCase):
         self.assertEqual(resolve_filament_manufacturer("ESUN").pk, maker.pk)
         self.assertEqual(FilamentManufacturer.objects.filter(name__iexact="esun").count(), 1)
 
-    def test_multiple_existing_case_aliases_are_not_deleted(self):
-        first = FilamentManufacturer.objects.create(name="Sunlu")
-        second = FilamentManufacturer.objects.create(name="SUNLU")
-        chosen = resolve_filament_manufacturer("sunlu")
-        self.assertIn(chosen.pk, [first.pk, second.pk])
-        self.assertEqual(FilamentManufacturer.objects.filter(name__iexact="sunlu").count(), 2)
+    def test_database_rejects_case_only_aliases(self):
+        from django.db import IntegrityError, transaction
+
+        FilamentManufacturer.objects.create(name="Sunlu")
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                FilamentManufacturer.objects.create(name="SUNLU")
+        self.assertEqual(FilamentManufacturer.objects.filter(name__iexact="sunlu").count(), 1)
 
 
 class FilamentCatalogueTests(TestCase):
