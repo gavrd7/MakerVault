@@ -5546,6 +5546,9 @@ def printing_printer_material_database(request, printer_id, connection_id):
     try:
         payload = _read_json(request)
         action = payload.get("action")
+        if action == "discover-key" and set(payload) == {"action"}:
+            from .creality_material_database import discover_creality_host_key
+            return JsonResponse({"host_key": discover_creality_host_key(connection)})
         if action == "configure":
             if set(payload) - {"action", "username", "password", "fingerprint", "scheduled"}:
                 return _error("Unsupported material database setting.")
