@@ -1240,6 +1240,26 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
   function updateMaterialForm(connection, patch) {
     setMaterialSettings(prev => ({...prev, [connection.id]: {...materialForm(connection), ...patch}}));
   }
+  async function discoverMaterialHostKey(connection) {
+    if (busy) return;
+    setBusy("material-" + connection.id);
+    setMaterialFeedback(prev => ({...prev, [connection.id]: null}));
+    try {
+      const url = "/api/printing/printers/" + printer.id + "/connections/" + connection.id + "/material-database/";
+      const result = await apiFetch(url, {method: "POST", body: {action: "discover-key"}});
+      const fingerprint = result.host_key?.fingerprint;
+      if (!fingerprint?.startsWith("SHA256:")) throw new Error("The printer did not return a valid fingerprint.");
+      if (window.confirm("Printer ED25519 host key detected:\\n" + fingerprint + "\\n\\nVerify this matches the K2's trusted host key before accepting. Use this key for future connections?")) {
+        updateMaterialForm(connection, {fingerprint});
+        setMaterialFeedback(prev => ({...prev, [connection.id]: {type: "success", message: "Fingerprint detected and selected. Save database settings to pin it."}}));
+      }
+    } catch (err) {
+      setMaterialFeedback(prev => ({...prev, [connection.id]: {type: "error", message: err.message}}));
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function materialDatabaseAction(connection, action) {
     if (busy) return;
     const id = connection.id;
@@ -1430,7 +1450,11 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
             <p>Import a read-only copy of material_database.json from this printer. This does not update the printer or automatically add materials to the shared Filament Library.</p>
             <label>SSH username<input value={materialForm(connection).username} autoComplete="username" onChange={e => updateMaterialForm(connection, {username: e.target.value})} /></label>
             <label>SSH password<input type="password" autoComplete="new-password" value={materialForm(connection).password} placeholder={connection.config?.material_ssh_password_configured ? "Saved — leave blank to retain" : "Printer SSH password"} onChange={e => updateMaterialForm(connection, {password: e.target.value})} /></label>
-            <label>SSH host-key fingerprint (SHA256)<input value={materialForm(connection).fingerprint} placeholder="SHA256:..." onChange={e => updateMaterialForm(connection, {fingerprint: e.target.value})} /></label>
+            <label>SSH host-key fingerprint (SHA256)<input value={materialForm(connection).fingerprint} placeholder="Select Detect host key to populate" onChange={e => updateMaterialForm(connection, {fingerprint: e.target.value})} /></label>
+            <div className="settingsActions compact">
+              <button type="button" disabled={Boolean(busy)} onClick={() => discoverMaterialHostKey(connection)}>Detect host key</button>
+              <small>Detects the printer's ED25519 key without logging in. Verify the fingerprint before accepting it; MakerVault pins the saved key for subsequent connections.</small>
+            </div>
             <label><input type="checkbox" checked={materialForm(connection).scheduled} onChange={e => updateMaterialForm(connection, {scheduled: e.target.checked})} /> Enable automatic read-only sync (daily)</label>
             <div className="settingsActions compact">
               <button type="button" disabled={Boolean(busy)} onClick={() => materialDatabaseAction(connection, "configure")}>Save database settings</button>
