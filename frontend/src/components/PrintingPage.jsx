@@ -928,7 +928,11 @@ function SpoolIdentityModal({ spool, onClose, onSaved }) {
   async function submit(event) {
     event.preventDefault();
     if (scanRequest) return;
-    if (tagCount === 2 && rfidUid.trim() && rfidUid.trim().toUpperCase() === secondaryUid.trim().toUpperCase()) {
+    if (tagCount === 2 && (!rfidUid.trim() || !secondaryUid.trim())) {
+      setError("Scan or enter both tag UIDs when using two RFID tags.");
+      return;
+    }
+    if (tagCount === 2 && rfidUid.trim().toUpperCase() === secondaryUid.trim().toUpperCase()) {
       setError("Tag 1 and Tag 2 must have different UIDs.");
       return;
     }
@@ -958,7 +962,7 @@ function SpoolIdentityModal({ spool, onClose, onSaved }) {
         <p>{[spool.manufacturer, spool.material, spool.color_name].filter(Boolean).join(" · ") || "Filament"}</p>
       </div>
       <label className="full">Number of physical RFID tags
-        <select value={tagCount} disabled={Boolean(scanRequest) || busy} onChange={e => setTagCount(Number(e.target.value))}>
+        <select value={tagCount} disabled={Boolean(scanRequest) || busy} onChange={e => { const count = Number(e.target.value); setTagCount(count); if (count === 1) setScanSlot(1); setScanNotice(""); }}>
           <option value={1}>1 tag</option>
           <option value={2}>2 tags (one on each side)</option>
         </select>
