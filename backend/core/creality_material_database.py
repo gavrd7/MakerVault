@@ -67,8 +67,8 @@ def pull_creality_material_database(connection):
                     payload = remote.read(MAX_DATABASE_BYTES + 1)
         except (paramiko.SSHException, OSError):
             # Some Creality SSH builds implement SCP but no SFTP subsystem.
-            # The remote command is a fixed, literal, read-only file read.
-            stdin, stdout, stderr = client.exec_command("cat " + remote_path, timeout=10)
+            # The remote command uses only a hard-coded path from the constant\n            # mapping above, never a user-controlled shell argument.
+            stdin, stdout, stderr = client.exec_command("cat " + remote_path, timeout=10)  # nosec B601
             stdin.close()
             payload = stdout.read(MAX_DATABASE_BYTES + 1)
             if len(payload) > MAX_DATABASE_BYTES:
