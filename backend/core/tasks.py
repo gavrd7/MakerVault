@@ -10,7 +10,7 @@ from .backups import backup_in_progress
 from .catalogue_image_sources import run_catalogue_image_seed
 from .catalogue_enrichment import run_board_catalogue_enrichment
 from .component_reference_enrichment import enrich_component_reference_links
-from .models import CatalogueMaintenanceSettings, PrinterConnection, PrintingIntegrationSetting
+from .models import CatalogueMaintenanceSettings, PrinterConnection, PrintingIntegrationSetting, PrinterMaterialDatabaseSnapshot
 from .orcaslicer_catalogue import OrcaCatalogueError, sync_orcaslicer_printer_catalogue
 from .printing_sync import PrintingSyncError, sync_printing_integration
 from .filament_catalogue import FilamentCatalogueError, refresh_imported_filament_products, seed_starter_filament_catalogue, populate_missing_filament_variants
@@ -475,12 +475,11 @@ def scheduled_creality_material_database_tick():
         config = connection.config or {}
         if config.get("material_database_scheduled") is not True:
             continue
-        timestamp = config.get("material_database_synced_at")
-        if timestamp:
-            from django.utils.dateparse import parse_datetime
-            parsed = parse_datetime(timestamp)
-            if parsed is not None and parsed >= now - timedelta(hours=24):
-                continue
+        cached_at = PrinterMaterialDatabaseSnapshot.objects.filter(
+            connection=connection,
+        ).values_list("synced_at", flat=True).first()
+        if cached_at is not None and cached_at >= now - timedelta(hours=24):
+            continue
         try:
             pull_creality_material_database(connection)
             checked += 1
