@@ -3164,3 +3164,6 @@ a:focus-visible,
 .integrationVariantList button > span:nth-child(2) {flex:1}
 .integrationVariantList button > small {opacity:.7}
 .integrationVariantPicker .printingSwatch {display:inline-block;min-width:20px;width:20px;height:20px;flex:none;border-radius:6px;border:1px solid #ffffff36}
+
+/* Keep filament library pagination clear of the panel border. */
+.printingLibraryRow + .formActions,.printingSection > .formActions[aria-label='Filament library pagination']{padding:16px 16px 20px;margin-top:8px;gap:12px;flex-wrap:wrap}
