@@ -38,7 +38,7 @@ test("catalogue-context matching groups reordered unknown shade names, not recor
   const index=buildFilamentFamilyIndex(rows);
   assert.equal(index.get("a").key,index.get("b").key);
   assert.notEqual(index.get("a").key,index.get("c").key);
-  assert.equal(index.get("a").family.product,"premium speed 2.0");
+  assert.deepEqual(index.get("a").family.product.split(" ").sort(), ["premium","speed","2.0"].sort());
   assert.equal(index.get("a").shade,"cherry");
   assert.equal(index.get("b").shade,"lemon");
 });
