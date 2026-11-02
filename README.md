@@ -47,7 +47,7 @@ Maker projects rarely live in one place. Components end up in boxes and spreadsh
 
 An inventory item can be allocated to a project BOM. A model and its revisions can be associated with a build; a recorded print can produce a tracked physical part. A MakerTag on a box, spool or printed object can bring you back to its current record. These links make the system more useful than isolated inventory or printer dashboards.
 
-**Terminal interoperability (v1.5.0):** a paired terminal can resolve CFS material identifiers against cached Creality printer databases, identify physical spools by RFID UID, and scan a spool tag on request from the Physical Identity form. Manufacturer material names require online MakerVault access; offline tag data remains readable. Third-party RFID support depends on compatible tags and available documentation, not universal compatibility.\n\n## Get started
+**Terminal interoperability (v1.5.0):** a paired terminal can resolve CFS material identifiers against cached Creality printer databases, identify physical spools by either of up to two separate RFID UIDs, and scan each side of a spool on request from the Physical Identity form. Manufacturer material names require online MakerVault access; offline tag data remains readable. Third-party RFID support depends on compatible tags and available documentation, not universal compatibility.\n\n## Get started
 
 MakerVault runs as a Docker Compose stack with the application, PostgreSQL and Redis. The normal installation pulls a prebuilt image from **GHCR**, so you do not need to compile the application yourself. Start with the complete [Linux installation guide](docs/guide/getting-started/install.md) or [Windows / Docker Desktop / WSL2 guide](docs/guide/getting-started/windows.md).
 
@@ -88,7 +88,7 @@ A concise view of what's delivered and where MakerVault may go next. Checkmarks 
 - [x] Filament products, physical/reusable spools, printed parts and cost tracking
 - [x] Optional live printer integrations, monitoring, cameras and supported controls
 - [x] MakerTags with QR, RFID/NFC association and verified NTAG215 URL writing
-- [x] Connected Devices pairing and terminal-first MakerTag creation and physical spool RFID identification (Terminal v1.0)
+- [x] Connected Devices pairing and terminal-first MakerTag creation and one- or two-tag physical spool RFID identification (Terminal v1.0)
 
 ### Planned / under evaluation
 
