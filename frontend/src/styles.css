@@ -3173,3 +3173,22 @@ a:focus-visible,
 .spoolEditFields > .full { grid-column:1/-1; }
 .spoolEditFields label { min-width:0; }
 @media(max-width:680px){.spoolEditFields{grid-template-columns:minmax(0,1fr)}}
+
+/* Printer material database management lives in Settings, not Live Monitoring. */
+.crealityMaterialSettings .crealityMaterialBody { display: grid; gap: 1.4rem; padding-top: .8rem; }
+.crealityMaterialSettings .crealityMaterialCard { display: grid; gap: 1.25rem; padding: 1.5rem; border: 1px solid var(--border, #344254); border-radius: 16px; background: var(--panel, transparent); }
+.crealityMaterialSettings .crealityMaterialHeading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem 1rem; }
+.crealityMaterialSettings .crealityMaterialHeading small { opacity: .75; }
+.crealityMaterialSettings .crealityMaterialFields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem 1.25rem; }
+.crealityMaterialSettings .crealityMaterialField { display: grid; gap: .45rem; min-width: 0; }
+.crealityMaterialSettings .crealityMaterialField input, .crealityMaterialSettings .crealityMaterialField select { width: 100%; min-width: 0; }
+.crealityMaterialSettings .crealityMaterialFull { grid-column: 1 / -1; }
+.crealityMaterialSettings .crealityMaterialKey { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.crealityMaterialSettings .crealityMaterialKey small { flex: 1 1 16rem; }
+.crealityMaterialSettings .crealityMaterialFooter { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; border-top: 1px solid var(--border, #344254); padding-top: 1.1rem; }
+.crealityMaterialSettings .crealityMaterialFooter .settingsActions { margin: 0; }
+@media (max-width: 640px) {
+  .crealityMaterialSettings .crealityMaterialFields { grid-template-columns: minmax(0, 1fr); }
+  .crealityMaterialSettings .crealityMaterialCard { padding: 1rem; }
+  .crealityMaterialSettings .crealityMaterialFooter .settingsActions { width: 100%; }
+}
