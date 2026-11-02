@@ -482,7 +482,8 @@ def maker_tags(request):
         if kind == "rfid" and target_type == "spool":
             existing = str(target.rfid_uid or "").strip().upper()
             submitted = MakerTag.normalise_code(kind, tag.code)
-            if existing and submitted and MakerTag.is_uid_like(submitted) and existing != submitted:
+            secondary = str(target.rfid_uid_secondary or "").strip().upper()
+            if existing and secondary and submitted and submitted not in {existing, secondary} and MakerTag.is_uid_like(submitted):
                 raise ValidationError({
                     "code": "This spool already has a different RFID UID. Use the existing RFID value."
                 })
@@ -574,7 +575,8 @@ def maker_tag_detail(request, tag_id):
         if tag.kind == "rfid" and tag.target_type == "spool":
             existing = str(target.rfid_uid or "").strip().upper()
             submitted = MakerTag.normalise_code(tag.kind, tag.code)
-            if existing and MakerTag.is_uid_like(submitted) and existing not in {submitted, previous.get("code", "")}:
+            secondary = str(target.rfid_uid_secondary or "").strip().upper()
+            if existing and secondary and MakerTag.is_uid_like(submitted) and submitted not in {existing, secondary, previous.get("code", "")}:
                 raise ValidationError({
                     "code": "The target spool already has a different RFID UID."
                 })
@@ -5686,7 +5688,7 @@ def printing_spools(request):
             return _error("Choose either a storage location or a printer.")
 
         rfid_uid = str(payload.get("rfid_uid") or "").strip().upper()
-        if rfid_uid and Spool.objects.filter(owner=request.user).filter(rfid_uid=rfid_uid).exists():
+        if rfid_uid and Spool.objects.filter(owner=request.user).filter(Q(rfid_uid=rfid_uid) | Q(rfid_uid_secondary=rfid_uid)).exists():
             return _error("That RFID tag ID is already assigned to another MakerVault spool.", status=409)
 
         item = Spool(
