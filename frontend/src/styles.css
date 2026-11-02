@@ -3167,3 +3167,9 @@ a:focus-visible,
 
 /* Keep filament library pagination clear of the panel border. */
 .printingLibraryRow + .formActions,.printingSection > .formActions[aria-label='Filament library pagination']{padding:16px 16px 20px;margin-top:8px;gap:12px;flex-wrap:wrap}
+
+/* Spool view/edit uses a real fieldset, with a stable two-column edit layout. */
+.spoolEditFields { grid-column:1/-1; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; padding:0; border:0; min-width:0; }
+.spoolEditFields > .full { grid-column:1/-1; }
+.spoolEditFields label { min-width:0; }
+@media(max-width:680px){.spoolEditFields{grid-template-columns:minmax(0,1fr)}}
