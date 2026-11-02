@@ -1,3 +1,4 @@
+from .filament_manufacturers import resolve_filament_manufacturer
 from __future__ import annotations
 
 import asyncio
@@ -229,9 +230,7 @@ def _rank_spoolman_filaments(snapshot: dict) -> list[tuple[int, FilamentProduct]
 
 def _create_filament_from_spoolman(snapshot: dict) -> FilamentProduct:
     maker_name = snapshot.get("vendor") or "Generic"
-    maker = FilamentManufacturer.objects.filter(name__iexact=maker_name).first()
-    if maker is None:
-        maker = FilamentManufacturer.objects.create(name=maker_name)
+    maker = resolve_filament_manufacturer(maker_name)
     profile = {
         "spoolman": {
             "filament_id": snapshot.get("filament_external_id", ""),
