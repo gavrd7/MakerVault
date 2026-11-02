@@ -3276,3 +3276,43 @@ a:focus-visible,
     width: 100%;
   }
 }
+
+/* Inset the Creality material database form from its outer Settings panel. */
+.crealityMaterialSettings .crealityMaterialBody {
+  box-sizing: border-box;
+  padding: 24px;
+  gap: 22px;
+  min-width: 0;
+}
+.crealityMaterialSettings .crealityMaterialBody > .crealityMaterialField {
+  margin: 0;
+  min-width: 0;
+}
+.crealityMaterialSettings .crealityMaterialBody > .crealityMaterialField > span {
+  display: block;
+  margin-bottom: 4px;
+}
+.crealityMaterialSettings .crealityMaterialCard {
+  min-width: 0;
+  margin: 0;
+  padding: 24px;
+  gap: 20px;
+}
+.crealityMaterialSettings .crealityMaterialFields,
+.crealityMaterialSettings .crealityMaterialFooter {
+  min-width: 0;
+}
+.crealityMaterialSettings .crealityMaterialField input,
+.crealityMaterialSettings .crealityMaterialField select {
+  box-sizing: border-box;
+}
+@media (max-width: 640px) {
+  .crealityMaterialSettings .crealityMaterialBody {
+    padding: 16px;
+    gap: 16px;
+  }
+  .crealityMaterialSettings .crealityMaterialCard {
+    padding: 16px;
+    gap: 16px;
+  }
+}
