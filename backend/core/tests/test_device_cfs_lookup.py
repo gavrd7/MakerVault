@@ -72,6 +72,33 @@ class ReadOnlyCfsLookupTests(TestCase):
         self.assertEqual(own.rfid_uid, "04AABBCC")
         self.assertEqual(other.rfid_uid, "11223344")
 
+    def test_either_side_uid_resolves_the_same_spool(self):
+        product = FilamentProduct.objects.create(
+            name="PETG Green", material="PETG", color_name="Green", color_hex="#29E000"
+        )
+        spool = Spool.objects.create(
+            owner=self.owner, filament=product, spool_id="SPL-0017",
+            rfid_uid="C2E3037C", rfid_uid_secondary="11223344",
+        )
+        for uid in ("C2E3037C", "11:22:33:44"):
+            with self.subTest(uid=uid):
+                status, result = self.query({"uid": uid})
+                self.assertEqual(status, 200)
+                self.assertTrue(result["found"])
+                self.assertEqual(result["spool"]["spool_id"], "SPL-0017")
+        spool.refresh_from_db()
+        self.assertEqual(spool.rfid_uid_secondary, "11223344")
+
+    def test_second_tag_is_not_visible_to_other_user(self):
+        product = FilamentProduct.objects.create(name="PLA Black", material="PLA")
+        Spool.objects.create(
+            owner=self.other, filament=product, spool_id="SPL-PRIVATE",
+            rfid_uid="AAAABBBB", rfid_uid_secondary="CCDDEEFF",
+        )
+        status, data = self.query({"uid": "CCDDEEFF"})
+        self.assertEqual(status, 200)
+        self.assertFalse(data["found"])
+
     def test_permission_denial(self):
         status, _ = self.query({"uid": "04AABBCC"}, permission=False)
         self.assertEqual(status, 403)
