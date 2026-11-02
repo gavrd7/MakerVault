@@ -1,3 +1,4 @@
+import { filamentFamily, filamentFamilyKey, filamentVariantLabel } from "./filamentFamilies";
 import React, { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../api";
 import PrintedPartsSection from "./PrintedPartsSection";
@@ -2352,22 +2353,7 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
   const [detailFilament, setDetailFilament] = useState(null);
   const [editFilament, setEditFilament] = useState(null);
   const [imageFilament, setImageFilament] = useState(null);
-  const familyName = item => {
-    const maker = String(item.manufacturer || "").trim();
-    const colour = String(item.color_name || "").trim();
-    let name = String(item.name || "").trim();
-    if (colour && name.toLowerCase().endsWith(colour.toLowerCase()))
-      name = name.slice(0, -colour.length).replace(/[-–—\s]+$/, "").trim();
-    // Some catalogues encode a shade in the name but leave color_name empty.
-    // An explicit spaced dash is a reliable delimiter (unlike PETG-CF).
-    const shadeSuffix = !colour && name.match(/\s+[-–—]\s+([^-–—]+)$/);
-    if (shadeSuffix) name = name.slice(0, -shadeSuffix[0].length).trim();
-    if (/^sunlu$/i.test(maker) && /^2\\.0\\s+/i.test(name)) name = "2.0";
-    if (/^3d[- ]fuel$/i.test(maker) && /^pla\\+?$/i.test(item.material || "")) name = item.material;
-    if (maker && name.toLowerCase().startsWith(maker.toLowerCase()))
-      name = name.slice(maker.length).replace(/^[-–—\s]+/, "").trim();
-    return name || item.material || "Unnamed product";
-  };
+  const familyName = item => filamentFamily(item).product;
   const colourFamily = item => {
     const name = String(item.color_name || "").toLowerCase();
     const hex = String(item.color_hex || "").replace("#","").trim();
@@ -2408,10 +2394,10 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
       .filter(Boolean).join(" ").toLowerCase().includes(term)));
   const groups = new Map();
   for (const item of filtered) {
-    const key = [item.manufacturer,familyName(item),item.material].map(v=>String(v||"").trim().toLowerCase()).join("|");
+    const key = filamentFamilyKey(item);
     if (!groups.has(key)) groups.set(key,{maker:item.manufacturer || "Unknown",name:familyName(item),material:item.material,variants:[],seen:new Set()});
     const group=groups.get(key);
-    const variantKey=[item.color_hex,item.color_name].map(v=>String(v||"").trim().toLowerCase()).join("|");
+    const variantKey=[item.color_hex,filamentVariantLabel(item)].map(v=>String(v||"").trim().toLowerCase()).join("|");
     if (!group.seen.has(variantKey)) {group.variants.push(item);group.seen.add(variantKey);}
   }
   const rows = [...groups.values()].sort((a,b)=>sortOrder==="material" ?
@@ -2458,7 +2444,7 @@ function FilamentLibraryPage({ filaments, manufacturers, materials, canChangeFil
               <small>{group.material} · {group.variants.length} colour variant{group.variants.length===1?"":"s"}</small>
               {open && <div className="filamentGroupedVariants">{group.variants.map(item=><div key={item.id} className="filamentGroupedVariant">
                 <span className="printingSwatch" style={filamentSwatchStyle(item)}/>
-                <span>{item.color_name || item.color_hex || "Unspecified colour"}{item.color_name && item.color_hex ? " · "+item.color_hex : ""}</span>
+                <span>{filamentVariantLabel(item) || item.color_hex || "Unspecified colour"}{item.color_name && item.color_hex ? " · "+item.color_hex : ""}</span>
                 <button type="button" onClick={()=>setDetailFilament(item)}>Details</button>
                 {canChangeFilament && <button type="button" onClick={()=>setEditFilament(item)}>Edit</button>}
               </div>)}</div>}
