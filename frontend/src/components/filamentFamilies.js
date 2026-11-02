@@ -2,7 +2,7 @@
 // Source variant records retain their IDs, properties and physical spool references.
 const COLOUR_WORDS = new Set(("black white grey gray silver red orange yellow green blue purple pink brown beige " +
   "cyan teal turquoise magenta violet indigo gold bronze copper ivory cream almond aquamarine " +
-  "mint lime navy maroon burgundy fuchsia coral peach salmon tan sand khaki olive charcoal " +
+  "mint lime navy maroon burgundy fuchsia coral peach salmon tan sand khaki olive charcoal aqua klein military blush " +
   "chocolate coffee lavender lilac amber bone blush forest grass midnight royal electric " +
   "fluorescent metallic translucent transparent natural clear").split(" "));
 const norm = value => String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
