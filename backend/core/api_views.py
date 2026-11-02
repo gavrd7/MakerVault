@@ -1,4 +1,5 @@
 from .creality_material_database import MaterialDatabaseError, pull_creality_material_database
+from .models import PrinterMaterialDatabaseSnapshot
 from .filament_manufacturers import resolve_filament_manufacturer
 import hashlib
 import json
@@ -5574,10 +5575,10 @@ def printing_printer_material_database(request, printer_id, connection_id):
 
 def _material_database_summary(connection):
     config = connection.config or {}
-    snapshot = config.get("material_database_snapshot")
+    copy = PrinterMaterialDatabaseSnapshot.objects.filter(connection=connection).first()
     return {
-        "synced_at": config.get("material_database_synced_at"),
-        "top_level_items": len(snapshot) if isinstance(snapshot, (dict, list)) else None,
+        "synced_at": copy.synced_at.isoformat() if copy else None,
+        "top_level_items": len(copy.payload) if copy and isinstance(copy.payload, (dict, list)) else None,
         "scheduled": config.get("material_database_scheduled") is True,
         "username": config.get("material_ssh_user") or "",
         "fingerprint": config.get("material_ssh_fingerprint") or "",
