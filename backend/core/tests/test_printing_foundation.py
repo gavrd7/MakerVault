@@ -13,6 +13,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from core.filament_catalogue import normalise_spoolmandb_row
+from core.filament_manufacturers import resolve_filament_manufacturer
 from core.tasks import printing_integrations_tick
 
 from core.models import (
@@ -34,6 +35,21 @@ from core.models import (
     PrintMaterialUsage,
     Spool,
 )
+
+
+class ManufacturerIdentityTests(TestCase):
+    def test_reuse_existing_regardless_of_case(self):
+        maker = FilamentManufacturer.objects.create(name="eSun")
+        self.assertEqual(resolve_filament_manufacturer("eSUN").pk, maker.pk)
+        self.assertEqual(resolve_filament_manufacturer("ESUN").pk, maker.pk)
+        self.assertEqual(FilamentManufacturer.objects.filter(name__iexact="esun").count(), 1)
+
+    def test_multiple_existing_case_aliases_are_not_deleted(self):
+        first = FilamentManufacturer.objects.create(name="Sunlu")
+        second = FilamentManufacturer.objects.create(name="SUNLU")
+        chosen = resolve_filament_manufacturer("sunlu")
+        self.assertIn(chosen.pk, [first.pk, second.pk])
+        self.assertEqual(FilamentManufacturer.objects.filter(name__iexact="sunlu").count(), 2)
 
 
 class FilamentCatalogueTests(TestCase):
