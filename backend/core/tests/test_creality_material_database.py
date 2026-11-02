@@ -6,7 +6,7 @@ from django.contrib.auth.models import Permission
 from django.test import TestCase
 
 from core.creality_material_database import MaterialDatabaseError
-from core.models import Printer, PrinterConnection
+from core.models import Printer, PrinterConnection, PrinterMaterialDatabaseSnapshot
 
 
 class CrealityMaterialDatabaseTests(TestCase):
@@ -63,13 +63,14 @@ class CrealityMaterialDatabaseTests(TestCase):
         self.assertEqual(self.client.get(self.url).status_code, 404)
 
     def test_failure_does_not_erase_cached_copy(self):
-        config = {"material_database_snapshot": {"stored": ["PLA"]}}
-        self.connection.config = config
-        self.connection.save(update_fields=["config"])
+        from django.utils import timezone
+        PrinterMaterialDatabaseSnapshot.objects.create(
+            connection=self.connection, payload={"stored": ["PLA"]},
+            synced_at=timezone.now(), byte_size=24,
+        )
         with patch("core.api_views.pull_creality_material_database", side_effect=MaterialDatabaseError("offline")):
             response = self.client.post(
                 self.url, data=json.dumps({"action": "pull"}), content_type="application/json"
             )
         self.assertEqual(response.status_code, 502)
-        self.connection.refresh_from_db()
-        self.assertEqual(self.connection.config["material_database_snapshot"], {"stored": ["PLA"]})
+        self.assertEqual(self.connection.material_database_copy.payload, {"stored": ["PLA"]})
