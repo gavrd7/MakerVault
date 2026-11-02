@@ -4209,6 +4209,7 @@ def _serialise_spool(spool):
         "id": str(spool.id),
         "spool_id": spool.spool_id,
         "rfid_uid": spool.rfid_uid,
+        "rfid_uid_secondary": spool.rfid_uid_secondary,
         "filament": str(filament),
         "filament_id": str(filament.id),
         "catalogue_matched": catalogue_matched,
@@ -6125,11 +6126,18 @@ def printing_spool_detail(request, spool_id):
             if not filament:
                 return _error("Choose a filament product.")
             item.filament = filament
-        if "rfid_uid" in payload:
-            rfid_uid = str(payload.get("rfid_uid") or "").strip().upper()
-            if rfid_uid and Spool.objects.filter(owner=request.user).exclude(pk=item.pk).filter(rfid_uid=rfid_uid).exists():
-                return _error("That RFID tag ID is already assigned to another MakerVault spool.", status=409)
-            item.rfid_uid = rfid_uid
+        if "rfid_uid" in payload or "rfid_uid_secondary" in payload:
+            primary_uid = str(payload.get("rfid_uid", item.rfid_uid) or "").strip().upper()
+            secondary_uid = str(payload.get("rfid_uid_secondary", item.rfid_uid_secondary) or "").strip().upper()
+            if primary_uid and primary_uid == secondary_uid:
+                return _error("Each physical tag must have a different UID.", status=400)
+            for uid in (primary_uid, secondary_uid):
+                if uid and Spool.objects.filter(owner=request.user).exclude(pk=item.pk).filter(
+                    models.Q(rfid_uid=uid) | models.Q(rfid_uid_secondary=uid)
+                ).exists():
+                    return _error("That RFID tag ID is already assigned to another MakerVault spool.", status=409)
+            item.rfid_uid = primary_uid
+            item.rfid_uid_secondary = secondary_uid
         if "storage_location_id" in payload:
             item.storage_location = _resolve_printing_location(
                 payload.get("storage_location_id"), request.user, "storage_location_id"
