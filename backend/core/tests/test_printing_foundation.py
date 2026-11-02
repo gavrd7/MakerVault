@@ -193,6 +193,22 @@ class PrintingFoundationTests(TestCase):
             nozzle_mm="0.4",
         )
 
+    def test_physical_spool_notes_survive_patch_and_reload(self):
+        endpoint = f"/api/printing/spools/{self.spool.id}/"
+        response = self.client.patch(
+            endpoint,
+            data='{"notes":"Drawer A - test note"}',
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["item"]["notes"], "Drawer A - test note")
+        self.spool.refresh_from_db()
+        self.assertEqual(self.spool.notes, "Drawer A - test note")
+        overview = self.client.get("/api/printing/")
+        self.assertEqual(overview.status_code, 200, overview.content)
+        saved = next(row for row in overview.json()["spools"] if row["id"] == str(self.spool.id))
+        self.assertEqual(saved["notes"], "Drawer A - test note")
+
     def test_public_config_exposes_printer_delete_permission(self):
         response = self.client.get("/api/config/")
         self.assertEqual(response.status_code, 200, response.content)
