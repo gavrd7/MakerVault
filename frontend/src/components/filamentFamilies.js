@@ -62,6 +62,8 @@ export function filamentVariantLabel(item) {
  */
 const tokens = value => norm(value).match(/[a-z0-9]+(?:[.+-][a-z0-9]+)*/g) || [];
 const signature = words => [...words].sort().join("|");
+const PRODUCT_SPECIFIERS = new Set(("matte glossy silk basic pro plus high speed fast rapid tough carbon cf gf wood flexible lightweight light highspeed " +
+  "recycled engineering reinforced highflow hf hs abs petg pla tpu asa nylon pc pa").split(" "));
 const compatible = (a,b) => norm(a.manufacturer)===norm(b.manufacturer) && norm(a.material)===norm(b.material);
 export function buildFilamentFamilyIndex(filaments) {
   const result = new Map();
@@ -94,6 +96,9 @@ export function buildFilamentFamilyIndex(filaments) {
     const words=tokens(f.product);
     if(words.length<3) continue;
     for(let i=0;i<words.length;i++){
+      // Versions, materials and process descriptors are product identities,
+      // not arbitrary shades. Never learn them as candidate colour tokens.
+      if (/\d/.test(words[i]) || PRODUCT_SPECIFIERS.has(words[i])) continue;
       const remainder=words.filter((_,n)=>n!==i);
       if(remainder.length<2) continue;
       const sig=[norm(f.manufacturer),norm(f.material),signature(remainder)].join("|");
