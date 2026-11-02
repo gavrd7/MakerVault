@@ -3192,3 +3192,87 @@ a:focus-visible,
   .crealityMaterialSettings .crealityMaterialCard { padding: 1rem; }
   .crealityMaterialSettings .crealityMaterialFooter .settingsActions { width: 100%; }
 }
+
+/* Consistent breathing room for all 3D Printing integration settings cards. */
+.settingsPrintingPanel .settingsIntegrationGrid {
+  gap: 22px;
+  padding: 20px;
+  align-items: stretch;
+}
+.settingsPrintingPanel .settingsIntegrationGrid > article {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+  padding: 22px;
+  border-radius: 16px;
+}
+.settingsPrintingPanel .settingsIntegrationGrid > article > span,
+.settingsPrintingPanel .settingsIntegrationGrid > article > small {
+  line-height: 1.55;
+}
+.settingsPrintingPanel .settingsIntegrationHead {
+  gap: 10px 16px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+.settingsPrintingPanel .settingsIntegrationGrid label {
+  gap: 9px;
+  line-height: 1.45;
+}
+.settingsPrintingPanel .settingsIntegrationGrid .settingsToggle.compact {
+  gap: 16px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid #293849;
+  border-radius: 12px;
+}
+.settingsPrintingPanel .settingsIntegrationGrid .settingsToggle.compact > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.settingsPrintingPanel .integrationSchedule {
+  gap: 15px;
+  padding: 16px;
+  border-radius: 12px;
+}
+.settingsPrintingPanel .settingsIntegrationGrid .settingsActions.compact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 6px;
+  width: 100%;
+}
+.settingsPrintingPanel .settingsIntegrationGrid .settingsActions.compact > button {
+  flex: 1 1 145px;
+  min-height: 42px;
+  margin: 0;
+}
+.settingsPrintingPanel .settingsIntegrationGrid input:not([type="checkbox"]),
+.settingsPrintingPanel .settingsIntegrationGrid select {
+  max-width: 100%;
+  min-width: 0;
+}
+.crealityMaterialSettings .crealityMaterialKey > button { min-height: 42px; }
+.crealityMaterialSettings .crealityMaterialFooter .settingsActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  width: auto;
+}
+.crealityMaterialSettings .crealityMaterialFooter .settingsActions button {
+  min-height: 42px;
+  margin: 0;
+}
+@media (max-width: 640px) {
+  .settingsPrintingPanel .settingsIntegrationGrid { padding: 12px; gap: 16px; }
+  .settingsPrintingPanel .settingsIntegrationGrid > article { padding: 16px; gap: 14px; }
+  .settingsPrintingPanel .settingsIntegrationGrid .settingsActions.compact,
+  .crealityMaterialSettings .crealityMaterialFooter .settingsActions {
+    display: grid !important;
+    grid-template-columns: minmax(0,1fr);
+    gap: 10px;
+    width: 100%;
+  }
+}
