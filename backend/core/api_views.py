@@ -187,14 +187,21 @@ def _sync_rfid_tag_to_spool(tag, *, previous=None):
             owner=tag.owner,
             pk=previous.get("target_id"),
         ).first()
-        if old_spool and old_spool.rfid_uid == previous.get("code") and (
+        if old_spool and (
             tag.kind != "rfid"
             or tag.target_type != "spool"
             or str(tag.target_id) != str(previous.get("target_id"))
             or tag.code != previous.get("code")
         ):
-            old_spool.rfid_uid = ""
-            old_spool.save(update_fields=["rfid_uid", "updated_at"])
+            cleared = []
+            if old_spool.rfid_uid == previous.get("code"):
+                old_spool.rfid_uid = ""
+                cleared.append("rfid_uid")
+            if old_spool.rfid_uid_secondary == previous.get("code"):
+                old_spool.rfid_uid_secondary = ""
+                cleared.append("rfid_uid_secondary")
+            if cleared:
+                old_spool.save(update_fields=[*cleared, "updated_at"])
 
     if tag.kind != "rfid" or tag.target_type != "spool" or not MakerTag.is_uid_like(tag.code):
         return
@@ -202,14 +209,18 @@ def _sync_rfid_tag_to_spool(tag, *, previous=None):
     spool = Spool.objects.filter(owner=tag.owner, pk=tag.target_id).first()
     if not spool:
         return
-    existing = str(spool.rfid_uid or "").strip().upper()
-    if existing and existing != tag.code:
-        raise ValidationError({
-            "code": "This spool already has a different RFID UID. Use its existing RFID identity or clear it first."
-        })
-    if existing != tag.code:
+    identities = [str(spool.rfid_uid or "").strip().upper(),
+                  str(spool.rfid_uid_secondary or "").strip().upper()]
+    if tag.code in identities:
+        return
+    if not identities[0]:
         spool.rfid_uid = tag.code
         spool.save(update_fields=["rfid_uid", "updated_at"])
+    elif not identities[1]:
+        spool.rfid_uid_secondary = tag.code
+        spool.save(update_fields=["rfid_uid_secondary", "updated_at"])
+    else:
+        raise ValidationError({"code": "This spool already has two RFID UIDs. Clear an identity first."})
 
 
 @login_required
