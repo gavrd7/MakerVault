@@ -58,11 +58,22 @@ def pull_creality_material_database(connection):
             timeout=6, auth_timeout=6, banner_timeout=6, look_for_keys=False,
             allow_agent=False,
         )
-        with client.open_sftp() as sftp:
-            if sftp.stat(remote_path).st_size > MAX_DATABASE_BYTES:
+        try:
+            with client.open_sftp() as sftp:
+                if sftp.stat(remote_path).st_size > MAX_DATABASE_BYTES:
+                    raise MaterialDatabaseError("Printer material database is too large to import safely.")
+                with sftp.open(remote_path, "rb") as remote:
+                    payload = remote.read(MAX_DATABASE_BYTES + 1)
+        except (paramiko.SSHException, OSError):
+            # Some Creality SSH builds implement SCP but no SFTP subsystem.
+            # The remote command is a fixed, literal, read-only file read.
+            stdin, stdout, stderr = client.exec_command("cat " + remote_path, timeout=10)
+            stdin.close()
+            payload = stdout.read(MAX_DATABASE_BYTES + 1)
+            if len(payload) > MAX_DATABASE_BYTES:
                 raise MaterialDatabaseError("Printer material database is too large to import safely.")
-            with sftp.open(remote_path, "rb") as remote:
-                payload = remote.read(MAX_DATABASE_BYTES + 1)
+            if stdout.channel.recv_exit_status() != 0:
+                raise MaterialDatabaseError("Printer material database could not be read.")
         if len(payload) > MAX_DATABASE_BYTES:
             raise MaterialDatabaseError("Printer material database exceeded the 5 MB read limit.")
         catalog = json.loads(payload.decode("utf-8-sig"))
