@@ -645,9 +645,11 @@ function IntegrationReviewRow({ review, spools, filaments, busy, onResolve }) {
     const family = filamentFamily(filament);
     return [family.manufacturer, family.product, ...(family.product.toLowerCase() === family.material.toLowerCase() ? [] : [family.material])].join(" · ");
   };
-  const families = [...new Set(filaments.map(familyName))].sort((a,b) => a.localeCompare(b));
+  const familyChoices = new Map();
+  filaments.forEach(f => { const key = filamentFamilyKey(f); if (!familyChoices.has(key)) familyChoices.set(key, familyName(f)); });
+  const families = [...familyChoices.entries()].sort((a,b) => a[1].localeCompare(b[1]));
   const remoteHex = String(review.remote?.color_hex || "").replace(/^#/, "").toLowerCase();
-  const variants = filaments.filter(f => familyName(f) === familyChoice);
+  const variants = filaments.filter(f => filamentFamilyKey(f) === familyChoice);
   const hexDistance = hex => {
     const value = String(hex || "").replace(/^#/, "").toLowerCase();
     if (!/^[0-9a-f]{6}$/.test(value) || !/^[0-9a-f]{6}$/.test(remoteHex)) return Infinity;
@@ -696,7 +698,7 @@ function IntegrationReviewRow({ review, spools, filaments, busy, onResolve }) {
     <div className="integrationReviewChoices">
       <label>Filament product<select value={familyChoice} onChange={e => { setFamilyChoice(e.target.value); setFilamentChoice(""); setConfirmed(false); }}>
         <option value="">Choose manufacturer and product…</option>
-        {families.map(name => <option key={name} value={name}>{name}</option>)}
+        {families.map(([key,name]) => <option key={key} value={key}>{name}</option>)}
         <option value="__detected__">Use exact Spoolman description (new filament)</option>
       </select></label>
       {familyChoice && familyChoice !== "__detected__" && <div className="integrationVariantPicker">
