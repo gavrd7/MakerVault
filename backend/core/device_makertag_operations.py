@@ -76,7 +76,7 @@ def owner_access(owner, action, also_clean, tag):
         return False
     if action == "remove" and not owner.has_perm("core.delete_makertag"):
         return False
-    if tag.owner_id != owner.pk or tag.status != "active":
+    if tag is None or tag.owner_id != owner.pk or tag.status != "active":
         return False
     return True
 
@@ -316,7 +316,7 @@ def device_cleaned(request, operation_id):
         if item.action == "clean":
             item.completed_at = now
         item.save(update_fields=["cleaned_at", "state", "completed_at", "updated_at"])
-        _record_tag_event(item.tag, request.device_owner, "nfc_cleaned",
+        _record_tag_event(item.tag, request.device_owner, "updated",
                           "Physical NFC user data cleared and verified by paired terminal.",
                           {"device_id": str(device.pk), "operation_id": str(item.pk)})
     return response(item)
