@@ -247,7 +247,7 @@ def device_pending(request):
     ).order_by("-created_at").first()
     if not item:
         item = Operation.objects.select_related("tag").filter(
-            device=device, owner=request.device_owner, source="browser",
+            device=device, owner=request.device_owner,
             state="pending", expires_at__gt=timezone.now()
         ).order_by("-created_at").first()
     result = JsonResponse({"operation": serialise(item) if item else None})
