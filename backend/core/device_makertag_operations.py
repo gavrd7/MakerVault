@@ -20,6 +20,7 @@ from .device_tag_operations_model import DeviceMakerTagOperation as Operation
 from .models import (ConnectedDevice, MakerTag, DeviceNdefWrite,
                      DeviceTagRegistration, DeviceTagLookup)
 from .radio_tag_identity import radio_tag_matches
+from .maker_tags import TARGETS, serialise_tag_target
 from .api_views import _record_tag_event
 
 TTL = timedelta(minutes=5)
@@ -42,6 +43,12 @@ def json_payload(request, allowed):
 
 
 def serialise(item):
+    label = item.tag.label if item.tag_id else ""
+    definition = TARGETS.get(item.target_type)
+    if definition and item.owner.has_perm(f"core.view_{definition.model._meta.model_name}"):
+        target = serialise_tag_target(item.owner, item.target_type, item.target_id)
+        if target and target.get("label"):
+            label = target["label"]
     state = "expired" if item.state == "pending" and item.expires_at <= timezone.now() else item.state
     return {
         "id": str(item.id), "state": state, "source": item.source,
@@ -50,7 +57,7 @@ def serialise(item):
         "maker_tag_id": "MV-" + item.expected_short_id,
         "tag_id": str(item.tag_id_snapshot),
         "target_type": item.target_type, "target_id": str(item.target_id),
-        "label": item.tag.label if item.tag_id else "",
+        "label": label,
         "expires_at": item.expires_at.isoformat(),
         "cleaned_at": item.cleaned_at.isoformat() if item.cleaned_at else None,
     }
