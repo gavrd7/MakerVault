@@ -154,7 +154,7 @@ def begin(request):
     except (ValueError, TypeError, KeyError, json.JSONDecodeError):
         return failure("Invalid operation request.")
     with transaction.atomic():
-        device = ConnectedDevice.objects.select_for_update().select_related("api_key").filter(
+        device = ConnectedDevice.objects.select_for_update(of=("self",)).select_related("api_key").filter(
             pk=device_id, owner=request.user, revoked_at__isnull=True, device_type="rfid_terminal"
         ).first()
         tag = MakerTag.objects.select_for_update().filter(pk=tag_id, owner=request.user).first()
