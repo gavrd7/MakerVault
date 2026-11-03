@@ -61,6 +61,14 @@ def begin(request):
             return failure("Active paired terminal not found.", 404)
         if "tags:read" not in device.api_key.scopes:
             return failure("The terminal requires tags:read.", 403)
+        # Do not overlap a cleaning/removal operation on the shared reader.
+        from .device_tag_operations_model import DeviceMakerTagOperation
+        from django.db.models import Q
+        if DeviceMakerTagOperation.objects.filter(device=device).filter(
+            Q(state="pending", expires_at__gt=timezone.now()) |
+            Q(state="cleaned", action="remove")
+        ).exists():
+            return failure("Finish the pending MakerTag cleanup first.", 409)
         if DeviceTagLookup.objects.filter(device=device, state="pending", expires_at__gt=timezone.now()).exists() or DeviceTagRegistration.objects.filter(
             device=device, state="pending", expires_at__gt=timezone.now()
         ).exists():
