@@ -132,3 +132,10 @@ class MakerTagOperationTests(TestCase):
         self.assertTrue(MakerTag.objects.filter(pk=self.tag.pk).exists())
         self.owner.user_permissions.add(perm)
         self.assertEqual(self.device_step(op,"remove",{"uid":"04AABBCCDDEEFF"}).status_code,200)
+
+    def test_unregistered_uid_reports_clear_error_without_creating_operation(self):
+        response=self.send("/api/device/v1/makertag-operation/begin/",
+            {"uid":"04FFFFCCDDEEFF","action":"clean","also_clean":True},True)
+        self.assertEqual(response.status_code,404,response.content)
+        self.assertEqual(response.json()["error"],"Tag not registered in MakerVault.")
+        self.assertFalse(Operation.objects.exists())
