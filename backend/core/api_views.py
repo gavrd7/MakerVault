@@ -1,3 +1,5 @@
+from .creality_material_database import MaterialDatabaseError, pull_creality_material_database
+from .models import PrinterMaterialDatabaseSnapshot
 from .filament_manufacturers import resolve_filament_manufacturer
 import hashlib
 import json
@@ -185,14 +187,21 @@ def _sync_rfid_tag_to_spool(tag, *, previous=None):
             owner=tag.owner,
             pk=previous.get("target_id"),
         ).first()
-        if old_spool and old_spool.rfid_uid == previous.get("code") and (
+        if old_spool and (
             tag.kind != "rfid"
             or tag.target_type != "spool"
             or str(tag.target_id) != str(previous.get("target_id"))
             or tag.code != previous.get("code")
         ):
-            old_spool.rfid_uid = ""
-            old_spool.save(update_fields=["rfid_uid", "updated_at"])
+            cleared = []
+            if old_spool.rfid_uid == previous.get("code"):
+                old_spool.rfid_uid = ""
+                cleared.append("rfid_uid")
+            if old_spool.rfid_uid_secondary == previous.get("code"):
+                old_spool.rfid_uid_secondary = ""
+                cleared.append("rfid_uid_secondary")
+            if cleared:
+                old_spool.save(update_fields=[*cleared, "updated_at"])
 
     if tag.kind != "rfid" or tag.target_type != "spool" or not MakerTag.is_uid_like(tag.code):
         return
@@ -200,14 +209,18 @@ def _sync_rfid_tag_to_spool(tag, *, previous=None):
     spool = Spool.objects.filter(owner=tag.owner, pk=tag.target_id).first()
     if not spool:
         return
-    existing = str(spool.rfid_uid or "").strip().upper()
-    if existing and existing != tag.code:
-        raise ValidationError({
-            "code": "This spool already has a different RFID UID. Use its existing RFID identity or clear it first."
-        })
-    if existing != tag.code:
+    identities = [str(spool.rfid_uid or "").strip().upper(),
+                  str(spool.rfid_uid_secondary or "").strip().upper()]
+    if tag.code in identities:
+        return
+    if not identities[0]:
         spool.rfid_uid = tag.code
         spool.save(update_fields=["rfid_uid", "updated_at"])
+    elif not identities[1]:
+        spool.rfid_uid_secondary = tag.code
+        spool.save(update_fields=["rfid_uid_secondary", "updated_at"])
+    else:
+        raise ValidationError({"code": "This spool already has two RFID UIDs. Clear an identity first."})
 
 
 @login_required
@@ -469,7 +482,8 @@ def maker_tags(request):
         if kind == "rfid" and target_type == "spool":
             existing = str(target.rfid_uid or "").strip().upper()
             submitted = MakerTag.normalise_code(kind, tag.code)
-            if existing and submitted and MakerTag.is_uid_like(submitted) and existing != submitted:
+            secondary = str(target.rfid_uid_secondary or "").strip().upper()
+            if existing and secondary and submitted and submitted not in {existing, secondary} and MakerTag.is_uid_like(submitted):
                 raise ValidationError({
                     "code": "This spool already has a different RFID UID. Use the existing RFID value."
                 })
@@ -561,7 +575,8 @@ def maker_tag_detail(request, tag_id):
         if tag.kind == "rfid" and tag.target_type == "spool":
             existing = str(target.rfid_uid or "").strip().upper()
             submitted = MakerTag.normalise_code(tag.kind, tag.code)
-            if existing and MakerTag.is_uid_like(submitted) and existing not in {submitted, previous.get("code", "")}:
+            secondary = str(target.rfid_uid_secondary or "").strip().upper()
+            if existing and secondary and MakerTag.is_uid_like(submitted) and submitted not in {existing, secondary, previous.get("code", "")}:
                 raise ValidationError({
                     "code": "The target spool already has a different RFID UID."
                 })
@@ -4207,6 +4222,7 @@ def _serialise_spool(spool):
         "id": str(spool.id),
         "spool_id": spool.spool_id,
         "rfid_uid": spool.rfid_uid,
+        "rfid_uid_secondary": spool.rfid_uid_secondary,
         "filament": str(filament),
         "filament_id": str(filament.id),
         "catalogue_matched": catalogue_matched,
@@ -4296,12 +4312,13 @@ def _serialise_printer_connection(connection):
     safe_config = {
         key: value
         for key, value in (connection.config or {}).items()
-        if key not in {"api_key", "token", "password", "access_code", "check_code", "cameras"}
+        if key not in {"api_key", "token", "password", "access_code", "check_code", "cameras", "material_ssh_password", "material_database_snapshot"}
     }
     safe_config["api_key_configured"] = bool(str((connection.config or {}).get("api_key") or "").strip())
     safe_config["access_code_configured"] = bool(str((connection.config or {}).get("access_code") or "").strip())
     safe_config["password_configured"] = bool(str((connection.config or {}).get("password") or "").strip())
     safe_config["check_code_configured"] = bool(str((connection.config or {}).get("check_code") or "").strip())
+    safe_config["material_ssh_password_configured"] = bool((connection.config or {}).get("material_ssh_password"))
     capabilities = dict(connection.capabilities or (definition.capabilities if definition else {}))
     snapshot = connection.last_snapshot or {}
     metadata = snapshot.get("source_metadata") or {}
@@ -5527,6 +5544,67 @@ def printing_printer_connection_detail(request, printer_id, connection_id):
 
 
 @login_required
+@require_http_methods(["GET", "POST"])
+def printing_printer_material_database(request, printer_id, connection_id):
+    connection = PrinterConnection.objects.select_related("printer").filter(
+        pk=connection_id, printer_id=printer_id, printer__owner=request.user,
+        adapter="creality_local",
+    ).first()
+    if not connection:
+        return _error("Creality printer connection not found.", status=404)
+    if request.method == "GET":
+        return JsonResponse({"summary": _material_database_summary(connection)})
+    denied = _require_permission(request, "core.change_printer")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+        action = payload.get("action")
+        if action == "discover-key" and set(payload) == {"action"}:
+            from .creality_material_database import discover_creality_host_key
+            return JsonResponse({"host_key": discover_creality_host_key(connection)})
+        if action == "configure":
+            if set(payload) - {"action", "username", "password", "fingerprint", "scheduled"}:
+                return _error("Unsupported material database setting.")
+            config = dict(connection.config or {})
+            if "username" in payload:
+                config["material_ssh_user"] = str(payload["username"]).strip()[:100]
+            if payload.get("password"):
+                config["material_ssh_password"] = str(payload["password"])
+            if "fingerprint" in payload:
+                config["material_ssh_fingerprint"] = str(payload["fingerprint"]).strip()[:120]
+            if "scheduled" in payload:
+                if not isinstance(payload["scheduled"], bool):
+                    return _error("Scheduled sync must be true or false.")
+                config["material_database_scheduled"] = payload["scheduled"]
+            connection.config = config
+            connection.save(update_fields=["config", "updated_at"])
+            return JsonResponse({"summary": _material_database_summary(connection)})
+        if action != "pull" or set(payload) != {"action"}:
+            return _error("Choose a read-only pull or configure action.")
+        result = pull_creality_material_database(connection)
+        return JsonResponse({"result": result, "summary": _material_database_summary(connection)})
+    except MaterialDatabaseError as exc:
+        return _error(str(exc), status=502)
+    except (ValueError, ValidationError) as exc:
+        return _error(str(exc))
+
+
+def _material_database_summary(connection):
+    config = connection.config or {}
+    copy = PrinterMaterialDatabaseSnapshot.objects.filter(connection=connection).first()
+    return {
+        "synced_at": copy.synced_at.isoformat() if copy else None,
+        "top_level_items": len(copy.payload) if copy and isinstance(copy.payload, (dict, list)) else None,
+        "scheduled": config.get("material_database_scheduled") is True,
+        "username": config.get("material_ssh_user") or "",
+        "fingerprint": config.get("material_ssh_fingerprint") or "",
+        "password_configured": bool(config.get("material_ssh_password")),
+        "read_only": True,
+    }
+
+
+@login_required
 @require_http_methods(["POST"])
 def printing_printer_connection_refresh(request, printer_id, connection_id):
     item = PrinterConnection.objects.select_related("printer").filter(
@@ -5610,7 +5688,7 @@ def printing_spools(request):
             return _error("Choose either a storage location or a printer.")
 
         rfid_uid = str(payload.get("rfid_uid") or "").strip().upper()
-        if rfid_uid and Spool.objects.filter(owner=request.user).filter(rfid_uid=rfid_uid).exists():
+        if rfid_uid and Spool.objects.filter(owner=request.user).filter(Q(rfid_uid=rfid_uid) | Q(rfid_uid_secondary=rfid_uid)).exists():
             return _error("That RFID tag ID is already assigned to another MakerVault spool.", status=409)
 
         item = Spool(
@@ -6061,11 +6139,18 @@ def printing_spool_detail(request, spool_id):
             if not filament:
                 return _error("Choose a filament product.")
             item.filament = filament
-        if "rfid_uid" in payload:
-            rfid_uid = str(payload.get("rfid_uid") or "").strip().upper()
-            if rfid_uid and Spool.objects.filter(owner=request.user).exclude(pk=item.pk).filter(rfid_uid=rfid_uid).exists():
-                return _error("That RFID tag ID is already assigned to another MakerVault spool.", status=409)
-            item.rfid_uid = rfid_uid
+        if "rfid_uid" in payload or "rfid_uid_secondary" in payload:
+            primary_uid = str(payload.get("rfid_uid", item.rfid_uid) or "").strip().upper()
+            secondary_uid = str(payload.get("rfid_uid_secondary", item.rfid_uid_secondary) or "").strip().upper()
+            if primary_uid and primary_uid == secondary_uid:
+                return _error("Each physical tag must have a different UID.", status=400)
+            for uid in (primary_uid, secondary_uid):
+                if uid and Spool.objects.filter(owner=request.user).exclude(pk=item.pk).filter(
+                    Q(rfid_uid=uid) | Q(rfid_uid_secondary=uid)
+                ).exists():
+                    return _error("That RFID tag ID is already assigned to another MakerVault spool.", status=409)
+            item.rfid_uid = primary_uid
+            item.rfid_uid_secondary = secondary_uid
         if "storage_location_id" in payload:
             item.storage_location = _resolve_printing_location(
                 payload.get("storage_location_id"), request.user, "storage_location_id"

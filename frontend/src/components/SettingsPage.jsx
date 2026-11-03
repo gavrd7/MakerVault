@@ -1,5 +1,5 @@
 import { filamentFamily, filamentFamilyKey, filamentVariantLabel, buildFilamentFamilyIndex } from "./filamentFamilies";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../api";
 import { Badge, LoadingBlock, Modal } from "./Common";
 import AdminUsersPanel from "./AdminUsersPanel";
@@ -8,6 +8,7 @@ import BackupRestorePanel from "./BackupRestorePanel";
 import HttpsCertificatePanel from "./HttpsCertificatePanel";
 import ApiKeysPanel from "./ApiKeysPanel";
 import ConnectedDevicesPanel from "./ConnectedDevicesPanel";
+import CrealityMaterialDatabaseSettings from "./CrealityMaterialDatabaseSettings";
 
 const EXPERIMENTAL_PRINTER_CAPABILITIES = {
   bambu_ams: {
@@ -588,6 +589,7 @@ export default function SettingsPage({ config, onBackupStarted }) {
         })}
       </div>
     </section>
+    <CrealityMaterialDatabaseSettings />
 
     </>}
 

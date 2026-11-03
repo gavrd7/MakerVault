@@ -3173,3 +3173,146 @@ a:focus-visible,
 .spoolEditFields > .full { grid-column:1/-1; }
 .spoolEditFields label { min-width:0; }
 @media(max-width:680px){.spoolEditFields{grid-template-columns:minmax(0,1fr)}}
+
+/* Printer material database management lives in Settings, not Live Monitoring. */
+.crealityMaterialSettings .crealityMaterialBody { display: grid; gap: 1.4rem; padding-top: .8rem; }
+.crealityMaterialSettings .crealityMaterialCard { display: grid; gap: 1.25rem; padding: 1.5rem; border: 1px solid var(--border, #344254); border-radius: 16px; background: var(--panel, transparent); }
+.crealityMaterialSettings .crealityMaterialHeading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem 1rem; }
+.crealityMaterialSettings .crealityMaterialHeading small { opacity: .75; }
+.crealityMaterialSettings .crealityMaterialFields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem 1.25rem; }
+.crealityMaterialSettings .crealityMaterialField { display: grid; gap: .45rem; min-width: 0; }
+.crealityMaterialSettings .crealityMaterialField input, .crealityMaterialSettings .crealityMaterialField select { width: 100%; min-width: 0; }
+.crealityMaterialSettings .crealityMaterialFull { grid-column: 1 / -1; }
+.crealityMaterialSettings .crealityMaterialKey { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.crealityMaterialSettings .crealityMaterialKey small { flex: 1 1 16rem; }
+.crealityMaterialSettings .crealityMaterialFooter { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; border-top: 1px solid var(--border, #344254); padding-top: 1.1rem; }
+.crealityMaterialSettings .crealityMaterialFooter .settingsActions { margin: 0; }
+@media (max-width: 640px) {
+  .crealityMaterialSettings .crealityMaterialFields { grid-template-columns: minmax(0, 1fr); }
+  .crealityMaterialSettings .crealityMaterialCard { padding: 1rem; }
+  .crealityMaterialSettings .crealityMaterialFooter .settingsActions { width: 100%; }
+}
+
+/* Consistent breathing room for all 3D Printing integration settings cards. */
+.settingsPrintingPanel .settingsIntegrationGrid {
+  gap: 22px;
+  padding: 20px;
+  align-items: stretch;
+}
+.settingsPrintingPanel .settingsIntegrationGrid > article {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+  padding: 22px;
+  border-radius: 16px;
+}
+.settingsPrintingPanel .settingsIntegrationGrid > article > span,
+.settingsPrintingPanel .settingsIntegrationGrid > article > small {
+  line-height: 1.55;
+}
+.settingsPrintingPanel .settingsIntegrationHead {
+  gap: 10px 16px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+.settingsPrintingPanel .settingsIntegrationGrid label {
+  gap: 9px;
+  line-height: 1.45;
+}
+.settingsPrintingPanel .settingsIntegrationGrid .settingsToggle.compact {
+  gap: 16px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid #293849;
+  border-radius: 12px;
+}
+.settingsPrintingPanel .settingsIntegrationGrid .settingsToggle.compact > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.settingsPrintingPanel .integrationSchedule {
+  gap: 15px;
+  padding: 16px;
+  border-radius: 12px;
+}
+.settingsPrintingPanel .settingsIntegrationGrid .settingsActions.compact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 6px;
+  width: 100%;
+}
+.settingsPrintingPanel .settingsIntegrationGrid .settingsActions.compact > button {
+  flex: 1 1 145px;
+  min-height: 42px;
+  margin: 0;
+}
+.settingsPrintingPanel .settingsIntegrationGrid input:not([type="checkbox"]),
+.settingsPrintingPanel .settingsIntegrationGrid select {
+  max-width: 100%;
+  min-width: 0;
+}
+.crealityMaterialSettings .crealityMaterialKey > button { min-height: 42px; }
+.crealityMaterialSettings .crealityMaterialFooter .settingsActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  width: auto;
+}
+.crealityMaterialSettings .crealityMaterialFooter .settingsActions button {
+  min-height: 42px;
+  margin: 0;
+}
+@media (max-width: 640px) {
+  .settingsPrintingPanel .settingsIntegrationGrid { padding: 12px; gap: 16px; }
+  .settingsPrintingPanel .settingsIntegrationGrid > article { padding: 16px; gap: 14px; }
+  .settingsPrintingPanel .settingsIntegrationGrid .settingsActions.compact,
+  .crealityMaterialSettings .crealityMaterialFooter .settingsActions {
+    display: grid !important;
+    grid-template-columns: minmax(0,1fr);
+    gap: 10px;
+    width: 100%;
+  }
+}
+
+/* Inset the Creality material database form from its outer Settings panel. */
+.crealityMaterialSettings .crealityMaterialBody {
+  box-sizing: border-box;
+  padding: 24px;
+  gap: 22px;
+  min-width: 0;
+}
+.crealityMaterialSettings .crealityMaterialBody > .crealityMaterialField {
+  margin: 0;
+  min-width: 0;
+}
+.crealityMaterialSettings .crealityMaterialBody > .crealityMaterialField > span {
+  display: block;
+  margin-bottom: 4px;
+}
+.crealityMaterialSettings .crealityMaterialCard {
+  min-width: 0;
+  margin: 0;
+  padding: 24px;
+  gap: 20px;
+}
+.crealityMaterialSettings .crealityMaterialFields,
+.crealityMaterialSettings .crealityMaterialFooter {
+  min-width: 0;
+}
+.crealityMaterialSettings .crealityMaterialField input,
+.crealityMaterialSettings .crealityMaterialField select {
+  box-sizing: border-box;
+}
+@media (max-width: 640px) {
+  .crealityMaterialSettings .crealityMaterialBody {
+    padding: 16px;
+    gap: 16px;
+  }
+  .crealityMaterialSettings .crealityMaterialCard {
+    padding: 16px;
+    gap: 16px;
+  }
+}

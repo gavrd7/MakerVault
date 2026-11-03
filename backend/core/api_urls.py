@@ -1,5 +1,5 @@
 from django.urls import path
-from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views, device_api_views, device_pairing, device_measurements, device_tag_registration, device_tag_lookup, weight_history_views, tag_ndef, device_ndef_write
+from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views, device_api_views, device_pairing, device_measurements, device_tag_registration, device_tag_lookup, weight_history_views, tag_ndef, device_ndef_write, device_cfs_lookup
 
 urlpatterns = [
     path("device/tag-lookup/", device_tag_lookup.begin, name="api-device-tag-lookup-begin"),
@@ -37,6 +37,8 @@ urlpatterns = [
     path("device/v1/measurements/history/", device_measurements.measurement_history, name="api-device-measurement-history"),
     path("device/v1/measurements/preview/", device_measurements.preview_measurement, name="api-device-measurement-preview"),
     path("device/v1/measurements/confirm/", device_measurements.confirm_measurement, name="api-device-measurement-confirm"),
+    path("device/v1/spools/by-rfid/", device_cfs_lookup.spool_by_rfid, name="api-device-spool-by-rfid"),
+    path("device/v1/cfs/material/", device_cfs_lookup.material_by_id, name="api-device-cfs-material"),
     path("device/v1/records/search/", device_api_views.search_records, name="api-device-records-search"),
     path("device/v1/records/browse/", device_api_views.browse_records, name="api-device-records-browse"),
     path("device/v1/tags/register/", device_api_views.register_tag, name="api-device-tag-register"),
@@ -88,6 +90,7 @@ urlpatterns = [
     path("printing/printers/<uuid:printer_id>/", api_views.printing_printer_detail, name="api-printing-printer-detail"),
     path("printing/printers/<uuid:printer_id>/connections/", api_views.printing_printer_connections, name="api-printing-printer-connections"),
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/", api_views.printing_printer_connection_detail, name="api-printing-printer-connection-detail"),
+    path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/material-database/", api_views.printing_printer_material_database, name="api-printing-printer-material-database"),
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/refresh/", api_views.printing_printer_connection_refresh, name="api-printing-printer-connection-refresh"),
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/control/", api_views.printing_printer_connection_control, name="api-printing-printer-connection-control"),
     path("printing/spools/", api_views.printing_spools, name="api-printing-spools"),

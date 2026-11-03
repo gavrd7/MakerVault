@@ -265,6 +265,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "core.tasks.printing_integrations_tick",
         "schedule": 60.0,
     },
+    "creality-material-database-tick": {
+        "task": "core.tasks.scheduled_creality_material_database_tick",
+        "schedule": 3600.0,
+    },
     "live-printer-connections-tick": {
         "task": "core.tasks.live_printer_connections_tick",
         "schedule": 10.0,

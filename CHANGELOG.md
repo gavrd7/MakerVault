@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.5.0 — Full terminal interoperability
+
+- Added read-only Creality printer material database snapshots with manual synchronisation and optional scheduled reads. Snapshot retrieval never writes to a printer or silently creates filament entries.
+- Added scoped CFS material-code lookup for paired MakerVault Terminals, including colour and offline fallback support on the terminal.
+- Added physical spool RFID identity capture using a paired terminal from the Spool Inventory UI.
+- Added **one- or two-tag physical spool identity**, so separate RFID tags on opposite sides of the same reel resolve to one inventory record; retained UID uniqueness and explicit save.
+- Improved Spoolman possible-duplicate review reliability.
+- Compatible with MakerVault Terminal v1.0.0. Bambu Lab and Elegoo filament RFID readers are experimental, software-validated only and not verified using genuine tags.
+
 ## v1.4.6 — Terminal-first MakerTag creation
 
 - Added paired MakerVault Terminal v0.8 support for starting MakerTag registration on the handheld without a browser, browsing server-sorted record categories with paginated results and an A–Z letter jump.

@@ -5,7 +5,7 @@
 <h1 align="center">MakerVault</h1>
 <p align="center"><strong>Your workshop, organised.</strong></p>
 <p align="center">A self-hosted workspace for electronics, making and 3D printing — from the parts you own to the things you build.</p>
-<p align="center"><strong>Current application version: v1.4.6</strong></p>
+<p align="center"><strong>Application source version: v1.5.0 (release candidate)</strong></p>
 <p align="center">
   <a href="https://gavrd7.github.io/MakerVault-docs/">User guide</a> ·
   <a href="docs/guide/getting-started/install.md">Install</a> ·
@@ -36,9 +36,9 @@ Maker projects rarely live in one place. Components end up in boxes and spreadsh
 | **Wiring Lab** | Interactive wiring diagrams, catalogue-aware pin selection, basic electrical checks and JSON/SVG export |
 | **Files and 3D models** | Private files with version history, STL/3MF viewing and analysis, model revisions, printer-fit and orientation assistance |
 | **3D printers and materials** | Printer inventory, filament products, physical spools, reusable spool hardware, printed parts, print history and material/cost reporting |
-| **Live integrations** | Optional local printer monitoring and compatible camera feeds, plus supported printer controls and Spoolman integration where configured |
+| **Live integrations** | Optional local printer monitoring and compatible camera feeds, supported printer controls, Spoolman review and Creality CFS material-database read-only snapshots |
 | **MakerTags** | Printable QR labels, stable `MV-XXXXXXXX` identities, RFID/NFC UID association, reassignment history and verified NTAG215 URLs |
-| **Connected Devices** | Certificate-verified HTTPS pairing, device permissions and heartbeats; with **MakerVault Terminal v0.8**, browse records and create MakerTags directly on the handheld |
+| **Connected Devices** | Certificate-verified HTTPS pairing, device permissions and heartbeats; with **MakerVault Terminal v1.0**, browse records, create MakerTags, scan filament RFID tags and identify physical spools from the handheld |
 | **Search and administration** | Universal search, role-based access, optional OIDC/MFA, account quotas, backups, guarded restore and catalogue-maintenance tools |
 
 **Compatibility notes:** Printer support and available controls vary by manufacturer, firmware and connection method. Some adapters are monitoring-only or have limited real-hardware validation; see the [user guide](https://gavrd7.github.io/MakerVault-docs/) and [hardware-validation issue](https://github.com/gavrd7/MakerVault/issues/37). MakerVault does not automatically deduct physical spool stock from every estimated print.
@@ -47,7 +47,7 @@ Maker projects rarely live in one place. Components end up in boxes and spreadsh
 
 An inventory item can be allocated to a project BOM. A model and its revisions can be associated with a build; a recorded print can produce a tracked physical part. A MakerTag on a box, spool or printed object can bring you back to its current record. These links make the system more useful than isolated inventory or printer dashboards.
 
-## Get started
+**Terminal interoperability (v1.5.0):** a paired terminal can resolve CFS material identifiers against cached Creality printer databases, identify physical spools by either of up to two separate RFID UIDs, and scan each side of a spool on request from the Physical Identity form. Manufacturer material names require online MakerVault access; offline tag data remains readable. Third-party RFID support depends on compatible tags and available documentation, not universal compatibility.\n\n## Get started
 
 MakerVault runs as a Docker Compose stack with the application, PostgreSQL and Redis. The normal installation pulls a prebuilt image from **GHCR**, so you do not need to compile the application yourself. Start with the complete [Linux installation guide](docs/guide/getting-started/install.md) or [Windows / Docker Desktop / WSL2 guide](docs/guide/getting-started/windows.md).
 
@@ -88,14 +88,14 @@ A concise view of what's delivered and where MakerVault may go next. Checkmarks 
 - [x] Filament products, physical/reusable spools, printed parts and cost tracking
 - [x] Optional live printer integrations, monitoring, cameras and supported controls
 - [x] MakerTags with QR, RFID/NFC association and verified NTAG215 URL writing
-- [x] Connected Devices pairing and terminal-first MakerTag creation (Terminal v0.8)
+- [x] Connected Devices pairing and terminal-first MakerTag creation and one- or two-tag physical spool RFID identification (Terminal v1.0)
 
 ### Planned / under evaluation
 
 - [ ] **G-code Library and explicit print submission:** organise and preview uploaded G-code and send supported jobs to compatible printers with explicit user control ([issue #155](https://github.com/gavrd7/MakerVault/issues/155))
 - [ ] **Self-hosted multi-engine FDM slicing:** optional local slicing service and one MakerVault UI, subject to engine, CLI and licence evaluation
 - [ ] **MakerVault Weigh Station:** connected scale/RFID hardware with a removable printable platform (hardware development)
-- [ ] **Read-only CFS material-tag decoding** on the MakerVault Terminal and inventory matching; **not** CFS rewriting or automatic printer database sync
+- [x] **Read-only CFS material-tag decoding**, K2 printer material-database snapshots, scoped online material lookup and explicit physical spool UID association; no CFS tag writing or printer database push
 - [ ] Expanded real-hardware validation and compatibility for printer/camera adapters ([issue #37](https://github.com/gavrd7/MakerVault/issues/37))
 - [ ] User-selectable appearance themes and palettes ([issue #124](https://github.com/gavrd7/MakerVault/issues/124))
 

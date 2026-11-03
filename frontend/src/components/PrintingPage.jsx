@@ -843,16 +843,104 @@ function SpoolEditModal({ spool, filaments, onClose, onSaved }) {
 
 function SpoolIdentityModal({ spool, onClose, onSaved }) {
   const [rfidUid, setRfidUid] = useState(spool.rfid_uid || "");
+  const [secondaryUid, setSecondaryUid] = useState(spool.rfid_uid_secondary || "");
+  const [tagCount, setTagCount] = useState(spool.rfid_uid_secondary ? 2 : 1);
+  const [scanSlot, setScanSlot] = useState(1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [terminals, setTerminals] = useState([]);
+  const [selectedTerminal, setSelectedTerminal] = useState("");
+  const [scanRequest, setScanRequest] = useState(null);
+  const [scanNotice, setScanNotice] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    apiFetch("/api/account/connected-devices/").then(result => {
+      if (!active) return;
+      const eligible = (result.rows || []).filter(device =>
+        device.device_type === "rfid_terminal" && !device.revoked_at &&
+        (device.scopes || []).includes("tags:read"));
+      setTerminals(eligible);
+      setSelectedTerminal(current => current || String(eligible[0]?.id || ""));
+    }).catch(() => { if (active) setTerminals([]); });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!scanRequest) return undefined;
+    let active = true;
+    let checking = false;
+    async function pollScan() {
+      if (!active || checking) return;
+      checking = true;
+      try {
+        const result = await apiFetch("/api/device/tag-lookup/" + scanRequest.id + "/");
+        if (!active) return;
+        if (result.state === "completed") {
+          setScanRequest(null);
+          if (result.uid && /^[0-9A-F]{8}(?:[0-9A-F]{6})?(?:[0-9A-F]{6})?$/.test(result.uid.replace(/[:-]/g, "").toUpperCase())) {
+            const uid = result.uid.replace(/[:-]/g, "").toUpperCase();
+            if (scanSlot === 2) setSecondaryUid(uid); else setRfidUid(uid);
+            setScanNotice("Tag scanned. Confirm this is the correct physical spool, then save its RFID identity.");
+          } else {
+            setError("The terminal did not return a valid RFID UID.");
+          }
+        } else if (result.state === "expired" || result.state === "cancelled") {
+          setScanRequest(null);
+          setError("The terminal scan request " + result.state + ".");
+        }
+      } catch (err) {
+        if (active) { setScanRequest(null); setError(err.message); }
+      } finally { checking = false; }
+    }
+    pollScan();
+    const timer = window.setInterval(pollScan, 2000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [scanRequest?.id]);
+
+  async function requestScan() {
+    if (!selectedTerminal || busy || scanRequest) return;
+    setBusy(true); setError(""); setScanNotice("");
+    try {
+      const result = await apiFetch("/api/device/tag-lookup/", {
+        method: "POST", body: {device_id: selectedTerminal}
+      });
+      setScanRequest({id: result.id});
+      setScanNotice("Waiting for the terminal to scan the spool's RFID tag. No tag will be written.");
+    } catch (err) { setError(err.message); }
+    finally { setBusy(false); }
+  }
+
+  async function cancelScan() {
+    if (!scanRequest) return;
+    setBusy(true);
+    try {
+      await apiFetch("/api/device/tag-lookup/" + scanRequest.id + "/cancel/", {method: "POST"});
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setScanRequest(null);
+      setScanNotice("");
+      setBusy(false);
+    }
+  }
 
   async function submit(event) {
     event.preventDefault();
+    if (scanRequest) return;
+    if (tagCount === 2 && (!rfidUid.trim() || !secondaryUid.trim())) {
+      setError("Scan or enter both tag UIDs when using two RFID tags.");
+      return;
+    }
+    if (tagCount === 2 && rfidUid.trim().toUpperCase() === secondaryUid.trim().toUpperCase()) {
+      setError("Tag 1 and Tag 2 must have different UIDs.");
+      return;
+    }
     setBusy(true); setError("");
     try {
       await apiFetch("/api/printing/spools/" + spool.id + "/", {
         method: "PATCH",
-        body: { rfid_uid: rfidUid.trim().toUpperCase() },
+        body: { rfid_uid: rfidUid.trim().toUpperCase(), rfid_uid_secondary: tagCount === 2 ? secondaryUid.trim().toUpperCase() : "" },
       });
       await onSaved();
     } catch (err) {
@@ -868,17 +956,48 @@ function SpoolIdentityModal({ spool, onClose, onSaved }) {
     onClose={onClose}
   >
     <form className="formGrid" onSubmit={submit}>
-      {error && <div className="formError full">{error}</div>}
+      {error && <div className="formError full" role="alert">{error}</div>}
       <div className="settingsCallout full">
         <strong>{spool.filament}</strong>
         <p>{[spool.manufacturer, spool.material, spool.color_name].filter(Boolean).join(" · ") || "Filament"}</p>
       </div>
-      <label className="full">RFID tag ID<input autoFocus value={rfidUid} onChange={e => setRfidUid(e.target.value.toUpperCase())} placeholder="Optional physical tag ID" /><small>Each non-empty tag ID can belong to only one MakerVault spool.</small></label>
-      <div className="formActions full"><button type="button" onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Saving…" : "Save RFID identity"}</button></div>
+      <label className="full">Number of physical RFID tags
+        <select value={tagCount} disabled={Boolean(scanRequest) || busy} onChange={e => { const count = Number(e.target.value); setTagCount(count); if (count === 1) setScanSlot(1); setScanNotice(""); }}>
+          <option value={1}>1 tag</option>
+          <option value={2}>2 tags (one on each side)</option>
+        </select>
+      </label>
+      <label className="full">RFID tag 1<input value={rfidUid} onChange={e => { setRfidUid(e.target.value.toUpperCase()); setScanNotice(""); }} placeholder="Physical tag UID — side 1" /></label>
+      {tagCount === 2 && <label className="full">RFID tag 2<input value={secondaryUid} onChange={e => { setSecondaryUid(e.target.value.toUpperCase()); setScanNotice(""); }} placeholder="Physical tag UID — side 2" /></label>}
+      <small className="full">Both UIDs identify the same physical spool. Each tag UID must be unique across MakerVault.</small>
+      <div className="settingsCallout full" style={{display:"grid", gap:12}}>
+        <strong>Scan tag using MakerVault Terminal</strong>
+        <small>Scan either side separately. Each scan fills the selected UID field; nothing is assigned until you save.</small>
+        <label>Scan into
+          <select value={scanSlot} disabled={Boolean(scanRequest) || busy} onChange={e => setScanSlot(Number(e.target.value))}>
+            <option value={1}>Tag 1</option>
+            {tagCount === 2 && <option value={2}>Tag 2</option>}
+          </select>
+        </label>
+        {terminals.length ? <div style={{display:"flex", gap:12, flexWrap:"wrap", alignItems:"end"}}>
+          <label style={{flex:"1 1 180px"}}>Paired terminal
+            <select value={selectedTerminal} disabled={Boolean(scanRequest) || busy} onChange={e => setSelectedTerminal(e.target.value)}>
+              {terminals.map(device => <option key={device.id} value={device.id}>{device.name}{device.online ? " · Online" : " · Offline"}</option>)}
+            </select>
+          </label>
+          {scanRequest ?
+            <button type="button" disabled={busy} onClick={cancelScan}>Cancel scan</button> :
+            <button type="button" disabled={busy} onClick={requestScan}>Scan using terminal</button>}
+        </div> : <small>No paired terminal with tag-reading permission was found. You can still enter the UID manually.</small>}
+        {scanNotice && <small role="status">{scanNotice}</small>}
+      </div>
+      <div className="formActions full">
+        <button type="button" onClick={onClose}>Cancel</button>
+        <button className="primary" disabled={busy || Boolean(scanRequest)}>{busy ? "Saving…" : "Save RFID identity"}</button>
+      </div>
     </form>
   </Modal>;
 }
-
 
 function ModelLibraryPage({ models, files, printers, projects, canAddModel, canChangeModel, canDeleteModel, canUpload, onBack, onChanged, searchTarget = null }) {
   const [query, setQuery] = useState("");

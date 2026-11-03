@@ -10,11 +10,12 @@ from .backups import backup_in_progress
 from .catalogue_image_sources import run_catalogue_image_seed
 from .catalogue_enrichment import run_board_catalogue_enrichment
 from .component_reference_enrichment import enrich_component_reference_links
-from .models import CatalogueMaintenanceSettings, PrinterConnection, PrintingIntegrationSetting
+from .models import CatalogueMaintenanceSettings, PrinterConnection, PrintingIntegrationSetting, PrinterMaterialDatabaseSnapshot
 from .orcaslicer_catalogue import OrcaCatalogueError, sync_orcaslicer_printer_catalogue
 from .printing_sync import PrintingSyncError, sync_printing_integration
 from .filament_catalogue import FilamentCatalogueError, refresh_imported_filament_products, seed_starter_filament_catalogue, populate_missing_filament_variants
 from .printer_connectivity import POLLERS, PrinterConnectionError, poll_connection
+from .creality_material_database import MaterialDatabaseError, pull_creality_material_database
 
 
 @shared_task
@@ -455,3 +456,33 @@ def live_printer_connections_tick():
         "count": len(due),
     }
 
+
+
+@shared_task
+def scheduled_creality_material_database_tick():
+    """Opt-in read-only printer database pulls, never changes printer state.
+
+    Runs hourly, but each connection is refreshed at most once per 24 hours.
+    A failure is isolated per printer and does not clear its last good copy.
+    """
+    if backup_in_progress():
+        return {"status": "backup-in-progress", "checked": 0}
+    now = timezone.now()
+    checked = 0
+    failed = 0
+    connections = PrinterConnection.objects.filter(adapter="creality_local", enabled=True)
+    for connection in connections.iterator():
+        config = connection.config or {}
+        if config.get("material_database_scheduled") is not True:
+            continue
+        cached_at = PrinterMaterialDatabaseSnapshot.objects.filter(
+            connection=connection,
+        ).values_list("synced_at", flat=True).first()
+        if cached_at is not None and cached_at >= now - timedelta(hours=24):
+            continue
+        try:
+            pull_creality_material_database(connection)
+            checked += 1
+        except MaterialDatabaseError:
+            failed += 1
+    return {"checked": checked, "failed": failed}
