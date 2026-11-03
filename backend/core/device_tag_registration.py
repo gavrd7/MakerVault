@@ -97,6 +97,14 @@ def begin(request):
         if chosen_origin and ("ntag215_ndef_write" not in (device.capabilities or []) or
                               not request.user.has_perm("core.change_makertag")):
             return failure("This terminal or account cannot complete NFC programming.", 403)
+        # Do not overlap a cleaning/removal operation on the shared reader.
+        from .device_tag_operations_model import DeviceMakerTagOperation
+        from django.db.models import Q
+        if DeviceMakerTagOperation.objects.filter(device=device).filter(
+            Q(state="pending", expires_at__gt=timezone.now()) |
+            Q(state="cleaned", action="remove")
+        ).exists():
+            return failure("Finish the pending MakerTag cleanup first.", 409)
         if DeviceTagRegistration.objects.filter(
             device=device, state="pending", expires_at__gt=timezone.now()
         ).exists():
@@ -151,6 +159,14 @@ def device_begin(request):
             return failure("Active paired terminal required.", 403)
         if "ntag215_ndef_write" not in (device.capabilities or []):
             return failure("Terminal requires verified NFC writing capability.", 403)
+        # Do not overlap a cleaning/removal operation on the shared reader.
+        from .device_tag_operations_model import DeviceMakerTagOperation
+        from django.db.models import Q
+        if DeviceMakerTagOperation.objects.filter(device=device).filter(
+            Q(state="pending", expires_at__gt=timezone.now()) |
+            Q(state="cleaned", action="remove")
+        ).exists():
+            return failure("Finish the pending MakerTag cleanup first.", 409)
         if DeviceTagRegistration.objects.filter(
             device=device, state="pending", expires_at__gt=timezone.now()
         ).exists():
