@@ -231,10 +231,18 @@ def device_pending(request):
     device = paired(request)
     if not device:
         return failure("Active paired terminal required.", 403)
+    # A verified wipe may have been reported just before an interrupted
+    # removal. After reboot, let the *same terminal* recover that exact
+    # operation without touching NFC memory or creating another session.
     item = Operation.objects.select_related("tag").filter(
-        device=device, owner=request.device_owner, source="browser",
-        state="pending", expires_at__gt=timezone.now()
+        device=device, owner=request.device_owner, action="remove",
+        state="cleaned"
     ).order_by("-created_at").first()
+    if not item:
+        item = Operation.objects.select_related("tag").filter(
+            device=device, owner=request.device_owner, source="browser",
+            state="pending", expires_at__gt=timezone.now()
+        ).order_by("-created_at").first()
     result = JsonResponse({"operation": serialise(item) if item else None})
     result["Cache-Control"] = "no-store"
     return result
