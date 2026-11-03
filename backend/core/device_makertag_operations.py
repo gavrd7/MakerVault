@@ -195,8 +195,10 @@ def device_begin(request):
             MakerTag.objects.filter(owner=request.device_owner, status="active"),
             "nfc" if len(uid)==14 else "rfid", uid
         )[:2])
-        if len(tags) != 1:
-            return failure("No unique registered MakerTag found for UID.", 404 if not tags else 409)
+        if not tags:
+            return failure("Tag not registered in MakerVault.", 404)
+        if len(tags) > 1:
+            return failure("Multiple MakerTags use this UID; resolve conflict first.", 409)
         tag = MakerTag.objects.select_for_update().get(pk=tags[0].pk)
         err = validate(data["action"], data["also_clean"], tag, request.device_owner, device)
         if err:
