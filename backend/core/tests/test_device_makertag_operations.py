@@ -67,6 +67,12 @@ class MakerTagOperationTests(TestCase):
         result=self.device_step(pk,"cleaned",{"uid":"04AABBCCDDEEFF","verified_empty":True})
         self.assertEqual(result.json()["operation"]["state"],"cleaned")
         self.assertTrue(MakerTag.objects.filter(pk=self.tag.pk).exists())
+        # After a terminal reboot, its pending endpoint must re-advertise
+        # the durable cleaned operation instead of scheduling a second wipe.
+        recovery=self.client.get("/api/device/v1/makertag-operation/pending/",
+            HTTP_AUTHORIZATION="Bearer "+self.token)
+        self.assertEqual(recovery.json()["operation"]["id"],pk)
+        self.assertEqual(recovery.json()["operation"]["state"],"cleaned")
         self.assertEqual(self.device_step(pk,"remove",{"uid":"04AABBCCDDEEFF"}).status_code,200)
         self.assertFalse(MakerTag.objects.filter(pk=self.tag.pk).exists())
 
