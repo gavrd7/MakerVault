@@ -1,6 +1,6 @@
 # MakerTag physical NFC cleaning — implementation contract
 
-Status: **design / not implemented**. Tracks [#159](https://github.com/gavrd7/MakerVault/issues/159). This document records the agreed cross-repository behaviour before adding destructive-device endpoints.
+Status: **implemented on the linked draft branches; hardware acceptance pending**. Tracks [#159](https://github.com/gavrd7/MakerVault/issues/159). Server and terminal interfaces described here are available on the feature branches, not the published releases.
 
 ## Three user-visible operations
 
@@ -18,11 +18,11 @@ A MakerTag URL may cease resolving after a server-only removal while still physi
 - Web: MakerTag details → **Clean NFC data using terminal**; **Remove MakerTag**, with optional physical clean and explicit paired-terminal selection.
 - Terminal-led operations must resolve the scanned UID and target through the authenticated owner-scoped device API. Web-led operations must bind the request to the selected MakerTag's exact ID and UID.
 
-## Device/server protocol to implement
+## Implemented device/server protocol
 
-A shared, durable, owner-scoped operation model should store: UUID request ID, selected terminal, target MakerTag identity, expected physical UID, intent (clean or remove), optional clean-before-remove, state, expiry, completed timestamps, and a bounded audit record of the physical readback result. This is **not** an existing API yet.
+The `DeviceMakerTagOperation` model stores UUID request ID, owner, terminal, immutable MakerTag identity and UID, intent (clean or remove), optional clean-before-remove, source, state, expiry, physical-clean timestamp and completion timestamp. The server stores the device-reported verified-empty result as a distinct transaction/event; the physical readback still requires hardware acceptance.
 
-- Browser create/status/cancel endpoints and device begin/pending/status/complete endpoints should follow the established paired-device patterns with authorization on every state transition.
+- Browser create/status/cancel endpoints and device begin/pending/status/cleaned/remove endpoints follow the established paired-device patterns with authorization on every state transition.
 - Server-led operations require an actively paired terminal with cleaning capability, matching owner, appropriate scopes and active user permissions.
 - Distinguish physical cleaning permission from `core.delete_makertag`; **tags:write alone is not deletion authority**.
 - Terminal-led removal must enforce `core.delete_makertag` against the owner or delegated interactive authorization before executing deletion.
@@ -44,3 +44,12 @@ Only supported, writable, unprotected NTAG215 user-data pages 4–127 may be phy
 - Permissions, cross-owner access, wrong UID, protected/unrecognised tags, cancellation, retries, server interruption after physical wipe, expired operations and competing requests tested.
 - Regression testing for MakerTag NFC assignment and existing CFS/third-party RFID readers.
 - App and firmware PRs remain **draft** until CI and real hardware acceptance.
+
+
+### API endpoints (feature branch)
+
+- Browser: `POST /api/device/makertag-operation/`, `GET /api/device/makertag-operation/<id>/`, `POST /api/device/makertag-operation/<id>/cancel/`.
+- Device: `POST /api/device/v1/makertag-operation/begin/`, `GET .../pending/`, `GET .../<id>/status/`, `POST .../<id>/cleaned/`, `POST .../<id>/remove/`, and `POST .../<id>/cancel/`.
+- The cleaned state is durable and rediscovered from the terminal after reboot; recovering it never performs another NFC wipe without a separate operation.
+
+**Merge status:** Application and firmware CI must be green on the exact PR heads and the physical test matrix must be completed before marking either PR ready for review.
