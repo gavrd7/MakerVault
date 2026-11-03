@@ -295,7 +295,7 @@ def device_cleaned(request, operation_id):
     except (ValueError, TypeError, KeyError, json.JSONDecodeError):
         return failure("Invalid verification.")
     with transaction.atomic():
-        item = Operation.objects.select_for_update().select_related("tag").filter(
+        item = Operation.objects.select_for_update(of=("self",)).select_related("tag").filter(
             pk=operation_id, owner=request.device_owner, device=device
         ).first()
         if not item:
@@ -335,7 +335,7 @@ def device_remove(request, operation_id):
     except (ValueError, TypeError, KeyError, json.JSONDecodeError):
         return failure("Invalid removal request.")
     with transaction.atomic():
-        item = Operation.objects.select_for_update().select_related("tag").filter(
+        item = Operation.objects.select_for_update(of=("self",)).select_related("tag").filter(
             pk=operation_id, owner=request.device_owner, device=device
         ).first()
         if not item:
