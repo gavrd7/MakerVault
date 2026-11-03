@@ -81,6 +81,9 @@ class MakerTagOperationTests(TestCase):
             {"uid":"04AABBCCDDEEFF","action":"clean","also_clean":True},True)
         self.assertEqual(response.status_code,201,response.content)
         op=response.json()["operation"]["id"]
+        recovered=self.client.get("/api/device/v1/makertag-operation/pending/",
+            HTTP_AUTHORIZATION="Bearer "+self.token)
+        self.assertEqual(recovered.json()["operation"]["id"],op)
         self.assertEqual(self.device_step(op,"cleaned",
             {"uid":"04AABBCCDDEE00","verified_empty":True}).status_code,409)
         self.assertEqual(self.device_step(op,"cleaned",
