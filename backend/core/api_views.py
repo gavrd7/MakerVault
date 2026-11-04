@@ -2416,7 +2416,19 @@ def file_gcode_inspect(request, asset_id):
         result = inspect_asset(asset)
     except (OSError, ValueError, UnicodeError) as exc:
         return _error(str(exc), status=400)
-    return JsonResponse({"file_id": str(asset.id), "sha256": asset.sha256, **result})
+    links = ModelRevisionAsset.objects.filter(
+        file_asset=asset, revision__model__owner=request.user
+    ).select_related("revision__model").order_by("-revision__created_at")[:20]
+    linked_models = [
+        {
+            "model_id": str(link.revision.model_id),
+            "model_name": link.revision.model.name,
+            "revision_id": str(link.revision_id),
+            "revision": link.revision.version,
+        }
+        for link in links
+    ]
+    return JsonResponse({"file_id": str(asset.id), "sha256": asset.sha256, "linked_models": linked_models, **result})
 
 
 @login_required
@@ -4675,7 +4687,7 @@ def printing_overview(request):
         "model_files": [
             _serialise_file_asset(asset)
             for asset in FileAsset.objects.filter(owner=request.user).filter(
-                category__in=["mesh", "slicer", "cad"],
+                Q(category__in=["mesh", "slicer", "cad", "gcode"]) | Q(metadata__extension=".gcode"),
                 superseded_by__isnull=True,
             )
                 .select_related("project", "board__manufacturer", "component__category")
