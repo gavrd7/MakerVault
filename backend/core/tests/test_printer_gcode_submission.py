@@ -7,7 +7,7 @@ from django.utils import timezone
 
 from core.bambu_storage import BambuStorageError, _fingerprint_or_fail, _parse_listing, list_bambu_storage
 from core.flashforge_gcode import FlashForgeFileError, supports_simple_print, list_files as list_flashforge_files
-from core.creality_gcode import CrealityGcodeError, _http_root
+from core.creality_gcode import CrealityGcodeError, _http_root, _safe_printer_file, _parse_file_list, list_files as list_creality_files, start_single_spool
 
 from core.printer_gcode_submission import (
     GcodeSubmissionError, _valid_path, availability,
@@ -162,6 +162,33 @@ class NativeGcodeAdapterTests(SimpleTestCase):
         self.assertEqual([file["path"] for file in rows], ["part.gcode"])
         self.assertTrue(post.call_args.args[0].endswith("/gcodeList"))
         self.assertFalse(post.call_args.kwargs["allow_redirects"])
+
+    def test_stock_creality_file_list_response_and_safety(self):
+        payload = {"params": {"gcodeFileList": [
+            {"fileName": "/mnt/UDISK/printer_data/gcodes/part.gcode", "size": 1200},
+            {"fileName": "../../escape.gcode"},
+        ]}}
+        rows = _parse_file_list(payload)
+        self.assertEqual([f["path"] for f in rows], ["part.gcode"])
+        self.assertIsNone(_safe_printer_file("../escape.gcode"))
+        self.assertIsNone(_safe_printer_file("/etc/escape.gcode"))
+
+    def test_creality_native_start_requires_separate_opt_in_and_no_cfs(self):
+        cc = connection("creality_local")
+        cc.printer = SimpleNamespace(model="K1", catalog_model=None)
+        cc.config["gcode_submission_enabled"] = True
+        self.assertFalse(availability(cc)["can_start"])
+        cc.config["creality_single_spool_start_enabled"] = True
+        self.assertTrue(availability(cc)["can_start"])
+        cc.last_snapshot["source_metadata"] = {"cfs_connected": True}
+        self.assertFalse(availability(cc)["can_start"])
+
+    @patch("core.creality_gcode.asyncio.run")
+    def test_creality_start_rejects_path_traversal_without_websocket(self, worker):
+        cc = connection("creality_local")
+        with self.assertRaises(CrealityGcodeError):
+            start_single_spool(cc, "../escape.gcode")
+        worker.assert_not_called()
 
     def test_creality_upload_target_is_same_host_no_credentials(self):
         printer = connection("creality_local")
