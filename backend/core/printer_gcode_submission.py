@@ -122,6 +122,42 @@ def _prusa_auth(connection):
     return HTTPDigestAuth(username, password) if username or password else None
 
 
+def _prusalink_capability_probe(connection, *, upload):
+    """Read PrusaLink's advertised API capabilities; never assume an old API."""
+    base, headers = _printer_endpoint(connection)
+    auth = _prusa_auth(connection)
+    try:
+        version = requests.get(
+            base + "/api/version", headers=headers, auth=auth,
+            timeout=(3, 10), allow_redirects=False,
+        )
+        storage = requests.get(
+            base + "/api/v1/storage", headers=headers, auth=auth,
+            timeout=(3, 10), allow_redirects=False,
+        )
+    except requests.RequestException as exc:
+        raise GcodeSubmissionError("Cannot check PrusaLink firmware storage capabilities.", 502) from exc
+    if version.status_code != 200 or storage.status_code != 200:
+        raise GcodeSubmissionError("PrusaLink version or storage capability query failed; transfer disabled.")
+    try:
+        v = version.json()
+        st = storage.json()
+    except ValueError as exc:
+        raise GcodeSubmissionError("PrusaLink returned invalid capability metadata.", 502) from exc
+    supported_storage = any(
+        isinstance(entry, dict) and entry.get("type") == "LOCAL"
+        and entry.get("available") is True
+        and (not upload or entry.get("read_only") is False)
+        for entry in (st.get("storage_list") or [])
+    ) if isinstance(st, dict) else False
+    if not supported_storage:
+        raise GcodeSubmissionError("PrusaLink has no compatible available local storage.")
+    if upload and (not isinstance(v, dict) or
+                   (v.get("capabilities") or {}).get("upload-by-put") is not True):
+        raise GcodeSubmissionError("This PrusaLink firmware does not advertise safe PUT uploads.")
+    return True
+
+
 def _prusalink_files(connection):
     """Experimental: modern PrusaLink v1 API; no undocumented fallback."""
     base, headers = _printer_endpoint(connection)
@@ -360,6 +396,8 @@ def submit(connection, user, payload):
         connection.refresh_from_db()
         _require_action_ready(connection, action)
         base, headers = _printer_endpoint(connection)
+        if connection.adapter == "prusa":
+            _prusalink_capability_probe(connection, upload=(source == "makervault"))
         if source == "makervault":
             try:
                 with asset.file.open("rb") as handle:
