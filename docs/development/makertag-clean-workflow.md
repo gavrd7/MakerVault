@@ -1,6 +1,6 @@
 # MakerTag physical NFC cleaning — implementation contract
 
-Status: **implemented on the linked draft branches; hardware acceptance pending**. Tracks [#159](https://github.com/gavrd7/MakerVault/issues/159). Server and terminal interfaces described here are available on the feature branches, not the published releases.
+Status: **implemented on the linked release-candidate branches; maintainer reports the complete physical release test matrix passed**. Tracks [#159](https://github.com/gavrd7/MakerVault/issues/159). Server and terminal interfaces described here are available on the feature branches, not the published releases.
 
 ## Three user-visible operations
 
@@ -43,7 +43,7 @@ Only supported, writable, unprotected NTAG215 user-data pages 4–127 may be phy
 - Remove-without-clean confirmed to leave NFC pages unchanged; remove-with-clean proves physical wipe precedes the exact server deletion.
 - Permissions, cross-owner access, wrong UID, protected/unrecognised tags, cancellation, retries, server interruption after physical wipe, expired operations and competing requests tested.
 - Regression testing for MakerTag NFC assignment and existing CFS/third-party RFID readers.
-- App and firmware PRs remain **draft** until CI and real hardware acceptance.
+- App and firmware PRs can be marked ready for review after final CI on the exact heads and documentation reconciliation; the maintainer reports the hardware matrix passed. The PR author must still verify final release artifacts after merge.
 
 
 ### API endpoints (feature branch)
@@ -52,7 +52,7 @@ Only supported, writable, unprotected NTAG215 user-data pages 4–127 may be phy
 - Device: `POST /api/device/v1/makertag-operation/begin/`, `GET .../pending/`, `GET .../<id>/status/`, `POST .../<id>/cleaned/`, `POST .../<id>/remove/`, and `POST .../<id>/cancel/`.
 - The cleaned state is durable and rediscovered from the terminal after reboot; recovering it never performs another NFC wipe without a separate operation.
 
-**Merge status:** Application and firmware CI must be green on the exact PR heads and the physical test matrix must be completed before marking either PR ready for review.
+**Merge status:** The maintainer has reported the full release test matrix passed on real ESP32-S3 hardware. Verify current GitHub CI against the latest docs-updated PR commits before merging, and confirm the paired app/firmware release assets when tagged.
 
 ### Consolidated terminal connection and idle work
 
@@ -64,5 +64,5 @@ The terminal's **four independent idle polling endpoints** have been replaced wi
 - Heartbeat and periodic `/me` verification remain independent because they report device health and refresh scopes, rather than discover new work. Active cancellation/status polling remains separate to preserve safety.
 - The deployed application must support the consolidated endpoint before the matching firmware is flashed. Keep both feature branches paired until their joint release.
 
-**Reliability validation remains open:** the terminal previously lost roughly 145 KB free internal heap in an idle hour with a TLS memory allocation error. The consolidated request removes most idle connection churn, but the root leak/fragmentation cause has not been independently verified as resolved. Use the added `[TLS HEAP]` serial diagnostics and repeat the one-hour and overnight idle tests before merging.
+**Reliability validation:** The previous Arduino HTTPClient firmware lost approximately 96 bytes per completed request and eventually ran out of TLS heap. The matching hardware branch now uses native ESP-IDF `esp_http_client`, a reusable verified TLS session and proper unwinding of C++ temporary buffers before deleting FreeRTOS worker tasks. In the maintainer's two-hour-plus idle recording, hundreds of requests reused one connection and idle heap remained stable, without a recovery reboot. The maintainer subsequently reported the full release test matrix passed. These are observations for the tested build, not a guarantee against future networking regressions. Keep recovery, TLS trust and the existing per-operation physical-safety checks.
 
