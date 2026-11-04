@@ -3316,3 +3316,46 @@ a:focus-visible,
     gap: 16px;
   }
 }
+
+
+/* Spool inventory: keep the record identity readable when the action list grows.
+   Separate the actions from the metadata instead of shrinking the metadata to
+   a few characters at desktop widths with a persistent sidebar. */
+.printingListRow.spoolInventoryRow {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  column-gap: 12px;
+  row-gap: 10px;
+}
+.spoolInventoryRow > .printingSwatch {
+  grid-column: 1;
+  grid-row: 1;
+  flex: none;
+}
+.spoolInventoryRow > .spoolInventoryDetails {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  flex: none;
+}
+.spoolInventoryRow > .spoolInventoryDetails strong,
+.spoolInventoryRow > .spoolInventoryDetails small {
+  overflow-wrap: anywhere;
+}
+.spoolInventoryRow > .printingBadges {
+  grid-column: 2;
+  grid-row: 2;
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 8px;
+}
+@media (max-width: 620px) {
+  .spoolInventoryRow > .printingBadges {
+    grid-column: 1 / -1;
+  }
+}
