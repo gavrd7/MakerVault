@@ -125,6 +125,7 @@ urlpatterns = [
     path("components/<uuid:component_id>/", api_views.component_detail, name="api-component-detail"),
     path("components/<uuid:component_id>/image/", api_views.component_image, name="api-component-image"),
     path("files/", api_views.files_lookup, name="api-files"),
+    path("files/<uuid:asset_id>/gcode/inspect/", api_views.file_gcode_inspect, name="api-file-gcode-inspect"),
     path("files/<uuid:asset_id>/", api_views.file_detail, name="api-file-detail"),
     path("files/<uuid:asset_id>/versions/", api_views.file_versions, name="api-file-versions"),
     path("projects/", api_views.projects_lookup, name="api-projects"),
