@@ -106,6 +106,7 @@ urlpatterns = [
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/control/", api_views.printing_printer_connection_control, name="api-printing-printer-connection-control"),
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/gcode/files/", printer_gcode_api.files, name="api-printer-gcode-files"),
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/gcode/bambu-certificate/", printer_gcode_api.bambu_certificate, name="api-printer-gcode-bambu-certificate"),
+    path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/gcode/native-opt-in/", printer_gcode_api.submission_opt_in, name="api-printer-gcode-native-opt-in"),
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/gcode/submit/", printer_gcode_api.submit_file, name="api-printer-gcode-submit"),
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/gcode/submissions/<uuid:request_id>/", printer_gcode_api.submission_status, name="api-printer-gcode-submission-status"),
     path("printing/spools/", api_views.printing_spools, name="api-printing-spools"),
