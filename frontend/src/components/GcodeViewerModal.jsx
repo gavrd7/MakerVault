@@ -3,7 +3,7 @@ import { apiFetch } from "../api";
 import { Modal } from "./Common";
 
 // Read-only analysis is evidence, not proof of safe G-code or firmware compatibility.
-export default function GcodeViewerModal({ file, canEdit = false, onClose, onSaved }) {
+export default function GcodeViewerModal({ file, canEdit = false, onClose, onSaved, onOpenModel }) {
   const [report, setReport] = useState(null);
   const [text, setText] = useState("");
   const [mode, setMode] = useState("visual");
@@ -60,6 +60,9 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
         <button type="button" className={mode === "code" ? "primary" : ""} onClick={() => setMode("code")}>G-code text</button>
         <a className="assetButton" href={file.url}>Download original</a>
       </div>
+      <p><strong>Linked model:</strong> {report.linked_models?.length
+        ? report.linked_models.map(link => <button key={link.revision_id} type="button" onClick={() => onOpenModel?.(link.model_id)} disabled={!onOpenModel}>{link.model_name} · revision {link.revision}</button>)
+        : "Not linked — attach this file to a model revision in Model Library."}</p>
       <p><strong>Intended printer:</strong> {analysis.printer_hints?.join(", ") || "Unknown — no verified printer metadata"}</p>
       {analysis.slicer_hints?.length > 0 && <p><strong>Slicer:</strong> {analysis.slicer_hints.join(", ")}</p>}
       <p><strong>XY moves:</strong> {analysis.xy_moves?.toLocaleString() || 0} · <strong>Coordinates:</strong> {["X", "Y", "Z"].map(axis => bounds[axis]?.[0] == null ? `${axis} unknown` : `${axis} ${bounds[axis][0].toFixed(1)}–${bounds[axis][1].toFixed(1)} mm`).join(" · ")}</p>
