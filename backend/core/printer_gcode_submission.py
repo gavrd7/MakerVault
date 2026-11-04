@@ -285,15 +285,16 @@ def submit(connection, user, payload):
             try:
                 with asset.file.open("rb") as handle:
                     response = requests.post(
-                        base + "/server/files/upload",
-                        data={"root": "gcodes", "print": "false", "checksum": asset.sha256},
+                        base + ("/api/files/local" if connection.adapter == "octoprint" else "/server/files/upload"),
+                        data=({"select": "false", "print": "false"} if connection.adapter == "octoprint" else {"root": "gcodes", "print": "false", "checksum": asset.sha256}),
                         files={"file": (remote_path, handle, "application/octet-stream")},
                         headers=headers, timeout=(5, 120), allow_redirects=False,
                     )
             except requests.RequestException as exc:
                 raise GcodeSubmissionError("Upload outcome is uncertain. Inspect printer storage before trying again.", 502) from exc
-            result = _json_response(response)
-            if not isinstance(result, dict) or result.get("item", {}).get("path") != remote_path or result.get("print_started") or result.get("print_queued"):
+            result = _octoprint_upload_receipt(response) if connection.adapter == "octoprint" else _json_response(response)
+            uploaded_path = ((result.get("files") or {}).get("local") or {}).get("path") if connection.adapter == "octoprint" else (result.get("item") or {}).get("path")
+            if not isinstance(result, dict) or uploaded_path != remote_path or result.get("print_started") or result.get("print_queued") or result.get("effectivePrint"):
                 raise GcodeSubmissionError("Printer did not confirm upload-only completion. Verify printer state.", 502)
         if action == "print":
             # Verify state a second time after file transfer, particularly when
@@ -302,14 +303,21 @@ def submit(connection, user, payload):
             connection.refresh_from_db()
             _require_action_ready(connection, "print")
             try:
-                response = requests.post(
-                    base + "/printer/print/start",
-                    params={"filename": remote_path}, headers=headers,
-                    timeout=(3, 15), allow_redirects=False,
-                )
+                if connection.adapter == "octoprint":
+                    response = requests.post(
+                        base + "/api/files/local/" + quote(remote_path, safe="/"),
+                        json={"command": "select", "print": True}, headers=headers,
+                        timeout=(3, 15), allow_redirects=False,
+                    )
+                else:
+                    response = requests.post(
+                        base + "/printer/print/start",
+                        params={"filename": remote_path}, headers=headers,
+                        timeout=(3, 15), allow_redirects=False,
+                    )
             except requests.RequestException as exc:
                 raise GcodeSubmissionError("Start-print outcome is uncertain. Inspect printer before trying again.", 502) from exc
-            if _json_response(response) != "ok":
+            if (response.status_code != 204 if connection.adapter == "octoprint" else _json_response(response) != "ok"):
                 raise GcodeSubmissionError("Printer did not confirm starting the print. Verify its live state.", 502)
         row.status = "started" if action == "print" else "uploaded"
         row.message = "Print start accepted by printer." if action == "print" else "Uploaded to printer without starting."
