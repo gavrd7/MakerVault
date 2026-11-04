@@ -11,6 +11,7 @@ import ModelViewerModal, { isViewableModelFile } from "./ModelViewer";
 import { suggestNextVersion } from "./FileVersionModal";
 import GcodeViewerModal from "./GcodeViewerModal";
 import GcodeLibraryModal from "./GcodeLibraryModal";
+import PrinterStartGcodeModal from "./PrinterStartGcodeModal";
 
 function grams(value) {
   if (value == null) return "—";
@@ -1205,6 +1206,7 @@ function LocationModal({ location = null, onClose, onSaved }) {
 }
 
 function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
+  const [gcodeConnection, setGcodeConnection] = useState(null);
   const [data, setData] = useState({ rows: [], adapters: [] });
   const [form, setForm] = useState({
     adapter: "moonraker",
@@ -1513,6 +1515,7 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
             <PrinterJobControls printer={printer} connection={connection} canControl={data.can_control} disabled={Boolean(busy)} onChanged={async () => { await loadConnections(); await onChanged(); }} />
           </div>}
           <div className="settingsActions compact">
+            {data.can_control && <button type="button" disabled={Boolean(busy)} onClick={() => setGcodeConnection(connection)}>Start print / G-code</button>}
             <button type="button" disabled={busy === connection.id || !connection.enabled || !connection.supported} onClick={() => refreshConnection(connection)}>{busy === connection.id ? "Working…" : "Refresh"}</button>
             <button type="button" onClick={() => copyDiagnostics(connection)}>Copy diagnostics</button>
             <button type="button" disabled={busy === connection.id} onClick={() => toggleConnection(connection)}>{connection.enabled ? "Disable" : "Enable"}</button>
@@ -1523,6 +1526,7 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
       {!data.rows?.length && <div className="printingEmptyInline">No live printer sources are configured yet.</div>}
     </div>
 
+    {gcodeConnection && <PrinterStartGcodeModal printer={printer} connection={gcodeConnection} canEdit={Boolean(data.can_control)} onClose={() => setGcodeConnection(null)} onChanged={async () => { await loadConnections(); await onChanged?.(); }} />}
     {!!available.length && <form className="formGrid" onSubmit={addConnection}>
       <div className="full settingsCallout">
         <strong>Add live source</strong>
