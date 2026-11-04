@@ -11,7 +11,7 @@ from core.creality_gcode import CrealityGcodeError, _http_root, _safe_printer_fi
 
 from core.printer_gcode_submission import (
     GcodeSubmissionError, _valid_path, availability,
-    list_printer_gcodes, _octoprint_upload_receipt,
+    list_printer_gcodes, _octoprint_upload_receipt, _verify_moonraker_upload,
 )
 
 
@@ -189,6 +189,26 @@ class NativeGcodeAdapterTests(SimpleTestCase):
         with self.assertRaises(CrealityGcodeError):
             start_single_spool(cc, "../escape.gcode")
         worker.assert_not_called()
+
+
+    @patch("core.printer_gcode_submission.list_printer_gcodes")
+    def test_moonraker_upload_requires_file_and_matching_bytes(self, browse):
+        printer = connection("moonraker")
+        browse.return_value = [{"path": "mv_test.gcode", "size_bytes": 2048}]
+        self.assertEqual(_verify_moonraker_upload(printer, "mv_test.gcode", 2048)["size_bytes"], 2048)
+        with self.assertRaises(GcodeSubmissionError):
+            _verify_moonraker_upload(printer, "mv_test.gcode", 2047)
+        browse.return_value = []
+        with self.assertRaises(GcodeSubmissionError):
+            _verify_moonraker_upload(printer, "mv_test.gcode", 2048)
+
+    @patch("core.creality_gcode.asyncio.run")
+    def test_creality_browser_preserves_real_error(self, run):
+        from core.creality_gcode import list_files
+        printer = connection("creality_local")
+        run.side_effect = CrealityGcodeError("Unrecognized printer file list")
+        with self.assertRaisesRegex(CrealityGcodeError, "Unrecognized printer"):
+            list_files(printer)
 
     def test_creality_upload_target_is_same_host_no_credentials(self):
         printer = connection("creality_local")
