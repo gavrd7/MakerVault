@@ -1,5 +1,6 @@
 """Owner-scoped printer G-code library and explicit submission endpoints."""
 import uuid
+import re
 
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
@@ -52,6 +53,35 @@ def files(request, printer_id, connection_id):
         "notice": ("Experimental read-only Bambu FTPS listing: printing is not enabled."
                    if connection.adapter == "bambu_local" else ""),
     })
+
+
+@login_required
+@require_http_methods(["PATCH"])
+def bambu_certificate(request, printer_id, connection_id):
+    """Configure a pinned Bambu FTPS device certificate, never auto-trust it."""
+    connection = _connection(request.user, printer_id, connection_id)
+    if not connection or connection.adapter != "bambu_local":
+        return JsonResponse({"error": "Bambu printer connection not found."}, status=404)
+    denied = _require_permission(request, "core.change_printer")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    if not isinstance(payload, dict) or set(payload) != {"sha256"}:
+        return JsonResponse({"error": "Supply only an independently verified certificate SHA-256 fingerprint."}, status=400)
+    value = str(payload.get("sha256") or "").replace(":", "").strip().lower()
+    if value and not re.fullmatch(r"[0-9a-f]{64}", value):
+        return JsonResponse({"error": "Certificate SHA-256 must contain exactly 64 hexadecimal characters."}, status=400)
+    config = dict(connection.config or {})
+    if value:
+        config["bambu_ftps_cert_sha256"] = value
+    else:
+        config.pop("bambu_ftps_cert_sha256", None)
+    connection.config = config
+    connection.save(update_fields=["config", "updated_at"])
+    return JsonResponse({"certificate_pinned": bool(value), "fingerprint": value})
 
 
 @login_required
