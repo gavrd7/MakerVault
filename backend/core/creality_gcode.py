@@ -7,6 +7,7 @@ firmware exposing Moonraker instead; users should configure it separately.
 from urllib.parse import urlparse, quote
 import asyncio
 import json
+import logging
 import re
 import websockets
 from websockets.exceptions import WebSocketException
@@ -14,6 +15,9 @@ from websockets.exceptions import WebSocketException
 import requests
 
 from .printer_connectivity import normalise_creality_endpoint
+
+
+logger = logging.getLogger(__name__)
 
 
 class CrealityGcodeError(RuntimeError):
@@ -104,6 +108,8 @@ def _parse_file_list(payload):
 
 async def _list_files(endpoint):
     merged = None
+    observed_keys = set()
+    frames_received = 0
     try:
         async with websockets.connect(
             normalise_creality_endpoint(endpoint), ping_interval=None,
@@ -120,6 +126,12 @@ async def _list_files(endpoint):
                     data = json.loads(raw)
                 except (TypeError, ValueError):
                     continue
+                if isinstance(data, dict):
+                    frames_received += 1
+                    observed_keys.update(str(key)[:40] for key in data if isinstance(key, str))
+                    for nested in ("params", "data"):
+                        if isinstance(data.get(nested), dict):
+                            observed_keys.update(str(key)[:40] for key in data[nested] if isinstance(key, str))
                 if isinstance(data, dict) and data.get("ModeCode") == "heart_beat":
                     await ws.send("ok")
                     continue
@@ -130,9 +142,11 @@ async def _list_files(endpoint):
     except (OSError, asyncio.TimeoutError, WebSocketException) as exc:
         raise CrealityGcodeError("Creality LAN G-code file discovery failed.") from exc
     if merged is None:
+        logger.warning("Creality storage list probe yielded no recognized response: frames=%d keys=%s", frames_received, sorted(observed_keys)[:40])
         raise CrealityGcodeError(
             "Creality did not return a recognised G-code file list in 8 seconds. "
-            "Monitoring can still work when storage commands are unsupported by printer firmware."
+            "Monitoring can still work when storage commands are unsupported by printer firmware. "
+            "Diagnostic: %d JSON frames; response keys: %s." % (frames_received, ", ".join(sorted(observed_keys)[:12]) or "none")
         )
     return merged
 
