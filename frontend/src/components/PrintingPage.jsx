@@ -3762,6 +3762,9 @@ function ModelManageModal({ model, files, printers, canUpload, onClose, onChange
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [viewerAsset, setViewerAsset] = useState(null);
+  const [gcodeViewerFile, setGcodeViewerFile] = useState(null);
+  const [gcodeUpload, setGcodeUpload] = useState(null);
+  const [gcodeRevisionId, setGcodeRevisionId] = useState(model.revisions[0]?.id || "");
   const [versionUploadOpen, setVersionUploadOpen] = useState(false);
 
   const compatibleFiles = (files || []).filter(file => {
@@ -3805,6 +3808,20 @@ function ModelManageModal({ model, files, printers, canUpload, onClose, onChange
     }
   }
 
+  async function uploadGcode(event) {
+    event.preventDefault();
+    if (!gcodeUpload || !gcodeRevisionId) return;
+    setBusy(true); setError("");
+    try {
+      const body = new FormData();
+      body.append("file", gcodeUpload);
+      await apiFetch(`/api/printing/models/${model.id}/revisions/${gcodeRevisionId}/gcode/upload/`, { method: "POST", body });
+      setGcodeUpload(null);
+      await onChanged?.();
+    } catch (err) { setError(err.message); }
+    finally { setBusy(false); }
+  }
+
   async function detach(revision, asset) {
     if (!window.confirm('Detach "' + asset.file.name + '" from revision ' + revision.version + "? The file itself will remain in MakerVault.")) return;
     setBusy(true); setError("");
@@ -3838,6 +3855,7 @@ function ModelManageModal({ model, files, printers, canUpload, onClose, onChange
                 <div><strong>{asset.file.name}</strong><small>{asset.role_label}{asset.is_primary ? " · Primary" : ""} · {asset.file.filename}</small></div>
                 <div className="printingRevisionAssetActions">
                   {isViewableModelFile(asset.file) && <button type="button" onClick={() => setViewerAsset(asset)}>View</button>}
+                  {asset.file.filename?.toLowerCase().endsWith(".gcode") && <button type="button" onClick={() => setGcodeViewerFile(asset.file)}>View G-code</button>}
                   <a className="assetButton" href={asset.file.url}>Download</a>
                   <button type="button" disabled={busy} onClick={() => detach(revision, asset)}>Detach</button>
                 </div>
@@ -3859,13 +3877,21 @@ function ModelManageModal({ model, files, printers, canUpload, onClose, onChange
       <form className="printingManageForm" onSubmit={attachFile}>
         <h3>Attach existing MakerVault file</h3>
         <label>Revision<select required value={revisionId} onChange={e => setRevisionId(e.target.value)}><option value="">Choose revision…</option>{model.revisions.map(x => <option key={x.id} value={x.id}>{x.version}</option>)}</select></label>
-        <label>File<select required value={fileId} onChange={e => setFileId(e.target.value)}><option value="">Choose STL / 3MF / CAD file…</option>{compatibleFiles.map(x => <option key={x.id} value={x.id}>{x.name} · {x.category_label}{x.project ? " · " + x.project : ""}</option>)}</select></label>
-        <label>Role<select value={role} onChange={e => setRole(e.target.value)}><option value="model">Printable model</option><option value="slicer">Slicer project</option><option value="cad">CAD / source</option><option value="reference">Reference</option><option value="other">Other</option></select></label>
+        <label>File<select required value={fileId} onChange={e => { const id = e.target.value; const selected = compatibleFiles.find(x => x.id === id); setFileId(id); if (selected?.filename?.toLowerCase().endsWith(".gcode")) { setRole("gcode"); setPrimary(false); } }}><option value="">Choose STL / 3MF / CAD / G-code file…</option>{compatibleFiles.map(x => <option key={x.id} value={x.id}>{x.name} · {x.category_label}{x.project ? " · " + x.project : ""}</option>)}</select></label>
+        <label>Role<select value={role} onChange={e => setRole(e.target.value)}><option value="model">Printable model</option><option value="slicer">Slicer project</option><option value="gcode">G-code toolpath</option><option value="cad">CAD / source</option><option value="reference">Reference</option><option value="other">Other</option></select></label>
         <label className="checkRow"><input type="checkbox" checked={primary} onChange={e => setPrimary(e.target.checked)} /><span>Primary file for this role</span></label>
-        {!compatibleFiles.length && <div className="printingEmptyInline">Upload an STL, 3MF or CAD file in Files first, then attach it here.</div>}
+        {!compatibleFiles.length && <div className="printingEmptyInline">Upload an STL, 3MF, CAD or G-code file in Files first, then attach it here.</div>}
         <button className="primary" disabled={busy || !model.revisions.length || !compatibleFiles.length}>{busy ? "Saving…" : "Attach file"}</button>
       </form>
+      {canUpload && model.revisions.length > 0 && <form className="printingManageForm" onSubmit={uploadGcode}>
+        <h3>Add G-code to an existing revision</h3>
+        <label>Model revision<select value={gcodeRevisionId} onChange={e => setGcodeRevisionId(e.target.value)} required>{model.revisions.map(revision => <option key={revision.id} value={revision.id}>{revision.version}</option>)}</select></label>
+        <label>G-code file<input type="file" accept=".gcode" required onChange={e => setGcodeUpload(e.target.files?.[0] || null)} /></label>
+        <button type="submit" className="primary" disabled={!gcodeUpload || !gcodeRevisionId || busy}>{busy ? "Uploading…" : "Upload supplementary G-code"}</button>
+        <small>Uses the same MakerVault Files storage. Never uploads to or starts a printer automatically.</small>
+      </form>}
     </div>
+    {gcodeViewerFile && <GcodeViewerModal file={gcodeViewerFile} onClose={() => setGcodeViewerFile(null)} />}
     {viewerAsset && <ModelViewerModal
       model={model}
       printers={printers || []}
