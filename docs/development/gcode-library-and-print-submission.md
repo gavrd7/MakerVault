@@ -32,9 +32,19 @@ Every submission requires a fresh, specific target printer connection (the selec
 
 For example, G-code explicitly sliced for a **Creality K2** and selected for a **Creality K1** must raise a model-mismatch error and **block automatic start**. An upload-only option can be separately considered only if the adapter safely supports storage without execution and the user explicitly acknowledges the mismatch. If printer origin is missing, compatibility remains **unknown** and direct print cannot be silently enabled. Do not infer a positive match from a shared brand or generic Marlin/Klipper commands.
 
-## Printer upload and print — phase 3 (not implemented by phase 1)
+## Printer upload and print — experimental implementation in PR #169
 
-Use dedicated, per-adapter file-upload APIs (Moonraker/Klipper, OctoPrint, and separately verified Creality local transport). Existing Pause/Resume/Cancel controls do not imply file upload or start capabilities. Other adapters remain disabled until validated.
+A **Start print / G-code** button has been added per live-monitoring connection. It offers three sources: **upload a new G-code to MakerVault**, **choose an existing MakerVault G-code**, and **browse files already on that printer**. A new ad-hoc file is saved as a private MakerVault FileAsset first, rather than bypassing the common storage/permissions system.
+
+Experimental adapter implementation:
+- **Moonraker/Klipper:** G-code list, verified upload-only and explicit print start, including adapters routed to Moonraker for Elegoo, QIDI, Sovol, Snapmaker and Voron. Specific manufacturer-firmware routing still requires validation.
+- **OctoPrint:** local file listing, multipart upload with both select/print false, and explicitly confirmed file select-and-print using the documented REST API.
+- **PrusaLink (experimental):** native v1 file listing, authenticated upload-by-PUT with Print-After-Upload disabled, and a separate start POST; firmware or storage variants without matching APIs fail closed.
+- **Bambu Lab LAN, Creality proprietary local, Anycubic, FlashForge, Prusa variants lacking the supported v1 API, and other non-Moonraker adapters:** monitoring remains available, but file transfer/start buttons report unsupported pending a dedicated and hardware-verified implementation. Bambu requires separate authenticated FTPS storage and MQTT print-start handling; neither is interchangeable with the existing telemetry transport.
+
+These paths are **not physically validated**, and the PR remains draft. File browsing is read-only. Only a user with existing printer control permission and an enabled connection can submit; supported endpoints require an online, recently observed printer. A fresh status check and one-shot, persistent request journal apply before potentially irreversible commands. A mismatch is rejected; unknown profiles require explicit acknowledgement and confirmation. G-code containing flagged firmware-control commands or a partially inspected large file is blocked from MakerVault file submission.
+
+Existing Pause/Resume/Cancel controls do not imply file upload or start capabilities. Do not enable commands for proprietary adapters merely because monitoring succeeds. See [hardware validation issue #37](https://github.com/gavrd7/MakerVault/issues/37).
 
 - **Upload only** transfers the selected immutable file to the printer; it must not start a job.
 - **Upload & start print** is a separate, explicit confirmed action, with a fresh printer-state check immediately before dispatch.
@@ -47,4 +57,4 @@ Use dedicated, per-adapter file-upload APIs (Moonraker/Klipper, OctoPrint, and s
 
 Verify multi-user file isolation; standalone/project references; optional G-code on model revisions; editor immutability; binary/truncated file behaviour; valid/invalid G-code metadata; source/target K2 vs K1 mismatch; no-model metadata; unsafe commands; active/busy/stale/disconnected printer states; permission/HTTPS/adapters; upload-only not starting; print only after explicit confirmation; idempotency and partial failures. Physical upload/start testing requires real printer hardware and should not rely only on mocked API calls.
 
-**Release gate:** Phase 1 is a storage/inspection foundation. Do not describe upload-to-printer, compatibility rejection or direct printing as delivered until the separate submission implementation and hardware tests have passed.
+**Release gate:** The common library and the Moonraker/OctoPrint/Prusa file commands are implemented only in draft form. Never describe printer upload/start as fully supported until automated tests, owner acceptance and real hardware validation of the exact printer and adapter have passed. Bambu, Creality local and other manufacturer transfer functions remain unimplemented.
