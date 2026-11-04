@@ -89,7 +89,7 @@ def bambu_certificate(request, printer_id, connection_id):
 def submission_opt_in(request, printer_id, connection_id):
     """Explicit owner-controlled opt-in for experimental native file transfers."""
     connection = _connection(request.user, printer_id, connection_id)
-    if not connection or connection.adapter not in {"flashforge", "creality_local"}:
+    if not connection or connection.adapter not in {"prusa", "flashforge", "creality_local"}:
         return JsonResponse({"error": "Native G-code transfer is not available for this adapter."}, status=404)
     denied = _require_permission(request, "core.change_printer")
     if denied:
