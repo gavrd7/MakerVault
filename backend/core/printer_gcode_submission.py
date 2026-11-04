@@ -19,6 +19,8 @@ from .gcode_analysis import compare_printer_metadata, inspect_asset
 from .models import FileAsset, Printer, PrinterConnection, PrinterGcodeSubmission
 from .printer_connectivity import normalise_moonraker_endpoint, normalise_printer_endpoint
 from .manufacturer_printer_adapters import normalise_prusalink_endpoint
+from .flashforge_gcode import FlashForgeFileError
+from .creality_gcode import CrealityGcodeError
 
 MAX_UPLOAD_BYTES = 64 * 1024 * 1024
 MOONRAKER_ADAPTERS = {"moonraker", "elegoo", "qidi", "sovol", "snapmaker", "voron"}
@@ -495,6 +497,9 @@ def submit(connection, user, payload):
                 raise GcodeSubmissionError("Printer did not confirm starting the print. Verify its live state.", 502)
         row.status = "started" if action == "print" else "uploaded"
         row.message = "Print start accepted by printer." if action == "print" else "Uploaded to printer without starting."
+    except (FlashForgeFileError, CrealityGcodeError) as exc:
+        row.status = "unknown"
+        row.message = "Printer response was not fully verified. Inspect printer storage and live state before trying again."
     except GcodeSubmissionError as exc:
         row.status = "unknown" if exc.status == 502 else "rejected"
         row.message = str(exc)
