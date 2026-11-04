@@ -32,9 +32,29 @@ class GcodePrinterContractTests(SimpleTestCase):
         self.assertTrue(_valid_path("folder/part.gcode"))
 
     def test_unsupported_proprietary_adapters_never_advertise_submission(self):
-        for adapter in ("bambu_local", "creality_local", "anycubic", "flashforge", "simplyprint"):
+        for adapter in ("bambu_local", "anycubic", "flashforge", "simplyprint"):
             self.assertFalse(availability(connection(adapter))["supported"])
             self.assertFalse(availability(connection(adapter))["can_start"])
+        creality = availability(connection("creality_local"))
+        self.assertTrue(creality["supported"])
+        self.assertFalse(creality["can_upload"])  # explicit opt-in needed
+        self.assertFalse(creality["can_start"])   # native start never enabled
+
+    def test_native_flashforge_and_creality_requires_opt_in(self):
+        ff = connection("flashforge")
+        ff.printer = SimpleNamespace(model="Adventurer 5M Pro", catalog_model=None)
+        self.assertTrue(availability(ff)["supported"])
+        self.assertFalse(availability(ff)["can_upload"])
+        ff.config["gcode_submission_enabled"] = True
+        self.assertTrue(availability(ff)["can_upload"])
+        self.assertTrue(availability(ff)["can_start"])
+        ff.printer.model = "AD5X"
+        self.assertFalse(availability(ff)["supported"])
+        cc = connection("creality_local")
+        cc.printer = SimpleNamespace(model="K2", catalog_model=None)
+        cc.config["gcode_submission_enabled"] = True
+        self.assertTrue(availability(cc)["can_upload"])
+        self.assertFalse(availability(cc)["can_start"])
 
     def test_moonraker_family_octoprint_and_prusalink_are_experimental(self):
         for adapter in ("moonraker", "octoprint", "prusa", "qidi", "elegoo", "sovol", "voron", "snapmaker"):
