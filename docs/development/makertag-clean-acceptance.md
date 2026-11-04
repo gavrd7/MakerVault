@@ -1,6 +1,6 @@
 # MakerTag clean/remove — staging and physical acceptance
 
-Companion PRs: MakerVault #165 / MakerVault-Hardware #12. Keep both **draft** until the full physical matrix is signed off.
+Companion PRs: MakerVault #165 / MakerVault-Hardware #12. The maintainer reports **all release validation tests passed** on physical hardware; verify current CI on the exact PR heads before marking ready for review or merging.
 
 ## Before starting
 
@@ -53,6 +53,10 @@ Companion PRs: MakerVault #165 / MakerVault-Hardware #12. Keep both **draft** un
 - [ ] Restore HTTPS and complete the same operation; a replay to a different tag is rejected.
 - [ ] Permissions: remove without core.delete_makertag fails; owner isolation is enforced.
 - [ ] Existing MakerTags creation/reassignment, CFS read-only material decoding, generic RFID and two-sided physical spool lookup still work.
+
+## Reported validation and merge gate
+
+The maintainer confirmed the release test matrix passed, including networking recovery, TLS security, MakerTag physical safety, RFID and release packaging checks. The matching ESP-IDF firmware additionally completed a two-hour-plus idle HTTPS endurance run with a stable heap and no recovery reboots. The individual checkboxes below are a **reusable acceptance template**, not an item-by-item archived test report; preserve original test evidence where available. Re-run affected tests if code changes after sign-off.
 
 ## Merge gate
 
