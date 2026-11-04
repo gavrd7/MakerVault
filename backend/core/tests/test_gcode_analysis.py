@@ -39,7 +39,7 @@ class GcodeAnalysisTests(SimpleTestCase):
         self.assertTrue(any("partially" in w for w in result["warnings"]))
 
     def test_k2_gcode_on_k1_must_be_blocked(self):
-        report = analyse_text("; printer_model = Creality K2\\nG1 X12 Y5\\n")
+        report = analyse_text("; printer_model = Creality K2\nG1 X12 Y5\n")
         printer = SimpleNamespace(
             model="K1", name="Workshop K1", catalog_model=None,
             printer_manufacturer=SimpleNamespace(name="Creality"),
@@ -49,7 +49,7 @@ class GcodeAnalysisTests(SimpleTestCase):
         self.assertTrue(result["blocking"])
 
     def test_matching_header_is_not_proof_of_safety(self):
-        report = analyse_text("; printer_model = Creality K2\\n")
+        report = analyse_text("; printer_model = Creality K2\n")
         printer = SimpleNamespace(
             model="K2", name="Workshop K2", catalog_model=None,
             printer_manufacturer=SimpleNamespace(name="Creality"),
@@ -60,7 +60,7 @@ class GcodeAnalysisTests(SimpleTestCase):
         self.assertIn("not a safety guarantee", result["reason"])
 
     def test_missing_printer_header_stays_blocked(self):
-        report = analyse_text("G1 X2 Y3\\n")
+        report = analyse_text("G1 X2 Y3\n")
         printer = SimpleNamespace(
             model="K2", name="K2", catalog_model=None,
             printer_manufacturer=None,
