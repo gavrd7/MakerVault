@@ -490,6 +490,24 @@ def resolve_spoolman_review(
     return result
 
 
+def _spoolman_remote_matches_export(remote: dict | None, payload: dict) -> bool:
+    """Skip writes only when every exported value matches a fresh Spoolman snapshot."""
+    if not isinstance(remote, dict):
+        return False
+    if not isinstance(remote.get("archived"), bool) or remote["archived"] != payload["archived"]:
+        return False
+    if "location" not in remote or str(remote.get("location") or "") != payload["location"]:
+        return False
+    if "remaining_weight" in payload:
+        expected = _as_decimal(payload["remaining_weight"], 2)
+        current = _as_decimal(remote.get("remaining_weight"), 2)
+        if expected is None or current is None or current != expected:
+            return False
+    if "comment" in payload and str(remote.get("comment") or "") != payload["comment"]:
+        return False
+    return True
+
+
 def sync_spoolman(setting: PrintingIntegrationSetting) -> dict:
     root, remote_spools = _spoolman_get_spools(setting.endpoint_url)
     direction = setting.sync_direction
@@ -500,6 +518,7 @@ def sync_spoolman(setting: PrintingIntegrationSetting) -> dict:
     linked_existing = 0
     updated = 0
     exported = 0
+    unchanged_exports = 0
     skipped_unlinked = 0
     review_queued = 0
     ignored_count = 0
@@ -614,6 +633,7 @@ def sync_spoolman(setting: PrintingIntegrationSetting) -> dict:
         setting.config = config
 
     if do_export:
+        remote_by_id = {str(item.get('id')): item for item in remote_spools if isinstance(item, dict) and item.get('id') is not None}
         links = list(
             ExternalSpoolLink.objects.select_related(
                 "spool__storage_location",
@@ -639,6 +659,11 @@ def sync_spoolman(setting: PrintingIntegrationSetting) -> dict:
                 payload["remaining_weight"] = float(spool.remaining_weight_g)
             if spool.notes:
                 payload["comment"] = spool.notes[:1024]
+            if _spoolman_remote_matches_export(remote_by_id.get(str(link.external_id)), payload):
+                link.last_synced_at = now
+                link.save(update_fields=["last_synced_at", "updated_at"])
+                unchanged_exports += 1
+                continue
             try:
                 response = requests.patch(
                     f"{root}/spool/{link.external_id}",
@@ -647,8 +672,11 @@ def sync_spoolman(setting: PrintingIntegrationSetting) -> dict:
                     timeout=(4, 20),
                 )
             except requests.RequestException as exc:
-                raise PrintingSyncConnectionError(
-                    f"Spoolman became unreachable while updating spool {link.external_id}."
+                logger.warning("Spoolman export request failed on spool %s: %s", link.external_id, type(exc).__name__)
+                raise PrintingSyncError(
+                    f"Spoolman sync could not update spool {link.external_id} ({type(exc).__name__}). "
+                    "The initial connection succeeded but the write request failed or timed out. "
+                    "Check Spoolman and reverse-proxy logs."
                 ) from exc
             if response.status_code not in {200, 201}:
                 raise PrintingSyncError(
@@ -666,6 +694,7 @@ def sync_spoolman(setting: PrintingIntegrationSetting) -> dict:
         "linked_existing": linked_existing,
         "updated": updated,
         "exported": exported,
+        "unchanged_exports": unchanged_exports,
         "pending_review": len(config.get("pending_reviews") or []),
         "review_queued": review_queued,
         "ignored": ignored_count,
