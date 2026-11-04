@@ -63,9 +63,13 @@ def require_device_scope(scope):
                 if not record_failed_auth(request):
                     return _error("Device authentication temporarily unavailable.", 503)
                 return _error("Invalid or inactive API key.", 401)
-            if scope not in key.scopes:
+            allowed_scopes = (scope,) if isinstance(scope, str) else tuple(scope)
+            if not any(s in key.scopes for s in allowed_scopes):
                 return _error("API key does not allow this action.", 403)
-            write = request.method not in ("GET", "HEAD") and (scope == "tags:write" or (scope == "spools:weight" and request.path.endswith("/confirm/")))
+            write = request.method not in ("GET", "HEAD") and (
+                ("tags:write" in allowed_scopes and "tags:write" in key.scopes) or
+                ("spools:weight" in allowed_scopes and request.path.endswith("/confirm/"))
+            )
             allowed, retry = device_request_allowed(key.identifier, write=write)
             if allowed is None:
                 return _error("Device rate limiting temporarily unavailable.", 503)

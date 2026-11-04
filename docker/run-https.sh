@@ -7,6 +7,12 @@ key="${MAKERVAULT_TLS_KEY_FILE:-/app/keys/tls/key.pem}"
 workers="${HTTPS_WEB_CONCURRENCY:-2}"
 threads="${HTTPS_WEB_THREADS:-4}"
 timeout="${GUNICORN_TIMEOUT:-120}"
+# Keep the native HTTPS socket alive across the terminal's 5-second polls.
+keepalive="${HTTPS_KEEPALIVE_SECONDS:-15}"
+if ! [[ "$keepalive" =~ ^[0-9]+$ ]] || (( 10#$keepalive < 6 || 10#$keepalive > 120 )); then
+  echo "ERROR: HTTPS_KEEPALIVE_SECONDS must be an integer from 6 to 120." >&2
+  exit 1
+fi
 
 case "${mode,,}" in
   0|false|no|off)
@@ -35,6 +41,7 @@ exec gosu makervault gunicorn makervault.wsgi:application \
   --workers "$workers" \
   --worker-class gthread \
   --threads "$threads" \
+  --keep-alive "$keepalive" \
   --timeout "$timeout" \
   --certfile "$cert" \
   --keyfile "$key" \

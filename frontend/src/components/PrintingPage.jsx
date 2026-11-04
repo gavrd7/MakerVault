@@ -699,9 +699,9 @@ function SpoolInventoryPage({ onOpenMakerTags, spools, filaments, locations, pri
         <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search ID, filament, material, location or integration…" />
       </div>
       <div className="printingList">
-        {rows.map(spool => <article className={"printingListRow printingLibraryRow" + (searchTarget?.id === spool.id ? " searchTargetRow" : "")} id={"spool-search-target-" + spool.id} key={spool.id}>
+        {rows.map(spool => <article className={"printingListRow printingLibraryRow spoolInventoryRow" + (searchTarget?.id === spool.id ? " searchTargetRow" : "")} id={"spool-search-target-" + spool.id} key={spool.id}>
           <span className={"printingSwatch filamentPreview-" + (spool.transparency || "opaque")} style={filamentSwatchStyle(spool)} />
-          <div>
+          <div className="spoolInventoryDetails">
             <strong>{spool.spool_id} · {spool.filament}</strong>
             <small>{[spool.manufacturer, spool.material, spool.color_name].filter(Boolean).join(" · ")} · {grams(spool.remaining_weight_g)} remaining{spool.location ? " · " + spool.location : ""}</small>
             <small>{spool.rfid_uid ? "RFID " + spool.rfid_uid + " · " : ""}Updated {formatDate(spool.updated_at)} · Last dried: {spool.last_dried_at || "Not recorded"}</small>

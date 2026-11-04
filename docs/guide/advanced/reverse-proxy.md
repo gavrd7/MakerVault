@@ -101,6 +101,20 @@ Always forward private file requests through MakerVault. Do not expose `/app/med
 Creality K2 camera playback uses the same MakerVault origin as the rest of the application. MakerVault's loopback-only go2rtc helper ingests the printer-side WebRTC stream internally and authenticated HLS/fMP4 is returned through the normal application routes. Your reverse proxy therefore needs only the usual MakerVault application backend; **do not publish or proxy a separate port 8555**. The browser does not need direct network reachability to the printer for this K2 compatibility path.
 
 
+### Connected ESP32 terminal keep-alive
+
+The matching MakerVault Terminal v1.0.0 release candidate uses the ESP-IDF HTTP client with a reusable, **certificate-verified HTTPS** connection. Its browser-to-terminal work is discovered through `GET /api/device/v1/pending-work/` every five seconds when idle; this is **not** a WebSocket endpoint. Device heartbeat, `/me` scope verification and operation-specific physical NFC confirmations remain separate.
+
+For MakerVault's **native HTTPS listener** on port 8443, Gunicorn runs the `gthread` worker class and the Compose setting `HTTPS_KEEPALIVE_SECONDS` defaults to **15 seconds**, allowing reuse across five-second polls. Set it only when necessary:
+
+```dotenv
+HTTPS_KEEPALIVE_SECONDS=15
+```
+
+Supported values are whole seconds **6–120**. Apply changes by recreating the application container (`sudo docker compose up -d`), not merely restarting a running container. Do not change certificate validation, authorisation or polling frequency to improve responsiveness. The keep-alive setting controls an idle socket timeout, **not** a guarantee of connection uptime or a substitute for client-side reconnect handling.
+
+**Reverse proxy:** the native keep-alive setting does not govern the **terminal-to-proxy TLS connection**. Ensure the HTTPS-facing proxy permits persistent HTTP/1.1 connections across at least five seconds of idle time (prefer a margin such as 15 seconds); proxy-to-MakerVault upstream keep-alive is separate. The terminal must continue reconnecting safely when the proxy or app restarts. Never bypass certificate verification or allow device tokens to be forwarded to an unapproved server.
+
 ## Optional native HTTPS listener
 
 MakerVault can also serve HTTPS directly on a separate port without adding another container. This is optional; a reverse proxy remains the recommended setup for a stable domain name, public certificate automation and normal ports 80/443.

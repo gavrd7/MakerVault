@@ -1,7 +1,8 @@
 from django.urls import path
-from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views, device_api_views, device_pairing, device_measurements, device_tag_registration, device_tag_lookup, weight_history_views, tag_ndef, device_ndef_write, device_cfs_lookup
+from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views, device_api_views, device_pairing, device_measurements, device_tag_registration, device_tag_lookup, weight_history_views, tag_ndef, device_ndef_write, device_cfs_lookup, device_makertag_operations, device_pending_work
 
 urlpatterns = [
+    path("device/v1/pending-work/", device_pending_work.pending_work, name="device-pending-work"),
     path("device/tag-lookup/", device_tag_lookup.begin, name="api-device-tag-lookup-begin"),
     path("device/tag-lookup/<uuid:lookup_id>/", device_tag_lookup.status, name="api-device-tag-lookup-status"),
     path("device/tag-lookup/<uuid:lookup_id>/cancel/", device_tag_lookup.cancel, name="api-device-tag-lookup-cancel"),
@@ -17,6 +18,15 @@ urlpatterns = [
     path("device/v1/tag-registration/pending/", device_tag_registration.device_pending, name="api-device-tag-registration-pending"),
     path("device/v1/tag-registration/<uuid:registration_id>/probe/", device_tag_registration.device_probe, name="api-device-tag-registration-probe"),
     path("device/v1/tag-registration/<uuid:registration_id>/complete/", device_tag_registration.device_complete, name="api-device-tag-registration-complete"),
+    path("device/makertag-operation/", device_makertag_operations.begin, name="makertag-op-begin"),
+    path("device/makertag-operation/<uuid:operation_id>/", device_makertag_operations.status, name="makertag-op-status"),
+    path("device/makertag-operation/<uuid:operation_id>/cancel/", device_makertag_operations.cancel, name="makertag-op-cancel"),
+    path("device/v1/makertag-operation/begin/", device_makertag_operations.device_begin, name="device-makertag-op-begin"),
+    path("device/v1/makertag-operation/pending/", device_makertag_operations.device_pending, name="device-makertag-op-pending"),
+    path("device/v1/makertag-operation/<uuid:operation_id>/status/", device_makertag_operations.device_status, name="device-makertag-op-status"),
+    path("device/v1/makertag-operation/<uuid:operation_id>/cancel/", device_makertag_operations.device_cancel, name="device-makertag-op-cancel"),
+    path("device/v1/makertag-operation/<uuid:operation_id>/cleaned/", device_makertag_operations.device_cleaned, name="device-makertag-op-cleaned"),
+    path("device/v1/makertag-operation/<uuid:operation_id>/remove/", device_makertag_operations.device_remove, name="device-makertag-op-remove"),
     path("device/ndef-write/", device_ndef_write.begin, name="api-ndef-write-begin"),
     path("device/ndef-write/<uuid:write_id>/", device_ndef_write.status, name="api-ndef-write-status"),
     path("device/ndef-write/<uuid:write_id>/cancel/", device_ndef_write.cancel, name="api-ndef-write-cancel"),

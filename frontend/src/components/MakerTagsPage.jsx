@@ -5,6 +5,7 @@ import { apiFetch } from "../api";
 import { Badge, LoadingBlock, Modal } from "./Common";
 import TerminalTagRegistration from "./TerminalTagRegistration";
 import TerminalNdefWrite from "./TerminalNdefWrite";
+import TerminalMakerTagOperation from "./TerminalMakerTagOperation";
 import TerminalTagLookup from "./TerminalTagLookup";
 
 function targetLabel(tag) {
@@ -608,7 +609,7 @@ function MakerTagDetail({ tag, initialWrite = false, canEdit, canDelete, onDelet
   const qrSize = Math.min(safeFormat.qr, safeFormat.width - 4, safeFormat.height - 4);
   const scanUrl = typeof window !== "undefined" ? window.location.origin + tag.scan_path : tag.scan_path;
 
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [makerTagOperation, setMakerTagOperation] = useState("");
 
   async function deleteTag() {
     setBusy(true); setNotice("");
@@ -794,21 +795,22 @@ function MakerTagDetail({ tag, initialWrite = false, canEdit, canDelete, onDelet
     <div className="formActions">
       {tag.target && <button className="primary" onClick={onOpenTarget}>Open target</button>}
       {canEdit && <button onClick={onEdit}>Edit / reassign</button>}
-      {canDelete && <button className="dangerButton" disabled={busy} onClick={() => setConfirmDelete(true)}>Delete tag</button>}
+      {tag.kind === "nfc" && canEdit && <button type="button" disabled={busy} onClick={() => setMakerTagOperation("clean")}>Clean NFC data</button>}
+      {canDelete && <button className="dangerButton" disabled={busy} onClick={() => setMakerTagOperation("remove")}>Remove MakerTag</button>}
       {canEdit && (tag.status === "active"
         ? <button className="dangerButton" disabled={busy} onClick={() => setStatus("retired")}>Retire tag</button>
         : <button className="primary" disabled={busy} onClick={() => setStatus("active")}>Reactivate tag</button>)}
     </div>
-    {confirmDelete && <Modal title="Permanently delete MakerTag?" onClose={() => setConfirmDelete(false)}>
-      <p>This permanently removes <strong>{tag.label || tag.code}</strong>, its assignment history and its QR/NFC identity in MakerVault. Any printed QR codes or written NFC links for this tag will stop resolving. This cannot be undone.</p>
-      <div className="formActions">
-        <button type="button" onClick={() => setConfirmDelete(false)} disabled={busy}>Cancel</button>
-        <button type="button" className="dangerButton" onClick={deleteTag} disabled={busy}>{busy ? "Deleting…" : "Delete permanently"}</button>
-      </div>
-    </Modal>}
+
   </Modal>
 
     {terminalNdefOpen && <TerminalNdefWrite tag={tag} onClose={() => setTerminalNdefOpen(false)} />}
+    {makerTagOperation && <TerminalMakerTagOperation tag={tag} mode={makerTagOperation} onClose={() => setMakerTagOperation("")} onCompleted={async result => {
+      setMakerTagOperation("");
+      if (result === "removed") { await onDeleted(); return; }
+      try { const current = await apiFetch("/api/tags/" + tag.id + "/"); onChanged(current.item); }
+      catch (err) { setNotice(err.message); }
+    }} />}
     {tag.kind === "qr" && typeof document !== "undefined" && createPortal(
       <div className="makerTagPrintPage" aria-hidden="true">
         <div className="makerTagPrintLabel" style={{ width: safeFormat.width + "mm", height: safeFormat.height + "mm" }}>
