@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.5.1 — Connected terminal reliability and MakerTag maintenance
+
+- Added Clean MakerTag to erase and verify writable, unprotected NTAG215 NFC user data while retaining the MakerTag registration and linked inventory item.
+- Added Remove MakerTag with optional clean-before-remove; physical erasure must be verified before registration deletion, with durable recovery for partial completion.
+- Consolidated browser-initiated terminal registration, NFC write, lookup and maintenance discovery into a single scoped `GET /api/device/v1/pending-work/` response every five seconds; independent heartbeat, permission and NFC write-authorisation checks remain.
+- Improved native HTTPS keep-alive for repeated device polling, with `HTTPS_KEEPALIVE_SECONDS` defaulting to 15 seconds on the native HTTPS listener; external reverse proxies require their own keep-alive configuration.
+- Compatible with **MakerVault Terminal firmware v1.0.1**, which uses native ESP-IDF HTTPS and corrected FreeRTOS worker memory cleanup. The maintainer reports all physical terminal validation tests passed, including stable idle heap during a two-hour-plus soak.
+- Updated README, administration guidance and release compatibility notes. This maintenance release does not add new support for writing third-party filament RFID tags or making automatic changes to the printer material database.
+
+
 ## v1.5.0 — Full terminal interoperability
 
 - Added read-only Creality printer material database snapshots with manual synchronisation and optional scheduled reads. Snapshot retrieval never writes to a printer or silently creates filament entries.
