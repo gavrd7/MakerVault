@@ -290,7 +290,7 @@ def _online(connection):
 def availability(connection):
     adapter = connection.adapter
     native_opt_in = (connection.config or {}).get("gcode_submission_enabled") is True
-    authorised = connection.controls_enabled if adapter in FILE_ADAPTERS else native_opt_in
+    authorised = connection.controls_enabled if adapter in (FILE_ADAPTERS - {"prusa"}) else native_opt_in
     from .flashforge_gcode import supports_simple_print
     simple_flashforge = adapter == "flashforge" and bool(getattr(connection, "printer", None)) and supports_simple_print(connection.printer)
     upload_supported = adapter in FILE_ADAPTERS or adapter == "creality_local" or simple_flashforge
@@ -310,7 +310,7 @@ def availability(connection):
         ),
         "enabled": authorised,
         "can_submit_from_printer": adapter in BROWSE_ADAPTERS and start_supported,
-        "requires_opt_in": adapter in {"flashforge", "creality_local"} and not native_opt_in,
+        "requires_opt_in": adapter in {"prusa", "flashforge", "creality_local"} and not native_opt_in,
     }
 
 
