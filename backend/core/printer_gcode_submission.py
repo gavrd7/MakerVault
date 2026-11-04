@@ -78,7 +78,7 @@ def list_printer_gcodes(connection):
         if not isinstance(item, dict):
             continue
         path = item.get("path")
-        if not isinstance(path, str) or not path.lower().endswith(".gcode") or not _valid_path(path):
+        if not isinstance(path, str) or not path.lower().endswith((".gcode", ".gco")) or not _valid_path(path):
             continue
         result.append({
             "path": path,
@@ -204,7 +204,7 @@ def _valid_path(value):
     return (
         isinstance(value, str)
         and 0 < len(value) <= 500
-        and value.lower().endswith(".gcode")
+        and value.lower().endswith((".gcode", ".gco"))
         and "\x00" not in value
         and "\\" not in value
         and not value.startswith("/")
@@ -358,7 +358,7 @@ def submit(connection, user, payload):
                         response = requests.put(
                             base + "/api/v1/files/local/" + quote(remote_path, safe="/"),
                             data=handle,
-                            headers={**headers, "Content-Type": "application/octet-stream", "Print-After-Upload": "?0", "Overwrite": "?0"},
+                            headers={**headers, "Content-Type": "application/octet-stream", "Content-Length": str(asset.file.size), "Print-After-Upload": "?0", "Overwrite": "?0"},
                             auth=_prusa_auth(connection), timeout=(5, 120), allow_redirects=False,
                         )
                     else:
