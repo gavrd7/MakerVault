@@ -9,6 +9,7 @@ import PrinterJobControls from "./PrinterJobControls";
 import { Badge, ImageManagerModal, LoadingBlock, Modal } from "./Common";
 import ModelViewerModal, { isViewableModelFile } from "./ModelViewer";
 import { suggestNextVersion } from "./FileVersionModal";
+import GcodeViewerModal from "./GcodeViewerModal";
 
 function grams(value) {
   if (value == null) return "—";
@@ -3689,6 +3690,7 @@ function ModelModal({ projects, canUpload, onClose, onSaved }) {
     is_reusable_spool: false,
   });
   const [file, setFile] = useState(null);
+  const [supplementaryGcode, setSupplementaryGcode] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const set = (key, value) => setForm(value0 => ({ ...value0, [key]: value }));
@@ -3708,6 +3710,7 @@ function ModelModal({ projects, canUpload, onClose, onSaved }) {
         const body = new FormData();
         for (const [key, value] of Object.entries(form)) body.append(key, value ?? "");
         body.append("file", file);
+        if (supplementaryGcode) body.append("gcode_file", supplementaryGcode);
         const created = await apiFetch("/api/printing/models/", { method: "POST", body });
         if (form.is_reusable_spool) await apiFetch("/api/printing/models/" + created.item.id + "/reusable-spool-design/", { method: "POST" });
       } else {
@@ -3729,6 +3732,10 @@ function ModelModal({ projects, canUpload, onClose, onSaved }) {
         <span>STL / 3MF file</span>
         <input type="file" accept=".stl,.3mf,model/stl,application/vnd.ms-package.3dmanufacturing-3dmodel+xml" onChange={fileChanged} />
         <small>{file ? `${file.name} · ${(file.size / 1024 / 1024).toFixed(2)} MB` : "Browse this computer, phone or tablet. The file is stored in MakerVault Files and attached to revision 1.0 by default."}</small>
+      </label>}
+      {canUpload && file && <label className="full">Supplementary G-code (optional)
+        <input type="file" accept=".gcode" onChange={e => setSupplementaryGcode(e.target.files?.[0] || null)} />
+        <small>Stored once in Files and linked to this model revision as a separate G-code toolpath. It is not sent to a printer.</small>
       </label>}
       <label>Name<input required={!file} value={form.name} onChange={e => set("name", e.target.value)} placeholder={file ? "Defaults to file name" : "Model name"} /></label>
       <label>Project<select value={form.project_id} onChange={e => set("project_id", e.target.value)}><option value="">Standalone model</option>{projects.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
