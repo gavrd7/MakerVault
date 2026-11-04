@@ -66,6 +66,12 @@ def _get_json(connection, path, params=None):
 
 
 def list_printer_gcodes(connection):
+    if connection.adapter == "bambu_local":
+        from .bambu_storage import BambuStorageError, list_bambu_storage
+        try:
+            return list_bambu_storage(connection)
+        except BambuStorageError as exc:
+            raise GcodeSubmissionError(str(exc), status=409) from exc
     if connection.adapter == "octoprint":
         return _octoprint_files(connection)
     if connection.adapter == "prusa":
@@ -236,6 +242,9 @@ def _online(connection):
 
 def availability(connection):
     return {
+        "can_browse": bool(connection.adapter in FILE_ADAPTERS or connection.adapter == "bambu_local"),
+        "browse_requires_pin": connection.adapter == "bambu_local" and not bool((connection.config or {}).get("bambu_ftps_cert_sha256")),
+        "experimental": connection.adapter in FILE_ADAPTERS or connection.adapter == "bambu_local",
         "supported": connection.adapter in FILE_ADAPTERS,
         "online": bool(_online(connection)),
         "can_upload": bool(connection.adapter in FILE_ADAPTERS and _online(connection) and connection.controls_enabled),
