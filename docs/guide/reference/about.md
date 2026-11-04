@@ -2,7 +2,7 @@
 
 ## Version and scope
 
-This guide describes **MakerVault v1.2.2**, which extends Maker Tags with custom-sized and batch QR label printing, which adds reusable spool hardware inventory, manufacturer and printable designs, reviewed catalogue additions and corrections, Maker Tags for reusable reels, branded QR labels and usability improvements. The earlier v1.1.0 catalogue-maintenance improvements and v1.0.4 project-planning features remain included. Experimental hardware integrations retain their documented validation limits.
+This guide describes the **MakerVault v1.5.1 release-candidate source**, including connected-terminal MakerTag cleaning/removal, consolidated pending-work polling and native HTTPS keep-alive. The v1.5.0 release introduced read-only Creality CFS material lookup and physical spool RFID identity capture; earlier releases introduced MakerTags, QR labels, reusable spool tracking and catalogue maintenance. Experimental hardware integrations retain their documented validation limits. MakerTag cleaning requires a supported writable NTAG215 and the matching Terminal v1.0.1 firmware.
 
 Linux with the supplied Docker Compose configuration remains the preferred always-on server deployment. Windows users can also follow the documented Docker Desktop, Docker Desktop + WSL2 integration, or direct WSL2 Docker Engine routes. NAS/Portainer and macOS remain platform-adaptation cases rather than fully validated walkthroughs. No measured minimum hardware specification is claimed.
 

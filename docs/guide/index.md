@@ -9,8 +9,8 @@ Learn to install MakerVault, record what you own and bring your projects, files 
 [Follow a first project](getting-started/first-project.md){ .md-button }
 </div>
 
-!!! info "Current release: v1.4.0"
-    MakerVault v1.4.0 adds connected RFID/NFC terminal lookup, registration, confirmation-based reassignment and permanent Maker Tag short IDs. The earlier v1.2.2 release included improved Maker Tags QR label preview, custom label sizes, print-only output, batch label printing and target-type filters. v1.2.0 added reusable spool hardware inventory, catalogue references and reviewed corrections, personal images, branded QR labels and Maker Tag support for reusable reels. The v1.1.0 background catalogue improvements remain included.
+!!! info "Current source release candidate: v1.5.1"
+    MakerVault v1.5.1 adds Clean/Remove MakerTag workflows, consolidated connected-terminal polling and native HTTPS keep-alive improvements, for the matching Terminal v1.0.1 firmware. The prior v1.5.0 release brought read-only Creality CFS material lookup and physical spool RFID identity linking. Version v1.4.0 added terminal lookup, registration, reassignment and permanent MakerTag IDs. The earlier v1.2.2 release included improved Maker Tags QR label preview, custom label sizes, print-only output, batch label printing and target-type filters. v1.2.0 added reusable spool hardware inventory, catalogue references and reviewed corrections, personal images, branded QR labels and Maker Tag support for reusable reels. The v1.1.0 background catalogue improvements remain included.
 
 <div class="guide-grid" markdown>
 <div class="guide-card" markdown>
