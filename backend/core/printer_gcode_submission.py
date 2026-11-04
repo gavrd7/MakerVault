@@ -150,6 +150,8 @@ def _valid_path(value):
 
 
 def _metadata(connection, path):
+    if connection.adapter == "octoprint":
+        return {}  # A local OctoPrint filename is not a verified slicer/printer profile.
     try:
         result = _get_json(connection, "/server/files/metadata", {"filename": path})
         return result if isinstance(result, dict) else {}
@@ -271,13 +273,18 @@ def submit(connection, user, payload):
         verdict = compare_printer_metadata(report, connection.printer)
         if verdict["status"] == "mismatch":
             raise GcodeSubmissionError(verdict["reason"])
+        if source == "makervault" and (report.get("partial") or any("firmware/control commands" in str(w) for w in report.get("warnings", []))):
+            raise GcodeSubmissionError("File is too large for complete analysis or contains flagged firmware-control commands. Printer submission blocked.")
         if verdict["blocking"] and payload.get("acknowledge_unknown") is not True:
             raise GcodeSubmissionError("Printer compatibility is unknown. Review the file and explicitly acknowledge the risk.", 409)
 
         # Re-poll immediately before irreversible I/O; this prevents stale
         # monitoring data from authorizing a print while already busy.
         from .printer_connectivity import poll_connection
-        poll_connection(connection)
+        try:
+            poll_connection(connection)
+        except Exception as exc:
+            raise GcodeSubmissionError("Unable to verify fresh printer status before transfer. No command dispatched.", 409) from exc
         connection.refresh_from_db()
         _require_action_ready(connection, action)
         base, headers = _printer_endpoint(connection)
@@ -299,7 +306,10 @@ def submit(connection, user, payload):
         if action == "print":
             # Verify state a second time after file transfer, particularly when
             # the upload took long enough for printer state to change.
-            poll_connection(connection)
+            try:
+                poll_connection(connection)
+            except Exception as exc:
+                raise GcodeSubmissionError("Unable to confirm printer is still idle after file upload. Do not start.", 409) from exc
             connection.refresh_from_db()
             _require_action_ready(connection, "print")
             try:
