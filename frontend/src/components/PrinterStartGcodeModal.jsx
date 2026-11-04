@@ -67,7 +67,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   }
 
   async function toggleNativeTransfer() {
-    if (!["creality_local", "flashforge"].includes(connection.adapter)) return;
+    if (!["prusa", "creality_local", "flashforge"].includes(connection.adapter)) return;
     const enabled = !capabilities?.enabled;
     if (enabled && !window.confirm("Enable EXPERIMENTAL native printer file operations for " + printer.name + "? This is unverified on hardware. Files can be sent to this printer only after an additional confirmation.")) return;
     setBusy(true); setError("");
@@ -130,12 +130,12 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
     onClose={onClose} wide>
     {error && <div className="formError" role="alert">{error}</div>}
     {notice && <div className="settingsCallout">{notice}</div>}
-    {["creality_local", "flashforge"].includes(connection.adapter) && <div className="settingsCallout">
+    {["prusa", "creality_local", "flashforge"].includes(connection.adapter) && <div className="settingsCallout">
       <strong>Experimental native G-code transfer</strong>
-      <p>{connection.adapter === "creality_local" ? "Upload only: no native print-start command will be sent." : "Adventurer 5M / 5M Pro: upload-only or explicitly confirmed start. Multi-material FlashForge models are not enabled."}</p>
+      <p>{connection.adapter === "creality_local" ? "Upload only: no native print-start command will be sent." : connection.adapter === "prusa" ? "Native PrusaLink v1 transfer and print-start are experimental and require the correct firmware capabilities." : "Adventurer 5M / 5M Pro: upload-only or explicitly confirmed start. Multi-material FlashForge models are not enabled."}</p>
       <label className="checkRow">
         <input type="checkbox" checked={Boolean(capabilities?.enabled)} disabled={!canEdit || busy} onChange={toggleNativeTransfer} />
-        Enable experimental native file transfer for this printer
+        Enable experimental G-code file transfer for this printer
       </label>
     </div>}
     {connection.adapter === "creality_local" && <div className="settingsCallout">
