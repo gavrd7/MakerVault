@@ -78,6 +78,23 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
     finally { setBusy(false); }
   }
 
+  async function toggleCrealityStart() {
+    if (connection.adapter !== "creality_local" || !capabilities?.enabled) return;
+    const enable = !capabilities?.can_start && capabilities?.requires_start_opt_in;
+    if (enable && !window.confirm(
+      "Enable EXPERIMENTAL Creality native single-spool print-start? This sends an actual start command to the selected printer. It is disabled whenever CFS is connected, and the proprietary protocol does not acknowledge delivery."
+    )) return;
+    setBusy(true); setError("");
+    try {
+      await apiFetch(base + "/native-opt-in/", {
+        method: "PATCH",
+        body: { enabled: true, single_spool_start: enable },
+      });
+      await load();
+    } catch (err) { setError(err.message); }
+    finally { setBusy(false); }
+  }
+
   async function configureBambuPin() {
     if (bambuPin.trim() && !/^(?:[0-9a-fA-F]{2}:?){32}$/.test(bambuPin.trim())) {
       setError("Supply exactly 64 hex characters (colons optional) for the independently verified certificate SHA-256.");
@@ -137,6 +154,15 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
         <input type="checkbox" checked={Boolean(capabilities?.enabled)} disabled={!canEdit || busy} onChange={toggleNativeTransfer} />
         Enable experimental G-code file transfer for this printer
       </label>
+    </div>}
+    {connection.adapter === "creality_local" && <div className="settingsCallout">
+      <strong>Experimental stock Creality print-start</strong>
+      <p>Native single-spool print-start is available for hardware validation on K1/K2, separately enabled from file uploads. It will not run while CFS is detected, and the printer protocol does not acknowledge command acceptance. Confirm the printer and loaded filament physically.</p>
+      <label className="checkRow">
+        <input type="checkbox" checked={Boolean(capabilities?.enabled && !capabilities?.requires_start_opt_in)} disabled={!canEdit || busy || !capabilities?.enabled} onChange={toggleCrealityStart} />
+        Allow experimental single-spool native start (never CFS)
+      </label>
+      {capabilities?.enabled && !capabilities?.can_start && !capabilities?.requires_start_opt_in && <small>Start remains unavailable: printer is busy/offline, CFS is connected, or telemetry is stale.</small>}
     </div>}
     {connection.adapter === "creality_local" && <div className="settingsCallout">
       <strong>Creality native monitoring does not imply file transfer</strong>
