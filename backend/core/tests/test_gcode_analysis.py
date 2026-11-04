@@ -26,8 +26,10 @@ class GcodeAnalysisTests(SimpleTestCase):
 
     def test_relative_and_inch_coordinates(self):
         result = analyse_text("G20\nG91\nG1 X1 Y1\nG1 X2\nG90\nG21\nG1 X2 Y3\n")
-        self.assertEqual(result["bounds_mm"]["X"], [2.0, 76.2])
-        self.assertEqual(result["bounds_mm"]["Y"], [3.0, 25.4])
+        self.assertAlmostEqual(result["bounds_mm"]["X"][0], 2.0)
+        self.assertAlmostEqual(result["bounds_mm"]["X"][1], 76.2)
+        self.assertAlmostEqual(result["bounds_mm"]["Y"][0], 3.0)
+        self.assertAlmostEqual(result["bounds_mm"]["Y"][1], 25.4)
 
     def test_partial_input_must_warn(self):
         result = analyse_text("; printer_model = K1\nG1 X12\n", truncated=True)
