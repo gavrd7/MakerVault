@@ -23,6 +23,9 @@ from .manufacturer_printer_adapters import normalise_prusalink_endpoint
 MAX_UPLOAD_BYTES = 64 * 1024 * 1024
 MOONRAKER_ADAPTERS = {"moonraker", "elegoo", "qidi", "sovol", "snapmaker", "voron"}
 FILE_ADAPTERS = MOONRAKER_ADAPTERS | {"octoprint", "prusa"}
+BROWSE_ADAPTERS = FILE_ADAPTERS | {"bambu_local", "flashforge"}
+UPLOAD_ADAPTERS = FILE_ADAPTERS | {"flashforge", "creality_local"}
+START_ADAPTERS = FILE_ADAPTERS | {"flashforge"}
 
 
 class GcodeSubmissionError(RuntimeError):
@@ -72,6 +75,12 @@ def list_printer_gcodes(connection):
             return list_bambu_storage(connection)
         except BambuStorageError as exc:
             raise GcodeSubmissionError(str(exc), status=409) from exc
+    if connection.adapter == "flashforge":
+        from .flashforge_gcode import FlashForgeFileError, list_files
+        try:
+            return list_files(connection)
+        except FlashForgeFileError as exc:
+            raise GcodeSubmissionError(str(exc), 502) from exc
     if connection.adapter == "octoprint":
         return _octoprint_files(connection)
     if connection.adapter == "prusa":
@@ -255,7 +264,7 @@ def _valid_path(value):
 
 
 def _metadata(connection, path):
-    if connection.adapter in {"octoprint", "prusa"}:
+    if connection.adapter in {"octoprint", "prusa", "flashforge"}:
         return {}  # Printer storage filenames alone are not verified slicer profiles.
     try:
         result = _get_json(connection, "/server/files/metadata", {"filename": path})
@@ -277,20 +286,29 @@ def _online(connection):
 
 
 def availability(connection):
+    adapter = connection.adapter
+    native_opt_in = (connection.config or {}).get("gcode_submission_enabled") is True
+    authorised = connection.controls_enabled if adapter in FILE_ADAPTERS else native_opt_in
+    from .flashforge_gcode import supports_simple_print
+    simple_flashforge = adapter == "flashforge" and supports_simple_print(connection.printer)
+    upload_supported = adapter in FILE_ADAPTERS or adapter == "creality_local" or simple_flashforge
+    start_supported = adapter in FILE_ADAPTERS or simple_flashforge
+    online = bool(_online(connection))
     return {
-        "can_browse": bool(connection.adapter in FILE_ADAPTERS or connection.adapter == "bambu_local"),
-        "browse_requires_pin": connection.adapter == "bambu_local" and not bool((connection.config or {}).get("bambu_ftps_cert_sha256")),
-        "experimental": connection.adapter in FILE_ADAPTERS or connection.adapter == "bambu_local",
-        "supported": connection.adapter in FILE_ADAPTERS,
-        "online": bool(_online(connection)),
-        "can_upload": bool(connection.adapter in FILE_ADAPTERS and _online(connection) and connection.controls_enabled),
+        "can_browse": adapter in BROWSE_ADAPTERS,
+        "browse_requires_pin": adapter == "bambu_local" and not bool((connection.config or {}).get("bambu_ftps_cert_sha256")),
+        "experimental": adapter in (BROWSE_ADAPTERS | UPLOAD_ADAPTERS),
+        "supported": upload_supported or start_supported,
+        "online": online,
+        "can_upload": bool(upload_supported and online and authorised),
         "can_start": bool(
-            connection.adapter in FILE_ADAPTERS and _online(connection)
-            and connection.controls_enabled
+            start_supported and online and authorised
             and (connection.last_snapshot or {}).get("state") == "idle"
             and not (connection.last_snapshot or {}).get("source_metadata", {}).get("power_loss_recovery")
         ),
-        "enabled": connection.controls_enabled,
+        "enabled": authorised,
+        "can_submit_from_printer": adapter in BROWSE_ADAPTERS and start_supported,
+        "requires_opt_in": adapter in {"flashforge", "creality_local"} and not native_opt_in,
     }
 
 
@@ -299,7 +317,9 @@ def _require_action_ready(connection, action):
     if not state["supported"]:
         raise GcodeSubmissionError("This printer adapter does not support G-code submission yet.")
     if not state["online"] or not state["enabled"]:
-        raise GcodeSubmissionError("Enable printer controls and refresh an online connection before submitting a file.")
+        raise GcodeSubmissionError("Explicitly enable printer G-code submission and refresh an online connection first.")
+    if action == "upload" and not state["can_upload"]:
+        raise GcodeSubmissionError("G-code upload is not supported for this printer.")
     if action == "print" and not state["can_start"]:
         raise GcodeSubmissionError("Printer must be freshly verified idle before starting a job.")
 
