@@ -24,16 +24,25 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   const current = files.find(f => f.id === assetId);
 
   async function load() {
-    try {
-      const [local, remote] = await Promise.all([
-        apiFetch("/api/files/"),
-        apiFetch(base + "/files/"),
-      ]);
-      setFiles((local.rows || []).filter(f => (f.filename || "").toLowerCase().endsWith(".gcode")));
-      setRemoteFiles(remote.rows || []);
-      setCapabilities(remote.capabilities || {});
-      setNotice(remote.error || remote.notice || "");
-    } catch (err) { setError(err.message); }
+    // A broken printer-side file API must not hide perfectly valid MakerVault files.
+    const [local, remote] = await Promise.allSettled([
+      apiFetch("/api/files/"),
+      apiFetch(base + "/files/"),
+    ]);
+    if (local.status === "fulfilled") {
+      setFiles((local.value.rows || []).filter(f => (f.filename || "").toLowerCase().endsWith(".gcode")));
+    } else {
+      setError("MakerVault file list unavailable: " + local.reason.message);
+    }
+    if (remote.status === "fulfilled") {
+      setRemoteFiles(remote.value.rows || []);
+      setCapabilities(remote.value.capabilities || {});
+      setNotice(remote.value.error || remote.value.notice || "");
+    } else {
+      setRemoteFiles([]);
+      setNotice("Printer storage listing unavailable. MakerVault files remain accessible.");
+      setError(remote.reason.message);
+    }
   }
   useEffect(() => { load(); }, [printer.id, connection.id]);
 
