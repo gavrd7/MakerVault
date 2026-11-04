@@ -37,6 +37,7 @@ The repository's `.env.example` is the full deployment reference. This table cov
 | `SYNC_ORCASLICER_PRINTER_CATALOGUE` | Optional printer catalogue expansion |
 | `OIDC_*` | Optional identity-provider bootstrap settings |
 | `EMAIL_*` / `DEFAULT_FROM_EMAIL` | Optional SMTP delivery |
+| `HTTPS_KEEPALIVE_SECONDS` | Native port-8443 Gunicorn HTTP/1.1 idle keep-alive (default 15 seconds; integer 6–120) supporting five-second terminal polling; does not configure a separate reverse proxy |
 | `CELERY_CONCURRENCY` / `WEB_CONCURRENCY` | Worker capacity; tune only after measuring resource use |
 | `DATA_UPLOAD_MAX_MEMORY_SIZE` / `FILE_UPLOAD_MAX_MEMORY_SIZE` | Django request/upload buffering settings, not a universal end-to-end file-size guarantee |
 
