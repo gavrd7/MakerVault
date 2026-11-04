@@ -6,6 +6,8 @@ from django.test import SimpleTestCase
 from django.utils import timezone
 
 from core.bambu_storage import BambuStorageError, _fingerprint_or_fail, _parse_listing, list_bambu_storage
+from core.flashforge_gcode import FlashForgeFileError, supports_simple_print, list_files as list_flashforge_files
+from core.creality_gcode import CrealityGcodeError, _http_root
 
 from core.printer_gcode_submission import (
     GcodeSubmissionError, _valid_path, availability,
@@ -133,3 +135,33 @@ class BambuReadOnlyStorageTests(SimpleTestCase):
         self.assertFalse(state["supported"])
         self.assertFalse(state["can_upload"])
         self.assertFalse(state["can_start"])
+
+
+class NativeGcodeAdapterTests(SimpleTestCase):
+    def test_flashforge_multimaterial_models_never_gain_start(self):
+        for name in ("AD5X", "Creator 5 Pro", "Adventurer 4"):
+            printer = SimpleNamespace(model=name, catalog_model=None)
+            self.assertFalse(supports_simple_print(printer))
+        self.assertTrue(supports_simple_print(
+            SimpleNamespace(model="FlashForge Adventurer 5M", catalog_model=None)
+        ))
+
+    @patch("core.flashforge_gcode.requests.post")
+    def test_flashforge_read_only_recent_file_list(self, post):
+        printer = connection("flashforge")
+        printer.config = {"serial": "TESTSERIAL", "check_code": "test-code"}
+        response = Mock(status_code=200)
+        response.json.return_value = {"code": 0, "gcodeList": ["part.gcode", "../escape.gcode", "notes.txt"]}
+        post.return_value = response
+        rows = list_flashforge_files(printer)
+        self.assertEqual([file["path"] for file in rows], ["part.gcode"])
+        self.assertTrue(post.call_args.args[0].endswith("/gcodeList"))
+        self.assertFalse(post.call_args.kwargs["allow_redirects"])
+
+    def test_creality_upload_target_is_same_host_no_credentials(self):
+        printer = connection("creality_local")
+        printer.endpoint_url = "ws://k2.local:9999"
+        self.assertEqual(_http_root(printer), "http://k2.local:80")
+        printer.endpoint_url = "ws://user:secret@k2.local:9999"
+        with self.assertRaises(Exception):
+            _http_root(printer)
