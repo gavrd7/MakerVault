@@ -1207,6 +1207,21 @@ function LocationModal({ location = null, onClose, onSaved }) {
 
 function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
   const [gcodeConnection, setGcodeConnection] = useState(null);
+  function prepareCrealityMoonrakerSource(connection) {
+    let endpoint = "";
+    try {
+      const remote = new URL(connection.endpoint_url);
+      const hostname = remote.hostname;
+      if (!hostname) throw new Error("No hostname");
+      endpoint = "http://" + hostname + ":7125";
+    } catch (_error) {
+      endpoint = "";
+    }
+    setGcodeConnection(null);
+    setForm(current => ({ ...current, adapter: "moonraker", endpoint_url: endpoint, api_key: "" }));
+    window.setTimeout(() => document.getElementById("printing-live-add-source")?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
+  }
+
   const [data, setData] = useState({ rows: [], adapters: [] });
   const [form, setForm] = useState({
     adapter: "moonraker",
@@ -1526,8 +1541,8 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
       {!data.rows?.length && <div className="printingEmptyInline">No live printer sources are configured yet.</div>}
     </div>
 
-    {gcodeConnection && <PrinterStartGcodeModal printer={printer} connection={gcodeConnection} canEdit={Boolean(data.can_control)} onClose={() => setGcodeConnection(null)} onChanged={async () => { await loadConnections(); await onChanged?.(); }} />}
-    {!!available.length && <form className="formGrid" onSubmit={addConnection}>
+    {gcodeConnection && <PrinterStartGcodeModal printer={printer} connection={gcodeConnection} canEdit={Boolean(data.can_control)} onConfigureMoonraker={() => prepareCrealityMoonrakerSource(gcodeConnection)} onClose={() => setGcodeConnection(null)} onChanged={async () => { await loadConnections(); await onChanged?.(); }} />}
+    {!!available.length && <form id="printing-live-add-source" className="formGrid" onSubmit={addConnection}>
       <div className="full settingsCallout">
         <strong>Add live source</strong>
         <p>MakerVault supports Moonraker/Klipper and OctoPrint plus experimental manufacturer-local adapters for Creality, Bambu Lab and PrusaLink. A single physical printer can use more than one source without creating duplicate MakerVault printer records.</p>
