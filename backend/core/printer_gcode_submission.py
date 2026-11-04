@@ -354,15 +354,30 @@ def submit(connection, user, payload):
         if source == "makervault":
             try:
                 with asset.file.open("rb") as handle:
-                    response = requests.post(
-                        base + ("/api/files/local" if connection.adapter == "octoprint" else "/server/files/upload"),
-                        data=({"select": "false", "print": "false"} if connection.adapter == "octoprint" else {"root": "gcodes", "print": "false", "checksum": asset.sha256}),
-                        files={"file": (remote_path, handle, "application/octet-stream")},
-                        headers=headers, timeout=(5, 120), allow_redirects=False,
-                    )
+                    if connection.adapter == "prusa":
+                        response = requests.put(
+                            base + "/api/v1/files/local/" + quote(remote_path, safe="/"),
+                            data=handle,
+                            headers={**headers, "Content-Type": "application/octet-stream", "Print-After-Upload": "?0", "Overwrite": "?0"},
+                            auth=_prusa_auth(connection), timeout=(5, 120), allow_redirects=False,
+                        )
+                    else:
+                        response = requests.post(
+                            base + ("/api/files/local" if connection.adapter == "octoprint" else "/server/files/upload"),
+                            data=({"select": "false", "print": "false"} if connection.adapter == "octoprint" else {"root": "gcodes", "print": "false", "checksum": asset.sha256}),
+                            files={"file": (remote_path, handle, "application/octet-stream")},
+                            headers=headers, timeout=(5, 120), allow_redirects=False,
+                        )
             except requests.RequestException as exc:
                 raise GcodeSubmissionError("Upload outcome is uncertain. Inspect printer storage before trying again.", 502) from exc
-            result = _octoprint_upload_receipt(response) if connection.adapter == "octoprint" else _json_response(response)
+            if connection.adapter == "prusa":
+                if response.status_code != 201:
+                    raise GcodeSubmissionError("PrusaLink rejected upload (HTTP %s). Check printer storage." % response.status_code, 502)
+                if remote_path not in {file["path"] for file in list_printer_gcodes(connection)}:
+                    raise GcodeSubmissionError("PrusaLink did not report the uploaded file. Refresh storage before printing.", 502)
+                result = {"item": {"path": remote_path}}
+            else:
+                result = _octoprint_upload_receipt(response) if connection.adapter == "octoprint" else _json_response(response)
             uploaded_path = ((result.get("files") or {}).get("local") or {}).get("path") if connection.adapter == "octoprint" else (result.get("item") or {}).get("path")
             if not isinstance(result, dict) or uploaded_path != remote_path or result.get("print_started") or result.get("print_queued") or result.get("effectivePrint"):
                 raise GcodeSubmissionError("Printer did not confirm upload-only completion. Verify printer state.", 502)
@@ -382,6 +397,11 @@ def submit(connection, user, payload):
                         json={"command": "select", "print": True}, headers=headers,
                         timeout=(3, 15), allow_redirects=False,
                     )
+                elif connection.adapter == "prusa":
+                    response = requests.post(
+                        base + "/api/v1/files/local/" + quote(remote_path, safe="/"),
+                        headers=headers, auth=_prusa_auth(connection), timeout=(3, 15), allow_redirects=False,
+                    )
                 else:
                     response = requests.post(
                         base + "/printer/print/start",
@@ -390,7 +410,7 @@ def submit(connection, user, payload):
                     )
             except requests.RequestException as exc:
                 raise GcodeSubmissionError("Start-print outcome is uncertain. Inspect printer before trying again.", 502) from exc
-            if (response.status_code != 204 if connection.adapter == "octoprint" else _json_response(response) != "ok"):
+            if (response.status_code != 204 if connection.adapter in {"octoprint", "prusa"} else _json_response(response) != "ok"):
                 raise GcodeSubmissionError("Printer did not confirm starting the print. Verify its live state.", 502)
         row.status = "started" if action == "print" else "uploaded"
         row.message = "Print start accepted by printer." if action == "print" else "Uploaded to printer without starting."
