@@ -18,6 +18,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [receipt, setReceipt] = useState(null);
+  const [transferStage, setTransferStage] = useState("");
   const [bambuPin, setBambuPin] = useState("");
   const base = "/api/printing/printers/" + printer.id + "/connections/" + connection.id + "/gcode";
   const current = files.find(f => f.id === assetId);
@@ -123,23 +124,34 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
     if (!window.confirm("Printer: " + printer.name + "\nFile: " + name + "\nAction: " +
       (operation === "print" ? "START PRINT" : "UPLOAD ONLY, no printing") + "\n\nContinue?")) return;
     setBusy(true); setError(""); setReceipt(null);
+    setTransferStage("Submitting request and checking printer readiness…");
+    const requestId = window.crypto.randomUUID();
+    const statusTimer = window.setInterval(async () => {
+      try {
+        const status = await apiFetch(base + "/submissions/" + requestId + "/");
+        if (status?.submission?.message) setTransferStage(status.submission.message);
+      } catch (_error) {
+        // The request may not have been journaled yet; the POST remains authoritative.
+      }
+    }, 1200);
     try {
       const result = await apiFetch(base + "/submit/", {
         method: "POST",
         body: {
-          request_id: window.crypto.randomUUID(),
+          request_id: requestId,
           source: source === "printer" ? "printer" : "makervault",
           action: operation, printer_path: remotePath,
           file_asset_id: assetId, confirmed: true, acknowledge_unknown: ack,
         },
       });
       setReceipt(result.submission);
+      setTransferStage(result.submission?.message || "Printer responded.");
       if (result.submission?.status === "unknown") {
         setError("Printer outcome is uncertain. Inspect the printer before trying anything else.");
       }
       await onChanged?.();
-    } catch (err) { setError(err.message); }
-    finally { setBusy(false); }
+    } catch (err) { setError(err.message); setTransferStage("Submission failed or could not be verified."); }
+    finally { window.clearInterval(statusTimer); setBusy(false); }
   }
 
   return <Modal title={"G-code printing · " + printer.name}
@@ -235,6 +247,12 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
         </div>
       </>}
     </>}
+    {busy && <div className="gcodeTransferProgress" role="status" aria-live="polite">
+      <strong>Printer transfer and verification</strong>
+      <progress aria-label="Printer transfer in progress" />
+      <p>{transferStage || "Waiting for printer response…"}</p>
+      <small>Progress is indeterminate because the printer adapter does not report bytes transferred. The stage text reflects server-side checks. Do not submit another job while this operation is running.</small>
+    </div>}
     {receipt && <div className="settingsCallout" role="status">
       <strong>Submission: {receipt.status}</strong><p>{receipt.message}</p>
       <small>Request ID {receipt.request_id} — uncertain requests are never resent automatically.</small>
