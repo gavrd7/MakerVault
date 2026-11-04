@@ -1,4 +1,5 @@
 from django.urls import path
+from . import printer_gcode_api
 from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views, device_api_views, device_pairing, device_measurements, device_tag_registration, device_tag_lookup, weight_history_views, tag_ndef, device_ndef_write, device_cfs_lookup, device_makertag_operations, device_pending_work
 
 urlpatterns = [
@@ -103,6 +104,9 @@ urlpatterns = [
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/material-database/", api_views.printing_printer_material_database, name="api-printing-printer-material-database"),
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/refresh/", api_views.printing_printer_connection_refresh, name="api-printing-printer-connection-refresh"),
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/control/", api_views.printing_printer_connection_control, name="api-printing-printer-connection-control"),
+    path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/gcode/files/", printer_gcode_api.files, name="api-printer-gcode-files"),
+    path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/gcode/submit/", printer_gcode_api.submit_file, name="api-printer-gcode-submit"),
+    path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/gcode/submissions/<uuid:request_id>/", printer_gcode_api.submission_status, name="api-printer-gcode-submission-status"),
     path("printing/spools/", api_views.printing_spools, name="api-printing-spools"),
     path("printing/spools/<uuid:spool_id>/", api_views.printing_spool_detail, name="api-printing-spool-detail"),
     path("printing/slots/<uuid:slot_id>/add-to-inventory/", api_views.printing_slot_add_to_inventory, name="api-printing-slot-add-to-inventory"),
