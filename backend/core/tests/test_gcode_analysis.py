@@ -1,7 +1,8 @@
 """G-code inspection is deliberately advisory and must never dispatch to printers."""
+from types import SimpleNamespace
 from django.test import SimpleTestCase
 
-from core.gcode_analysis import analyse_text
+from core.gcode_analysis import analyse_text, compare_printer_metadata
 
 
 class GcodeAnalysisTests(SimpleTestCase):
@@ -36,3 +37,32 @@ class GcodeAnalysisTests(SimpleTestCase):
         self.assertTrue(result["partial"])
         self.assertEqual(result["compatibility"], "unverified")
         self.assertTrue(any("partially" in w for w in result["warnings"]))
+
+    def test_k2_gcode_on_k1_must_be_blocked(self):
+        report = analyse_text("; printer_model = Creality K2\\nG1 X12 Y5\\n")
+        printer = SimpleNamespace(
+            model="K1", name="Workshop K1", catalog_model=None,
+            printer_manufacturer=SimpleNamespace(name="Creality"),
+        )
+        result = compare_printer_metadata(report, printer)
+        self.assertEqual(result["status"], "mismatch")
+        self.assertTrue(result["blocking"])
+
+    def test_matching_header_is_not_proof_of_safety(self):
+        report = analyse_text("; printer_model = Creality K2\\n")
+        printer = SimpleNamespace(
+            model="K2", name="Workshop K2", catalog_model=None,
+            printer_manufacturer=SimpleNamespace(name="Creality"),
+        )
+        result = compare_printer_metadata(report, printer)
+        self.assertEqual(result["status"], "metadata_match")
+        self.assertFalse(result["blocking"])
+        self.assertIn("not a safety guarantee", result["reason"])
+
+    def test_missing_printer_header_stays_blocked(self):
+        report = analyse_text("G1 X2 Y3\\n")
+        printer = SimpleNamespace(
+            model="K2", name="K2", catalog_model=None,
+            printer_manufacturer=None,
+        )
+        self.assertTrue(compare_printer_metadata(report, printer)["blocking"])
