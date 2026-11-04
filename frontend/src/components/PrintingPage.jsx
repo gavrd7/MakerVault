@@ -1022,6 +1022,7 @@ function ModelLibraryPage({ models, files, gcodeFiles = [], printers, projects, 
   const [addOpen, setAddOpen] = useState(false);
   const [manageModel, setManageModel] = useState(null);
   const [viewerModel, setViewerModel] = useState(null);
+  const [gcodeViewerFile, setGcodeViewerFile] = useState(null);
   const [deleteModel, setDeleteModel] = useState(null);
   const [reusableModelBusy, setReusableModelBusy] = useState("");
 
@@ -1091,6 +1092,7 @@ function ModelLibraryPage({ models, files, gcodeFiles = [], printers, projects, 
             <div className="printingLibraryActions modelActionsWithToggle">
               <div className="modelActionButtons">
                 {hasViewableModelAsset(model) && <button className="primary" type="button" onClick={() => setViewerModel(model)}>View 3D</button>}
+                {model.revisions.flatMap(rev => rev.assets).some(asset => asset.file.filename?.toLowerCase().endsWith(".gcode")) && <button type="button" onClick={() => setGcodeViewerFile(model.revisions.flatMap(rev => rev.assets).find(asset => asset.file.filename?.toLowerCase().endsWith(".gcode")).file)}>View G-code</button>}
                 {canChangeModel && <button onClick={() => setManageModel(model)}>Manage</button>}
                 {canDeleteModel && <button className="dangerButton" type="button" onClick={() => setDeleteModel(model)}>Delete</button>}
               </div>
@@ -1102,6 +1104,7 @@ function ModelLibraryPage({ models, files, gcodeFiles = [], printers, projects, 
       </div>
     </section>
 
+    {gcodeViewerFile && <GcodeViewerModal file={gcodeViewerFile} onClose={() => setGcodeViewerFile(null)} />}
     {gcodeOpen && <GcodeLibraryModal files={gcodeFiles} projects={projects} canUpload={canUpload} onClose={() => setGcodeOpen(false)} onSaved={onChanged} />}
     {addOpen && <ModelModal projects={projects} canUpload={canUpload} onClose={() => setAddOpen(false)} onSaved={async () => { setAddOpen(false); await onChanged(); }} />}
     {manageModel && <ModelManageModal
