@@ -53,3 +53,16 @@ Only supported, writable, unprotected NTAG215 user-data pages 4–127 may be phy
 - The cleaned state is durable and rediscovered from the terminal after reboot; recovering it never performs another NFC wipe without a separate operation.
 
 **Merge status:** Application and firmware CI must be green on the exact PR heads and the physical test matrix must be completed before marking either PR ready for review.
+
+### Consolidated terminal connection and idle work
+
+The terminal's **four independent idle polling endpoints** have been replaced with one scoped snapshot:
+
+- `GET /api/device/v1/pending-work/` authenticated with `tags:read`, bound to the active paired terminal and account.
+- JSON fields: `registration`, `ndef_write`, `lookup`, `operation`, each an existing operation payload or `null`. Write operations are omitted unless the paired key includes `tags:write`. The existing physical-clean operation can be rediscovered in durable `cleaned` state after a reboot.
+- The terminal polls **once every five seconds while idle** instead of making four separate idle requests; during physical activity it suspends idle discovery. A pending snapshot is strictly **discovery, not write authorisation**. The existing operation-specific status checks, physical UID verification, cancellation and completion calls are unchanged.
+- Heartbeat and periodic `/me` verification remain independent because they report device health and refresh scopes, rather than discover new work. Active cancellation/status polling remains separate to preserve safety.
+- The deployed application must support the consolidated endpoint before the matching firmware is flashed. Keep both feature branches paired until their joint release.
+
+**Reliability validation remains open:** the terminal previously lost roughly 145 KB free internal heap in an idle hour with a TLS memory allocation error. The consolidated request removes most idle connection churn, but the root leak/fragmentation cause has not been independently verified as resolved. Use the added `[TLS HEAP]` serial diagnostics and repeat the one-hour and overnight idle tests before merging.
+
