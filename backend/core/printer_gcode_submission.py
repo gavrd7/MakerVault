@@ -274,6 +274,20 @@ def _valid_path(value):
     )
 
 
+def _verify_moonraker_upload(connection, remote_path, expected_size):
+    """Confirm G-code appears in printer storage at the expected byte count."""
+    match = next((item for item in list_printer_gcodes(connection) if item["path"] == remote_path), None)
+    if not match:
+        raise GcodeSubmissionError(
+            "Moonraker accepted upload but the file is absent from printer storage. "
+            "Inspect the printer before retrying.", 502)
+    if match.get("size_bytes") is None or int(match["size_bytes"]) != int(expected_size):
+        raise GcodeSubmissionError(
+            "Uploaded G-code cannot be verified: printer file size missing or mismatched. "
+            "The print must not be started.", 502)
+    return match
+
+
 def _metadata(connection, path):
     if connection.adapter in {"octoprint", "prusa", "flashforge"}:
         return {}  # Printer storage filenames alone are not verified slicer profiles.
