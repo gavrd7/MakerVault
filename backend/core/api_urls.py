@@ -1,7 +1,8 @@
 from django.urls import path
-from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views, device_api_views, device_pairing, device_measurements, device_tag_registration, device_tag_lookup, weight_history_views, tag_ndef, device_ndef_write, device_cfs_lookup, device_makertag_operations
+from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views, device_api_views, device_pairing, device_measurements, device_tag_registration, device_tag_lookup, weight_history_views, tag_ndef, device_ndef_write, device_cfs_lookup, device_makertag_operations, device_pending_work
 
 urlpatterns = [
+    path("device/v1/pending-work/", device_pending_work.pending_work, name="device-pending-work"),
     path("device/tag-lookup/", device_tag_lookup.begin, name="api-device-tag-lookup-begin"),
     path("device/tag-lookup/<uuid:lookup_id>/", device_tag_lookup.status, name="api-device-tag-lookup-status"),
     path("device/tag-lookup/<uuid:lookup_id>/cancel/", device_tag_lookup.cancel, name="api-device-tag-lookup-cancel"),
