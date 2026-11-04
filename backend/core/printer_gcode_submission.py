@@ -9,6 +9,7 @@ import uuid
 from datetime import timedelta
 from pathlib import PurePosixPath
 from urllib.parse import quote
+from requests.auth import HTTPDigestAuth
 
 import requests
 from django.db import transaction
@@ -17,10 +18,11 @@ from django.utils import timezone
 from .gcode_analysis import compare_printer_metadata, inspect_asset
 from .models import FileAsset, Printer, PrinterConnection, PrinterGcodeSubmission
 from .printer_connectivity import normalise_moonraker_endpoint, normalise_printer_endpoint
+from .manufacturer_printer_adapters import normalise_prusalink_endpoint
 
 MAX_UPLOAD_BYTES = 64 * 1024 * 1024
 MOONRAKER_ADAPTERS = {"moonraker", "elegoo", "qidi", "sovol", "snapmaker", "voron"}
-FILE_ADAPTERS = MOONRAKER_ADAPTERS | {"octoprint"}
+FILE_ADAPTERS = MOONRAKER_ADAPTERS | {"octoprint", "prusa"}
 
 
 class GcodeSubmissionError(RuntimeError):
@@ -66,6 +68,8 @@ def _get_json(connection, path, params=None):
 def list_printer_gcodes(connection):
     if connection.adapter == "octoprint":
         return _octoprint_files(connection)
+    if connection.adapter == "prusa":
+        return _prusalink_files(connection)
     rows = _get_json(connection, "/server/files/list", {"root": "gcodes"})
     if not isinstance(rows, list):
         raise GcodeSubmissionError("Printer file list has an unexpected format.", 502)
@@ -93,7 +97,66 @@ def _printer_endpoint(connection):
         if key:
             headers["X-Api-Key"] = key
         return base, headers
+    if connection.adapter == "prusa":
+        base = normalise_prusalink_endpoint(connection.endpoint_url)
+        headers = {"Accept": "application/json"}
+        key = str((connection.config or {}).get("api_key") or "").strip()
+        if key:
+            headers["X-Api-Key"] = key
+        return base, headers
     return _moonraker(connection)
+
+
+def _prusa_auth(connection):
+    if connection.adapter != "prusa":
+        return None
+    config = connection.config or {}
+    username = str(config.get("username") or "")
+    password = str(config.get("password") or "")
+    return HTTPDigestAuth(username, password) if username or password else None
+
+
+def _prusalink_files(connection):
+    """Experimental: modern PrusaLink v1 API; no undocumented fallback."""
+    base, headers = _printer_endpoint(connection)
+    try:
+        response = requests.get(
+            base + "/api/v1/files/local/", headers=headers, auth=_prusa_auth(connection),
+            timeout=(3, 12), allow_redirects=False,
+        )
+    except requests.RequestException as exc:
+        raise GcodeSubmissionError("PrusaLink file directory is unavailable.", 502) from exc
+    if response.status_code != 200:
+        raise GcodeSubmissionError(
+            "This PrusaLink firmware did not provide a compatible local file listing (HTTP %s)." % response.status_code, 502
+        )
+    try:
+        data = response.json()
+    except ValueError as exc:
+        raise GcodeSubmissionError("PrusaLink returned invalid directory metadata.", 502) from exc
+    children = data.get("children") if isinstance(data, dict) else None
+    if not isinstance(children, list):
+        raise GcodeSubmissionError("PrusaLink file listing format is not yet supported for this model.", 502)
+    results = []
+    def walk(nodes, prefix=""):
+        for item in nodes:
+            if len(results) >= 5000:
+                break
+            if not isinstance(item, dict):
+                continue
+            filename = item.get("display_name") or item.get("name")
+            if not isinstance(filename, str) or "/" in filename or "\\" in filename:
+                continue
+            path = prefix + filename
+            if item.get("type") == "FOLDER":
+                walk(item.get("children") or [], path + "/")
+            elif _valid_path(path):
+                results.append({
+                    "path": path, "size_bytes": item.get("size"),
+                    "modified": item.get("m_timestamp"), "permissions": "r" if item.get("read_only") else "rw",
+                })
+    walk(children)
+    return results
 
 
 def _octoprint_files(connection):
@@ -150,8 +213,8 @@ def _valid_path(value):
 
 
 def _metadata(connection, path):
-    if connection.adapter == "octoprint":
-        return {}  # A local OctoPrint filename is not a verified slicer/printer profile.
+    if connection.adapter in {"octoprint", "prusa"}:
+        return {}  # Printer storage filenames alone are not verified slicer profiles.
     try:
         result = _get_json(connection, "/server/files/metadata", {"filename": path})
         return result if isinstance(result, dict) else {}
