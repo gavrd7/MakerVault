@@ -145,6 +145,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   return <Modal title={"G-code printing · " + printer.name}
     subtitle="Select one source and explicitly confirm upload or start. Nothing runs automatically."
     onClose={onClose} wide>
+    <div className="gcodePrintModalContent">
     {error && <div className="formError" role="alert">{error}</div>}
     {notice && <div className="settingsCallout">{notice}</div>}
     {["prusa", "creality_local", "flashforge"].includes(connection.adapter) && <div className="settingsCallout">
@@ -238,5 +239,6 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
       <strong>Submission: {receipt.status}</strong><p>{receipt.message}</p>
       <small>Request ID {receipt.request_id} — uncertain requests are never resent automatically.</small>
     </div>}
+    </div>
   </Modal>;
 }
