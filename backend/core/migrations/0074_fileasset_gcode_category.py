@@ -30,4 +30,20 @@ class Migration(migrations.Migration):
                 max_length=20,
             ),
         ),
+        migrations.AlterField(
+            model_name="modelrevisionasset",
+            name="role",
+            field=models.CharField(
+                choices=[
+                    ("model", "Printable model"),
+                    ("slicer", "Slicer project"),
+                    ("gcode", "G-code toolpath"),
+                    ("cad", "CAD / source"),
+                    ("reference", "Reference"),
+                    ("other", "Other"),
+                ],
+                default="model",
+                max_length=20,
+            ),
+        ),
     ]
