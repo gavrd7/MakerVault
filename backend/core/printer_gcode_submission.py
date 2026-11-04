@@ -415,13 +415,21 @@ def submit(connection, user, payload):
             raise GcodeSubmissionError("Unable to verify fresh printer status before transfer. No command dispatched.", 409) from exc
         connection.refresh_from_db()
         _require_action_ready(connection, action)
-        base, headers = _printer_endpoint(connection)
+        base, headers = (None, None) if connection.adapter in {"flashforge", "creality_local"} else _printer_endpoint(connection)
         if connection.adapter == "prusa":
             _prusalink_capability_probe(connection, upload=(source == "makervault"))
         if source == "makervault":
             try:
                 with asset.file.open("rb") as handle:
-                    if connection.adapter == "prusa":
+                    if connection.adapter == "flashforge":
+                        from .flashforge_gcode import upload_file
+                        upload_file(connection, asset, remote_path)
+                        response = None
+                    elif connection.adapter == "creality_local":
+                        from .creality_gcode import upload_only
+                        upload_only(connection, asset, remote_path)
+                        response = None
+                    elif connection.adapter == "prusa":
                         response = requests.put(
                             base + "/api/v1/files/local/" + quote(remote_path, safe="/"),
                             data=handle,
@@ -437,7 +445,9 @@ def submit(connection, user, payload):
                         )
             except requests.RequestException as exc:
                 raise GcodeSubmissionError("Upload outcome is uncertain. Inspect printer storage before trying again.", 502) from exc
-            if connection.adapter == "prusa":
+            if connection.adapter in {"flashforge", "creality_local"}:
+                result = {"item": {"path": remote_path}}
+            elif connection.adapter == "prusa":
                 if response.status_code != 201:
                     raise GcodeSubmissionError("PrusaLink rejected upload (HTTP %s). Check printer storage." % response.status_code, 502)
                 if remote_path not in {file["path"] for file in list_printer_gcodes(connection)}:
@@ -458,7 +468,11 @@ def submit(connection, user, payload):
             connection.refresh_from_db()
             _require_action_ready(connection, "print")
             try:
-                if connection.adapter == "octoprint":
+                if connection.adapter == "flashforge":
+                    from .flashforge_gcode import start_file
+                    start_file(connection, remote_path)
+                    response = None
+                elif connection.adapter == "octoprint":
                     response = requests.post(
                         base + "/api/files/local/" + quote(remote_path, safe="/"),
                         json={"command": "select", "print": True}, headers=headers,
@@ -477,7 +491,7 @@ def submit(connection, user, payload):
                     )
             except requests.RequestException as exc:
                 raise GcodeSubmissionError("Start-print outcome is uncertain. Inspect printer before trying again.", 502) from exc
-            if (response.status_code != 204 if connection.adapter in {"octoprint", "prusa"} else _json_response(response) != "ok"):
+            if (False if connection.adapter == "flashforge" else response.status_code != 204 if connection.adapter in {"octoprint", "prusa"} else _json_response(response) != "ok"):
                 raise GcodeSubmissionError("Printer did not confirm starting the print. Verify its live state.", 502)
         row.status = "started" if action == "print" else "uploaded"
         row.message = "Print start accepted by printer." if action == "print" else "Uploaded to printer without starting."
