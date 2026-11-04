@@ -18,7 +18,7 @@ from .device_tag_operations_model import DeviceMakerTagOperation
 
 
 @require_http_methods(["GET"])
-@require_device_scope("tags:read")
+@require_device_scope(("tags:read", "tags:write"))
 def pending_work(request):
     device = ConnectedDevice.objects.filter(
         owner=request.device_owner, api_key=request.device_key,
@@ -29,9 +29,10 @@ def pending_work(request):
     now = timezone.now()
     scopes = request.device_key.scopes or []
     can_write = "tags:write" in scopes
+    can_read = "tags:read" in scopes
     response = {"registration": None, "ndef_write": None,
                 "lookup": None, "operation": None}
-    if request.device_owner.has_perm("core.view_makertag"):
+    if can_read and request.device_owner.has_perm("core.view_makertag"):
         lookup = DeviceTagLookup.objects.filter(
             device=device, owner=request.device_owner, state="pending",
             expires_at__gt=now
