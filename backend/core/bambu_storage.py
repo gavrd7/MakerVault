@@ -28,6 +28,16 @@ MAX_RESULTS = 1000
 class ImplicitFTP_TLS(FTP_TLS):
     """FTP_TLS variant for Bambu's implicit TLS control port 990."""
 
+    def ntransfercmd(self, cmd, rest=None):
+        conn, size = super().ntransfercmd(cmd, rest)
+        expected = getattr(self, "_expected_peer", "")
+        if expected:
+            peer = conn.getpeercert(binary_form=True) if isinstance(conn, ssl.SSLSocket) else None
+            if not peer or _fingerprint(peer) != expected:
+                conn.close()
+                raise BambuStorageError("Bambu FTPS data certificate does not match the pinned device certificate.")
+        return conn, size
+
     def connect(self, host="", port=0, timeout=-999, source_address=None):
         if host:
             self.host = host
@@ -95,6 +105,7 @@ def list_bambu_storage(connection):
     try:
         ftp.connect(hostname, 990, timeout=8)
         _check_peer(ftp, expected)
+        ftp._expected_peer = expected
         FTP.login(ftp, user="bblp", passwd=access_code)
         ftp.prot_p()
 
@@ -121,7 +132,7 @@ def list_bambu_storage(connection):
                 pass  # Cache directory is not available on every device.
     except BambuStorageError:
         raise
-    except (OSError, ssl.SSLError, *all_errors) as exc:
+    except all_errors as exc:
         raise BambuStorageError(
             "Bambu FTPS browsing failed or this firmware requires an incompatible TLS session. "
             "No printing command was issued."
