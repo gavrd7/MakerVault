@@ -5,7 +5,7 @@
 <h1 align="center">MakerVault</h1>
 <p align="center"><strong>Your workshop, organised.</strong></p>
 <p align="center">A self-hosted workspace for electronics, making and 3D printing — from the parts you own to the things you build.</p>
-<p align="center"><strong>Application source version: v1.5.0 (release candidate)</strong></p>
+<p align="center"><strong>Application source version: v1.5.1 (release preparation)</strong></p>
 <p align="center">
   <a href="https://gavrd7.github.io/MakerVault-docs/">User guide</a> ·
   <a href="docs/guide/getting-started/install.md">Install</a> ·
@@ -47,7 +47,7 @@ Maker projects rarely live in one place. Components end up in boxes and spreadsh
 
 An inventory item can be allocated to a project BOM. A model and its revisions can be associated with a build; a recorded print can produce a tracked physical part. A MakerTag on a box, spool or printed object can bring you back to its current record. These links make the system more useful than isolated inventory or printer dashboards.
 
-**Terminal interoperability (v1.5.0):** a paired terminal can resolve CFS material identifiers against cached Creality printer databases, identify physical spools by either of up to two separate RFID UIDs, and scan each side of a spool on request from the Physical Identity form. Manufacturer material names require online MakerVault access; offline tag data remains readable. Third-party RFID support depends on compatible tags and available documentation, not universal compatibility.
+**Terminal interoperability (introduced in v1.5.0; retained in v1.5.1):** a paired terminal can resolve CFS material identifiers against cached Creality printer databases, identify physical spools by either of up to two separate RFID UIDs, and scan each side of a spool on request from the Physical Identity form. Manufacturer material names require online MakerVault access; offline tag data remains readable. Third-party RFID support depends on compatible tags and available documentation, not universal compatibility.
 
 ### MakerTag cleaning and removal (feature branch #159)
 
@@ -57,11 +57,11 @@ The release-candidate MakerTag maintenance workflow has three **distinct** actio
 - **Remove MakerTag:** removes the registration (and makes its short URL stop resolving) but leaves the physical NFC tag unchanged.
 - **Remove and clean:** explicitly cleans and verifies the physical tag **first**, then removes the registration. If the wipe fails, the record is kept; if later server removal fails, MakerVault reports partial completion rather than claiming both steps succeeded.
 
-These operations are implemented and maintainer-tested in the linked **release-candidate** [application PR #165](https://github.com/gavrd7/MakerVault/pull/165) and [terminal firmware PR #12](https://github.com/gavrd7/MakerVault-Hardware/pull/12), **not guaranteed in older published v1.5.0 / Terminal v1.0.0 binaries**; publish the matching tagged app and hardware releases after both PRs merge. Cleaning applies to supported, writable, unprotected **NTAG215 MakerTags only**; it never erases the chip UID or manufacturer/configuration pages, unrelated inventory records, or Creality/Bambu/Elegoo filament tags. See the [MakerTags guide](https://gavrd7.github.io/MakerVault-docs/using/maker-tags/) for the end-user instructions once the documentation PR merges.
+These operations are implemented and maintainer-tested in the merged [application PR #165](https://github.com/gavrd7/MakerVault/pull/165) and [terminal firmware PR #12](https://github.com/gavrd7/MakerVault-Hardware/pull/12), **included in the v1.5.1 application source and the matching Terminal v1.0.1 firmware**; published availability depends on the release tag and container/firmware assets. Cleaning applies to supported, writable, unprotected **NTAG215 MakerTags only**; it never erases the chip UID or manufacturer/configuration pages, unrelated inventory records, or Creality/Bambu/Elegoo filament tags. See the [MakerTags guide](https://gavrd7.github.io/MakerVault-docs/using/maker-tags/) for the end-user instructions in the corresponding updated guide.
 
 ### Terminal v1.0.0 connection reliability
 
-The matching terminal firmware in [MakerVault-Hardware PR #12](https://github.com/gavrd7/MakerVault-Hardware/pull/12) now uses native ESP-IDF `esp_http_client`, a persistent verified HTTPS session and correct C++/FreeRTOS worker-buffer cleanup. MakerVault v1.5.0 supports a **single authenticated five-second idle snapshot** (`GET /api/device/v1/pending-work/`) in place of four separate pending-operation requests. Heartbeats, device scope checks and physical-write authorisation remain separate and cannot be inferred from the snapshot.
+The matching terminal firmware in [MakerVault-Hardware PR #12](https://github.com/gavrd7/MakerVault-Hardware/pull/12) now uses native ESP-IDF `esp_http_client`, a persistent verified HTTPS session and correct C++/FreeRTOS worker-buffer cleanup. MakerVault v1.5.1 retains the **single authenticated five-second idle snapshot** (`GET /api/device/v1/pending-work/`) in place of four separate pending-operation requests. Heartbeats, device scope checks and physical-write authorisation remain separate and cannot be inferred from the snapshot.
 
 For direct port-8443 deployments, the native Gunicorn HTTPS listener defaults to a **15-second keep-alive**, configurable with `HTTPS_KEEPALIVE_SECONDS`. This is long enough to span normal terminal idle polls; a separate reverse proxy must also allow reuse on its **device-facing HTTPS connection**. The maintainer's two-hour-plus physical terminal test showed stable idle heap, continuous successful polls and no memory-recovery reboots. Transport switching or keep-alive alone is not a substitute for TLS verification. See [HTTPS/reverse-proxy guidance](docs/guide/advanced/reverse-proxy.md) and [configuration reference](docs/guide/reference/configuration.md).
 
