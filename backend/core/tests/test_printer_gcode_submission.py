@@ -1,0 +1,80 @@
+"""Contract tests for experimental printer file APIs. No hardware is commanded."""
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
+
+from django.test import SimpleTestCase
+from django.utils import timezone
+
+from core.printer_gcode_submission import (
+    GcodeSubmissionError, _valid_path, availability,
+    list_printer_gcodes, _octoprint_upload_receipt,
+)
+
+
+def connection(adapter, *, enabled=True, status="connected", state="idle"):
+    return SimpleNamespace(
+        adapter=adapter,
+        endpoint_url="http://printer.local:7125" if adapter != "prusa" else "http://prusa.local",
+        config={"api_key": "test-api-key"},
+        enabled=enabled, controls_enabled=True, status=status,
+        last_seen_at=timezone.now(),
+        last_snapshot={"online": True, "state": state},
+    )
+
+
+class GcodePrinterContractTests(SimpleTestCase):
+    def test_file_paths_cannot_escape_printer_storage(self):
+        for invalid in ("../escape.gcode", "/etc/escape.gcode", "folder//file.gcode",
+                        "folder/./file.gcode", "folder\\bad.gcode", "danger.txt", ""):
+            self.assertFalse(_valid_path(invalid), invalid)
+        self.assertTrue(_valid_path("folder/part.gcode"))
+
+    def test_unsupported_proprietary_adapters_never_advertise_submission(self):
+        for adapter in ("bambu_local", "creality_local", "anycubic", "flashforge", "simplyprint"):
+            self.assertFalse(availability(connection(adapter))["supported"])
+            self.assertFalse(availability(connection(adapter))["can_start"])
+
+    def test_moonraker_family_octoprint_and_prusalink_are_experimental(self):
+        for adapter in ("moonraker", "octoprint", "prusa", "qidi", "elegoo", "sovol", "voron", "snapmaker"):
+            caps = availability(connection(adapter))
+            self.assertTrue(caps["supported"], adapter)
+            self.assertTrue(caps["can_start"], adapter)
+            self.assertTrue(caps["can_upload"], adapter)
+
+    def test_stale_or_busy_printer_cannot_start(self):
+        self.assertFalse(availability(connection("moonraker", state="printing"))["can_start"])
+        self.assertFalse(availability(connection("octoprint", status="disconnected"))["can_start"])
+
+    @patch("core.printer_gcode_submission.requests.get")
+    def test_octoprint_local_storage_listing(self, get):
+        response = Mock(status_code=200)
+        response.json.return_value = {"files": [
+            {"name": "part.gcode", "path": "part.gcode", "type": "machinecode", "size": 1250},
+            {"name": "info.txt", "path": "info.txt", "type": "file"},
+        ]}
+        get.return_value = response
+        rows = list_printer_gcodes(connection("octoprint"))
+        self.assertEqual([item["path"] for item in rows], ["part.gcode"])
+        self.assertIn("/api/files/local", get.call_args.args[0])
+        self.assertFalse(get.call_args.kwargs["allow_redirects"])
+
+    @patch("core.printer_gcode_submission.requests.get")
+    def test_prusalink_native_file_listing(self, get):
+        response = Mock(status_code=200)
+        response.json.return_value = {"children": [
+            {"name": "part.gcode", "type": "PRINT_FILE", "size": 1000},
+            {"name": "config.txt", "type": "FILE", "size": 100},
+        ]}
+        get.return_value = response
+        rows = list_printer_gcodes(connection("prusa"))
+        self.assertEqual([item["path"] for item in rows], ["part.gcode"])
+        self.assertIn("/api/v1/files/local/", get.call_args.args[0])
+        self.assertFalse(get.call_args.kwargs["allow_redirects"])
+
+    def test_octoprint_upload_requires_created_receipt(self):
+        response = Mock(status_code=201)
+        response.json.return_value = {"files": {"local": {"path": "part.gcode"}}}
+        self.assertEqual(_octoprint_upload_receipt(response)["files"]["local"]["path"], "part.gcode")
+        response.status_code = 409
+        with self.assertRaises(GcodeSubmissionError):
+            _octoprint_upload_receipt(response)
