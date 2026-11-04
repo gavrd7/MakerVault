@@ -452,6 +452,8 @@ class FileAsset(TimeStampedModel):
         ordering = ["-created_at"]
 
     def clean(self):
+        if self.category == "gcode" and (self.metadata or {}).get("extension") != ".gcode":
+            raise ValidationError({"category": "Only plain-text .gcode files can use the G-code category."})
         if self.project_id and self.owner_id and self.project.owner_id != self.owner_id:
             raise ValidationError({"project": "Selected project belongs to a different user."})
         if self.supersedes_id and self.owner_id and self.supersedes.owner_id != self.owner_id:
