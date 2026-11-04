@@ -5,6 +5,7 @@ receipt before I/O and is never automatically retried after an uncertain send.
 Other printer adapters must implement and validate their own transfer protocol.
 """
 import re
+import logging
 import uuid
 from datetime import timedelta
 from pathlib import PurePosixPath
@@ -21,6 +22,8 @@ from .printer_connectivity import normalise_moonraker_endpoint, normalise_printe
 from .manufacturer_printer_adapters import normalise_prusalink_endpoint
 from .flashforge_gcode import FlashForgeFileError
 from .creality_gcode import CrealityGcodeError
+
+logger = logging.getLogger(__name__)
 
 MAX_UPLOAD_BYTES = 64 * 1024 * 1024
 MOONRAKER_ADAPTERS = {"moonraker", "elegoo", "qidi", "sovol", "snapmaker", "voron"}
