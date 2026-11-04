@@ -161,7 +161,7 @@ def inspect_asset(asset):
     filename = str((asset.metadata or {}).get("original_name") or asset.name or "")
     if not filename.lower().endswith(".gcode"):
         raise ValueError("Only plain-text .gcode files can be inspected.")
-    with asset.file.open("rb") as handle:
+    with asset.file.storage.open(asset.file.name, "rb") as handle:
         sample = handle.read(MAX_SCAN_BYTES + 1)
     truncated = len(sample) > MAX_SCAN_BYTES
     sample = sample[:MAX_SCAN_BYTES]
