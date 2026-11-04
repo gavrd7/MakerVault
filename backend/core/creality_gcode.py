@@ -82,6 +82,8 @@ def _parse_file_list(payload):
         return None
     if isinstance(payload.get("params"), dict):
         payload = payload["params"]
+    if isinstance(payload.get("data"), dict):
+        payload = payload["data"]
     for key in FILE_LIST_FIELDS:
         value = payload.get(key)
         if isinstance(value, dict):
@@ -130,8 +132,8 @@ async def _list_files(endpoint):
         raise CrealityGcodeError("Creality LAN G-code file discovery failed.") from exc
     if merged is None:
         raise CrealityGcodeError(
-            "Creality did not return a recognized G-code file-list payload. "
-            "This firmware variant requires further read-only validation."
+            "Creality did not return a recognised G-code file list in 8 seconds. "
+            "Monitoring can still work when storage commands are unsupported by printer firmware."
         )
     return merged
 
@@ -139,8 +141,10 @@ async def _list_files(endpoint):
 def list_files(connection):
     try:
         return asyncio.run(_list_files(connection.endpoint_url))
+    except CrealityGcodeError:
+        raise
     except RuntimeError as exc:
-        raise CrealityGcodeError("Creality file-browser worker could not start.") from exc
+        raise CrealityGcodeError("Creality file-browser event loop unavailable.") from exc
 
 
 async def _start_single_spool(endpoint, remote_path):
@@ -167,8 +171,10 @@ def start_single_spool(connection, remote_path):
         raise CrealityGcodeError("Printer file path is unsafe or not recognized.")
     try:
         asyncio.run(_start_single_spool(connection.endpoint_url, safe))
+    except CrealityGcodeError:
+        raise
     except RuntimeError as exc:
-        raise CrealityGcodeError("Creality print-start worker failed.") from exc
+        raise CrealityGcodeError("Creality print-start event loop unavailable.") from exc
     # Fire-and-forget protocol: sending does not prove acceptance.
     return None
 
