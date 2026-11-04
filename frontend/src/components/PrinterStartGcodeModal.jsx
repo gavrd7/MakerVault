@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { apiFetch } from "../api";
 import { Modal } from "./Common";
 
-export default function PrinterStartGcodeModal({ printer, connection, canEdit, onClose, onChanged }) {
+export default function PrinterStartGcodeModal({ printer, connection, canEdit, onConfigureMoonraker, onClose, onChanged }) {
   const [source, setSource] = useState("makervault");
   const [action, setAction] = useState("upload");
   const [files, setFiles] = useState([]);
@@ -118,6 +118,11 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
     onClose={onClose} wide>
     {error && <div className="formError" role="alert">{error}</div>}
     {notice && <div className="settingsCallout">{notice}</div>}
+    {connection.adapter === "creality_local" && <div className="settingsCallout">
+      <strong>Creality native monitoring does not imply file transfer</strong>
+      <p>Some Creality K1/K2 firmware exposes a separate Moonraker/Klipper service on the same printer. You can configure that as an additional source, with its own authentication and explicit printer controls. MakerVault will not assume the endpoint is present or send files through the monitoring WebSocket.</p>
+      {onConfigureMoonraker && <button type="button" onClick={onConfigureMoonraker}>Configure separate Moonraker source</button>}
+    </div>}
     {connection.adapter === "prusa" && <div className="settingsCallout"><strong>Experimental PrusaLink transfer</strong><p>Native PrusaLink v1 file listing, upload and start support is unverified on physical hardware. Unsupported firmware returns an error; never assume print acceptance until confirmed on the printer.</p></div>}
     {connection.adapter === "bambu_local" && <div className="printingManageForm">
       <strong>Bambu LAN storage — read-only experimental browser</strong>
