@@ -171,7 +171,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
     {notice && <div className="settingsCallout">{notice}</div>}
     {["prusa", "creality_local", "flashforge"].includes(connection.adapter) && <div className="settingsCallout">
       <strong>Experimental native G-code transfer</strong>
-      <p>{connection.adapter === "creality_local" ? "Upload only: no native print-start command will be sent." : connection.adapter === "prusa" ? "Native PrusaLink v1 transfer and print-start are experimental and require the correct firmware capabilities." : "Adventurer 5M / 5M Pro: upload-only or explicitly confirmed start. Multi-material FlashForge models are not enabled."}</p>
+      <p>{connection.adapter === "creality_local" ? "Native upload is supported experimentally. Single-spool start is a separate opt-in; CFS printing remains disabled until mapping is validated." : connection.adapter === "prusa" ? "Native PrusaLink v1 transfer and print-start are experimental and require the correct firmware capabilities." : "Adventurer 5M / 5M Pro: upload-only or explicitly confirmed start. Multi-material FlashForge models are not enabled."}</p>
       <label className="checkRow">
         <input type="checkbox" checked={Boolean(capabilities?.enabled)} disabled={!canEdit || busy} onChange={toggleNativeTransfer} />
         Enable experimental G-code file transfer for this printer
@@ -186,11 +186,11 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
       </label>
       {capabilities?.enabled && !capabilities?.can_start && !capabilities?.requires_start_opt_in && <small>Start remains unavailable: printer is busy/offline, CFS is connected, or telemetry is stale.</small>}
     </div>}
-    {connection.adapter === "creality_local" && <div className="settingsCallout">
-      <strong>Creality native monitoring does not imply file transfer</strong>
-      <p>Some Creality K1/K2 firmware exposes a separate Moonraker/Klipper service on the same printer. You can configure that as an additional source, with its own authentication and explicit printer controls. MakerVault will not assume the endpoint is present or send files through the monitoring WebSocket.</p>
-      {onConfigureMoonraker && <button type="button" onClick={onConfigureMoonraker}>Configure separate Moonraker source</button>}
-    </div>}
+    {connection.adapter === "creality_local" && <details className="settingsCallout">
+      <summary><strong>Alternative transport: Moonraker / Klipper (optional)</strong></summary>
+      <p>MakerVault uses stock Creality LAN protocols for this connection. Moonraker is optional when the printer separately exposes its API; it is not required for native file browsing, uploads or single-spool prints.</p>
+      {onConfigureMoonraker && <button type="button" onClick={onConfigureMoonraker}>Configure additional Moonraker source</button>}
+    </details>}
     {connection.adapter === "prusa" && <div className="settingsCallout"><strong>Experimental PrusaLink transfer</strong><p>Native PrusaLink v1 file listing, upload and start support is unverified on physical hardware. Unsupported firmware returns an error; never assume print acceptance until confirmed on the printer.</p></div>}
     {connection.adapter === "bambu_local" && <div className="printingManageForm">
       <strong>Bambu LAN storage — read-only experimental browser</strong>
