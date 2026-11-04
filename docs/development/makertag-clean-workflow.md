@@ -58,7 +58,7 @@ Only supported, writable, unprotected NTAG215 user-data pages 4–127 may be phy
 
 The terminal's **four independent idle polling endpoints** have been replaced with one scoped snapshot:
 
-- `GET /api/device/v1/pending-work/` authenticated with `tags:read`, bound to the active paired terminal and account.
+- `GET /api/device/v1/pending-work/` authenticated with either `tags:read` or `tags:write` (only the corresponding authorised queues are returned), bound to the active paired terminal and account.
 - JSON fields: `registration`, `ndef_write`, `lookup`, `operation`, each an existing operation payload or `null`. Write operations are omitted unless the paired key includes `tags:write`. The existing physical-clean operation can be rediscovered in durable `cleaned` state after a reboot.
 - The terminal polls **once every five seconds while idle** instead of making four separate idle requests; during physical activity it suspends idle discovery. A pending snapshot is strictly **discovery, not write authorisation**. The existing operation-specific status checks, physical UID verification, cancellation and completion calls are unchanged.
 - Heartbeat and periodic `/me` verification remain independent because they report device health and refresh scopes, rather than discover new work. Active cancellation/status polling remains separate to preserve safety.
