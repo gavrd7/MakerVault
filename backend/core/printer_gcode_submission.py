@@ -414,7 +414,12 @@ def submit(connection, user, payload):
             remote_path=remote_path, file_sha256=(asset.sha256 if asset else ""),
         )
 
+    def progress(message):
+        row.message = message
+        row.save(update_fields=["message", "updated_at"])
+
     try:
+        progress("Checking file metadata and printer compatibility.")
         # All commands occur after the receipt is committed. Never auto-retry an
         # upload or print command with unknown delivery status.
         _require_action_ready(connection, action)
@@ -441,6 +446,7 @@ def submit(connection, user, payload):
         if verdict["blocking"] and payload.get("acknowledge_unknown") is not True:
             raise GcodeSubmissionError("Printer compatibility is unknown. Review the file and explicitly acknowledge the risk.", 409)
 
+        progress("Rechecking live printer state before transfer.")
         # Re-poll immediately before irreversible I/O; this prevents stale
         # monitoring data from authorizing a print while already busy.
         from .printer_connectivity import poll_connection
@@ -454,6 +460,7 @@ def submit(connection, user, payload):
         if connection.adapter == "prusa":
             _prusalink_capability_probe(connection, upload=(source == "makervault"))
         if source == "makervault":
+            progress("Transferring G-code to printer; byte progress is not available.")
             try:
                 with asset.file.open("rb") as handle:
                     if connection.adapter == "flashforge":
@@ -494,8 +501,10 @@ def submit(connection, user, payload):
             if not isinstance(result, dict) or uploaded_path != remote_path or result.get("print_started") or result.get("print_queued") or result.get("effectivePrint"):
                 raise GcodeSubmissionError("Printer did not confirm upload-only completion. Verify printer state.", 502)
             if connection.adapter in MOONRAKER_ADAPTERS:
+                progress("Checking uploaded filename and file size against printer storage.")
                 _verify_moonraker_upload(connection, remote_path, asset.file.size)
         if action == "print":
+            progress("Upload checked. Confirming printer idle before print-start.")
             # Verify state a second time after file transfer, particularly when
             # the upload took long enough for printer state to change.
             try:
@@ -504,6 +513,7 @@ def submit(connection, user, payload):
                 raise GcodeSubmissionError("Unable to confirm printer is still idle after file upload. Do not start.", 409) from exc
             connection.refresh_from_db()
             _require_action_ready(connection, "print")
+            progress("Sending the explicitly confirmed print-start command.")
             try:
                 if connection.adapter == "creality_local":
                     from .creality_gcode import start_single_spool
