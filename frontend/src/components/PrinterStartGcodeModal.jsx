@@ -100,6 +100,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
     onClose={onClose} wide>
     {error && <div className="formError" role="alert">{error}</div>}
     {notice && <div className="settingsCallout">{notice}</div>}
+    {connection.adapter === "prusa" && <div className="settingsCallout"><strong>Experimental PrusaLink transfer</strong><p>Native PrusaLink v1 file listing, upload and start support is unverified on physical hardware. Unsupported firmware returns an error; never assume print acceptance until confirmed on the printer.</p></div>}
     {capabilities && !capabilities.supported ? <div className="settingsCallout">
       <strong>Experimental adapter — printer file submission unavailable</strong>
       <p>This source supports monitoring, but its storage and start-print protocol is not implemented or verified here. Bambu, Prusa, proprietary Creality and other manufacturer adapters require dedicated transfer support and hardware validation.</p>
