@@ -427,7 +427,7 @@ class BOMAllocation(TimeStampedModel):
 
 
 class FileAsset(TimeStampedModel):
-    CATEGORIES = [("image", "Image"), ("wiring", "Wiring / schematic"), ("firmware", "Firmware"), ("source", "Source code"), ("binary", "Executable / binary"), ("document", "Document"), ("cad", "CAD"), ("mesh", "STL / mesh"), ("slicer", "3MF / slicer project"), ("pcb", "PCB"), ("archive", "Archive"), ("other", "Other")]
+    CATEGORIES = [("image", "Image"), ("wiring", "Wiring / schematic"), ("firmware", "Firmware"), ("source", "Source code"), ("binary", "Executable / binary"), ("document", "Document"), ("cad", "CAD"), ("mesh", "STL / mesh"), ("slicer", "3MF / slicer project"), ("gcode", "G-code"), ("pcb", "PCB"), ("archive", "Archive"), ("other", "Other")]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="makervault_file_assets")
