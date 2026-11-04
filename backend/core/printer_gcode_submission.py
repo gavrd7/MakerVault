@@ -503,6 +503,10 @@ def submit(connection, user, payload):
             if connection.adapter in MOONRAKER_ADAPTERS:
                 progress("Checking uploaded filename and file size against printer storage.")
                 _verify_moonraker_upload(connection, remote_path, asset.file.size)
+            elif connection.adapter == "creality_local":
+                progress("Native Creality HTTP accepted the transfer. Checking printer storage.")
+                if remote_path not in {item["path"] for item in list_printer_gcodes(connection)}:
+                    raise GcodeSubmissionError("Native Creality accepted upload but the file is not confirmed in printer storage. No start command sent.", 502)
         if action == "print":
             progress("Upload checked. Confirming printer idle before print-start.")
             # Verify state a second time after file transfer, particularly when
