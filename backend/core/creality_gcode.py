@@ -39,8 +39,7 @@ def upload_only(connection, asset, remote_name):
     try:
         with asset.file.open("rb") as handle:
             response = requests.post(
-                url, data=handle,
-                headers={"Content-Type": "application/octet-stream", "Content-Length": str(asset.file.size)},
+                url, files={"file": (remote_name, handle, "application/octet-stream")},
                 timeout=(5, 120), allow_redirects=False,
             )
     except requests.RequestException as exc:
