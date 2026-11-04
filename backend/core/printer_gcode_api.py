@@ -98,16 +98,24 @@ def submission_opt_in(request, printer_id, connection_id):
         payload = _read_json(request)
     except ValueError as exc:
         return JsonResponse({"error": str(exc)}, status=400)
-    if not isinstance(payload, dict) or set(payload) != {"enabled"} or not isinstance(payload["enabled"], bool):
+    if not isinstance(payload, dict) or set(payload) - {"enabled", "single_spool_start"} or not isinstance(payload.get("enabled"), bool) or ("single_spool_start" in payload and not isinstance(payload["single_spool_start"], bool)):
         return JsonResponse({"error": "Enable or disable native G-code transfer explicitly."}, status=400)
     config = dict(connection.config or {})
     if payload["enabled"]:
         config["gcode_submission_enabled"] = True
     else:
         config.pop("gcode_submission_enabled", None)
+        config.pop("creality_single_spool_start_enabled", None)
+    if connection.adapter == "creality_local" and "single_spool_start" in payload:
+        if payload["single_spool_start"] and not payload["enabled"]:
+            return JsonResponse({"error": "Enable Creality G-code transfer before native print-start."}, status=400)
+        if payload["single_spool_start"]:
+            config["creality_single_spool_start_enabled"] = True
+        else:
+            config.pop("creality_single_spool_start_enabled", None)
     connection.config = config
     connection.save(update_fields=["config", "updated_at"])
-    return JsonResponse({"enabled": payload["enabled"]})
+    return JsonResponse({"enabled": payload["enabled"], "single_spool_start": bool(config.get("creality_single_spool_start_enabled"))})
 
 
 @login_required
