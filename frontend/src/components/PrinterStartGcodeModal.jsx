@@ -2,12 +2,12 @@ import React, { useEffect, useState } from "react";
 import { apiFetch } from "../api";
 import { Modal } from "./Common";
 
-export default function PrinterStartGcodeModal({ printer, connection, canEdit, onConfigureMoonraker, onClose, onChanged }) {
+export default function PrinterStartGcodeModal({ printer, connection, canEdit, onConfigureMoonraker, onClose, onChanged, initialAsset = null }) {
   const [source, setSource] = useState("makervault");
   const [action, setAction] = useState("upload");
   const [files, setFiles] = useState([]);
   const [remoteFiles, setRemoteFiles] = useState([]);
-  const [assetId, setAssetId] = useState("");
+  const [assetId, setAssetId] = useState(initialAsset?.id ? String(initialAsset.id) : "");
   const [remotePath, setRemotePath] = useState("");
   const [newFile, setNewFile] = useState(null);
   const [capabilities, setCapabilities] = useState(null);
@@ -21,7 +21,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   const [transferStage, setTransferStage] = useState("");
   const [bambuPin, setBambuPin] = useState("");
   const base = "/api/printing/printers/" + printer.id + "/connections/" + connection.id + "/gcode";
-  const current = files.find(f => f.id === assetId);
+  const current = files.find(f => String(f.id) === String(assetId)) || (initialAsset && String(initialAsset.id) === String(assetId) ? initialAsset : null);
 
   async function load() {
     // A broken printer-side file API must not hide perfectly valid MakerVault files.
@@ -223,6 +223,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
       </div>}
       {source === "makervault" && <label>MakerVault file<select value={assetId} onChange={e => setAssetId(e.target.value)}>
         <option value="">Choose a G-code file…</option>
+        {initialAsset && !files.some(f => String(f.id) === String(initialAsset.id)) && <option value={initialAsset.id}>{initialAsset.name} · selected G-code</option>}
         {files.map(f => <option value={f.id} key={f.id}>{f.name} · {f.project || "Standalone"}</option>)}
       </select></label>}
       {source === "printer" && <>
