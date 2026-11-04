@@ -493,6 +493,8 @@ def submit(connection, user, payload):
             uploaded_path = ((result.get("files") or {}).get("local") or {}).get("path") if connection.adapter == "octoprint" else (result.get("item") or {}).get("path")
             if not isinstance(result, dict) or uploaded_path != remote_path or result.get("print_started") or result.get("print_queued") or result.get("effectivePrint"):
                 raise GcodeSubmissionError("Printer did not confirm upload-only completion. Verify printer state.", 502)
+            if connection.adapter in MOONRAKER_ADAPTERS:
+                _verify_moonraker_upload(connection, remote_path, asset.file.size)
         if action == "print":
             # Verify state a second time after file transfer, particularly when
             # the upload took long enough for printer state to change.
@@ -541,10 +543,12 @@ def submit(connection, user, payload):
         row.status = "unknown"
         row.message = "Printer response was not fully verified. Inspect printer storage and live state before trying again."
     except GcodeSubmissionError as exc:
+        logger.warning("G-code submission %s status=%s error=%s", row.pk, exc.status, exc)
         row.status = "unknown" if exc.status == 502 else "rejected"
         row.message = str(exc)
-    except (OSError, ValueError, requests.RequestException) as exc:
+    except (OSError, ValueError, TypeError, KeyError, requests.RequestException) as exc:
+        logger.exception("Unexpected printer submission error, request %s", row.pk)
         row.status = "unknown"
-        row.message = "Submission outcome uncertain. Verify the printer before retrying."
+        row.message = "Transfer/verification failed (" + type(exc).__name__ + "). Inspect server logs and printer files before retrying."
     row.save(update_fields=["status", "message", "updated_at"])
     return _receipt(row)
