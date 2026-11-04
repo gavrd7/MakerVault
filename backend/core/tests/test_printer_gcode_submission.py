@@ -59,11 +59,16 @@ class GcodePrinterContractTests(SimpleTestCase):
         self.assertFalse(availability(cc)["can_start"])
 
     def test_moonraker_family_octoprint_and_prusalink_are_experimental(self):
-        for adapter in ("moonraker", "octoprint", "prusa", "qidi", "elegoo", "sovol", "voron", "snapmaker"):
+        for adapter in ("moonraker", "octoprint", "qidi", "elegoo", "sovol", "voron", "snapmaker"):
             caps = availability(connection(adapter))
             self.assertTrue(caps["supported"], adapter)
             self.assertTrue(caps["can_start"], adapter)
             self.assertTrue(caps["can_upload"], adapter)
+        prusa = connection("prusa")
+        self.assertTrue(availability(prusa)["supported"])
+        self.assertFalse(availability(prusa)["can_start"])
+        prusa.config["gcode_submission_enabled"] = True
+        self.assertTrue(availability(prusa)["can_start"])
 
     def test_stale_or_busy_printer_cannot_start(self):
         self.assertFalse(availability(connection("moonraker", state="printing"))["can_start"])
