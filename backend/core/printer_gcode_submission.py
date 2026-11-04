@@ -292,7 +292,7 @@ def availability(connection):
     native_opt_in = (connection.config or {}).get("gcode_submission_enabled") is True
     authorised = connection.controls_enabled if adapter in FILE_ADAPTERS else native_opt_in
     from .flashforge_gcode import supports_simple_print
-    simple_flashforge = adapter == "flashforge" and supports_simple_print(connection.printer)
+    simple_flashforge = adapter == "flashforge" and bool(getattr(connection, "printer", None)) and supports_simple_print(connection.printer)
     upload_supported = adapter in FILE_ADAPTERS or adapter == "creality_local" or simple_flashforge
     start_supported = adapter in FILE_ADAPTERS or simple_flashforge
     online = bool(_online(connection))
