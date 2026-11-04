@@ -6233,6 +6233,9 @@ def printing_models(request):
 
     uploaded = request.FILES.get("file")
     if uploaded:
+        optional_gcode = request.FILES.get("gcode_file")
+        if optional_gcode and Path(optional_gcode.name or "").suffix.lower() != ".gcode":
+            return _error("Supplementary G-code must be a plain .gcode file.")
         file_denied = _require_permission(request, "core.add_fileasset")
         if file_denied:
             return file_denied
@@ -6262,11 +6265,12 @@ def printing_models(request):
         if not revision_version:
             return _error("Revision version is required.")
         try:
-            ensure_storage_capacity(request.user, getattr(uploaded, "size", 0) or 0)
+            ensure_storage_capacity(request.user, (getattr(uploaded, "size", 0) or 0) + (getattr(optional_gcode, "size", 0) or 0))
         except StorageQuotaExceeded as exc:
             return _storage_quota_response(request, exc)
 
         stored_asset = None
+        supplementary_asset = None
         try:
             checksum = _sha256_upload(uploaded)
             with transaction.atomic():
@@ -6317,6 +6321,27 @@ def printing_models(request):
                 )
                 link.full_clean()
                 link.save()
+                if optional_gcode:
+                    gcode_name = Path(optional_gcode.name).name
+                    supplementary_asset = FileAsset(
+                        owner=request.user, project=project, category="gcode",
+                        name=Path(gcode_name).stem[:255], version=revision_version[:80],
+                        sha256=_sha256_upload(optional_gcode),
+                        metadata={
+                            "original_name": gcode_name,
+                            "size_bytes": getattr(optional_gcode, "size", 0) or 0,
+                            "extension": ".gcode", "uploaded_from": "printing_model",
+                        },
+                    )
+                    supplementary_asset.file = optional_gcode
+                    supplementary_asset.full_clean()
+                    supplementary_asset.save()
+                    gcode_link = ModelRevisionAsset(
+                        revision=revision, file_asset=supplementary_asset,
+                        role="gcode", is_primary=False,
+                    )
+                    gcode_link.full_clean()
+                    gcode_link.save()
 
             _analyse_revision_link(revision, link)
             item = Model3D.objects.filter(owner=request.user).select_related("project").prefetch_related(
@@ -6324,18 +6349,20 @@ def printing_models(request):
             ).get(pk=item.pk)
             return JsonResponse({"item": _serialise_printing_model(item)}, status=201)
         except ValidationError as exc:
-            if stored_asset and stored_asset.file:
-                try:
-                    stored_asset.file.delete(save=False)
-                except OSError:
-                    pass
+            for uploaded_asset in (stored_asset, supplementary_asset):
+                if uploaded_asset and uploaded_asset.file:
+                    try:
+                        uploaded_asset.file.delete(save=False)
+                    except OSError:
+                        pass
             return _validation_response(exc)
         except IntegrityError:
-            if stored_asset and stored_asset.file:
-                try:
-                    stored_asset.file.delete(save=False)
-                except OSError:
-                    pass
+            for uploaded_asset in (stored_asset, supplementary_asset):
+                if uploaded_asset and uploaded_asset.file:
+                    try:
+                        uploaded_asset.file.delete(save=False)
+                    except OSError:
+                        pass
             return _error("A matching model revision already exists.")
 
     try:
