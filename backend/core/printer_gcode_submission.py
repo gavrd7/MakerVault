@@ -466,18 +466,20 @@ def submit(connection, user, payload):
             _prusalink_capability_probe(connection, upload=(source == "makervault"))
         if source == "makervault":
             progress("Transferring G-code to printer; byte progress is not available.")
-            dispatch_attempted = True
             try:
-                with asset.file.open("rb") as handle:
+                with asset.file.storage.open(asset.file.name, "rb") as handle:
                     if connection.adapter == "flashforge":
+                        dispatch_attempted = True
                         from .flashforge_gcode import upload_file
                         upload_file(connection, asset, remote_path)
                         response = None
                     elif connection.adapter == "creality_local":
+                        dispatch_attempted = True
                         from .creality_gcode import upload_only
                         upload_only(connection, asset, remote_path)
                         response = None
                     elif connection.adapter == "prusa":
+                        dispatch_attempted = True
                         response = requests.put(
                             base + "/api/v1/files/local/" + quote(remote_path, safe="/"),
                             data=handle,
@@ -485,6 +487,7 @@ def submit(connection, user, payload):
                             auth=_prusa_auth(connection), timeout=(5, 120), allow_redirects=False,
                         )
                     else:
+                        dispatch_attempted = True
                         response = requests.post(
                             base + ("/api/files/local" if connection.adapter == "octoprint" else "/server/files/upload"),
                             data=({"select": "false", "print": "false"} if connection.adapter == "octoprint" else {"root": "gcodes", "print": "false", "checksum": asset.sha256}),
