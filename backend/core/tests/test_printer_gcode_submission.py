@@ -5,6 +5,8 @@ from unittest.mock import Mock, patch
 from django.test import SimpleTestCase
 from django.utils import timezone
 
+from core.bambu_storage import BambuStorageError, _fingerprint_or_fail, _parse_listing, list_bambu_storage
+
 from core.printer_gcode_submission import (
     GcodeSubmissionError, _valid_path, availability,
     list_printer_gcodes, _octoprint_upload_receipt,
@@ -78,3 +80,36 @@ class GcodePrinterContractTests(SimpleTestCase):
         response.status_code = 409
         with self.assertRaises(GcodeSubmissionError):
             _octoprint_upload_receipt(response)
+
+
+class BambuReadOnlyStorageTests(SimpleTestCase):
+    def test_missing_pin_never_attempts_network_or_credentials(self):
+        printer = connection("bambu_local")
+        printer.config = {"access_code": "test-secret"}
+        with patch("core.bambu_storage.socket.create_connection") as connect:
+            with self.assertRaises(BambuStorageError):
+                list_bambu_storage(printer)
+            connect.assert_not_called()
+
+    def test_invalid_pin_fails_closed(self):
+        with self.assertRaises(BambuStorageError):
+            _fingerprint_or_fail("TOFU")
+        with self.assertRaises(BambuStorageError):
+            _fingerprint_or_fail("a" * 63)
+        self.assertEqual(_fingerprint_or_fail("AB:" * 31 + "AB"), "ab" * 32)
+
+    def test_directory_parser_does_not_return_traversal_paths(self):
+        self.assertIsNone(_parse_listing("-rw-r--r-- 1 root root 20 Jan 1 12:00 ../file.gcode"))
+        self.assertIsNone(_parse_listing("-rw-r--r-- 1 root root 20 Jan 1 12:00 folder/part.gcode"))
+        result = _parse_listing("-rw-r--r-- 1 root root 20 Jan 1 12:00 model.gcode.3mf")
+        self.assertEqual(result["name"], "model.gcode.3mf")
+        self.assertEqual(result["size_bytes"], 20)
+
+    def test_bambu_browse_does_not_enable_upload_or_start(self):
+        printer = connection("bambu_local")
+        printer.config["bambu_ftps_cert_sha256"] = "a" * 64
+        state = availability(printer)
+        self.assertTrue(state["can_browse"])
+        self.assertFalse(state["supported"])
+        self.assertFalse(state["can_upload"])
+        self.assertFalse(state["can_start"])
