@@ -85,6 +85,32 @@ def bambu_certificate(request, printer_id, connection_id):
 
 
 @login_required
+@require_http_methods(["PATCH"])
+def submission_opt_in(request, printer_id, connection_id):
+    """Explicit owner-controlled opt-in for experimental native file transfers."""
+    connection = _connection(request.user, printer_id, connection_id)
+    if not connection or connection.adapter not in {"flashforge", "creality_local"}:
+        return JsonResponse({"error": "Native G-code transfer is not available for this adapter."}, status=404)
+    denied = _require_permission(request, "core.change_printer")
+    if denied:
+        return denied
+    try:
+        payload = _read_json(request)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    if not isinstance(payload, dict) or set(payload) != {"enabled"} or not isinstance(payload["enabled"], bool):
+        return JsonResponse({"error": "Enable or disable native G-code transfer explicitly."}, status=400)
+    config = dict(connection.config or {})
+    if payload["enabled"]:
+        config["gcode_submission_enabled"] = True
+    else:
+        config.pop("gcode_submission_enabled", None)
+    connection.config = config
+    connection.save(update_fields=["config", "updated_at"])
+    return JsonResponse({"enabled": payload["enabled"]})
+
+
+@login_required
 @require_http_methods(["POST"])
 def submit_file(request, printer_id, connection_id):
     connection = _connection(request.user, printer_id, connection_id)
