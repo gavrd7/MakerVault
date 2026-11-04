@@ -41,7 +41,7 @@ def upload_only(connection, asset, remote_name):
         raise CrealityGcodeError("Unsafe Creality upload filename.")
     url = _http_root(connection) + "/upload/" + quote(remote_name, safe="")
     try:
-        with asset.file.open("rb") as handle:
+        with asset.file.storage.open(asset.file.name, "rb") as handle:
             response = requests.post(
                 url, files={"file": (remote_name, handle, "application/octet-stream")},
                 timeout=(5, 120), allow_redirects=False,
