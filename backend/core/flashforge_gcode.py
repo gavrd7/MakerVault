@@ -74,7 +74,7 @@ def list_files(connection):
         raise FlashForgeFileError("FlashForge firmware returned an unrecognized G-code listing.")
     return [
         {"path": name, "size_bytes": None, "modified": None, "permissions": "rw"}
-        for name in entries[:100] if _name(name)
+        for name in entries[:100] if _name(name) and name.lower().endswith(".gcode")
     ]
 
 
