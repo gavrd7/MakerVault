@@ -1191,6 +1191,7 @@ class ModelRevisionAsset(TimeStampedModel):
     ROLES = [
         ("model", "Printable model"),
         ("slicer", "Slicer project"),
+        ("gcode", "G-code toolpath"),
         ("cad", "CAD / source"),
         ("reference", "Reference"),
         ("other", "Other"),
@@ -1214,6 +1215,10 @@ class ModelRevisionAsset(TimeStampedModel):
             raise ValidationError({"file_asset": "Selected file belongs to a different user."})
         if self.file_asset_id and self.role == "model" and self.file_asset.category not in {"mesh", "slicer", "cad"}:
             raise ValidationError({"file_asset": "Printable model assets should use a mesh, slicer or CAD file category."})
+        if self.file_asset_id and self.role == "gcode" and (self.file_asset.metadata or {}).get("extension") != ".gcode":
+            raise ValidationError({"file_asset": "G-code links require an uploaded .gcode file."})
+        if self.file_asset_id and self.file_asset.category == "gcode" and self.role != "gcode":
+            raise ValidationError({"role": "G-code files must use the G-code toolpath role."})
 
     def __str__(self):
         return f"{self.revision} · {self.file_asset.name}"
