@@ -193,3 +193,29 @@ class MakerTagOperationTests(TestCase):
         data=self.client.get("/api/device/v1/pending-work/",
             HTTP_AUTHORIZATION="Bearer "+self.token).json()
         self.assertIsNone(data["lookup"])
+
+    def test_consolidated_pending_scope_filtering(self):
+        until=timezone.now()+timedelta(minutes=5)
+        DeviceTagLookup.objects.create(owner=self.owner,device=self.device,expires_at=until)
+        DeviceTagRegistration.objects.create(owner=self.owner,device=self.device,
+            target_type="inventory",target_id=self.item.pk,expires_at=until)
+        key=self.device.api_key
+        key.scopes=["tags:read"]
+        key.save(update_fields=["scopes"])
+        response=self.client.get("/api/device/v1/pending-work/",
+            HTTP_AUTHORIZATION="Bearer "+self.token)
+        self.assertEqual(response.status_code,200,response.content)
+        self.assertIsNotNone(response.json()["lookup"])
+        self.assertIsNone(response.json()["registration"])
+        key.scopes=["tags:write"]
+        key.save(update_fields=["scopes"])
+        response=self.client.get("/api/device/v1/pending-work/",
+            HTTP_AUTHORIZATION="Bearer "+self.token)
+        self.assertEqual(response.status_code,200,response.content)
+        self.assertIsNone(response.json()["lookup"])
+        self.assertIsNotNone(response.json()["registration"])
+        key.scopes=[]
+        key.save(update_fields=["scopes"])
+        response=self.client.get("/api/device/v1/pending-work/",
+            HTTP_AUTHORIZATION="Bearer "+self.token)
+        self.assertEqual(response.status_code,403)
