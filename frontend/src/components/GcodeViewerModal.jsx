@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../api";
 import { Modal } from "./Common";
+import PrinterStartGcodeModal from "./PrinterStartGcodeModal";
 
 // Read-only analysis is evidence, not proof of safe G-code or firmware compatibility.
 export default function GcodeViewerModal({ file, canEdit = false, onClose, onSaved, onOpenModel }) {
@@ -12,6 +13,8 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
   const [printerId, setPrinterId] = useState("");
   const [printerCheck, setPrinterCheck] = useState(null);
   const [checkingPrinter, setCheckingPrinter] = useState(false);
+  const [transfer, setTransfer] = useState(null);
+  const [findingConnection, setFindingConnection] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -49,6 +52,23 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
     finally { setCheckingPrinter(false); }
   }
 
+  async function sendToPrinter() {
+    if (!printerId || checkingPrinter || !printerCheck || printerCheck.status === "mismatch" || edited) return;
+    setFindingConnection(true); setError("");
+    try {
+      const response = await apiFetch("/api/printing/printers/" + encodeURIComponent(printerId) + "/connections/");
+      const connections = (response.rows || []).filter(item => item.enabled !== false);
+      // Prefer the manufacturer's native transport; Moonraker remains an optional alternative.
+      const native = connections.find(item => item.adapter === "creality_local");
+      const connection = native || connections.find(item => ["moonraker", "octoprint", "prusa", "flashforge"].includes(item.adapter));
+      if (!connection) throw new Error("No enabled G-code transfer connection is configured for this printer. Configure a printer connection under 3D Printing first.");
+      const printer = (report?.printers || []).find(item => String(item.id) === String(printerId));
+      if (!printer) throw new Error("The selected printer is no longer available.");
+      setTransfer({ printer, connection });
+    } catch (err) { setError(err.message); }
+    finally { setFindingConnection(false); }
+  }
+
   async function saveRevision() {
     if (!version.trim() || !edited || !report || report.preview_truncated) return;
     setBusy(true); setError("");
@@ -66,6 +86,12 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
 
   const analysis = report?.analysis || {};
   const bounds = analysis.bounds_mm || {};
+  if (transfer) return <PrinterStartGcodeModal
+    printer={transfer.printer} connection={transfer.connection} canEdit
+    initialAsset={file}
+    onClose={() => setTransfer(null)}
+  />;
+
   return <Modal title={`G-code · ${file.name}`} subtitle="Read-only analysis. A matching printer must be verified separately before uploading or printing." onClose={onClose} wide>
     {error && <div className="formError">{error}</div>}
     {loading ? <p>Inspecting G-code…</p> : report && <>
@@ -103,7 +129,14 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
           <small>Original G-code is retained. Always revalidate edited instructions before printing.</small>
         </>}
       </div>}
-      <p><strong>Printer submission:</strong> Not yet enabled. Printer capability detection, readiness, and an explicit confirmation workflow must pass before upload/start controls are made available.</p>
+      <div className="settingsCallout">
+        <strong>Send to printer</strong>
+        <p>Use the selected printer to upload this original G-code file. Upload only is the default; starting a print requires separate confirmation and available printer capabilities.</p>
+        {edited && <p>Unsaved editor changes will not be sent. Save a new file version and inspect it before sending.</p>}
+        <button type="button" className="primary" disabled={!printerId || !printerCheck || checkingPrinter || findingConnection || edited || printerCheck.status === "mismatch"} onClick={sendToPrinter}>
+          {findingConnection ? "Checking printer connection…" : "Send to printer"}
+        </button>
+      </div>
     </>}
     <div className="formActions"><button type="button" onClick={onClose}>Close</button></div>
   </Modal>;
