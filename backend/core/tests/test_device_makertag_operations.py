@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.test import TestCase, override_settings
 from core.device_api_keys import generate_token
-from core.models import ConnectedDevice, InventoryItem, MakerTag, UserApiKey
+from core.models import ConnectedDevice, InventoryItem, MakerTag, UserApiKey, DeviceTagRegistration, DeviceTagLookup, DeviceNdefWrite
 
 @override_settings(DEBUG=True)
 class MakerTagOperationTests(TestCase):
@@ -139,3 +139,57 @@ class MakerTagOperationTests(TestCase):
         self.assertEqual(response.status_code,404,response.content)
         self.assertEqual(response.json()["error"],"Tag not registered in MakerVault.")
         self.assertFalse(Operation.objects.exists())
+
+    def test_consolidated_pending_work_exposes_all_four_queues(self):
+        now=timezone.now()+timedelta(minutes=5)
+        registration=DeviceTagRegistration.objects.create(
+            owner=self.owner,device=self.device,target_type="inventory",
+            target_id=self.item.pk,expires_at=now)
+        lookup=DeviceTagLookup.objects.create(
+            owner=self.owner,device=self.device,expires_at=now)
+        write=DeviceNdefWrite.objects.create(
+            owner=self.owner,device=self.device,tag=self.tag,
+            expected_uid="04AABBCCDDEEFF",
+            url="https://maker.example/t/MV-"+self.tag.short_id+"/",expires_at=now)
+        result=self.client.get("/api/device/v1/pending-work/",
+            HTTP_AUTHORIZATION="Bearer "+self.token)
+        self.assertEqual(result.status_code,200,result.content)
+        queues=result.json()
+        self.assertEqual(queues["registration"]["id"],str(registration.pk))
+        self.assertEqual(queues["lookup"]["id"],str(lookup.pk))
+        self.assertEqual(queues["ndef_write"]["id"],str(write.pk))
+        self.assertIsNone(queues["operation"])
+        self.assertEqual(result["Cache-Control"],"no-store")
+        started=self.begin("clean",True)
+        self.assertEqual(started.status_code,409)  # another pending queue exists
+        # No queued requests leak to a different bearer identity.
+        outsider=get_user_model().objects.create_user(username="foreign-pending",password="test")
+        self.client.force_login(outsider)
+        denied=self.client.get("/api/device/v1/pending-work/")
+        self.assertIn(denied.status_code,(401,403))
+
+    def test_consolidated_pending_recovers_cleaned_removal_without_rewipe(self):
+        started=self.begin("remove",True)
+        self.assertEqual(started.status_code,201,started.content)
+        op_id=started.json()["operation"]["id"]
+        first=self.client.get("/api/device/v1/pending-work/",
+            HTTP_AUTHORIZATION="Bearer "+self.token).json()
+        self.assertEqual(first["operation"]["id"],op_id)
+        self.assertEqual(first["operation"]["state"],"pending")
+        self.assertEqual(self.device_step(op_id,"cleaned",
+            {"uid":"04AABBCCDDEEFF","verified_empty":True}).status_code,200)
+        second=self.client.get("/api/device/v1/pending-work/",
+            HTTP_AUTHORIZATION="Bearer "+self.token).json()
+        self.assertEqual(second["operation"]["id"],op_id)
+        self.assertEqual(second["operation"]["state"],"cleaned")
+        self.assertIsNone(second["registration"])
+        self.assertIsNone(second["ndef_write"])
+        self.assertIsNone(second["lookup"])
+        self.assertTrue(MakerTag.objects.filter(pk=self.tag.pk).exists())
+
+    def test_consolidated_pending_excludes_expired_lookup(self):
+        DeviceTagLookup.objects.create(owner=self.owner,device=self.device,
+            expires_at=timezone.now()-timedelta(seconds=1))
+        data=self.client.get("/api/device/v1/pending-work/",
+            HTTP_AUTHORIZATION="Bearer "+self.token).json()
+        self.assertIsNone(data["lookup"])
