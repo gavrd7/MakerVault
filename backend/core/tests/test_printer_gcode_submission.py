@@ -1,4 +1,5 @@
 """Contract tests for experimental printer file APIs. No hardware is commanded."""
+from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -9,6 +10,7 @@ from core.bambu_storage import BambuStorageError, _fingerprint_or_fail, _parse_l
 from core.flashforge_gcode import FlashForgeFileError, supports_simple_print, list_files as list_flashforge_files
 from core.creality_gcode import CrealityGcodeError, _http_root, _safe_printer_file, _parse_file_list, list_files as list_creality_files, start_single_spool
 
+from core.gcode_analysis import inspect_asset
 from core.printer_gcode_submission import (
     GcodeSubmissionError, _valid_path, availability,
     list_printer_gcodes, _octoprint_upload_receipt, _verify_moonraker_upload,
@@ -210,6 +212,22 @@ class NativeGcodeAdapterTests(SimpleTestCase):
         with self.assertRaisesRegex(CrealityGcodeError, "Unrecognized printer"):
             list_files(printer)
 
+
+    def test_inspection_does_not_consume_or_reopen_closed_fieldfile(self):
+        """Inspection and subsequent transfer must each obtain their own storage handle."""
+        content = b"; printer: K2\\nG90\\nG1 X20 Y20 F3000\\n"
+        storage = SimpleNamespace(open=Mock(side_effect=lambda name, mode: BytesIO(content)))
+        # Mimic Django FieldFile after its original underlying handle has been closed.
+        file_field = SimpleNamespace(name="ghost.gcode", storage=storage,
+                                     open=Mock(side_effect=ValueError("The file cannot be reopened.")))
+        asset = SimpleNamespace(file=file_field, metadata={"original_name": "ghost.gcode"}, name="ghost")
+        report = inspect_asset(asset)
+        self.assertIn("analysis", report)
+        with asset.file.storage.open(asset.file.name, "rb") as transfer_handle:
+            self.assertEqual(transfer_handle.read(), content)
+        self.assertEqual(storage.open.call_count, 2)
+        file_field.open.assert_not_called()
+
     @patch("core.creality_gcode.requests.post")
     def test_stock_creality_upload_uses_native_multipart_file(self, post):
         from io import BytesIO
@@ -217,7 +235,7 @@ class NativeGcodeAdapterTests(SimpleTestCase):
         printer = connection("creality_local")
         printer.endpoint_url = "ws://k2.local:9999"
         fake = BytesIO(b"G90\nG1 X20\n")
-        asset = SimpleNamespace(file=SimpleNamespace(open=lambda mode: fake, size=11))
+        asset = SimpleNamespace(file=SimpleNamespace(storage=SimpleNamespace(open=lambda name, mode: fake), name="ghost.gcode", size=11))
         response = Mock(status_code=200)
         post.return_value = response
         upload_only(printer, asset, "ghost.gcode")
