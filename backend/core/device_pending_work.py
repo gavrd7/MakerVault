@@ -45,7 +45,14 @@ def pending_work(request):
         ).filter(device=device, owner=request.device_owner, state="pending",
                  expires_at__gt=now).order_by("-created_at").first()
         if reg is not None:
-            response["registration"] = summary(reg)
+            # Only return what the handheld's initial registration screen
+            # needs. Full registration data stays on its original endpoint.
+            target = summary(reg).get("target") or {}
+            response["registration"] = {
+                "id": str(reg.pk),
+                "label": target.get("label", ""),
+                "record_code": target.get("record_code", ""),
+            }
         write = DeviceNdefWrite.objects.select_related("tag").filter(
             device=device, owner=request.device_owner, state="pending",
             expires_at__gt=now
