@@ -414,7 +414,11 @@ def submit(connection, user, payload):
             remote_path=remote_path, file_sha256=(asset.sha256 if asset else ""),
         )
 
+    stage = "Preparing submission"
+
     def progress(message):
+        nonlocal stage
+        stage = message
         row.message = message
         row.save(update_fields=["message", "updated_at"])
 
@@ -557,12 +561,12 @@ def submit(connection, user, payload):
         row.status = "unknown"
         row.message = "Printer response was not fully verified. Inspect printer storage and live state before trying again."
     except GcodeSubmissionError as exc:
-        logger.warning("G-code submission %s status=%s error=%s", row.pk, exc.status, exc)
+        logger.warning("G-code submission %s stage=%s status=%s error=%s", row.pk, stage, exc.status, exc)
         row.status = "unknown" if exc.status == 502 else "rejected"
         row.message = str(exc)
     except (OSError, ValueError, TypeError, KeyError, requests.RequestException) as exc:
-        logger.exception("Unexpected printer submission error, request %s", row.pk)
+        logger.exception("Unexpected printer submission error, request %s, stage=%s, adapter=%s", row.pk, stage, connection.adapter)
         row.status = "unknown"
-        row.message = "Transfer/verification failed (" + type(exc).__name__ + "). Inspect server logs and printer files before retrying."
+        row.message = "Transfer/verification failed during " + stage + " (" + type(exc).__name__ + "). Inspect server logs and printer files before retrying."
     row.save(update_fields=["status", "message", "updated_at"])
     return _receipt(row)
