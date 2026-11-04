@@ -8,6 +8,7 @@ import re
 import uuid
 from datetime import timedelta
 from pathlib import PurePosixPath
+from urllib.parse import quote
 
 import requests
 from django.db import transaction
@@ -15,9 +16,11 @@ from django.utils import timezone
 
 from .gcode_analysis import compare_printer_metadata, inspect_asset
 from .models import FileAsset, Printer, PrinterConnection, PrinterGcodeSubmission
-from .printer_connectivity import normalise_moonraker_endpoint
+from .printer_connectivity import normalise_moonraker_endpoint, normalise_printer_endpoint
 
 MAX_UPLOAD_BYTES = 64 * 1024 * 1024
+MOONRAKER_ADAPTERS = {"moonraker", "elegoo", "qidi", "sovol", "snapmaker", "voron"}
+FILE_ADAPTERS = MOONRAKER_ADAPTERS | {"octoprint"}
 
 
 class GcodeSubmissionError(RuntimeError):
@@ -27,9 +30,9 @@ class GcodeSubmissionError(RuntimeError):
 
 
 def _moonraker(connection):
-    if connection.adapter != "moonraker":
+    if connection.adapter not in MOONRAKER_ADAPTERS:
         raise GcodeSubmissionError(
-            "G-code listing, upload and print submission are initially supported only for the standard Moonraker adapter.", 409
+            "The selected adapter does not expose a verified Moonraker file API.", 409
         )
     base = normalise_moonraker_endpoint(connection.endpoint_url)
     headers = {"Accept": "application/json"}
@@ -61,6 +64,8 @@ def _get_json(connection, path, params=None):
 
 
 def list_printer_gcodes(connection):
+    if connection.adapter == "octoprint":
+        return _octoprint_files(connection)
     rows = _get_json(connection, "/server/files/list", {"root": "gcodes"})
     if not isinstance(rows, list):
         raise GcodeSubmissionError("Printer file list has an unexpected format.", 502)
@@ -80,12 +85,64 @@ def list_printer_gcodes(connection):
     return result
 
 
+def _printer_endpoint(connection):
+    if connection.adapter == "octoprint":
+        base = normalise_printer_endpoint(connection.endpoint_url)
+        headers = {"Accept": "application/json"}
+        key = str((connection.config or {}).get("api_key") or "").strip()
+        if key:
+            headers["X-Api-Key"] = key
+        return base, headers
+    return _moonraker(connection)
+
+
+def _octoprint_files(connection):
+    base, headers = _printer_endpoint(connection)
+    try:
+        response = requests.get(base + "/api/files/local", params={"recursive": "true"}, headers=headers, timeout=(3, 15), allow_redirects=False)
+    except requests.RequestException as exc:
+        raise GcodeSubmissionError("OctoPrint file listing unavailable.", 502) from exc
+    if response.status_code != 200:
+        raise GcodeSubmissionError(f"OctoPrint refused file listing (HTTP {response.status_code}).", 502)
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise GcodeSubmissionError("OctoPrint returned invalid file list data.", 502) from exc
+    files = payload.get("files") if isinstance(payload, dict) else None
+    if not isinstance(files, list):
+        raise GcodeSubmissionError("OctoPrint file response is not recognised.", 502)
+    result = []
+    def walk(items, prefix=""):
+        for item in items:
+            if len(result) >= 5000:
+                break
+            if not isinstance(item, dict):
+                continue
+            path = item.get("path") or (prefix + str(item.get("name") or ""))
+            if item.get("type") == "folder":
+                walk(item.get("children") or [], str(path).rstrip("/") + "/")
+            elif isinstance(path, str) and _valid_path(path):
+                result.append({"path": path, "size_bytes": item.get("size"), "modified": item.get("date"), "permissions": "rw"})
+    walk(files)
+    return result
+
+
+def _octoprint_upload_receipt(response):
+    if response.status_code != 201:
+        raise GcodeSubmissionError(f"OctoPrint did not accept upload (HTTP {response.status_code}).", 502)
+    try:
+        result = response.json()
+    except ValueError as exc:
+        raise GcodeSubmissionError("OctoPrint returned invalid upload data.", 502) from exc
+    return result if isinstance(result, dict) else {}
+
+
 def _valid_path(value):
     return (
         isinstance(value, str)
         and 0 < len(value) <= 500
         and value.lower().endswith(".gcode")
-        and "\\x00" not in value
+        and "\x00" not in value
         and "\\" not in value
         and not value.startswith("/")
         and all(part not in {"", ".", ".."} for part in value.split("/"))
@@ -114,11 +171,11 @@ def _online(connection):
 
 def availability(connection):
     return {
-        "supported": connection.adapter == "moonraker",
+        "supported": connection.adapter in FILE_ADAPTERS,
         "online": bool(_online(connection)),
-        "can_upload": bool(connection.adapter == "moonraker" and _online(connection) and connection.controls_enabled),
+        "can_upload": bool(connection.adapter in FILE_ADAPTERS and _online(connection) and connection.controls_enabled),
         "can_start": bool(
-            connection.adapter == "moonraker" and _online(connection)
+            connection.adapter in FILE_ADAPTERS and _online(connection)
             and connection.controls_enabled
             and (connection.last_snapshot or {}).get("state") == "idle"
             and not (connection.last_snapshot or {}).get("source_metadata", {}).get("power_loss_recovery")
@@ -190,8 +247,6 @@ def submit(connection, user, payload):
             return _receipt(old)
         connection.refresh_from_db()
         _require_action_ready(connection, action)
-        if connection.printer.gcode_submissions if False else False:
-            pass
         recent = PrinterGcodeSubmission.objects.filter(connection__printer_id=connection.printer_id)
         if recent.filter(status__in=["pending", "unknown"], created_at__gte=timezone.now() - timedelta(minutes=10)).exists():
             raise GcodeSubmissionError("An earlier submission has an unresolved outcome. Verify printer state before another request.")
@@ -225,7 +280,7 @@ def submit(connection, user, payload):
         poll_connection(connection)
         connection.refresh_from_db()
         _require_action_ready(connection, action)
-        base, headers = _moonraker(connection)
+        base, headers = _printer_endpoint(connection)
         if source == "makervault":
             try:
                 with asset.file.open("rb") as handle:
