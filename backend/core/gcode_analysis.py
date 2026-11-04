@@ -102,6 +102,60 @@ def analyse_text(text, *, truncated=False):
     }
 
 
+
+
+def compare_printer_metadata(report, printer):
+    """Compare explicit slicer model hints with a selected owned printer.
+
+    This is a conservative preflight signal, not proof that G-code is safe.
+    No adapter is called. An actual print-start must recheck compatibility.
+    """
+    hints = report.get("printer_hints") or []
+    catalog = printer.catalog_model
+    manufacturer = printer.printer_manufacturer
+
+    def normalise(value):
+        value = re.sub(r"[^A-Z0-9]+", " ", str(value or "").upper()).strip()
+        vendor = (getattr(manufacturer, "name", "") or "").upper()
+        if vendor and value.startswith(vendor + " "):
+            value = value[len(vendor):].strip()
+        if value.startswith("CREALITY "):
+            value = value[len("CREALITY "):]
+        return " ".join(value.split())
+
+    names = [printer.model, getattr(catalog, "name", ""), printer.name]
+    expected = {normalise(name) for name in names if name}
+    supplied = {normalise(hint) for hint in hints if hint}
+    supplied.discard("")
+    expected.discard("")
+    if not supplied:
+        return {"status": "unknown", "reason": "G-code does not name an intended printer.", "blocking": True}
+    if supplied & expected:
+        return {"status": "metadata_match", "reason": "The explicit printer name agrees with the selected model; this is not a safety guarantee.", "blocking": False}
+
+    def creality_series(value):
+        found = re.search(r"\b(K1C|K1|K2)\b", value)
+        return found.group(1) if found else None
+
+    source_series = {creality_series(value) for value in supplied}
+    target_series = {creality_series(value) for value in expected}
+    source_series.discard(None)
+    target_series.discard(None)
+    # Distinguish K1 and K2 without substring matches; never call unknown "safe".
+    if source_series and target_series and source_series.isdisjoint(target_series):
+        return {
+            "status": "mismatch",
+            "reason": "G-code targets " + ", ".join(sorted(source_series)) +
+                      " but the selected printer is " + ", ".join(sorted(target_series)) +
+                      ". Do not start this file on the selected printer.",
+            "blocking": True,
+        }
+    return {
+        "status": "unknown",
+        "reason": "The slicer printer profile could not be matched confidently to the selected model.",
+        "blocking": True,
+    }
+
 def inspect_asset(asset):
     """Read a bounded prefix from private storage, never perform printer I/O."""
     filename = str((asset.metadata or {}).get("original_name") or asset.name or "")
