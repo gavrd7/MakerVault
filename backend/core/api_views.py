@@ -6604,14 +6604,18 @@ def printing_revision_assets(request, model_id, revision_id):
         asset = FileAsset.objects.filter(owner=request.user).select_related("project").filter(pk=payload.get("file_asset_id")).first()
         if not asset:
             return _error("Selected MakerVault file was not found.")
-        if asset.category not in {"mesh", "slicer", "cad"}:
-            return _error("Choose an STL/mesh, 3MF/slicer or CAD asset.")
+        if asset.category not in {"mesh", "slicer", "cad", "gcode"} and (asset.metadata or {}).get("extension") != ".gcode":
+            return _error("Choose an STL/mesh, 3MF/slicer, CAD or plain G-code asset.")
         if model.project_id and asset.project_id and model.project_id != asset.project_id:
             return _error("This file belongs to a different project. Detach it or choose a matching project file first.")
 
         role = str(payload.get("role") or "model")
         if role not in dict(ModelRevisionAsset.ROLES):
             return _error("Unknown revision asset role.")
+        if (asset.metadata or {}).get("extension") == ".gcode" and role != "gcode":
+            return _error("Select the G-code toolpath role for a G-code file.")
+        if role == "gcode" and (asset.metadata or {}).get("extension") != ".gcode":
+            return _error("G-code toolpaths require an uploaded .gcode file.")
         is_primary = payload.get("is_primary") is True
         with transaction.atomic():
             if is_primary:
