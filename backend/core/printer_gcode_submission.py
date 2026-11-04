@@ -415,6 +415,7 @@ def submit(connection, user, payload):
         )
 
     stage = "Preparing submission"
+    dispatch_attempted = False
 
     def progress(message):
         nonlocal stage
@@ -465,6 +466,7 @@ def submit(connection, user, payload):
             _prusalink_capability_probe(connection, upload=(source == "makervault"))
         if source == "makervault":
             progress("Transferring G-code to printer; byte progress is not available.")
+            dispatch_attempted = True
             try:
                 with asset.file.open("rb") as handle:
                     if connection.adapter == "flashforge":
@@ -522,6 +524,7 @@ def submit(connection, user, payload):
             connection.refresh_from_db()
             _require_action_ready(connection, "print")
             progress("Sending the explicitly confirmed print-start command.")
+            dispatch_attempted = True
             try:
                 if connection.adapter == "creality_local":
                     from .creality_gcode import start_single_spool
@@ -562,11 +565,11 @@ def submit(connection, user, payload):
         row.message = "Printer response was not fully verified. Inspect printer storage and live state before trying again."
     except GcodeSubmissionError as exc:
         logger.warning("G-code submission %s stage=%s status=%s error=%s", row.pk, stage, exc.status, exc)
-        row.status = "unknown" if exc.status == 502 else "rejected"
+        row.status = "unknown" if dispatch_attempted and exc.status == 502 else "rejected"
         row.message = str(exc)
     except (OSError, ValueError, TypeError, KeyError, requests.RequestException) as exc:
         logger.exception("Unexpected printer submission error, request %s, stage=%s, adapter=%s", row.pk, stage, connection.adapter)
-        row.status = "unknown"
+        row.status = "unknown" if dispatch_attempted else "rejected"
         row.message = "Transfer/verification failed during " + stage + " (" + type(exc).__name__ + "). Inspect server logs and printer files before retrying."
     row.save(update_fields=["status", "message", "updated_at"])
     return _receipt(row)
