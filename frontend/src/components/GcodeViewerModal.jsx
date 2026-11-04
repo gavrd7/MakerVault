@@ -9,6 +9,9 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
   const [mode, setMode] = useState("visual");
   const [edited, setEdited] = useState(false);
   const [version, setVersion] = useState("");
+  const [printerId, setPrinterId] = useState("");
+  const [printerCheck, setPrinterCheck] = useState(null);
+  const [checkingPrinter, setCheckingPrinter] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -34,6 +37,17 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
     const scale = Math.max(maxX - minX, maxY - minY, 0.01);
     return points.map(p => `${((p[0] - minX) / scale * 550 + 20).toFixed(1)},${((maxY - p[1]) / scale * 550 + 20).toFixed(1)}`).join(" ");
   }, [report]);
+
+  async function choosePrinter(id) {
+    setPrinterId(id); setPrinterCheck(null);
+    if (!id) return;
+    setCheckingPrinter(true); setError("");
+    try {
+      const result = await apiFetch(`/api/files/${file.id}/gcode/inspect/?printer_id=${encodeURIComponent(id)}`);
+      setPrinterCheck(result.compatibility);
+    } catch (err) { setError(err.message); }
+    finally { setCheckingPrinter(false); }
+  }
 
   async function saveRevision() {
     if (!version.trim() || !edited || !report || report.preview_truncated) return;
@@ -63,6 +77,14 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
       <p><strong>Linked model:</strong> {report.linked_models?.length
         ? report.linked_models.map(link => <button key={link.revision_id} type="button" onClick={() => onOpenModel?.(link.model_id)} disabled={!onOpenModel}>{link.model_name} · revision {link.revision}</button>)
         : "Not linked — attach this file to a model revision in Model Library."}</p>
+      <label>Check against a MakerVault printer
+        <select value={printerId} onChange={e => choosePrinter(e.target.value)}>
+          <option value="">Choose printer for advisory compatibility check</option>
+          {(report.printers || []).map(printer => <option value={printer.id} key={printer.id}>{printer.name} · {printer.model}</option>)}
+        </select>
+      </label>
+      {checkingPrinter && <p>Checking explicit printer metadata…</p>}
+      {printerCheck && <p role="status"><strong>{printerCheck.status === "mismatch" ? "Printer mismatch — block printing" : printerCheck.status === "metadata_match" ? "Printer metadata matches (not safety-verified)" : "Printer compatibility unknown — do not start"}:</strong> {printerCheck.reason}</p>}
       <p><strong>Intended printer:</strong> {analysis.printer_hints?.join(", ") || "Unknown — no verified printer metadata"}</p>
       {analysis.slicer_hints?.length > 0 && <p><strong>Slicer:</strong> {analysis.slicer_hints.join(", ")}</p>}
       <p><strong>XY moves:</strong> {analysis.xy_moves?.toLocaleString() || 0} · <strong>Coordinates:</strong> {["X", "Y", "Z"].map(axis => bounds[axis]?.[0] == null ? `${axis} unknown` : `${axis} ${bounds[axis][0].toFixed(1)}–${bounds[axis][1].toFixed(1)} mm`).join(" · ")}</p>
@@ -73,7 +95,7 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
         </svg> : <p>No XY movements found.</p>}
         <small>Top-down XY trajectory only; not a validated print preview. {analysis.xy_preview_sampled ? "Only the first 3,000 moves are shown." : ""} Extrusion, machine-specific instructions and clearance are not fully simulated.</small>
       </div> : <div>
-        <textarea value={text} onChange={e => { setText(e.target.value); setEdited(true); }} readOnly={!canEdit || report.preview_truncated} spellCheck={false} aria-label="G-code source" rows={17} style={{ width: "100%", fontFamily: "monospace", fontSize: 12 }} />
+        <textarea value={text} onChange={e => { setText(e.target.value); setEdited(true); setPrinterCheck(null); }} readOnly={!canEdit || report.preview_truncated} spellCheck={false} aria-label="G-code source" rows={17} style={{ width: "100%", fontFamily: "monospace", fontSize: 12 }} />
         {report.preview_truncated && <p>Only the beginning of this file is displayed. Editing is disabled to prevent saving a truncated file.</p>}
         {canEdit && !report.preview_truncated && <>
           <label>New file version<input value={version} onChange={e => setVersion(e.target.value)} placeholder="e.g. 1.1" /></label>
