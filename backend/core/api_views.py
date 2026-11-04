@@ -2402,6 +2402,24 @@ def component_image(request, component_id):
 
 
 @login_required
+@require_http_methods(["GET"])
+def file_gcode_inspect(request, asset_id):
+    """Authenticated, owner-scoped read-only G-code report and source preview."""
+    from .gcode_analysis import inspect_asset
+
+    asset = FileAsset.objects.filter(owner=request.user, pk=asset_id).first()
+    if not asset:
+        return _error("G-code file not found.", status=404)
+    if str((asset.metadata or {}).get("extension", "")).lower() != ".gcode":
+        return _error("Only plain-text G-code is supported.", status=400)
+    try:
+        result = inspect_asset(asset)
+    except (OSError, ValueError, UnicodeError) as exc:
+        return _error(str(exc), status=400)
+    return JsonResponse({"file_id": str(asset.id), "sha256": asset.sha256, **result})
+
+
+@login_required
 @require_http_methods(["GET", "POST"])
 def files_lookup(request):
     if request.method == "GET":
