@@ -25,7 +25,7 @@ from .creality_gcode import CrealityGcodeError
 MAX_UPLOAD_BYTES = 64 * 1024 * 1024
 MOONRAKER_ADAPTERS = {"moonraker", "elegoo", "qidi", "sovol", "snapmaker", "voron"}
 FILE_ADAPTERS = MOONRAKER_ADAPTERS | {"octoprint", "prusa"}
-BROWSE_ADAPTERS = FILE_ADAPTERS | {"bambu_local", "flashforge"}
+BROWSE_ADAPTERS = FILE_ADAPTERS | {"bambu_local", "flashforge", "creality_local"}
 UPLOAD_ADAPTERS = FILE_ADAPTERS | {"flashforge", "creality_local"}
 START_ADAPTERS = FILE_ADAPTERS | {"flashforge"}
 
@@ -77,6 +77,12 @@ def list_printer_gcodes(connection):
             return list_bambu_storage(connection)
         except BambuStorageError as exc:
             raise GcodeSubmissionError(str(exc), status=409) from exc
+    if connection.adapter == "creality_local":
+        from .creality_gcode import CrealityGcodeError, list_files
+        try:
+            return list_files(connection)
+        except CrealityGcodeError as exc:
+            raise GcodeSubmissionError(str(exc), 409) from exc
     if connection.adapter == "flashforge":
         from .flashforge_gcode import FlashForgeFileError, list_files
         try:
@@ -294,7 +300,7 @@ def availability(connection):
     from .flashforge_gcode import supports_simple_print
     simple_flashforge = adapter == "flashforge" and bool(getattr(connection, "printer", None)) and supports_simple_print(connection.printer)
     upload_supported = adapter in FILE_ADAPTERS or adapter == "creality_local" or simple_flashforge
-    start_supported = adapter in FILE_ADAPTERS or simple_flashforge
+    start_supported = adapter in FILE_ADAPTERS or simple_flashforge or adapter == "creality_local"
     online = bool(_online(connection))
     return {
         "can_browse": adapter in BROWSE_ADAPTERS,
@@ -305,12 +311,15 @@ def availability(connection):
         "can_upload": bool(upload_supported and online and authorised),
         "can_start": bool(
             start_supported and online and authorised
+            and (adapter != "creality_local" or (connection.config or {}).get("creality_single_spool_start_enabled") is True)
+            and (adapter != "creality_local" or not (connection.last_snapshot or {}).get("source_metadata", {}).get("cfs_connected"))
             and (connection.last_snapshot or {}).get("state") == "idle"
             and not (connection.last_snapshot or {}).get("source_metadata", {}).get("power_loss_recovery")
         ),
         "enabled": authorised,
         "can_submit_from_printer": adapter in BROWSE_ADAPTERS and start_supported,
         "requires_opt_in": adapter in {"prusa", "flashforge", "creality_local"} and not native_opt_in,
+        "requires_start_opt_in": adapter == "creality_local" and (connection.config or {}).get("creality_single_spool_start_enabled") is not True,
     }
 
 
@@ -393,6 +402,8 @@ def submit(connection, user, payload):
         # upload or print command with unknown delivery status.
         _require_action_ready(connection, action)
         if source == "printer":
+            if connection.adapter == "creality_local" and (connection.last_snapshot or {}).get("source_metadata", {}).get("cfs_connected"):
+                raise GcodeSubmissionError("Creality CFS is connected: single-spool start is blocked pending material mapping.")
             if remote_path not in {f["path"] for f in list_printer_gcodes(connection)}:
                 raise GcodeSubmissionError("Printer file no longer exists. Refresh the printer file list.")
             meta = _metadata(connection, remote_path)
@@ -403,6 +414,11 @@ def submit(connection, user, payload):
         verdict = compare_printer_metadata(report, connection.printer)
         if verdict["status"] == "mismatch":
             raise GcodeSubmissionError(verdict["reason"])
+        if connection.adapter == "creality_local" and action == "print":
+            if (connection.last_snapshot or {}).get("source_metadata", {}).get("cfs_connected"):
+                raise GcodeSubmissionError("CFS is connected. Native start requires validated material-slot mapping.")
+            if remote_path not in {item["path"] for item in list_printer_gcodes(connection)} and source == "printer":
+                raise GcodeSubmissionError("Selected Creality file is no longer present.")
         if source == "makervault" and (report.get("partial") or any("firmware/control commands" in str(w) for w in report.get("warnings", []))):
             raise GcodeSubmissionError("File is too large for complete analysis or contains flagged firmware-control commands. Printer submission blocked.")
         if verdict["blocking"] and payload.get("acknowledge_unknown") is not True:
@@ -470,7 +486,14 @@ def submit(connection, user, payload):
             connection.refresh_from_db()
             _require_action_ready(connection, "print")
             try:
-                if connection.adapter == "flashforge":
+                if connection.adapter == "creality_local":
+                    from .creality_gcode import start_single_spool
+                    # Reconfirm the exact file exists on printer before a fire-and-forget start.
+                    if remote_path not in {item["path"] for item in list_printer_gcodes(connection)}:
+                        raise GcodeSubmissionError("Creality did not confirm the expected printer file; no start sent.")
+                    start_single_spool(connection, remote_path)
+                    response = None
+                elif connection.adapter == "flashforge":
                     from .flashforge_gcode import start_file
                     start_file(connection, remote_path)
                     response = None
@@ -493,10 +516,10 @@ def submit(connection, user, payload):
                     )
             except requests.RequestException as exc:
                 raise GcodeSubmissionError("Start-print outcome is uncertain. Inspect printer before trying again.", 502) from exc
-            if (False if connection.adapter == "flashforge" else response.status_code != 204 if connection.adapter in {"octoprint", "prusa"} else _json_response(response) != "ok"):
+            if (False if connection.adapter in {"flashforge", "creality_local"} else response.status_code != 204 if connection.adapter in {"octoprint", "prusa"} else _json_response(response) != "ok"):
                 raise GcodeSubmissionError("Printer did not confirm starting the print. Verify its live state.", 502)
-        row.status = "started" if action == "print" else "uploaded"
-        row.message = "Print start accepted by printer." if action == "print" else "Uploaded to printer without starting."
+        row.status = "unknown" if action == "print" and connection.adapter == "creality_local" else "started" if action == "print" else "uploaded"
+        row.message = ("Creality start command sent, but this protocol provides no acknowledgement. Verify the live printer before any follow-up." if action == "print" and connection.adapter == "creality_local" else "Print start accepted by printer." if action == "print" else "Uploaded to printer without starting.")
     except (FlashForgeFileError, CrealityGcodeError) as exc:
         row.status = "unknown"
         row.message = "Printer response was not fully verified. Inspect printer storage and live state before trying again."
