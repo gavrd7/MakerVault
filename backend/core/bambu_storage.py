@@ -10,7 +10,9 @@ import hashlib
 import re
 import socket
 import ssl
-from ftplib import FTP, FTP_TLS, all_errors
+# Python ftplib provides FTP_TLS; this module uses ONLY implicit TLS, controls/data
+# certificate SHA-256 pinning before credentials, and read-only LIST operations.
+from ftplib import FTP, FTP_TLS, all_errors  # nosec B402
 from urllib.parse import urlparse
 
 from .manufacturer_printer_adapters import normalise_bambu_endpoint
