@@ -10,6 +10,7 @@ import { Badge, ImageManagerModal, LoadingBlock, Modal } from "./Common";
 import ModelViewerModal, { isViewableModelFile } from "./ModelViewer";
 import { suggestNextVersion } from "./FileVersionModal";
 import GcodeViewerModal from "./GcodeViewerModal";
+import GcodeLibraryModal from "./GcodeLibraryModal";
 
 function grams(value) {
   if (value == null) return "—";
@@ -311,6 +312,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
     return <ModelLibraryPage
       models={data?.models || []}
       files={data?.model_files || []}
+      gcodeFiles={data?.gcode_files || []}
       printers={data?.printers || []}
       projects={projects || []}
       canAddModel={canAddModel}
@@ -345,6 +347,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
           <h3 id="printing-models-heading">Models &amp; print history</h3>
           <div className="printingHeroActions">
             <button type="button" onClick={() => setWorkspaceView("models")}>Model library</button>
+            <button type="button" onClick={() => setModal("gcode")}>G-code library</button>
             {canAddModel && <button type="button" onClick={() => setModal("model")}>Add model</button>}
             {canAddPrintJob && <button type="button" onClick={() => setModal("print")}>Add print history</button>}
             <button type="button" onClick={() => document.getElementById("printing-printed-parts")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Printed parts</button>
@@ -597,6 +600,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       onClose={() => setClaimSlot(null)}
       onSaved={async () => { setClaimSlot(null); await load(); }}
     />}
+    {modal === "gcode" && <GcodeLibraryModal files={data?.gcode_files || []} projects={projects || []} canUpload={Boolean(config?.permissions?.add_file)} onClose={() => setModal("")} onSaved={load} />}
     {modal === "model" && <ModelModal projects={projects || []} canUpload={Boolean(config?.permissions?.add_file)} onClose={() => setModal("")} onSaved={saved} />}
     {modal === "print" && <PrintJobModal
       printers={data?.printers || []}
@@ -1000,8 +1004,9 @@ function SpoolIdentityModal({ spool, onClose, onSaved }) {
   </Modal>;
 }
 
-function ModelLibraryPage({ models, files, printers, projects, canAddModel, canChangeModel, canDeleteModel, canUpload, onBack, onChanged, searchTarget = null }) {
+function ModelLibraryPage({ models, files, gcodeFiles = [], printers, projects, canAddModel, canChangeModel, canDeleteModel, canUpload, onBack, onChanged, searchTarget = null }) {
   const [query, setQuery] = useState("");
+  const [gcodeOpen, setGcodeOpen] = useState(false);
 
   useEffect(() => {
     if (searchTarget?.type !== "models" || !searchTarget.id) return;
@@ -1056,6 +1061,7 @@ function ModelLibraryPage({ models, files, printers, projects, canAddModel, canC
       </div>
       <div className="printingHeroActions">
         <button onClick={onBack}>← Printing overview</button>
+        <button type="button" onClick={() => setGcodeOpen(true)}>G-code library</button>
         {canAddModel && <button className="primary" onClick={() => setAddOpen(true)}>Add model</button>}
       </div>
     </section>
@@ -1096,6 +1102,7 @@ function ModelLibraryPage({ models, files, printers, projects, canAddModel, canC
       </div>
     </section>
 
+    {gcodeOpen && <GcodeLibraryModal files={gcodeFiles} projects={projects} canUpload={canUpload} onClose={() => setGcodeOpen(false)} onSaved={onChanged} />}
     {addOpen && <ModelModal projects={projects} canUpload={canUpload} onClose={() => setAddOpen(false)} onSaved={async () => { setAddOpen(false); await onChanged(); }} />}
     {manageModel && <ModelManageModal
       model={manageModel}
