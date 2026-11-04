@@ -25,6 +25,7 @@ def analyse_text(text, *, truncated=False):
     slicer_hints = []
     warnings = []
     moves = 0
+    preview_points = []
     bounds = {axis: [None, None] for axis in "XYZ"}
     position = {"X": 0.0, "Y": 0.0, "Z": 0.0}
     absolute = True
@@ -78,6 +79,8 @@ def analyse_text(text, *, truncated=False):
                 low, high = bounds[axis]
                 bounds[axis] = [position[axis] if low is None else min(low, position[axis]),
                                 position[axis] if high is None else max(high, position[axis])]
+            if len(preview_points) < 3000:
+                preview_points.append([round(position['X'], 3), round(position['Y'], 3), round(position['Z'], 3)])
     if truncated:
         warnings.append("File was only partially analysed; bounds and metadata may be incomplete.")
     if not printer_hints:
@@ -91,6 +94,8 @@ def analyse_text(text, *, truncated=False):
         "slicer_hints": slicer_hints,
         "xy_moves": moves,
         "bounds_mm": bounds,
+        "xy_preview": preview_points,
+        "xy_preview_sampled": moves > len(preview_points),
         "partial": truncated,
         "warnings": warnings,
         "compatibility": "unverified",
