@@ -6627,6 +6627,69 @@ def printing_model_revision_detail(request, model_id, revision_id):
 
 @login_required
 @require_http_methods(["POST"])
+def printing_revision_gcode_upload(request, model_id, revision_id):
+    """Add an optional sliced toolpath without modifying the associated STL/3MF."""
+    model = Model3D.objects.filter(owner=request.user).select_related("project").filter(pk=model_id).first()
+    if not model:
+        return _error("3D model not found.", status=404)
+    revision = ModelRevision.objects.filter(model=model, pk=revision_id).first()
+    if not revision:
+        return _error("Model revision not found.", status=404)
+    for permission in ("core.change_model3d", "core.add_fileasset"):
+        denied = _require_permission(request, permission)
+        if denied:
+            return denied
+    if model.project:
+        denied = _require_permission(request, "core.change_project")
+        if denied:
+            return denied
+    uploaded = request.FILES.get("file")
+    if not uploaded or Path(uploaded.name or "").suffix.lower() != ".gcode":
+        return _error("Choose a plain-text .gcode file.")
+    try:
+        ensure_storage_capacity(request.user, getattr(uploaded, "size", 0) or 0)
+    except StorageQuotaExceeded as exc:
+        return _storage_quota_response(request, exc)
+    stored_asset = None
+    try:
+        filename = Path(uploaded.name).name
+        with transaction.atomic():
+            stored_asset = FileAsset(
+                owner=request.user, project=model.project, category="gcode",
+                name=Path(filename).stem[:255],
+                version=revision.version,
+                sha256=_sha256_upload(uploaded),
+                metadata={
+                    "original_name": filename, "extension": ".gcode",
+                    "size_bytes": getattr(uploaded, "size", 0) or 0,
+                    "uploaded_from": "printing_model_gcode",
+                },
+            )
+            stored_asset.file = uploaded
+            stored_asset.full_clean()
+            stored_asset.save()
+            link = ModelRevisionAsset(
+                revision=revision, file_asset=stored_asset,
+                role="gcode", is_primary=False,
+            )
+            link.full_clean()
+            link.save()
+        refreshed = Model3D.objects.filter(owner=request.user).select_related("project").prefetch_related(
+            "revisions__assets__file_asset__project"
+        ).get(pk=model.pk)
+        return JsonResponse({"model": _serialise_printing_model(refreshed)}, status=201)
+    except ValidationError as exc:
+        if stored_asset and stored_asset.file:
+            stored_asset.file.delete(save=False)
+        return _validation_response(exc)
+    except IntegrityError:
+        if stored_asset and stored_asset.file:
+            stored_asset.file.delete(save=False)
+        return _error("Unable to attach G-code to this revision.")
+
+
+@login_required
+@require_http_methods(["POST"])
 def printing_revision_assets(request, model_id, revision_id):
     model = Model3D.objects.filter(owner=request.user).select_related("project").filter(pk=model_id).first()
     if not model:
