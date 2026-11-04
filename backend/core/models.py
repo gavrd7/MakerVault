@@ -1102,6 +1102,39 @@ class PrinterControlRequest(TimeStampedModel):
     message = models.TextField(blank=True)
 
 
+class PrinterGcodeSubmission(TimeStampedModel):
+    """One-shot journal for potentially irreversible remote print operations."""
+
+    STATES = [
+        ("pending", "Pending"),
+        ("uploaded", "Uploaded"),
+        ("started", "Start requested"),
+        ("rejected", "Rejected"),
+        ("unknown", "Outcome unknown"),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    connection = models.ForeignKey(
+        PrinterConnection, on_delete=models.CASCADE, related_name="gcode_submissions"
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="gcode_submissions"
+    )
+    file_asset = models.ForeignKey(
+        FileAsset, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="printer_submissions"
+    )
+    source = models.CharField(max_length=20)
+    action = models.CharField(max_length=12)
+    original_path = models.CharField(max_length=512, blank=True)
+    remote_path = models.CharField(max_length=512, blank=True)
+    file_sha256 = models.CharField(max_length=64, blank=True)
+    status = models.CharField(max_length=12, choices=STATES, default="pending")
+    message = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
 class PrinterFilamentSlot(TimeStampedModel):
     SYSTEMS = [
         ("creality_cfs", "Creality CFS"),
