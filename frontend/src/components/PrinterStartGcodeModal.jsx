@@ -18,6 +18,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [receipt, setReceipt] = useState(null);
+  const [bambuPin, setBambuPin] = useState("");
   const base = "/api/printing/printers/" + printer.id + "/connections/" + connection.id + "/gcode";
   const current = files.find(f => f.id === assetId);
 
@@ -65,6 +66,23 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
     finally { setBusy(false); }
   }
 
+  async function configureBambuPin() {
+    if (bambuPin.trim() && !/^(?:[0-9a-fA-F]{2}:?){32}$/.test(bambuPin.trim())) {
+      setError("Supply exactly 64 hex characters (colons optional) for the independently verified certificate SHA-256.");
+      return;
+    }
+    if (!window.confirm("Change the Bambu FTPS trust fingerprint for " + printer.name + "? Only a fingerprint independently verified against your own printer should be used.")) return;
+    setBusy(true); setError("");
+    try {
+      await apiFetch(base + "/bambu-certificate/", {
+        method: "PATCH", body: { sha256: bambuPin.trim() },
+      });
+      setBambuPin("");
+      await load();
+    } catch (err) { setError(err.message); }
+    finally { setBusy(false); }
+  }
+
   async function submit() {
     const name = source === "printer" ? remotePath : current?.filename;
     const operation = source === "printer" ? "print" : action;
@@ -101,9 +119,24 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
     {error && <div className="formError" role="alert">{error}</div>}
     {notice && <div className="settingsCallout">{notice}</div>}
     {connection.adapter === "prusa" && <div className="settingsCallout"><strong>Experimental PrusaLink transfer</strong><p>Native PrusaLink v1 file listing, upload and start support is unverified on physical hardware. Unsupported firmware returns an error; never assume print acceptance until confirmed on the printer.</p></div>}
+    {connection.adapter === "bambu_local" && <div className="printingManageForm">
+      <strong>Bambu LAN storage — read-only experimental browser</strong>
+      <p>Bambu may expose its files over implicit FTPS on port 990. The browser requires an independently verified certificate SHA-256 fingerprint; no file is uploaded and no print command is available.</p>
+      <label>FTPS certificate SHA-256 fingerprint
+        <input value={bambuPin} onChange={e => setBambuPin(e.target.value)} placeholder="64 hexadecimal characters, colons optional" autoComplete="off" />
+      </label>
+      <div className="formActions">
+        <button type="button" disabled={busy || !canEdit} onClick={configureBambuPin}>Save / clear certificate pin</button>
+        <button type="button" disabled={busy} onClick={load}>Browse printer storage</button>
+      </div>
+      {!!remoteFiles.length && <div className="printingRevisionList">
+        {remoteFiles.map(file => <div key={file.path}><strong>{file.path}</strong><small>{file.size_bytes == null ? "Size unknown" : (file.size_bytes / 1048576).toFixed(2) + " MiB"} · Read-only</small></div>)}
+      </div>}
+      <small>FTPS availability differs by Bambu model and firmware. A PIN mismatch or unsupported TLS handshake fails closed. Starting Bambu print jobs is not implemented.</small>
+    </div>}
     {capabilities && !capabilities.supported ? <div className="settingsCallout">
       <strong>Experimental adapter — printer file submission unavailable</strong>
-      <p>This source supports monitoring, but its storage and start-print protocol is not implemented or verified here. Bambu, Prusa, proprietary Creality and other manufacturer adapters require dedicated transfer support and hardware validation.</p>
+      <p>This source supports monitoring, but its storage and start-print protocol is not implemented or verified here. Bambu storage listing is experimental and read-only; Bambu print-start, proprietary Creality and other manufacturer transfer paths still require dedicated implementation and hardware validation.</p>
     </div> : <>
       <label>Source<select value={source} onChange={e => { setSource(e.target.value); setError(""); setReceipt(null); }}>
         <option value="new">Upload a new G-code file</option>
