@@ -89,7 +89,7 @@ def upload_file(connection, asset, remote_path):
         "printNow": "false", "levelingBeforePrint": "true",
     }
     try:
-        with asset.file.open("rb") as handle:
+        with asset.file.storage.open(asset.file.name, "rb") as handle:
             response = requests.post(
                 base + "/uploadGcode", headers=headers,
                 files={"gcodeFile": (remote_path, handle, "application/octet-stream")},
