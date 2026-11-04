@@ -39,7 +39,7 @@ function inferFileCategory(filename) {
   return "other";
 }
 
-export default function FilesPage({ projects, onOpenProject, config, searchTarget = null }) {
+export default function FilesPage({ projects, onOpenProject, onOpenModel, config, searchTarget = null }) {
   const [rows, setRows] = useState([]);
   const [categories, setCategories] = useState([]);
   const [search, setSearch] = useState("");
@@ -200,7 +200,7 @@ export default function FilesPage({ projects, onOpenProject, config, searchTarge
       onSaved={async () => { setVersioning(null); await load(); }}
     />}
     {viewerFile && <FileModelViewerModal file={viewerFile} onClose={() => setViewerFile(null)} />}
-    {gcodeFile && <GcodeViewerModal file={gcodeFile} canEdit={Boolean(config?.permissions?.change_file)} onClose={() => setGcodeFile(null)} onSaved={async () => { setGcodeFile(null); await load(); }} />}
+    {gcodeFile && <GcodeViewerModal file={gcodeFile} onOpenModel={onOpenModel} canEdit={Boolean(config?.permissions?.change_file)} onClose={() => setGcodeFile(null)} onSaved={async () => { setGcodeFile(null); await load(); }} />}
   </div>;
 }
 
