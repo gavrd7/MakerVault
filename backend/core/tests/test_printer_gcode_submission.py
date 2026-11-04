@@ -210,6 +210,22 @@ class NativeGcodeAdapterTests(SimpleTestCase):
         with self.assertRaisesRegex(CrealityGcodeError, "Unrecognized printer"):
             list_files(printer)
 
+    @patch("core.creality_gcode.requests.post")
+    def test_stock_creality_upload_uses_native_multipart_file(self, post):
+        from io import BytesIO
+        from core.creality_gcode import upload_only
+        printer = connection("creality_local")
+        printer.endpoint_url = "ws://k2.local:9999"
+        fake = BytesIO(b"G90\nG1 X20\n")
+        asset = SimpleNamespace(file=SimpleNamespace(open=lambda mode: fake, size=11))
+        response = Mock(status_code=200)
+        post.return_value = response
+        upload_only(printer, asset, "ghost.gcode")
+        self.assertIn("/upload/ghost.gcode", post.call_args.args[0])
+        self.assertIn("file", post.call_args.kwargs["files"])
+        self.assertNotIn("data", post.call_args.kwargs)
+        self.assertFalse(post.call_args.kwargs["allow_redirects"])
+
     def test_creality_upload_target_is_same_host_no_credentials(self):
         printer = connection("creality_local")
         printer.endpoint_url = "ws://k2.local:9999"
