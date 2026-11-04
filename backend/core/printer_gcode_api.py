@@ -27,12 +27,18 @@ def files(request, printer_id, connection_id):
     if not connection:
         return JsonResponse({"error": "Printer connection not found."}, status=404)
     caps = availability(connection)
-    if not caps["supported"]:
+    if connection.adapter == "bambu_local" and caps["browse_requires_pin"]:
         return JsonResponse({
             "capabilities": caps, "rows": [],
-            "notice": "This monitoring adapter does not yet have validated G-code transfer support. "
-                      "Bambu, PrusaLink, Creality-local and other proprietary file protocols "
-                      "require separate implementations and physical hardware testing.",
+            "notice": "Read-only Bambu FTPS listing is available experimentally after you configure "
+                      "the printer's independently verified SHA-256 TLS certificate fingerprint. "
+                      "G-code transfer/start remains disabled.",
+        })
+    if not caps["can_browse"]:
+        return JsonResponse({
+            "capabilities": caps, "rows": [],
+            "notice": "No documented G-code storage protocol is enabled for this monitoring adapter. "
+                      "Transfer and printing remain unavailable until the protocol is implemented and validated.",
         })
     if not caps["online"]:
         return JsonResponse({"capabilities": caps, "rows": [],
@@ -41,7 +47,11 @@ def files(request, printer_id, connection_id):
         rows = list_printer_gcodes(connection)
     except GcodeSubmissionError as exc:
         return JsonResponse({"capabilities": caps, "rows": [], "error": str(exc)}, status=exc.status)
-    return JsonResponse({"capabilities": caps, "rows": rows})
+    return JsonResponse({
+        "capabilities": caps, "rows": rows,
+        "notice": ("Experimental read-only Bambu FTPS listing: printing is not enabled."
+                   if connection.adapter == "bambu_local" else ""),
+    })
 
 
 @login_required
