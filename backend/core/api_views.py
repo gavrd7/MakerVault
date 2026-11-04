@@ -2405,7 +2405,7 @@ def component_image(request, component_id):
 @require_http_methods(["GET"])
 def file_gcode_inspect(request, asset_id):
     """Authenticated, owner-scoped read-only G-code report and source preview."""
-    from .gcode_analysis import inspect_asset
+    from .gcode_analysis import inspect_asset, compare_printer_metadata
 
     asset = FileAsset.objects.filter(owner=request.user, pk=asset_id).first()
     if not asset:
@@ -2428,7 +2428,31 @@ def file_gcode_inspect(request, asset_id):
         }
         for link in links
     ]
-    return JsonResponse({"file_id": str(asset.id), "sha256": asset.sha256, "linked_models": linked_models, **result})
+    printers = list(
+        Printer.objects.filter(owner=request.user, is_active=True)
+        .select_related("catalog_model", "printer_manufacturer")
+        .order_by("name")[:250]
+    )
+    selected_id = str(request.GET.get("printer_id") or "").strip()
+    compatibility = None
+    if selected_id:
+        try:
+            requested_id = uuid.UUID(selected_id)
+        except (TypeError, ValueError):
+            return _error("Invalid printer selection.")
+        printer = next((p for p in printers if p.pk == requested_id), None)
+        if not printer:
+            return _error("Printer not found.", status=404)
+        compatibility = compare_printer_metadata(result["analysis"], printer)
+        compatibility["printer_id"] = str(printer.pk)
+    return JsonResponse({
+        "file_id": str(asset.id),
+        "sha256": asset.sha256,
+        "linked_models": linked_models,
+        "printers": [{"id": str(p.pk), "name": p.name, "model": p.model or (p.catalog_model.name if p.catalog_model else "")} for p in printers],
+        "compatibility": compatibility,
+        **result,
+    })
 
 
 @login_required
