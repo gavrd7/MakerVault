@@ -133,6 +133,57 @@ class GcodePrinterContractTests(SimpleTestCase):
         _verify_print_start_now(printer)
         self.assertEqual(poll.call_count, 2)
 
+    def test_native_idle_release_needs_positive_idle_state_and_no_active_job(self):
+        from core.printer_gcode_submission import _native_creality_clearly_idle
+        idle = {
+            "online": True, "state": "idle", "job": {"file_name": "", "progress": 0},
+            "source_metadata": {
+                "raw_state": 0, "device_state": 0, "power_loss_recovery": False,
+            },
+        }
+        self.assertTrue(_native_creality_clearly_idle(idle))
+        for snap in (
+            {**idle, "online": False},
+            {**idle, "state": "processing"},
+            {**idle, "source_metadata": {"raw_state": 1, "device_state": 0}},
+            {**idle, "source_metadata": {"raw_state": 0, "power_loss_recovery": True}},
+            {**idle, "job": {"file_name": "3DBenchy.gcode"}},
+            {**idle, "job": {"file_name": "", "progress": 2}},
+        ):
+            self.assertFalse(_native_creality_clearly_idle(snap))
+
+    @patch("core.printer_connectivity.poll_connection")
+    def test_native_idle_release_requires_two_new_observations(self, poll):
+        from core.printer_gcode_submission import _native_idle_after_unknown
+        from datetime import timedelta
+        printer = connection("creality_local")
+        start = timezone.now()
+        def idle(when):
+            return {
+                "online": True, "state": "idle",
+                "job": {"file_name": "", "progress": 0},
+                "source_metadata": {"raw_state": 0, "device_state": 0},
+                "captured_at": when.isoformat(),
+            }
+        poll.side_effect = [
+            idle(start + timedelta(seconds=1)),
+            idle(start + timedelta(seconds=2)),
+        ]
+        self.assertTrue(_native_idle_after_unknown(printer, start))
+        self.assertEqual(poll.call_count, 2)
+        poll.side_effect = [
+            idle(start + timedelta(seconds=1)),
+            {**idle(start + timedelta(seconds=2)), "state": "printing"},
+        ]
+        self.assertFalse(_native_idle_after_unknown(printer, start))
+        poll.side_effect = [idle(start - timedelta(seconds=1))]
+        self.assertFalse(_native_idle_after_unknown(printer, start))
+        poll.side_effect = [idle(start + timedelta(seconds=1)), idle(start + timedelta(seconds=1))]
+        self.assertFalse(_native_idle_after_unknown(printer, start))
+        poll.reset_mock()
+        self.assertFalse(_native_idle_after_unknown(connection("octoprint"), start))
+        poll.assert_not_called()
+
     def test_creality_start_confirmation_requires_same_file_and_active_raw_state(self):
         from core.printer_gcode_submission import _creality_started_file
         snapshot = {
