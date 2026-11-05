@@ -833,7 +833,6 @@ class NativeGcodeAdapterTests(SimpleTestCase):
     def test_stock_k1_start_sends_once_and_tolerates_remote_close(self, connect):
         import asyncio
         import json
-        from websockets.exceptions import ConnectionClosedOK
         from core.creality_gcode import _start_single_spool
         session = AsyncMock()
         session.recv.side_effect = EOFError("printer closed after accepting start")
