@@ -66,6 +66,43 @@ class GcodeAnalysisTests(SimpleTestCase):
         self.assertFalse(bad["filaments"]["complete"])
         self.assertEqual(bad["filaments"]["requirements"][0]["color_hex"], "")
 
+    def test_creality_compact_toolpath_extrusion_uses_selected_tool(self):
+        report = analyse_text(
+            "; filament_type = PLA; PLA; PLA; PLA\n"
+            "; filament_colour = #000000; #e83d89; #ffffff; #668798\n"
+            "M82\nT2\nG92E0\nG1X10Y20E0.4F1200\n"
+            "G1X20Y30E0.8F1200\n"
+        )["filaments"]
+        self.assertTrue(report["usage_confident"])
+        self.assertEqual(report["used_tool_indices"], [2])
+        self.assertEqual(report["used_requirements"][0]["color_hex"], "#ffffff")
+
+    def test_slicer_filament_consumption_can_resolve_ambiguous_toolpath(self):
+        report = analyse_text(
+            "; filament_type = PLA; PLA; PLA; PLA\n"
+            "; filament_colour = #000000; #e83d89; #ffffff; #668798\n"
+            "; filament used [mm] = 0, 0, 1423.5, 0\n"
+            "G1 X5 Y5 E0.2\n"
+        )["filaments"]
+        self.assertTrue(report["usage_confident"])
+        self.assertEqual(report["usage_source"], "slicer_consumption_mm")
+        self.assertEqual(report["used_tool_indices"], [2])
+        self.assertEqual(len(report["used_requirements"]), 1)
+        self.assertFalse(analyse_text(
+            "; filament_type = PLA; PETG\n"
+            "; filament used [mm] = 1234\n"
+        )["filaments"]["usage_confident"])
+
+    def test_consumption_conflict_does_not_silently_select_a_slot(self):
+        report = analyse_text(
+            "; filament_type = PLA; PLA\n"
+            "; filament_colour = #ffffff; #000000\n"
+            "; filament used [g] = 0, 3.4\n"
+            "T0\nG92 E0\nG1 X4 Y5 E0.2\n"
+        )["filaments"]
+        self.assertFalse(report["usage_confident"])
+        self.assertEqual(report["used_requirements"], [])
+
     def test_only_extruding_tool_is_mapped_from_four_profiles(self):
         gcode = (
             "; filament_type = PLA; PLA; PLA; PLA\n"
