@@ -27,17 +27,17 @@ PROFILES = (
 # Reference routes from inspected slicer implementations. These are hints only;
 # MakerVault does not yet enable Bambu upload/start via this catalogue.
 BAMBU_REFERENCE_ROUTES = (
-    (r"\\b(?:X1(?:C|E| CARBON)?|P1[PS]|A1 MINI)\\b", "/cache/", "gcode_file"),
-    (r"\\bA1\\b(?!\\s*MINI)", "/", "project_file"),
-    (r"\\bP2S\\b", "/cache/", "project_file"),
-    (r"\\bH2[DSC]\\b", "/", "project_file"),
+    (r"\b(?:X1(?:C|E| CARBON)?|P1[PS]|A1 MINI)\b", "/cache/", "gcode_file"),
+    (r"\bA1\b(?!\s*MINI)", "/", "project_file"),
+    (r"\bP2S\b", "/cache/", "project_file"),
+    (r"\bH2[DSC]\b", "/", "project_file"),
 )
 
 
 def bambu_reference_route(model):
     """Slicer-documented route; not a verified upload capability."""
     value = str(model or "").upper()
-    if re.search(r"\\bX2D\\b", value):
+    if re.search(r"\bX2D\b", value):
         return None  # Requires newer model-specific helper, not legacy FTPS.
     for pattern, remote_dir, start_command in BAMBU_REFERENCE_ROUTES:
         if re.search(pattern, value):
