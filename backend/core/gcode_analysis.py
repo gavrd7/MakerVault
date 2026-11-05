@@ -22,6 +22,51 @@ FILAMENT_HEADER = re.compile(
     r"^;\s*(filament_type|filament_colour|filament_color|filament_settings_id|material[ _]type|material[ _]color|material[ _]colour)\s*[:=]\s*(.*?)\s*$",
     re.I,
 )
+PRINT_SETUP_HEADER = re.compile(
+    r"^;\\s*(nozzle_diameter|nozzle diameter|nozzle_size|nozzle size|curr_bed_type|bed_type|bed type|plate_type|plate type|build_plate_type|build plate type)\\s*[:=]\\s*(.*?)\\s*$",
+    re.I,
+)
+NOZZLE_KEYS = {"nozzle_diameter", "nozzle diameter", "nozzle_size", "nozzle size"}
+BED_KEYS = {"curr_bed_type", "bed_type", "bed type", "plate_type", "plate type", "build_plate_type", "build plate type"}
+
+
+def _print_setup(text):
+    """Extract only explicit slicer-declared nozzle and build-plate metadata."""
+    nozzle = []
+    bed_type = None
+    sources = {}
+    for line in text.splitlines():
+        if len(line) > MAX_LINE:
+            continue
+        match = PRINT_SETUP_HEADER.match(line.strip())
+        if not match:
+            continue
+        key = match.group(1).lower()
+        value = match.group(2).strip().strip('"').strip("'")[:120]
+        if key in NOZZLE_KEYS and not nozzle:
+            # Slicers may declare multiple extruder nozzle diameters.
+            entries = re.split(r"[,;]", value)
+            parsed = []
+            for entry in entries:
+                candidate = entry.strip().lower().removesuffix("mm").strip()
+                if not NUMBER.fullmatch(candidate):
+                    parsed = []
+                    break
+                diameter = float(candidate)
+                if not math.isfinite(diameter) or not 0.1 <= diameter <= 2.0:
+                    parsed = []
+                    break
+                parsed.append(round(diameter, 3))
+            if parsed and len(parsed) <= 16:
+                nozzle = parsed
+                sources["nozzle"] = key
+        elif key in BED_KEYS and bed_type is None and value:
+            # A label is not evidence of the plate physically fitted.
+            bed_type = value
+            sources["bed_type"] = key
+    return {"nozzle_diameters_mm": nozzle, "bed_type": bed_type, "sources": sources}
+
+
 HEX_COLOUR = re.compile(r"^#[0-9A-Fa-f]{6}$")
 MATERIAL_TYPES = ("PLA", "PETG", "ABS", "ASA", "TPU", "PC", "PA", "PVA", "HIPS", "PCTG")
 
@@ -83,6 +128,7 @@ def analyse_text(text, *, truncated=False):
     units_mm = True
     risky = set()
     filaments = _filament_requirements(text, truncated=truncated)
+    print_setup = _print_setup(text)
     for raw in text.splitlines():
         if len(raw) > MAX_LINE:
             continue
@@ -143,6 +189,7 @@ def analyse_text(text, *, truncated=False):
         warnings.append("Contains firmware/control commands requiring manual review: " + ", ".join(sorted(risky)))
     return {
         "filaments": filaments,
+        "print_setup": print_setup,
         "printer_hints": printer_hints,
         "slicer_hints": slicer_hints,
         "xy_moves": moves,
