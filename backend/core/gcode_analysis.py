@@ -55,7 +55,7 @@ def _filament_requirements(text, *, truncated):
         if not HEX_COLOUR.fullmatch(colour):
             colour = ""
         # Preserve unknown material rather than incorrectly treating product names as chemistry.
-        if material and not any(material == kind or material.startswith(kind + "-") for kind in MATERIAL_TYPES):
+        if material and not any(material == kind or (material.startswith(kind + "-") or material.startswith(kind + "+")) for kind in MATERIAL_TYPES):
             material = ""
         requirements.append({
             "tool_index": index, "material": material, "color_hex": colour.lower(),
