@@ -51,11 +51,11 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   )?.label || "";
   const current = files.find(f => String(f.id) === String(assetId)) || (initialAsset && String(initialAsset.id) === String(assetId) ? initialAsset : null);
 
-  async function load() {
+  async function load(refreshStatus = false) {
     // A broken printer-side file API must not hide perfectly valid MakerVault files.
     const [local, remote] = await Promise.allSettled([
       apiFetch("/api/files/"),
-      apiFetch(base + "/files/"),
+      apiFetch(base + (refreshStatus === true ? "/files/?refresh_status=1" : "/files/")),
     ]);
     if (local.status === "fulfilled") {
       setFiles((local.value.rows || []).filter(f => (f.filename || "").toLowerCase().endsWith(".gcode")));
@@ -314,7 +314,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
           <option value="">Choose a printer file…</option>
           {remoteFiles.map(f => <option key={f.path} value={f.path}>{f.path}</option>)}
         </select></label>
-        <button type="button" disabled={busy} onClick={load}>Refresh printer storage</button>
+        <button type="button" disabled={busy} onClick={() => load()}>Refresh printer storage</button>
       </>}
     {source !== "new" && (source === "printer" ? !!printerInspection : !!assetId) && <div className="settingsCallout">
       <strong>Sliced print settings</strong>
@@ -400,6 +400,13 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
         <p>{verdict.reason}</p>
       </div>)}
       {source !== "new" && <>
+        {capabilities?.k1_native_model && capabilities?.can_start === false && <div className="settingsCallout" role="status">
+          <strong>K1 native print-start unavailable</strong>
+          {(capabilities.k1_start_blockers || []).map((reason, index) => <p key={index}>{reason}</p>)}
+          {k1TestEnabled && <button type="button" disabled={busy || checking} onClick={() => load(true)}>
+            Refresh K1 readiness (read-only)
+          </button>}
+        </div>}
         {k1TestEnabled && <div className="settingsCallout" role="group" aria-label="Experimental K1 native print test">
           <strong>K1 native print-start — supervised test</strong>
           <p>This firmware previously rebooted during print preparation. Test only while physically attending the printer. No command is retried automatically.</p>
