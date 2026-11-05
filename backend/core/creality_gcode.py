@@ -158,17 +158,20 @@ def list_files(connection):
 
 
 def _stock_data_root(connection):
-    """Stock K1 family and K2 family use different printer file roots."""
+    """Resolve verified native file root from the shared model capability table."""
+    from .printer_storage_profiles import storage_profile
     printer = getattr(connection, "printer", None)
     model = " ".join((
         str(getattr(printer, "model", "") or ""),
         str(getattr(getattr(printer, "catalog_model", None), "name", "") or ""),
-    )).upper()
-    if re.search(r"\bK1(?:C| SE| MAX)?\b", model):
-        return "/usr/data"
-    if re.search(r"\bK2(?:\b|$)", model):
-        return "/mnt/UDISK"
-    raise CrealityGcodeError("Unknown Creality model file layout. Native print-start is unavailable until its file path is verified.")
+    ))
+    profile = storage_profile("creality_local", model)
+    if profile["strategy"] != "native_path" or profile["path"] is None:
+        raise CrealityGcodeError(
+            "Native print-start file location is not yet verified for this model. "
+            "Use a supported printer API rather than guessing a filesystem path."
+        )
+    return profile["path"].removesuffix("/printer_data/gcodes/")
 
 
 async def _start_single_spool(endpoint, remote_path, data_root="/mnt/UDISK"):
