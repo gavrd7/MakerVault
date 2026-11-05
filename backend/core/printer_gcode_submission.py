@@ -440,6 +440,13 @@ def _mapped_cfs_entries(connection, requirements, requested):
     return mapping
 
 
+def _ready_for_start(snapshot):
+    # Moonraker/Creality may retain a terminal print_stats state after
+    # completion/cancellation until the next job. Never admit active states.
+    state = str((snapshot or {}).get("state") or "").lower()
+    return state in {"idle", "complete", "cancelled"}
+
+
 def availability(connection):
     adapter = connection.adapter
     # Native transports are opt-in at the final submission confirmation, not
@@ -460,13 +467,13 @@ def availability(connection):
     mapped_mapping_candidate = bool(
         _is_k2(connection) and adapter in {"moonraker", "creality_local"} and online and authorised
         and cfs["applicable"] and cfs["verified"] and cfs["connected"] is True
-        and cfs["slots"] and (connection.last_snapshot or {}).get("state") == "idle"
+        and cfs["slots"] and _ready_for_start(connection.last_snapshot)
         and not (connection.last_snapshot or {}).get("source_metadata", {}).get("power_loss_recovery")
     )
     sliced_mapping_candidate = bool(
         adapter == "moonraker" and online and authorised
         and cfs["applicable"] and cfs["verified"] and cfs["connected"] is True
-        and cfs["slots"] and (connection.last_snapshot or {}).get("state") == "idle"
+        and cfs["slots"] and _ready_for_start(connection.last_snapshot)
         and not (connection.last_snapshot or {}).get("source_metadata", {}).get("power_loss_recovery")
     )
     return {
@@ -480,7 +487,7 @@ def availability(connection):
             start_supported and online and authorised and not cfs_blocks_start
             
             and (adapter != "creality_local" or not (connection.last_snapshot or {}).get("source_metadata", {}).get("cfs_connected"))
-            and (connection.last_snapshot or {}).get("state") == "idle"
+            and _ready_for_start(connection.last_snapshot)
             and not (connection.last_snapshot or {}).get("source_metadata", {}).get("power_loss_recovery")
         ),
         "enabled": authorised,
@@ -556,11 +563,13 @@ def submit(connection, user, payload):
             raise GcodeSubmissionError("Select an owned, current plain-text G-code file.", 404)
         if asset.file.size > MAX_UPLOAD_BYTES:
             raise GcodeSubmissionError("This release supports printer transfers up to 64 MiB. Large files require the streaming transport.", 413)
-        remote_path = "mv_" + request_id.hex[:12] + "_" + re.sub(
-            r"[^A-Za-z0-9_.-]", "_", PurePosixPath(str((asset.metadata or {}).get("original_name") or "job.gcode")).name
-        )[:140]
-        if not remote_path.lower().endswith(".gcode"):
-            remote_path += ".gcode"
+        # Keep the recognisable original filename first. A deterministic
+        # per-submission suffix prevents collision/overwrite and makes retry
+        # receipts stable even when printer storage changes between requests.
+        original = PurePosixPath(str((asset.metadata or {}).get("original_name") or "job.gcode")).name
+        stem = re.sub(r"[^A-Za-z0-9_.-]", "_", re.sub(r"(?i)\\.gcode$", "", original))
+        stem = stem.strip("._")[:120] or "job"
+        remote_path = f"{stem}-mv-{request_id.hex[:12]}.gcode"
 
     # A repeated request ID is a status lookup, NEVER a second dispatch.
     with transaction.atomic():
