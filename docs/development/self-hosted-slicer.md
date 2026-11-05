@@ -51,6 +51,15 @@ Creality Print, Bambu Studio, CuraEngine, ElegooSlicer, Snapmaker Orca and Anycu
 - `validate_engine_selection` requires an externally provided administrator-verified worker inventory containing an exact engine version, explicit enablement, successful verification and pinned SHA-256 image digest. The inventory must come from trusted server state, never from a browser request.
 - Contract unit tests assert unsupported inputs fail closed and Orca/Prusa profile formats remain distinct.
 
+## Implemented checkpoint — draft jobs and restricted worker contract
+
+- SliceJob model and migration 0076: owner-scoped input FileAsset, printer, optional physical spool, independent printer/process/filament preset references and durable state fields.
+- Authenticated `/api/printing/slicer/engines/` (informational) and `/api/printing/slicer/jobs/` (drafts only) plus owner-scoped job detail and deletion. Drafts do not execute, schedule, send commands or deduct spool stock. Engine availability is false until verified worker inventory exists.
+- `slicer_worker/runner.py` is an **unconnected worker-side Prusa CLI contract** with fixed file names, allowlisted arguments, post-processing script rejection, timeout/process-group cleanup, bounded output, and suppressed raw engine logs. No web or Celery code launches this runner.
+- Worker contract tests run in dedicated CI. Engine/version/profile compatibility and the optional restricted container remain **not yet validated**.
+
+**Do not run untrusted slicer input on the host.** The runner is not a security sandbox; a separate unprivileged, network-restricted, resource-limited container and trusted native profile installation are required before an actual Slice button is enabled.
+
 ## Safety and release gates
 
 1. Verify service isolation and no untrusted model/profile can escape a job sandbox, access the network/secret mounts or run arbitrary CLI flags.

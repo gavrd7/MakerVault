@@ -69,6 +69,11 @@ class WorkerContractTests(TestCase):
         self.assertNotIn("secret", str(failure.exception))
         self.assertNotIn("private", str(failure.exception))
 
+    def test_post_processing_scripts_are_rejected(self):
+        (self.root / "printer.ini").write_text("post_process = /tmp/untrusted.sh\\n")
+        with self.assertRaisesRegex(WorkerError, "Post-processing"):
+            prusa_command(self.executable, self.root)
+
     def test_invalid_timeout_and_oversize_models_fail_without_execution(self):
         with self.assertRaises(WorkerError):
             run_prusa(self.executable, self.root, timeout_seconds=0)

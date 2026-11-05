@@ -1,0 +1,26 @@
+name: Slicer worker contract
+
+on:
+  pull_request:
+    paths:
+      - "slicer_worker/**"
+      - ".github/workflows/slicer-contract.yml"
+  push:
+    branches: [main]
+    paths:
+      - "slicer_worker/**"
+      - ".github/workflows/slicer-contract.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  worker-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Worker contract unit tests (no engine binaries)
+        run: python3 -m unittest discover -s slicer_worker/tests -p "test_*.py" -v
+      - name: Compile worker modules
+        run: python3 -m compileall -q slicer_worker

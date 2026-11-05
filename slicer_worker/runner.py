@@ -49,6 +49,16 @@ def prusa_command(binary: Path, workdir: Path) -> list[str]:
         _regular_file(workdir, name, MAX_PROFILE_BYTES)
         for name in ("printer.ini", "filament.ini", "process.ini")
     ]
+    for profile in profiles:
+        # Native profiles can include arbitrary post-processing scripts.
+        # Reject execution hooks before launching any slicer.
+        data = profile.read_bytes()
+        if b"\\x00" in data:
+            raise WorkerError("Native profile contains binary data.")
+        for line in data.decode("utf-8", "replace").splitlines():
+            key = line.partition("=")[0].strip().lower()
+            if key in {"post_process", "post_process_scripts"}:
+                raise WorkerError("Post-processing scripts are forbidden.")
     output = _output_path(workdir)
     return [
         str(binary), "--load", str(profiles[0]), "--load", str(profiles[1]),
@@ -77,10 +87,10 @@ def run_prusa(
             command, cwd=str(workdir), env={
                 "HOME": str(workdir), "TMPDIR": str(workdir), "LANG": "C.UTF-8",
                 "LC_ALL": "C.UTF-8", "PATH": "/usr/bin:/bin",
-            }, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True,
+            }, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
         )
         try:
-            stdout, stderr = proc.communicate(timeout=timeout_seconds)
+            proc.communicate(timeout=timeout_seconds)
         except subprocess.TimeoutExpired:
             os.killpg(proc.pid, signal.SIGKILL)
             proc.communicate()
