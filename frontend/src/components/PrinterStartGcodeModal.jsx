@@ -22,6 +22,9 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   const [bambuPin, setBambuPin] = useState("");
   const [filamentAnalysis, setFilamentAnalysis] = useState(null);
   const [slicedPrintSetup, setSlicedPrintSetup] = useState(null);
+  const [printerInspection, setPrinterInspection] = useState(null);
+  const [printerInspectNotice, setPrinterInspectNotice] = useState("");
+  const [printerInspecting, setPrinterInspecting] = useState(false);
   const [cfsAssignments, setCfsAssignments] = useState({});
   const [mappingMode, setMappingMode] = useState("mapped");
 
@@ -30,9 +33,12 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   const cfs = capabilities?.cfs || null;
   const cfsSlicedAvailable = Boolean(capabilities?.can_start_sliced_mapping);
   const cfsMappedAvailable = Boolean(capabilities?.can_start_mapped_cfs);
-  const requirements = source === "makervault" && filamentAnalysis?.usage_confident
-    ? (filamentAnalysis?.used_requirements || []) : [];
-  const usageUnknown = source === "makervault" && !!assetId && !!filamentAnalysis && !filamentAnalysis.usage_confident;
+  const selectedAnalysis = source === "printer" ? printerInspection?.filaments : filamentAnalysis;
+  const selectedSetup = source === "printer" ? printerInspection?.print_setup : slicedPrintSetup;
+  const requirements = source !== "new" && selectedAnalysis?.usage_confident
+    ? (selectedAnalysis?.used_requirements || []) : [];
+  const usageUnknown = source !== "new" && (source === "printer" ? !!remotePath : !!assetId)
+    && !!selectedAnalysis && !selectedAnalysis.usage_confident;
   const sameMaterial = (left, right) => Boolean(left && right) && left.trim().toUpperCase() === right.trim().toUpperCase();
   const matches = (requirement, slot) => sameMaterial(requirement.material, slot.material);
   const suggestedSlot = (requirement) => (cfs?.slots || []).find(slot =>
@@ -80,6 +86,20 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
     return () => { active = false; };
   }, [source, assetId, printer.id]);
 
+  useEffect(() => {
+    let active = true;
+    setPrinterInspection(null);
+    setPrinterInspectNotice("");
+    setCfsAssignments({});
+    if (source !== "printer" || !remotePath) return () => { active = false; };
+    setPrinterInspecting(true);
+    apiFetch(base + "/files/?inspect_path=" + encodeURIComponent(remotePath))
+      .then(data => { if (active) setPrinterInspection(data.analysis || null); })
+      .catch(err => { if (active) setPrinterInspectNotice(err.message || "File inspection unavailable. Original mapping remains available."); })
+      .finally(() => { if (active) setPrinterInspecting(false); });
+    return () => { active = false; };
+  }, [source, remotePath, connection.id, printer.id]);
+
   async function saveNew() {
     if (!newFile || !newFile.name.toLowerCase().endsWith(".gcode")) return;
     setBusy(true); setError("");
@@ -117,7 +137,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   async function submit() {
     const name = source === "printer" ? remotePath : current?.filename;
     const operation = source === "printer" ? "print" : action;
-    const mappedCfs = operation === "print" && mappingMode === "mapped" && cfsMappedAvailable && requirements.length > 0 && !usageUnknown && source === "makervault";
+    const mappedCfs = operation === "print" && mappingMode === "mapped" && cfsMappedAvailable && requirements.length > 0 && !usageUnknown && (source === "printer" ? !!printerInspection : !!assetId);
     const slicedCfs = operation === "print" && !mappedCfs && cfsSlicedAvailable;
     const selections = requirements.map(r => ({
       tool_index: r.tool_index, slot_label: cfsAssignments[r.tool_index] ?? suggestedSlot(r)
@@ -243,11 +263,11 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
         </select></label>
         <button type="button" disabled={busy} onClick={load}>Refresh printer storage</button>
       </>}
-    {source === "makervault" && assetId && <div className="settingsCallout">
+    {source !== "new" && (source === "printer" ? !!printerInspection : !!assetId) && <div className="settingsCallout">
       <strong>Sliced print settings</strong>
-      <p><strong>Nozzle:</strong> {slicedPrintSetup?.nozzle_diameters_mm?.length
-        ? slicedPrintSetup.nozzle_diameters_mm.map(value => `${value} mm`).join(", ")
-        : "Not specified"} · <strong>Build plate:</strong> {slicedPrintSetup?.bed_type || "Not specified"}</p>
+      <p><strong>Nozzle:</strong> {selectedSetup?.nozzle_diameters_mm?.length
+        ? selectedSetup.nozzle_diameters_mm.map(value => `${value} mm`).join(", ")
+        : "Not specified"} · <strong>Build plate:</strong> {selectedSetup?.bed_type || "Not specified"}</p>
       <small>These are the slicer's recorded settings, not detected printer hardware. They are provided for reference and never restrict submission.</small>
     </div>}
     {cfs?.applicable && <div className="settingsCallout">
@@ -268,7 +288,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
             <span><strong>{slot.label}</strong> · {slot.material || "Unknown type"}<small style={{ display: "block" }}>{slot.vendor || "Unknown brand"} · {slot.product_name || "Unknown product"}</small></span>
           </div>)}
         </div>
-        {source === "makervault" && assetId && (checking ? <p>Reading sliced filament requirements…</p> : requirements.length ? <>
+        {source !== "new" && (source === "printer" ? !!remotePath : !!assetId) && ((checking || printerInspecting) ? <p>Reading sliced filament requirements…</p> : requirements.length ? <>
           <strong>Filaments used by this print</strong>
           <p>Only tools with detected extrusion are listed. Choose the loaded filament to use for each tool; changing colour within the same material is allowed.</p>
           {requirements.map(requirement => {
@@ -283,7 +303,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
                 <span>{requirement.material || "Unknown material"}{requirement.color_hex ? " · " + requirement.color_hex : ""}</span>
               </div>
               {requirement.preset && <small>Profile: {requirement.preset}</small>}
-              {source === "makervault" && mappingMode === "mapped" && cfsMappedAvailable ? <label style={{ display: "block", marginTop: 8 }}>Print with CFS slot
+              {source !== "new" && mappingMode === "mapped" && cfsMappedAvailable ? <label style={{ display: "block", marginTop: 8 }}>Print with CFS slot
                 <select value={chosen} onChange={e => setCfsAssignments(previous => ({ ...previous, [requirement.tool_index]: e.target.value }))}>
                   <option value="">Unassigned</option>
                   {(cfs.slots || []).map(slot => <option key={slot.label} value={slot.label}>
@@ -296,19 +316,19 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
           })}
           {!filamentAnalysis?.complete && <p role="status">Slicer metadata is incomplete. Check the intended material and colour carefully; mapped printing requires a known material type for every tool.</p>}
         </> : <p>{usageUnknown ? "The G-code declares filament profiles, but MakerVault cannot confidently identify which tools actually deposit material. It will not ask you to map unused filaments. Use the original slicer mapping if supported, or upload only." : "No depositing filament requirements could be identified. You can upload without printing, or use the original slicer mapping where supported."}</p>)}
-        {source === "printer" && <p>Files already on the printer do not have source filament metadata in this dialog. MakerVault does not infer filament mapping from filenames. Use a saved G-code file to review and change CFS mappings.</p>}
+        {source === "printer" && !printerInspection && <p>{printerInspectNotice || "Read-only G-code inspection is unavailable for this printer file. Use its original slicer mapping or save the file in MakerVault to review its materials."}</p>}
         <small>In mapped-print mode, selections are sent to the K2. The proprietary protocol does not confirm acceptance, so check its display after submitting.</small>
       </>}
     </div>}
-    {source === "makervault" && (cfsSlicedAvailable || (cfsMappedAvailable && requirements.length > 0 && !usageUnknown)) && <div className="settingsCallout">
+    {source !== "new" && (cfsSlicedAvailable || (cfsMappedAvailable && requirements.length > 0 && !usageUnknown)) && <div className="settingsCallout">
       <strong>CFS print preparation</strong>
       <p>Review the sliced filament and select the correct loaded CFS slot. You can send these selections to the K2 or use its original slicer mapping.</p>
-      {source === "makervault" && <label>Filament mapping
+      <label>Filament mapping
         <select value={requirements.length && !usageUnknown ? mappingMode : "original"} onChange={e => setMappingMode(e.target.value)}>
           {cfsMappedAvailable && requirements.length > 0 && !usageUnknown && <option value="mapped">Use selected CFS slots — send mapping to K2</option>}
           {cfsSlicedAvailable && <option value="original">Use original mapping embedded by the slicer</option>}
         </select>
-      </label>}
+      </label>
       <small>{requirements.length > 0 && mappingMode === "mapped"
         ? "MakerVault will send a new native K2 filament mapping before print-start. The printer provides no confirmed acknowledgement; check its display."
         : "The original slicer-selected mapping will be used without changes. Review the printer's loaded filaments."}</small>
@@ -325,8 +345,8 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
         <div className="formActions">
           <button type="button" onClick={onClose}>Cancel</button>
           <button type="button" className="primary" onClick={submit}
-            disabled={busy || checking || !canEdit || !capabilities?.supported ||
-              (source === "printer" ? !remotePath || !(capabilities.can_start || cfsSlicedAvailable) : !assetId || !capabilities.can_upload ||
+            disabled={busy || checking || printerInspecting || !canEdit || !capabilities?.supported ||
+              (source === "printer" ? !remotePath || !(capabilities.can_start || cfsSlicedAvailable || (cfsMappedAvailable && requirements.length > 0 && !!printerInspection)) : !assetId || !capabilities.can_upload ||
                 (action === "print" && !(capabilities.can_start || cfsSlicedAvailable || cfsMappedAvailable))) || verdict?.status === "mismatch"}>
             {busy ? "Submitting…" : source === "printer" || action === "print" ? "Review & start print" : "Review & upload only"}
           </button>
