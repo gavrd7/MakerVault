@@ -43,6 +43,23 @@ class PrinterStorageProfileTests(SimpleTestCase):
                 self.assertEqual(result["strategy"], expected)
                 self.assertIsNone(result["path"])
 
+    def test_bambu_reference_routes_are_not_activated_for_upload(self):
+        expected = [
+            ("Bambu X1C", "/cache/", "gcode_file"),
+            ("Bambu P1S", "/cache/", "gcode_file"),
+            ("Bambu A1 Mini", "/cache/", "gcode_file"),
+            ("Bambu A1", "/", "project_file"),
+            ("Bambu P2S", "/cache/", "project_file"),
+            ("Bambu H2D", "/", "project_file"),
+        ]
+        for model, directory, command in expected:
+            with self.subTest(model=model):
+                profile = storage_profile("bambu_local", model)
+                self.assertEqual(profile["reference_route"]["remote_directory_hint"], directory)
+                self.assertEqual(profile["reference_route"]["start_command_hint"], command)
+                self.assertFalse(profile["reference_route"]["usable_for_upload"])
+        self.assertIsNone(storage_profile("bambu_local", "Bambu X2D")["reference_route"])
+
     def test_unknown_model_and_adapter_never_get_generic_linux_root(self):
         for adapter in ("creality_local", "bambu_local", "prusa", "flashforge", "anycubic"):
             with self.subTest(adapter=adapter):
