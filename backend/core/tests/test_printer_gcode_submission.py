@@ -155,6 +155,35 @@ class GcodePrinterContractTests(SimpleTestCase):
         generic.printer = SimpleNamespace(model="K1", catalog_model=None)
         self.assertFalse(_k1_native_start_suspended(generic))
 
+    def test_k1_native_start_requires_per_connection_opt_in_and_acknowledgement(self):
+        from core.printer_gcode_submission import (
+            _k1_native_start_suspended, availability, _require_action_ready,
+        )
+        k1 = connection("creality_local")
+        k1.printer = SimpleNamespace(model="K1", catalog_model=None)
+        self.assertTrue(_k1_native_start_suspended(k1))
+        self.assertFalse(availability(k1)["k1_native_test_enabled"])
+        self.assertTrue(availability(k1)["k1_native_model"])
+        self.assertFalse(availability(k1)["can_start"])
+        k1.config = {**(k1.config or {}), "k1_native_start_test_enabled": True}
+        self.assertTrue(availability(k1)["k1_native_test_enabled"])
+        self.assertTrue(availability(k1)["can_start"])
+        with self.assertRaisesRegex(GcodeSubmissionError, "crash-risk acknowledgement"):
+            _require_action_ready(k1, "print")
+        _require_action_ready(k1, "print", k1_test_acknowledged=True)
+        k1.config["k1_native_start_test_enabled"] = "true"
+        self.assertFalse(availability(k1)["can_start"])
+        with self.assertRaisesRegex(GcodeSubmissionError, "temporarily disabled"):
+            _require_action_ready(k1, "print", k1_test_acknowledged=True)
+
+    def test_k2_cannot_enable_k1_native_test_flow(self):
+        from core.printer_gcode_submission import availability
+        k2 = connection("creality_local")
+        k2.printer = SimpleNamespace(model="K2", catalog_model=None)
+        k2.config = {**(k2.config or {}), "k1_native_start_test_enabled": True}
+        self.assertFalse(availability(k2)["k1_native_model"])
+        self.assertFalse(availability(k2)["k1_native_test_enabled"])
+
     def test_native_idle_release_needs_positive_idle_state_and_no_active_job(self):
         from core.printer_gcode_submission import _native_creality_clearly_idle
         idle = {
