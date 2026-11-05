@@ -118,14 +118,16 @@ function PrinterLiveSummary({ printer, onOpen, canControl, onChanged }) {
     </div>}
     <div className="printerLiveActions">
       <PrinterJobControls printer={printer} connection={connection} canControl={canControl} onChanged={onChanged} />
-      <button type="button" className="printerLiveOpen" onClick={onOpen}>Open live</button>
     </div>
-    <div className="printerLiveQuickStats">
+    <div className="printerLiveFooter">
+      <div className="printerLiveQuickStats">
       {liveNozzles(snapshot).map(([key, temp]) => <span key={key}><small>{liveNozzleLabel(snapshot, key)}</small><strong>{liveTemperature(temp)}</strong></span>)}
       {temps.bed?.actual_c != null && <span><small>Bed</small><strong>{liveTemperature(temps.bed)}</strong></span>}
       {temps.chamber?.actual_c != null && <span><small>Chamber</small><strong>{liveTemperature(temps.chamber)}</strong></span>}
       {(job.current_layer != null || job.total_layers != null) && <span><small>Layer</small><strong>{job.current_layer ?? "—"} / {job.total_layers ?? "—"}</strong></span>}
       {job.remaining_seconds != null && Number(job.remaining_seconds) > 0 && <span><small>Remaining</small><strong>{Math.max(1, Math.round(Number(job.remaining_seconds) / 60))} min</strong></span>}
+      </div>
+      <button type="button" className="printerLiveOpen" onClick={onOpen} aria-label={"Open detailed live monitoring for " + printer.name}>More details</button>
     </div>
   </div>;
 }
@@ -418,7 +420,8 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       <div className="panelHead"><div><h3>Printers &amp; loaded filament</h3><p>Filament slots are provider-neutral so CFS, AMS and later systems can use the same model.</p></div></div>
       <div className="printingCards printingPrinterCards">
         {(data?.printers || []).map(printer => <article className={"printingCard printingPrinterCard" + (searchTarget?.type === "printers" && searchTarget.id === printer.id ? " searchTargetRow" : "")} id={"printer-search-target-" + printer.id} key={printer.id}>
-          <div className="printingPrinterHeader">
+          <div className="printingPrinterOverviewTop">
+            <div className="printingPrinterHeader">
             <div className="printingPrinterImage">
               {(printer.multi_material_installed && printer.catalogue?.image_multi_material) || printer.catalogue?.image
                 ? <img
@@ -444,13 +447,11 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
                     {printer.multi_material_installed && <Badge>{printer.slots.length} slots</Badge>}
                   </div>
                   <div className="printingPrinterActions" aria-label={"Actions for " + printer.name}>
+                    {canChangePrinter && <button className="printingPrinterAction printingPrinterActionLive" type="button" onClick={() => setLivePrinter(printer)}>Live monitor</button>}
+                    {canChangePrinter && <button className="printingPrinterAction" type="button" onClick={() => setManagePrinter(printer)}>Manage printer</button>}
                     <button className="printingPrinterAction" type="button" onClick={() => onOpenMakerTags("printer", printer.id)}>MakerTags</button>
+                    {canChangePrinter && <button className="printingPrinterAction" type="button" onClick={() => setCameraSetup({ printerId: printer.id })}>Camera setup</button>}
                   </div>
-                  {canChangePrinter && <div className="printingPrinterActions" aria-label={"Actions for " + printer.name}>
-                    <button className="printingPrinterAction printingPrinterActionLive" type="button" onClick={() => setLivePrinter(printer)}>Live monitor</button>
-                    <button className="printingPrinterAction" type="button" onClick={() => setCameraSetup({ printerId: printer.id })}>Camera setup</button>
-                    <button className="printingPrinterAction" type="button" onClick={() => setManagePrinter(printer)}>Manage printer</button>
-                  </div>}
                 </div>
               </div>
               {((printer.multi_material_installed && printer.catalogue?.image_multi_material && printer.catalogue?.image_multi_material_source_provider) || printer.catalogue?.image_source_provider) && <small className="printingPrinterImageCredit">
@@ -459,8 +460,11 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
               </small>}
             </div>
           </div>
-          <PrinterLiveSummary printer={printer} onOpen={() => setLivePrinter(printer)} canControl={canChangePrinter} onChanged={load} />
-          <PrinterCameraPreview printer={printer} suspended={Boolean(cameraSetup || livePrinter || cameraOffer)} />
+          <div className="printingSlotPanel">
+            <div className="printingSlotPanelHeader">
+              <strong>Loaded filament</strong>
+              <small>{printer.multi_material_installed ? (printer.installed_multi_material_label || "Multi-material") : "Printer material"}</small>
+            </div>
           <div className="printingSlotGrid">
             {printer.slots.filter(slot => slot.is_loaded).map(slot => <div className="printingSlot" key={slot.id}>
               <span className="printingSwatch" style={slot.color_hex ? { background: slot.color_hex } : undefined} />
@@ -477,6 +481,10 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
                 : <div className="printingEmptyInline">No loaded filament slots have been discovered yet.</div>
             )}
           </div>
+          </div>
+          </div>
+          <PrinterLiveSummary printer={printer} onOpen={() => setLivePrinter(printer)} canControl={canChangePrinter} onChanged={load} />
+          <PrinterCameraPreview printer={printer} suspended={Boolean(cameraSetup || livePrinter || cameraOffer)} />
         </article>)}
         {!data?.printers?.length && <div className="projectEmpty"><strong>No printers yet.</strong><span>Add your first printer to begin the 3D printing workspace.</span></div>}
       </div>
