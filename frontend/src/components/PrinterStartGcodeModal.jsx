@@ -187,7 +187,13 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
     onClose={onClose} wide>
     <div className="gcodePrintModalContent">
     {error && <div className="formError" role="alert">{error}</div>}
-    {notice && <div className="settingsCallout">{notice}</div>}
+    {notice && (connection.adapter === "creality_local" && notice.includes("Diagnostic:")
+      ? <details className="settingsCallout">
+          <summary><strong>Native printer storage listing unavailable — view diagnostics</strong></summary>
+          <p style={{ overflowWrap: "anywhere" }}>{notice}</p>
+          <small>Native HTTP upload can be verified independently using an enabled Moonraker storage connection on this same printer.</small>
+        </details>
+      : <div className="settingsCallout">{notice}</div>)}
     {["prusa", "creality_local", "flashforge"].includes(connection.adapter) && <div className="settingsCallout">
       <strong>Experimental native G-code transfer</strong>
       <p>{connection.adapter === "creality_local" ? "Native upload is supported experimentally. Single-spool start is a separate opt-in; CFS printing remains disabled until mapping is validated." : connection.adapter === "prusa" ? "Native PrusaLink v1 transfer and print-start are experimental and require the correct firmware capabilities." : "Adventurer 5M / 5M Pro: upload-only or explicitly confirmed start. Multi-material FlashForge models are not enabled."}</p>
