@@ -50,14 +50,14 @@ def inspect_generated_gcode(raw: bytes, printer=None) -> dict:
 
 
 def store_generated_gcode(job_id, raw: bytes):
-    """Called only by a future worker dispatcher after a verified slice result.
+    """Called by the approved worker dispatcher after a verified slice result.
 
     Idempotence: only an owned, running job with no existing output is accepted.
     """
     stored = None
     try:
         with transaction.atomic():
-            job = SliceJob.objects.select_for_update().select_related(
+            job = SliceJob.objects.select_for_update(of=("self",)).select_related(
                 "owner", "input_asset", "printer", "printer__catalog_model",
                 "printer__printer_manufacturer",
             ).get(pk=job_id)
