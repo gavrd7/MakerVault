@@ -30,7 +30,9 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   const cfs = capabilities?.cfs || null;
   const cfsSlicedAvailable = Boolean(capabilities?.can_start_sliced_mapping);
   const cfsMappedAvailable = Boolean(capabilities?.can_start_mapped_cfs);
-  const requirements = source === "makervault" ? (filamentAnalysis?.requirements || []) : [];
+  const requirements = source === "makervault" && filamentAnalysis?.usage_confident
+    ? (filamentAnalysis?.used_requirements || []) : [];
+  const usageUnknown = source === "makervault" && !!assetId && !!filamentAnalysis && !filamentAnalysis.usage_confident;
   const sameMaterial = (left, right) => Boolean(left && right) && left.trim().toUpperCase() === right.trim().toUpperCase();
   const matches = (requirement, slot) => sameMaterial(requirement.material, slot.material);
   const suggestedSlot = (requirement) => (cfs?.slots || []).find(slot =>
@@ -115,14 +117,14 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   async function submit() {
     const name = source === "printer" ? remotePath : current?.filename;
     const operation = source === "printer" ? "print" : action;
-    const mappedCfs = operation === "print" && mappingMode === "mapped" && cfsMappedAvailable && requirements.length > 0 && source === "makervault";
+    const mappedCfs = operation === "print" && mappingMode === "mapped" && cfsMappedAvailable && requirements.length > 0 && !usageUnknown && source === "makervault";
     const slicedCfs = operation === "print" && !mappedCfs && cfsSlicedAvailable;
     const selections = requirements.map(r => ({
       tool_index: r.tool_index, slot_label: cfsAssignments[r.tool_index] ?? suggestedSlot(r)
     }));
     if (mappedCfs) {
       if (!selections.length || selections.some(item => !item.slot_label)) {
-        setError("Select a CFS slot for every sliced filament before printing."); return;
+        setError("Select a loaded CFS slot for each filament actually used by this print."); return;
       }
       for (const item of selections) {
         const required = requirements[item.tool_index];
@@ -267,8 +269,8 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
           </div>)}
         </div>
         {source === "makervault" && assetId && (checking ? <p>Reading sliced filament requirements…</p> : requirements.length ? <>
-          <strong>Sliced filament mapping review</strong>
-          <p>MakerVault suggests matching CFS slots by material and colour. You can override the suggestion before sending the mapping to the K2.</p>
+          <strong>Filaments used by this print</strong>
+          <p>Only tools with detected extrusion are listed. Choose the loaded filament to use for each tool; changing colour within the same material is allowed.</p>
           {requirements.map(requirement => {
             const chosen = cfsAssignments[requirement.tool_index] ?? suggestedSlot(requirement);
             const selected = (cfs.slots || []).find(slot => slot.label === chosen);
@@ -276,7 +278,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
             const colourMatch = materialMatch && !!requirement.color_hex && selected.color_hex?.toLowerCase() === requirement.color_hex.toLowerCase();
             return <div key={requirement.tool_index} style={{ margin: "12px 0", padding: 12, border: "1px solid var(--border-color, #344255)", borderRadius: 10 }}>
               <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                <strong>Slicer filament {requirement.tool_index + 1}</strong>
+                <strong>Used slicer filament {requirement.tool_index + 1}</strong>
                 {requirement.color_hex && <span style={{ width: 18, height: 18, borderRadius: 5, border: "1px solid #718096", background: requirement.color_hex }} />}
                 <span>{requirement.material || "Unknown material"}{requirement.color_hex ? " · " + requirement.color_hex : ""}</span>
               </div>
@@ -293,17 +295,17 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
             </div>;
           })}
           {!filamentAnalysis?.complete && <p role="status">Slicer metadata is incomplete. Check the intended material and colour carefully; mapped printing requires a known material type for every tool.</p>}
-        </> : <p>No sliced filament material information could be found. MakerVault cannot safely send a new CFS mapping for this file. You can upload it without printing, or use the original slicer mapping where supported.</p>)}
+        </> : <p>{usageUnknown ? "The G-code declares filament profiles, but MakerVault cannot confidently identify which tools actually deposit material. It will not ask you to map unused filaments. Use the original slicer mapping if supported, or upload only." : "No depositing filament requirements could be identified. You can upload without printing, or use the original slicer mapping where supported."}</p>)}
         {source === "printer" && <p>Files already on the printer do not have source filament metadata in this dialog. MakerVault does not infer filament mapping from filenames. Use a saved G-code file to review and change CFS mappings.</p>}
         <small>In mapped-print mode, selections are sent to the K2. The proprietary protocol does not confirm acceptance, so check its display after submitting.</small>
       </>}
     </div>}
-    {source === "makervault" && (cfsSlicedAvailable || (cfsMappedAvailable && requirements.length > 0)) && <div className="settingsCallout">
+    {source === "makervault" && (cfsSlicedAvailable || (cfsMappedAvailable && requirements.length > 0 && !usageUnknown)) && <div className="settingsCallout">
       <strong>CFS print preparation</strong>
       <p>Review the sliced filament and select the correct loaded CFS slot. You can send these selections to the K2 or use its original slicer mapping.</p>
       {source === "makervault" && <label>Filament mapping
-        <select value={requirements.length ? mappingMode : "original"} onChange={e => setMappingMode(e.target.value)}>
-          {cfsMappedAvailable && requirements.length > 0 && <option value="mapped">Use selected CFS slots — send mapping to K2</option>}
+        <select value={requirements.length && !usageUnknown ? mappingMode : "original"} onChange={e => setMappingMode(e.target.value)}>
+          {cfsMappedAvailable && requirements.length > 0 && !usageUnknown && <option value="mapped">Use selected CFS slots — send mapping to K2</option>}
           {cfsSlicedAvailable && <option value="original">Use original mapping embedded by the slicer</option>}
         </select>
       </label>}
