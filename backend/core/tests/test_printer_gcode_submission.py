@@ -57,7 +57,8 @@ class GcodePrinterContractTests(SimpleTestCase):
         self.assertFalse(availability(ff)["supported"])
         cc = connection("creality_local")
         cc.printer = SimpleNamespace(model="K2", catalog_model=None)
-        cc.config["gcode_submission_enabled"] = True
+        cc.controls_enabled = False
+        cc.config["gcode_submission_enabled"] = False
         self.assertTrue(availability(cc)["can_upload"])
         self.assertFalse(availability(cc)["can_start"])
 
