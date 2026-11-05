@@ -24,6 +24,28 @@ PROFILES = (
 )
 
 
+# Reference routes from inspected slicer implementations. These are hints only;
+# MakerVault does not yet enable Bambu upload/start via this catalogue.
+BAMBU_REFERENCE_ROUTES = (
+    (r"\\b(?:X1(?:C|E| CARBON)?|P1[PS]|A1 MINI)\\b", "/cache/", "gcode_file"),
+    (r"\\bA1\\b(?!\\s*MINI)", "/", "project_file"),
+    (r"\\bP2S\\b", "/cache/", "project_file"),
+    (r"\\bH2[DSC]\\b", "/", "project_file"),
+)
+
+
+def bambu_reference_route(model):
+    """Slicer-documented route; not a verified upload capability."""
+    value = str(model or "").upper()
+    if re.search(r"\\bX2D\\b", value):
+        return None  # Requires newer model-specific helper, not legacy FTPS.
+    for pattern, remote_dir, start_command in BAMBU_REFERENCE_ROUTES:
+        if re.search(pattern, value):
+            return {"remote_directory_hint": remote_dir, "start_command_hint": start_command,
+                    "usable_for_upload": False}
+    return None
+
+
 def storage_profile(adapter, model):
     """Return an explicitly supported strategy, not a speculative path."""
     if adapter == "moonraker":
@@ -33,5 +55,8 @@ def storage_profile(adapter, model):
     text = str(model or "").upper().strip()
     for key, pattern, match_adapter, strategy, path, confidence in PROFILES:
         if adapter == match_adapter and re.search(pattern, text):
-            return {"key": key, "strategy": strategy, "path": path, "confidence": confidence}
+            result = {"key": key, "strategy": strategy, "path": path, "confidence": confidence}
+            if adapter == "bambu_local":
+                result["reference_route"] = bambu_reference_route(text)
+            return result
     return {"key": "unknown", "strategy": "unsupported_until_verified", "path": None, "confidence": "unknown"}
