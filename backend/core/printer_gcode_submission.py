@@ -796,7 +796,7 @@ def submit(connection, user, payload):
                     )
             except requests.RequestException as exc:
                 raise GcodeSubmissionError("Start-print outcome is uncertain. Inspect printer before trying again.", 502) from exc
-            if (False if use_mapped_cfs or connection.adapter in {"flashforge", "creality_local"} else response.status_code != 204 if connection.adapter in {"octoprint", "prusa"} else _json_response(response) != "ok"):
+            if (False if use_mapped_cfs or connection.adapter == "flashforge" or (connection.adapter == "creality_local" and not use_sliced_cfs) else response.status_code != 204 if connection.adapter in {"octoprint", "prusa"} else _json_response(response) != "ok"):
                 raise GcodeSubmissionError("Printer did not confirm starting the print. Verify its live state.", 502)
         row.status = "unknown" if action == "print" and (use_mapped_cfs or (connection.adapter == "creality_local" and not use_sliced_cfs)) else "started" if action == "print" else "uploaded"
         row.message = ("K2 CFS mapping and print-start commands dispatched, but not acknowledged. Verify the selected filament and printer state." if use_mapped_cfs and action == "print" else "Creality start command sent, but this protocol provides no acknowledgement. Verify the live printer before any follow-up." if action == "print" and connection.adapter == "creality_local" and not use_sliced_cfs else
