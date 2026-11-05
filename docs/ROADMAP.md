@@ -2,7 +2,7 @@
 
 _Last reconciled: 5 November 2026_
 
-**Release development: v1.5.1 source plus G-code and native-printing milestone #155.** The v1.0 acceptance gates remain complete. This roadmap describes features in the coordinated upcoming application and guide release; it does not imply every adapter is hardware-verified.
+**Current milestone: v1.6.0 — G-code Library and explicit printer submission (#155).** The v1.0 acceptance gates remain complete. This roadmap describes features in the coordinated upcoming application and guide release; it does not imply every adapter is hardware-verified.
 
 This roadmap separates delivered functionality, outstanding validation and future implementation. The [README](../README.md) describes the current application; [CHANGELOG.md](../CHANGELOG.md) records changes.
 
@@ -73,7 +73,7 @@ Supported deployment guidance centres on the supplied Linux Docker Compose stack
 
 Experimental adapters may remain explicitly experimental at v1.0. Absence of development hardware does not justify claiming full support or blocking unrelated stable functionality indefinitely.
 
-## G-code library and explicit printer submission — delivered in coordinated release
+## v1.6.0 — G-code library and explicit printer submission
 
 - Owner-scoped plain-text G-code assets in Files and Model Library, bounded code inspection, XY toolpath sample visualisation and save-as-new-version editing; G-code can link to a project and model revision.
 - **3D Printing** includes a shared G-code library and per-printer **Start print / G-code** workflow: save a new upload, choose an existing MakerVault file, or browse files already stored on a printer. Upload-only never starts a print. Start requires separate confirmation and live printer readiness.
@@ -113,7 +113,7 @@ Printer maintenance logs, schedules and reminders were removed from the planned 
 
 Two independently deliverable linked features agreed on 30 October 2026. Neither is committed to the next release or the current MakerTags/connected-hardware milestones:
 
-1. **[G-code Library and explicit Print Submission (#155)](https://github.com/gavrd7/MakerVault/issues/155):** **Phase 1 underway:** shared private G-code files, project/model-revision links, text inspection, bounded XY visualisation and immutable edited versions through Files/Model Library/3D Printing. **Next phase:** validate source printer vs destination (including K2→K1 mismatch), adapter upload-only capability, separate confirmed start-print, readiness, permissions and unknown outcomes. No automatic spool-stock deduction on upload or start. See [implementation and safety design](development/gcode-library-and-print-submission.md).
+1. **[G-code Library and explicit Print Submission (#155)](https://github.com/gavrd7/MakerVault/issues/155):** **Implemented in v1.6.0:** shared private G-code files, project/model-revision links, text inspection, bounded XY visualisation and immutable edited versions through Files/Model Library/3D Printing. **Next phase:** validate source printer vs destination (including K2→K1 mismatch), adapter upload-only capability, separate confirmed start-print, readiness, permissions and unknown outcomes. No automatic spool-stock deduction on upload or start. See [implementation and safety design](development/gcode-library-and-print-submission.md).
 2. **[Self-Hosted Multi-Engine FDM Slicer (#156)](https://github.com/gavrd7/MakerVault/issues/156):** One responsive MakerVault Slicer UI and one optional local slicing service with individually installable, pinned and isolated engine versions. Evaluate OrcaSlicer and PrusaSlicer first; subsequently Creality Print, Bambu Studio, CuraEngine, ElegooSlicer, Snapmaker Orca and Anycubic Slicer Next, subject to validated headless CLI operation, licensing and profile support. Support printer/plate/nozzle, engine-specific filament/process profiles linked to physical MakerVault inventory, and searchable Basic/Simple/Advanced settings; model manipulation and multimaterial incrementally.
 
 **Design principles:** Slicing computation runs only on the self-hoster's own infrastructure, not MakerVault-hosted cloud infrastructure; the main application remains operable without the optional restricted worker. Reuse existing file, model, filament and printer infrastructure. The SimplyPrint mobile multi-engine UX is a functional reference, not a request to reproduce its UI. Start G-code work first; defer slicer implementation until current hardware/MakerTags work is stable.
