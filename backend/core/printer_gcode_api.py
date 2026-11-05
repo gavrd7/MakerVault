@@ -47,6 +47,10 @@ def files(request, printer_id, connection_id):
     try:
         rows = list_printer_gcodes(connection)
     except GcodeSubmissionError as exc:
+        if connection.adapter == "creality_local":
+            # File listing and upload are separate stock interfaces. A failed
+            # read-only storage probe must not hide native upload capability.
+            return JsonResponse({"capabilities": caps, "rows": [], "error": str(exc)})
         return JsonResponse({"capabilities": caps, "rows": [], "error": str(exc)}, status=exc.status)
     return JsonResponse({
         "capabilities": caps, "rows": rows,
