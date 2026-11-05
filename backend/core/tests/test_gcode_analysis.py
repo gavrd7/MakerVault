@@ -8,9 +8,9 @@ from core.gcode_analysis import analyse_text, compare_printer_metadata
 class GcodeAnalysisTests(SimpleTestCase):
     def test_nozzle_and_plate_comments_are_advisory(self):
         report = analyse_text(
-            "; nozzle_diameter = 0.4, 0.6\\n"
-            "; curr_bed_type = Textured PEI Plate\\n"
-            "G1 X5 Y6 E1\\n"
+            "; nozzle_diameter = 0.4, 0.6\n"
+            "; curr_bed_type = Textured PEI Plate\n"
+            "G1 X5 Y6 E1\n"
         )
         self.assertEqual(report["print_setup"]["nozzle_diameters_mm"], [0.4, 0.6])
         self.assertEqual(report["print_setup"]["bed_type"], "Textured PEI Plate")
@@ -18,23 +18,23 @@ class GcodeAnalysisTests(SimpleTestCase):
         self.assertEqual(report["print_setup"]["sources"]["bed_type"], "curr_bed_type")
 
     def test_creality_and_unknown_print_setup_metadata(self):
-        report = analyse_text("; Nozzle Size: 0.4mm\\n; Plate Type: Cool Plate\\n")
+        report = analyse_text("; Nozzle Size: 0.4mm\n; Plate Type: Cool Plate\n")
         self.assertEqual(report["print_setup"]["nozzle_diameters_mm"], [0.4])
         self.assertEqual(report["print_setup"]["bed_type"], "Cool Plate")
-        missing = analyse_text("G28\\n")
+        missing = analyse_text("G28\n")
         self.assertEqual(missing["print_setup"]["nozzle_diameters_mm"], [])
         self.assertIsNone(missing["print_setup"]["bed_type"])
-        invalid = analyse_text("; nozzle_diameter = 999\\n; bed_type = Smooth PEI Plate\\n")
+        invalid = analyse_text("; nozzle_diameter = 999\n; bed_type = Smooth PEI Plate\n")
         self.assertEqual(invalid["print_setup"]["nozzle_diameters_mm"], [])
         self.assertEqual(invalid["print_setup"]["bed_type"], "Smooth PEI Plate")
 
     def test_creality_sliced_filament_vectors_for_cfs_review(self):
         report = analyse_text(
-            "; printer_model = Creality K2\\n"
-            "; filament_type = PLA; PETG\\n"
-            "; filament_colour = #ffffff; #e83d89\\n"
-            "; filament_settings_id = SUNLU PLA+; SUNLU Hyper PETG Matte\\n"
-            "T0\\nG1 X2 Y3\\nT1\\n"
+            "; printer_model = Creality K2\n"
+            "; filament_type = PLA; PETG\n"
+            "; filament_colour = #ffffff; #e83d89\n"
+            "; filament_settings_id = SUNLU PLA+; SUNLU Hyper PETG Matte\n"
+            "T0\nG1 X2 Y3\nT1\n"
         )
         filaments = report["filaments"]
         self.assertTrue(filaments["complete"])
@@ -43,26 +43,26 @@ class GcodeAnalysisTests(SimpleTestCase):
         self.assertEqual(filaments["requirements"][0]["preset"], "SUNLU PLA+")
 
     def test_creality_print_material_type_comment_is_detected(self):
-        analysis = analyse_text(";Material Type:PLA\\n;Material Density:1.24\\nG1 X5 Y2\\n")
+        analysis = analyse_text(";Material Type:PLA\n;Material Density:1.24\nG1 X5 Y2\n")
         self.assertEqual(analysis["filaments"]["requirements"][0]["material"], "PLA")
         self.assertFalse(analysis["filaments"]["complete"])
         self.assertEqual(analysis["filaments"]["requirements"][0]["color_hex"], "")
 
     def test_comma_delimited_filament_metadata(self):
         analysis = analyse_text(
-            "; filament_type = PLA, PETG\\n"
-            "; filament_colour = #ffffff, #e83d89\\n"
+            "; filament_type = PLA, PETG\n"
+            "; filament_colour = #ffffff, #e83d89\n"
         )
         self.assertTrue(analysis["filaments"]["complete"])
         self.assertEqual(len(analysis["filaments"]["requirements"]), 2)
 
     def test_missing_slicer_filaments_do_not_guess_cfs_slots(self):
-        report = analyse_text("T0\\nG1 X1 Y2\\n")
+        report = analyse_text("T0\nG1 X1 Y2\n")
         self.assertEqual(report["filaments"]["requirements"], [])
         self.assertFalse(report["filaments"]["complete"])
-        partial = analyse_text("; filament_type = PLA\\n; filament_colour = #ffffff\\n", truncated=True)
+        partial = analyse_text("; filament_type = PLA\n; filament_colour = #ffffff\n", truncated=True)
         self.assertFalse(partial["filaments"]["complete"])
-        bad = analyse_text("; filament_type = PLA\\n; filament_colour = invalid\\n")
+        bad = analyse_text("; filament_type = PLA\n; filament_colour = invalid\n")
         self.assertFalse(bad["filaments"]["complete"])
         self.assertEqual(bad["filaments"]["requirements"][0]["color_hex"], "")
 
