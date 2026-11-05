@@ -74,8 +74,10 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   useEffect(() => {
     // A Creality print-start may be confirmed by a later normal telemetry
     // poll. Read only the existing receipt; never re-submit the command.
-    if (receipt?.status !== "unknown" ||
-        !(receipt.message?.startsWith("Awaiting native Creality start verification") || receipt.message?.startsWith("Print-start sent without acknowledgement; awaiting live job verification")) ||
+    if (!["started", "unknown"].includes(receipt?.status) ||
+        !(receipt.message?.startsWith("Awaiting native Creality start verification") ||
+          receipt.message?.startsWith("Print-start sent without acknowledgement; awaiting live job verification") ||
+          receipt.message?.startsWith("Print-start command accepted; awaiting live job verification")) ||
         !receipt.request_id) return undefined;
     let active = true;
     let checks = 0;
@@ -88,7 +90,9 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
         const result = await apiFetch(base + "/submissions/" + receipt.request_id + "/");
         const updated = result?.submission;
         if (!active || !updated) return;
-        if (updated.status !== "unknown") {
+        if (updated.message?.startsWith("Print started — verified by live printer telemetry") ||
+            updated.message?.startsWith("Print start confirmed by live Creality telemetry") ||
+            ["rejected", "uploaded"].includes(updated.status)) {
           window.clearInterval(timer);
           setReceipt(updated);
           setTransferStage(updated.message || "");
