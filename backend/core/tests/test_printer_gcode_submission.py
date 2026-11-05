@@ -133,78 +133,28 @@ class GcodePrinterContractTests(SimpleTestCase):
         _verify_print_start_now(printer)
         self.assertEqual(poll.call_count, 2)
 
-    def test_k1_native_start_is_suspended_but_file_upload_is_available(self):
-        from core.printer_gcode_submission import (
-            _k1_native_start_suspended, availability, _require_action_ready,
-        )
+    def test_k1_native_print_uses_standard_flow_with_fresh_idle_no_cfs_status(self):
+        from core.printer_gcode_submission import availability, _require_action_ready
         k1 = connection("creality_local")
         k1.printer = SimpleNamespace(model="K1", catalog_model=None)
-        self.assertTrue(_k1_native_start_suspended(k1))
+        k1.last_snapshot["source_metadata"] = {"cfs_connected": False}
         state = availability(k1)
-        self.assertFalse(state["can_start"])
+        self.assertTrue(state["k1_native_model"])
         self.assertTrue(state["can_browse"])
         self.assertTrue(state["can_upload"])
-        with self.assertRaisesRegex(GcodeSubmissionError, "temporarily disabled"):
-            _require_action_ready(k1, "print")
-        k2 = connection("creality_local")
-        k2.printer = SimpleNamespace(model="K2", catalog_model=None)
-        self.assertFalse(_k1_native_start_suspended(k2))
-        k2.last_snapshot["source_metadata"] = {"cfs_connected": False}
-        self.assertTrue(availability(k2)["can_start"])
-        generic = connection("moonraker")
-        generic.printer = SimpleNamespace(model="K1", catalog_model=None)
-        self.assertFalse(_k1_native_start_suspended(generic))
-
-    def test_k1_native_start_requires_per_connection_opt_in_and_acknowledgement(self):
-        from core.printer_gcode_submission import (
-            _k1_native_start_suspended, availability, _require_action_ready,
-        )
-        k1 = connection("creality_local")
-        k1.printer = SimpleNamespace(model="K1", catalog_model=None)
-        self.assertTrue(_k1_native_start_suspended(k1))
-        self.assertFalse(availability(k1)["k1_native_test_enabled"])
-        self.assertTrue(availability(k1)["k1_native_model"])
-        self.assertFalse(availability(k1)["can_start"])
-        k1.config = {**(k1.config or {}), "k1_native_start_test_enabled": True}
-        k1.last_snapshot["source_metadata"] = {"cfs_connected": False}
-        self.assertTrue(availability(k1)["k1_native_test_enabled"])
+        self.assertTrue(state["can_start"])
+        _require_action_ready(k1, "print")
+        # A legacy opt-in value has no bearing on print-start permissions.
+        k1.config["k1_native_start_test_enabled"] = False
         self.assertTrue(availability(k1)["can_start"])
-        with self.assertRaisesRegex(GcodeSubmissionError, "crash-risk acknowledgement"):
-            _require_action_ready(k1, "print")
-        _require_action_ready(k1, "print", k1_test_acknowledged=True)
-        k1.config["k1_native_start_test_enabled"] = "true"
+        k1.last_snapshot["state"] = "printing"
         self.assertFalse(availability(k1)["can_start"])
-        with self.assertRaisesRegex(GcodeSubmissionError, "temporarily disabled"):
-            _require_action_ready(k1, "print", k1_test_acknowledged=True)
-
-    def test_all_submission_rechecks_preserve_k1_test_acknowledgement(self):
-        # A prior regression passed the acknowledgement at the initial guard,
-        # but omitted it in later pre-dispatch checks, rejecting the submission.
-        # Inspect every guard call in submit without contacting any printer.
-        import ast
-        import inspect
-        import textwrap
-        from core.printer_gcode_submission import submit
-        tree = ast.parse(textwrap.dedent(inspect.getsource(submit)))
-        guard_calls = [
-            node for node in ast.walk(tree)
-            if isinstance(node, ast.Call) and
-            isinstance(node.func, ast.Name) and
-            node.func.id == "_require_action_ready"
-        ]
-        self.assertGreaterEqual(len(guard_calls), 3)
-        for call in guard_calls:
-            keywords = {item.arg: item.value for item in call.keywords}
-            self.assertIn("k1_test_acknowledged", keywords)
-            self.assertIsInstance(keywords["k1_test_acknowledged"], ast.Name)
-            self.assertEqual(keywords["k1_test_acknowledged"].id, "k1_test_acknowledged")
 
     def test_k1_start_blockers_explain_stale_or_busy_telemetry(self):
         from datetime import timedelta
         from core.printer_gcode_submission import availability
         k1 = connection("creality_local")
         k1.printer = SimpleNamespace(model="K1", catalog_model=None)
-        k1.config = {**k1.config, "k1_native_start_test_enabled": True}
         k1.last_seen_at = timezone.now() - timedelta(minutes=3)
         state = availability(k1)
         self.assertFalse(state["can_start"])
@@ -221,13 +171,13 @@ class GcodePrinterContractTests(SimpleTestCase):
         self.assertTrue(availability(k1)["can_start"])
         self.assertEqual(availability(k1)["k1_start_blockers"], [])
 
-    def test_k2_cannot_enable_k1_native_test_flow(self):
+    def test_k2_is_not_treated_as_k1(self):
         from core.printer_gcode_submission import availability
         k2 = connection("creality_local")
         k2.printer = SimpleNamespace(model="K2", catalog_model=None)
-        k2.config = {**(k2.config or {}), "k1_native_start_test_enabled": True}
         self.assertFalse(availability(k2)["k1_native_model"])
-        self.assertFalse(availability(k2)["k1_native_test_enabled"])
+        k2.last_snapshot["source_metadata"] = {"cfs_connected": False}
+        self.assertTrue(availability(k2)["can_start"])
 
     def test_native_idle_release_needs_positive_idle_state_and_no_active_job(self):
         from core.printer_gcode_submission import _native_creality_clearly_idle
