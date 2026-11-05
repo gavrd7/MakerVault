@@ -113,7 +113,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   async function submit() {
     const name = source === "printer" ? remotePath : current?.filename;
     const operation = source === "printer" ? "print" : action;
-    const mappedCfs = operation === "print" && mappingMode === "mapped" && cfsMappedAvailable && source === "makervault";
+    const mappedCfs = operation === "print" && mappingMode === "mapped" && cfsMappedAvailable && requirements.length > 0 && source === "makervault";
     const slicedCfs = operation === "print" && !mappedCfs && cfsSlicedAvailable;
     const selections = requirements.map(r => ({
       tool_index: r.tool_index, slot_label: cfsAssignments[r.tool_index] ?? suggestedSlot(r)
@@ -213,6 +213,32 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
       </div>}
       <small>FTPS availability differs by Bambu model and firmware. A PIN mismatch or unsupported TLS handshake fails closed. Starting Bambu print jobs is not implemented.</small>
     </div>}
+    {capabilities && !capabilities.supported ? <div className="settingsCallout">
+      <strong>Experimental adapter — printer file submission unavailable</strong>
+      <p>This source supports monitoring, but its storage and start-print protocol is not implemented or verified here. Bambu storage listing is experimental and read-only; Bambu print-start, proprietary Creality and other manufacturer transfer paths still require dedicated implementation and hardware validation.</p>
+    </div> : <>
+      <label>Source<select value={source} onChange={e => { setSource(e.target.value); setError(""); setReceipt(null); }}>
+        <option value="new">Upload a new G-code file</option>
+        <option value="makervault">Existing MakerVault G-code</option>
+        <option value="printer" disabled={capabilities && !capabilities.can_browse}>Already stored on the printer</option>
+      </select></label>
+      {source === "new" && <div className="printingManageForm">
+        <label>G-code<input type="file" accept=".gcode" onChange={e => setNewFile(e.target.files?.[0] || null)} /></label>
+        <small>This ad-hoc file is saved in MakerVault Files before transfer. It can be linked to a project or model later.</small>
+        <button type="button" className="primary" disabled={!newFile || busy || !canEdit} onClick={saveNew}>Save and review</button>
+      </div>}
+      {source === "makervault" && <label>MakerVault file<select value={assetId} onChange={e => setAssetId(e.target.value)}>
+        <option value="">Choose a G-code file…</option>
+        {initialAsset && !files.some(f => String(f.id) === String(initialAsset.id)) && <option value={initialAsset.id}>{initialAsset.name} · selected G-code</option>}
+        {files.map(f => <option value={f.id} key={f.id}>{f.name} · {f.project || "Standalone"}</option>)}
+      </select></label>}
+      {source === "printer" && <>
+        <label>Printer storage<select value={remotePath} onChange={e => setRemotePath(e.target.value)}>
+          <option value="">Choose a printer file…</option>
+          {remoteFiles.map(f => <option key={f.path} value={f.path}>{f.path}</option>)}
+        </select></label>
+        <button type="button" disabled={busy} onClick={load}>Refresh printer storage</button>
+      </>}
     {cfs?.applicable && <div className="settingsCallout">
       <strong>Creality CFS · Live loaded filaments</strong>
       <p>{cfs.connected === true
@@ -267,7 +293,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
       <strong>CFS print preparation</strong>
       <p>Review the sliced filament and select the correct loaded CFS slot. You can send these selections to the K2 or use its original slicer mapping.</p>
       {source === "makervault" && <label>Filament mapping
-        <select value={mappingMode} onChange={e => setMappingMode(e.target.value)}>
+        <select value={requirements.length ? mappingMode : "original"} onChange={e => setMappingMode(e.target.value)}>
           {cfsMappedAvailable && requirements.length > 0 && <option value="mapped">Use selected CFS slots — send mapping to K2</option>}
           {cfsSlicedAvailable && <option value="original">Use original mapping embedded by the slicer</option>}
         </select>
@@ -276,32 +302,6 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
         ? "MakerVault will send a new native K2 filament mapping before print-start. The printer provides no confirmed acknowledgement; check its display."
         : "The original slicer-selected mapping will be used without changes. Review the printer's loaded filaments."}</small>
     </div>}
-    {capabilities && !capabilities.supported ? <div className="settingsCallout">
-      <strong>Experimental adapter — printer file submission unavailable</strong>
-      <p>This source supports monitoring, but its storage and start-print protocol is not implemented or verified here. Bambu storage listing is experimental and read-only; Bambu print-start, proprietary Creality and other manufacturer transfer paths still require dedicated implementation and hardware validation.</p>
-    </div> : <>
-      <label>Source<select value={source} onChange={e => { setSource(e.target.value); setError(""); setReceipt(null); }}>
-        <option value="new">Upload a new G-code file</option>
-        <option value="makervault">Existing MakerVault G-code</option>
-        <option value="printer" disabled={capabilities && !capabilities.can_browse}>Already stored on the printer</option>
-      </select></label>
-      {source === "new" && <div className="printingManageForm">
-        <label>G-code<input type="file" accept=".gcode" onChange={e => setNewFile(e.target.files?.[0] || null)} /></label>
-        <small>This ad-hoc file is saved in MakerVault Files before transfer. It can be linked to a project or model later.</small>
-        <button type="button" className="primary" disabled={!newFile || busy || !canEdit} onClick={saveNew}>Save and review</button>
-      </div>}
-      {source === "makervault" && <label>MakerVault file<select value={assetId} onChange={e => setAssetId(e.target.value)}>
-        <option value="">Choose a G-code file…</option>
-        {initialAsset && !files.some(f => String(f.id) === String(initialAsset.id)) && <option value={initialAsset.id}>{initialAsset.name} · selected G-code</option>}
-        {files.map(f => <option value={f.id} key={f.id}>{f.name} · {f.project || "Standalone"}</option>)}
-      </select></label>}
-      {source === "printer" && <>
-        <label>Printer storage<select value={remotePath} onChange={e => setRemotePath(e.target.value)}>
-          <option value="">Choose a printer file…</option>
-          {remoteFiles.map(f => <option key={f.path} value={f.path}>{f.path}</option>)}
-        </select></label>
-        <button type="button" disabled={busy} onClick={load}>Refresh printer storage</button>
-      </>}
       {source === "makervault" && (checking ? <p>Analysing printer metadata…</p> : verdict && <div className="settingsCallout" role="status">
         <strong>{verdict.status === "mismatch" ? "Printer mismatch — blocked" : verdict.status === "metadata_match" ? "Printer name matches; full safety not verified" : "Printer identity unknown"}</strong>
         <p>{verdict.reason}</p>
