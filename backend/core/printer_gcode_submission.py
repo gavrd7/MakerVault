@@ -400,7 +400,7 @@ def _is_k2(connection):
     printer = getattr(connection, "printer", None)
     model = " ".join((str(getattr(printer, "model", "") or ""),
                       str(getattr(getattr(printer, "catalog_model", None), "name", "") or "")))
-    return bool(re.search(r"\\bK2(?:\\b|$)", model.upper()))
+    return bool(re.search(r"\bK2(?:\b|$)", model.upper()))
 
 
 def _mapped_cfs_entries(connection, requirements, requested):
