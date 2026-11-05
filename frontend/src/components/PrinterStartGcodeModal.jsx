@@ -75,7 +75,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
     // A Creality print-start may be confirmed by a later normal telemetry
     // poll. Read only the existing receipt; never re-submit the command.
     if (receipt?.status !== "unknown" ||
-        !receipt.message?.startsWith("Awaiting native Creality start verification") ||
+        !(receipt.message?.startsWith("Awaiting native Creality start verification") || receipt.message?.startsWith("Print-start sent without acknowledgement; awaiting live job verification")) ||
         !receipt.request_id) return undefined;
     let active = true;
     let checks = 0;
@@ -239,7 +239,8 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
       if (result.submission?.status === "unknown") {
         if (mappedCfs && result.submission?.message?.includes("mapping and print-start commands dispatched")) {
           setNotice("CFS print commands were sent. Check the K2 display and filament selection; the printer does not acknowledge the command.");
-        } else if (result.submission?.message?.startsWith("Awaiting native Creality start verification")) {
+        } else if (result.submission?.message?.startsWith("Awaiting native Creality start verification") ||
+                   result.submission?.message?.startsWith("Print-start sent without acknowledgement; awaiting live job verification")) {
           setNotice("Print command sent. Checking the printer's live status for the selected file; no further print command will be sent.");
         } else {
           setError("Printer outcome is uncertain. Inspect the printer before trying anything else.");
@@ -417,9 +418,9 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
       <small>Progress is indeterminate because the printer adapter does not report bytes transferred. The stage text reflects server-side checks. Do not submit another job while this operation is running.</small>
     </div>}
     {receipt && <div className="settingsCallout" role="status">
-      <strong>{receipt.status === "unknown" && receipt.message?.startsWith("Awaiting native Creality start verification")
+      <strong>{receipt.status === "unknown" && (receipt.message?.startsWith("Awaiting native Creality start verification") || receipt.message?.startsWith("Print-start sent without acknowledgement; awaiting live job verification"))
         ? "Print command sent — checking live status"
-        : receipt.status === "started" && receipt.message?.includes("confirmed by live Creality telemetry")
+        : receipt.status === "started" && (receipt.message?.includes("confirmed by live Creality telemetry") || receipt.message?.startsWith("Print started — verified by live printer telemetry"))
           ? "Print started — verified"
           : receipt.status === "unknown" && receipt.message?.includes("mapping and print-start commands dispatched")
             ? "Print command sent — verify on K2" : "Submission: " + receipt.status}</strong><p>{receipt.message}</p>
