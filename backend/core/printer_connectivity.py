@@ -1018,6 +1018,50 @@ POLLERS: dict[str, Callable[[str, dict | None], dict]] = {
 }
 
 
+def _reconcile_creality_processing(connection, snapshot):
+    """Do not leave a cancelled K-series job indefinitely at Preparing.
+
+    Creality may keep the previous filename and report state=0 after a stop.
+    Only a fresh, independent same-printer Moonraker query can establish that
+    the printer has returned to a terminal/idle state. A failed or busy query
+    leaves native telemetry untouched, so it cannot enable unsafe starts.
+    """
+    if snapshot.get("state") != "processing" or not getattr(connection, "printer_id", None):
+        return snapshot
+    from .models import PrinterConnection
+    sources = PrinterConnection.objects.filter(
+        printer_id=connection.printer_id, adapter="moonraker", enabled=True,
+    ).order_by("-last_seen_at")
+    for source in sources:
+        try:
+            observed = poll_moonraker(source.endpoint_url, source.config or {})
+        except (PrinterConnectionError, OSError, ValueError):
+            continue
+        remote_state = str(observed.get("state") or "").lower()
+        klippy = str((observed.get("source_metadata") or {}).get("klippy_state") or "").lower()
+        if not observed.get("online") or klippy != "ready":
+            continue
+        if remote_state not in {"idle", "complete", "cancelled"}:
+            # Do not trust cached Creality state over a live busy Moonraker.
+            continue
+        result = dict(snapshot)
+        result["state"] = "idle"
+        result["state_label"] = "Idle"
+        job = dict(result.get("job") or {})
+        old_file = job.get("file_name") or ""
+        job.update({"file_name": "", "progress": None, "remaining_seconds": None,
+                    "current_layer": None, "total_layers": None})
+        result["job"] = job
+        metadata = dict(result.get("source_metadata") or {})
+        metadata.update({
+            "state_reconciled_with_moonraker": True,
+            "previous_job_filename": old_file,
+        })
+        result["source_metadata"] = metadata
+        return result
+    return snapshot
+
+
 def poll_connection(connection) -> dict:
     definition = ADAPTERS.get(connection.adapter)
     if not definition:
@@ -1053,6 +1097,9 @@ def poll_connection(connection) -> dict:
             "adapter": connection.adapter,
             "source_metadata": source_metadata,
         }
+
+    if connection.adapter == "creality_local":
+        snapshot = _reconcile_creality_processing(connection, snapshot)
 
     job_result = sync_print_job_from_snapshot(connection, snapshot)
     material_result = sync_live_material_slots(connection, snapshot)
