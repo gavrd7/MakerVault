@@ -134,6 +134,24 @@ class SliceJobApiTests(TestCase):
                 self.assertEqual(self.post({**self.payload, **patch}).status_code, 400)
         self.assertEqual(SliceJob.objects.count(), 0)
 
+    def test_executable_start_fails_closed_without_approved_worker(self):
+        self.client.force_login(self.owner)
+        job_id = self.post().json()["job"]["id"]
+        response = self.client.post(f"{self.url}{job_id}/start/", "{}", content_type="application/json")
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(SliceJob.objects.get(pk=job_id).status, "draft")
+
+    def test_queued_job_fails_without_verified_worker_instead_of_sticking(self):
+        from core.slicer_execution import process_queued_job
+        from unittest.mock import patch
+        self.client.force_login(self.owner)
+        job_id = self.post().json()["job"]["id"]
+        SliceJob.objects.filter(pk=job_id).update(status="queued")
+        with patch("core.slicer_execution.verified_installation", return_value={}):
+            result = process_queued_job(job_id)
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(SliceJob.objects.get(pk=job_id).status, "failed")
+
     def test_unscheduled_draft_delete_requires_permission(self):
         self.client.force_login(self.owner)
         job_id = self.post().json()["job"]["id"]

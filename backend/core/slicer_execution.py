@@ -127,7 +127,7 @@ def process_queued_job(job_id):
             return {"status": "skipped"}
         try:
             validate_scheduling_for_worker(job, installed)
-        except SlicerExecutionError:
+        except (SlicerExecutionError, ValueError):
             job.status = "failed"
             job.message = "The verified worker or native profiles are no longer available."
             job.save(update_fields=["status", "message", "updated_at"])
