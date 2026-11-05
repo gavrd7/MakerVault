@@ -489,7 +489,7 @@ def _mapped_cfs_entries(connection, requirements, requested):
 def _printer_transfer_name(original_name, request_id):
     """Preserve the original name first, suffix with a stable job identity."""
     original = PurePosixPath(str(original_name or "job.gcode")).name
-    stem = re.sub(r"[^A-Za-z0-9_.-]", "_", re.sub(r"(?i)\\.gcode$", "", original))
+    stem = re.sub(r"[^A-Za-z0-9_.-]", "_", re.sub(r"(?i)\.gcode$", "", original))
     stem = stem.strip("._")[:120] or "job"
     return f"{stem}-mv-{request_id.hex[:12]}.gcode"
 
