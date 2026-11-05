@@ -436,6 +436,8 @@ def _require_action_ready(connection, action, *, use_sliced_cfs=False):
         raise GcodeSubmissionError("This printer adapter does not support G-code submission yet.")
     if not state["online"] or not state["enabled"]:
         raise GcodeSubmissionError("Explicitly enable printer G-code submission and refresh an online connection first.")
+    if use_sliced_cfs and not state["can_start_sliced_mapping"]:
+        raise GcodeSubmissionError("Original sliced CFS mapping is available only for a fresh, idle Creality K2 through Moonraker.", 409)
     if action == "upload" and not state["can_upload"]:
         raise GcodeSubmissionError("G-code upload is not supported for this printer.")
     if action == "print" and not (state["can_start"] or (use_sliced_cfs and state["can_start_sliced_mapping"])):
