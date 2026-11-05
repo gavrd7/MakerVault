@@ -20,9 +20,17 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   const [receipt, setReceipt] = useState(null);
   const [transferStage, setTransferStage] = useState("");
   const [bambuPin, setBambuPin] = useState("");
-  const [selectedCfsSlot, setSelectedCfsSlot] = useState("");
+  const [filamentAnalysis, setFilamentAnalysis] = useState(null);
+  const [cfsAssignments, setCfsAssignments] = useState({});
   const base = "/api/printing/printers/" + printer.id + "/connections/" + connection.id + "/gcode";
   const cfs = capabilities?.cfs || null;
+  const requirements = source === "makervault" ? (filamentAnalysis?.requirements || []) : [];
+  const sameMaterial = (left, right) => Boolean(left && right) && left.trim().toUpperCase() === right.trim().toUpperCase();
+  const matches = (requirement, slot) => sameMaterial(requirement.material, slot.material);
+  const suggestedSlot = (requirement) => (cfs?.slots || []).find(slot =>
+    matches(requirement, slot) && requirement.color_hex &&
+    slot.color_hex?.toLowerCase() === requirement.color_hex.toLowerCase()
+  )?.label || "";
   const current = files.find(f => String(f.id) === String(assetId)) || (initialAsset && String(initialAsset.id) === String(assetId) ? initialAsset : null);
 
   async function load() {
@@ -51,11 +59,13 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   useEffect(() => {
     let active = true;
     setVerdict(null);
+    setFilamentAnalysis(null);
+    setCfsAssignments({});
     setAck(false);
     if (source !== "makervault" || !assetId) return () => { active = false; };
     setChecking(true);
     apiFetch("/api/files/" + assetId + "/gcode/inspect/?printer_id=" + encodeURIComponent(printer.id))
-      .then(data => { if (active) setVerdict(data.compatibility); })
+      .then(data => { if (active) { setVerdict(data.compatibility); setFilamentAnalysis(data.analysis?.filaments || null); } })
       .catch(err => { if (active) setError(err.message); })
       .finally(() => { if (active) setChecking(false); });
     return () => { active = false; };
@@ -217,16 +227,46 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
           ? "The latest native printer reading reports no CFS connected."
           : "CFS connection state is unavailable or stale. Remote print-start remains disabled until it can be verified."}</p>
       {cfs.connected === true && <>
-        {cfs.slots?.length ? <label>Candidate CFS filament
-          <select value={selectedCfsSlot} onChange={e => setSelectedCfsSlot(e.target.value)}>
-            <option value="">Choose a loaded CFS slot for review…</option>
-            {cfs.slots.map(slot => <option key={slot.label} value={slot.label}>
-              {slot.label} · {slot.vendor || "Unknown brand"} · {slot.product_name || slot.material || "Unknown material"}{slot.color_hex ? " · " + slot.color_hex : ""}
-            </option>)}
-          </select>
-        </label> : <p>No usable CFS slot information was reported.</p>}
-        {selectedCfsSlot && <p role="status">Selected candidate: {selectedCfsSlot}. This is a read-only selection; it is not sent to the printer. Upload-only remains available.</p>}
-        <small>Creality CFS material mapping and its acknowledgement must be validated before MakerVault can start CFS jobs remotely.</small>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <strong>Current CFS inventory</strong>
+          <button type="button" onClick={load} disabled={busy}>Refresh CFS snapshot</button>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(215px, 1fr))", gap: 10, margin: "12px 0" }}>
+          {(cfs.slots || []).map(slot => <div key={slot.label} style={{ display: "flex", alignItems: "center", gap: 10, padding: 12, border: "1px solid var(--border-color, #344255)", borderRadius: 10 }}>
+            <span aria-label={slot.color_hex || "Unknown colour"} style={{ width: 24, height: 24, flexShrink: 0, borderRadius: 6, background: /^#[0-9a-fA-F]{6}$/.test(slot.color_hex || "") ? slot.color_hex : "transparent", border: "1px solid #718096" }} />
+            <span><strong>{slot.label}</strong> · {slot.material || "Unknown type"}<small style={{ display: "block" }}>{slot.vendor || "Unknown brand"} · {slot.product_name || "Unknown product"}</small></span>
+          </div>)}
+        </div>
+        {source === "makervault" && assetId && (checking ? <p>Reading sliced filament requirements…</p> : requirements.length ? <>
+          <strong>Sliced filament mapping review</strong>
+          <p>MakerVault proposes matching loaded slots from the G-code metadata. Your choices are not transmitted to the K2 yet.</p>
+          {requirements.map(requirement => {
+            const chosen = cfsAssignments[requirement.tool_index] ?? suggestedSlot(requirement);
+            const selected = (cfs.slots || []).find(slot => slot.label === chosen);
+            const materialMatch = selected && matches(requirement, selected);
+            const colourMatch = materialMatch && !!requirement.color_hex && selected.color_hex?.toLowerCase() === requirement.color_hex.toLowerCase();
+            return <div key={requirement.tool_index} style={{ margin: "12px 0", padding: 12, border: "1px solid var(--border-color, #344255)", borderRadius: 10 }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <strong>Slicer filament {requirement.tool_index + 1}</strong>
+                {requirement.color_hex && <span style={{ width: 18, height: 18, borderRadius: 5, border: "1px solid #718096", background: requirement.color_hex }} />}
+                <span>{requirement.material || "Unknown material"}{requirement.color_hex ? " · " + requirement.color_hex : ""}</span>
+              </div>
+              {requirement.preset && <small>Profile: {requirement.preset}</small>}
+              <label style={{ display: "block", marginTop: 8 }}>CFS slot for review
+                <select value={chosen} onChange={e => setCfsAssignments(previous => ({ ...previous, [requirement.tool_index]: e.target.value }))}>
+                  <option value="">Unassigned</option>
+                  {(cfs.slots || []).map(slot => <option key={slot.label} value={slot.label}>
+                    {slot.label} · {slot.material || "Unknown material"} · {slot.product_name || "Unknown filament"}{slot.color_hex ? " · " + slot.color_hex : ""}
+                  </option>)}
+                </select>
+              </label>
+              <small role="status">{!selected ? "No CFS slot selected." : !requirement.material ? "Material unknown — cannot check compatibility." : !materialMatch ? "Material mismatch — do not print using this selection." : colourMatch ? "Material and colour match the slicer metadata (advisory only)." : "Material matches, but colour differs or is unknown."}</small>
+            </div>;
+          })}
+          {!filamentAnalysis?.complete && <p role="status">Slicer metadata is incomplete. Automatic mapping cannot be verified.</p>}
+        </> : <p>There are no explicit sliced filament declarations in this G-code. An automatic matching recommendation cannot be made.</p>)}
+        {source === "printer" && <p>Files already on the printer do not have source filament metadata in this dialog. No mapping is inferred from the filename.</p>}
+        <small>All mapping selections are read-only. Printing through either transport remains disabled when CFS is connected until the printer mapping protocol and acknowledgement are verified.</small>
       </>}
     </div>}
     {capabilities && !capabilities.supported ? <div className="settingsCallout">
