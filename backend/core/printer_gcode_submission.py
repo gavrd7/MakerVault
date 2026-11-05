@@ -82,18 +82,17 @@ def list_printer_gcodes(connection):
             raise GcodeSubmissionError(str(exc), status=409) from exc
     if connection.adapter == "creality_local":
         from .creality_gcode import CrealityGcodeError, list_files
+        # Use the proven same-printer storage API when it is already
+        # configured. This is read-only: native upload remains independent.
+        alternatives = PrinterConnection.objects.filter(
+            printer_id=connection.printer_id, adapter="moonraker", enabled=True,
+        ).order_by("-last_seen_at")
+        for alternative in alternatives:
+            if _online(alternative):
+                return list_printer_gcodes(alternative)
         try:
             return list_files(connection)
         except CrealityGcodeError as exc:
-            # Stock WebSocket file enumeration is not supported by every K2
-            # firmware. Use the already-configured same-printer Moonraker
-            # source exclusively for read-only storage enumeration.
-            alternatives = PrinterConnection.objects.filter(
-                printer_id=connection.printer_id, adapter="moonraker", enabled=True,
-            ).order_by("-last_seen_at")
-            for alternative in alternatives:
-                if _online(alternative):
-                    return list_printer_gcodes(alternative)
             raise GcodeSubmissionError(str(exc), 409) from exc
     if connection.adapter == "flashforge":
         from .flashforge_gcode import FlashForgeFileError, list_files
