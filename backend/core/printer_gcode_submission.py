@@ -745,6 +745,97 @@ def _verify_creality_start_now(connection, remote_path):
     return _creality_started_file(snapshot, remote_path)
 
 
+# Generic APIs acknowledge receipt of a command, not necessarily that the
+# selected G-code actually became the running job.
+START_ACCEPTED_PENDING = "Print-start command accepted; awaiting live job verification"
+START_UNACKNOWLEDGED_PENDING = "Print-start sent without acknowledgement; awaiting live job verification"
+START_VERIFIED_MESSAGE = "Print started — verified by live printer telemetry"
+START_VERIFY_ADAPTERS = frozenset({
+    "moonraker", "elegoo", "qidi", "sovol", "snapmaker", "voron",
+    "octoprint", "prusa", "flashforge", "creality_local",
+})
+
+
+def _matches_active_print(connection, snapshot, expected_path):
+    """Check a fresh, adapter-normalised active job, never just a cached file."""
+    if not isinstance(snapshot, dict) or snapshot.get("online") is not True:
+        return False
+    if snapshot.get("state") not in {"printing", "paused"}:
+        return False
+    job = snapshot.get("job") or {}
+    actual = str(job.get("file_name") or "").strip().replace(chr(92), "/").lstrip("/")
+    expected = str(expected_path or "").strip().replace(chr(92), "/").lstrip("/")
+    if not actual or not expected:
+        return False
+    # Full relative paths must match; when telemetry only provides a basename,
+    # accept it only if the request itself also named a root-level file.
+    if actual != expected:
+        return False
+    if getattr(connection, "adapter", None) == "creality_local":
+        return _creality_started_file(snapshot, expected_path)
+    return True
+
+
+def _pending_start_message(remote_path, *, acknowledged):
+    prefix = START_ACCEPTED_PENDING if acknowledged else START_UNACKNOWLEDGED_PENDING
+    return prefix + ": " + remote_path + ". No further start commands will be sent."
+
+
+def reconcile_print_start_receipts(connection, snapshot):
+    """Confirm eligible submitted prints using a fresh observation of that job.
+
+    No fallback to a different printer connection, filename inference, or
+    non-idempotent retry. Only previously dispatched receipts marked with a
+    pending verification prefix can be reconciled.
+    """
+    if getattr(connection, "adapter", None) not in START_VERIFY_ADAPTERS:
+        return 0
+    if not (isinstance(snapshot, dict) and snapshot.get("online") is True):
+        return 0
+    try:
+        observed_at = timezone.datetime.fromisoformat(snapshot.get("captured_at") or "")
+        if timezone.is_naive(observed_at):
+            return 0
+    except (TypeError, ValueError):
+        return 0
+    if snapshot.get("state") not in {"printing", "paused"}:
+        return 0
+    prefixes = (START_ACCEPTED_PENDING, START_UNACKNOWLEDGED_PENDING,
+                CREALITY_START_CONFIRMATION)
+    candidates = PrinterGcodeSubmission.objects.filter(
+        connection=connection,
+        action="print",
+        created_at__gte=timezone.now() - timedelta(minutes=10),
+        created_at__lte=observed_at,
+        status__in=["started", "unknown"],
+    ).order_by("-created_at")[:10]
+    for row in candidates:
+        if not str(row.message or "").startswith(prefixes):
+            continue
+        if not _matches_active_print(connection, snapshot, row.remote_path):
+            continue
+        changed = PrinterGcodeSubmission.objects.filter(
+            pk=row.pk, status=row.status, message=row.message,
+        ).update(
+            status="started",
+            message=START_VERIFIED_MESSAGE + " for " + row.remote_path + ".",
+            updated_at=timezone.now(),
+        )
+        if changed:
+            return changed
+    return 0
+
+
+def _verify_print_start_now(connection):
+    """One bounded read-only check. Ordinary polling handles late starts."""
+    from .printer_connectivity import poll_connection
+    try:
+        poll_connection(connection)
+    except Exception:
+        logger.info("Printer start verification deferred to normal live polling")
+    # The normal poll reconciles the journal record itself.
+
+
 def _receipt(row):
     return {
         "request_id": str(row.pk), "status": row.status,
@@ -952,6 +1043,7 @@ def submit(connection, user, payload):
             # Reconciliation only accepts an explicit successful dispatch. This
             # marker is persisted after dispatch and before polling starts.
             native_unacknowledged = connection.adapter == "creality_local" and not use_sliced_cfs
+            unacknowledged_start = native_unacknowledged or connection.adapter == "flashforge"
 
             dispatch_attempted = True
             try:
@@ -1008,23 +1100,19 @@ def submit(connection, user, payload):
                 raise GcodeSubmissionError("Start-print outcome is uncertain. Inspect printer before trying again.", 502) from exc
             if (False if use_mapped_cfs or connection.adapter == "flashforge" or (connection.adapter == "creality_local" and not use_sliced_cfs) else response.status_code != 204 if connection.adapter in {"octoprint", "prusa"} else _json_response(response) != "ok"):
                 raise GcodeSubmissionError("Printer did not confirm starting the print. Verify its live state.", 502)
-            if native_unacknowledged:
-                row.status = "unknown"
-                row.message = _creality_start_receipt_message(remote_path)
+            if connection.adapter in START_VERIFY_ADAPTERS:
+                row.status = "unknown" if unacknowledged_start else "started"
+                row.message = _pending_start_message(remote_path, acknowledged=not unacknowledged_start)
                 row.save(update_fields=["status", "message", "updated_at"])
-                # Do not retry the irreversible start. The read-only poll may
-                # immediately confirm it, otherwise future monitoring will.
-                if _verify_creality_start_now(connection, remote_path):
-                    row.refresh_from_db(fields=["status", "message"])
-        if action == "print" and native_unacknowledged:
-            # A background poll can have reconciled the receipt while the
-            # request was still in progress; never overwrite that outcome.
+                # A read-only poll may confirm an active matching job, but
+                # cannot dispatch another start or convert failures to success.
+                _verify_print_start_now(connection)
+        if action == "print" and connection.adapter in START_VERIFY_ADAPTERS:
+            # Another poll may already have upgraded the receipt.
             row.refresh_from_db(fields=["status", "message"])
         else:
             row.status = "started" if action == "print" else "uploaded"
-        if not (action == "print" and native_unacknowledged):
-            row.message = ("Print-start accepted with original slicer mapping; MakerVault did not change any CFS slots. Verify filament at printer." if action == "print" and use_sliced_cfs else
-                           "Print start accepted by printer." if action == "print" else "Uploaded to printer without starting.")
+            row.message = "Print start accepted by printer." if action == "print" else "Uploaded to printer without starting."
     except (FlashForgeFileError, CrealityGcodeError) as exc:
         row.status = "unknown"
         row.message = "Printer response was not fully verified. Inspect printer storage and live state before trying again."
