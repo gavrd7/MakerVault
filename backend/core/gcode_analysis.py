@@ -71,6 +71,76 @@ HEX_COLOUR = re.compile(r"^#[0-9A-Fa-f]{6}$")
 MATERIAL_TYPES = ("PLA", "PETG", "ABS", "ASA", "TPU", "PC", "PA", "PVA", "HIPS", "PCTG")
 
 
+TOOL_SELECT = re.compile(r"^T(\d{1,2})(?:\s|$)", re.I)
+E_VALUE = re.compile(r"(?:^|\s)E\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))(?=\s|$)", re.I)
+
+
+def _used_extrusion_tools(text, *, declared_count, truncated=False):
+    """Conservatively identify tools depositing material, not merely configured.
+
+    Only planar G0/G1 moves with a positive E delta count as deposition.
+    T0/T1... select slicer tool indices. G92 E, M82/M83 and G90/G91 are
+    tracked separately; ambiguous dialects and bounded scans fail to unknown.
+    """
+    active = None
+    seen_tool = False
+    extruding = set()
+    e_absolute = True
+    e_position = 0.0
+    ambiguous = False
+    detected_deposition = False
+    for raw in text.splitlines():
+        if len(raw) > MAX_LINE:
+            ambiguous = True
+            continue
+        line = raw.split(";", 1)[0].strip().upper()
+        if not line:
+            continue
+        match = TOOL_SELECT.match(line)
+        if match:
+            active = int(match.group(1))
+            seen_tool = True
+            if active >= max(1, declared_count):
+                ambiguous = True
+            continue
+        code = line.split(None, 1)[0]
+        if code in {"M82", "M83"}:
+            e_absolute = code == "M82"
+        elif code == "G92":
+            e = E_VALUE.search(line[len(code):])
+            if e:
+                e_position = float(e.group(1))
+        elif code in {"G0", "G00", "G1", "G01"}:
+            args = line[len(code):]
+            e = E_VALUE.search(args)
+            if not e:
+                continue
+            amount = float(e.group(1))
+            delta = amount - e_position if e_absolute else amount
+            if e_absolute:
+                e_position = amount
+            if delta <= 0.000001 or not re.search(r"(?:^|\s)[XY]\s*[-+]?\d", args):
+                continue
+            detected_deposition = True
+            if active is None:
+                # Only an explicitly single-profile file has an unambiguous
+                # default tool. Do not assume T0 for four declared profiles.
+                if declared_count == 1 and not seen_tool:
+                    extruding.add(0)
+                else:
+                    ambiguous = True
+            else:
+                extruding.add(active)
+        elif code in {"G10", "G11", "M163", "M164", "M567"}:
+            # These commands can change feedstock without a normal T command.
+            ambiguous = True
+    known = bool(extruding) and detected_deposition and not ambiguous and not truncated
+    return {"used_tool_indices": sorted(extruding) if known else [],
+            "usage_confident": known,
+            "usage_reason": ("" if known else
+                "Actual depositing tools could not be determined from this G-code; the slicer's original mapping can still be used.")}
+
+
 def _filament_requirements(text, *, truncated):
     """Extract advisory slicer filament declarations; never infer a printer mapping.
 
@@ -106,9 +176,13 @@ def _filament_requirements(text, *, truncated):
             "tool_index": index, "material": material, "color_hex": colour.lower(),
             "preset": preset, "complete": bool(material and colour),
         })
+    tool_usage = _used_extrusion_tools(text, declared_count=count, truncated=truncated)
+    used = [item for item in requirements if item["tool_index"] in tool_usage["used_tool_indices"]]
     complete = bool(requirements) and all(item["complete"] for item in requirements) and not truncated
     return {
         "requirements": requirements, "complete": complete,
+        "used_requirements": used,
+        **tool_usage,
         "reason": ("" if complete else "Sliced filament type/colour metadata is incomplete or not available; manual review is required."),
     }
 
