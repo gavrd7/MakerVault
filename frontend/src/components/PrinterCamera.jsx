@@ -106,9 +106,9 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
     {notice && <p role="status">{notice}</p>}
     {error && <p className="integrationError" role="alert">{error}</p>}
     {settings && canEdit && <form className="formGrid printerCameraForm" onSubmit={save}>
-      <div className="full"><small>{provider?.guidance} If this printer exposes Moonraker or OctoPrint, you can also add that integration and configure its camera.</small></div>
+      <div className="full printerCameraGuidance"><small>{provider?.guidance || "Choose a camera source below, or enter its URL manually."}</small></div>
       {warnings.map(message => <p className="full" role="status" key={message}>{message}</p>)}
-      <div className="full settingsActions">{!!presets.length && <button type="button" disabled={busy} onClick={() => { setCandidates(presets); setWarnings([]); setNotice("K1 presets loaded. Choose the route that works in your printer installation."); }}>K1 / Helper Script presets</button>}<button type="button" disabled={busy || !connection.enabled} onClick={discover}>{busy ? "Working…" : "Find camera sources"}</button></div>
+      <div className="full settingsActions printerCameraDiscoveryActions">{!!presets.length && <button type="button" disabled={busy} onClick={() => { setCandidates(presets); setWarnings([]); setNotice("K1 presets loaded. Choose the route that works in your printer installation."); }}>K1 / Helper Script presets</button>}<button type="button" disabled={busy || !connection.enabled} onClick={discover}>{busy ? "Working…" : "Find camera sources"}</button></div>
       {!!rows.length && <div className="full cameraSavedSources">
         <strong>Saved camera sources</strong>
         {rows.map(item => <div className="cameraSourceRow" key={item.id}>
@@ -135,7 +135,7 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
       <label className="full">Camera URL<input required type="url" value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} placeholder="http://printer-address:8080/?action=snapshot" /><small>Use the same host as this printer source. Include the camera port and path. Embedded usernames and passwords are unsupported.</small></label>
       <label>Rotation<select value={form.rotation} onChange={e => setForm({ ...form, rotation: Number(e.target.value) })}>{[0, 90, 180, 270].map(value => <option key={value} value={value}>{value}°</option>)}</select></label>
       <div className="printerCameraFlips"><label><input type="checkbox" checked={form.flip_horizontal} onChange={e => setForm({ ...form, flip_horizontal: e.target.checked })} /> Flip horizontally</label><label><input type="checkbox" checked={form.flip_vertical} onChange={e => setForm({ ...form, flip_vertical: e.target.checked })} /> Flip vertically</label></div>
-      <div className="full settingsActions"><button className="primary" disabled={busy}>Save camera source</button></div>
+      <div className="full settingsActions printerCameraSaveActions"><button className="primary" disabled={busy}>Save camera source</button></div>
     </form>}
     {!setupOnly && playing && <CameraPlayback key={camera.id} camera={camera} url={root + camera.id + "/media/"} />}
   </section>;
