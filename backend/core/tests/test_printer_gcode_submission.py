@@ -1,7 +1,7 @@
 """Contract tests for experimental printer file APIs. No hardware is commanded."""
 from io import BytesIO
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, AsyncMock, patch
 
 from django.test import SimpleTestCase
 from django.utils import timezone
@@ -14,7 +14,7 @@ from core.gcode_analysis import inspect_asset
 from core.printer_gcode_submission import (
     GcodeSubmissionError, _valid_path, availability,
     list_printer_gcodes, _octoprint_upload_receipt, _verify_moonraker_upload,
-    _verify_creality_upload, _require_action_ready,
+    _verify_creality_upload, _require_action_ready, _mapped_cfs_entries,
 )
 
 
@@ -229,6 +229,53 @@ class NativeGcodeAdapterTests(SimpleTestCase):
         self.assertFalse(availability(moon)["can_start_sliced_mapping"])
         with self.assertRaises(GcodeSubmissionError):
             _require_action_ready(moon, "print", use_sliced_cfs=True)
+
+    @patch("core.printer_gcode_submission.PrinterConnection.objects.filter")
+    def test_mapped_cfs_validates_physical_slots_and_materials(self, filtered):
+        moon = connection("moonraker")
+        moon.printer = SimpleNamespace(model="K2", manufacturer="Creality", catalog_model=None)
+        moon.printer_id = "one-printer"
+        native = connection("creality_local")
+        native.last_snapshot["source_metadata"] = {"cfs_connected": True}
+        native.last_snapshot["materials"] = [{
+            "system": "creality_cfs", "unit_index": 0, "slot_index": 2,
+            "material": "PLA", "color_hex": "#ffffff",
+        }]
+        filtered.return_value.order_by.return_value = [native]
+        req = [{"tool_index": 0, "material": "PLA", "color_hex": "#000000"}]
+        chosen = [{"tool_index": 0, "slot_label": "1C"}]
+        mapped = _mapped_cfs_entries(moon, req, chosen)
+        self.assertEqual(mapped, [{
+            "id": "T1A", "type": "PLA", "color": "#ffffff", "boxId": 1, "materialId": 2,
+        }])
+        req[0]["material"] = "PETG"
+        with self.assertRaisesRegex(GcodeSubmissionError, "Material mismatch"):
+            _mapped_cfs_entries(moon, req, chosen)
+        req[0]["material"] = "PLA"
+        with self.assertRaises(GcodeSubmissionError):
+            _mapped_cfs_entries(moon, req, [{"tool_index": 0, "slot_label": "2A"}])
+        native.last_seen_at = timezone.now() - timezone.timedelta(minutes=5)
+        with self.assertRaises(GcodeSubmissionError):
+            _mapped_cfs_entries(moon, req, chosen)
+
+    @patch("core.creality_gcode.websockets.connect")
+    def test_mapped_creality_command_sequence_once(self, connect):
+        import asyncio
+        import json
+        from core.creality_gcode import _start_cfs_mapped, start_cfs_mapped
+        ws = AsyncMock()
+        connect.return_value.__aenter__.return_value = ws
+        items = [{"id": "T1A", "type": "PLA", "color": "#ffffff", "boxId": 1, "materialId": 2}]
+        asyncio.run(_start_cfs_mapped("ws://k2.local:9999", "ghost.gcode", items))
+        self.assertEqual(ws.send.await_count, 2)
+        first = json.loads(ws.send.await_args_list[0].args[0])
+        second = json.loads(ws.send.await_args_list[1].args[0])
+        self.assertEqual(first["params"]["colorMatch"]["list"], items)
+        self.assertEqual(second["params"]["multiColorPrint"]["gcode"], "/mnt/UDISK/printer_data/gcodes/ghost.gcode")
+        with patch("core.creality_gcode.asyncio.run") as runner:
+            with self.assertRaises(CrealityGcodeError):
+                start_cfs_mapped(connection("creality_local"), "../danger.gcode", items)
+            runner.assert_not_called()
 
     @patch("core.printer_gcode_submission.PrinterConnection.objects.filter")
     @patch("core.printer_gcode_submission._verify_moonraker_upload")
