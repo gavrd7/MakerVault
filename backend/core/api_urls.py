@@ -1,8 +1,13 @@
 from django.urls import path
 from . import printer_gcode_api
+from . import slicer_api
 from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views, device_api_views, device_pairing, device_measurements, device_tag_registration, device_tag_lookup, weight_history_views, tag_ndef, device_ndef_write, device_cfs_lookup, device_makertag_operations, device_pending_work
 
 urlpatterns = [
+    path("printing/slicer/engines/", slicer_api.engines, name="api-slicer-engines"),
+    path("printing/slicer/jobs/", slicer_api.jobs, name="api-slicer-jobs"),
+    path("printing/slicer/jobs/<uuid:job_id>/", slicer_api.job_detail, name="api-slicer-job-detail"),
+
     path("device/v1/pending-work/", device_pending_work.pending_work, name="device-pending-work"),
     path("device/tag-lookup/", device_tag_lookup.begin, name="api-device-tag-lookup-begin"),
     path("device/tag-lookup/<uuid:lookup_id>/", device_tag_lookup.status, name="api-device-tag-lookup-status"),
