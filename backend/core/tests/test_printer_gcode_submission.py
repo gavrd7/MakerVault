@@ -271,6 +271,12 @@ class GcodePrinterContractTests(SimpleTestCase):
             list_printer_gcodes(printer)
         native.assert_called_once_with(printer)
 
+    def test_every_browsable_adapter_has_explicit_listing_handler(self):
+        from core.printer_gcode_submission import BROWSE_ADAPTERS, _listing_handler
+        for adapter in BROWSE_ADAPTERS:
+            with self.subTest(adapter=adapter):
+                self.assertTrue(callable(_listing_handler(adapter)))
+
     @patch("core.printer_gcode_submission._get_json")
     def test_unknown_adapter_does_not_guess_moonraker_endpoint(self, get_json):
         with self.assertRaisesRegex(GcodeSubmissionError, "no supported file listing protocol"):
