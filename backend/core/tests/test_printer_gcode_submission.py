@@ -88,20 +88,21 @@ class GcodePrinterContractTests(SimpleTestCase):
             pk="receipt-1", remote_path="3DBenchy.gcode",
             message=_creality_start_receipt_message("3DBenchy.gcode"),
         )
-        candidates = Mock()
-        candidates.order_by.return_value.__getitem__ = Mock(return_value=[row])
-        filter_rows.side_effect = [candidates, Mock()]
+        candidates = MagicMock()
+        candidates.order_by.return_value.__getitem__.return_value = [row]
+        update_queryset = Mock()
+        update_queryset.update.return_value = 1
+        filter_rows.side_effect = [candidates, update_queryset]
         snapshot = {
             "online": True, "captured_at": timezone.now().isoformat(),
             "state": "printing", "job": {"file_name": "3DBenchy.gcode"},
             "source_metadata": {"raw_state": 1},
         }
-        filter_rows.return_value.update.return_value = 1
         self.assertEqual(reconcile_creality_start_receipts(printer, snapshot), 1)
         self.assertEqual(filter_rows.call_count, 2)
         self.assertEqual(filter_rows.call_args.kwargs["pk"], "receipt-1")
         self.assertEqual(filter_rows.call_args.kwargs["status"], "unknown")
-        self.assertEqual(filter_rows.call_args.return_value.update.call_args.kwargs["status"], "started")
+        self.assertEqual(update_queryset.update.call_args.kwargs["status"], "started")
 
     @patch("core.printer_gcode_submission.PrinterGcodeSubmission.objects.filter")
     def test_native_start_does_not_upgrade_unrelated_or_old_telemetry(self, filtered):
@@ -112,9 +113,9 @@ class GcodePrinterContractTests(SimpleTestCase):
             "source_metadata": {"raw_state": 1},
             "captured_at": timezone.now().isoformat(),
         }
-        filtered.return_value.order_by.return_value.__getitem__ = Mock(
-            return_value=[SimpleNamespace(pk="r1", remote_path="3DBenchy.gcode")]
-        )
+        filtered.return_value.order_by.return_value.__getitem__.return_value = [
+            SimpleNamespace(pk="r1", remote_path="3DBenchy.gcode")
+        ]
         self.assertEqual(reconcile_creality_start_receipts(printer, snapshot), 0)
         self.assertEqual(filtered.call_count, 1)
         self.assertEqual(reconcile_creality_start_receipts(printer, {**snapshot, "captured_at": ""}), 0)
