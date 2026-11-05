@@ -120,6 +120,12 @@ class GcodePrinterContractTests(SimpleTestCase):
         k2.printer = SimpleNamespace(model="K2", catalog_model=None)
         self.assertEqual(_stock_data_root(k1), "/usr/data")
         self.assertEqual(_stock_data_root(k2), "/mnt/UDISK")
+        k1.printer.model = "K1 Max"
+        self.assertEqual(_stock_data_root(k1), "/usr/data")
+        k1.printer.model = "Unrecognised Creality"
+        with self.assertRaises(CrealityGcodeError):
+            _stock_data_root(k1)
+        k1.printer.model = "K1"
         with patch("core.creality_gcode.websockets.connect") as connect:
             ws = AsyncMock()
             connect.return_value.__aenter__.return_value = ws
