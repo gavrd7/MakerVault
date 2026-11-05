@@ -288,6 +288,22 @@ def _verify_moonraker_upload(connection, remote_path, expected_size):
     return match
 
 
+def _verify_creality_upload(connection, remote_path, expected_size):
+    """Verify native HTTP-upload presence through an enabled Moonraker source
+    on the SAME printer. This never uploads or starts via the alternate source.
+    """
+    moonraker_sources = PrinterConnection.objects.filter(
+        printer_id=connection.printer_id, adapter="moonraker", enabled=True,
+    ).order_by("-last_seen_at")
+    for source in moonraker_sources:
+        if _online(source):
+            return _verify_moonraker_upload(source, remote_path, expected_size)
+    raise GcodeSubmissionError(
+        "Native Creality HTTP upload was attempted, but no fresh Moonraker storage "
+        "connection is available to verify the file. Inspect printer storage before retrying.", 502
+    )
+
+
 def _metadata(connection, path):
     if connection.adapter in {"octoprint", "prusa", "flashforge"}:
         return {}  # Printer storage filenames alone are not verified slicer profiles.
@@ -595,8 +611,7 @@ def submit(connection, user, payload):
                 _verify_moonraker_upload(connection, remote_path, asset.file.size)
             elif connection.adapter == "creality_local":
                 progress("Native Creality HTTP accepted the transfer. Checking printer storage.")
-                if remote_path not in {item["path"] for item in list_printer_gcodes(connection)}:
-                    raise GcodeSubmissionError("Native Creality accepted upload but the file is not confirmed in printer storage. No start command sent.", 502)
+                _verify_creality_upload(connection, remote_path, asset.file.size)
         if action == "print":
             progress("Upload checked. Confirming printer idle before print-start.")
             # Verify state a second time after file transfer, particularly when
