@@ -1,8 +1,7 @@
-"""Experimental upload-only path for stock Creality OS on a trusted LAN.
+"""Stock Creality OS G-code storage and explicitly confirmed print operations.
 
-The proprietary WebSocket monitoring API is not a validated print-start API.
-Never dispatch a print command from this module. Port 80 may be absent on
-firmware exposing Moonraker instead; users should configure it separately.
+File operations and proprietary print commands are separately validated and
+must be invoked only by the owner-scoped submission workflow.
 """
 from urllib.parse import urlparse, quote
 import asyncio
@@ -56,9 +55,7 @@ def upload_only(connection, asset, remote_name):
     # printer-side file checksum. No start follows this operation.
     return remote_name
 
-# Stock Creality OS uses an uncorrelated WebSocket protocol. Only the validated
-# single-spool print-start command is represented here; CFS prints require
-# explicit colour-slot mapping and cannot use this path.
+# Stock Creality OS uses an uncorrelated WebSocket protocol.
 FILE_LIST_FIELDS = ("gcodeFiles", "gcodeFile", "gcodeList", "gcodeFileList", "files", "fileList")
 
 
@@ -191,3 +188,43 @@ def start_single_spool(connection, remote_path):
     # Fire-and-forget protocol: sending does not prove acceptance.
     return None
 
+
+async def _start_cfs_mapped(endpoint, remote_path, mapping):
+    """Use the stock K2's established colorMatch -> multiColorPrint sequence.
+
+    Sending these commands does not prove firmware acceptance. Callers must
+    journal the result as unknown rather than claim a confirmed start.
+    """
+    gcode_path = "/mnt/UDISK/printer_data/gcodes/" + remote_path
+    async with websockets.connect(
+        normalise_creality_endpoint(endpoint), ping_interval=None,
+        subprotocols=["wsslicer"], open_timeout=5, close_timeout=1, proxy=None
+    ) as ws:
+        command = {"method": "set", "params": {"colorMatch": {"path": gcode_path, "list": mapping}}}
+        await asyncio.wait_for(ws.send(json.dumps(command, separators=(",", ":"))), timeout=5)
+        # The documented proprietary API does not correlate acknowledgements.
+        # No application-level retries are safe after this point.
+        command = {"method": "set", "params": {"multiColorPrint": {
+            "gcode": gcode_path, "enableSelfTest": 0,
+        }}}
+        await asyncio.wait_for(ws.send(json.dumps(command, separators=(",", ":"))), timeout=5)
+
+
+def start_cfs_mapped(connection, remote_path, mapping):
+    safe = _safe_printer_file(remote_path)
+    if not safe or safe != remote_path or not isinstance(mapping, list) or not 1 <= len(mapping) <= 4:
+        raise CrealityGcodeError("Invalid mapped K2 print request.")
+    for item in mapping:
+        if not isinstance(item, dict) or set(item) != {"id", "type", "color", "boxId", "materialId"}:
+            raise CrealityGcodeError("Invalid CFS mapping entry.")
+        if not re.fullmatch(r"T1[A-D]", str(item["id"])) or not re.fullmatch(r"#[0-9A-Fa-f]{6}", str(item["color"])):
+            raise CrealityGcodeError("Invalid sliced tool or filament colour.")
+        if not isinstance(item["boxId"], int) or not 1 <= item["boxId"] <= 4 or not isinstance(item["materialId"], int) or not 0 <= item["materialId"] <= 3:
+            raise CrealityGcodeError("Invalid CFS box or material slot.")
+        if not re.fullmatch(r"[A-Za-z0-9+_-]{2,20}", str(item["type"])):
+            raise CrealityGcodeError("Invalid CFS material type.")
+    try:
+        asyncio.run(_start_cfs_mapped(connection.endpoint_url, safe, mapping))
+    except (OSError, asyncio.TimeoutError, WebSocketException, RuntimeError) as exc:
+        raise CrealityGcodeError("K2 colour mapping/print-start outcome uncertain. Inspect the printer before attempting another job.") from exc
+    return None
