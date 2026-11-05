@@ -611,6 +611,7 @@ def poll_moonraker(endpoint_url: str, config: dict | None = None) -> dict:
         ] + tool_warnings,
         "source_metadata": {
             "klippy_state": str((server.get("result") or {}).get("klippy_state") or ""),
+            "virtual_sdcard_active": virtual_sd.get("is_active") is True,
             "moonraker_version": str((server.get("result") or {}).get("moonraker_version") or ""),
             "tool_names": tool_names,
             "active_tool": active_tool,
@@ -1039,7 +1040,8 @@ def _reconcile_creality_processing(connection, snapshot):
             continue
         remote_state = str(observed.get("state") or "").lower()
         klippy = str((observed.get("source_metadata") or {}).get("klippy_state") or "").lower()
-        if not observed.get("online") or klippy != "ready":
+        if (not observed.get("online") or klippy != "ready" or
+                (observed.get("source_metadata") or {}).get("virtual_sdcard_active") is True):
             continue
         if remote_state not in {"idle", "complete", "cancelled"}:
             # Do not trust cached Creality state over a live busy Moonraker.
@@ -1049,7 +1051,8 @@ def _reconcile_creality_processing(connection, snapshot):
         result["state_label"] = "Idle"
         job = dict(result.get("job") or {})
         old_file = job.get("file_name") or ""
-        job.update({"file_name": "", "progress": None, "remaining_seconds": None,
+        job.update({"file_name": "", "progress": None, "elapsed_seconds": None,
+                    "remaining_seconds": None,
                     "current_layer": None, "total_layers": None})
         result["job"] = job
         metadata = dict(result.get("source_metadata") or {})
