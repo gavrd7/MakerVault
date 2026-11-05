@@ -102,7 +102,7 @@ class GcodePrinterContractTests(SimpleTestCase):
         creality = availability(connection("creality_local"))
         self.assertTrue(creality["supported"])
         self.assertTrue(creality["can_upload"])  # owner printer-control permissions are sufficient
-        self.assertFalse(creality["can_start"])   # CFS state unknown
+        self.assertTrue(creality["can_start"])    # Mock connection has no K2 model or CFS evidence
 
     def test_native_submission_uses_control_permissions_without_experimental_switches(self):
         ff = connection("flashforge")
