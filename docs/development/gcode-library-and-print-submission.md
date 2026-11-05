@@ -102,3 +102,47 @@ Follow-up validation:
    Klipper/MCU, or supervisor triggers the reboot. Preserve crash evidence.
 4. Revisit native start only with a reviewed, supervised hardware test plan;
    never enable it merely because file browsing works.
+
+
+## Supervised K1 native start test switch (staging only, 2026-11-05)
+
+The stock K1 `opGcodeFile` start path remains disabled by default after
+two full printer reboots. Owners may explicitly opt into a **supervised**
+hardware trial on one native Creality K1 connection by setting
+`connection.config["k1_native_start_test_enabled"] = True`. This switch is
+never automatically enabled on upgrades. It has no effect on K2 or Moonraker.
+It is not a firmware fix and the K1 may reboot again.
+
+In a staging Django shell (`sudo docker compose -f compose.yaml -f
+compose.build.yaml -f compose.staging.yaml exec makervault python manage.py shell`),
+select the correct native K1 connection and explicitly set the flag:
+
+```python
+from core.models import PrinterConnection
+c = PrinterConnection.objects.get(adapter="creality_local", printer__name="K1")
+c.config = {**(c.config or {}), "k1_native_start_test_enabled": True}
+c.save(update_fields=["config"])
+```
+
+Refresh the browser's G-code submission modal. Before start can become
+available, **fresh native telemetry must indicate no CFS connected and idle**;
+any existing unknown/pending submissions are subject to ordinary conservative
+state and journal checks. The modal presents a restart-risk checkbox and
+then the normal final confirmation. The backend independently requires
+`k1_test_acknowledged: true` for the print request. A print command is
+sent **once only**, never automatically retried, and a WebSocket send is not
+proof that printing started. Perform the test physically attended with the
+printer clear of obstructions and keep a way to cut power if needed.
+
+To immediately disable further native K1 starts:
+
+```python
+c = PrinterConnection.objects.get(adapter="creality_local", printer__name="K1")
+c.config = {**(c.config or {}), "k1_native_start_test_enabled": False}
+c.save(update_fields=["config"])
+```
+
+This permission persists across container rebuilds until explicitly disabled.
+Record any attempted print and collect Creality/klippy/system logs if it fails.
+Do not commit private full diagnostics or remove this gate based only on one
+successful print.
