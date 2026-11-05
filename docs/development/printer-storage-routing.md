@@ -9,8 +9,8 @@ filesystem path, and no other adapter may inherit a Creality path.
 
 | Printer family | Current routing | Storage / command notes | Validation |
 | --- | --- | --- | --- |
-| Creality K1, K1C, K1 Max, K1 SE | Native Creality file path | `/usr/data/printer_data/gcodes/` | Source-supported; K1 hardware start not yet tested by MakerVault |
-| Creality K2 family | Native Creality file path | `/mnt/UDISK/printer_data/gcodes/` | K2 single-filament CFS override physically demonstrated |
+| Creality K1, K1C, K1 Max, K1 SE | Native Creality file path | `/usr/data/printer_data/gcodes/` | Clean stock K1 file browsing and print-start hardware-tested; other models/firmware still experimental |
+| Creality K2 family | Native Creality file path | `/mnt/UDISK/printer_data/gcodes/` | K2 native upload and Moonraker print-start tested; proprietary mapped CFS start awaits hardware verification |
 | Creality Hi, SPARKX i7/i8, Ender-3 V3 family | Per-firmware native probe required | Do not inherit K1/K2 storage path; Ender-3 V3 SE can be Marlin/USB rather than stock LAN | Not verified |
 | Bambu Lab X1/P1/A1 families | Native LAN FTPS model profile | FTPS on port 990; cache/SD layout and print commands differ by model. Verify storage listing before any write | Vendor protocol documented, upload/start not enabled in MakerVault |
 | Bambu Lab H2/P2/X2 and later | Native LAN model-specific storage API | Removable USB/SD storage and firmware-specific transport or bridge; do not assume legacy `/cache` | Model/firmware verification required |
