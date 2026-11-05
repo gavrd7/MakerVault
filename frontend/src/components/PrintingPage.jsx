@@ -11,6 +11,7 @@ import ModelViewerModal, { isViewableModelFile } from "./ModelViewer";
 import { suggestNextVersion } from "./FileVersionModal";
 import GcodeViewerModal from "./GcodeViewerModal";
 import GcodeLibraryModal from "./GcodeLibraryModal";
+import SlicerWorkbench from "./SlicerWorkbench";
 import PrinterStartGcodeModal from "./PrinterStartGcodeModal";
 
 function grams(value) {
@@ -311,6 +312,16 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
     />;
   }
 
+  if (workspaceView === "slicer") {
+    return <SlicerWorkbench
+      files={data?.model_files || []}
+      printers={data?.printers || []}
+      spools={data?.spools || []}
+      canPrepare={Boolean(config?.permissions?.add_file)}
+      onBack={() => setWorkspaceView("overview")}
+    />;
+  }
+
   if (workspaceView === "models") {
     return <ModelLibraryPage
       models={data?.models || []}
@@ -351,6 +362,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
           <div className="printingHeroActions">
             <button type="button" onClick={() => setWorkspaceView("models")}>Model library</button>
             <button type="button" onClick={() => setModal("gcode")}>G-code library</button>
+            <button type="button" onClick={() => setWorkspaceView("slicer")}>MakerVault Slicer</button>
             {canAddModel && <button type="button" onClick={() => setModal("model")}>Add model</button>}
             {canAddPrintJob && <button type="button" onClick={() => setModal("print")}>Add print history</button>}
             <button type="button" onClick={() => document.getElementById("printing-printed-parts")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Printed parts</button>

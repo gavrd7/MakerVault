@@ -1,0 +1,157 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { apiFetch } from "../api";
+
+const initialForm = {
+  engine: "prusaslicer", engine_version: "", input_asset_id: "", printer_id: "",
+  spool_id: "", printer_preset: "", filament_preset: "", process_preset: "",
+  nozzle_mm: "0.40", plate: "default",
+};
+
+/**
+ * Safe preparation-only entry point. A verified slicing worker, real engine-native
+ * profile IDs and isolated execution are required before enabling a Slice action.
+ */
+export default function SlicerWorkbench({ files = [], printers = [], spools = [], canPrepare = false, onBack }) {
+  const [form, setForm] = useState(initialForm);
+  const [engines, setEngines] = useState([]);
+  const [jobs, setJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  const stlFiles = useMemo(() => files.filter(file =>
+    file.category === "mesh" && /\.stl$/i.test(file.filename || "")
+  ), [files]);
+
+  const update = (name, value) => setForm(current => ({ ...current, [name]: value }));
+  const selectedPrinter = printers.find(item => String(item.id) === form.printer_id);
+
+  async function refresh() {
+    setLoading(true);
+    setError("");
+    try {
+      const [catalogue, existing] = await Promise.all([
+        apiFetch("/api/printing/slicer/engines/"),
+        apiFetch("/api/printing/slicer/jobs/"),
+      ]);
+      setEngines(catalogue.engines || []);
+      setJobs(existing.jobs || []);
+    } catch (err) {
+      setError(err.message || "Could not load slicing drafts.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { refresh(); }, []);
+
+  async function saveDraft(event) {
+    event.preventDefault();
+    setError(""); setNotice(""); setBusy(true);
+    try {
+      const { job } = await apiFetch("/api/printing/slicer/jobs/", {
+        method: "POST",
+        body: {
+          ...form,
+          spool_id: form.spool_id || null,
+          settings: {},
+        },
+      });
+      setJobs(current => [job, ...current]);
+      setNotice("Slicing configuration saved as a private draft. No slicer or printer command was run.");
+    } catch (err) {
+      setError(err.message || "Could not save the slicing draft.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <div className="printingStack">
+    <section className="panel printingHero">
+      <div>
+        <span className="settingsEyebrow">3D Printing · MakerVault Slicer</span>
+        <h2>Prepare a slice</h2>
+        <p>Choose the model, physical printer and spool, then keep each slicing engine's printer, filament and process presets separate. Slicing execution is not enabled until a verified self-hosted worker is installed.</p>
+      </div>
+      <div className="printingHeroActions">
+        <button type="button" onClick={onBack}>← Printing overview</button>
+        <button type="button" disabled={loading} onClick={refresh}>Refresh drafts</button>
+      </div>
+    </section>
+
+    <section className="panel printingSection" aria-labelledby="slicer-preparation-heading">
+      <h3 id="slicer-preparation-heading">Slicing configuration</h3>
+      <p role="status">Preparation mode — engine binaries, native preset libraries and actual slicing are not available yet. Saving does not upload files to printers or change spool inventory.</p>
+      {error && <p className="integrationError" role="alert">{error}</p>}
+      {notice && <p role="status">{notice}</p>}
+      <form className="formGrid" onSubmit={saveDraft}>
+        <label>Engine
+          <select required disabled={!canPrepare || busy || loading} value={form.engine} onChange={e => update("engine", e.target.value)}>
+            {engines.length ? engines.map(engine =>
+              <option key={engine.key} value={engine.key}>{engine.label} · {engine.status} · not installed</option>
+            ) : <option value="prusaslicer">PrusaSlicer · not installed</option>}
+          </select>
+        </label>
+        <label>Requested engine version (not yet installed)
+          <input required maxLength="80" disabled={!canPrepare || busy} value={form.engine_version} onChange={e => update("engine_version", e.target.value)} placeholder="Exact tested version when available" />
+        </label>
+        <label className="full">Model STL
+          <select required disabled={!canPrepare || busy} value={form.input_asset_id} onChange={e => update("input_asset_id", e.target.value)}>
+            <option value="">Choose an existing STL file</option>
+            {stlFiles.map(file => <option key={file.id} value={file.id}>{file.name} · {file.filename}</option>)}
+          </select>
+        </label>
+        <label>Printer
+          <select required disabled={!canPrepare || busy} value={form.printer_id} onChange={e => {
+            const printer = printers.find(item => String(item.id) === e.target.value);
+            setForm(current => ({ ...current, printer_id: e.target.value, nozzle_mm: String(printer?.nozzle_mm || "0.40") }));
+          }}>
+            <option value="">Choose an owned printer</option>
+            {printers.filter(item => item.is_active !== false).map(printer => <option key={printer.id} value={printer.id}>{printer.name}</option>)}
+          </select>
+        </label>
+        <label>Nozzle diameter (mm)
+          <input required type="number" step="0.01" min="0.1" max="2" disabled={!canPrepare || busy} value={form.nozzle_mm} onChange={e => update("nozzle_mm", e.target.value)} />
+        </label>
+        <label className="full">Physical filament spool (optional; does not replace the slicer's filament preset)
+          <select disabled={!canPrepare || busy} value={form.spool_id} onChange={e => update("spool_id", e.target.value)}>
+            <option value="">No physical spool selected</option>
+            {spools.map(spool => <option key={spool.id} value={spool.id}>{spool.spool_id} · {spool.filament}</option>)}
+          </select>
+        </label>
+        <label>Engine printer preset (draft label)
+          <input required maxLength="200" disabled={!canPrepare || busy} value={form.printer_preset} onChange={e => update("printer_preset", e.target.value)} placeholder={selectedPrinter?.name || "Native machine preset"} />
+        </label>
+        <label>Engine filament preset (draft label)
+          <input required maxLength="200" disabled={!canPrepare || busy} value={form.filament_preset} onChange={e => update("filament_preset", e.target.value)} placeholder="Native filament preset" />
+        </label>
+        <label>Engine process preset (draft label)
+          <input required maxLength="200" disabled={!canPrepare || busy} value={form.process_preset} onChange={e => update("process_preset", e.target.value)} placeholder="Native quality/process preset" />
+        </label>
+        <label>Build plate
+          <select disabled={!canPrepare || busy} value={form.plate} onChange={e => update("plate", e.target.value)}>
+            <option value="default">Default plate</option>
+          </select>
+        </label>
+        <div className="full settingsActions">
+          <button type="submit" className="primary" disabled={!canPrepare || busy || loading || !stlFiles.length || !printers.length}>{busy ? "Saving…" : "Save slicing draft"}</button>
+        </div>
+      </form>
+      {!stlFiles.length && <p>Add a plain-text STL model to Files or Model Library before preparing a slicing draft.</p>}
+    </section>
+
+    <section className="panel printingSection" aria-label="Saved slicing drafts">
+      <h3>Saved slicing drafts</h3>
+      {jobs.length ? <div className="printingStack">{jobs.map(job =>
+        <div key={job.id} className="cameraSourceRow">
+          <div className="cameraSourceIdentity">
+            <strong>{job.input_asset?.name || "Model"} · {job.printer?.name || "Printer"}</strong>
+            <small>{job.engine} {job.engine_version} · {job.status} · {job.process_preset}</small>
+            <small>{job.spool?.name ? "Spool " + job.spool.name + " · " : ""}No processing or printer action performed</small>
+          </div>
+        </div>
+      )}</div> : <p>No slicing drafts saved yet.</p>}
+    </section>
+  </div>;
+}
