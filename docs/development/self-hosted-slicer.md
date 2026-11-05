@@ -57,6 +57,8 @@ The draft branch now contains a preparation workbench in **3D Printing → Maker
 
 The optional isolated PrusaSlicer worker protocol, one-shot authenticated dispatch, fixed CLI invocation, bounded input/output, no-root capabilities and private G-code FileAsset import are implemented in source. A **Slice now** action is enabled only when an explicitly installed, approved worker and all three verified native profiles pass server-side admission. Print submission and spool deduction remain wholly separate operations.
 
+The opt-in Compose overlay requires a strong internal worker token and exact engine version. The MakerVault service also requires an explicit execution flag, a worker image reference containing `@sha256:` and an exact matching digest. The backend rejects mismatches or an unready worker. These settings do **not** substitute for independent binary security and real fixture validation.
+
 **The real slicer is not yet ready to run:** no tested digest-pinned slicer engine image or approved machine/filament/process fixture library is bundled. The user cannot approve profiles from the browser. Before enabling execution we must verify the exact CLI build and licences, run a known STL fixture end-to-end inside the isolated worker, audit sandbox limits and recovery, and validate the generated G-code against the slicer settings.
 
 Orca execution, interactive build plate manipulation, searchable Basic/Simple/Advanced controls and multi-material support are later phases. The [dedicated worker contract CI](../../.github/workflows/slicer-contract.yml) and Django/frontend checks cover code contracts, not real slicing.
