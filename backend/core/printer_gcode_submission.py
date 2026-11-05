@@ -317,7 +317,7 @@ def creality_cfs_context(connection):
     not report the filament changer. Unknown or stale native state fails closed
     for CFS-equipped K2 printers, without restricting upload-only operations.
     """
-    printer = connection.printer
+    printer = getattr(connection, "printer", None)
     model_name = str(getattr(printer, "model", "") or "")
     manufacturer = str(getattr(printer, "manufacturer", "") or "")
     catalog = getattr(printer, "catalog_model", None)
