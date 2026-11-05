@@ -447,6 +447,19 @@ def _ready_for_start(snapshot):
     return state in {"idle", "complete", "cancelled"}
 
 
+def _same_printer_moonraker(connection, *, require_controls=False):
+    printer_id = getattr(connection, "printer_id", None)
+    if printer_id is None:
+        return None
+    sources = PrinterConnection.objects.filter(
+        printer_id=printer_id, adapter="moonraker", enabled=True,
+    ).order_by("-last_seen_at")
+    for source in sources:
+        if _online(source) and (not require_controls or source.controls_enabled):
+            return source
+    return None
+
+
 def availability(connection):
     adapter = connection.adapter
     # Native transports are opt-in at the final submission confirmation, not
@@ -470,10 +483,14 @@ def availability(connection):
         and cfs["slots"] and _ready_for_start(connection.last_snapshot)
         and not (connection.last_snapshot or {}).get("source_metadata", {}).get("power_loss_recovery")
     )
+    moonraker_for_sliced = (connection if adapter == "moonraker" else
+                             _same_printer_moonraker(connection, require_controls=True)
+                             if adapter == "creality_local" and cfs["applicable"] and cfs["connected"] is True else None)
     sliced_mapping_candidate = bool(
-        adapter == "moonraker" and online and authorised
+        moonraker_for_sliced is not None and online and authorised
         and cfs["applicable"] and cfs["verified"] and cfs["connected"] is True
         and cfs["slots"] and _ready_for_start(connection.last_snapshot)
+        and _ready_for_start(moonraker_for_sliced.last_snapshot)
         and not (connection.last_snapshot or {}).get("source_metadata", {}).get("power_loss_recovery")
     )
     return {
@@ -606,7 +623,7 @@ def submit(connection, user, payload):
         # upload or print command with unknown delivery status.
         _require_action_ready(connection, action, use_sliced_cfs=use_sliced_cfs, use_mapped_cfs=use_mapped_cfs)
         if source == "printer":
-            if connection.adapter == "creality_local" and (connection.last_snapshot or {}).get("source_metadata", {}).get("cfs_connected"):
+            if connection.adapter == "creality_local" and not use_sliced_cfs and (connection.last_snapshot or {}).get("source_metadata", {}).get("cfs_connected"):
                 raise GcodeSubmissionError("Creality CFS is connected: single-spool start is blocked pending material mapping.")
             if remote_path not in {f["path"] for f in list_printer_gcodes(connection)}:
                 raise GcodeSubmissionError("Printer file no longer exists. Refresh the printer file list.")
@@ -620,7 +637,7 @@ def submit(connection, user, payload):
         verdict = compare_printer_metadata(report, connection.printer)
         if verdict["status"] == "mismatch":
             raise GcodeSubmissionError(verdict["reason"])
-        if connection.adapter == "creality_local" and action == "print" and not use_mapped_cfs:
+        if connection.adapter == "creality_local" and action == "print" and not use_mapped_cfs and not use_sliced_cfs:
             if (connection.last_snapshot or {}).get("source_metadata", {}).get("cfs_connected"):
                 raise GcodeSubmissionError("CFS is connected. Native start requires validated material-slot mapping.")
             if remote_path not in {item["path"] for item in list_printer_gcodes(connection)} and source == "printer":
@@ -730,6 +747,21 @@ def submit(connection, user, payload):
                         raise GcodeSubmissionError("Native Creality status was lost before mapping.", 409)
                     start_cfs_mapped(mapped_native_connection, remote_path, mapping_entries)
                     response = None
+                elif use_sliced_cfs and connection.adapter == "creality_local":
+                    moonraker = _same_printer_moonraker(connection, require_controls=True)
+                    if moonraker is None or not _ready_for_start(moonraker.last_snapshot):
+                        raise GcodeSubmissionError("Same-printer Moonraker control must be fresh and idle before original-mapping start.", 409)
+                    from .printer_connectivity import poll_connection
+                    poll_connection(moonraker)
+                    moonraker.refresh_from_db()
+                    if not _online(moonraker) or not _ready_for_start(moonraker.last_snapshot):
+                        raise GcodeSubmissionError("Moonraker printer is no longer idle; no print-start sent.", 409)
+                    moon_base, moon_headers = _printer_endpoint(moonraker)
+                    response = requests.post(
+                        moon_base + "/printer/print/start",
+                        params={"filename": remote_path}, headers=moon_headers,
+                        timeout=(3, 15), allow_redirects=False,
+                    )
                 elif connection.adapter == "creality_local":
                     from .creality_gcode import start_single_spool
                     # Reconfirm the exact file exists on printer before a fire-and-forget start.
@@ -762,8 +794,8 @@ def submit(connection, user, payload):
                 raise GcodeSubmissionError("Start-print outcome is uncertain. Inspect printer before trying again.", 502) from exc
             if (False if use_mapped_cfs or connection.adapter in {"flashforge", "creality_local"} else response.status_code != 204 if connection.adapter in {"octoprint", "prusa"} else _json_response(response) != "ok"):
                 raise GcodeSubmissionError("Printer did not confirm starting the print. Verify its live state.", 502)
-        row.status = "unknown" if action == "print" and (connection.adapter == "creality_local" or use_mapped_cfs) else "started" if action == "print" else "uploaded"
-        row.message = ("K2 CFS mapping and print-start commands dispatched, but not acknowledged. Verify the selected filament and printer state." if use_mapped_cfs and action == "print" else "Creality start command sent, but this protocol provides no acknowledgement. Verify the live printer before any follow-up." if action == "print" and connection.adapter == "creality_local" else
+        row.status = "unknown" if action == "print" and (use_mapped_cfs or (connection.adapter == "creality_local" and not use_sliced_cfs)) else "started" if action == "print" else "uploaded"
+        row.message = ("K2 CFS mapping and print-start commands dispatched, but not acknowledged. Verify the selected filament and printer state." if use_mapped_cfs and action == "print" else "Creality start command sent, but this protocol provides no acknowledgement. Verify the live printer before any follow-up." if action == "print" and connection.adapter == "creality_local" and not use_sliced_cfs else
                        "Print-start accepted with original slicer mapping; MakerVault did not change any CFS slots. Verify filament at printer." if action == "print" and use_sliced_cfs else
                        "Print start accepted by printer." if action == "print" else "Uploaded to printer without starting.")
     except (FlashForgeFileError, CrealityGcodeError) as exc:
