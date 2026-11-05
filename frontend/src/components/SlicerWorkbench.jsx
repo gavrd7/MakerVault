@@ -5,6 +5,7 @@ const initialForm = {
   engine: "prusaslicer", engine_version: "", input_asset_id: "", printer_id: "",
   spool_id: "", printer_preset: "", filament_preset: "", process_preset: "",
   nozzle_mm: "0.40", plate: "default",
+  printer_profile_id: "", filament_profile_id: "", process_profile_id: "",
 };
 
 /**
@@ -15,6 +16,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [form, setForm] = useState(initialForm);
   const [engines, setEngines] = useState([]);
   const [jobs, setJobs] = useState([]);
+  const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -24,19 +26,42 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     file.category === "mesh" && /\.stl$/i.test(file.filename || "")
   ), [files]);
 
-  const update = (name, value) => setForm(current => ({ ...current, [name]: value }));
+  const update = (name, value) => setForm(current => {
+    if (name === "engine" || name === "engine_version") return {
+      ...current, [name]: value,
+      printer_profile_id: "", filament_profile_id: "", process_profile_id: "",
+    };
+    if (name.endsWith("_preset")) return {
+      ...current, [name]: value,
+      [name.replace("_preset", "_profile_id")]: "",
+    };
+    return { ...current, [name]: value };
+  });
+  const forKind = kind => profiles.filter(profile =>
+    profile.engine === form.engine && profile.engine_version === form.engine_version && profile.kind === kind
+  );
+  const selectNativeProfile = (kind, id) => {
+    const profile = profiles.find(item => item.id === id);
+    setForm(current => ({
+      ...current,
+      [kind + "_profile_id"]: id,
+      ...(profile ? { [kind + "_preset"]: profile.name } : {}),
+    }));
+  };
   const selectedPrinter = printers.find(item => String(item.id) === form.printer_id);
 
   async function refresh() {
     setLoading(true);
     setError("");
     try {
-      const [catalogue, existing] = await Promise.all([
+      const [catalogue, existing, native] = await Promise.all([
         apiFetch("/api/printing/slicer/engines/"),
         apiFetch("/api/printing/slicer/jobs/"),
+        apiFetch("/api/printing/slicer/profiles/"),
       ]);
       setEngines(catalogue.engines || []);
       setJobs(existing.jobs || []);
+      setProfiles(native.profiles || []);
     } catch (err) {
       setError(err.message || "Could not load slicing drafts.");
     } finally {
@@ -120,12 +145,30 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             {spools.map(spool => <option key={spool.id} value={spool.id}>{spool.spool_id} · {spool.filament}</option>)}
           </select>
         </label>
+        {forKind("printer").length > 0 && <label>Native printer profile (unverified)
+          <select disabled={!canPrepare || busy} value={form.printer_profile_id} onChange={e => selectNativeProfile("printer", e.target.value)}>
+            <option value="">Use a draft label instead</option>
+            {forKind("printer").map(profile => <option key={profile.id} value={profile.id}>{profile.name} · {profile.status}</option>)}
+          </select>
+        </label>}
         <label>Engine printer preset (draft label)
           <input required maxLength="200" disabled={!canPrepare || busy} value={form.printer_preset} onChange={e => update("printer_preset", e.target.value)} placeholder={selectedPrinter?.name || "Native machine preset"} />
         </label>
+        {forKind("filament").length > 0 && <label>Native filament profile (unverified)
+          <select disabled={!canPrepare || busy} value={form.filament_profile_id} onChange={e => selectNativeProfile("filament", e.target.value)}>
+            <option value="">Use a draft label instead</option>
+            {forKind("filament").map(profile => <option key={profile.id} value={profile.id}>{profile.name} · {profile.status}</option>)}
+          </select>
+        </label>}
         <label>Engine filament preset (draft label)
           <input required maxLength="200" disabled={!canPrepare || busy} value={form.filament_preset} onChange={e => update("filament_preset", e.target.value)} placeholder="Native filament preset" />
         </label>
+        {forKind("process").length > 0 && <label>Native process profile (unverified)
+          <select disabled={!canPrepare || busy} value={form.process_profile_id} onChange={e => selectNativeProfile("process", e.target.value)}>
+            <option value="">Use a draft label instead</option>
+            {forKind("process").map(profile => <option key={profile.id} value={profile.id}>{profile.name} · {profile.status}</option>)}
+          </select>
+        </label>}
         <label>Engine process preset (draft label)
           <input required maxLength="200" disabled={!canPrepare || busy} value={form.process_preset} onChange={e => update("process_preset", e.target.value)} placeholder="Native quality/process preset" />
         </label>
