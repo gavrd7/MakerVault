@@ -323,7 +323,7 @@ def creality_cfs_context(connection):
     catalog = getattr(printer, "catalog_model", None)
     if catalog:
         model_name += " " + str(getattr(catalog, "name", "") or "")
-    if not ("creality" in manufacturer.lower() or connection.adapter == "creality_local"):
+    if not ("creality" in manufacturer.lower() or connection.adapter == "creality_local" or "k2" in model_name.lower()):
         return {"applicable": False, "connected": False, "verified": False, "slots": []}
     if not any(word in model_name.lower() for word in ("k2", "k1")):
         return {"applicable": False, "connected": False, "verified": False, "slots": []}
