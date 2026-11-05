@@ -5,10 +5,12 @@ from decimal import Decimal, InvalidOperation
 
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
+from django.db import IntegrityError, transaction
 from django.views.decorators.http import require_http_methods
 
-from .models import FileAsset, Printer, SliceJob, Spool
+from .models import FileAsset, Printer, SliceJob, Spool, SlicerProfile
 from .slicer_engines import engine_catalogue, get_engine
+from .slicer_profiles import SlicerProfileError, inspect_native_profile
 
 
 def _error(message, status=400):
@@ -153,3 +155,62 @@ def job_detail(request, job_id):
         job.delete()
         return JsonResponse({"deleted": True})
     return JsonResponse({"job": serialise(job), "execution_available": False})
+
+
+def _profile_summary(profile):
+    return {
+        "id": str(profile.pk), "engine": profile.engine,
+        "engine_version": profile.engine_version, "kind": profile.kind,
+        "name": profile.name, "status": profile.status,
+        "file_asset_id": str(profile.file_asset_id),
+        "content_sha256": profile.content_sha256,
+        "provenance": profile.provenance,
+    }
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def profiles(request):
+    if request.method == "GET":
+        rows = SlicerProfile.objects.filter(owner=request.user).order_by(
+            "engine", "kind", "name"
+        )[:500]
+        return JsonResponse({"profiles": [_profile_summary(row) for row in rows]})
+
+    if not request.user.has_perm("core.add_fileasset"):
+        return _error("You do not have permission to import slicing profiles.", 403)
+    try:
+        if len(request.body) > 4096:
+            return _error("Profile registration is too large.", 413)
+        data = json.loads(request.body.decode("utf-8"))
+        if not isinstance(data, dict) or set(data) - {
+            "file_asset_id", "engine", "engine_version", "kind", "name", "provenance"
+        }:
+            raise ValueError("Invalid native profile registration fields.")
+        engine = get_engine(data.get("engine"))
+        version = _preset(data, "engine_version", 80)
+        kind = data.get("kind")
+        if kind not in dict(SlicerProfile.KINDS):
+            raise ValueError("Select a printer, filament or process profile.")
+        name = _preset(data, "name")
+        asset = FileAsset.objects.filter(
+            pk=_uuid(data.get("file_asset_id")), owner=request.user
+        ).first()
+        if not asset:
+            raise ValueError("Select a profile file you own.")
+        provenance = str(data.get("provenance") or "").strip()
+        if len(provenance) > 200 or any(ord(char) < 32 for char in provenance):
+            raise ValueError("Invalid profile source label.")
+        inspected = inspect_native_profile(asset, engine.key)
+        with transaction.atomic():
+            profile = SlicerProfile.objects.create(
+                owner=request.user, file_asset=asset, engine=engine.key,
+                engine_version=version, kind=kind, name=name,
+                provenance=provenance, content_sha256=inspected["sha256"],
+                status="candidate",
+            )
+    except (ValueError, TypeError, UnicodeDecodeError, SlicerProfileError) as exc:
+        return _error(str(exc))
+    except IntegrityError:
+        return _error("A profile with this engine, version, kind and name already exists.", 409)
+    return JsonResponse({"profile": _profile_summary(profile), "execution_available": False}, status=201)
