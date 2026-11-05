@@ -315,6 +315,10 @@ def _verify_creality_upload(connection, remote_path, expected_size):
 def _metadata(connection, path):
     if connection.adapter in {"octoprint", "prusa", "flashforge"}:
         return {}  # Printer storage filenames alone are not verified slicer profiles.
+    if connection.adapter == "creality_local":
+        connection = _same_printer_moonraker(connection)
+        if connection is None:
+            return {}
     try:
         result = _get_json(connection, "/server/files/metadata", {"filename": path})
         return result if isinstance(result, dict) else {}
