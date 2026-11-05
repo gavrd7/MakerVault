@@ -36,6 +36,9 @@ def serialise(job):
         "nozzle_mm": str(job.nozzle_mm),
         "plate": job.plate,
         "settings": job.settings,
+        "printer_profile_id": str(job.printer_profile_id) if job.printer_profile_id else None,
+        "filament_profile_id": str(job.filament_profile_id) if job.filament_profile_id else None,
+        "process_profile_id": str(job.process_profile_id) if job.process_profile_id else None,
         "input_asset": {"id": str(job.input_asset_id), "name": job.input_asset.name},
         "printer": {"id": str(job.printer_id), "name": job.printer.name},
         "spool": {"id": str(job.spool_id), "name": job.spool.spool_id} if job.spool_id else None,
@@ -69,7 +72,7 @@ def _preset(data, key, max_length=200):
 def _draft(user, data):
     if not isinstance(data, dict) or len(json.dumps(data)) > 8192:
         raise ValueError("Slice configuration must be a small JSON object.")
-    allowed = {"engine", "engine_version", "input_asset_id", "printer_id", "spool_id", "printer_preset", "filament_preset", "process_preset", "nozzle_mm", "plate", "settings"}
+    allowed = {"engine", "engine_version", "input_asset_id", "printer_id", "spool_id", "printer_preset", "filament_preset", "process_preset", "nozzle_mm", "plate", "settings", "printer_profile_id", "filament_profile_id", "process_profile_id"}
     if set(data) - allowed:
         raise ValueError("Unknown slicing configuration fields.")
     engine = get_engine(data.get("engine"))
@@ -107,12 +110,29 @@ def _draft(user, data):
     if not isinstance(settings_data, dict) or settings_data:
         # Each engine setting requires a typed schema before it is accepted.
         raise ValueError("Custom settings are unavailable until engine profiles are validated.")
+    native_profiles = {}
+    native_labels = {}
+    for kind in ("printer", "filament", "process"):
+        label = _preset(data, f"{kind}_preset")
+        raw_id = data.get(f"{kind}_profile_id")
+        profile = None
+        if raw_id:
+            profile = SlicerProfile.objects.filter(
+                pk=_uuid(raw_id), owner=user, engine=engine.key,
+                engine_version=version, kind=kind
+            ).first()
+            if not profile:
+                raise ValueError(f"Selected {kind} native profile was not found for this engine/version.")
+            if profile.name != label:
+                raise ValueError(f"{kind.title()} preset must match the selected native profile.")
+        native_profiles[f"{kind}_profile"] = profile
+        native_labels[f"{kind}_preset"] = label
+
     return SliceJob.objects.create(
         owner=user, input_asset=input_asset, printer=printer, spool=spool,
+        **native_profiles,
         engine=engine.key, engine_version=version,
-        printer_preset=_preset(data, "printer_preset"),
-        filament_preset=_preset(data, "filament_preset"),
-        process_preset=_preset(data, "process_preset"),
+        **native_labels,
         nozzle_mm=nozzle, plate=_preset(data, "plate", 80) if "plate" in data else "default",
         status="draft", settings={},
     )
