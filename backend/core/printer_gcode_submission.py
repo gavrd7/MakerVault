@@ -688,19 +688,29 @@ def submit(connection, user, payload):
                 raise GcodeSubmissionError("Unable to confirm printer is still idle after file upload. Do not start.", 409) from exc
             connection.refresh_from_db()
             _require_action_ready(connection, "print", use_sliced_cfs=use_sliced_cfs, use_mapped_cfs=use_mapped_cfs)
+            mapped_native_connection = None
             if use_mapped_cfs:
+                mapped_native_connection = connection if connection.adapter == "creality_local" else PrinterConnection.objects.filter(
+                    printer_id=connection.printer_id, adapter="creality_local", enabled=True,
+                ).order_by("-last_seen_at").first()
+                if mapped_native_connection is None:
+                    raise GcodeSubmissionError("Native Creality connection is required to check live CFS slots.", 409)
+                try:
+                    poll_connection(mapped_native_connection)
+                except Exception as exc:
+                    raise GcodeSubmissionError("Unable to refresh live CFS slots before mapping. No start sent.", 409) from exc
+                mapped_native_connection.refresh_from_db()
+                if connection.adapter == "creality_local":
+                    connection.refresh_from_db()
                 mapping_entries = _mapped_cfs_entries(connection, (report.get("filaments") or {}).get("requirements"), payload.get("cfs_mapping"))
             progress("Sending the explicitly confirmed print-start command.")
             dispatch_attempted = True
             try:
                 if use_mapped_cfs:
                     from .creality_gcode import start_cfs_mapped
-                    native = connection if connection.adapter == "creality_local" else PrinterConnection.objects.filter(
-                        printer_id=connection.printer_id, adapter="creality_local", enabled=True,
-                    ).order_by("-last_seen_at").first()
-                    if native is None or not _online(native):
-                        raise GcodeSubmissionError("Native Creality connection is needed to apply CFS mapping.", 409)
-                    start_cfs_mapped(native, remote_path, mapping_entries)
+                    if not _online(mapped_native_connection):
+                        raise GcodeSubmissionError("Native Creality status was lost before mapping.", 409)
+                    start_cfs_mapped(mapped_native_connection, remote_path, mapping_entries)
                     response = None
                 elif connection.adapter == "creality_local":
                     from .creality_gcode import start_single_spool
