@@ -108,7 +108,7 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
     {settings && canEdit && <form className="formGrid printerCameraForm" onSubmit={save}>
       <div className="full printerCameraGuidance"><small>{provider?.guidance || "Choose a camera source below, or enter its URL manually."}</small></div>
       {warnings.map(message => <p className="full" role="status" key={message}>{message}</p>)}
-      <div className="full settingsActions printerCameraDiscoveryActions">{!!presets.length && <button type="button" disabled={busy} onClick={() => { setCandidates(presets); setWarnings([]); setNotice("K1 presets loaded. Choose the route that works in your printer installation."); }}>K1 / Helper Script presets</button>}<button type="button" disabled={busy || !connection.enabled} onClick={discover}>{busy ? "Working…" : "Find camera sources"}</button></div>
+      <div className="full settingsActions printerCameraDiscoveryActions">{!!presets.length && <button type="button" disabled={busy} onClick={() => { setCandidates(presets); setWarnings([]); setNotice("Camera presets loaded. For a clean K1 installation, try Creality native WebRTC first; older MJPEG routes may require additional software."); }}>Camera presets</button>}<button type="button" disabled={busy || !connection.enabled} onClick={discover}>{busy ? "Working…" : "Find camera sources"}</button></div>
       {!!rows.length && <div className="full cameraSavedSources">
         <strong>Saved camera sources</strong>
         {rows.map(item => <div className="cameraSourceRow" key={item.id}>
