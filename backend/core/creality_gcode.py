@@ -164,9 +164,11 @@ def _stock_data_root(connection):
         str(getattr(printer, "model", "") or ""),
         str(getattr(getattr(printer, "catalog_model", None), "name", "") or ""),
     )).upper()
-    if re.search(r"\bK1(?:C| SE| MAX|_CFS-C)?\b", model):
+    if re.search(r"\bK1(?:C| SE| MAX)?\b", model):
         return "/usr/data"
-    return "/mnt/UDISK"
+    if re.search(r"\bK2(?:\b|$)", model):
+        return "/mnt/UDISK"
+    raise CrealityGcodeError("Unknown Creality model file layout. Native print-start is unavailable until its file path is verified.")
 
 
 async def _start_single_spool(endpoint, remote_path, data_root="/mnt/UDISK"):
