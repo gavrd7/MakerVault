@@ -8,7 +8,7 @@ from django.views.decorators.http import require_http_methods
 
 from .models import PrinterConnection, PrinterGcodeSubmission
 from .printer_gcode_submission import (
-    GcodeSubmissionError, availability, list_printer_gcodes, submit,
+    GcodeSubmissionError, availability, list_printer_gcodes, inspect_printer_file, submit,
 )
 from .api_views import _require_permission, _read_json
 
@@ -27,6 +27,12 @@ def files(request, printer_id, connection_id):
     connection = _connection(request.user, printer_id, connection_id)
     if not connection:
         return JsonResponse({"error": "Printer connection not found."}, status=404)
+    if "inspect_path" in request.GET:
+        try:
+            report = inspect_printer_file(connection, request.GET["inspect_path"])
+        except GcodeSubmissionError as exc:
+            return JsonResponse({"error": str(exc), "inspection_available": False}, status=exc.status)
+        return JsonResponse({"analysis": report, "inspection_available": True})
     caps = availability(connection)
     if connection.adapter == "bambu_local" and caps["browse_requires_pin"]:
         return JsonResponse({
