@@ -323,7 +323,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
         : "Not specified"} · <strong>Build plate:</strong> {selectedSetup?.bed_type || "Not specified"}</p>
       <small>These are the slicer's recorded settings, not detected printer hardware. They are provided for reference and never restrict submission.</small>
     </div>}
-    {cfs?.applicable && cfs.connected !== false && <div className="settingsCallout">
+    {cfs?.applicable && !(capabilities?.k1_native_model && cfs.connected === false) && <div className="settingsCallout">
       <strong>Creality CFS · Live loaded filaments</strong>
       <p>{cfs.connected === true
         ? "These materials were reported by the K2's native LAN telemetry. Match the sliced filaments against the loaded CFS slots before printing."
