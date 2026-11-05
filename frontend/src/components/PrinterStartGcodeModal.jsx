@@ -122,7 +122,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
 
     if (verdict?.status === "mismatch") { setError("Printer model mismatch; submission blocked."); return; }
     if (!window.confirm("Printer: " + printer.name + "\nFile: " + name + "\nAction: " +
-      (operation === "print" ? "START PRINT" : "UPLOAD ONLY, no printing") + (slicedCfs ? "\\nCFS: Original sliced mapping — MakerVault cannot yet apply overrides.\\nCheck actual filament selection on the printer." : "") + "\\n\\nContinue?")) return;
+      (operation === "print" ? "START PRINT" : "UPLOAD ONLY, no printing") + (slicedCfs ? "\nCFS: Original sliced mapping — MakerVault cannot yet apply overrides.\\nCheck actual filament selection on the printer." : "") + "\n\nContinue?")) return;
     setBusy(true); setError(""); setReceipt(null);
     setTransferStage("Submitting request and checking printer readiness…");
     const requestId = window.crypto.randomUUID();
@@ -284,7 +284,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
           <button type="button" className="primary" onClick={submit}
             disabled={busy || checking || !canEdit || !capabilities?.supported ||
               (source === "printer" ? !remotePath || !(capabilities.can_start || cfsSlicedAvailable) : !assetId || !capabilities.can_upload ||
-                (action === "print" && !(capabilities.can_start || (cfsSlicedAvailable && useSlicedCfs && cfsAcknowledged)))) || verdict?.status === "mismatch"}>
+                (action === "print" && !(capabilities.can_start || cfsSlicedAvailable))) || verdict?.status === "mismatch"}>
             {busy ? "Submitting…" : source === "printer" || action === "print" ? "Review & start print" : "Review & upload only"}
           </button>
         </div>
