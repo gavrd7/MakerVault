@@ -9,6 +9,9 @@ import PrinterJobControls from "./PrinterJobControls";
 import { Badge, ImageManagerModal, LoadingBlock, Modal } from "./Common";
 import ModelViewerModal, { isViewableModelFile } from "./ModelViewer";
 import { suggestNextVersion } from "./FileVersionModal";
+import GcodeViewerModal from "./GcodeViewerModal";
+import GcodeLibraryModal from "./GcodeLibraryModal";
+import PrinterStartGcodeModal from "./PrinterStartGcodeModal";
 
 function grams(value) {
   if (value == null) return "—";
@@ -115,14 +118,16 @@ function PrinterLiveSummary({ printer, onOpen, canControl, onChanged }) {
     </div>}
     <div className="printerLiveActions">
       <PrinterJobControls printer={printer} connection={connection} canControl={canControl} onChanged={onChanged} />
-      <button type="button" className="printerLiveOpen" onClick={onOpen}>Open live</button>
     </div>
-    <div className="printerLiveQuickStats">
+    <div className="printerLiveFooter">
+      <div className="printerLiveQuickStats">
       {liveNozzles(snapshot).map(([key, temp]) => <span key={key}><small>{liveNozzleLabel(snapshot, key)}</small><strong>{liveTemperature(temp)}</strong></span>)}
       {temps.bed?.actual_c != null && <span><small>Bed</small><strong>{liveTemperature(temps.bed)}</strong></span>}
       {temps.chamber?.actual_c != null && <span><small>Chamber</small><strong>{liveTemperature(temps.chamber)}</strong></span>}
       {(job.current_layer != null || job.total_layers != null) && <span><small>Layer</small><strong>{job.current_layer ?? "—"} / {job.total_layers ?? "—"}</strong></span>}
       {job.remaining_seconds != null && Number(job.remaining_seconds) > 0 && <span><small>Remaining</small><strong>{Math.max(1, Math.round(Number(job.remaining_seconds) / 60))} min</strong></span>}
+      </div>
+      <button type="button" className="printerLiveOpen" onClick={onOpen} aria-label={"Open detailed live monitoring for " + printer.name}>More details</button>
     </div>
   </div>;
 }
@@ -310,6 +315,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
     return <ModelLibraryPage
       models={data?.models || []}
       files={data?.model_files || []}
+      gcodeFiles={data?.gcode_files || []}
       printers={data?.printers || []}
       projects={projects || []}
       canAddModel={canAddModel}
@@ -344,6 +350,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
           <h3 id="printing-models-heading">Models &amp; print history</h3>
           <div className="printingHeroActions">
             <button type="button" onClick={() => setWorkspaceView("models")}>Model library</button>
+            <button type="button" onClick={() => setModal("gcode")}>G-code library</button>
             {canAddModel && <button type="button" onClick={() => setModal("model")}>Add model</button>}
             {canAddPrintJob && <button type="button" onClick={() => setModal("print")}>Add print history</button>}
             <button type="button" onClick={() => document.getElementById("printing-printed-parts")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Printed parts</button>
@@ -413,7 +420,8 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       <div className="panelHead"><div><h3>Printers &amp; loaded filament</h3><p>Filament slots are provider-neutral so CFS, AMS and later systems can use the same model.</p></div></div>
       <div className="printingCards printingPrinterCards">
         {(data?.printers || []).map(printer => <article className={"printingCard printingPrinterCard" + (searchTarget?.type === "printers" && searchTarget.id === printer.id ? " searchTargetRow" : "")} id={"printer-search-target-" + printer.id} key={printer.id}>
-          <div className="printingPrinterHeader">
+          <div className="printingPrinterOverviewTop">
+            <div className="printingPrinterHeader">
             <div className="printingPrinterImage">
               {(printer.multi_material_installed && printer.catalogue?.image_multi_material) || printer.catalogue?.image
                 ? <img
@@ -439,13 +447,11 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
                     {printer.multi_material_installed && <Badge>{printer.slots.length} slots</Badge>}
                   </div>
                   <div className="printingPrinterActions" aria-label={"Actions for " + printer.name}>
+                    {canChangePrinter && <button className="printingPrinterAction printingPrinterActionLive" type="button" onClick={() => setLivePrinter(printer)}>Live monitor</button>}
+                    {canChangePrinter && <button className="printingPrinterAction" type="button" onClick={() => setManagePrinter(printer)}>Manage printer</button>}
                     <button className="printingPrinterAction" type="button" onClick={() => onOpenMakerTags("printer", printer.id)}>MakerTags</button>
+                    {canChangePrinter && <button className="printingPrinterAction" type="button" onClick={() => setCameraSetup({ printerId: printer.id })}>Camera setup</button>}
                   </div>
-                  {canChangePrinter && <div className="printingPrinterActions" aria-label={"Actions for " + printer.name}>
-                    <button className="printingPrinterAction printingPrinterActionLive" type="button" onClick={() => setLivePrinter(printer)}>Live monitor</button>
-                    <button className="printingPrinterAction" type="button" onClick={() => setCameraSetup({ printerId: printer.id })}>Camera setup</button>
-                    <button className="printingPrinterAction" type="button" onClick={() => setManagePrinter(printer)}>Manage printer</button>
-                  </div>}
                 </div>
               </div>
               {((printer.multi_material_installed && printer.catalogue?.image_multi_material && printer.catalogue?.image_multi_material_source_provider) || printer.catalogue?.image_source_provider) && <small className="printingPrinterImageCredit">
@@ -454,8 +460,11 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
               </small>}
             </div>
           </div>
-          <PrinterLiveSummary printer={printer} onOpen={() => setLivePrinter(printer)} canControl={canChangePrinter} onChanged={load} />
-          <PrinterCameraPreview printer={printer} suspended={Boolean(cameraSetup || livePrinter || cameraOffer)} />
+          <div className="printingSlotPanel">
+            <div className="printingSlotPanelHeader">
+              <strong>Loaded filament</strong>
+              <small>{printer.multi_material_installed ? (printer.installed_multi_material_label || "Multi-material") : "Printer material"}</small>
+            </div>
           <div className="printingSlotGrid">
             {printer.slots.filter(slot => slot.is_loaded).map(slot => <div className="printingSlot" key={slot.id}>
               <span className="printingSwatch" style={slot.color_hex ? { background: slot.color_hex } : undefined} />
@@ -472,6 +481,10 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
                 : <div className="printingEmptyInline">No loaded filament slots have been discovered yet.</div>
             )}
           </div>
+          </div>
+          </div>
+          <PrinterLiveSummary printer={printer} onOpen={() => setLivePrinter(printer)} canControl={canChangePrinter} onChanged={load} />
+          <PrinterCameraPreview printer={printer} suspended={Boolean(cameraSetup || livePrinter || cameraOffer)} />
         </article>)}
         {!data?.printers?.length && <div className="projectEmpty"><strong>No printers yet.</strong><span>Add your first printer to begin the 3D printing workspace.</span></div>}
       </div>
@@ -596,6 +609,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       onClose={() => setClaimSlot(null)}
       onSaved={async () => { setClaimSlot(null); await load(); }}
     />}
+    {modal === "gcode" && <GcodeLibraryModal files={data?.gcode_files || []} projects={projects || []} canUpload={Boolean(config?.permissions?.add_file)} onClose={() => setModal("")} onSaved={load} />}
     {modal === "model" && <ModelModal projects={projects || []} canUpload={Boolean(config?.permissions?.add_file)} onClose={() => setModal("")} onSaved={saved} />}
     {modal === "print" && <PrintJobModal
       printers={data?.printers || []}
@@ -999,8 +1013,9 @@ function SpoolIdentityModal({ spool, onClose, onSaved }) {
   </Modal>;
 }
 
-function ModelLibraryPage({ models, files, printers, projects, canAddModel, canChangeModel, canDeleteModel, canUpload, onBack, onChanged, searchTarget = null }) {
+function ModelLibraryPage({ models, files, gcodeFiles = [], printers, projects, canAddModel, canChangeModel, canDeleteModel, canUpload, onBack, onChanged, searchTarget = null }) {
   const [query, setQuery] = useState("");
+  const [gcodeOpen, setGcodeOpen] = useState(false);
 
   useEffect(() => {
     if (searchTarget?.type !== "models" || !searchTarget.id) return;
@@ -1016,6 +1031,7 @@ function ModelLibraryPage({ models, files, printers, projects, canAddModel, canC
   const [addOpen, setAddOpen] = useState(false);
   const [manageModel, setManageModel] = useState(null);
   const [viewerModel, setViewerModel] = useState(null);
+  const [gcodeViewerFile, setGcodeViewerFile] = useState(null);
   const [deleteModel, setDeleteModel] = useState(null);
   const [reusableModelBusy, setReusableModelBusy] = useState("");
 
@@ -1055,6 +1071,7 @@ function ModelLibraryPage({ models, files, printers, projects, canAddModel, canC
       </div>
       <div className="printingHeroActions">
         <button onClick={onBack}>← Printing overview</button>
+        <button type="button" onClick={() => setGcodeOpen(true)}>G-code library</button>
         {canAddModel && <button className="primary" onClick={() => setAddOpen(true)}>Add model</button>}
       </div>
     </section>
@@ -1084,6 +1101,7 @@ function ModelLibraryPage({ models, files, printers, projects, canAddModel, canC
             <div className="printingLibraryActions modelActionsWithToggle">
               <div className="modelActionButtons">
                 {hasViewableModelAsset(model) && <button className="primary" type="button" onClick={() => setViewerModel(model)}>View 3D</button>}
+                {model.revisions.flatMap(rev => rev.assets).some(asset => asset.file.filename?.toLowerCase().endsWith(".gcode")) && <button type="button" onClick={() => setGcodeViewerFile(model.revisions.flatMap(rev => rev.assets).find(asset => asset.file.filename?.toLowerCase().endsWith(".gcode")).file)}>View G-code</button>}
                 {canChangeModel && <button onClick={() => setManageModel(model)}>Manage</button>}
                 {canDeleteModel && <button className="dangerButton" type="button" onClick={() => setDeleteModel(model)}>Delete</button>}
               </div>
@@ -1095,6 +1113,8 @@ function ModelLibraryPage({ models, files, printers, projects, canAddModel, canC
       </div>
     </section>
 
+    {gcodeViewerFile && <GcodeViewerModal file={gcodeViewerFile} onClose={() => setGcodeViewerFile(null)} />}
+    {gcodeOpen && <GcodeLibraryModal files={gcodeFiles} projects={projects} canUpload={canUpload} onClose={() => setGcodeOpen(false)} onSaved={onChanged} />}
     {addOpen && <ModelModal projects={projects} canUpload={canUpload} onClose={() => setAddOpen(false)} onSaved={async () => { setAddOpen(false); await onChanged(); }} />}
     {manageModel && <ModelManageModal
       model={manageModel}
@@ -1194,6 +1214,22 @@ function LocationModal({ location = null, onClose, onSaved }) {
 }
 
 function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
+  const [gcodeConnection, setGcodeConnection] = useState(null);
+  function prepareCrealityMoonrakerSource(connection) {
+    let endpoint = "";
+    try {
+      const remote = new URL(connection.endpoint_url);
+      const hostname = remote.hostname;
+      if (!hostname) throw new Error("No hostname");
+      endpoint = "http://" + hostname + ":7125";
+    } catch (_error) {
+      endpoint = "";
+    }
+    setGcodeConnection(null);
+    setForm(current => ({ ...current, adapter: "moonraker", endpoint_url: endpoint, api_key: "" }));
+    window.setTimeout(() => document.getElementById("printing-live-add-source")?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
+  }
+
   const [data, setData] = useState({ rows: [], adapters: [] });
   const [form, setForm] = useState({
     adapter: "moonraker",
@@ -1255,10 +1291,6 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
   const available = selectableAdapters
     .filter(item => !configured.has(item.key))
     .sort((left, right) => Number(right.key === preferredAdapter) - Number(left.key === preferredAdapter));
-  const selectedAdapterInfo = available.find(item => item.key === form.adapter)
-    || selectableAdapters.find(item => item.key === form.adapter)
-    || null;
-
   useEffect(() => {
     if (!available.length) return;
     const nextAdapter = available.some(item => item.key === form.adapter)
@@ -1502,6 +1534,7 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
             <PrinterJobControls printer={printer} connection={connection} canControl={data.can_control} disabled={Boolean(busy)} onChanged={async () => { await loadConnections(); await onChanged(); }} />
           </div>}
           <div className="settingsActions compact">
+            {data.can_control && <button type="button" disabled={Boolean(busy)} onClick={() => setGcodeConnection(connection)}>Start print / G-code</button>}
             <button type="button" disabled={busy === connection.id || !connection.enabled || !connection.supported} onClick={() => refreshConnection(connection)}>{busy === connection.id ? "Working…" : "Refresh"}</button>
             <button type="button" onClick={() => copyDiagnostics(connection)}>Copy diagnostics</button>
             <button type="button" disabled={busy === connection.id} onClick={() => toggleConnection(connection)}>{connection.enabled ? "Disable" : "Enable"}</button>
@@ -1512,19 +1545,15 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
       {!data.rows?.length && <div className="printingEmptyInline">No live printer sources are configured yet.</div>}
     </div>
 
-    {!!available.length && <form className="formGrid" onSubmit={addConnection}>
-      <div className="full settingsCallout">
+    {gcodeConnection && <PrinterStartGcodeModal printer={printer} connection={gcodeConnection} canEdit={Boolean(data.can_control)} onConfigureMoonraker={() => prepareCrealityMoonrakerSource(gcodeConnection)} onClose={() => setGcodeConnection(null)} onChanged={async () => { await loadConnections(); await onChanged?.(); }} />}
+    {!!available.length && <form id="printing-live-add-source" className="formGrid printerLiveAddSource" onSubmit={addConnection}>
+      <div className="full printerLiveAddHeading">
         <strong>Add live source</strong>
-        <p>MakerVault supports Moonraker/Klipper and OctoPrint plus experimental manufacturer-local adapters for Creality, Bambu Lab and PrusaLink. A single physical printer can use more than one source without creating duplicate MakerVault printer records.</p>
+        <p>Choose an integration for this printer. Multiple connections can share the same printer record.</p>
       </div>
       <label>Adapter<select value={form.adapter} onChange={e => adapterChanged(e.target.value)}>
         {available.map(item => <option key={item.key} value={item.key}>{item.label}{item.experimental ? " · experimental" : ""}</option>)}
       </select></label>
-      {selectedAdapterInfo && <div className="settingsCallout">
-        <strong>{selectedAdapterInfo.validation_label || (selectedAdapterInfo.experimental ? "Experimental" : "Supported")}</strong>
-        <p>{selectedAdapterInfo.compatibility_hint || selectedAdapterInfo.protocol || "MakerVault will use this provider as a read-only live source."}</p>
-        {selectedAdapterInfo.protocol && <small>Protocol: {selectedAdapterInfo.protocol}</small>}
-      </div>}
       <label>{["creality_local", "bambu_local", "prusa", "flashforge", "anycubic", "elegoo", "qidi", "sovol", "snapmaker", "voron"].includes(form.adapter) ? "Printer host / IP" : "Service URL"}<input required value={form.endpoint_url} onChange={e => setForm(current => ({ ...current, endpoint_url: e.target.value }))} placeholder={form.adapter === "creality_local" ? "192.168.1.34" : form.adapter === "bambu_local" ? "192.168.1.45" : form.adapter === "prusa" ? "prusa.local" : form.adapter === "flashforge" ? "192.168.1.60" : form.adapter === "anycubic" ? "192.168.1.70" : ["moonraker", "elegoo", "qidi", "sovol", "snapmaker", "voron"].includes(form.adapter) ? "printer.local or http://printer.local:7125" : "http://octoprint.local"} /></label>
       {!["creality_local", "bambu_local"].includes(form.adapter) && <label>API key (optional)<input type="password" value={form.api_key} onChange={e => setForm(current => ({ ...current, api_key: e.target.value }))} autoComplete="new-password" placeholder={form.adapter === "prusa" ? "Legacy / API-key PrusaLink setups" : "Only when your service requires one"} /></label>}
       {form.adapter === "creality_local" && <div className="settingsCallout">
@@ -1559,14 +1588,10 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
         <strong>Anycubic LAN mode</strong>
         <p>MakerVault performs the printer's local signed LAN handshake on port 18910, then opens its temporary MQTT/TLS session on port 9883. No Anycubic Cloud credentials are required. The printer must be in LAN mode; this adapter currently targets the Kobra 3 / S1-generation protocol and remains experimental.</p>
       </div>}
-      <label>Polling interval<div className="intervalInput"><input type="number" min="10" max="3600" step="5" value={form.poll_interval_seconds} onChange={e => setForm(current => ({ ...current, poll_interval_seconds: e.target.value }))} /><span>seconds</span></div></label>
-      <div className="formActions full"><button className="primary" disabled={busy === "add"}>{busy === "add" ? "Adding…" : "Add live source"}</button></div>
+      <label className="printerLivePollField">Polling interval<div className="intervalInput"><input type="number" min="10" max="3600" step="5" value={form.poll_interval_seconds} onChange={e => setForm(current => ({ ...current, poll_interval_seconds: e.target.value }))} /><span>seconds</span></div></label>
+      <div className="formActions printerLiveAddActions"><button className="primary" disabled={busy === "add"}>{busy === "add" ? "Adding…" : "Add live source"}</button></div>
     </form>}
 
-    <div className="settingsCallout">
-      <strong>Read-only first</strong>
-      <p>All live adapters, including the manufacturer Moonraker profiles, remain read-only in MakerVault even where the upstream printer supports pause/resume/cancel. Control actions stay behind a later permissioned/confirmed pass.</p>
-    </div>
   </Modal>;
 }
 
@@ -1799,7 +1824,7 @@ function PrinterModal({ manufacturers, models, locations, onClose, onSaved }) {
       <label>Printer name<input required value={form.name} onChange={e => set("name", e.target.value)} placeholder={selectedModel ? selectedModel.display_name : "Desk printer"} /></label>
       <label>Serial number<input value={form.serial_number} onChange={e => set("serial_number", e.target.value)} /></label>
       <label>Location<select value={form.location_id} onChange={e => set("location_id", e.target.value)}><option value="">Unassigned</option>{locations.map(x => <option key={x.id} value={x.id}>{x.name} · {x.kind_label}</option>)}</select></label>
-      <label>Local host / IP<input value={form.connection_host} onChange={e => set("connection_host", e.target.value)} placeholder="192.168.1.34" /><small>Used by optional local printer/CFS adapters.</small></label>
+      <label>Local host / IP<input value={form.connection_host} onChange={e => set("connection_host", e.target.value)} placeholder="192.168.1.34" /></label>
       {selectedModel?.multi_material_system && <label className="settingsToggle full"><div><strong>{selectedModel.multi_material_label} installed</strong><small>This printer model supports the add-on, but it is optional. Check this only when the hardware is actually fitted.</small></div><input type="checkbox" checked={form.multi_material_installed} onChange={e => set("multi_material_installed", e.target.checked)} /></label>}
       <label>Nozzle (mm)<input type="number" min="0.1" step="0.05" value={form.nozzle_mm} onChange={e => set("nozzle_mm", e.target.value)} /></label>
       <label>Build X (mm)<input type="number" min="1" step="0.1" value={form.build_volume_x_mm} onChange={e => set("build_volume_x_mm", e.target.value)} /></label>
@@ -3689,6 +3714,7 @@ function ModelModal({ projects, canUpload, onClose, onSaved }) {
     is_reusable_spool: false,
   });
   const [file, setFile] = useState(null);
+  const [supplementaryGcode, setSupplementaryGcode] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const set = (key, value) => setForm(value0 => ({ ...value0, [key]: value }));
@@ -3708,6 +3734,7 @@ function ModelModal({ projects, canUpload, onClose, onSaved }) {
         const body = new FormData();
         for (const [key, value] of Object.entries(form)) body.append(key, value ?? "");
         body.append("file", file);
+        if (supplementaryGcode) body.append("gcode_file", supplementaryGcode);
         const created = await apiFetch("/api/printing/models/", { method: "POST", body });
         if (form.is_reusable_spool) await apiFetch("/api/printing/models/" + created.item.id + "/reusable-spool-design/", { method: "POST" });
       } else {
@@ -3729,6 +3756,10 @@ function ModelModal({ projects, canUpload, onClose, onSaved }) {
         <span>STL / 3MF file</span>
         <input type="file" accept=".stl,.3mf,model/stl,application/vnd.ms-package.3dmanufacturing-3dmodel+xml" onChange={fileChanged} />
         <small>{file ? `${file.name} · ${(file.size / 1024 / 1024).toFixed(2)} MB` : "Browse this computer, phone or tablet. The file is stored in MakerVault Files and attached to revision 1.0 by default."}</small>
+      </label>}
+      {canUpload && file && <label className="full">Supplementary G-code (optional)
+        <input type="file" accept=".gcode" onChange={e => setSupplementaryGcode(e.target.files?.[0] || null)} />
+        <small>Stored once in Files and linked to this model revision as a separate G-code toolpath. It is not sent to a printer.</small>
       </label>}
       <label>Name<input required={!file} value={form.name} onChange={e => set("name", e.target.value)} placeholder={file ? "Defaults to file name" : "Model name"} /></label>
       <label>Project<select value={form.project_id} onChange={e => set("project_id", e.target.value)}><option value="">Standalone model</option>{projects.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
@@ -3755,6 +3786,9 @@ function ModelManageModal({ model, files, printers, canUpload, onClose, onChange
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [viewerAsset, setViewerAsset] = useState(null);
+  const [gcodeViewerFile, setGcodeViewerFile] = useState(null);
+  const [gcodeUpload, setGcodeUpload] = useState(null);
+  const [gcodeRevisionId, setGcodeRevisionId] = useState(model.revisions[0]?.id || "");
   const [versionUploadOpen, setVersionUploadOpen] = useState(false);
 
   const compatibleFiles = (files || []).filter(file => {
@@ -3798,6 +3832,20 @@ function ModelManageModal({ model, files, printers, canUpload, onClose, onChange
     }
   }
 
+  async function uploadGcode(event) {
+    event.preventDefault();
+    if (!gcodeUpload || !gcodeRevisionId) return;
+    setBusy(true); setError("");
+    try {
+      const body = new FormData();
+      body.append("file", gcodeUpload);
+      await apiFetch(`/api/printing/models/${model.id}/revisions/${gcodeRevisionId}/gcode/upload/`, { method: "POST", body });
+      setGcodeUpload(null);
+      await onChanged?.();
+    } catch (err) { setError(err.message); }
+    finally { setBusy(false); }
+  }
+
   async function detach(revision, asset) {
     if (!window.confirm('Detach "' + asset.file.name + '" from revision ' + revision.version + "? The file itself will remain in MakerVault.")) return;
     setBusy(true); setError("");
@@ -3831,6 +3879,7 @@ function ModelManageModal({ model, files, printers, canUpload, onClose, onChange
                 <div><strong>{asset.file.name}</strong><small>{asset.role_label}{asset.is_primary ? " · Primary" : ""} · {asset.file.filename}</small></div>
                 <div className="printingRevisionAssetActions">
                   {isViewableModelFile(asset.file) && <button type="button" onClick={() => setViewerAsset(asset)}>View</button>}
+                  {asset.file.filename?.toLowerCase().endsWith(".gcode") && <button type="button" onClick={() => setGcodeViewerFile(asset.file)}>View G-code</button>}
                   <a className="assetButton" href={asset.file.url}>Download</a>
                   <button type="button" disabled={busy} onClick={() => detach(revision, asset)}>Detach</button>
                 </div>
@@ -3852,13 +3901,21 @@ function ModelManageModal({ model, files, printers, canUpload, onClose, onChange
       <form className="printingManageForm" onSubmit={attachFile}>
         <h3>Attach existing MakerVault file</h3>
         <label>Revision<select required value={revisionId} onChange={e => setRevisionId(e.target.value)}><option value="">Choose revision…</option>{model.revisions.map(x => <option key={x.id} value={x.id}>{x.version}</option>)}</select></label>
-        <label>File<select required value={fileId} onChange={e => setFileId(e.target.value)}><option value="">Choose STL / 3MF / CAD file…</option>{compatibleFiles.map(x => <option key={x.id} value={x.id}>{x.name} · {x.category_label}{x.project ? " · " + x.project : ""}</option>)}</select></label>
-        <label>Role<select value={role} onChange={e => setRole(e.target.value)}><option value="model">Printable model</option><option value="slicer">Slicer project</option><option value="cad">CAD / source</option><option value="reference">Reference</option><option value="other">Other</option></select></label>
+        <label>File<select required value={fileId} onChange={e => { const id = e.target.value; const selected = compatibleFiles.find(x => x.id === id); setFileId(id); if (selected?.filename?.toLowerCase().endsWith(".gcode")) { setRole("gcode"); setPrimary(false); } }}><option value="">Choose STL / 3MF / CAD / G-code file…</option>{compatibleFiles.map(x => <option key={x.id} value={x.id}>{x.name} · {x.category_label}{x.project ? " · " + x.project : ""}</option>)}</select></label>
+        <label>Role<select value={role} onChange={e => setRole(e.target.value)}><option value="model">Printable model</option><option value="slicer">Slicer project</option><option value="gcode">G-code toolpath</option><option value="cad">CAD / source</option><option value="reference">Reference</option><option value="other">Other</option></select></label>
         <label className="checkRow"><input type="checkbox" checked={primary} onChange={e => setPrimary(e.target.checked)} /><span>Primary file for this role</span></label>
-        {!compatibleFiles.length && <div className="printingEmptyInline">Upload an STL, 3MF or CAD file in Files first, then attach it here.</div>}
+        {!compatibleFiles.length && <div className="printingEmptyInline">Upload an STL, 3MF, CAD or G-code file in Files first, then attach it here.</div>}
         <button className="primary" disabled={busy || !model.revisions.length || !compatibleFiles.length}>{busy ? "Saving…" : "Attach file"}</button>
       </form>
+      {canUpload && model.revisions.length > 0 && <form className="printingManageForm" onSubmit={uploadGcode}>
+        <h3>Add G-code to an existing revision</h3>
+        <label>Model revision<select value={gcodeRevisionId} onChange={e => setGcodeRevisionId(e.target.value)} required>{model.revisions.map(revision => <option key={revision.id} value={revision.id}>{revision.version}</option>)}</select></label>
+        <label>G-code file<input type="file" accept=".gcode" required onChange={e => setGcodeUpload(e.target.files?.[0] || null)} /></label>
+        <button type="submit" className="primary" disabled={!gcodeUpload || !gcodeRevisionId || busy}>{busy ? "Uploading…" : "Upload supplementary G-code"}</button>
+        <small>Uses the same MakerVault Files storage. Never uploads to or starts a printer automatically.</small>
+      </form>}
     </div>
+    {gcodeViewerFile && <GcodeViewerModal file={gcodeViewerFile} onClose={() => setGcodeViewerFile(null)} />}
     {viewerAsset && <ModelViewerModal
       model={model}
       printers={printers || []}

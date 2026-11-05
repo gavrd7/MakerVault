@@ -2402,6 +2402,60 @@ def component_image(request, component_id):
 
 
 @login_required
+@require_http_methods(["GET"])
+def file_gcode_inspect(request, asset_id):
+    """Authenticated, owner-scoped read-only G-code report and source preview."""
+    from .gcode_analysis import inspect_asset, compare_printer_metadata
+
+    asset = FileAsset.objects.filter(owner=request.user, pk=asset_id).first()
+    if not asset:
+        return _error("G-code file not found.", status=404)
+    if str((asset.metadata or {}).get("extension", "")).lower() != ".gcode":
+        return _error("Only plain-text G-code is supported.", status=400)
+    try:
+        result = inspect_asset(asset)
+    except (OSError, ValueError, UnicodeError) as exc:
+        return _error(str(exc), status=400)
+    links = ModelRevisionAsset.objects.filter(
+        file_asset=asset, revision__model__owner=request.user
+    ).select_related("revision__model").order_by("-revision__created_at")[:20]
+    linked_models = [
+        {
+            "model_id": str(link.revision.model_id),
+            "model_name": link.revision.model.name,
+            "revision_id": str(link.revision_id),
+            "revision": link.revision.version,
+        }
+        for link in links
+    ]
+    printers = list(
+        Printer.objects.filter(owner=request.user, is_active=True)
+        .select_related("catalog_model", "printer_manufacturer")
+        .order_by("name")[:250]
+    )
+    selected_id = str(request.GET.get("printer_id") or "").strip()
+    compatibility = None
+    if selected_id:
+        try:
+            requested_id = uuid.UUID(selected_id)
+        except (TypeError, ValueError):
+            return _error("Invalid printer selection.")
+        printer = next((p for p in printers if p.pk == requested_id), None)
+        if not printer:
+            return _error("Printer not found.", status=404)
+        compatibility = compare_printer_metadata(result["analysis"], printer)
+        compatibility["printer_id"] = str(printer.pk)
+    return JsonResponse({
+        "file_id": str(asset.id),
+        "sha256": asset.sha256,
+        "linked_models": linked_models,
+        "printers": [{"id": str(p.pk), "name": p.name, "model": p.model or (p.catalog_model.name if p.catalog_model else "")} for p in printers],
+        "compatibility": compatibility,
+        **result,
+    })
+
+
+@login_required
 @require_http_methods(["GET", "POST"])
 def files_lookup(request):
     if request.method == "GET":
@@ -4657,7 +4711,7 @@ def printing_overview(request):
         "model_files": [
             _serialise_file_asset(asset)
             for asset in FileAsset.objects.filter(owner=request.user).filter(
-                category__in=["mesh", "slicer", "cad"],
+                Q(category__in=["mesh", "slicer", "cad", "gcode"]) | Q(metadata__extension=".gcode"),
                 superseded_by__isnull=True,
             )
                 .select_related("project", "board__manufacturer", "component__category")
@@ -6203,6 +6257,9 @@ def printing_models(request):
 
     uploaded = request.FILES.get("file")
     if uploaded:
+        optional_gcode = request.FILES.get("gcode_file")
+        if optional_gcode and Path(optional_gcode.name or "").suffix.lower() != ".gcode":
+            return _error("Supplementary G-code must be a plain .gcode file.")
         file_denied = _require_permission(request, "core.add_fileasset")
         if file_denied:
             return file_denied
@@ -6232,11 +6289,12 @@ def printing_models(request):
         if not revision_version:
             return _error("Revision version is required.")
         try:
-            ensure_storage_capacity(request.user, getattr(uploaded, "size", 0) or 0)
+            ensure_storage_capacity(request.user, (getattr(uploaded, "size", 0) or 0) + (getattr(optional_gcode, "size", 0) or 0))
         except StorageQuotaExceeded as exc:
             return _storage_quota_response(request, exc)
 
         stored_asset = None
+        supplementary_asset = None
         try:
             checksum = _sha256_upload(uploaded)
             with transaction.atomic():
@@ -6287,6 +6345,27 @@ def printing_models(request):
                 )
                 link.full_clean()
                 link.save()
+                if optional_gcode:
+                    gcode_name = Path(optional_gcode.name).name
+                    supplementary_asset = FileAsset(
+                        owner=request.user, project=project, category="gcode",
+                        name=Path(gcode_name).stem[:255], version=revision_version[:80],
+                        sha256=_sha256_upload(optional_gcode),
+                        metadata={
+                            "original_name": gcode_name,
+                            "size_bytes": getattr(optional_gcode, "size", 0) or 0,
+                            "extension": ".gcode", "uploaded_from": "printing_model",
+                        },
+                    )
+                    supplementary_asset.file = optional_gcode
+                    supplementary_asset.full_clean()
+                    supplementary_asset.save()
+                    gcode_link = ModelRevisionAsset(
+                        revision=revision, file_asset=supplementary_asset,
+                        role="gcode", is_primary=False,
+                    )
+                    gcode_link.full_clean()
+                    gcode_link.save()
 
             _analyse_revision_link(revision, link)
             item = Model3D.objects.filter(owner=request.user).select_related("project").prefetch_related(
@@ -6294,18 +6373,20 @@ def printing_models(request):
             ).get(pk=item.pk)
             return JsonResponse({"item": _serialise_printing_model(item)}, status=201)
         except ValidationError as exc:
-            if stored_asset and stored_asset.file:
-                try:
-                    stored_asset.file.delete(save=False)
-                except OSError:
-                    pass
+            for uploaded_asset in (stored_asset, supplementary_asset):
+                if uploaded_asset and uploaded_asset.file:
+                    try:
+                        uploaded_asset.file.delete(save=False)
+                    except OSError:
+                        pass
             return _validation_response(exc)
         except IntegrityError:
-            if stored_asset and stored_asset.file:
-                try:
-                    stored_asset.file.delete(save=False)
-                except OSError:
-                    pass
+            for uploaded_asset in (stored_asset, supplementary_asset):
+                if uploaded_asset and uploaded_asset.file:
+                    try:
+                        uploaded_asset.file.delete(save=False)
+                    except OSError:
+                        pass
             return _error("A matching model revision already exists.")
 
     try:
@@ -6570,6 +6651,69 @@ def printing_model_revision_detail(request, model_id, revision_id):
 
 @login_required
 @require_http_methods(["POST"])
+def printing_revision_gcode_upload(request, model_id, revision_id):
+    """Add an optional sliced toolpath without modifying the associated STL/3MF."""
+    model = Model3D.objects.filter(owner=request.user).select_related("project").filter(pk=model_id).first()
+    if not model:
+        return _error("3D model not found.", status=404)
+    revision = ModelRevision.objects.filter(model=model, pk=revision_id).first()
+    if not revision:
+        return _error("Model revision not found.", status=404)
+    for permission in ("core.change_model3d", "core.add_fileasset"):
+        denied = _require_permission(request, permission)
+        if denied:
+            return denied
+    if model.project:
+        denied = _require_permission(request, "core.change_project")
+        if denied:
+            return denied
+    uploaded = request.FILES.get("file")
+    if not uploaded or Path(uploaded.name or "").suffix.lower() != ".gcode":
+        return _error("Choose a plain-text .gcode file.")
+    try:
+        ensure_storage_capacity(request.user, getattr(uploaded, "size", 0) or 0)
+    except StorageQuotaExceeded as exc:
+        return _storage_quota_response(request, exc)
+    stored_asset = None
+    try:
+        filename = Path(uploaded.name).name
+        with transaction.atomic():
+            stored_asset = FileAsset(
+                owner=request.user, project=model.project, category="gcode",
+                name=Path(filename).stem[:255],
+                version=revision.version,
+                sha256=_sha256_upload(uploaded),
+                metadata={
+                    "original_name": filename, "extension": ".gcode",
+                    "size_bytes": getattr(uploaded, "size", 0) or 0,
+                    "uploaded_from": "printing_model_gcode",
+                },
+            )
+            stored_asset.file = uploaded
+            stored_asset.full_clean()
+            stored_asset.save()
+            link = ModelRevisionAsset(
+                revision=revision, file_asset=stored_asset,
+                role="gcode", is_primary=False,
+            )
+            link.full_clean()
+            link.save()
+        refreshed = Model3D.objects.filter(owner=request.user).select_related("project").prefetch_related(
+            "revisions__assets__file_asset__project"
+        ).get(pk=model.pk)
+        return JsonResponse({"model": _serialise_printing_model(refreshed)}, status=201)
+    except ValidationError as exc:
+        if stored_asset and stored_asset.file:
+            stored_asset.file.delete(save=False)
+        return _validation_response(exc)
+    except IntegrityError:
+        if stored_asset and stored_asset.file:
+            stored_asset.file.delete(save=False)
+        return _error("Unable to attach G-code to this revision.")
+
+
+@login_required
+@require_http_methods(["POST"])
 def printing_revision_assets(request, model_id, revision_id):
     model = Model3D.objects.filter(owner=request.user).select_related("project").filter(pk=model_id).first()
     if not model:
@@ -6586,14 +6730,18 @@ def printing_revision_assets(request, model_id, revision_id):
         asset = FileAsset.objects.filter(owner=request.user).select_related("project").filter(pk=payload.get("file_asset_id")).first()
         if not asset:
             return _error("Selected MakerVault file was not found.")
-        if asset.category not in {"mesh", "slicer", "cad"}:
-            return _error("Choose an STL/mesh, 3MF/slicer or CAD asset.")
+        if asset.category not in {"mesh", "slicer", "cad", "gcode"} and (asset.metadata or {}).get("extension") != ".gcode":
+            return _error("Choose an STL/mesh, 3MF/slicer, CAD or plain G-code asset.")
         if model.project_id and asset.project_id and model.project_id != asset.project_id:
             return _error("This file belongs to a different project. Detach it or choose a matching project file first.")
 
         role = str(payload.get("role") or "model")
         if role not in dict(ModelRevisionAsset.ROLES):
             return _error("Unknown revision asset role.")
+        if (asset.metadata or {}).get("extension") == ".gcode" and role != "gcode":
+            return _error("Select the G-code toolpath role for a G-code file.")
+        if role == "gcode" and (asset.metadata or {}).get("extension") != ".gcode":
+            return _error("G-code toolpaths require an uploaded .gcode file.")
         is_primary = payload.get("is_primary") is True
         with transaction.atomic():
             if is_primary:

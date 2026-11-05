@@ -104,7 +104,7 @@ def summary(connection):
 PROVIDERS = {
     **{key: ("moonraker", "Read cameras configured in Moonraker. Klipper itself does not serve camera images.") for key in MOONRAKER},
     "octoprint": ("octoprint", "Read the default webcam settings. The API key needs Settings Read permission."),
-    "creality_local": ("creality", "Choose the K1 route that works in your installation, or experimental K2 WebRTC. Presets do not verify playback. If Creality Cloud works but K1 HTTP does not, check that the printer's local mjpg_streamer service is running."),
+    "creality_local": ("creality", "Stock K1 firmware may provide camera video over local WebRTC on port 8000 without an MJPEG service on port 8080. Try the Creality local WebRTC preset first on newer firmware. Older K1 and Helper Script MJPEG routes remain available. Presets do not verify playback."),
     "prusa": ("prusalink", "Read local PrusaLink cameras where its camera API is available. Requires an API key; Prusa Connect cloud cameras are not imported."),
     "anycubic": ("reported", "Use a supported camera URL reported by the printer. RTSP needs a media relay, which is not included yet."),
     "flashforge": ("reported", "Use a supported camera URL reported by the printer. Opaque or unsupported stream formats require manual setup or a future relay."),
@@ -123,7 +123,16 @@ def k1_presets(connection):
     base = endpoint(connection)
     host = f"[{base.hostname}]" if ":" in base.hostname else base.hostname
     routes = [("K1 direct", 8080, "/"), ("K1 Helper Script / Fluidd", 4408, "/webcam/"), ("K1 Helper Script / Mainsail", 4409, "/webcam/")]
-    return [normalise_source(connection, {"name": name + " · " + mode, "mode": mode, "url": f"http://{host}:{port}{path}?action={action}"}, f"preset-k1-{port}-{mode}") for name, port, path in routes for mode, action in (("mjpeg", "stream"), ("snapshot", "snapshot"))]
+    presets = [normalise_source(connection, {"name": name + " · " + mode, "mode": mode, "url": f"http://{host}:{port}{path}?action={action}"}, f"preset-k1-{port}-{mode}") for name, port, path in routes for mode, action in (("mjpeg", "stream"), ("snapshot", "snapshot"))]
+    if connection.adapter == "creality_local":
+        presets.insert(0, normalise_source(
+            connection,
+            {"name": "Creality native camera · WebRTC (K1/K2, experimental)",
+             "mode": "creality_webrtc",
+             "url": f"http://{host}:8000/call/webrtc_local"},
+            "preset-creality-native-webrtc",
+        ))
+    return presets
 
 
 def setup_presets(connection):
@@ -240,7 +249,12 @@ def discover_result(connection):
     elif kind == "creality":
         host = f"[{base.hostname}]" if ":" in base.hostname else base.hostname
         candidates = k1_presets(connection)
-        candidates.append(normalise_source(connection, {"name": "K2 Creality WebRTC (experimental)", "mode": "creality_webrtc", "url": f"http://{host}:8000/call/webrtc_local"}, "candidate-k2"))
+        if not any(item["mode"] == "creality_webrtc" for item in candidates):
+            candidates.append(normalise_source(connection, {
+                "name": "Creality native camera · WebRTC (experimental)",
+                "mode": "creality_webrtc",
+                "url": f"http://{host}:8000/call/webrtc_local",
+            }, "candidate-creality-native-webrtc"))
         return {"candidates": candidates, "warnings": [], "provider": provider_info(connection)}
     elif kind == "reported":
         snapshot = getattr(connection, "last_snapshot", {}) or {}

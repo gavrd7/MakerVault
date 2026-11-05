@@ -427,7 +427,7 @@ class BOMAllocation(TimeStampedModel):
 
 
 class FileAsset(TimeStampedModel):
-    CATEGORIES = [("image", "Image"), ("wiring", "Wiring / schematic"), ("firmware", "Firmware"), ("source", "Source code"), ("binary", "Executable / binary"), ("document", "Document"), ("cad", "CAD"), ("mesh", "STL / mesh"), ("slicer", "3MF / slicer project"), ("pcb", "PCB"), ("archive", "Archive"), ("other", "Other")]
+    CATEGORIES = [("image", "Image"), ("wiring", "Wiring / schematic"), ("firmware", "Firmware"), ("source", "Source code"), ("binary", "Executable / binary"), ("document", "Document"), ("cad", "CAD"), ("mesh", "STL / mesh"), ("slicer", "3MF / slicer project"), ("gcode", "G-code"), ("pcb", "PCB"), ("archive", "Archive"), ("other", "Other")]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="makervault_file_assets")
@@ -452,6 +452,8 @@ class FileAsset(TimeStampedModel):
         ordering = ["-created_at"]
 
     def clean(self):
+        if self.category == "gcode" and (self.metadata or {}).get("extension") != ".gcode":
+            raise ValidationError({"category": "Only plain-text .gcode files can use the G-code category."})
         if self.project_id and self.owner_id and self.project.owner_id != self.owner_id:
             raise ValidationError({"project": "Selected project belongs to a different user."})
         if self.supersedes_id and self.owner_id and self.supersedes.owner_id != self.owner_id:
@@ -1100,6 +1102,39 @@ class PrinterControlRequest(TimeStampedModel):
     message = models.TextField(blank=True)
 
 
+class PrinterGcodeSubmission(TimeStampedModel):
+    """One-shot journal for potentially irreversible remote print operations."""
+
+    STATES = [
+        ("pending", "Pending"),
+        ("uploaded", "Uploaded"),
+        ("started", "Start requested"),
+        ("rejected", "Rejected"),
+        ("unknown", "Outcome unknown"),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    connection = models.ForeignKey(
+        PrinterConnection, on_delete=models.CASCADE, related_name="gcode_submissions"
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="gcode_submissions"
+    )
+    file_asset = models.ForeignKey(
+        FileAsset, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="printer_submissions"
+    )
+    source = models.CharField(max_length=20)
+    action = models.CharField(max_length=12)
+    original_path = models.CharField(max_length=512, blank=True)
+    remote_path = models.CharField(max_length=512, blank=True)
+    file_sha256 = models.CharField(max_length=64, blank=True)
+    status = models.CharField(max_length=12, choices=STATES, default="pending")
+    message = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
 class PrinterFilamentSlot(TimeStampedModel):
     SYSTEMS = [
         ("creality_cfs", "Creality CFS"),
@@ -1191,6 +1226,7 @@ class ModelRevisionAsset(TimeStampedModel):
     ROLES = [
         ("model", "Printable model"),
         ("slicer", "Slicer project"),
+        ("gcode", "G-code toolpath"),
         ("cad", "CAD / source"),
         ("reference", "Reference"),
         ("other", "Other"),
@@ -1214,6 +1250,10 @@ class ModelRevisionAsset(TimeStampedModel):
             raise ValidationError({"file_asset": "Selected file belongs to a different user."})
         if self.file_asset_id and self.role == "model" and self.file_asset.category not in {"mesh", "slicer", "cad"}:
             raise ValidationError({"file_asset": "Printable model assets should use a mesh, slicer or CAD file category."})
+        if self.file_asset_id and self.role == "gcode" and (self.file_asset.metadata or {}).get("extension") != ".gcode":
+            raise ValidationError({"file_asset": "G-code links require an uploaded .gcode file."})
+        if self.file_asset_id and self.file_asset.category == "gcode" and self.role != "gcode":
+            raise ValidationError({"role": "G-code files must use the G-code toolpath role."})
 
     def __str__(self):
         return f"{self.revision} · {self.file_asset.name}"

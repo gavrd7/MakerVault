@@ -1,4 +1,5 @@
 from django.urls import path
+from . import printer_gcode_api
 from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views, device_api_views, device_pairing, device_measurements, device_tag_registration, device_tag_lookup, weight_history_views, tag_ndef, device_ndef_write, device_cfs_lookup, device_makertag_operations, device_pending_work
 
 urlpatterns = [
@@ -103,6 +104,11 @@ urlpatterns = [
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/material-database/", api_views.printing_printer_material_database, name="api-printing-printer-material-database"),
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/refresh/", api_views.printing_printer_connection_refresh, name="api-printing-printer-connection-refresh"),
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/control/", api_views.printing_printer_connection_control, name="api-printing-printer-connection-control"),
+    path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/gcode/files/", printer_gcode_api.files, name="api-printer-gcode-files"),
+    path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/gcode/bambu-certificate/", printer_gcode_api.bambu_certificate, name="api-printer-gcode-bambu-certificate"),
+    path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/gcode/native-opt-in/", printer_gcode_api.submission_opt_in, name="api-printer-gcode-native-opt-in"),
+    path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/gcode/submit/", printer_gcode_api.submit_file, name="api-printer-gcode-submit"),
+    path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/gcode/submissions/<uuid:request_id>/", printer_gcode_api.submission_status, name="api-printer-gcode-submission-status"),
     path("printing/spools/", api_views.printing_spools, name="api-printing-spools"),
     path("printing/spools/<uuid:spool_id>/", api_views.printing_spool_detail, name="api-printing-spool-detail"),
     path("printing/slots/<uuid:slot_id>/add-to-inventory/", api_views.printing_slot_add_to_inventory, name="api-printing-slot-add-to-inventory"),
@@ -112,6 +118,7 @@ urlpatterns = [
     path("printing/models/<uuid:model_id>/revisions/upload/", api_views.printing_model_revision_upload, name="api-printing-model-revision-upload"),
     path("printing/models/<uuid:model_id>/revisions/<uuid:revision_id>/", api_views.printing_model_revision_detail, name="api-printing-model-revision-detail"),
     path("printing/models/<uuid:model_id>/revisions/<uuid:revision_id>/analyse/", api_views.printing_revision_analyse, name="api-printing-revision-analyse"),
+    path("printing/models/<uuid:model_id>/revisions/<uuid:revision_id>/gcode/upload/", api_views.printing_revision_gcode_upload, name="api-printing-revision-gcode-upload"),
     path("printing/models/<uuid:model_id>/revisions/<uuid:revision_id>/assets/", api_views.printing_revision_assets, name="api-printing-revision-assets"),
     path("printing/models/<uuid:model_id>/revisions/<uuid:revision_id>/assets/<uuid:link_id>/", api_views.printing_revision_asset_detail, name="api-printing-revision-asset-detail"),
     path("printing/jobs/", api_views.printing_jobs, name="api-printing-jobs"),
@@ -125,6 +132,7 @@ urlpatterns = [
     path("components/<uuid:component_id>/", api_views.component_detail, name="api-component-detail"),
     path("components/<uuid:component_id>/image/", api_views.component_image, name="api-component-image"),
     path("files/", api_views.files_lookup, name="api-files"),
+    path("files/<uuid:asset_id>/gcode/inspect/", api_views.file_gcode_inspect, name="api-file-gcode-inspect"),
     path("files/<uuid:asset_id>/", api_views.file_detail, name="api-file-detail"),
     path("files/<uuid:asset_id>/versions/", api_views.file_versions, name="api-file-versions"),
     path("projects/", api_views.projects_lookup, name="api-projects"),

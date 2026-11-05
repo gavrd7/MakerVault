@@ -2,9 +2,10 @@ import React, { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../api";
 import { Badge, LoadingBlock, Modal } from "./Common";
 import FileVersionModal from "./FileVersionModal";
+import GcodeViewerModal from "./GcodeViewerModal";
 import { FileModelViewerModal, ModelThumbnail, isViewableModelFile } from "./ModelViewer";
 
-const CATEGORY_ORDER = ["source", "firmware", "binary", "cad", "mesh", "slicer", "pcb", "wiring", "document", "archive", "other"];
+const CATEGORY_ORDER = ["gcode", "source", "firmware", "binary", "cad", "mesh", "slicer", "pcb", "wiring", "document", "archive", "other"];
 const ALLOWED_FILE_TYPES = [
   ".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".pdf", ".txt", ".md",
   ".zip", ".7z", ".tar", ".gz", ".ino", ".cpp", ".h", ".hpp", ".py", ".yaml", ".yml",
@@ -28,7 +29,8 @@ function inferFileCategory(filename) {
   if (["bin", "hex", "uf2", "elf"].includes(ext)) return "firmware";
   if (["exe", "msi"].includes(ext)) return "binary";
   if (["stl", "obj"].includes(ext)) return "mesh";
-  if (["3mf", "gcode", "bgcode"].includes(ext)) return "slicer";
+  if (ext === "gcode") return "gcode";
+  if (["3mf", "bgcode"].includes(ext)) return "slicer";
   if (["step", "stp", "iges", "igs", "f3d", "fcstd", "sldprt", "scad", "dxf"].includes(ext)) return "cad";
   if (ext === "kicad_pcb") return "pcb";
   if (ext === "kicad_sch") return "wiring";
@@ -37,7 +39,7 @@ function inferFileCategory(filename) {
   return "other";
 }
 
-export default function FilesPage({ projects, onOpenProject, config, searchTarget = null }) {
+export default function FilesPage({ projects, onOpenProject, onOpenModel, config, searchTarget = null }) {
   const [rows, setRows] = useState([]);
   const [categories, setCategories] = useState([]);
   const [search, setSearch] = useState("");
@@ -49,6 +51,7 @@ export default function FilesPage({ projects, onOpenProject, config, searchTarge
   const [editing, setEditing] = useState(null);
   const [versioning, setVersioning] = useState(null);
   const [viewerFile, setViewerFile] = useState(null);
+  const [gcodeFile, setGcodeFile] = useState(null);
 
   useEffect(() => {
     if (searchTarget?.type !== "files" || !searchTarget.id) return;
@@ -165,6 +168,7 @@ export default function FilesPage({ projects, onOpenProject, config, searchTarge
               </div>
               <div className="projectAssetActions">
                 {isViewableModelFile(file) && <button type="button" onClick={() => setViewerFile(file)}>View</button>}
+                {file.filename?.toLowerCase().endsWith(".gcode") && <button type="button" onClick={() => setGcodeFile(file)}>View G-code</button>}
                 <a href={file.url} className="assetButton">Download</a>
                 {config?.permissions?.change_file && <button onClick={() => setVersioning(file)}>Upload new version</button>}
                 {config?.permissions?.change_file && <button onClick={() => setEditing(file)}>Manage</button>}
@@ -196,6 +200,7 @@ export default function FilesPage({ projects, onOpenProject, config, searchTarge
       onSaved={async () => { setVersioning(null); await load(); }}
     />}
     {viewerFile && <FileModelViewerModal file={viewerFile} onClose={() => setViewerFile(null)} />}
+    {gcodeFile && <GcodeViewerModal file={gcodeFile} onOpenModel={onOpenModel} canEdit={Boolean(config?.permissions?.change_file)} onClose={() => setGcodeFile(null)} onSaved={async () => { setGcodeFile(null); await load(); }} />}
   </div>;
 }
 

@@ -1,0 +1,221 @@
+"""G-code inspection is deliberately advisory and must never dispatch to printers."""
+from types import SimpleNamespace
+from django.test import SimpleTestCase
+
+from core.gcode_analysis import analyse_text, compare_printer_metadata
+
+
+class GcodeAnalysisTests(SimpleTestCase):
+    def test_nozzle_and_plate_comments_are_advisory(self):
+        report = analyse_text(
+            "; nozzle_diameter = 0.4, 0.6\n"
+            "; curr_bed_type = Textured PEI Plate\n"
+            "G1 X5 Y6 E1\n"
+        )
+        self.assertEqual(report["print_setup"]["nozzle_diameters_mm"], [0.4, 0.6])
+        self.assertEqual(report["print_setup"]["bed_type"], "Textured PEI Plate")
+        self.assertNotIn("blocking", report["print_setup"])
+        self.assertEqual(report["print_setup"]["sources"]["bed_type"], "curr_bed_type")
+
+    def test_creality_and_unknown_print_setup_metadata(self):
+        report = analyse_text("; Nozzle Size: 0.4mm\n; Plate Type: Cool Plate\n")
+        self.assertEqual(report["print_setup"]["nozzle_diameters_mm"], [0.4])
+        self.assertEqual(report["print_setup"]["bed_type"], "Cool Plate")
+        missing = analyse_text("G28\n")
+        self.assertEqual(missing["print_setup"]["nozzle_diameters_mm"], [])
+        self.assertIsNone(missing["print_setup"]["bed_type"])
+        invalid = analyse_text("; nozzle_diameter = 999\n; bed_type = Smooth PEI Plate\n")
+        self.assertEqual(invalid["print_setup"]["nozzle_diameters_mm"], [])
+        self.assertEqual(invalid["print_setup"]["bed_type"], "Smooth PEI Plate")
+
+    def test_creality_sliced_filament_vectors_for_cfs_review(self):
+        report = analyse_text(
+            "; printer_model = Creality K2\n"
+            "; filament_type = PLA; PETG\n"
+            "; filament_colour = #ffffff; #e83d89\n"
+            "; filament_settings_id = SUNLU PLA+; SUNLU Hyper PETG Matte\n"
+            "T0\nG1 X2 Y3\nT1\n"
+        )
+        filaments = report["filaments"]
+        self.assertTrue(filaments["complete"])
+        self.assertEqual([item["material"] for item in filaments["requirements"]], ["PLA", "PETG"])
+        self.assertEqual([item["color_hex"] for item in filaments["requirements"]], ["#ffffff", "#e83d89"])
+        self.assertEqual(filaments["requirements"][0]["preset"], "SUNLU PLA+")
+
+    def test_creality_print_material_type_comment_is_detected(self):
+        analysis = analyse_text(";Material Type:PLA\n;Material Density:1.24\nG1 X5 Y2\n")
+        self.assertEqual(analysis["filaments"]["requirements"][0]["material"], "PLA")
+        self.assertFalse(analysis["filaments"]["complete"])
+        self.assertEqual(analysis["filaments"]["requirements"][0]["color_hex"], "")
+
+    def test_comma_delimited_filament_metadata(self):
+        analysis = analyse_text(
+            "; filament_type = PLA, PETG\n"
+            "; filament_colour = #ffffff, #e83d89\n"
+        )
+        self.assertTrue(analysis["filaments"]["complete"])
+        self.assertEqual(len(analysis["filaments"]["requirements"]), 2)
+
+    def test_missing_slicer_filaments_do_not_guess_cfs_slots(self):
+        report = analyse_text("T0\nG1 X1 Y2\n")
+        self.assertEqual(report["filaments"]["requirements"], [])
+        self.assertFalse(report["filaments"]["complete"])
+        partial = analyse_text("; filament_type = PLA\n; filament_colour = #ffffff\n", truncated=True)
+        self.assertFalse(partial["filaments"]["complete"])
+        bad = analyse_text("; filament_type = PLA\n; filament_colour = invalid\n")
+        self.assertFalse(bad["filaments"]["complete"])
+        self.assertEqual(bad["filaments"]["requirements"][0]["color_hex"], "")
+
+    def test_creality_compact_toolpath_extrusion_uses_selected_tool(self):
+        report = analyse_text(
+            "; filament_type = PLA; PLA; PLA; PLA\n"
+            "; filament_colour = #000000; #e83d89; #ffffff; #668798\n"
+            "M82\nT2\nG92E0\nG1X10Y20E0.4F1200\n"
+            "G1X20Y30E0.8F1200\n"
+        )["filaments"]
+        self.assertTrue(report["usage_confident"])
+        self.assertEqual(report["used_tool_indices"], [2])
+        self.assertEqual(report["used_requirements"][0]["color_hex"], "#ffffff")
+
+    def test_missing_unused_profile_color_does_not_affect_used_completeness(self):
+        report = analyse_text(
+            "; filament_type = PLA; PLA; PLA\n"
+            "; filament_colour = not-known; #ffffff; not-known\n"
+            "T1\nG92 E0\nG1 X10 Y10 E0.1\n"
+        )["filaments"]
+        self.assertFalse(report["complete"])
+        self.assertTrue(report["used_complete"])
+        self.assertEqual(report["used_tool_indices"], [1])
+
+    def test_slicer_filament_consumption_can_resolve_ambiguous_toolpath(self):
+        report = analyse_text(
+            "; filament_type = PLA; PLA; PLA; PLA\n"
+            "; filament_colour = #000000; #e83d89; #ffffff; #668798\n"
+            "; filament used [mm] = 0, 0, 1423.5, 0\n"
+            "G1 X5 Y5 E0.2\n"
+        )["filaments"]
+        self.assertTrue(report["usage_confident"])
+        self.assertEqual(report["usage_source"], "slicer_consumption_mm")
+        self.assertEqual(report["used_tool_indices"], [2])
+        self.assertEqual(len(report["used_requirements"]), 1)
+        self.assertFalse(analyse_text(
+            "; filament_type = PLA; PETG\n"
+            "; filament used [mm] = 1234\n"
+        )["filaments"]["usage_confident"])
+
+    def test_consumption_conflict_does_not_silently_select_a_slot(self):
+        report = analyse_text(
+            "; filament_type = PLA; PLA\n"
+            "; filament_colour = #ffffff; #000000\n"
+            "; filament used [g] = 0, 3.4\n"
+            "T0\nG92 E0\nG1 X4 Y5 E0.2\n"
+        )["filaments"]
+        self.assertFalse(report["usage_confident"])
+        self.assertEqual(report["used_requirements"], [])
+
+    def test_only_extruding_tool_is_mapped_from_four_profiles(self):
+        gcode = (
+            "; filament_type = PLA; PLA; PLA; PLA\n"
+            "; filament_colour = #000000; #e83d89; #ffffff; #668798\n"
+            "M82\nT2\nG92 E0\nG1 X10 Y10 E0.4\n"
+            "T0\nG1 X12 Y12 F3000\n"
+            "T2\nG1 X13 Y13 E0.8\n"
+        )
+        result = analyse_text(gcode)["filaments"]
+        self.assertTrue(result["usage_confident"])
+        self.assertEqual(result["used_tool_indices"], [2])
+        self.assertEqual(len(result["requirements"]), 4)
+        self.assertEqual([r["tool_index"] for r in result["used_requirements"]], [2])
+        self.assertEqual(result["used_requirements"][0]["color_hex"], "#ffffff")
+
+    def test_actual_two_material_extruders_not_configured_presets(self):
+        report = analyse_text(
+            "; filament_type = PLA; PETG; ABS\n"
+            "; filament_colour = #ffffff; #000000; #ff0000\n"
+            "M83\nT0\nG1 X1 E0.2\n"
+            "T1\nG1 X2 E0.3\n"
+            "T2\nG1 E4\n"
+        )["filaments"]
+        self.assertTrue(report["usage_confident"])
+        self.assertEqual([r["tool_index"] for r in report["used_requirements"]], [0, 1])
+        self.assertEqual([r["material"] for r in report["used_requirements"]], ["PLA", "PETG"])
+
+    def test_ambiguous_used_tools_do_not_invent_mapping(self):
+        headers = "; filament_type = PLA; PLA; PLA; PLA\n"
+        result = analyse_text(headers + "G1 X1 Y1 E0.2\n")["filaments"]
+        self.assertFalse(result["usage_confident"])
+        self.assertFalse(result["used_requirements"])
+        result = analyse_text(headers + "T2\nG1 X1 Y1 E0.2\n", truncated=True)["filaments"]
+        self.assertFalse(result["usage_confident"])
+        result = analyse_text(headers + "T8\nG1 X1 Y1 E0.2\n")["filaments"]
+        self.assertFalse(result["usage_confident"])
+
+    def test_single_declared_profile_and_e_reset_supported(self):
+        result = analyse_text(
+            "; filament_type = PLA\n"
+            "M82\nG92 E10\nG1 X1 Y1 E10.25\n"
+            "G92 E0\nG1 X2 Y2 E0.2\n"
+        )["filaments"]
+        self.assertTrue(result["usage_confident"])
+        self.assertEqual(result["used_tool_indices"], [0])
+
+    def test_explicit_printer_and_bounds(self):
+        result = analyse_text(
+            "; printer_model = Creality K2 Plus\n"
+            "; generated by: OrcaSlicer\n"
+            "G90\nG21\nG1 X10 Y20 Z0.2 E0.1\nG1 X30 Y5 E0.2\n"
+        )
+        self.assertEqual(result["printer_hints"], ["Creality K2 Plus"])
+        self.assertEqual(result["slicer_hints"], ["OrcaSlicer"])
+        self.assertEqual(result["bounds_mm"]["X"], [10.0, 30.0])
+        self.assertEqual(result["bounds_mm"]["Y"], [5.0, 20.0])
+        self.assertEqual(result["xy_moves"], 2)
+        self.assertEqual(result["compatibility"], "unverified")
+
+    def test_no_slicer_printer_fallback_and_destructive_command_warning(self):
+        result = analyse_text("; generic\nG28\nM500\nG1 X5\n")
+        self.assertFalse(result["printer_hints"])
+        self.assertTrue(any("unknown" in message.lower() for message in result["warnings"]))
+        self.assertTrue(any("M500" in message for message in result["warnings"]))
+
+    def test_relative_and_inch_coordinates(self):
+        result = analyse_text("G20\nG91\nG1 X1 Y1\nG1 X2\nG90\nG21\nG1 X2 Y3\n")
+        self.assertAlmostEqual(result["bounds_mm"]["X"][0], 2.0)
+        self.assertAlmostEqual(result["bounds_mm"]["X"][1], 76.2)
+        self.assertAlmostEqual(result["bounds_mm"]["Y"][0], 3.0)
+        self.assertAlmostEqual(result["bounds_mm"]["Y"][1], 25.4)
+
+    def test_partial_input_must_warn(self):
+        result = analyse_text("; printer_model = K1\nG1 X12\n", truncated=True)
+        self.assertTrue(result["partial"])
+        self.assertEqual(result["compatibility"], "unverified")
+        self.assertTrue(any("partially" in w for w in result["warnings"]))
+
+    def test_k2_gcode_on_k1_must_be_blocked(self):
+        report = analyse_text("; printer_model = Creality K2\nG1 X12 Y5\n")
+        printer = SimpleNamespace(
+            model="K1", name="Workshop K1", catalog_model=None,
+            printer_manufacturer=SimpleNamespace(name="Creality"),
+        )
+        result = compare_printer_metadata(report, printer)
+        self.assertEqual(result["status"], "mismatch")
+        self.assertTrue(result["blocking"])
+
+    def test_matching_header_is_not_proof_of_safety(self):
+        report = analyse_text("; printer_model = Creality K2\n")
+        printer = SimpleNamespace(
+            model="K2", name="Workshop K2", catalog_model=None,
+            printer_manufacturer=SimpleNamespace(name="Creality"),
+        )
+        result = compare_printer_metadata(report, printer)
+        self.assertEqual(result["status"], "metadata_match")
+        self.assertFalse(result["blocking"])
+        self.assertIn("not a safety guarantee", result["reason"])
+
+    def test_missing_printer_header_stays_blocked(self):
+        report = analyse_text("G1 X2 Y3\n")
+        printer = SimpleNamespace(
+            model="K2", name="K2", catalog_model=None,
+            printer_manufacturer=None,
+        )
+        self.assertTrue(compare_printer_metadata(report, printer)["blocking"])

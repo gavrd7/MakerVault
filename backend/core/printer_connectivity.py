@@ -611,6 +611,7 @@ def poll_moonraker(endpoint_url: str, config: dict | None = None) -> dict:
         ] + tool_warnings,
         "source_metadata": {
             "klippy_state": str((server.get("result") or {}).get("klippy_state") or ""),
+            "virtual_sdcard_active": virtual_sd.get("is_active") is True,
             "moonraker_version": str((server.get("result") or {}).get("moonraker_version") or ""),
             "tool_names": tool_names,
             "active_tool": active_tool,
@@ -695,7 +696,7 @@ def poll_octoprint(endpoint_url: str, config: dict | None = None) -> dict:
         "state": state,
         "state_label": state_text or state.title(),
         "job": {
-            "file_name": str(file_data.get("display") or file_data.get("name") or file_data.get("path") or ""),
+            "file_name": str(file_data.get("path") or file_data.get("name") or file_data.get("display") or ""),
             "progress": round(max(0.0, min(100.0, completion)), 2) if completion is not None else None,
             "elapsed_seconds": elapsed,
             "remaining_seconds": remaining,
@@ -1018,6 +1019,54 @@ POLLERS: dict[str, Callable[[str, dict | None], dict]] = {
 }
 
 
+def _creality_native_idle_evidence(snapshot):
+    """Recognise an idle K-series state=0 without a second connection.
+
+    Creality's state=0 can mean idle or preparation, and printFileName may
+    retain the last completed/cancelled job. Require explicit idle device
+    status, cleared targets AND cleared job counters before trusting it.
+    Missing/ambiguous telemetry is never interpreted as idle.
+    """
+    if snapshot.get("state") != "processing" or not snapshot.get("online"):
+        return False
+    meta = snapshot.get("source_metadata") or {}
+    if meta.get("raw_state") != 0 or meta.get("device_state") != 0:
+        return False
+    if meta.get("power_loss_recovery") or str(meta.get("material_status") or "0") not in {"0", "0.0"}:
+        return False
+    temperatures = snapshot.get("temperatures") or {}
+    for key in ("tool0", "bed"):
+        reading = temperatures.get(key) or {}
+        target = _finite_number(reading.get("target_c"))
+        if target is None or target > 0:
+            return False
+    job = snapshot.get("job") or {}
+    for key in ("progress", "elapsed_seconds", "remaining_seconds", "current_layer"):
+        value = _finite_number(job.get(key))
+        if value is None or value != 0:
+            return False
+    return True
+
+
+def _reconcile_creality_processing(connection, snapshot):
+    """Remove a stale job filename only on direct native idle evidence."""
+    if not _creality_native_idle_evidence(snapshot):
+        return snapshot
+    result = dict(snapshot)
+    result["state"] = "idle"
+    result["state_label"] = "Idle"
+    job = dict(result.get("job") or {})
+    previous_filename = job.get("file_name") or ""
+    job.update({"file_name": "", "progress": None, "elapsed_seconds": None,
+                "remaining_seconds": None, "current_layer": None, "total_layers": None})
+    result["job"] = job
+    metadata = dict(result.get("source_metadata") or {})
+    metadata.update({"native_idle_confirmed": True,
+                     "previous_job_filename": previous_filename})
+    result["source_metadata"] = metadata
+    return result
+
+
 def poll_connection(connection) -> dict:
     definition = ADAPTERS.get(connection.adapter)
     if not definition:
@@ -1053,6 +1102,9 @@ def poll_connection(connection) -> dict:
             "adapter": connection.adapter,
             "source_metadata": source_metadata,
         }
+
+    if connection.adapter == "creality_local":
+        snapshot = _reconcile_creality_processing(connection, snapshot)
 
     job_result = sync_print_job_from_snapshot(connection, snapshot)
     material_result = sync_live_material_slots(connection, snapshot)
@@ -1099,4 +1151,9 @@ def poll_connection(connection) -> dict:
         "status", "last_error", "last_checked_at", "last_seen_at",
         "capabilities", "last_snapshot", "updated_at",
     ])
+    # Reconcile any explicitly submitted print against this adapter's own
+    # freshly collected job telemetry. Polling is strictly read-only and
+    # never reissues a printer command.
+    from .printer_gcode_submission import reconcile_print_start_receipts
+    reconcile_print_start_receipts(connection, snapshot)
     return snapshot

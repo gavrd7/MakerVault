@@ -93,6 +93,8 @@ class CameraProtocolTests(SimpleTestCase):
         self.connection.adapter = 'creality_local'
         rows = discover(self.connection)
         self.assertEqual(len(rows), 7)
+        self.assertEqual(rows[0]["mode"], "creality_webrtc")
+        self.assertEqual(rows[0]["url"], "http://[fd00::50]:8000/call/webrtc_local")
         self.assertIn('http://[fd00::50]:4408/webcam/?action=stream', [row['url'] for row in rows])
         self.assertIn('http://[fd00::50]:4409/webcam/?action=snapshot', [row['url'] for row in rows])
         self.connection.adapter = 'moonraker'
@@ -279,7 +281,8 @@ class CameraApiTests(TestCase):
     def test_provider_setup_and_discovery_are_scoped_and_do_not_probe_presets(self, upstream):
         setup = self.client.get(self.root).json()
         self.assertEqual(setup["provider"]["id"], "creality")
-        self.assertEqual(len(setup["presets"]), 6)
+        self.assertEqual(len(setup["presets"]), 7)
+        self.assertEqual(setup["presets"][0]["mode"], "creality_webrtc")
         result = self.client.post(self.root + "discover/", {}, content_type="application/json")
         self.assertEqual(result.status_code, 200)
         self.assertEqual(len(result.json()["candidates"]), 7)

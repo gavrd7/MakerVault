@@ -3359,3 +3359,291 @@ a:focus-visible,
     grid-column: 1 / -1;
   }
 }
+
+
+/* Printer G-code modal: keep guidance, fields, and the submit footer distinct. */
+.gcodePrintModalContent { display:flex; flex-direction:column; gap:18px; min-width:0; }
+.gcodePrintModalContent > .settingsCallout,
+.gcodePrintModalContent > .printingManageForm,
+.gcodePrintModalContent > .formError { margin:0; }
+.gcodePrintModalContent > label:not(.checkRow) { display:grid; gap:9px; margin:0; color:#aeb8c7; }
+.gcodePrintModalContent > label:not(.checkRow) select,
+.gcodePrintModalContent > label:not(.checkRow) input { margin:0; min-width:0; }
+.gcodePrintModalContent .settingsCallout { display:grid; gap:12px; padding:18px 20px; }
+.gcodePrintModalContent .settingsCallout p { margin:0; line-height:1.5; }
+.gcodePrintModalContent .settingsCallout .checkRow { margin:0; }
+.gcodePrintModalContent .checkRow { display:flex; align-items:flex-start; gap:12px; line-height:1.5; margin:0; }
+.gcodePrintModalContent .checkRow input[type=checkbox] { flex:none; width:18px; height:18px; margin:2px 0 0; }
+.gcodePrintModalContent > .formActions { margin-top:4px; padding-top:14px; border-top:1px solid #29313c; gap:12px; flex-wrap:wrap; }
+.gcodePrintModalContent .printingManageForm { padding:18px 20px; gap:14px; }
+.gcodePrintModalContent .gcodeTransferProgress { display:grid; gap:8px; padding:16px 18px; border:1px solid #344052; border-radius:12px; background:#111925; }
+.gcodePrintModalContent .gcodeTransferProgress progress { display:block; width:100%; height:10px; accent-color:#795bf0; }
+.gcodePrintModalContent .gcodeTransferProgress p { margin:0; color:#aeb8c7; line-height:1.45; }
+@media(max-width:600px) {
+  .gcodePrintModalContent { gap:15px; }
+  .gcodePrintModalContent .settingsCallout { padding:15px; }
+  .gcodePrintModalContent > .formActions { justify-content:stretch; }
+  .gcodePrintModalContent > .formActions button { flex:1; }
+}
+
+
+/* Printer overview: reusable for Creality, AMS, MMU and generic live connections. */
+.printingPrinterCard .printingPrinterOverviewTop{
+  display:grid;grid-template-columns:minmax(270px, .85fr) minmax(0, 1.65fr);
+  gap:18px;align-items:start;min-width:0;
+}
+.printingPrinterCard .printingPrinterHeader{align-items:start;min-width:0}
+.printingPrinterCard .printingPrinterControls{width:100%;justify-items:stretch;gap:12px}
+.printingPrinterCard .printingPrinterActions{
+  display:flex;flex-wrap:wrap;align-items:stretch;justify-content:flex-start;
+  width:100%;gap:8px;
+}
+.printingPrinterCard .printingPrinterAction{
+  display:inline-flex;align-items:center;justify-content:center;min-height:40px;
+  padding:9px 12px;white-space:normal;text-align:center;line-height:1.25;
+}
+.printingPrinterCard .printingSlotPanel{
+  min-width:0;border:1px solid #293648;border-radius:12px;
+  padding:14px;background:#0d151f;
+}
+.printingSlotPanelHeader{
+  display:flex;align-items:baseline;justify-content:space-between;
+  gap:8px;margin-bottom:12px;flex-wrap:wrap;
+}
+.printingSlotPanelHeader strong{color:#e6ebf4;font-size:14px}
+.printingSlotPanelHeader small{color:#8493a8;font-size:11px}
+.printingPrinterCard .printingSlotGrid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(min(205px,100%),1fr));
+  grid-auto-rows:auto;align-items:stretch;gap:10px;margin:0;
+}
+.printingPrinterCard .printingSlot{
+  display:grid;grid-template-columns:20px minmax(0,1fr);gap:10px;
+  padding:12px;min-width:0;height:100%;border-radius:11px;
+  border:1px solid #314155;background:#111c29;align-items:start;
+}
+.printingPrinterCard .printingSlot .printingSwatch{
+  width:19px;height:19px;border-radius:6px;margin-top:2px;flex:none;
+}
+.printingPrinterCard .printingSlot>div{display:flex;flex-direction:column;align-items:flex-start;min-width:0;gap:4px}
+.printingPrinterCard .printingSlot strong{font-size:13px;line-height:1.4;margin:0}
+.printingPrinterCard .printingSlot small{
+  margin:0;font-size:11px;line-height:1.5;color:#91a0b3;
+  max-width:100%;overflow-wrap:anywhere;
+}
+.printingPrinterCard .printingSlot .slotInventoryAction{
+  margin-top:9px;min-height:32px;max-width:100%;
+  padding:6px 10px;font-size:11px;line-height:1.25;
+}
+.printingPrinterCard .printerLiveSummary{margin-top:15px}
+.printingPrinterCard .printerLiveFooter{
+  display:flex;align-items:flex-end;justify-content:space-between;
+  flex-wrap:wrap;gap:10px;margin-top:10px;min-width:0;
+}
+.printingPrinterCard .printerLiveQuickStats{flex:1 1 250px;min-width:0;margin:0}
+.printingPrinterCard .printerLiveFooter .printerLiveOpen{
+  flex:none;min-height:36px;margin:0 0 0 auto;padding:8px 13px;
+  font-size:12px;align-self:flex-end;
+}
+.printingPrinterCard .printerLiveActions{margin-top:10px}
+.printingPrinterCard .printerLiveActions .printerJobControls{flex:1 1 auto}
+@container (max-width:1000px){
+  .printingPrinterCard .printingPrinterOverviewTop{
+    grid-template-columns:minmax(0,1fr);
+  }
+  .printingPrinterCard .printingSlotGrid{
+    grid-template-columns:repeat(auto-fit,minmax(min(210px,100%),1fr));
+  }
+}
+@container (max-width:620px){
+  .printingPrinterCard .printingPrinterActions{
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;
+  }
+  .printingPrinterCard .printingPrinterAction{width:100%;min-width:0;min-height:44px}
+  .printingPrinterCard .printingSlotGrid{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  }
+  .printingPrinterCard .printingSlot{padding:10px;gap:8px}
+  .printingPrinterCard .printerLiveFooter{align-items:stretch}
+  .printingPrinterCard .printerLiveFooter .printerLiveOpen{min-height:44px}
+}
+@container (max-width:400px){
+  .printingPrinterCard .printingSlotGrid{
+    grid-template-columns:minmax(0,1fr)!important;
+  }
+  .printingPrinterCard .printerLiveFooter{flex-direction:column;align-items:stretch}
+  .printingPrinterCard .printerLiveFooter .printerLiveOpen{width:100%;margin:0}
+}
+
+
+/* Live-source setup aligns with the saved connection cards at every modal width. */
+.printerLiveAddSource{
+  box-sizing:border-box;
+  width:calc(100% - 32px);
+  max-width:calc(100% - 32px);
+  margin:12px 16px 0;
+  padding:18px;
+  border:1px solid #293746;
+  border-radius:12px;
+  background:#0d151f;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  align-items:start;
+  gap:16px;
+  min-width:0;
+}
+.printerLiveAddSource>*{min-width:0;max-width:100%}
+.printerLiveAddSource label{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  justify-content:flex-start;
+  gap:7px;
+  line-height:1.4;
+}
+.printerLiveAddSource label>input,
+.printerLiveAddSource label>select,
+.printerLiveAddSource label>.intervalInput{
+  box-sizing:border-box;
+  min-width:0;
+  width:100%;
+  margin:0;
+}
+.printerLiveAddSource input,
+.printerLiveAddSource select{
+  min-height:44px;
+}
+.printerLiveAddHeading{
+  display:grid;
+  gap:5px;
+  padding-bottom:12px;
+  border-bottom:1px solid #253445;
+}
+.printerLiveAddHeading strong{font-size:15px;color:#e8edf5}
+.printerLiveAddHeading p{
+  margin:0;
+  color:#98a7ba;
+  font-size:13px;
+  line-height:1.5;
+}
+.printerLiveAddSource .settingsCallout{
+  min-width:0;
+  max-width:100%;
+  overflow-wrap:anywhere;
+  align-self:stretch;
+  padding:12px 14px;
+}
+.printerLiveAddSource .settingsCallout p{line-height:1.5}
+.printerLiveAddSource .printerLivePollField .intervalInput{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  max-width:280px;
+}
+.printerLiveAddSource .printerLivePollField .intervalInput input{
+  width:100%;
+  min-width:0;
+  max-width:160px;
+}
+.printerLiveAddSource .printerLivePollField .intervalInput span{
+  flex:none;
+  color:#98a7ba;
+}
+.printerLiveAddSource .printerLiveAddActions{
+  grid-column:1/-1;
+  display:flex;
+  justify-content:flex-end;
+  align-items:center;
+  padding-top:12px;
+  border-top:1px solid #253445;
+  margin:0;
+}
+.printerLiveAddSource .printerLiveAddActions button{
+  min-height:44px;
+  padding:10px 17px;
+}
+@media(max-width:700px){
+  .printerLiveAddSource{
+    grid-template-columns:minmax(0,1fr);
+    gap:13px;
+    padding:14px;
+  }
+  .printerLiveAddSource .full,
+  .printerLiveAddSource .printerLiveAddActions{
+    grid-column:1;
+  }
+}
+@media(max-width:480px){
+  .printerLiveAddSource{
+    width:calc(100% - 16px);
+    max-width:calc(100% - 16px);
+    margin:10px 8px 0;
+    padding:12px;
+  }
+  .printerLiveAddSource .printerLiveAddActions button{width:100%}
+}
+
+
+/* Printer camera modal: consistent form card, control spacing, and mobile stacking. */
+.printerCameraSetupLayout{display:grid;gap:16px;min-width:0}
+.printerCameraSetupLayout>*{min-width:0}
+.printerCameraIntegrationField{
+  display:grid;gap:7px;min-width:0;max-width:100%;
+  color:#aeb8c7;font-size:13px;line-height:1.45;
+}
+.printerCameraIntegrationField select{width:100%;min-height:44px;min-width:0;margin:0}
+.printerCameraSetupLayout .printerCamera{min-width:0}
+.printerCameraSetupLayout .printerCameraToolbar{margin:0 0 10px;align-items:center}
+.printerCameraSetupLayout .printerCameraForm{
+  box-sizing:border-box;min-width:0;width:100%;margin:0;
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  column-gap:16px;row-gap:14px;align-items:start;
+  padding:16px;border:1px solid #293746;border-radius:12px;background:#0d151f;
+}
+.printerCameraSetupLayout .printerCameraForm>*{min-width:0;max-width:100%}
+.printerCameraSetupLayout .printerCameraForm>label{
+  display:flex;flex-direction:column;gap:7px;min-width:0;
+  justify-content:flex-start;line-height:1.4;
+}
+.printerCameraSetupLayout .printerCameraForm>label input,
+.printerCameraSetupLayout .printerCameraForm>label select{
+  box-sizing:border-box;min-height:44px;width:100%;min-width:0;margin:0;
+}
+.printerCameraSetupLayout .printerCameraGuidance{
+  padding:0 0 12px;border-bottom:1px solid #253445;
+  color:#94a5b9;line-height:1.5;
+}
+.printerCameraSetupLayout .printerCameraDiscoveryActions{
+  margin:0;display:flex;justify-content:flex-start;gap:9px;
+  flex-wrap:wrap;align-items:center;
+}
+.printerCameraSetupLayout .printerCameraDiscoveryActions button{min-height:40px}
+.printerCameraSetupLayout .printerCameraFlips{
+  display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;
+  min-width:0;align-self:end;padding-bottom:7px;
+}
+.printerCameraSetupLayout .printerCameraFlips label{
+  display:flex;align-items:center;gap:8px;font-size:13px;line-height:1.4;
+  min-width:0;white-space:normal;
+}
+.printerCameraSetupLayout .printerCameraFlips input{width:17px;height:17px;flex:none;margin:0}
+.printerCameraSetupLayout .printerCameraSaveActions{
+  grid-column:1/-1;display:flex;justify-content:flex-end;
+  padding-top:14px;border-top:1px solid #253445;margin:0;
+}
+.printerCameraSetupLayout .printerCameraSaveActions button{min-height:44px}
+.printerCameraSetupLayout .printerCameraDoneActions{
+  display:flex;justify-content:flex-end;
+  margin:0;padding-top:14px;border-top:1px solid #293746;
+}
+.printerCameraSetupLayout .cameraSourceRow{min-width:0}
+@media(max-width:700px){
+  .printerCameraSetupLayout .printerCameraForm{grid-template-columns:minmax(0,1fr);padding:14px;gap:13px}
+  .printerCameraSetupLayout .printerCameraForm .full,
+  .printerCameraSetupLayout .printerCameraSaveActions{grid-column:1}
+}
+@media(max-width:480px){
+  .printerCameraSetupLayout .printerCameraDiscoveryActions button,
+  .printerCameraSetupLayout .printerCameraSaveActions button,
+  .printerCameraSetupLayout .printerCameraDoneActions button{width:100%;min-height:44px}
+  .printerCameraSetupLayout .printerCameraFlips{align-items:flex-start;flex-direction:column;gap:12px}
+}

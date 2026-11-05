@@ -118,6 +118,54 @@ class PrinterConnectivityAdapterTests(TestCase):
         self.assertEqual(snapshot["source_metadata"]["klippy_state"], "ready")
         self.assertTrue(all(call.kwargs["headers"]["X-Api-Key"] == "secret" for call in get_mock.call_args_list))
 
+    def test_native_creality_idle_reconciliation_requires_clear_independent_signals(self):
+        from types import SimpleNamespace
+        from copy import deepcopy
+        from core.printer_connectivity import _reconcile_creality_processing
+        old = {
+            "online": True, "state": "processing", "state_label": "Preparing",
+            "job": {"file_name": "ghost.gcode", "progress": 0,
+                    "elapsed_seconds": 0, "remaining_seconds": 0, "current_layer": 0},
+            "temperatures": {"tool0": {"actual_c": 28, "target_c": 0},
+                             "bed": {"actual_c": 24, "target_c": 0}},
+            "source_metadata": {"raw_state": 0, "device_state": 0, "cfs_connected": True,
+                                "power_loss_recovery": False, "material_status": 0},
+        }
+        native = SimpleNamespace(printer_id="k2-native-only")
+        cleared = _reconcile_creality_processing(native, old)
+        self.assertEqual(cleared["state"], "idle")
+        self.assertEqual(cleared["job"]["file_name"], "")
+        self.assertEqual(cleared["source_metadata"]["previous_job_filename"], "ghost.gcode")
+        self.assertTrue(cleared["source_metadata"]["native_idle_confirmed"])
+        self.assertEqual(old["state"], "processing")
+        checks = [
+            ("source_metadata", "raw_state", 1),
+            ("source_metadata", "device_state", 1),
+            ("source_metadata", "device_state", None),
+            ("source_metadata", "power_loss_recovery", True),
+            ("source_metadata", "material_status", 1),
+            ("job", "progress", 7),
+            ("job", "elapsed_seconds", 20),
+            ("job", "remaining_seconds", 70),
+            ("job", "current_layer", 2),
+            ("job", "current_layer", None),
+        ]
+        for section, key, value in checks:
+            with self.subTest(field=key, value=value):
+                active = deepcopy(old)
+                active[section][key] = value
+                self.assertEqual(_reconcile_creality_processing(native, active), active)
+        for part, key in (("tool0", "target_c"), ("bed", "target_c")):
+            active = deepcopy(old)
+            active["temperatures"][part][key] = 60
+            self.assertEqual(_reconcile_creality_processing(native, active), active)
+        active = deepcopy(old)
+        active["state"] = "printing"
+        self.assertEqual(_reconcile_creality_processing(native, active), active)
+        active = deepcopy(old)
+        active["online"] = False
+        self.assertEqual(_reconcile_creality_processing(native, active), active)
+
     def test_creality_endpoint_accepts_existing_host_field(self):
         self.assertEqual(
             normalise_creality_endpoint("192.168.1.34"),
