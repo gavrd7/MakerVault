@@ -47,3 +47,38 @@ References:
   https://github.com/cuihuir/anycubic_bridge/blob/main/README.md
 - Snapmaker U1 Moonraker:
   https://github.com/Snapmaker/u1-moonraker
+
+
+## Uniform G-code file browsing contract
+
+A printer's **configured adapter**, not its manufacturer name, chooses the
+actual read-only file-listing protocol. The public printer-files endpoint calls
+`list_printer_gcodes(connection)`; each implemented adapter returns records
+with `path`, `size_bytes`, `modified`, and `permissions` (where the
+upstream provides those values).
+
+- **Stock Creality OS**: proprietary WebSocket `reqGcodeFile`; recognises
+  `retGcodeFileInfo2` on newer firmware and packed `retGcodeFileInfo` on
+  older firmware, with bounded, path-validated decoding. If the *same
+  MakerVault printer record* has an enabled and online generic Moonraker
+  connection, try its `/server/files/list` first. If that API fails,
+  automatically try the stock Creality listing. A valid empty list is
+  authoritative and does not trigger another request.
+- **Moonraker**: generic or verified manufacturer Moonraker-compatible
+  integrations (Elegoo, Qidi, Sovol, Snapmaker and Voron), using the `gcodes`
+  logical root. No OS path assumptions.
+- **OctoPrint**: `/api/files/local`, recursive; no OS path assumptions.
+- **PrusaLink**: version-specific `/api/v1/files/local/`; unsupported
+  firmware responses are reported as such, not guessed.
+- **Bambu Lab LAN**: pinned-certificate read-only FTPS browser; requires
+  configured certificate fingerprint. Not every model/firmware is supported.
+- **FlashForge**: the existing supported FlashForge file-management endpoint.
+- **Unimplemented family protocols**: return a clear unsupported-listing
+  response. Never probe random ports or fall back to Moonraker simply because
+  a printer is Klipper-based.
+
+Read-only fallback means *requesting another already-configured, identity-bound
+file interface* after a listing failure. It never installs Moonraker, changes
+firmware, uploads G-code or starts a print. Future vendors must add a verified
+listing handler, response normaliser and tests **before** advertising browsing
+capability. A discovered empty list is not the same as a failed protocol.
