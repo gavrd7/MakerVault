@@ -213,22 +213,50 @@ def _stock_data_root(connection):
     return profile["path"].removesuffix("/printer_data/gcodes/")
 
 
+def _single_spool_command(remote_path, data_root):
+    """Stock K1 no-CFS command, following the established Creality LAN API.
+
+    The root is resolved from the explicitly recognised printer family. The
+    self-test flag belongs to the CFS/multi-colour contract and is deliberately
+    omitted from the ordinary K1 single-spool request.
+    """
+    if data_root not in ("/usr/data", "/mnt/UDISK"):
+        raise CrealityGcodeError("Unrecognised native Creality storage root.")
+    if not _safe_printer_file(remote_path) or _safe_printer_file(remote_path) != remote_path:
+        raise CrealityGcodeError("Unsafe native print-start filename.")
+    return {
+        "method": "set",
+        "params": {"opGcodeFile": "printprt:" + data_root + "/printer_data/gcodes/" + remote_path},
+    }
+
+
 async def _start_single_spool(endpoint, remote_path, data_root="/mnt/UDISK"):
+    """Send exactly once; allow firmware to close its own WS session.
+
+    K1 firmware can close its WebSocket immediately after receiving the start.
+    An EOF or timeout while waiting for one best-effort reply must never cause
+    a second dispatch or be interpreted as printer-side confirmation.
+    """
+    command = _single_spool_command(remote_path, data_root)
     try:
         async with websockets.connect(
             normalise_creality_endpoint(endpoint), ping_interval=None,
-            subprotocols=["wsslicer"], open_timeout=5, close_timeout=1, proxy=None
+            subprotocols=["wsslicer"], open_timeout=5, close_timeout=1, proxy=None,
         ) as ws:
-            message = {
-                "method": "set",
-                "params": {
-                    "opGcodeFile": "printprt:" + data_root + "/printer_data/gcodes/" + remote_path,
-                    "enableSelfTest": 0,
-                },
-            }
-            await asyncio.wait_for(ws.send(json.dumps(message, separators=(",", ":"))), timeout=5)
+            await asyncio.wait_for(
+                ws.send(json.dumps(command, separators=(",", ":"))), timeout=5
+            )
+            try:
+                # OrcaSlicer reads best-effort before closing on K1. Apart
+                # from avoiding an immediate local close-frame burst, this
+                # gives the printer time to close on its own after dispatch.
+                await asyncio.wait_for(ws.recv(), timeout=2)
+            except (asyncio.TimeoutError, WebSocketException, EOFError, OSError):
+                pass
     except (OSError, asyncio.TimeoutError, WebSocketException) as exc:
-        raise CrealityGcodeError("Creality single-spool print-start outcome is uncertain. Inspect the printer.") from exc
+        raise CrealityGcodeError(
+            "Creality single-spool print-start outcome is uncertain. Inspect the printer."
+        ) from exc
 
 
 def start_single_spool(connection, remote_path):
