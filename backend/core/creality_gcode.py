@@ -239,20 +239,40 @@ async def _start_single_spool(endpoint, remote_path, data_root="/mnt/UDISK"):
     """
     command = _single_spool_command(remote_path, data_root)
     try:
+        # The stock K1 protocol is independent of the K2 CFS WebSocket flow.
+        # Do not request the K2/slicer subprotocol for this one-shot command.
         async with websockets.connect(
             normalise_creality_endpoint(endpoint), ping_interval=None,
-            subprotocols=["wsslicer"], open_timeout=5, close_timeout=1, proxy=None,
+            open_timeout=5, close_timeout=1, proxy=None,
         ) as ws:
             await asyncio.wait_for(
                 ws.send(json.dumps(command, separators=(",", ":"))), timeout=5
             )
-            try:
-                # OrcaSlicer reads best-effort before closing on K1. Apart
-                # from avoiding an immediate local close-frame burst, this
-                # gives the printer time to close on its own after dispatch.
-                await asyncio.wait_for(ws.recv(), timeout=2)
-            except (asyncio.TimeoutError, WebSocketException, EOFError, OSError):
-                pass
+            # A stock K1 may send a heartbeat or close the socket after print
+            # dispatch. A bounded best-effort read prevents a close-frame burst.
+            # Neither a heartbeat nor a WebSocket close confirms a print start.
+            deadline = asyncio.get_running_loop().time() + 2
+            while True:
+                remaining = deadline - asyncio.get_running_loop().time()
+                if remaining <= 0:
+                    break
+                try:
+                    raw = await asyncio.wait_for(ws.recv(), timeout=remaining)
+                except (asyncio.TimeoutError, WebSocketException, EOFError, OSError):
+                    break
+                try:
+                    packet = json.loads(raw)
+                except (TypeError, ValueError):
+                    break
+                if isinstance(packet, dict) and packet.get("ModeCode") == "heart_beat":
+                    try:
+                        await asyncio.wait_for(ws.send("ok"), timeout=max(
+                            0.01, deadline - asyncio.get_running_loop().time()
+                        ))
+                    except (asyncio.TimeoutError, WebSocketException, EOFError, OSError):
+                        break
+                    continue
+                break
     except (OSError, asyncio.TimeoutError, WebSocketException) as exc:
         raise CrealityGcodeError(
             "Creality single-spool print-start outcome is uncertain. Inspect the printer."
