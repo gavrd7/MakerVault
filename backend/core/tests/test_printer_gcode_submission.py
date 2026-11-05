@@ -77,17 +77,19 @@ class GcodePrinterContractTests(SimpleTestCase):
         self.assertFalse(availability(connection("moonraker", state="printing"))["can_start"])
         self.assertFalse(availability(connection("octoprint", status="disconnected"))["can_start"])
 
+    @patch("core.creality_gcode.list_files")
+    @patch("core.printer_gcode_submission._get_json")
     @patch("core.printer_gcode_submission.PrinterConnection.objects.filter")
-    @patch("core.printer_gcode_submission.list_printer_gcodes")
-    def test_creality_browse_prefers_same_printer_moonraker(self, list_files, filtered):
+    def test_creality_browse_prefers_same_printer_moonraker(self, filtered, get_json, native_browse):
         native = connection("creality_local")
         native.printer_id = "my-printer"
         moon = connection("moonraker")
         filtered.return_value.order_by.return_value = [moon]
-        list_files.return_value = [{"path": "ghost.gcode", "size_bytes": 123}]
+        get_json.return_value = [{"path": "ghost.gcode", "size": 123}]
         result = list_printer_gcodes(native)
         self.assertEqual(result[0]["path"], "ghost.gcode")
         self.assertEqual(filtered.call_args.kwargs["printer_id"], "my-printer")
+        native_browse.assert_not_called()
 
     @patch("core.printer_gcode_submission.requests.get")
     def test_octoprint_local_storage_listing(self, get):
