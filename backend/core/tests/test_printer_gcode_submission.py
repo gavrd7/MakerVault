@@ -232,6 +232,61 @@ class GcodePrinterContractTests(SimpleTestCase):
         self.assertEqual(filtered.call_args.kwargs["printer_id"], "my-printer")
         native_browse.assert_not_called()
 
+    @patch("core.creality_gcode.list_files")
+    @patch("core.printer_gcode_submission._get_json")
+    @patch("core.printer_gcode_submission.PrinterConnection.objects.filter")
+    def test_creality_browse_falls_back_to_native_if_moonraker_listing_fails(self, filtered, get_json, native):
+        printer = connection("creality_local")
+        printer.printer_id = "same-printer"
+        moon = connection("moonraker")
+        filtered.return_value.order_by.return_value = [moon]
+        get_json.side_effect = GcodeSubmissionError("Moonraker temporarily unavailable.", 502)
+        native.return_value = [{"path": "k1_file.gcode", "size_bytes": 123}]
+        rows = list_printer_gcodes(printer)
+        self.assertEqual(rows[0]["path"], "k1_file.gcode")
+        native.assert_called_once_with(printer)
+        self.assertEqual(filtered.call_args.kwargs["printer_id"], "same-printer")
+
+    @patch("core.creality_gcode.list_files")
+    @patch("core.printer_gcode_submission._get_json")
+    @patch("core.printer_gcode_submission.PrinterConnection.objects.filter")
+    def test_empty_moonraker_listing_is_not_treated_as_failure(self, filtered, get_json, native):
+        printer = connection("creality_local")
+        printer.printer_id = "same-printer"
+        filtered.return_value.order_by.return_value = [connection("moonraker")]
+        get_json.return_value = []
+        self.assertEqual(list_printer_gcodes(printer), [])
+        native.assert_not_called()
+
+    @patch("core.creality_gcode.list_files")
+    @patch("core.printer_gcode_submission._get_json")
+    @patch("core.printer_gcode_submission.PrinterConnection.objects.filter")
+    def test_both_creality_listing_methods_fail_with_clear_error(self, filtered, get_json, native):
+        printer = connection("creality_local")
+        printer.printer_id = "same-printer"
+        filtered.return_value.order_by.return_value = [connection("moonraker")]
+        get_json.side_effect = GcodeSubmissionError("Moonraker timeout", 502)
+        native.side_effect = CrealityGcodeError("Creality WS listing timeout")
+        with self.assertRaisesRegex(GcodeSubmissionError, "No configured printer file-listing"):
+            list_printer_gcodes(printer)
+        native.assert_called_once_with(printer)
+
+    @patch("core.printer_gcode_submission._get_json")
+    def test_unknown_adapter_does_not_guess_moonraker_endpoint(self, get_json):
+        with self.assertRaisesRegex(GcodeSubmissionError, "no supported file listing protocol"):
+            list_printer_gcodes(connection("anycubic"))
+        get_json.assert_not_called()
+
+    @patch("core.printer_gcode_submission._get_json")
+    def test_moonraker_compatible_manufacturer_adapters_share_file_api(self, get_json):
+        get_json.return_value = [{"path": "folder/part.gcode", "size": 1024}]
+        for adapter in ("moonraker", "elegoo", "qidi", "sovol", "snapmaker", "voron"):
+            with self.subTest(adapter=adapter):
+                rows = list_printer_gcodes(connection(adapter))
+                self.assertEqual(rows[0]["path"], "folder/part.gcode")
+                self.assertEqual(rows[0]["size_bytes"], 1024)
+                self.assertEqual(get_json.call_args.args[1], "/server/files/list")
+
     @patch("core.printer_gcode_submission.requests.get")
     def test_octoprint_local_storage_listing(self, get):
         response = Mock(status_code=200)
