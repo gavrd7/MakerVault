@@ -590,6 +590,14 @@ def _k1_native_start_suspended(connection):
     return storage_profile("creality_local", model)["key"] == "creality_k1"
 
 
+def _k1_native_test_enabled(connection):
+    """Local, explicit owner-controlled K1 test permission; defaults off."""
+    return bool(
+        _k1_native_start_suspended(connection)
+        and (getattr(connection, "config", None) or {}).get("k1_native_start_test_enabled") is True
+    )
+
+
 def availability(connection):
     adapter = connection.adapter
     # Native transports are opt-in at the final submission confirmation, not
@@ -601,7 +609,9 @@ def availability(connection):
     from .flashforge_gcode import supports_simple_print
     simple_flashforge = adapter == "flashforge" and bool(getattr(connection, "printer", None)) and supports_simple_print(connection.printer)
     upload_supported = adapter in FILE_ADAPTERS or adapter == "creality_local" or simple_flashforge
-    start_supported = (adapter in FILE_ADAPTERS or simple_flashforge or adapter == "creality_local") and not _k1_native_start_suspended(connection)
+    start_supported = (adapter in FILE_ADAPTERS or simple_flashforge or adapter == "creality_local") and (
+        not _k1_native_start_suspended(connection) or _k1_native_test_enabled(connection)
+    )
     online = bool(_online(connection))
     cfs = creality_cfs_context(connection)
     cfs_blocks_start = bool(cfs["applicable"] and (cfs["connected"] is not False or not cfs["verified"]))
@@ -640,6 +650,7 @@ def availability(connection):
     )
     return {
         "can_browse": adapter in BROWSE_ADAPTERS,
+        "k1_native_test_enabled": _k1_native_test_enabled(connection),
         "browse_requires_pin": adapter == "bambu_local" and not bool((connection.config or {}).get("bambu_ftps_cert_sha256")),
         "experimental": adapter in (BROWSE_ADAPTERS | UPLOAD_ADAPTERS),
         "supported": upload_supported or start_supported,
@@ -663,7 +674,8 @@ def availability(connection):
     }
 
 
-def _require_action_ready(connection, action, *, use_sliced_cfs=False, use_mapped_cfs=False):
+def _require_action_ready(connection, action, *, use_sliced_cfs=False, use_mapped_cfs=False,
+                          k1_test_acknowledged=False):
     state = availability(connection)
     if not state["supported"]:
         raise GcodeSubmissionError("This printer adapter does not support G-code submission yet.")
@@ -676,10 +688,15 @@ def _require_action_ready(connection, action, *, use_sliced_cfs=False, use_mappe
     if action == "upload" and not state["can_upload"]:
         raise GcodeSubmissionError("G-code upload is not supported for this printer.")
     if action == "print" and _k1_native_start_suspended(connection):
-        raise GcodeSubmissionError(
-            "Native Creality K1 print-start is temporarily disabled after repeated printer restarts. "
-            "File browsing, upload-only and monitoring remain available; investigate firmware diagnostics before retrying.", 409
-        )
+        if not _k1_native_test_enabled(connection):
+            raise GcodeSubmissionError(
+                "Native Creality K1 print-start is temporarily disabled after repeated printer restarts. "
+                "File browsing, upload-only and monitoring remain available; investigate firmware diagnostics before retrying.", 409
+            )
+        if k1_test_acknowledged is not True:
+            raise GcodeSubmissionError(
+                "A supervised K1 native start test requires explicit crash-risk acknowledgement.", 409
+            )
     if action == "print" and not (state["can_start"] or (use_sliced_cfs and state["can_start_sliced_mapping"]) or (use_mapped_cfs and state["can_start_mapped_cfs"])):
         raise GcodeSubmissionError("Printer must be freshly verified idle with a supported CFS print mode before starting a job.")
 
@@ -933,6 +950,7 @@ def submit(connection, user, payload):
     source, action = payload.get("source"), payload.get("action")
     use_sliced_cfs = payload.get("cfs_mode") == "use_sliced"
     use_mapped_cfs = payload.get("cfs_mode") == "mapped"
+    k1_test_acknowledged = payload.get("k1_test_acknowledged") is True
     if use_mapped_cfs and action != "print":
         raise GcodeSubmissionError("Mapped CFS starts require an explicit print action.", 400)
     if payload.get("cfs_mode") not in (None, "", "use_sliced", "mapped"):
@@ -999,7 +1017,8 @@ def submit(connection, user, payload):
                 raise GcodeSubmissionError("Submission ID was already used for a different operation.")
             return _receipt(old)
         connection.refresh_from_db()
-        _require_action_ready(connection, action, use_sliced_cfs=use_sliced_cfs, use_mapped_cfs=use_mapped_cfs)
+        _require_action_ready(connection, action, use_sliced_cfs=use_sliced_cfs, use_mapped_cfs=use_mapped_cfs,
+                              k1_test_acknowledged=k1_test_acknowledged)
         recent = PrinterGcodeSubmission.objects.filter(
             connection__printer_id=connection.printer_id,
             created_at__gte=timezone.now() - timedelta(minutes=10),
@@ -1142,7 +1161,8 @@ def submit(connection, user, payload):
             except Exception as exc:
                 raise GcodeSubmissionError("Unable to confirm printer is still idle after file upload. Do not start.", 409) from exc
             connection.refresh_from_db()
-            _require_action_ready(connection, "print", use_sliced_cfs=use_sliced_cfs, use_mapped_cfs=use_mapped_cfs)
+            _require_action_ready(connection, "print", use_sliced_cfs=use_sliced_cfs, use_mapped_cfs=use_mapped_cfs,
+                                  k1_test_acknowledged=k1_test_acknowledged)
             mapped_native_connection = None
             if use_mapped_cfs:
                 mapped_native_connection = connection if connection.adapter == "creality_local" else PrinterConnection.objects.filter(
