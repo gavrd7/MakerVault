@@ -1151,9 +1151,9 @@ def poll_connection(connection) -> dict:
         "status", "last_error", "last_checked_at", "last_seen_at",
         "capabilities", "last_snapshot", "updated_at",
     ])
-    if connection.adapter == "creality_local":
-        # Native start has no acknowledged response. Fresh polled telemetry
-        # may resolve a previously unknown submission without reissuing it.
-        from .printer_gcode_submission import reconcile_creality_start_receipts
-        reconcile_creality_start_receipts(connection, snapshot)
+    # Reconcile any explicitly submitted print against this adapter's own
+    # freshly collected job telemetry. Polling is strictly read-only and
+    # never reissues a printer command.
+    from .printer_gcode_submission import reconcile_print_start_receipts
+    reconcile_print_start_receipts(connection, snapshot)
     return snapshot
