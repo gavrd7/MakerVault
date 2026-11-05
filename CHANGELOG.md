@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.6.0 — G-code Library, explicit printer submission and native Creality camera improvements
+
+- Added a private, owner-scoped **G-code Library** integrated with Files, the Model Library and 3D Printing, including optional project/model-revision links and immutable file-version history.
+- Added bounded plain-text G-code inspection with extracted machine/material hints, source preview and top-down XY path visualisation. Edits to complete supported text previews save as new versions; this is not a slicer or complete print simulation.
+- Added **Start print / G-code** to compatible live printer connections. Choose a new upload, an existing MakerVault G-code or a file already stored on the printer. **Upload only** never starts printing; each start requires deliberate final confirmation.
+- Added adapter-specific file browsing, transfer and explicit print submission for supported Creality LAN, Moonraker/Klipper and OctoPrint connections, with experimental firmware-dependent PrusaLink and FlashForge 5M-family routes. Bambu LAN provides certificate-pinned, read-only FTPS browsing; native Bambu upload/start is not enabled.
+- Improved stock **Creality K1** file-list parsing and single-spool print-start with K1-specific file paths and WebSocket handling, independent of the K2 CFS protocol. The maintainer confirmed a **completed K1 print initiated from MakerVault native LAN on a clean stock firmware installation**. Modified K1 firmware had rebooted when printing from both MakerVault and the printer touchscreen; that printer-side incompatibility was resolved by a clean reinstall, not by installing additional printer services.
+- Added native **K1 camera WebRTC** discovery/preset compatibility with MakerVault's existing authenticated same-origin HLS relay. K1 and K2 live camera previews were hardware-tested simultaneously; legacy K1 MJPEG and Helper Script presets remain available where installed.
+- Added advisory G-code/printer compatibility checks, selected-printer identity and idle-state revalidation, persistent submission receipts and correlated printer-state confirmation. Uncertain print commands are **never automatically retried**.
+- Implemented explicit **Creality K2 CFS** tool-to-loaded-slot review and proprietary mapped native print-start. **Native mapped-CFS start still needs controlled hardware validation**; do not imply universal Creality or third-party printer compatibility. No automatic spool deduction, printer material-database writes, binary BGCODE editing or integrated slicing engine.
+- Updated release documentation, roadmap, printer storage routing and [public user guide](https://gavrd7.github.io/MakerVault-docs/using/gcode-and-print-submission/). Existing MakerVault Terminal v1.0.1 compatibility is unchanged.
+
 ## v1.5.1 — Connected terminal reliability and MakerTag maintenance
 
 - Added Clean MakerTag to erase and verify writable, unprotected NTAG215 NFC user data while retaining the MakerTag registration and linked inventory item.
