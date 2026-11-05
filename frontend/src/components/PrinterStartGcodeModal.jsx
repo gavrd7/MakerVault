@@ -315,7 +315,14 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
             </div>;
           })}
           {!selectedAnalysis?.complete && <p role="status">Slicer metadata is incomplete. Check the intended material and colour carefully; mapped printing requires a known material type for every tool.</p>}
-        </> : <p>{usageUnknown ? "The G-code declares filament profiles, but MakerVault cannot confidently identify which tools actually deposit material. It will not ask you to map unused filaments. Use the original slicer mapping if supported, or upload only." : "No depositing filament requirements could be identified. You can upload without printing, or use the original slicer mapping where supported."}</p>)}
+        </> : <div>
+          <p>{usageUnknown ? "MakerVault cannot confirm which filament profiles are actually used. Unverified overrides are disabled; the original slicer mapping remains available where supported." : "No depositing filament requirements could be identified. You can upload without printing, or use the original slicer mapping where supported."}</p>
+          {selectedAnalysis && <details>
+            <summary>Tool detection details</summary>
+            <p>{selectedAnalysis.usage_reason || "Slicer tool usage was not available."}</p>
+            <small>Declared profiles: {(selectedAnalysis.requirements || []).length}; tools selected: {(selectedAnalysis.toolpath_evidence?.selected_tools || []).map(i => i + 1).join(", ") || "none"}; depositing tools found: {(selectedAnalysis.toolpath_evidence?.extruding_tools || []).map(i => i + 1).join(", ") || "none"}; unassigned extrusion moves: {selectedAnalysis.toolpath_evidence?.unassigned_extrusions ?? "unknown"}; detection: {selectedAnalysis.usage_source || "unknown"}</small>
+          </details>}
+        </div>)}
         {source === "printer" && !printerInspection && !printerInspecting && <p>{printerInspectNotice || "Read-only G-code inspection is unavailable for this printer file. Use its original slicer mapping or save the file in MakerVault to review its materials."}</p>}
         <small>In mapped-print mode, selections are sent to the K2. The proprietary protocol does not confirm acceptance, so check its display after submitting.</small>
       </>}
