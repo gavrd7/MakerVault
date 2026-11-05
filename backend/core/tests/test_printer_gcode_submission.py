@@ -58,6 +58,81 @@ class GcodePrinterContractTests(SimpleTestCase):
         with self.assertRaises(GcodeSubmissionError):
             inspect_printer_file(native, "ghost.gcode")
 
+    def test_adapter_neutral_start_verification_requires_matching_active_file(self):
+        from core.printer_gcode_submission import _matches_active_print, START_VERIFY_ADAPTERS
+        snapshot = {
+            "online": True, "state": "printing",
+            "job": {"file_name": "folder/part.gcode"},
+        }
+        for adapter in ("moonraker", "octoprint", "prusa", "flashforge",
+                        "snapmaker", "elegoo", "qidi", "sovol", "voron"):
+            with self.subTest(adapter=adapter):
+                self.assertIn(adapter, START_VERIFY_ADAPTERS)
+                printer = connection(adapter)
+                self.assertTrue(_matches_active_print(printer, snapshot, "folder/part.gcode"))
+                self.assertFalse(_matches_active_print(printer, snapshot, "other/part.gcode"))
+                self.assertFalse(_matches_active_print(printer, {**snapshot, "state": "idle"}, "folder/part.gcode"))
+                self.assertFalse(_matches_active_print(printer, {**snapshot, "online": False}, "folder/part.gcode"))
+                self.assertFalse(_matches_active_print(printer, {**snapshot, "job": {"file_name": ""}}, "folder/part.gcode"))
+        native = connection("creality_local")
+        self.assertFalse(_matches_active_print(native, snapshot, "folder/part.gcode"))
+        self.assertTrue(_matches_active_print(native, {
+            **snapshot, "source_metadata": {"raw_state": 1},
+        }, "folder/part.gcode"))
+
+    @patch("core.printer_gcode_submission.PrinterGcodeSubmission.objects.filter")
+    def test_generic_acknowledged_receipt_upgrades_only_with_matching_job(self, filtered):
+        from core.printer_gcode_submission import (
+            reconcile_print_start_receipts, _pending_start_message,
+        )
+        printer = connection("moonraker")
+        row = SimpleNamespace(
+            pk="receipt-1", status="started", remote_path="folder/part.gcode",
+            message=_pending_start_message("folder/part.gcode", acknowledged=True),
+        )
+        candidates = MagicMock()
+        candidates.order_by.return_value.__getitem__.return_value = [row]
+        updated = Mock()
+        updated.update.return_value = 1
+        filtered.side_effect = [candidates, updated]
+        snapshot = {
+            "online": True, "state": "printing", "job": {"file_name": "folder/part.gcode"},
+            "captured_at": timezone.now().isoformat(),
+        }
+        self.assertEqual(reconcile_print_start_receipts(printer, snapshot), 1)
+        self.assertEqual(updated.update.call_args.kwargs["status"], "started")
+        self.assertIn("verified", updated.update.call_args.kwargs["message"])
+
+    @patch("core.printer_gcode_submission.PrinterGcodeSubmission.objects.filter")
+    def test_generic_unacknowledged_receipt_requires_exact_job(self, filtered):
+        from core.printer_gcode_submission import (
+            reconcile_print_start_receipts, _pending_start_message,
+        )
+        printer = connection("flashforge")
+        row = SimpleNamespace(
+            pk="receipt-2", status="unknown", remote_path="part.gcode",
+            message=_pending_start_message("part.gcode", acknowledged=False),
+        )
+        candidates = MagicMock()
+        candidates.order_by.return_value.__getitem__.return_value = [row]
+        filtered.return_value = candidates
+        data = {"online": True, "state": "printing", "job": {"file_name": "other.gcode"},
+                "captured_at": timezone.now().isoformat()}
+        self.assertEqual(reconcile_print_start_receipts(printer, data), 0)
+        self.assertEqual(filtered.call_count, 1)
+        self.assertEqual(reconcile_print_start_receipts(printer, {**data, "state": "idle"}), 0)
+        self.assertEqual(filtered.call_count, 1)
+
+    @patch("core.printer_connectivity.poll_connection")
+    def test_generic_immediate_verification_only_polls(self, poll):
+        from core.printer_gcode_submission import _verify_print_start_now
+        printer = connection("octoprint")
+        _verify_print_start_now(printer)
+        poll.assert_called_once_with(printer)
+        poll.side_effect = RuntimeError("offline")
+        _verify_print_start_now(printer)
+        self.assertEqual(poll.call_count, 2)
+
     def test_creality_start_confirmation_requires_same_file_and_active_raw_state(self):
         from core.printer_gcode_submission import _creality_started_file
         snapshot = {
