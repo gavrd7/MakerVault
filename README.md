@@ -34,12 +34,15 @@ Maker projects rarely live in one place. Components end up in boxes and spreadsh
 | **Inventory and catalogues** | Electronic boards and components, searchable reference specifications and images, physical item IDs, quantities, locations, condition and provenance-aware catalogue enrichment |
 | **Projects and bills of materials** | Project workspaces, notes, files, build information, BOMs, quantity-aware stock allocation and cost tracking |
 | **Wiring Lab** | Interactive wiring diagrams, catalogue-aware pin selection, basic electrical checks and JSON/SVG export |
-| **Files and 3D models** | Private files with version history, STL/3MF viewing and analysis, model revisions, printer-fit and orientation assistance |
+| **Files and 3D models** | Private files with version history; STL/3MF viewing and analysis; model revisions; printer-fit and orientation assistance; plain-text G-code library with bounded XY path preview, source inspection and save-as-new-version editing |
+| **G-code transfer and printing** | Explicit upload-only, upload-and-start or start-existing-printer-file workflows from compatible live printer connections; per-adapter file browsing and print verification; Creality K2 CFS mapping where supported (hardware validation varies) |
 | **3D printers and materials** | Printer inventory, filament products, physical spools, reusable spool hardware, printed parts, print history and material/cost reporting |
 | **Live integrations** | Optional local printer monitoring and compatible camera feeds, supported printer controls, Spoolman review and Creality CFS material-database read-only snapshots |
 | **MakerTags** | Printable QR labels, stable `MV-XXXXXXXX` identities, RFID/NFC UID association, reassignment history and verified NTAG215 URLs; **Clean NFC data**, **Remove MakerTag**, and optional clean-before-remove are implemented in the #159 feature branch (not yet released) |
 | **Connected Devices** | Certificate-verified HTTPS pairing, device permissions and heartbeats; with **MakerVault Terminal v1.0**, browse records, create MakerTags, scan filament RFID tags and identify physical spools from the handheld |
 | **Search and administration** | Universal search, role-based access, optional OIDC/MFA, account quotas, backups, guarded restore and catalogue-maintenance tools |
+
+**G-code availability:** K1 native storage browsing and print-start were tested on a clean stock-firmware installation; K2 native HTTP transfer, Moonraker print-start and K1/K2 same-origin camera previews were also tested. A print-start command is sent only after confirmation, is not silently retried, and counts as verified only after correlated printer telemetry. Proprietary K2 mapped-CFS start and other manufacturer-specific transfers remain subject to hardware/firmware checks. The library is not a slicer and does not support binary BGCODE preview/editing.
 
 **Compatibility notes:** Printer support and available controls vary by manufacturer, firmware and connection method. Some adapters are monitoring-only or have limited real-hardware validation; see the [user guide](https://gavrd7.github.io/MakerVault-docs/) and [hardware-validation issue](https://github.com/gavrd7/MakerVault/issues/37). MakerVault does not automatically deduct physical spool stock from every estimated print.
 
@@ -105,12 +108,13 @@ A concise view of what's delivered and where MakerVault may go next. Checkmarks 
 - [x] 3D model library, STL/3MF previews, analysis and print history
 - [x] Filament products, physical/reusable spools, printed parts and cost tracking
 - [x] Optional live printer integrations, monitoring, cameras and supported controls
+- [x] G-code Library, source inspection and XY preview, immutable edits, printer storage browsing and explicit upload/start with supported native or generic adapters; K1/K2 LAN integration and local WebRTC camera previews, subject to firmware and adapter validation ([guide](https://gavrd7.github.io/MakerVault-docs/using/gcode-and-print-submission/), [issue #155](https://github.com/gavrd7/MakerVault/issues/155))
 - [x] MakerTags with QR, RFID/NFC association and verified NTAG215 URL writing
 - [x] Connected Devices pairing and terminal-first MakerTag creation and one- or two-tag physical spool RFID identification (Terminal v1.0)
 
 ### Planned / under evaluation
 
-- [ ] **G-code Library and explicit print submission (PR #169):** preview and inspect G-code, upload to supported printers, and explicitly submit prints. K2 native LAN uploads and Moonraker print-start have been physically tested; CFS tool-to-slot mapping via native Creality WebSocket is implemented but still requires controlled hardware verification. Printer compatibility and firmware support vary. There are no extra experimental checkboxes in the print workflow; see [development guidance](docs/development/gcode-library-and-print-submission.md) for current limitations ([issue #155](https://github.com/gavrd7/MakerVault/issues/155))
+
 - [ ] **Self-hosted multi-engine FDM slicing:** optional local slicing service and one MakerVault UI, subject to engine, CLI and licence evaluation
 - [ ] **MakerVault Weigh Station:** connected scale/RFID hardware with a removable printable platform (hardware development)
 - [x] **Read-only CFS material-tag decoding**, K2 printer material-database snapshots, scoped online material lookup and explicit physical spool UID association; no CFS tag writing or printer database push
