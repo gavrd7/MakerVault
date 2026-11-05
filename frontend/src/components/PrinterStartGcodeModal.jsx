@@ -272,14 +272,14 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
                 <span>{requirement.material || "Unknown material"}{requirement.color_hex ? " · " + requirement.color_hex : ""}</span>
               </div>
               {requirement.preset && <small>Profile: {requirement.preset}</small>}
-              <label style={{ display: "block", marginTop: 8 }}>CFS slot for review
+              {source === "makervault" && mappingMode === "mapped" && cfsMappedAvailable ? <label style={{ display: "block", marginTop: 8 }}>Print with CFS slot
                 <select value={chosen} onChange={e => setCfsAssignments(previous => ({ ...previous, [requirement.tool_index]: e.target.value }))}>
                   <option value="">Unassigned</option>
                   {(cfs.slots || []).map(slot => <option key={slot.label} value={slot.label}>
                     {slot.label} · {slot.material || "Unknown material"} · {slot.product_name || "Unknown filament"}{slot.color_hex ? " · " + slot.color_hex : ""}
                   </option>)}
                 </select>
-              </label>
+              </label> : <p>Original slicer mapping retained; this selection is not overridden.</p>}
               <small role="status">{!selected ? "No CFS slot selected." : !requirement.material ? "Material unknown — cannot check compatibility." : !materialMatch ? "Material mismatch — do not print using this selection." : colourMatch ? "Material and colour match the slicer metadata (advisory only)." : "Material matches, but colour differs or is unknown."}</small>
             </div>;
           })}
@@ -289,7 +289,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
         <small>In mapped-print mode, selections are sent to the K2. The proprietary protocol does not confirm acceptance, so check its display after submitting.</small>
       </>}
     </div>}
-    {(cfsSlicedAvailable || cfsMappedAvailable) && <div className="settingsCallout">
+    {source === "makervault" && (cfsSlicedAvailable || (cfsMappedAvailable && requirements.length > 0)) && <div className="settingsCallout">
       <strong>CFS print preparation</strong>
       <p>Review the sliced filament and select the correct loaded CFS slot. You can send these selections to the K2 or use its original slicer mapping.</p>
       {source === "makervault" && <label>Filament mapping
@@ -298,7 +298,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
           {cfsSlicedAvailable && <option value="original">Use original mapping embedded by the slicer</option>}
         </select>
       </label>}
-      <small>{mappingMode === "mapped"
+      <small>{requirements.length > 0 && mappingMode === "mapped"
         ? "MakerVault will send a new native K2 filament mapping before print-start. The printer provides no confirmed acknowledgement; check its display."
         : "The original slicer-selected mapping will be used without changes. Review the printer's loaded filaments."}</small>
     </div>}
