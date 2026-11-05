@@ -1079,7 +1079,8 @@ def submit(connection, user, payload):
         progress("Checking file metadata and printer compatibility.")
         # All commands occur after the receipt is committed. Never auto-retry an
         # upload or print command with unknown delivery status.
-        _require_action_ready(connection, action, use_sliced_cfs=use_sliced_cfs, use_mapped_cfs=use_mapped_cfs)
+        _require_action_ready(connection, action, use_sliced_cfs=use_sliced_cfs, use_mapped_cfs=use_mapped_cfs,
+                              k1_test_acknowledged=k1_test_acknowledged)
         if source == "printer":
             if connection.adapter == "creality_local" and not (use_sliced_cfs or use_mapped_cfs) and (connection.last_snapshot or {}).get("source_metadata", {}).get("cfs_connected"):
                 raise GcodeSubmissionError("Creality CFS is connected: single-spool start is blocked pending material mapping.")
@@ -1117,7 +1118,8 @@ def submit(connection, user, payload):
         except Exception as exc:
             raise GcodeSubmissionError("Unable to verify fresh printer status before transfer. No command dispatched.", 409) from exc
         connection.refresh_from_db()
-        _require_action_ready(connection, action, use_sliced_cfs=use_sliced_cfs, use_mapped_cfs=use_mapped_cfs)
+        _require_action_ready(connection, action, use_sliced_cfs=use_sliced_cfs, use_mapped_cfs=use_mapped_cfs,
+                              k1_test_acknowledged=k1_test_acknowledged)
         if use_mapped_cfs:
             mapping_entries = _mapped_cfs_entries(connection, (report.get("filaments") or {}).get("used_requirements"), payload.get("cfs_mapping"))
         base, headers = (None, None) if connection.adapter in {"flashforge", "creality_local"} else _printer_endpoint(connection)
