@@ -20,7 +20,9 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   const [receipt, setReceipt] = useState(null);
   const [transferStage, setTransferStage] = useState("");
   const [bambuPin, setBambuPin] = useState("");
+  const [selectedCfsSlot, setSelectedCfsSlot] = useState("");
   const base = "/api/printing/printers/" + printer.id + "/connections/" + connection.id + "/gcode";
+  const cfs = capabilities?.cfs || null;
   const current = files.find(f => String(f.id) === String(assetId)) || (initialAsset && String(initialAsset.id) === String(assetId) ? initialAsset : null);
 
   async function load() {
@@ -207,6 +209,26 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
       </div>}
       <small>FTPS availability differs by Bambu model and firmware. A PIN mismatch or unsupported TLS handshake fails closed. Starting Bambu print jobs is not implemented.</small>
     </div>}
+    {cfs?.applicable && <div className="settingsCallout">
+      <strong>Creality CFS · Live loaded filaments</strong>
+      <p>{cfs.connected === true
+        ? "These materials were reported by the K2's native LAN telemetry. Choose a candidate slot for review; MakerVault does not yet apply a verified filament mapping to the print-start command."
+        : cfs.connected === false && cfs.verified
+          ? "The latest native printer reading reports no CFS connected."
+          : "CFS connection state is unavailable or stale. Remote print-start remains disabled until it can be verified."}</p>
+      {cfs.connected === true && <>
+        {cfs.slots?.length ? <label>Candidate CFS filament
+          <select value={selectedCfsSlot} onChange={e => setSelectedCfsSlot(e.target.value)}>
+            <option value="">Choose a loaded CFS slot for review…</option>
+            {cfs.slots.map(slot => <option key={slot.label} value={slot.label}>
+              {slot.label} · {slot.vendor || "Unknown brand"} · {slot.product_name || slot.material || "Unknown material"}{slot.color_hex ? " · " + slot.color_hex : ""}
+            </option>)}
+          </select>
+        </label> : <p>No usable CFS slot information was reported.</p>}
+        {selectedCfsSlot && <p role="status">Selected candidate: {selectedCfsSlot}. This is a read-only selection; it is not sent to the printer. Upload-only remains available.</p>}
+        <small>Creality CFS material mapping and its acknowledgement must be validated before MakerVault can start CFS jobs remotely.</small>
+      </>}
+    </div>}
     {capabilities && !capabilities.supported ? <div className="settingsCallout">
       <strong>Experimental adapter — printer file submission unavailable</strong>
       <p>This source supports monitoring, but its storage and start-print protocol is not implemented or verified here. Bambu storage listing is experimental and read-only; Bambu print-start, proprietary Creality and other manufacturer transfer paths still require dedicated implementation and hardware validation.</p>
@@ -240,7 +262,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
       {source !== "new" && <>
         {source === "makervault" && <label>Operation<select value={action} onChange={e => setAction(e.target.value)}>
           <option value="upload">Upload only — do not print</option>
-          <option value="print">Upload and start print</option>
+          <option value="print" disabled={cfs?.applicable && !capabilities?.can_start}>Upload and start print{cfs?.applicable && !capabilities?.can_start ? " — CFS verification required" : ""}</option>
         </select></label>}
         {(source === "printer" || verdict?.status !== "metadata_match") && <label className="checkRow">
           <input type="checkbox" checked={ack} onChange={e => setAck(e.target.checked)} />
