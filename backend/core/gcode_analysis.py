@@ -23,7 +23,7 @@ FILAMENT_HEADER = re.compile(
     re.I,
 )
 PRINT_SETUP_HEADER = re.compile(
-    r"^;\\s*(nozzle_diameter|nozzle diameter|nozzle_size|nozzle size|curr_bed_type|bed_type|bed type|plate_type|plate type|build_plate_type|build plate type)\\s*[:=]\\s*(.*?)\\s*$",
+    r"^;\s*(nozzle_diameter|nozzle diameter|nozzle_size|nozzle size|curr_bed_type|bed_type|bed type|plate_type|plate type|build_plate_type|build plate type)\s*[:=]\s*(.*?)\s*$",
     re.I,
 )
 NOZZLE_KEYS = {"nozzle_diameter", "nozzle diameter", "nozzle_size", "nozzle size"}
