@@ -571,6 +571,25 @@ def _same_printer_moonraker(connection, *, require_controls=False):
     return None
 
 
+def _k1_native_start_suspended(connection):
+    """Disable stock K1 native start pending investigation of printer reboots.
+
+    Two separate hardware tests reported the K1 restarting after a native
+    opGcodeFile start. Browsing, upload-only and monitoring remain available.
+    This guard is scoped by the printer's explicit model profile, not merely
+    the presence of the Creality adapter (K2 remains unaffected).
+    """
+    if getattr(connection, "adapter", None) != "creality_local":
+        return False
+    from .printer_storage_profiles import storage_profile
+    printer = getattr(connection, "printer", None)
+    model = " ".join((
+        str(getattr(printer, "model", "") or ""),
+        str(getattr(getattr(printer, "catalog_model", None), "name", "") or ""),
+    ))
+    return storage_profile("creality_local", model)["key"] == "creality_k1"
+
+
 def availability(connection):
     adapter = connection.adapter
     # Native transports are opt-in at the final submission confirmation, not
@@ -582,7 +601,7 @@ def availability(connection):
     from .flashforge_gcode import supports_simple_print
     simple_flashforge = adapter == "flashforge" and bool(getattr(connection, "printer", None)) and supports_simple_print(connection.printer)
     upload_supported = adapter in FILE_ADAPTERS or adapter == "creality_local" or simple_flashforge
-    start_supported = adapter in FILE_ADAPTERS or simple_flashforge or adapter == "creality_local"
+    start_supported = (adapter in FILE_ADAPTERS or simple_flashforge or adapter == "creality_local") and not _k1_native_start_suspended(connection)
     online = bool(_online(connection))
     cfs = creality_cfs_context(connection)
     cfs_blocks_start = bool(cfs["applicable"] and (cfs["connected"] is not False or not cfs["verified"]))
@@ -656,6 +675,11 @@ def _require_action_ready(connection, action, *, use_sliced_cfs=False, use_mappe
         raise GcodeSubmissionError("Original sliced CFS mapping is available only for a fresh, idle Creality K2 through Moonraker.", 409)
     if action == "upload" and not state["can_upload"]:
         raise GcodeSubmissionError("G-code upload is not supported for this printer.")
+    if action == "print" and _k1_native_start_suspended(connection):
+        raise GcodeSubmissionError(
+            "Native Creality K1 print-start is temporarily disabled after repeated printer restarts. "
+            "File browsing, upload-only and monitoring remain available; investigate firmware diagnostics before retrying.", 409
+        )
     if action == "print" and not (state["can_start"] or (use_sliced_cfs and state["can_start_sliced_mapping"]) or (use_mapped_cfs and state["can_start_mapped_cfs"])):
         raise GcodeSubmissionError("Printer must be freshly verified idle with a supported CFS print mode before starting a job.")
 
