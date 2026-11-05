@@ -202,6 +202,20 @@ class NativeGcodeAdapterTests(SimpleTestCase):
         cc.last_snapshot["source_metadata"] = {"cfs_connected": True}
         self.assertFalse(availability(cc)["can_start"])
 
+    def test_k2_detection_and_post_print_terminal_states(self):
+        from core.printer_gcode_submission import _is_k2, _ready_for_start
+        moon = connection("moonraker")
+        moon.printer = SimpleNamespace(model="K2", catalog_model=None)
+        self.assertTrue(_is_k2(moon))
+        moon.printer.model = "Creality K2 Combo"
+        self.assertTrue(_is_k2(moon))
+        moon.printer.model = "K1 Max"
+        self.assertFalse(_is_k2(moon))
+        for state in ("idle", "complete", "cancelled"):
+            self.assertTrue(_ready_for_start({"state": state}))
+        for state in ("printing", "paused", "processing", "error", "unknown"):
+            self.assertFalse(_ready_for_start({"state": state}))
+
     @patch("core.printer_gcode_submission.PrinterConnection.objects.filter")
     def test_k2_cfs_is_shared_with_moonraker_and_blocks_start_only(self, filtered):
         moon = connection("moonraker")
