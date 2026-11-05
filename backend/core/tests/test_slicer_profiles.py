@@ -32,7 +32,7 @@ class NativeProfileInspectionTests(SimpleTestCase):
             self.asset("machine.ini", b"layer_height = 0.2\nnozzle_diameter = 0.4\n"),
             "prusaslicer",
         )
-        self.assertEqual(report["bytes"], 45)
+        self.assertEqual(report["bytes"], 41)
         self.assertEqual(len(report["sha256"]), 64)
         self.assertEqual(report["extension"], ".ini")
 
