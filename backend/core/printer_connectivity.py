@@ -1019,50 +1019,52 @@ POLLERS: dict[str, Callable[[str, dict | None], dict]] = {
 }
 
 
-def _reconcile_creality_processing(connection, snapshot):
-    """Do not leave a cancelled K-series job indefinitely at Preparing.
+def _creality_native_idle_evidence(snapshot):
+    """Recognise an idle K-series state=0 without a second connection.
 
-    Creality may keep the previous filename and report state=0 after a stop.
-    Only a fresh, independent same-printer Moonraker query can establish that
-    the printer has returned to a terminal/idle state. A failed or busy query
-    leaves native telemetry untouched, so it cannot enable unsafe starts.
+    Creality's state=0 can mean idle or preparation, and printFileName may
+    retain the last completed/cancelled job. Require explicit idle device
+    status, cleared targets AND cleared job counters before trusting it.
+    Missing/ambiguous telemetry is never interpreted as idle.
     """
-    if snapshot.get("state") != "processing" or not getattr(connection, "printer_id", None):
+    if snapshot.get("state") != "processing" or not snapshot.get("online"):
+        return False
+    meta = snapshot.get("source_metadata") or {}
+    if meta.get("raw_state") != 0 or meta.get("device_state") != 0:
+        return False
+    if meta.get("power_loss_recovery") or str(meta.get("material_status") or "0") not in {"0", "0.0"}:
+        return False
+    temperatures = snapshot.get("temperatures") or {}
+    for key in ("tool0", "bed"):
+        reading = temperatures.get(key) or {}
+        target = _finite_number(reading.get("target_c"))
+        if target is None or target > 0:
+            return False
+    job = snapshot.get("job") or {}
+    for key in ("progress", "elapsed_seconds", "remaining_seconds", "current_layer"):
+        value = _finite_number(job.get(key))
+        if value is None or value != 0:
+            return False
+    return True
+
+
+def _reconcile_creality_processing(connection, snapshot):
+    """Remove a stale job filename only on direct native idle evidence."""
+    if not _creality_native_idle_evidence(snapshot):
         return snapshot
-    from .models import PrinterConnection
-    sources = PrinterConnection.objects.filter(
-        printer_id=connection.printer_id, adapter="moonraker", enabled=True,
-    ).order_by("-last_seen_at")
-    for source in sources:
-        try:
-            observed = poll_moonraker(source.endpoint_url, source.config or {})
-        except (PrinterConnectionError, OSError, ValueError):
-            continue
-        remote_state = str(observed.get("state") or "").lower()
-        klippy = str((observed.get("source_metadata") or {}).get("klippy_state") or "").lower()
-        if (not observed.get("online") or klippy != "ready" or
-                (observed.get("source_metadata") or {}).get("virtual_sdcard_active") is True):
-            continue
-        if remote_state not in {"idle", "complete", "cancelled"}:
-            # Do not trust cached Creality state over a live busy Moonraker.
-            continue
-        result = dict(snapshot)
-        result["state"] = "idle"
-        result["state_label"] = "Idle"
-        job = dict(result.get("job") or {})
-        old_file = job.get("file_name") or ""
-        job.update({"file_name": "", "progress": None, "elapsed_seconds": None,
-                    "remaining_seconds": None,
-                    "current_layer": None, "total_layers": None})
-        result["job"] = job
-        metadata = dict(result.get("source_metadata") or {})
-        metadata.update({
-            "state_reconciled_with_moonraker": True,
-            "previous_job_filename": old_file,
-        })
-        result["source_metadata"] = metadata
-        return result
-    return snapshot
+    result = dict(snapshot)
+    result["state"] = "idle"
+    result["state_label"] = "Idle"
+    job = dict(result.get("job") or {})
+    previous_filename = job.get("file_name") or ""
+    job.update({"file_name": "", "progress": None, "elapsed_seconds": None,
+                "remaining_seconds": None, "current_layer": None, "total_layers": None})
+    result["job"] = job
+    metadata = dict(result.get("source_metadata") or {})
+    metadata.update({"native_idle_confirmed": True,
+                     "previous_job_filename": previous_filename})
+    result["source_metadata"] = metadata
+    return result
 
 
 def poll_connection(connection) -> dict:
