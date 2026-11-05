@@ -1,0 +1,70 @@
+# MakerVault Slicer — implementation architecture and acceptance plan
+
+Milestone: [Self-hosted multi-engine FDM slicer #156](https://github.com/gavrd7/MakerVault/issues/156).
+Prerequisite: v1.6.0 [G-code Library & Print Submission #155](https://github.com/gavrd7/MakerVault/issues/155), merged and completed.
+
+## Product boundaries
+
+Provide **one MakerVault Slicer UI** for an explicitly selected engine and pinned version. Keep the toolchain **entirely self-hosted**. MakerVault owns the UI, authorization, job state, profiles and links to existing private assets. The optional slicing service executes in its **own isolated worker**, not in the web/Gunicorn or existing Celery process. No MakerVault cloud service or external slicer account is necessary.
+
+The G-code output must return through the existing owner-scoped FileAsset versioning pipeline and can then be inspected, saved/downloaded or submitted to a compatible printer using the existing **explicit start** workflow. Completing a slice **never starts a print** or deducts spool inventory.
+
+## Delivery order
+
+### A. Provider-neutral contract, engine inventory and permission model
+- Register engine identities independently from the executable path or CLI flags.
+- Expose candidates without claiming an installation or engine version is available. Administrative approval requires a **tested, exact version and container image digest**, then marking the engine enabled.
+- Keep engine-native machine/process/filament profiles distinct. Preserve original files, inheritance relationships, and upstream provenance.
+- Model an owner-scoped SliceJob with immutable input model revision/asset references; selected engine/version, printer/nozzle/plate, process preset, physical spool selections *separate from* per-engine filament profiles; progress, state, output G-code FileAsset, warnings and redacted failure category.
+- Restrict job creation, changes and file downloads by owner/role/quotas. Disallow input URLs and arbitrary host filesystem paths.
+
+### B. Optional isolated slicing service
+- Independent Compose **profile**: normal app deployments remain unchanged until the administrator opts in.
+- Worker receives only scoped, immutable input artifacts and validated profile files; avoid database credentials, Docker socket, host root, or general MakerVault file mounts. Use limited authenticated service-to-service exchange or a short-lived one-job staging mount.
+- Container isolation: unprivileged user, read-only filesystem except bounded scratch, no new privileges/capabilities, non-root, per-engine CPU/RAM/PID/disk/time caps, egress denied where feasible, and pinned image digests.
+- Stage input locally with fixed filenames under a unique job directory; invoke an approved preconfigured executable with an **argument list, never a shell command**, and only allowlisted flags. Prevent arbitrary profile paths/flags and cap stdout/stderr. Terminate the entire process group on timeout/cancellation.
+- Validate the produced G-code as an expected bounded file, scan using the existing G-code inspector, and import to the private FileAsset store. No background auto-dispatch to printers.
+- Jobs must survive worker restart: queued/running/completed/failed/cancelled/stale; abandoned running jobs are reconciled without duplicate execution.
+
+### C. First end-to-end slicer: PrusaSlicer
+- Test a **specific version** of PrusaSlicer headless CLI and native INI profiles, verify licences/distribution, and record an automated fixture: known small STL + machine/process/filament presets → bounded G-code with expected metadata.
+- Show a model and single plate, printer and nozzle, one actual spool reference paired to one native filament profile, process preset, Basic/Simple/Advanced settings and a Slice button.
+- Report queue/progress/errors, create a new private G-code asset, and open the existing viewer. Separate download / Save / Submit-to-printer actions.
+
+### D. Second engine: OrcaSlicer
+- Verify a pinned headless build and its specific CLI invocation with native machine/process and filament JSON profiles. Do not translate Prusa INI to Orca JSON by approximation.
+- Reuse the same UI contract with engine-specific preset choice and settings. Validate an actual Orca test fixture before enabling.
+
+### E. Enhanced plate, profiles and multi-material
+- Model placement and transforms with server-validated build-volume bounds, units and plate orientation.
+- Multiple objects, multiple material/extruder assignments, supports and user-editable searchable groups: Quality, Strength, Speed, Support and Multimaterial. Keep process and profile provenance explicit.
+- Link selected MakerVault physical spools to engine-native filament definitions. **Spool identity is not a slicer preset**; an exact material profile is chosen separately.
+- Preserve source/derived G-code provenance and support re-slice without modifying prior assets.
+- Reuse v1.6.0 K2 CFS mapping on *subsequent explicit print submission*, never as a hidden slicing side effect.
+
+### F. Additional engines only after genuine CLI/licence verification
+Creality Print, Bambu Studio, CuraEngine, ElegooSlicer, Snapmaker Orca and Anycubic Slicer Next are future candidates, **not** active integrations. Validate distribution terms, headless CLI availability, profile compatibility and model-specific behaviour independently.
+
+## Initial work in this branch
+
+- `core.slicer_engines` defines the first two **candidate** engines. The registry is deliberately non-executable and returns `available=false`; it does not install a slicer or advertise a usable slicing service.
+- `validate_engine_selection` requires an externally provided administrator-verified worker inventory containing an exact engine version, explicit enablement, successful verification and pinned SHA-256 image digest. The inventory must come from trusted server state, never from a browser request.
+- Contract unit tests assert unsupported inputs fail closed and Orca/Prusa profile formats remain distinct.
+
+## Safety and release gates
+
+1. Verify service isolation and no untrusted model/profile can escape a job sandbox, access the network/secret mounts or run arbitrary CLI flags.
+2. Per-owner access checks for inputs, outputs, worker/job status, and selected printer/spool IDs.
+3. Size/triangle/file-count quotas; input parsing timeouts; archive and decompression protections; no direct URL import into a worker.
+4. Explicit cancellation; bounded runtime; jobs recover after crash without duplicate or accidental print actions.
+5. Reproducible pinned-engine build/installation documentation, licensing and dependency/SBOM checks.
+6. Physical printer testing for optional submission is separate from slicer-output validity. No automatic printing or automatic spool deduction.
+7. Container creation and installed engine downloads are **explicit admin actions only**; ordinary MakerVault updates must not silently install engines.
+
+## Implementation notes / research
+
+- [OrcaSlicer CLI actions](https://github.com/OrcaSlicer/OrcaSlicer/wiki/cli_actions) and [loading machine/filament profiles](https://github.com/OrcaSlicer/OrcaSlicer/wiki/cli_misc).
+- [PrusaSlicer CLI](https://github.com/prusa3d/PrusaSlicer/wiki/Command-Line-Interface), including `--export-gcode`. Linux distribution/build approach needs validation for the selected pinned version.
+- Upstream licence for PrusaSlicer and OrcaSlicer must be checked **per distributed binary/source/version**, not inferred only from the public repository homepage.
+
+The full slicer is a new major milestone and is not included in v1.6.0. Keep the milestone open until an end-to-end, isolated, hardware-appropriate slice workflow is verified.
