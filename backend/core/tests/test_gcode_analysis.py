@@ -6,6 +6,28 @@ from core.gcode_analysis import analyse_text, compare_printer_metadata
 
 
 class GcodeAnalysisTests(SimpleTestCase):
+    def test_nozzle_and_plate_comments_are_advisory(self):
+        report = analyse_text(
+            "; nozzle_diameter = 0.4, 0.6\\n"
+            "; curr_bed_type = Textured PEI Plate\\n"
+            "G1 X5 Y6 E1\\n"
+        )
+        self.assertEqual(report["print_setup"]["nozzle_diameters_mm"], [0.4, 0.6])
+        self.assertEqual(report["print_setup"]["bed_type"], "Textured PEI Plate")
+        self.assertNotIn("blocking", report["print_setup"])
+        self.assertEqual(report["print_setup"]["sources"]["bed_type"], "curr_bed_type")
+
+    def test_creality_and_unknown_print_setup_metadata(self):
+        report = analyse_text("; Nozzle Size: 0.4mm\\n; Plate Type: Cool Plate\\n")
+        self.assertEqual(report["print_setup"]["nozzle_diameters_mm"], [0.4])
+        self.assertEqual(report["print_setup"]["bed_type"], "Cool Plate")
+        missing = analyse_text("G28\\n")
+        self.assertEqual(missing["print_setup"]["nozzle_diameters_mm"], [])
+        self.assertIsNone(missing["print_setup"]["bed_type"])
+        invalid = analyse_text("; nozzle_diameter = 999\\n; bed_type = Smooth PEI Plate\\n")
+        self.assertEqual(invalid["print_setup"]["nozzle_diameters_mm"], [])
+        self.assertEqual(invalid["print_setup"]["bed_type"], "Smooth PEI Plate")
+
     def test_creality_sliced_filament_vectors_for_cfs_review(self):
         report = analyse_text(
             "; printer_model = Creality K2\\n"
