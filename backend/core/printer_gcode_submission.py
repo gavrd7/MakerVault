@@ -383,6 +383,14 @@ def availability(connection):
     online = bool(_online(connection))
     cfs = creality_cfs_context(connection)
     cfs_blocks_start = bool(cfs["applicable"] and (cfs["connected"] is not False or not cfs["verified"]))
+    # Moonraker can run the original, slicer-embedded CFS mapping without
+    # changing any slots. It cannot apply a MakerVault-selected override.
+    sliced_mapping_candidate = bool(
+        adapter == "moonraker" and online and authorised
+        and cfs["applicable"] and cfs["verified"] and cfs["connected"] is True
+        and cfs["slots"] and (connection.last_snapshot or {}).get("state") == "idle"
+        and not (connection.last_snapshot or {}).get("source_metadata", {}).get("power_loss_recovery")
+    )
     return {
         "can_browse": adapter in BROWSE_ADAPTERS,
         "browse_requires_pin": adapter == "bambu_local" and not bool((connection.config or {}).get("bambu_ftps_cert_sha256")),
@@ -399,13 +407,14 @@ def availability(connection):
         ),
         "enabled": authorised,
         "cfs": cfs,
+        "can_start_sliced_mapping": sliced_mapping_candidate,
         "can_submit_from_printer": adapter in BROWSE_ADAPTERS and start_supported,
         "requires_opt_in": adapter in {"prusa", "flashforge", "creality_local"} and not native_opt_in,
         "requires_start_opt_in": adapter == "creality_local" and (connection.config or {}).get("creality_single_spool_start_enabled") is not True,
     }
 
 
-def _require_action_ready(connection, action):
+def _require_action_ready(connection, action, *, use_sliced_cfs=False):
     state = availability(connection)
     if not state["supported"]:
         raise GcodeSubmissionError("This printer adapter does not support G-code submission yet.")
@@ -413,8 +422,8 @@ def _require_action_ready(connection, action):
         raise GcodeSubmissionError("Explicitly enable printer G-code submission and refresh an online connection first.")
     if action == "upload" and not state["can_upload"]:
         raise GcodeSubmissionError("G-code upload is not supported for this printer.")
-    if action == "print" and not state["can_start"]:
-        raise GcodeSubmissionError("Printer must be freshly verified idle before starting a job.")
+    if action == "print" and not (state["can_start"] or (use_sliced_cfs and state["can_start_sliced_mapping"])):
+        raise GcodeSubmissionError("Printer must be freshly verified idle with a supported CFS print mode before starting a job.")
 
 
 def _receipt(row):
@@ -431,6 +440,13 @@ def submit(connection, user, payload):
     if payload.get("confirmed") is not True:
         raise GcodeSubmissionError("Confirm the selected printer, file and upload/print action.", 400)
     source, action = payload.get("source"), payload.get("action")
+    use_sliced_cfs = payload.get("cfs_mode") == "use_sliced"
+    if payload.get("cfs_mode") not in (None, "", "use_sliced"):
+        raise GcodeSubmissionError("Unsupported CFS print mode.", 400)
+    if use_sliced_cfs and (action != "print" or payload.get("cfs_acknowledged") is not True):
+        raise GcodeSubmissionError("Explicitly confirm the K2's loaded filaments and the slicer's existing CFS mapping.", 400)
+    if use_sliced_cfs and payload.get("cfs_slot_overrides"):
+        raise GcodeSubmissionError("CFS slot overrides are not supported by this print path.", 400)
     if source not in {"printer", "makervault"} or action not in {"upload", "print"}:
         raise GcodeSubmissionError("Choose printer or MakerVault G-code and upload or print.", 400)
     if source == "printer" and action != "print":
@@ -469,7 +485,7 @@ def submit(connection, user, payload):
                 raise GcodeSubmissionError("Submission ID was already used for a different operation.")
             return _receipt(old)
         connection.refresh_from_db()
-        _require_action_ready(connection, action)
+        _require_action_ready(connection, action, use_sliced_cfs=use_sliced_cfs)
         recent = PrinterGcodeSubmission.objects.filter(connection__printer_id=connection.printer_id)
         if recent.filter(status__in=["pending", "unknown"], created_at__gte=timezone.now() - timedelta(minutes=10)).exists():
             raise GcodeSubmissionError("An earlier submission has an unresolved outcome. Verify printer state before another request.")
@@ -492,7 +508,7 @@ def submit(connection, user, payload):
         progress("Checking file metadata and printer compatibility.")
         # All commands occur after the receipt is committed. Never auto-retry an
         # upload or print command with unknown delivery status.
-        _require_action_ready(connection, action)
+        _require_action_ready(connection, action, use_sliced_cfs=use_sliced_cfs)
         if source == "printer":
             if connection.adapter == "creality_local" and (connection.last_snapshot or {}).get("source_metadata", {}).get("cfs_connected"):
                 raise GcodeSubmissionError("Creality CFS is connected: single-spool start is blocked pending material mapping.")
@@ -525,7 +541,7 @@ def submit(connection, user, payload):
         except Exception as exc:
             raise GcodeSubmissionError("Unable to verify fresh printer status before transfer. No command dispatched.", 409) from exc
         connection.refresh_from_db()
-        _require_action_ready(connection, action)
+        _require_action_ready(connection, action, use_sliced_cfs=use_sliced_cfs)
         base, headers = (None, None) if connection.adapter in {"flashforge", "creality_local"} else _printer_endpoint(connection)
         if connection.adapter == "prusa":
             _prusalink_capability_probe(connection, upload=(source == "makervault"))
@@ -590,7 +606,7 @@ def submit(connection, user, payload):
             except Exception as exc:
                 raise GcodeSubmissionError("Unable to confirm printer is still idle after file upload. Do not start.", 409) from exc
             connection.refresh_from_db()
-            _require_action_ready(connection, "print")
+            _require_action_ready(connection, "print", use_sliced_cfs=use_sliced_cfs)
             progress("Sending the explicitly confirmed print-start command.")
             dispatch_attempted = True
             try:
@@ -627,7 +643,9 @@ def submit(connection, user, payload):
             if (False if connection.adapter in {"flashforge", "creality_local"} else response.status_code != 204 if connection.adapter in {"octoprint", "prusa"} else _json_response(response) != "ok"):
                 raise GcodeSubmissionError("Printer did not confirm starting the print. Verify its live state.", 502)
         row.status = "unknown" if action == "print" and connection.adapter == "creality_local" else "started" if action == "print" else "uploaded"
-        row.message = ("Creality start command sent, but this protocol provides no acknowledgement. Verify the live printer before any follow-up." if action == "print" and connection.adapter == "creality_local" else "Print start accepted by printer." if action == "print" else "Uploaded to printer without starting.")
+        row.message = ("Creality start command sent, but this protocol provides no acknowledgement. Verify the live printer before any follow-up." if action == "print" and connection.adapter == "creality_local" else
+                       "Print-start accepted with original slicer mapping; MakerVault did not change any CFS slots. Verify filament at printer." if action == "print" and use_sliced_cfs else
+                       "Print start accepted by printer." if action == "print" else "Uploaded to printer without starting.")
     except (FlashForgeFileError, CrealityGcodeError) as exc:
         row.status = "unknown"
         row.message = "Printer response was not fully verified. Inspect printer storage and live state before trying again."
