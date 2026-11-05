@@ -827,7 +827,7 @@ class NativeGcodeAdapterTests(SimpleTestCase):
         with self.assertRaises(CrealityGcodeError):
             _single_spool_command("../bad.gcode", "/usr/data")
         with self.assertRaises(CrealityGcodeError):
-            _single_spool_command("good.gcode", "/tmp")
+            _single_spool_command("good.gcode", "/invalid-native-root")
 
     @patch("core.creality_gcode.websockets.connect")
     def test_stock_k1_start_sends_once_and_tolerates_remote_close(self, connect):
