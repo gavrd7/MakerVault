@@ -6,6 +6,30 @@ from core.gcode_analysis import analyse_text, compare_printer_metadata
 
 
 class GcodeAnalysisTests(SimpleTestCase):
+    def test_creality_sliced_filament_vectors_for_cfs_review(self):
+        report = analyse_text(
+            "; printer_model = Creality K2\\n"
+            "; filament_type = PLA; PETG\\n"
+            "; filament_colour = #ffffff; #e83d89\\n"
+            "; filament_settings_id = SUNLU PLA+; SUNLU Hyper PETG Matte\\n"
+            "T0\\nG1 X2 Y3\\nT1\\n"
+        )
+        filaments = report["filaments"]
+        self.assertTrue(filaments["complete"])
+        self.assertEqual([item["material"] for item in filaments["requirements"]], ["PLA", "PETG"])
+        self.assertEqual([item["color_hex"] for item in filaments["requirements"]], ["#ffffff", "#e83d89"])
+        self.assertEqual(filaments["requirements"][0]["preset"], "SUNLU PLA+")
+
+    def test_missing_slicer_filaments_do_not_guess_cfs_slots(self):
+        report = analyse_text("T0\\nG1 X1 Y2\\n")
+        self.assertEqual(report["filaments"]["requirements"], [])
+        self.assertFalse(report["filaments"]["complete"])
+        partial = analyse_text("; filament_type = PLA\\n; filament_colour = #ffffff\\n", truncated=True)
+        self.assertFalse(partial["filaments"]["complete"])
+        bad = analyse_text("; filament_type = PLA\\n; filament_colour = invalid\\n")
+        self.assertFalse(bad["filaments"]["complete"])
+        self.assertEqual(bad["filaments"]["requirements"][0]["color_hex"], "")
+
     def test_explicit_printer_and_bounds(self):
         result = analyse_text(
             "; printer_model = Creality K2 Plus\n"
