@@ -89,6 +89,47 @@ class GcodePrinterContractTests(SimpleTestCase):
         moon.controls_enabled = False
         self.assertFalse(availability(native)["can_start_sliced_mapping"])
 
+    @patch("core.printer_gcode_submission.PrinterConnection.objects.filter")
+    def test_original_mapping_option_persists_when_printer_is_busy(self, filtered):
+        native = connection("creality_local")
+        native.printer = SimpleNamespace(model="K2", catalog_model=None)
+        native.printer_id = "printer-one"
+        native.last_snapshot["source_metadata"] = {"cfs_connected": True}
+        native.last_snapshot["materials"] = [{
+            "system": "creality_cfs", "unit_index": 0, "slot_index": 2,
+            "material": "PLA", "color_hex": "#ffffff",
+        }]
+        moon = connection("moonraker")
+        moon.controls_enabled = True
+        filtered.return_value.order_by.return_value = [moon]
+        filtered.return_value.exists.return_value = True
+        native.last_snapshot["state"] = "printing"
+        caps = availability(native)
+        self.assertTrue(caps["supports_original_mapping"])
+        self.assertFalse(caps["can_start_sliced_mapping"])
+        with self.assertRaises(GcodeSubmissionError):
+            _require_action_ready(native, "print", use_sliced_cfs=True)
+
+    def test_creality_k1_native_start_uses_stock_k1_file_root(self):
+        import asyncio
+        import json
+        from core.creality_gcode import _stock_data_root, _start_single_spool
+        k1 = connection("creality_local")
+        k1.printer = SimpleNamespace(model="K1", catalog_model=None)
+        k2 = connection("creality_local")
+        k2.printer = SimpleNamespace(model="K2", catalog_model=None)
+        self.assertEqual(_stock_data_root(k1), "/usr/data")
+        self.assertEqual(_stock_data_root(k2), "/mnt/UDISK")
+        with patch("core.creality_gcode.websockets.connect") as connect:
+            ws = AsyncMock()
+            connect.return_value.__aenter__.return_value = ws
+            asyncio.run(_start_single_spool(
+                "ws://printer.local:9999", "ghost.gcode", _stock_data_root(k1),
+            ))
+            sent = json.loads(ws.send.await_args.args[0])
+            self.assertEqual(sent["params"]["opGcodeFile"],
+                             "printprt:/usr/data/printer_data/gcodes/ghost.gcode")
+
     def test_file_paths_cannot_escape_printer_storage(self):
         for invalid in ("../escape.gcode", "/etc/escape.gcode", "folder//file.gcode",
                         "folder/./file.gcode", "folder\\bad.gcode", "danger.txt", ""):
