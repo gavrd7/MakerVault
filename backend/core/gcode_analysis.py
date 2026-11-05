@@ -137,25 +137,25 @@ def _used_extrusion_tools(text, *, declared_count, truncated=False):
                 ambiguous = True
             continue
         code = line.split(None, 1)[0]
-        compact = re.match(r"^(G0?[01]|G92)(?=\\s|[XYZE])", line)
+        compact = re.match(r"^(G0?[01]|G92)(?=\s|[XYZE])", line)
         if compact:
             code = compact.group(1)
         if code in {"M82", "M83"}:
             e_absolute = code == "M82"
         elif code == "G92":
-            e = E_VALUE.search(line[len(code):]) or re.search(r"E\\s*([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))", line[len(code):])
+            e = E_VALUE.search(line[len(code):]) or re.search(r"E\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))", line[len(code):])
             if e:
                 e_position = float(e.group(1))
         elif code in {"G0", "G00", "G1", "G01"}:
             args = line[len(code):]
-            e = E_VALUE.search(args) or re.search(r"E\\s*([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))", args)
+            e = E_VALUE.search(args) or re.search(r"E\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))", args)
             if not e:
                 continue
             amount = float(e.group(1))
             delta = amount - e_position if e_absolute else amount
             if e_absolute:
                 e_position = amount
-            if delta <= 0.000001 or not re.search(r"(?:^|\s)[XY]\s*[-+]?\d", args):
+            if delta <= 0.000001 or not re.search(r"[XY]\s*[-+]?\d", args):
                 continue
             detected_deposition = True
             if active is None:
