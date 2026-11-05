@@ -598,7 +598,7 @@ def submit(connection, user, payload):
         verdict = compare_printer_metadata(report, connection.printer)
         if verdict["status"] == "mismatch":
             raise GcodeSubmissionError(verdict["reason"])
-        if connection.adapter == "creality_local" and action == "print":
+        if connection.adapter == "creality_local" and action == "print" and not use_mapped_cfs:
             if (connection.last_snapshot or {}).get("source_metadata", {}).get("cfs_connected"):
                 raise GcodeSubmissionError("CFS is connected. Native start requires validated material-slot mapping.")
             if remote_path not in {item["path"] for item in list_printer_gcodes(connection)} and source == "printer":
