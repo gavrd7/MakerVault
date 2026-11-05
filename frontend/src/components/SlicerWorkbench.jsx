@@ -17,6 +17,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [engines, setEngines] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [profiles, setProfiles] = useState([]);
+  const [importFile, setImportFile] = useState(null);
+  const [importKind, setImportKind] = useState("printer");
+  const [importName, setImportName] = useState("");
+  const [importSource, setImportSource] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -87,6 +91,45 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       setNotice("Slicing configuration saved as a private draft. No slicer or printer command was run.");
     } catch (err) {
       setError(err.message || "Could not save the slicing draft.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function importProfile(event) {
+    event.preventDefault();
+    setError(""); setNotice(""); setBusy(true);
+    let uploaded = false;
+    try {
+      if (!importFile) throw new Error("Choose an exported native profile file.");
+      const expected = form.engine === "prusaslicer" ? ".ini" : ".json";
+      if (!importFile.name.toLowerCase().endsWith(expected)) {
+        throw new Error("This engine requires a native " + expected + " preset file.");
+      }
+      if (!form.engine_version.trim()) throw new Error("Enter the exact engine version before importing profiles.");
+      const body = new FormData();
+      body.append("file", importFile);
+      body.append("category", "source");
+      body.append("name", importName.trim() || importFile.name);
+      const fileResult = await apiFetch("/api/files/", { method: "POST", body });
+      uploaded = true;
+      const { profile } = await apiFetch("/api/printing/slicer/profiles/", {
+        method: "POST",
+        body: {
+          file_asset_id: fileResult.file.id,
+          engine: form.engine,
+          engine_version: form.engine_version,
+          kind: importKind,
+          name: importName.trim() || importFile.name.replace(/\\.[^.]+$/, ""),
+          provenance: importSource.trim(),
+        },
+      });
+      setProfiles(current => [profile, ...current]);
+      setImportFile(null);
+      setImportName("");
+      setNotice("Native profile imported as an unverified candidate. Slicing remains disabled until an approved worker and profiles pass validation.");
+    } catch (err) {
+      setError((err.message || "Profile import failed.") + (uploaded ? " The uploaded file remains in Files for review." : ""));
     } finally {
       setBusy(false);
     }
@@ -182,6 +225,42 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         </div>
       </form>
       {!stlFiles.length && <p>Add a plain-text STL model to Files or Model Library before preparing a slicing draft.</p>}
+    </section>
+
+    <section className="panel printingSection" aria-labelledby="slicer-profile-import">
+      <h3 id="slicer-profile-import">Engine-native profiles</h3>
+      <p>Import a preset exported by the selected slicer. PrusaSlicer INI and OrcaSlicer JSON remain separate. Imported profiles are preserved in private Files and are <strong>not verified for execution</strong>.</p>
+      <form className="formGrid" onSubmit={importProfile}>
+        <label>Profile type
+          <select value={importKind} disabled={busy || !canPrepare} onChange={e => setImportKind(e.target.value)}>
+            <option value="printer">Printer / machine</option>
+            <option value="filament">Filament</option>
+            <option value="process">Process</option>
+          </select>
+        </label>
+        <label>Exported preset file
+          <input required type="file" accept={form.engine === "prusaslicer" ? ".ini" : ".json"} disabled={busy || !canPrepare} onChange={e => setImportFile(e.target.files?.[0] || null)} />
+        </label>
+        <label>Preset name
+          <input required maxLength="200" value={importName} disabled={busy || !canPrepare} onChange={e => setImportName(e.target.value)} placeholder="Native preset name" />
+        </label>
+        <label>Source / provenance
+          <input maxLength="200" value={importSource} disabled={busy || !canPrepare} onChange={e => setImportSource(e.target.value)} placeholder="Exported from engine, vendor or original author" />
+        </label>
+        <div className="full settingsActions">
+          <button type="submit" disabled={!canPrepare || busy || !form.engine_version.trim() || !importFile}>{busy ? "Importing…" : "Import profile for review"}</button>
+        </div>
+      </form>
+      <div className="printingStack">
+        {profiles.filter(item => item.engine === form.engine).map(profile =>
+          <div className="cameraSourceRow" key={profile.id}>
+            <div className="cameraSourceIdentity">
+              <strong>{profile.name} · {profile.kind}</strong>
+              <small>{profile.engine} {profile.engine_version} · {profile.status} · {profile.provenance || "No source supplied"}</small>
+            </div>
+          </div>
+        )}
+      </div>
     </section>
 
     <section className="panel printingSection" aria-label="Saved slicing drafts">
