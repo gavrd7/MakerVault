@@ -234,9 +234,11 @@ def _filament_requirements(text, *, truncated):
             tool_usage = {**declared_usage, "toolpath_evidence": tool_usage.get("toolpath_evidence", {})}
     used = [item for item in requirements if item["tool_index"] in tool_usage["used_tool_indices"]]
     complete = bool(requirements) and all(item["complete"] for item in requirements) and not truncated
+    used_complete = bool(used) and all(item["complete"] for item in used) and not truncated
     return {
         "requirements": requirements, "complete": complete,
         "used_requirements": used,
+        "used_complete": used_complete,
         **tool_usage,
         "reason": ("" if complete else "Sliced filament type/colour metadata is incomplete or not available; manual review is required."),
     }
