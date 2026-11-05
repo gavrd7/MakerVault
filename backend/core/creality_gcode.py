@@ -157,7 +157,19 @@ def list_files(connection):
         raise CrealityGcodeError("Creality file-browser event loop unavailable.") from exc
 
 
-async def _start_single_spool(endpoint, remote_path):
+def _stock_data_root(connection):
+    """Stock K1 family and K2 family use different printer file roots."""
+    printer = getattr(connection, "printer", None)
+    model = " ".join((
+        str(getattr(printer, "model", "") or ""),
+        str(getattr(getattr(printer, "catalog_model", None), "name", "") or ""),
+    )).upper()
+    if re.search(r"\bK1(?:C| SE| MAX|_CFS-C)?\b", model):
+        return "/usr/data"
+    return "/mnt/UDISK"
+
+
+async def _start_single_spool(endpoint, remote_path, data_root="/mnt/UDISK"):
     try:
         async with websockets.connect(
             normalise_creality_endpoint(endpoint), ping_interval=None,
@@ -166,7 +178,7 @@ async def _start_single_spool(endpoint, remote_path):
             message = {
                 "method": "set",
                 "params": {
-                    "opGcodeFile": "printprt:/mnt/UDISK/printer_data/gcodes/" + remote_path,
+                    "opGcodeFile": "printprt:" + data_root + "/printer_data/gcodes/" + remote_path,
                     "enableSelfTest": 0,
                 },
             }
@@ -180,7 +192,7 @@ def start_single_spool(connection, remote_path):
     if not safe or safe != remote_path:
         raise CrealityGcodeError("Printer file path is unsafe or not recognized.")
     try:
-        asyncio.run(_start_single_spool(connection.endpoint_url, safe))
+        asyncio.run(_start_single_spool(connection.endpoint_url, safe, _stock_data_root(connection)))
     except CrealityGcodeError:
         raise
     except RuntimeError as exc:
