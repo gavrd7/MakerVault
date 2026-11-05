@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.test import TestCase
 
-from core.models import FileAsset, Printer, SliceJob
+from core.models import FileAsset, Printer, SliceJob, SlicerProfile
 
 
 class SliceJobApiTests(TestCase):
@@ -79,6 +79,44 @@ class SliceJobApiTests(TestCase):
         self.assertEqual(self.post({**self.payload, "input_asset_id": str(alien.pk)}).status_code, 400)
         self.assertEqual(SliceJob.objects.count(), 0)
         self.assertEqual(self.post({**self.payload, "printer_id": str(uuid.uuid4())}).status_code, 400)
+
+    def test_native_profile_selection_requires_matching_ownership_version_and_kind(self):
+        source = FileAsset.objects.create(
+            owner=self.owner, name="Saved native profiles", category="source",
+            metadata={"extension": ".ini"},
+        )
+        profiles = {}
+        for kind, label in (
+            ("printer", "Generic FDM"),
+            ("filament", "Generic PLA"),
+            ("process", "0.20mm Quality"),
+        ):
+            profiles[kind] = SlicerProfile.objects.create(
+                owner=self.owner, engine="prusaslicer", engine_version="2.9.4",
+                kind=kind, name=label, file_asset=source,
+                content_sha256="b" * 64,
+            )
+        self.client.force_login(self.owner)
+        linked = {
+            **self.payload,
+            **{kind + "_profile_id": str(profile.pk) for kind, profile in profiles.items()},
+        }
+        created = self.post(linked)
+        self.assertEqual(created.status_code, 201, created.content)
+        row = SliceJob.objects.get(pk=created.json()["job"]["id"])
+        self.assertEqual(row.printer_profile_id, profiles["printer"].pk)
+        self.assertEqual(row.filament_profile_id, profiles["filament"].pk)
+        self.assertEqual(row.process_profile_id, profiles["process"].pk)
+        self.assertEqual(row.status, "draft")
+        self.assertEqual(self.post({**linked, "engine_version": "2.9.7"}).status_code, 400)
+        self.assertEqual(self.post({**linked, "printer_preset": "Different label"}).status_code, 400)
+        foreign_source = FileAsset.objects.create(owner=self.other, name="Other.ini", category="source")
+        foreign = SlicerProfile.objects.create(
+            owner=self.other, engine="prusaslicer", engine_version="2.9.4",
+            kind="printer", name="Generic FDM", file_asset=foreign_source,
+            content_sha256="c" * 64,
+        )
+        self.assertEqual(self.post({**linked, "printer_profile_id": str(foreign.pk)}).status_code, 400)
 
     def test_rejects_untrusted_execution_fields_and_profile_paths(self):
         self.client.force_login(self.owner)
