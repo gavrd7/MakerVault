@@ -177,6 +177,28 @@ class GcodePrinterContractTests(SimpleTestCase):
         with self.assertRaisesRegex(GcodeSubmissionError, "temporarily disabled"):
             _require_action_ready(k1, "print", k1_test_acknowledged=True)
 
+    def test_all_submission_rechecks_preserve_k1_test_acknowledgement(self):
+        # A prior regression passed the acknowledgement at the initial guard,
+        # but omitted it in later pre-dispatch checks, rejecting the submission.
+        # Inspect every guard call in submit without contacting any printer.
+        import ast
+        import inspect
+        import textwrap
+        from core.printer_gcode_submission import submit
+        tree = ast.parse(textwrap.dedent(inspect.getsource(submit)))
+        guard_calls = [
+            node for node in ast.walk(tree)
+            if isinstance(node, ast.Call) and
+            isinstance(node.func, ast.Name) and
+            node.func.id == "_require_action_ready"
+        ]
+        self.assertGreaterEqual(len(guard_calls), 3)
+        for call in guard_calls:
+            keywords = {item.arg: item.value for item in call.keywords}
+            self.assertIn("k1_test_acknowledged", keywords)
+            self.assertIsInstance(keywords["k1_test_acknowledged"], ast.Name)
+            self.assertEqual(keywords["k1_test_acknowledged"].id, "k1_test_acknowledged")
+
     def test_k1_start_blockers_explain_stale_or_busy_telemetry(self):
         from datetime import timedelta
         from core.printer_gcode_submission import availability
