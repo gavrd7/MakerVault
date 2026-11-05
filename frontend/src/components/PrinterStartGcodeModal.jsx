@@ -135,13 +135,13 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
 
     if (verdict?.status === "mismatch") { setError("Printer model mismatch; submission blocked."); return; }
     const mappingSummary = mappedCfs
-      ? selections.map(item => "Slicer " + (item.tool_index + 1) + " (" + (requirements[item.tool_index]?.material || "?") + ") → CFS " + item.slot_label).join("\\n")
+      ? selections.map(item => "Slicer " + (item.tool_index + 1) + " (" + (requirements[item.tool_index]?.material || "?") + ") → CFS " + item.slot_label).join("\n")
       : slicedCfs ? "Use original slicer mapping (no slot changes)." : "";
-    if (!window.confirm("Printer: " + printer.name + "\\nFile: " + name + "\\nAction: " +
+    if (!window.confirm("Printer: " + printer.name + "\nFile: " + name + "\nAction: " +
       (operation === "print" ? "START PRINT" : "UPLOAD ONLY, no printing") +
-      (mappingSummary ? "\\n\\nCFS mapping:\\n" + mappingSummary : "") +
-      (mappedCfs ? "\\n\\nK2 native start has no command acknowledgement. Check the selected filament on the printer." : "") +
-      "\\n\\nContinue?")) return;
+      (mappingSummary ? "\n\nCFS mapping:\n" + mappingSummary : "") +
+      (mappedCfs ? "\n\nK2 native start has no command acknowledgement. Check the selected filament on the printer." : "") +
+      "\n\nContinue?")) return;
     setBusy(true); setError(""); setReceipt(null);
     setTransferStage("Submitting request and checking printer readiness…");
     const requestId = window.crypto.randomUUID();
@@ -169,7 +169,11 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
       setReceipt(result.submission);
       setTransferStage(result.submission?.message || "Printer responded.");
       if (result.submission?.status === "unknown") {
-        setError("Printer outcome is uncertain. Inspect the printer before trying anything else.");
+        if (mappedCfs && result.submission?.message?.includes("mapping and print-start commands dispatched")) {
+          setNotice("CFS print commands were sent. Check the K2 display and filament selection; the printer does not acknowledge the command.");
+        } else {
+          setError("Printer outcome is uncertain. Inspect the printer before trying anything else.");
+        }
       }
       await onChanged?.();
     } catch (err) { setError(err.message); setTransferStage("Submission failed or could not be verified."); }
@@ -264,7 +268,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
       <p>Review the sliced filament and select the correct loaded CFS slot. You can send these selections to the K2 or use its original slicer mapping.</p>
       {source === "makervault" && <label>Filament mapping
         <select value={mappingMode} onChange={e => setMappingMode(e.target.value)}>
-          {cfsMappedAvailable && <option value="mapped">Use selected CFS slots — send mapping to K2</option>}
+          {cfsMappedAvailable && requirements.length > 0 && <option value="mapped">Use selected CFS slots — send mapping to K2</option>}
           {cfsSlicedAvailable && <option value="original">Use original mapping embedded by the slicer</option>}
         </select>
       </label>}
@@ -311,7 +315,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
           <button type="button" onClick={onClose}>Cancel</button>
           <button type="button" className="primary" onClick={submit}
             disabled={busy || checking || !canEdit || !capabilities?.supported ||
-              (source === "printer" ? !remotePath || !(capabilities.can_start || cfsSlicedAvailable || cfsMappedAvailable) : !assetId || !capabilities.can_upload ||
+              (source === "printer" ? !remotePath || !(capabilities.can_start || cfsSlicedAvailable) : !assetId || !capabilities.can_upload ||
                 (action === "print" && !(capabilities.can_start || cfsSlicedAvailable || cfsMappedAvailable))) || verdict?.status === "mismatch"}>
             {busy ? "Submitting…" : source === "printer" || action === "print" ? "Review & start print" : "Review & upload only"}
           </button>
@@ -325,7 +329,8 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
       <small>Progress is indeterminate because the printer adapter does not report bytes transferred. The stage text reflects server-side checks. Do not submit another job while this operation is running.</small>
     </div>}
     {receipt && <div className="settingsCallout" role="status">
-      <strong>Submission: {receipt.status}</strong><p>{receipt.message}</p>
+      <strong>{receipt.status === "unknown" && receipt.message?.includes("mapping and print-start commands dispatched")
+        ? "Print command sent — verify on K2" : "Submission: " + receipt.status}</strong><p>{receipt.message}</p>
       <small>Request ID {receipt.request_id} — uncertain requests are never resent automatically.</small>
     </div>}
     </div>
