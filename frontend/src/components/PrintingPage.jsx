@@ -1550,19 +1550,14 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
     </div>
 
     {gcodeConnection && <PrinterStartGcodeModal printer={printer} connection={gcodeConnection} canEdit={Boolean(data.can_control)} onConfigureMoonraker={() => prepareCrealityMoonrakerSource(gcodeConnection)} onClose={() => setGcodeConnection(null)} onChanged={async () => { await loadConnections(); await onChanged?.(); }} />}
-    {!!available.length && <form id="printing-live-add-source" className="formGrid" onSubmit={addConnection}>
-      <div className="full settingsCallout">
+    {!!available.length && <form id="printing-live-add-source" className="formGrid printerLiveAddSource" onSubmit={addConnection}>
+      <div className="full printerLiveAddHeading">
         <strong>Add live source</strong>
-        <p>MakerVault supports Moonraker/Klipper and OctoPrint plus experimental manufacturer-local adapters for Creality, Bambu Lab and PrusaLink. A single physical printer can use more than one source without creating duplicate MakerVault printer records.</p>
+        <p>Choose an integration for this printer. Multiple connections can share the same printer record.</p>
       </div>
       <label>Adapter<select value={form.adapter} onChange={e => adapterChanged(e.target.value)}>
         {available.map(item => <option key={item.key} value={item.key}>{item.label}{item.experimental ? " · experimental" : ""}</option>)}
       </select></label>
-      {selectedAdapterInfo && <div className="settingsCallout">
-        <strong>{selectedAdapterInfo.validation_label || (selectedAdapterInfo.experimental ? "Experimental" : "Supported")}</strong>
-        <p>{selectedAdapterInfo.compatibility_hint || selectedAdapterInfo.protocol || "MakerVault will use this provider as a read-only live source."}</p>
-        {selectedAdapterInfo.protocol && <small>Protocol: {selectedAdapterInfo.protocol}</small>}
-      </div>}
       <label>{["creality_local", "bambu_local", "prusa", "flashforge", "anycubic", "elegoo", "qidi", "sovol", "snapmaker", "voron"].includes(form.adapter) ? "Printer host / IP" : "Service URL"}<input required value={form.endpoint_url} onChange={e => setForm(current => ({ ...current, endpoint_url: e.target.value }))} placeholder={form.adapter === "creality_local" ? "192.168.1.34" : form.adapter === "bambu_local" ? "192.168.1.45" : form.adapter === "prusa" ? "prusa.local" : form.adapter === "flashforge" ? "192.168.1.60" : form.adapter === "anycubic" ? "192.168.1.70" : ["moonraker", "elegoo", "qidi", "sovol", "snapmaker", "voron"].includes(form.adapter) ? "printer.local or http://printer.local:7125" : "http://octoprint.local"} /></label>
       {!["creality_local", "bambu_local"].includes(form.adapter) && <label>API key (optional)<input type="password" value={form.api_key} onChange={e => setForm(current => ({ ...current, api_key: e.target.value }))} autoComplete="new-password" placeholder={form.adapter === "prusa" ? "Legacy / API-key PrusaLink setups" : "Only when your service requires one"} /></label>}
       {form.adapter === "creality_local" && <div className="settingsCallout">
@@ -1597,14 +1592,10 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
         <strong>Anycubic LAN mode</strong>
         <p>MakerVault performs the printer's local signed LAN handshake on port 18910, then opens its temporary MQTT/TLS session on port 9883. No Anycubic Cloud credentials are required. The printer must be in LAN mode; this adapter currently targets the Kobra 3 / S1-generation protocol and remains experimental.</p>
       </div>}
-      <label>Polling interval<div className="intervalInput"><input type="number" min="10" max="3600" step="5" value={form.poll_interval_seconds} onChange={e => setForm(current => ({ ...current, poll_interval_seconds: e.target.value }))} /><span>seconds</span></div></label>
-      <div className="formActions full"><button className="primary" disabled={busy === "add"}>{busy === "add" ? "Adding…" : "Add live source"}</button></div>
+      <label className="printerLivePollField">Polling interval<div className="intervalInput"><input type="number" min="10" max="3600" step="5" value={form.poll_interval_seconds} onChange={e => setForm(current => ({ ...current, poll_interval_seconds: e.target.value }))} /><span>seconds</span></div></label>
+      <div className="formActions printerLiveAddActions"><button className="primary" disabled={busy === "add"}>{busy === "add" ? "Adding…" : "Add live source"}</button></div>
     </form>}
 
-    <div className="settingsCallout">
-      <strong>Read-only first</strong>
-      <p>All live adapters, including the manufacturer Moonraker profiles, remain read-only in MakerVault even where the upstream printer supports pause/resume/cancel. Control actions stay behind a later permissioned/confirmed pass.</p>
-    </div>
   </Modal>;
 }
 
