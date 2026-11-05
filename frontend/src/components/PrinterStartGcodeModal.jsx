@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { apiFetch } from "../api";
+import { findSlicedRequirement } from "../utils/gcodeMapping";
 import { Modal } from "./Common";
 
 export default function PrinterStartGcodeModal({ printer, connection, canEdit, onConfigureMoonraker, onClose, onChanged, initialAsset = null }) {
@@ -147,7 +148,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
         setError("Select a loaded CFS slot for each filament actually used by this print."); return;
       }
       for (const item of selections) {
-        const required = requirements.find(requirement => requirement.tool_index === item.tool_index);
+        const required = findSlicedRequirement(requirements, item.tool_index);
         const loaded = (cfs?.slots || []).find(slot => slot.label === item.slot_label);
         if (!required?.material || !loaded || !matches(required, loaded)) {
           setError("Sliced and loaded material types must agree before mapped printing."); return;
@@ -159,7 +160,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
 
     if (verdict?.status === "mismatch") { setError("Printer model mismatch; submission blocked."); return; }
     const mappingSummary = mappedCfs
-      ? selections.map(item => "Slicer " + (item.tool_index + 1) + " (" + (requirements.find(requirement => requirement.tool_index === item.tool_index)?.material || "?") + ") → CFS " + item.slot_label).join("\n")
+      ? selections.map(item => "Slicer " + (item.tool_index + 1) + " (" + (findSlicedRequirement(requirements, item.tool_index)?.material || "?") + ") → CFS " + item.slot_label).join("\n")
       : slicedCfs ? "Use original slicer mapping (no slot changes)." : "";
     if (!window.confirm("Printer: " + printer.name + "\nFile: " + name + "\nAction: " +
       (operation === "print" ? "START PRINT" : "UPLOAD ONLY, no printing") +
