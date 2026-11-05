@@ -60,6 +60,20 @@ Creality Print, Bambu Studio, CuraEngine, ElegooSlicer, Snapmaker Orca and Anycu
 
 **Do not run untrusted slicer input on the host.** The runner is not a security sandbox; a separate unprivileged, network-restricted, resource-limited container and trusted native profile installation are required before an actual Slice button is enabled.
 
+## Native-profile checkpoint
+
+The draft-only Slicer Workbench is available from **3D Printing → MakerVault Slicer** on the feature branch. It uses existing owned STL files, printers and physical spools and stores private draft configurations through `/api/printing/slicer/jobs/`. Slicing itself is deliberately unavailable.
+
+The backend now has `SlicerProfile` (migration `0077`) and per-job native profile references (migration `0078`) in addition to the `SliceJob` migration `0076`. Profiles are linked to existing owner-scoped FileAsset versions, preserve engine, version, printer/filament/process role, source label and checksum, and default to **candidate/unverified**.
+
+The `/api/printing/slicer/profiles/` endpoint registers and lists native PrusaSlicer `.ini` and OrcaSlicer `.json` assets. Import performs bounded UTF-8/JSON checks, ownership checks and post-processing command rejection. Registration does **not** verify actual slicer compatibility or permit execution. When a draft selects a profile, its owner, engine, version, kind and name must all match.
+
+The separate `slicer_worker/runner.py` prototype uses fixed, bounded files and a hard timeout for a Prusa CLI invocation, with post-processing disabled and raw engine logs suppressed. A dedicated GitHub Actions workflow runs its Python contract tests. It is not connected to the web app or Celery and must **not** be used on an unisolated host with untrusted input.
+
+**Engine version research (5 November 2026):** PrusaSlicer 2.9.7 is the preferred *candidate* because upstream published security fixes on 2 November; the Debian trixie package is still older. Neither source nor runtime has been vetted as a redistributable, pinned sandbox image. Do not use a mutable latest tag or silently fall back to the distro package.
+
+**Missing before real execution:** separately installable restricted container, version+digest verified engine, admin-approved native profile inventory, safe per-job staging, authentication/queue dispatch, output validation/import to private G-code assets and end-to-end slicer UI/acceptance tests. No printer action or physical spool deduction is coupled to slicing.
+
 ## Safety and release gates
 
 1. Verify service isolation and no untrusted model/profile can escape a job sandbox, access the network/secret mounts or run arbitrary CLI flags.
