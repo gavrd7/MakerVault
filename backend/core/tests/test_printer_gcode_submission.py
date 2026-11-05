@@ -324,6 +324,30 @@ class NativeGcodeAdapterTests(SimpleTestCase):
             runner.assert_not_called()
 
     @patch("core.printer_gcode_submission.PrinterConnection.objects.filter")
+    def test_one_used_slicer_tool_maps_without_assigning_three_unused_profiles(self, filtered):
+        moon = connection("moonraker")
+        moon.printer = SimpleNamespace(model="K2", manufacturer="Creality", catalog_model=None)
+        moon.printer_id = "printer-one"
+        native = connection("creality_local")
+        native.last_snapshot["source_metadata"] = {"cfs_connected": True}
+        native.last_snapshot["materials"] = [{
+            "system": "creality_cfs", "unit_index": 0, "slot_index": 0,
+            "material": "PLA", "color_hex": "#000000",
+        }]
+        filtered.return_value.order_by.return_value = [native]
+        mapping = _mapped_cfs_entries(moon, [
+            {"tool_index": 2, "material": "PLA", "color_hex": "#ffffff"}
+        ], [{"tool_index": 2, "slot_label": "1A"}])
+        self.assertEqual(mapping, [{
+            "id": "T1C", "type": "PLA", "color": "#000000",
+            "boxId": 1, "materialId": 0,
+        }])
+        with self.assertRaises(GcodeSubmissionError):
+            _mapped_cfs_entries(moon, [
+                {"tool_index": 2, "material": "PETG"}
+            ], [{"tool_index": 2, "slot_label": "1A"}])
+
+    @patch("core.printer_gcode_submission.PrinterConnection.objects.filter")
     @patch("core.printer_gcode_submission._verify_moonraker_upload")
     def test_native_creality_upload_uses_same_printer_moonraker_verification(self, verify, filtered):
         native = connection("creality_local")
