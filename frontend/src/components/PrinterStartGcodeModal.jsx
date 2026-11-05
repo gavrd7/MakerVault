@@ -314,7 +314,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
               <small role="status">{!selected ? "No CFS slot selected." : !requirement.material ? "Material unknown — cannot check compatibility." : !materialMatch ? "Material mismatch — do not print using this selection." : colourMatch ? "Material and colour match the slicer metadata (advisory only)." : "Material matches, but colour differs or is unknown."}</small>
             </div>;
           })}
-          {!selectedAnalysis?.complete && <p role="status">Slicer metadata is incomplete. Check the intended material and colour carefully; mapped printing requires a known material type for every tool.</p>}
+          {!selectedAnalysis?.used_complete && <p role="status">Slicer metadata for at least one used filament is incomplete. Check the intended material and colour carefully; mapped printing requires a known material type for every tool.</p>}
         </> : <div>
           <p>{usageUnknown ? "MakerVault cannot confirm which filament profiles are actually used. Unverified overrides are disabled; the original slicer mapping remains available where supported." : "No depositing filament requirements could be identified. You can upload without printing, or use the original slicer mapping where supported."}</p>
           {selectedAnalysis && <details>
