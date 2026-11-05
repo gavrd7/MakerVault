@@ -372,6 +372,68 @@ class GcodePrinterContractTests(SimpleTestCase):
         self.assertEqual(rows[0]["size_bytes"], 42132)
         self.assertEqual(rows[1]["size_bytes"], 2048)
 
+    def test_k1_archived_retgcodefileinfo2_shape_and_path_authority(self):
+        # Reduced fixture from the K1 1.3.5.22 web-server.log; no private
+        # identifiers or full diagnostic payloads are stored in the repository.
+        packet = {"retGcodeFileInfo2": [
+            {"custom_types": 1, "type": 8, "name": "sample_PLA_6m42s.gcode",
+             "path": "/usr/data/printer_data/gcodes/sample_PLA_6m42s.gcode",
+             "file_size": 166268, "create_time": 1791677919,
+             "material": "PLA", "software": "OrcaSlicer"},
+            {"name": "benign.gcode", "path": "/etc/unsafe.gcode",
+             "file_size": 512},
+            {"name": "unknown.gcode", "path": "../escape.gcode",
+             "file_size": 100},
+            {"name": "invalid-size.gcode",
+             "path": "/usr/data/printer_data/gcodes/invalid-size.gcode",
+             "file_size": -2},
+        ]}
+        rows = _parse_file_list(packet)
+        self.assertEqual([item["path"] for item in rows],
+                         ["sample_PLA_6m42s.gcode", "invalid-size.gcode"])
+        self.assertEqual([item["size_bytes"] for item in rows], [166268, None])
+
+    @patch("core.creality_gcode.websockets.connect")
+    def test_k1_file_browser_uses_plain_websocket_and_ignores_telemetry(self, connect):
+        import asyncio
+        import json
+        from core.creality_gcode import _list_files
+        session = AsyncMock()
+        session.recv.side_effect = [
+            json.dumps({"nozzleTemp": "21.4", "bedTemp0": "20.2"}),
+            json.dumps({"ModeCode": "heart_beat"}),
+            json.dumps({"params": {"retGcodeFileInfo2": [{
+                "name": "existing.gcode",
+                "path": "/usr/data/printer_data/gcodes/existing.gcode",
+                "file_size": 4096,
+            }]}}),
+        ]
+        context = MagicMock()
+        context.__aenter__ = AsyncMock(return_value=session)
+        context.__aexit__ = AsyncMock(return_value=None)
+        connect.return_value = context
+        rows = asyncio.run(_list_files("ws://k1.local:9999", stock_k1=True))
+        self.assertEqual(rows[0]["path"], "existing.gcode")
+        self.assertEqual(rows[0]["size_bytes"], 4096)
+        self.assertNotIn("subprotocols", connect.call_args.kwargs)
+        self.assertEqual(json.loads(session.send.await_args_list[0].args[0]),
+                         {"method": "get", "params": {"reqGcodeFile": 1}})
+        self.assertEqual(session.send.await_args_list[1].args[0], "ok")
+
+    @patch("core.creality_gcode.websockets.connect")
+    def test_k2_file_browser_preserves_existing_subprotocol(self, connect):
+        import asyncio
+        import json
+        from core.creality_gcode import _list_files
+        session = AsyncMock()
+        session.recv.return_value = json.dumps({"retGcodeFileInfo2": []})
+        context = MagicMock()
+        context.__aenter__ = AsyncMock(return_value=session)
+        context.__aexit__ = AsyncMock(return_value=None)
+        connect.return_value = context
+        self.assertEqual(asyncio.run(_list_files("ws://k2.local:9999")), [])
+        self.assertEqual(connect.call_args.kwargs["subprotocols"], ["wsslicer"])
+
     def test_k1_legacy_packed_file_list_reply(self):
         packet = {"retGcodeFileInfo": {
             "totalNum": 3,
