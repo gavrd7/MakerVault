@@ -30,6 +30,8 @@ class PrinterStorageProfileTests(SimpleTestCase):
             ("bambu_local", "Bambu A1 Mini", "ftps_model_profile"),
             ("bambu_local", "Bambu H2D", "ftps_model_profile"),
             ("prusa", "Prusa MK4S", "prusalink_storage_api"),
+            ("prusa", "MK3.9S", "prusalink_storage_api"),
+            ("prusa", "Prusa Pro HT90", "requires_vendor_adapter"),
             ("prusa", "Prusa CORE One", "prusalink_storage_api"),
             ("anycubic", "Kobra 3", "anycubic_upload_api"),
             ("flashforge", "FlashForge Adventurer 5M", "flashforge_model_api"),
