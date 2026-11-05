@@ -1136,6 +1136,44 @@ class PrinterGcodeSubmission(TimeStampedModel):
 
 
 
+
+class SlicerProfile(TimeStampedModel):
+    """A preserved engine-native preset, never executed or trusted on import."""
+
+    KINDS = [("printer", "Printer"), ("filament", "Filament"), ("process", "Process")]
+    STATES = [("candidate", "Not verified"), ("verified", "Verified for worker")]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="slicer_profiles"
+    )
+    engine = models.CharField(max_length=32)
+    engine_version = models.CharField(max_length=80)
+    kind = models.CharField(max_length=16, choices=KINDS)
+    name = models.CharField(max_length=200)
+    file_asset = models.ForeignKey(
+        FileAsset, on_delete=models.PROTECT, related_name="slicer_profile_links"
+    )
+    content_sha256 = models.CharField(max_length=64)
+    status = models.CharField(max_length=16, choices=STATES, default="candidate")
+    provenance = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        ordering = ["engine", "kind", "name", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["owner", "engine", "engine_version", "kind", "name"],
+                name="unique_slicer_profile_identity",
+            ),
+        ]
+
+    def clean(self):
+        if self.file_asset_id and self.owner_id and self.file_asset.owner_id != self.owner_id:
+            raise ValidationError({"file_asset": "Slicer profile file belongs to another account."})
+        if self.status not in dict(self.STATES):
+            raise ValidationError({"status": "Unknown profile verification status."})
+
+
+
 class SliceJob(TimeStampedModel):
     """Private slicer job specification; this model never executes anything.
 
