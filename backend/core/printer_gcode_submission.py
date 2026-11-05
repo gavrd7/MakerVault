@@ -540,6 +540,20 @@ def availability(connection):
     moonraker_for_sliced = (connection if adapter == "moonraker" else
                              _same_printer_moonraker(connection, require_controls=True)
                              if adapter == "creality_local" and cfs["applicable"] and cfs["connected"] is True else None)
+    # Capability and instantaneous readiness are separate: the UI should
+    # not make a supported original-mapping option disappear while printing.
+    supports_original_mapping = bool(
+        adapter == "moonraker" or (
+            adapter == "creality_local" and
+            PrinterConnection.objects.filter(
+                printer_id=connection.printer_id, adapter="moonraker",
+                enabled=True, controls_enabled=True,
+            ).exists()
+        )
+    )
+    supports_original_mapping = bool(
+        supports_original_mapping and cfs["applicable"] and cfs["connected"] is True
+    )
     sliced_mapping_candidate = bool(
         moonraker_for_sliced is not None and online and authorised
         and cfs["applicable"] and cfs["verified"] and cfs["connected"] is True
@@ -563,6 +577,7 @@ def availability(connection):
         ),
         "enabled": authorised,
         "cfs": cfs,
+        "supports_original_mapping": supports_original_mapping,
         "can_start_sliced_mapping": sliced_mapping_candidate,
         "can_start_mapped_cfs": mapped_mapping_candidate,
         "can_submit_from_printer": adapter in BROWSE_ADAPTERS and start_supported,
