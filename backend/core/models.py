@@ -1135,6 +1135,67 @@ class PrinterGcodeSubmission(TimeStampedModel):
         ordering = ["-created_at"]
 
 
+
+class SliceJob(TimeStampedModel):
+    """Private slicer job specification; this model never executes anything.
+
+    Creation stores a draft and does not start a queue worker or printer.
+    Worker execution is a separately gated milestone.
+    """
+
+    STATES = [
+        ("draft", "Draft"), ("queued", "Queued"), ("running", "Running"),
+        ("completed", "Completed"), ("failed", "Failed"),
+        ("cancelled", "Cancelled"), ("stale", "Stale"),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="slicing_jobs"
+    )
+    input_asset = models.ForeignKey(
+        FileAsset, on_delete=models.PROTECT, related_name="slice_inputs"
+    )
+    output_asset = models.ForeignKey(
+        FileAsset, on_delete=models.SET_NULL, null=True, blank=True, related_name="slice_outputs"
+    )
+    printer = models.ForeignKey(
+        "Printer", on_delete=models.PROTECT, related_name="slice_jobs"
+    )
+    spool = models.ForeignKey(
+        "Spool", on_delete=models.PROTECT, null=True, blank=True, related_name="slice_jobs"
+    )
+    engine = models.CharField(max_length=32)
+    engine_version = models.CharField(max_length=80)
+    printer_preset = models.CharField(max_length=200)
+    filament_preset = models.CharField(max_length=200)
+    process_preset = models.CharField(max_length=200)
+    nozzle_mm = models.DecimalField(max_digits=5, decimal_places=2)
+    plate = models.CharField(max_length=80, default="default")
+    settings = models.JSONField(default=dict, blank=True)
+    status = models.CharField(max_length=16, choices=STATES, default="draft", db_index=True)
+    progress = models.PositiveSmallIntegerField(default=0)
+    message = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["owner", "status"], name="slice_owner_status_idx")]
+
+    def clean(self):
+        if self.input_asset_id and self.owner_id and self.input_asset.owner_id != self.owner_id:
+            raise ValidationError({"input_asset": "Input asset must belong to the job owner."})
+        if self.output_asset_id and self.owner_id and self.output_asset.owner_id != self.owner_id:
+            raise ValidationError({"output_asset": "Output asset must belong to the job owner."})
+        if self.printer_id and self.owner_id and self.printer.owner_id != self.owner_id:
+            raise ValidationError({"printer": "Printer must belong to the job owner."})
+        if self.spool_id and self.owner_id and self.spool.owner_id != self.owner_id:
+            raise ValidationError({"spool": "Spool must belong to the job owner."})
+        if self.input_asset_id and self.input_asset.category not in {"mesh", "slicer"}:
+            raise ValidationError({"input_asset": "Select a model or slicer project file."})
+        if self.status == "draft" and self.output_asset_id:
+            raise ValidationError({"output_asset": "Draft slice jobs cannot have output G-code."})
+
+
+
 class PrinterFilamentSlot(TimeStampedModel):
     SYSTEMS = [
         ("creality_cfs", "Creality CFS"),
