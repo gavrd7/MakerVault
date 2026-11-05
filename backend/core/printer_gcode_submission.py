@@ -73,37 +73,8 @@ def _get_json(connection, path, params=None):
     return _json_response(response)
 
 
-def list_printer_gcodes(connection):
-    if connection.adapter == "bambu_local":
-        from .bambu_storage import BambuStorageError, list_bambu_storage
-        try:
-            return list_bambu_storage(connection)
-        except BambuStorageError as exc:
-            raise GcodeSubmissionError(str(exc), status=409) from exc
-    if connection.adapter == "creality_local":
-        from .creality_gcode import CrealityGcodeError, list_files
-        # Use the proven same-printer storage API when it is already
-        # configured. This is read-only: native upload remains independent.
-        alternatives = PrinterConnection.objects.filter(
-            printer_id=connection.printer_id, adapter="moonraker", enabled=True,
-        ).order_by("-last_seen_at")
-        for alternative in alternatives:
-            if _online(alternative):
-                return list_printer_gcodes(alternative)
-        try:
-            return list_files(connection)
-        except CrealityGcodeError as exc:
-            raise GcodeSubmissionError(str(exc), 409) from exc
-    if connection.adapter == "flashforge":
-        from .flashforge_gcode import FlashForgeFileError, list_files
-        try:
-            return list_files(connection)
-        except FlashForgeFileError as exc:
-            raise GcodeSubmissionError(str(exc), 502) from exc
-    if connection.adapter == "octoprint":
-        return _octoprint_files(connection)
-    if connection.adapter == "prusa":
-        return _prusalink_files(connection)
+def _moonraker_gcode_files(connection):
+    """Query a compatible Moonraker API; no filesystem assumptions."""
     rows = _get_json(connection, "/server/files/list", {"root": "gcodes"})
     if not isinstance(rows, list):
         raise GcodeSubmissionError("Printer file list has an unexpected format.", 502)
@@ -116,11 +87,97 @@ def list_printer_gcodes(connection):
             continue
         result.append({
             "path": path,
-            "size_bytes": item.get("size") if isinstance(item.get("size"), int) else None,
+            "size_bytes": item.get("size") if type(item.get("size")) is int and item["size"] >= 0 else None,
             "modified": item.get("modified"),
             "permissions": item.get("permissions") or "",
         })
     return result
+
+
+def _creality_native_gcode_files(connection):
+    from .creality_gcode import CrealityGcodeError, list_files
+    try:
+        return list_files(connection)
+    except CrealityGcodeError as exc:
+        raise GcodeSubmissionError(str(exc), 409) from exc
+
+
+def _bambu_gcode_files(connection):
+    from .bambu_storage import BambuStorageError, list_bambu_storage
+    try:
+        return list_bambu_storage(connection)
+    except BambuStorageError as exc:
+        raise GcodeSubmissionError(str(exc), 409) from exc
+
+
+def _flashforge_gcode_files(connection):
+    from .flashforge_gcode import FlashForgeFileError, list_files
+    try:
+        return list_files(connection)
+    except FlashForgeFileError as exc:
+        raise GcodeSubmissionError(str(exc), 502) from exc
+
+
+def _listing_handler(adapter):
+    """Return the explicit, implemented file API for this connection type.
+
+    Several manufacturer-branded adapters expose Moonraker's API; this is a
+    capability mapping, not a guess based on a printer name or IP address.
+    """
+    if adapter in MOONRAKER_ADAPTERS:
+        return _moonraker_gcode_files
+    return {
+        "creality_local": _creality_native_gcode_files,
+        "bambu_local": _bambu_gcode_files,
+        "flashforge": _flashforge_gcode_files,
+        "octoprint": _octoprint_files,
+        "prusa": _prusalink_files,
+    }.get(adapter)
+
+
+def _listing_candidates(connection):
+    """Enumerate verified file interfaces for this *same* physical printer.
+
+    A manually configured generic connection is optional. Its failure must
+    not suppress a working manufacturer-native file browser. Never try an
+    endpoint belonging to another printer or invent an HTTP path.
+    """
+    handler = _listing_handler(connection.adapter)
+    if handler is None:
+        raise GcodeSubmissionError("This printer connection has no supported file listing protocol.", 409)
+    candidates = []
+    if connection.adapter == "creality_local" and getattr(connection, "printer_id", None):
+        alternatives = PrinterConnection.objects.filter(
+            printer_id=connection.printer_id, adapter="moonraker", enabled=True,
+        ).order_by("-last_seen_at")
+        for alternative in alternatives:
+            if _online(alternative):
+                candidates.append((alternative, _moonraker_gcode_files))
+    candidates.append((connection, handler))
+    return candidates
+
+
+def list_printer_gcodes(connection):
+    """Standard provider-neutral file list with adapter-specific discovery.
+
+    Fail over only on a protocol failure, not on a legitimate empty list.
+    All candidates are explicitly configured connections for this printer.
+    Read-only calls never upload, start prints or modify printer storage.
+    """
+    errors = []
+    for candidate, browse in _listing_candidates(connection):
+        try:
+            return browse(candidate)
+        except GcodeSubmissionError as exc:
+            errors.append(str(exc))
+            logger.warning("Printer file listing via %s failed; trying next configured interface", candidate.adapter)
+    if errors:
+        # Avoid exposing credentials or private URLs from remote errors.
+        raise GcodeSubmissionError(
+            "No configured printer file-listing interface succeeded. "
+            + " | ".join(errors[:2]), 502
+        )
+    raise GcodeSubmissionError("No available printer file-listing interface.", 409)
 
 
 def _printer_endpoint(connection):
