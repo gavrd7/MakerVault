@@ -122,6 +122,8 @@ def _used_extrusion_tools(text, *, declared_count, truncated=False):
     e_position = 0.0
     ambiguous = False
     detected_deposition = False
+    unassigned_depositions = 0
+    seen_tools = set()
     for raw in text.splitlines():
         if len(raw) > MAX_LINE:
             ambiguous = True
@@ -133,6 +135,7 @@ def _used_extrusion_tools(text, *, declared_count, truncated=False):
         if match:
             active = int(match.group(1))
             seen_tool = True
+            seen_tools.add(active)
             if active >= max(1, declared_count):
                 ambiguous = True
             continue
@@ -165,6 +168,7 @@ def _used_extrusion_tools(text, *, declared_count, truncated=False):
                     extruding.add(0)
                 else:
                     ambiguous = True
+                    unassigned_depositions += 1
             else:
                 extruding.add(active)
         elif code in {"G10", "G11", "M163", "M164", "M567"}:
@@ -172,6 +176,9 @@ def _used_extrusion_tools(text, *, declared_count, truncated=False):
             ambiguous = True
     known = bool(extruding) and detected_deposition and not ambiguous and not truncated
     return {"used_tool_indices": sorted(extruding) if known else [],
+            "toolpath_evidence": {"selected_tools": sorted(seen_tools),
+                                  "extruding_tools": sorted(extruding),
+                                  "unassigned_extrusions": unassigned_depositions},
             "usage_source": "toolpath_extrusion" if known else "unknown",
             "usage_confident": known,
             "usage_reason": ("" if known else
@@ -224,7 +231,7 @@ def _filament_requirements(text, *, truncated):
                           "usage_source": "conflicting_evidence",
                           "usage_reason": "Toolpath and slicer filament consumption disagree."}
         else:
-            tool_usage = declared_usage
+            tool_usage = {**declared_usage, "toolpath_evidence": tool_usage.get("toolpath_evidence", {})}
     used = [item for item in requirements if item["tool_index"] in tool_usage["used_tool_indices"]]
     complete = bool(requirements) and all(item["complete"] for item in requirements) and not truncated
     return {
