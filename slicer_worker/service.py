@@ -125,7 +125,10 @@ class Handler(BaseHTTPRequestHandler):
         if not 0 < length <= MAX_REQUEST_BYTES:
             return self._json(413, {"error": "Invalid or oversized request."})
         try:
+            self.connection.settimeout(30)
             request = json.loads(self.rfile.read(length))
+            if not isinstance(request, dict):
+                raise WorkerError("Job request must be a JSON object.")
             if request.get("engine_version") != current["version"]:
                 raise WorkerError("Requested engine version is unavailable.")
             files = _decode_payload(request)
