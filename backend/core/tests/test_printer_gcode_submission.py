@@ -177,6 +177,28 @@ class GcodePrinterContractTests(SimpleTestCase):
         with self.assertRaisesRegex(GcodeSubmissionError, "temporarily disabled"):
             _require_action_ready(k1, "print", k1_test_acknowledged=True)
 
+    def test_k1_start_blockers_explain_stale_or_busy_telemetry(self):
+        from datetime import timedelta
+        from core.printer_gcode_submission import availability
+        k1 = connection("creality_local")
+        k1.printer = SimpleNamespace(model="K1", catalog_model=None)
+        k1.config = {**k1.config, "k1_native_start_test_enabled": True}
+        k1.last_seen_at = timezone.now() - timedelta(minutes=3)
+        state = availability(k1)
+        self.assertFalse(state["can_start"])
+        self.assertTrue(any("older than 60 seconds" in reason for reason in state["k1_start_blockers"]))
+        k1.last_seen_at = timezone.now()
+        k1.last_snapshot = {
+            "online": True, "state": "printing",
+            "source_metadata": {"cfs_connected": False},
+        }
+        state = availability(k1)
+        self.assertFalse(state["can_start"])
+        self.assertTrue(any("not confirmed idle" in reason for reason in state["k1_start_blockers"]))
+        k1.last_snapshot["state"] = "idle"
+        self.assertTrue(availability(k1)["can_start"])
+        self.assertEqual(availability(k1)["k1_start_blockers"], [])
+
     def test_k2_cannot_enable_k1_native_test_flow(self):
         from core.printer_gcode_submission import availability
         k2 = connection("creality_local")
