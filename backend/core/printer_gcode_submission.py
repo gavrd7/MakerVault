@@ -310,6 +310,67 @@ def _online(connection):
     )
 
 
+def creality_cfs_context(connection):
+    """Share the same owner's fresh native Creality CFS snapshot with every transport.
+
+    A Moonraker source must not bypass CFS safety simply because Moonraker does
+    not report the filament changer. Unknown or stale native state fails closed
+    for CFS-equipped K2 printers, without restricting upload-only operations.
+    """
+    printer = connection.printer
+    model_name = str(getattr(printer, "model", "") or "")
+    manufacturer = str(getattr(printer, "manufacturer", "") or "")
+    catalog = getattr(printer, "catalog_model", None)
+    if catalog:
+        model_name += " " + str(getattr(catalog, "name", "") or "")
+    if not ("creality" in manufacturer.lower() or connection.adapter == "creality_local"):
+        return {"applicable": False, "connected": False, "verified": False, "slots": []}
+    if not any(word in model_name.lower() for word in ("k2", "k1")):
+        return {"applicable": False, "connected": False, "verified": False, "slots": []}
+    sources = list(PrinterConnection.objects.filter(
+        printer_id=connection.printer_id, adapter="creality_local", enabled=True
+    ).order_by("-last_seen_at"))
+    if not sources:
+        return {"applicable": True, "connected": None, "verified": False, "slots": [],
+                "reason": "No native Creality source is configured to verify CFS state."}
+    source = sources[0]
+    snap = source.last_snapshot or {}
+    metadata = snap.get("source_metadata") or {}
+    fresh = bool(source.status == "connected" and source.last_seen_at and
+                 source.last_seen_at >= timezone.now() - timedelta(seconds=60)
+                 and snap.get("online") is True)
+    connected = metadata.get("cfs_connected") if fresh else None
+    raw = snap.get("materials") or []
+    slots = []
+    if connected is True:
+        for material in raw:
+            if not isinstance(material, dict) or material.get("system") != "creality_cfs":
+                continue
+            try:
+                box = int(material["unit_index"]) + 1
+                slot = int(material["slot_index"])
+            except (ValueError, TypeError, KeyError):
+                continue
+            if not 1 <= box <= 4 or not 0 <= slot <= 3:
+                continue
+            slots.append({
+                "box_id": box, "slot_id": slot,
+                "label": f"{box}{'ABCD'[slot]}",
+                "material": str(material.get("material") or "")[:80],
+                "product_name": str(material.get("product_name") or "")[:120],
+                "vendor": str(material.get("vendor") or "")[:80],
+                "color_hex": str(material.get("color_hex") or "")[:24],
+                "selected": material.get("selected") is True,
+            })
+    return {
+        "applicable": True, "connected": connected, "verified": fresh,
+        "slots": slots,
+        "reason": ("CFS state is not fresh or is unavailable." if not fresh else
+                   "CFS filament mapping is not yet validated for remote print-start." if connected else
+                   "No CFS detected in fresh native telemetry."),
+    }
+
+
 def availability(connection):
     adapter = connection.adapter
     native_opt_in = (connection.config or {}).get("gcode_submission_enabled") is True
@@ -319,6 +380,8 @@ def availability(connection):
     upload_supported = adapter in FILE_ADAPTERS or adapter == "creality_local" or simple_flashforge
     start_supported = adapter in FILE_ADAPTERS or simple_flashforge or adapter == "creality_local"
     online = bool(_online(connection))
+    cfs = creality_cfs_context(connection)
+    cfs_blocks_start = bool(cfs["applicable"] and (cfs["connected"] is not False or not cfs["verified"]))
     return {
         "can_browse": adapter in BROWSE_ADAPTERS,
         "browse_requires_pin": adapter == "bambu_local" and not bool((connection.config or {}).get("bambu_ftps_cert_sha256")),
@@ -327,13 +390,14 @@ def availability(connection):
         "online": online,
         "can_upload": bool(upload_supported and online and authorised),
         "can_start": bool(
-            start_supported and online and authorised
+            start_supported and online and authorised and not cfs_blocks_start
             and (adapter != "creality_local" or (connection.config or {}).get("creality_single_spool_start_enabled") is True)
             and (adapter != "creality_local" or not (connection.last_snapshot or {}).get("source_metadata", {}).get("cfs_connected"))
             and (connection.last_snapshot or {}).get("state") == "idle"
             and not (connection.last_snapshot or {}).get("source_metadata", {}).get("power_loss_recovery")
         ),
         "enabled": authorised,
+        "cfs": cfs,
         "can_submit_from_printer": adapter in BROWSE_ADAPTERS and start_supported,
         "requires_opt_in": adapter in {"prusa", "flashforge", "creality_local"} and not native_opt_in,
         "requires_start_opt_in": adapter == "creality_local" and (connection.config or {}).get("creality_single_spool_start_enabled") is not True,
