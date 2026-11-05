@@ -660,6 +660,91 @@ def _require_action_ready(connection, action, *, use_sliced_cfs=False, use_mappe
         raise GcodeSubmissionError("Printer must be freshly verified idle with a supported CFS print mode before starting a job.")
 
 
+# The stock Creality start command is fire-and-forget. Only telemetry about
+# the *requested file* can upgrade an uncertain receipt; arbitrary printer
+# activity or the successful WebSocket send is never enough.
+CREALITY_START_CONFIRMATION = "Awaiting native Creality start verification"
+
+
+def _creality_started_file(snapshot, expected_path):
+    """Return True only for a freshly observed active job on the exact file."""
+    if not isinstance(snapshot, dict) or snapshot.get("online") is not True:
+        return False
+    if snapshot.get("state") not in {"printing", "paused"}:
+        return False
+    job = snapshot.get("job") or {}
+    name = str(job.get("file_name") or "").replace("\\\\", "/").rsplit("/", 1)[-1]
+    expected = str(expected_path or "").replace("\\\\", "/").rsplit("/", 1)[-1]
+    if not expected or not name or name != expected:
+        return False
+    meta = snapshot.get("source_metadata") or {}
+    # 1 is the native actively printing state. A non-native, uncorrelated
+    # "processing" or stale filename must not count as a confirmed start.
+    return meta.get("raw_state") in (1, "1", 5, "5")
+
+
+def _creality_start_receipt_message(remote_path):
+    return (
+        CREALITY_START_CONFIRMATION
+        + ": "
+        + remote_path
+        + ". Command dispatched without application-level acknowledgement. "
+          "Waiting for fresh printer telemetry; it will not be resent."
+    )
+
+
+def reconcile_creality_start_receipts(connection, snapshot):
+    """Upgrade *eligible* uncertain native-start receipts from new telemetry.
+
+    Runs from normal connection polling, so delayed startup does not require a
+    second user action. Never turns unrelated errors or uploads into success.
+    """
+    if getattr(connection, "adapter", None) != "creality_local":
+        return 0
+    if not (isinstance(snapshot, dict) and snapshot.get("online") is True):
+        return 0
+    try:
+        observed_at = timezone.datetime.fromisoformat(snapshot.get("captured_at") or "")
+        if timezone.is_naive(observed_at):
+            return 0
+    except (ValueError, TypeError):
+        return 0
+    active_name = str((snapshot.get("job") or {}).get("file_name") or "")
+    if not active_name:
+        return 0
+    # Small bounded query; no cross-printer matching or old job resurrection.
+    candidates = PrinterGcodeSubmission.objects.filter(
+        connection=connection,
+        action="print",
+        status="unknown",
+        created_at__gte=timezone.now() - timedelta(minutes=10),
+        created_at__lte=observed_at,
+        message__startswith=CREALITY_START_CONFIRMATION,
+    ).order_by("-created_at")[:5]
+    for row in candidates:
+        if _creality_started_file(snapshot, row.remote_path):
+            updated = PrinterGcodeSubmission.objects.filter(
+                pk=row.pk, status="unknown", message__startswith=CREALITY_START_CONFIRMATION,
+            ).update(
+                status="started",
+                message="Print start confirmed by live Creality telemetry for " + row.remote_path + ".",
+                updated_at=timezone.now(),
+            )
+            return updated
+    return 0
+
+
+def _verify_creality_start_now(connection, remote_path):
+    """One bounded read-only poll. A slow start remains eligible for later polls."""
+    from .printer_connectivity import poll_connection
+    try:
+        snapshot = poll_connection(connection)
+    except Exception:
+        logger.info("Creality start could not be verified immediately; awaiting later telemetry")
+        return False
+    return _creality_started_file(snapshot, remote_path)
+
+
 def _receipt(row):
     return {
         "request_id": str(row.pk), "status": row.status,
@@ -864,6 +949,10 @@ def submit(connection, user, payload):
                     connection.refresh_from_db()
                 mapping_entries = _mapped_cfs_entries(connection, (report.get("filaments") or {}).get("used_requirements"), payload.get("cfs_mapping"))
             progress("Sending the explicitly confirmed print-start command.")
+            # Reconciliation only accepts an explicit successful dispatch. This
+            # marker is persisted after dispatch and before polling starts.
+            native_unacknowledged = connection.adapter == "creality_local" and not use_sliced_cfs
+
             dispatch_attempted = True
             try:
                 if use_mapped_cfs:
@@ -919,10 +1008,23 @@ def submit(connection, user, payload):
                 raise GcodeSubmissionError("Start-print outcome is uncertain. Inspect printer before trying again.", 502) from exc
             if (False if use_mapped_cfs or connection.adapter == "flashforge" or (connection.adapter == "creality_local" and not use_sliced_cfs) else response.status_code != 204 if connection.adapter in {"octoprint", "prusa"} else _json_response(response) != "ok"):
                 raise GcodeSubmissionError("Printer did not confirm starting the print. Verify its live state.", 502)
-        row.status = "unknown" if action == "print" and (use_mapped_cfs or (connection.adapter == "creality_local" and not use_sliced_cfs)) else "started" if action == "print" else "uploaded"
-        row.message = ("K2 CFS mapping and print-start commands dispatched, but not acknowledged. Verify the selected filament and printer state." if use_mapped_cfs and action == "print" else "Creality start command sent, but this protocol provides no acknowledgement. Verify the live printer before any follow-up." if action == "print" and connection.adapter == "creality_local" and not use_sliced_cfs else
-                       "Print-start accepted with original slicer mapping; MakerVault did not change any CFS slots. Verify filament at printer." if action == "print" and use_sliced_cfs else
-                       "Print start accepted by printer." if action == "print" else "Uploaded to printer without starting.")
+            if native_unacknowledged:
+                row.status = "unknown"
+                row.message = _creality_start_receipt_message(remote_path)
+                row.save(update_fields=["status", "message", "updated_at"])
+                # Do not retry the irreversible start. The read-only poll may
+                # immediately confirm it, otherwise future monitoring will.
+                if _verify_creality_start_now(connection, remote_path):
+                    row.refresh_from_db(fields=["status", "message"])
+        if action == "print" and native_unacknowledged:
+            # A background poll can have reconciled the receipt while the
+            # request was still in progress; never overwrite that outcome.
+            row.refresh_from_db(fields=["status", "message"])
+        else:
+            row.status = "started" if action == "print" else "uploaded"
+        if not (action == "print" and native_unacknowledged):
+            row.message = ("Print-start accepted with original slicer mapping; MakerVault did not change any CFS slots. Verify filament at printer." if action == "print" and use_sliced_cfs else
+                           "Print start accepted by printer." if action == "print" else "Uploaded to printer without starting.")
     except (FlashForgeFileError, CrealityGcodeError) as exc:
         row.status = "unknown"
         row.message = "Printer response was not fully verified. Inspect printer storage and live state before trying again."
