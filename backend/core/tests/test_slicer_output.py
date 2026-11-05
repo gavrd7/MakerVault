@@ -15,3 +15,39 @@ class SlicerOutputTests(SimpleTestCase):
         ):
             with self.subTest(body=body[:50]), self.assertRaises(SlicerOutputError):
                 inspect_generated_gcode(body)
+
+from django.contrib.auth import get_user_model
+from django.test import TestCase
+from core.models import FileAsset, Printer, SliceJob
+from core.slicer_output import store_generated_gcode
+
+
+class GeneratedSlicerFileTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.owner = user_model.objects.create_user(username="slice-output", password="test")
+        self.printer = Printer.objects.create(owner=self.owner, name="Printer", model="Generic")
+        self.input_asset = FileAsset.objects.create(
+            owner=self.owner, name="shape.stl", category="mesh",
+            metadata={"extension": ".stl", "original_name": "shape.stl"},
+        )
+        self.job = SliceJob.objects.create(
+            owner=self.owner, input_asset=self.input_asset, printer=self.printer,
+            engine="prusaslicer", engine_version="2.9.7",
+            printer_preset="Generic", filament_preset="PLA", process_preset="Normal",
+            nozzle_mm="0.40", status="running",
+        )
+
+    def test_successful_output_stays_in_private_gcode_and_no_print_submission(self):
+        from core.models import PrinterGcodeSubmission
+        before = PrinterGcodeSubmission.objects.count()
+        output = store_generated_gcode(self.job.pk, b"; generated\nG1 X1 Y1 E0.5\n")
+        self.job.refresh_from_db()
+        self.assertEqual(self.job.status, "completed")
+        self.assertEqual(self.job.output_asset_id, output.pk)
+        self.assertEqual(output.category, "gcode")
+        self.assertEqual(output.owner_id, self.owner.pk)
+        self.assertEqual(output.metadata["generated_by"], "makervault-slicer")
+        self.assertEqual(PrinterGcodeSubmission.objects.count(), before)
+        with self.assertRaises(SlicerOutputError):
+            store_generated_gcode(self.job.pk, b"G1 X2 Y2\n")
