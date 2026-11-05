@@ -14,7 +14,7 @@ from core.gcode_analysis import inspect_asset
 from core.printer_gcode_submission import (
     GcodeSubmissionError, _valid_path, availability,
     list_printer_gcodes, _octoprint_upload_receipt, _verify_moonraker_upload,
-    _verify_creality_upload, _require_action_ready, _mapped_cfs_entries,
+    _verify_creality_upload, _require_action_ready, _mapped_cfs_entries, _printer_transfer_name,
 )
 
 
@@ -30,6 +30,37 @@ def connection(adapter, *, enabled=True, status="connected", state="idle"):
 
 
 class GcodePrinterContractTests(SimpleTestCase):
+    def test_printer_transfer_name_preserves_original_before_suffix(self):
+        import uuid
+        token = uuid.UUID("c1609a3c-d200-4b12-aabb-112233445566")
+        self.assertEqual(_printer_transfer_name("ghost.gcode", token),
+                         "ghost-mv-c1609a3cd200.gcode")
+        self.assertEqual(_printer_transfer_name("my part.gcode", token),
+                         "my_part-mv-c1609a3cd200.gcode")
+        self.assertEqual(_printer_transfer_name("ghost.gcode", token),
+                         _printer_transfer_name("ghost.gcode", token))
+
+    @patch("core.printer_gcode_submission.PrinterConnection.objects.filter")
+    def test_native_k2_can_use_same_printer_moonraker_original_mapping(self, filtered):
+        native = connection("creality_local")
+        native.printer = SimpleNamespace(model="K2", catalog_model=None)
+        native.printer_id = "printer-one"
+        native.last_snapshot["source_metadata"] = {"cfs_connected": True}
+        native.last_snapshot["materials"] = [{
+            "system": "creality_cfs", "unit_index": 0, "slot_index": 2,
+            "material": "PLA", "color_hex": "#ffffff"
+        }]
+        moon = connection("moonraker")
+        moon.controls_enabled = True
+        filtered.return_value.order_by.return_value = [moon]
+        caps = availability(native)
+        self.assertTrue(caps["can_start_mapped_cfs"])
+        self.assertTrue(caps["can_start_sliced_mapping"])
+        self.assertFalse(caps["can_start"])
+        _require_action_ready(native, "print", use_sliced_cfs=True)
+        moon.controls_enabled = False
+        self.assertFalse(availability(native)["can_start_sliced_mapping"])
+
     def test_file_paths_cannot_escape_printer_storage(self):
         for invalid in ("../escape.gcode", "/etc/escape.gcode", "folder//file.gcode",
                         "folder/./file.gcode", "folder\\bad.gcode", "danger.txt", ""):
