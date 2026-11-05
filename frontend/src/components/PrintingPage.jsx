@@ -1291,10 +1291,6 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
   const available = selectableAdapters
     .filter(item => !configured.has(item.key))
     .sort((left, right) => Number(right.key === preferredAdapter) - Number(left.key === preferredAdapter));
-  const selectedAdapterInfo = available.find(item => item.key === form.adapter)
-    || selectableAdapters.find(item => item.key === form.adapter)
-    || null;
-
   useEffect(() => {
     if (!available.length) return;
     const nextAdapter = available.some(item => item.key === form.adapter)
