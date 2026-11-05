@@ -42,14 +42,14 @@ class GcodePrinterContractTests(SimpleTestCase):
             self.assertFalse(availability(connection(adapter))["can_start"])
         creality = availability(connection("creality_local"))
         self.assertTrue(creality["supported"])
-        self.assertFalse(creality["can_upload"])  # explicit opt-in needed
-        self.assertFalse(creality["can_start"])   # native start never enabled
+        self.assertTrue(creality["can_upload"])  # owner printer-control permissions are sufficient
+        self.assertFalse(creality["can_start"])   # CFS state unknown
 
-    def test_native_flashforge_and_creality_requires_opt_in(self):
+    def test_native_submission_uses_control_permissions_without_experimental_switches(self):
         ff = connection("flashforge")
         ff.printer = SimpleNamespace(model="Adventurer 5M Pro", catalog_model=None)
         self.assertTrue(availability(ff)["supported"])
-        self.assertFalse(availability(ff)["can_upload"])
+        self.assertTrue(availability(ff)["can_upload"])
         ff.config["gcode_submission_enabled"] = True
         self.assertTrue(availability(ff)["can_upload"])
         self.assertTrue(availability(ff)["can_start"])
@@ -69,13 +69,25 @@ class GcodePrinterContractTests(SimpleTestCase):
             self.assertTrue(caps["can_upload"], adapter)
         prusa = connection("prusa")
         self.assertTrue(availability(prusa)["supported"])
-        self.assertFalse(availability(prusa)["can_start"])
+        self.assertTrue(availability(prusa)["can_start"])
         prusa.config["gcode_submission_enabled"] = True
         self.assertTrue(availability(prusa)["can_start"])
 
     def test_stale_or_busy_printer_cannot_start(self):
         self.assertFalse(availability(connection("moonraker", state="printing"))["can_start"])
         self.assertFalse(availability(connection("octoprint", status="disconnected"))["can_start"])
+
+    @patch("core.printer_gcode_submission.PrinterConnection.objects.filter")
+    @patch("core.printer_gcode_submission.list_printer_gcodes")
+    def test_creality_browse_prefers_same_printer_moonraker(self, list_files, filtered):
+        native = connection("creality_local")
+        native.printer_id = "my-printer"
+        moon = connection("moonraker")
+        filtered.return_value.order_by.return_value = [moon]
+        list_files.return_value = [{"path": "ghost.gcode", "size_bytes": 123}]
+        result = list_printer_gcodes(native)
+        self.assertEqual(result[0]["path"], "ghost.gcode")
+        self.assertEqual(filtered.call_args.kwargs["printer_id"], "my-printer")
 
     @patch("core.printer_gcode_submission.requests.get")
     def test_octoprint_local_storage_listing(self, get):
