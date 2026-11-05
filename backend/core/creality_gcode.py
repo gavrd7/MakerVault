@@ -56,15 +56,16 @@ def upload_only(connection, asset, remote_name):
     return remote_name
 
 # Stock Creality OS uses an uncorrelated WebSocket protocol.
-FILE_LIST_FIELDS = ("gcodeFiles", "gcodeFile", "gcodeList", "gcodeFileList", "files", "fileList")
+FILE_LIST_FIELDS = ("retGcodeFileInfo2", "gcodeFiles", "gcodeFile", "gcodeList", "gcodeFileList", "files", "fileList")
 
 
 def _safe_printer_file(value):
     if not isinstance(value, str) or not value.lower().endswith(".gcode"):
         return None
     candidate = value.replace("\\\\", "/")
-    prefix = "/mnt/UDISK/printer_data/gcodes/"
-    if candidate.startswith(prefix):
+    prefixes = ("/mnt/UDISK/printer_data/gcodes/", "/usr/data/printer_data/gcodes/")
+    prefix = next((root for root in prefixes if candidate.startswith(root)), None)
+    if prefix:
         candidate = candidate[len(prefix):]
     elif candidate.startswith("gcodes/"):
         candidate = candidate[7:]
@@ -77,6 +78,42 @@ def _safe_printer_file(value):
     return candidate
 
 
+def _parse_legacy_gcode_file_info(value):
+    """Old K1 firmware returns a packed semicolon-separated fileInfo string.
+
+    Only parse the documented /usr/data and /mnt/UDISK G-code roots; never
+    turn arbitrary absolute paths or other fields into selectable print files.
+    """
+    if not isinstance(value, dict) or not isinstance(value.get("fileInfo"), str):
+        return None
+    packed = value["fileInfo"]
+    if len(packed) > 2_000_000:
+        return None
+    rows = []
+    for record in packed.split(";")[:1000]:
+        if not record.strip():
+            continue
+        fields = record.split(":")
+        if len(fields) < 3:
+            continue
+        root, name, size = fields[:3]
+        if root.rstrip("/") not in (
+            "/usr/data/printer_data/gcodes", "/mnt/UDISK/printer_data/gcodes"
+        ):
+            continue
+        safe = _safe_printer_file(name)
+        if not safe:
+            continue
+        try:
+            byte_size = int(size)
+        except (ValueError, TypeError):
+            byte_size = None
+        if byte_size is not None and byte_size < 0:
+            byte_size = None
+        rows.append({"path": safe, "size_bytes": byte_size, "modified": None, "permissions": "r"})
+    return rows
+
+
 def _parse_file_list(payload):
     if not isinstance(payload, dict):
         return None
@@ -84,6 +121,8 @@ def _parse_file_list(payload):
         payload = payload["params"]
     if isinstance(payload.get("data"), dict):
         payload = payload["data"]
+    if "retGcodeFileInfo" in payload:
+        return _parse_legacy_gcode_file_info(payload["retGcodeFileInfo"])
     for key in FILE_LIST_FIELDS:
         value = payload.get(key)
         if isinstance(value, dict):
@@ -97,7 +136,7 @@ def _parse_file_list(payload):
             ) if isinstance(item, dict) else None
             safe = _safe_printer_file(name)
             if safe:
-                rows.append({"path": safe, "size_bytes": item.get("size") if isinstance(item, dict) else None,
+                rows.append({"path": safe, "size_bytes": (item.get("file_size", item.get("size")) if isinstance(item, dict) else None),
                              "modified": None, "permissions": "r"})
         return rows
     return None
