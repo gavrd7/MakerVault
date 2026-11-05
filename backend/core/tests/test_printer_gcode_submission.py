@@ -136,6 +136,40 @@ class GcodePrinterContractTests(SimpleTestCase):
             self.assertEqual(sent["params"]["opGcodeFile"],
                              "printprt:/usr/data/printer_data/gcodes/ghost.gcode")
 
+    def test_k1_gcode_files_current_firmware_reply(self):
+        packet = {"params": {"retGcodeFileInfo2": [
+            {"name": "Benchy.gcode", "path": "/usr/data/printer_data/gcodes/Benchy.gcode",
+             "file_size": 42132, "material": "PLA"},
+            {"path": "/usr/data/printer_data/gcodes/folder/Part.gcode", "file_size": 2048},
+            {"path": "/usr/data/printer_data/gcodes/../bad.gcode"},
+            {"path": "/etc/passwd"},
+        ]}}
+        rows = _parse_file_list(packet)
+        self.assertEqual([row["path"] for row in rows], ["Benchy.gcode", "folder/Part.gcode"])
+        self.assertEqual(rows[0]["size_bytes"], 42132)
+        self.assertEqual(rows[1]["size_bytes"], 2048)
+
+    def test_k1_legacy_packed_file_list_reply(self):
+        packet = {"retGcodeFileInfo": {
+            "totalNum": 3,
+            "fileInfo": (
+                "/usr/data/printer_data/gcodes:Benchy.gcode:2048:0.2:123:900:/tmp/thumb;"
+                "/usr/data/printer_data/gcodes:folder/Part.gcode:1024:0.2:123:200:/tmp/thumb;"
+                "/etc:evil.gcode:1:0.2:123:200:/tmp/thumb;"
+            ),
+        }}
+        rows = _parse_file_list(packet)
+        self.assertEqual([row["path"] for row in rows], ["Benchy.gcode", "folder/Part.gcode"])
+        self.assertEqual([row["size_bytes"] for row in rows], [2048, 1024])
+        self.assertEqual(_parse_file_list({"params": {"retGcodeFileInfo2": []}}), [])
+
+    def test_k1_file_list_does_not_accept_foreign_absolute_paths(self):
+        for path in ("/etc/thing.gcode", "/home/root/thing.gcode",
+                     "/usr/data/printer_data/gcodes/../evil.gcode",
+                     "../evil.gcode"):
+            self.assertIsNone(_safe_printer_file(path), path)
+        self.assertEqual(_safe_printer_file("/usr/data/printer_data/gcodes/benchy.gcode"), "benchy.gcode")
+
     def test_file_paths_cannot_escape_printer_storage(self):
         for invalid in ("../escape.gcode", "/etc/escape.gcode", "folder//file.gcode",
                         "folder/./file.gcode", "folder\\bad.gcode", "danger.txt", ""):
