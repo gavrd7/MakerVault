@@ -400,7 +400,7 @@ def creality_cfs_context(connection):
 def availability(connection):
     adapter = connection.adapter
     native_opt_in = (connection.config or {}).get("gcode_submission_enabled") is True
-    authorised = connection.controls_enabled if adapter in (FILE_ADAPTERS - {"prusa"}) else native_opt_in
+    authorised = bool(connection.controls_enabled)  # owner/role permissions, not UI experiment switches
     from .flashforge_gcode import supports_simple_print
     simple_flashforge = adapter == "flashforge" and bool(getattr(connection, "printer", None)) and supports_simple_print(connection.printer)
     upload_supported = adapter in FILE_ADAPTERS or adapter == "creality_local" or simple_flashforge
@@ -425,7 +425,7 @@ def availability(connection):
         "can_upload": bool(upload_supported and online and authorised),
         "can_start": bool(
             start_supported and online and authorised and not cfs_blocks_start
-            and (adapter != "creality_local" or (connection.config or {}).get("creality_single_spool_start_enabled") is True)
+            
             and (adapter != "creality_local" or not (connection.last_snapshot or {}).get("source_metadata", {}).get("cfs_connected"))
             and (connection.last_snapshot or {}).get("state") == "idle"
             and not (connection.last_snapshot or {}).get("source_metadata", {}).get("power_loss_recovery")
@@ -434,8 +434,8 @@ def availability(connection):
         "cfs": cfs,
         "can_start_sliced_mapping": sliced_mapping_candidate,
         "can_submit_from_printer": adapter in BROWSE_ADAPTERS and start_supported,
-        "requires_opt_in": adapter in {"prusa", "flashforge", "creality_local"} and not native_opt_in,
-        "requires_start_opt_in": adapter == "creality_local" and (connection.config or {}).get("creality_single_spool_start_enabled") is not True,
+        "requires_opt_in": False,
+        "requires_start_opt_in": False,
     }
 
 
