@@ -21,6 +21,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   const [transferStage, setTransferStage] = useState("");
   const [bambuPin, setBambuPin] = useState("");
   const [filamentAnalysis, setFilamentAnalysis] = useState(null);
+  const [slicedPrintSetup, setSlicedPrintSetup] = useState(null);
   const [cfsAssignments, setCfsAssignments] = useState({});
   const [mappingMode, setMappingMode] = useState("mapped");
 
@@ -65,12 +66,13 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
     let active = true;
     setVerdict(null);
     setFilamentAnalysis(null);
+    setSlicedPrintSetup(null);
     setCfsAssignments({});
 
     if (source !== "makervault" || !assetId) return () => { active = false; };
     setChecking(true);
     apiFetch("/api/files/" + assetId + "/gcode/inspect/?printer_id=" + encodeURIComponent(printer.id))
-      .then(data => { if (active) { setVerdict(data.compatibility); setFilamentAnalysis(data.analysis?.filaments || null); } })
+      .then(data => { if (active) { setVerdict(data.compatibility); setFilamentAnalysis(data.analysis?.filaments || null); setSlicedPrintSetup(data.analysis?.print_setup || null); } })
       .catch(err => { if (active) setError(err.message); })
       .finally(() => { if (active) setChecking(false); });
     return () => { active = false; };
@@ -239,6 +241,13 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
         </select></label>
         <button type="button" disabled={busy} onClick={load}>Refresh printer storage</button>
       </>}
+    {source === "makervault" && assetId && <div className="settingsCallout">
+      <strong>Sliced print settings</strong>
+      <p><strong>Nozzle:</strong> {slicedPrintSetup?.nozzle_diameters_mm?.length
+        ? slicedPrintSetup.nozzle_diameters_mm.map(value => `${value} mm`).join(", ")
+        : "Not specified"} · <strong>Build plate:</strong> {slicedPrintSetup?.bed_type || "Not specified"}</p>
+      <small>These are the slicer's recorded settings, not detected printer hardware. They are provided for reference and never restrict submission.</small>
+    </div>}
     {cfs?.applicable && <div className="settingsCallout">
       <strong>Creality CFS · Live loaded filaments</strong>
       <p>{cfs.connected === true
