@@ -399,7 +399,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
           {(capabilities.k1_start_blockers || []).map((reason, index) => <p key={index}>{reason}</p>)}
           <button type="button" disabled={busy || checking} onClick={() => load(true)}>
             Refresh K1 readiness (read-only)
-          </button>}
+          </button>
         </div>}
         {source === "makervault" && <label>Operation<select value={action} onChange={e => setAction(e.target.value)}>
           <option value="upload">Upload only — do not print</option>
