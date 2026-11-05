@@ -1,8 +1,8 @@
 # MakerVault roadmap
 
-_Last reconciled: 3 October 2026_
+_Last reconciled: 5 November 2026_
 
-**Current stable release: v1.0.0. All mandatory v1 release gates are complete.**
+**Release development: v1.5.1 source plus G-code and native-printing milestone #155.** The v1.0 acceptance gates remain complete. This roadmap describes features in the coordinated upcoming application and guide release; it does not imply every adapter is hardware-verified.
 
 This roadmap separates delivered functionality, outstanding validation and future implementation. The [README](../README.md) describes the current application; [CHANGELOG.md](../CHANGELOG.md) records changes.
 
@@ -32,7 +32,7 @@ Implemented sources include Creality local, Moonraker/Klipper, OctoPrint, Bambu 
 
 K2 monitoring and K1 monitoring through both Creality and Moonraker have owner confirmation. Other manufacturer/model combinations remain experimental, even where fixtures and automated tests pass. Standard numbered extruders and active-tool reporting are implemented in the shared Moonraker adapter; this does not imply every toolchanger or multi-material system is supported.
 
-Creality, Moonraker and OctoPrint expose optional Pause, Resume and confirmed Cancel with per-source opt-in, ownership/editor checks and dispatch protections. Control hardware validation is separate from monitoring. Other adapters remain monitoring-only; Start print, movement, heating and raw G-code are outside the current control scope.
+Creality, Moonraker and OctoPrint expose optional Pause, Resume and confirmed Cancel with per-source opt-in, ownership/editor checks and dispatch protections. Control hardware validation is separate from monitoring. G-code start and upload are now available as separately permissioned, explicit workflows for implemented printer-file adapters; this does not enable arbitrary movement, heating or raw G-code commands. Unsupported adapters remain monitoring-only.
 
 ### Filament accounting and printed parts
 
@@ -47,11 +47,11 @@ Creality, Moonraker and OctoPrint expose optional Pause, Resume and confirmed Ca
 - Camera setup is separate from live telemetry and is offered as an optional second step after adding a live source.
 - Visible dashboard and 3D Printing cards automatically show the most recently configured enabled camera. Selection is stored on the server and changed in setup.
 - Normal viewing shows the feed and Fullscreen. Off-screen/hidden-page feeds pause; browser media requests are queued to support multiple visible previews.
-- HTTP snapshots and MJPEG-derived frames refresh at approximately 1 fps. Creality WebRTC media requires browser LAN/VPN reachability; MakerVault does not relay that media.
-- Discovery covers K1 direct/Helper Script presets, Moonraker, OctoPrint, applicable PrusaLink APIs and recognised Anycubic/FlashForge HTTP URLs.
+- HTTP snapshots and MJPEG-derived frames refresh at approximately 1 fps. Creality's native K1/K2 WebRTC is ingested by MakerVault's compatibility relay and served as authenticated same-origin HLS/fMP4. Browser LAN/VPN access to the MakerVault application is sufficient; the printer video port need not be exposed to the browser.
+- Discovery covers stock K1/K2 WebRTC and legacy K1 direct/Helper Script MJPEG presets, Moonraker, OctoPrint, applicable PrusaLink APIs and recognised Anycubic/FlashForge HTTP URLs.
 - Owner-scoped media access, same-host validation, DNS pinning, TLS/redirect controls, bounded reads and URL/token redaction are implemented.
 
-The owner confirmed K1/K2 playback and accepted the compact layout on 2 October 2026. This does not close every firmware, route, reconnect, security or browser check. Those remain in [hardware validation issue #37](https://github.com/gavrd7/MakerVault/issues/37).
+The owner confirmed simultaneous stock K1/K2 same-origin WebRTC previews on 5 November 2026 and accepted the compact layout. This does not close every firmware, route, reconnect, security or browser check. Those remain in [hardware validation issue #37](https://github.com/gavrd7/MakerVault/issues/37).
 
 ## v1.0 — released
 
@@ -72,6 +72,17 @@ A representative real-installation restore on a separate host passed on 3 Octobe
 Supported deployment guidance centres on the supplied Linux Docker Compose stack: application/worker, PostgreSQL and Redis. Broader NAS/ARM/desktop compatibility and minimum resource claims need evidence before being advertised.
 
 Experimental adapters may remain explicitly experimental at v1.0. Absence of development hardware does not justify claiming full support or blocking unrelated stable functionality indefinitely.
+
+## G-code library and explicit printer submission — delivered in coordinated release
+
+- Owner-scoped plain-text G-code assets in Files and Model Library, bounded code inspection, XY toolpath sample visualisation and save-as-new-version editing; G-code can link to a project and model revision.
+- **3D Printing** includes a shared G-code library and per-printer **Start print / G-code** workflow: save a new upload, choose an existing MakerVault file, or browse files already stored on a printer. Upload-only never starts a print. Start requires separate confirmation and live printer readiness.
+- Native K1/K2 LAN G-code file handling, generic Moonraker and OctoPrint storage/start, and experimental PrusaLink/FlashForge routes are implemented with per-adapter checks. Bambu is read-only FTPS browsing with explicit pinned certificate; proprietary upload/start remains disabled. Other manufacturer protocols stay unsupported until verified.
+- K1 native file discovery and print start were observed on clean stock firmware, after modified K1 firmware repeatedly rebooted using both MakerVault and the printer itself. This isolates an environment-dependent printer issue but is not a universal firmware compatibility guarantee. K2 native upload and Moonraker start are physically tested; proprietary K2 mapped CFS start needs controlled verification.
+- K1/K2 native cameras use the same MakerVault WebRTC/HLS relay. Older K1 Helper Script MJPEG presets remain available. One-shot print journal, state rechecks, unknown-outcome handling, owner permissions and model-identity mismatch checks apply.
+- **Not delivered:** self-hosted slicing engine, arbitrary G-code execution, automatic spool deduction, binary BGCODE text tooling or universal firmware/printer coverage.
+
+See [G-code implementation and testing](development/gcode-library-and-print-submission.md) and [printer storage routing](development/printer-storage-routing.md).
 
 ## Outstanding validation
 
