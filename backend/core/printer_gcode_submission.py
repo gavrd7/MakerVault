@@ -651,6 +651,7 @@ def availability(connection):
     return {
         "can_browse": adapter in BROWSE_ADAPTERS,
         "k1_native_test_enabled": _k1_native_test_enabled(connection),
+        "k1_native_model": _k1_native_start_suspended(connection),
         "browse_requires_pin": adapter == "bambu_local" and not bool((connection.config or {}).get("bambu_ftps_cert_sha256")),
         "experimental": adapter in (BROWSE_ADAPTERS | UPLOAD_ADAPTERS),
         "supported": upload_supported or start_supported,
