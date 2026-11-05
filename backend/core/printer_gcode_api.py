@@ -33,6 +33,19 @@ def files(request, printer_id, connection_id):
         except GcodeSubmissionError as exc:
             return JsonResponse({"error": str(exc), "inspection_available": False}, status=exc.status)
         return JsonResponse({"analysis": report, "inspection_available": True})
+    # Explicit, read-only readiness refresh for supervised stock K1 testing.
+    # Never start a job or modify printer configuration from this endpoint.
+    if request.GET.get("refresh_status") == "1" and connection.adapter == "creality_local":
+        from .printer_gcode_submission import _k1_native_start_suspended, _k1_native_test_enabled
+        if _k1_native_start_suspended(connection) and _k1_native_test_enabled(connection):
+            try:
+                from .printer_connectivity import poll_connection
+                poll_connection(connection)
+                connection.refresh_from_db()
+            except Exception:
+                # The capability report below will correctly fail closed
+                # using the stale/disconnected telemetry.
+                connection.refresh_from_db()
     caps = availability(connection)
     if connection.adapter == "bambu_local" and caps["browse_requires_pin"]:
         return JsonResponse({
