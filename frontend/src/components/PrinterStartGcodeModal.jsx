@@ -278,7 +278,6 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
           <option value="upload">Upload only — do not print</option>
           <option value="print" disabled={cfs?.applicable && !capabilities?.can_start && !cfsSlicedAvailable}>Upload and start print{cfsSlicedAvailable ? " — original sliced CFS mapping" : cfs?.applicable && !capabilities?.can_start ? " — CFS mode unavailable" : ""}</option>
         </select></label>}
-}
         <div className="formActions">
           <button type="button" onClick={onClose}>Cancel</button>
           <button type="button" className="primary" onClick={submit}
