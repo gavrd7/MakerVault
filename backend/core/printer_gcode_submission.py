@@ -602,6 +602,7 @@ def availability(connection):
     supports_original_mapping = bool(
         adapter == "moonraker" or (
             adapter == "creality_local" and
+            getattr(connection, "printer_id", None) is not None and
             PrinterConnection.objects.filter(
                 printer_id=connection.printer_id, adapter="moonraker",
                 enabled=True, controls_enabled=True,
