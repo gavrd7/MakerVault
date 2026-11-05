@@ -20,6 +20,20 @@ class GcodeAnalysisTests(SimpleTestCase):
         self.assertEqual([item["color_hex"] for item in filaments["requirements"]], ["#ffffff", "#e83d89"])
         self.assertEqual(filaments["requirements"][0]["preset"], "SUNLU PLA+")
 
+    def test_creality_print_material_type_comment_is_detected(self):
+        analysis = analyse_text(";Material Type:PLA\\n;Material Density:1.24\\nG1 X5 Y2\\n")
+        self.assertEqual(analysis["filaments"]["requirements"][0]["material"], "PLA")
+        self.assertFalse(analysis["filaments"]["complete"])
+        self.assertEqual(analysis["filaments"]["requirements"][0]["color_hex"], "")
+
+    def test_comma_delimited_filament_metadata(self):
+        analysis = analyse_text(
+            "; filament_type = PLA, PETG\\n"
+            "; filament_colour = #ffffff, #e83d89\\n"
+        )
+        self.assertTrue(analysis["filaments"]["complete"])
+        self.assertEqual(len(analysis["filaments"]["requirements"]), 2)
+
     def test_missing_slicer_filaments_do_not_guess_cfs_slots(self):
         report = analyse_text("T0\\nG1 X1 Y2\\n")
         self.assertEqual(report["filaments"]["requirements"], [])
