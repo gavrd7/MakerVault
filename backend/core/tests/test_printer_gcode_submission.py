@@ -133,6 +133,27 @@ class GcodePrinterContractTests(SimpleTestCase):
         _verify_print_start_now(printer)
         self.assertEqual(poll.call_count, 2)
 
+    def test_k1_native_start_is_suspended_but_file_upload_is_available(self):
+        from core.printer_gcode_submission import (
+            _k1_native_start_suspended, availability, _require_action_ready,
+        )
+        k1 = connection("creality_local")
+        k1.printer = SimpleNamespace(model="K1", catalog_model=None)
+        self.assertTrue(_k1_native_start_suspended(k1))
+        state = availability(k1)
+        self.assertFalse(state["can_start"])
+        self.assertTrue(state["can_browse"])
+        self.assertTrue(state["can_upload"])
+        with self.assertRaisesRegex(GcodeSubmissionError, "temporarily disabled"):
+            _require_action_ready(k1, "print")
+        k2 = connection("creality_local")
+        k2.printer = SimpleNamespace(model="K2", catalog_model=None)
+        self.assertFalse(_k1_native_start_suspended(k2))
+        self.assertTrue(availability(k2)["can_start"])
+        generic = connection("moonraker")
+        generic.printer = SimpleNamespace(model="K1", catalog_model=None)
+        self.assertFalse(_k1_native_start_suspended(generic))
+
     def test_native_idle_release_needs_positive_idle_state_and_no_active_job(self):
         from core.printer_gcode_submission import _native_creality_clearly_idle
         idle = {
