@@ -12,11 +12,12 @@ const initialForm = {
  * Safe preparation-only entry point. A verified slicing worker, real engine-native
  * profile IDs and isolated execution are required before enabling a Slice action.
  */
-export default function SlicerWorkbench({ files = [], printers = [], spools = [], canPrepare = false, onBack }) {
+export default function SlicerWorkbench({ files = [], printers = [], spools = [], canPrepare = false, onBack, onOpenGcode }) {
   const [form, setForm] = useState(initialForm);
   const [engines, setEngines] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [profiles, setProfiles] = useState([]);
+  const [workerConfigured, setWorkerConfigured] = useState(false);
   const [importFile, setImportFile] = useState(null);
   const [importKind, setImportKind] = useState("printer");
   const [importName, setImportName] = useState("");
@@ -65,6 +66,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       ]);
       setEngines(catalogue.engines || []);
       setJobs(existing.jobs || []);
+      setWorkerConfigured(existing.worker_configured === true);
       setProfiles(native.profiles || []);
     } catch (err) {
       setError(err.message || "Could not load slicing drafts.");
@@ -74,6 +76,37 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   }
 
   useEffect(() => { refresh(); }, []);
+
+  const running = jobs.some(job => job.status === "queued" || job.status === "running");
+  useEffect(() => {
+    if (!running) return undefined;
+    const id = window.setInterval(async () => {
+      try {
+        const result = await apiFetch("/api/printing/slicer/jobs/");
+        setJobs(result.jobs || []);
+        setWorkerConfigured(result.worker_configured === true);
+      } catch {
+        // Existing draft listing remains visible; manual Refresh reports errors.
+      }
+    }, 5000);
+    return () => window.clearInterval(id);
+  }, [running]);
+
+  async function startSlice(job) {
+    setError(""); setNotice(""); setBusy(true);
+    try {
+      const result = await apiFetch("/api/printing/slicer/jobs/" + job.id + "/start/", {
+        method: "POST", body: {},
+      });
+      setJobs(current => current.map(item => item.id === job.id ? result.job : item));
+      setNotice("Slicing requested. This does not upload files to a printer or deduct filament inventory.");
+    } catch (err) {
+      setError(err.message || "Could not queue slicing.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
 
   async function saveDraft(event) {
     event.preventDefault();
@@ -150,7 +183,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
     <section className="panel printingSection" aria-labelledby="slicer-preparation-heading">
       <h3 id="slicer-preparation-heading">Slicing configuration</h3>
-      <p role="status">Preparation mode — engine binaries, native preset libraries and actual slicing are not available yet. Saving does not upload files to printers or change spool inventory.</p>
+      <p role="status">{workerConfigured
+        ? "A verified isolated worker is configured. Only drafts with administrator-verified native profiles can be sliced. Slicing never starts a print."
+        : "Preparation mode — no administrator-approved slicing worker is available. Saving a draft does not run a slicer, send a printer command or change spool inventory."}</p>
       {error && <p className="integrationError" role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
       <form className="formGrid" onSubmit={saveDraft}>
@@ -270,7 +305,15 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           <div className="cameraSourceIdentity">
             <strong>{job.input_asset?.name || "Model"} · {job.printer?.name || "Printer"}</strong>
             <small>{job.engine} {job.engine_version} · {job.status} · {job.process_preset}</small>
-            <small>{job.spool?.name ? "Spool " + job.spool.name + " · " : ""}No processing or printer action performed</small>
+            <small>{job.spool?.name ? "Spool " + job.spool.name + " · " : ""}
+              {job.status === "completed" ? "G-code saved privately; inspect before printing" :
+                job.status === "draft" ? "Configuration saved; not sliced" :
+                job.message || "Waiting for job update"}</small>
+            {(job.status === "queued" || job.status === "running") && <progress value={job.progress || 0} max="100" aria-label="Slicing progress" />}
+          </div>
+          <div className="cameraSourceActions">
+            {job.can_slice && canPrepare && <button type="button" disabled={busy} onClick={() => startSlice(job)}>Slice now</button>}
+            {job.status === "completed" && job.output_asset_id && <button type="button" onClick={onOpenGcode}>Open G-code library</button>}
           </div>
         </div>
       )}</div> : <p>No slicing drafts saved yet.</p>}

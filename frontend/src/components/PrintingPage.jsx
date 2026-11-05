@@ -319,6 +319,11 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       spools={data?.spools || []}
       canPrepare={Boolean(config?.permissions?.add_file)}
       onBack={() => setWorkspaceView("overview")}
+      onOpenGcode={async () => {
+        await load();
+        setWorkspaceView("overview");
+        setModal("gcode");
+      }}
     />;
   }
 
