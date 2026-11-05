@@ -22,11 +22,13 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   const [bambuPin, setBambuPin] = useState("");
   const [filamentAnalysis, setFilamentAnalysis] = useState(null);
   const [cfsAssignments, setCfsAssignments] = useState({});
+  const [mappingMode, setMappingMode] = useState("mapped");
 
 
   const base = "/api/printing/printers/" + printer.id + "/connections/" + connection.id + "/gcode";
   const cfs = capabilities?.cfs || null;
   const cfsSlicedAvailable = Boolean(capabilities?.can_start_sliced_mapping);
+  const cfsMappedAvailable = Boolean(capabilities?.can_start_mapped_cfs);
   const requirements = source === "makervault" ? (filamentAnalysis?.requirements || []) : [];
   const sameMaterial = (left, right) => Boolean(left && right) && left.trim().toUpperCase() === right.trim().toUpperCase();
   const matches = (requirement, slot) => sameMaterial(requirement.material, slot.material);
@@ -111,18 +113,35 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   async function submit() {
     const name = source === "printer" ? remotePath : current?.filename;
     const operation = source === "printer" ? "print" : action;
-    const slicedCfs = operation === "print" && cfsSlicedAvailable;
-    const overrides = requirements.map(r => ({ requirement: r, chosen: cfsAssignments[r.tool_index] ?? suggestedSlot(r) }))
-      .filter(({ requirement, chosen }) => chosen && chosen !== suggestedSlot(requirement));
-    if (slicedCfs && overrides.length) {
-      setError("These CFS slot overrides have not been applied to the printer. Print-start is disabled until the K2 mapping protocol is verified. Use Upload only or the original mapping."); return;
+    const mappedCfs = operation === "print" && mappingMode === "mapped" && cfsMappedAvailable && source === "makervault";
+    const slicedCfs = operation === "print" && !mappedCfs && cfsSlicedAvailable;
+    const selections = requirements.map(r => ({
+      tool_index: r.tool_index, slot_label: cfsAssignments[r.tool_index] ?? suggestedSlot(r)
+    }));
+    if (mappedCfs) {
+      if (!selections.length || selections.some(item => !item.slot_label)) {
+        setError("Select a CFS slot for every sliced filament before printing."); return;
+      }
+      for (const item of selections) {
+        const required = requirements[item.tool_index];
+        const loaded = (cfs?.slots || []).find(slot => slot.label === item.slot_label);
+        if (!required?.material || !loaded || !matches(required, loaded)) {
+          setError("Sliced and loaded material types must agree before mapped printing."); return;
+        }
+      }
     }
     if (!name) { setError("Select a G-code file."); return; }
-    if (operation === "print" && !capabilities?.can_start && !slicedCfs) { setError("Choose a supported print mode first."); return; }
+    if (operation === "print" && !capabilities?.can_start && !slicedCfs && !mappedCfs) { setError("Choose a supported print mode first."); return; }
 
     if (verdict?.status === "mismatch") { setError("Printer model mismatch; submission blocked."); return; }
-    if (!window.confirm("Printer: " + printer.name + "\nFile: " + name + "\nAction: " +
-      (operation === "print" ? "START PRINT" : "UPLOAD ONLY, no printing") + (slicedCfs ? "\nCFS: Original sliced mapping — MakerVault cannot yet apply overrides.\\nCheck actual filament selection on the printer." : "") + "\n\nContinue?")) return;
+    const mappingSummary = mappedCfs
+      ? selections.map(item => "Slicer " + (item.tool_index + 1) + " (" + (requirements[item.tool_index]?.material || "?") + ") → CFS " + item.slot_label).join("\\n")
+      : slicedCfs ? "Use original slicer mapping (no slot changes)." : "";
+    if (!window.confirm("Printer: " + printer.name + "\\nFile: " + name + "\\nAction: " +
+      (operation === "print" ? "START PRINT" : "UPLOAD ONLY, no printing") +
+      (mappingSummary ? "\\n\\nCFS mapping:\\n" + mappingSummary : "") +
+      (mappedCfs ? "\\n\\nK2 native start has no command acknowledgement. Check the selected filament on the printer." : "") +
+      "\\n\\nContinue?")) return;
     setBusy(true); setError(""); setReceipt(null);
     setTransferStage("Submitting request and checking printer readiness…");
     const requestId = window.crypto.randomUUID();
@@ -142,7 +161,9 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
           source: source === "printer" ? "printer" : "makervault",
           action: operation, printer_path: remotePath,
           file_asset_id: assetId, confirmed: true, acknowledge_unknown: true,
-          cfs_mode: slicedCfs ? "use_sliced" : null, cfs_acknowledged: slicedCfs,
+          cfs_mode: mappedCfs ? "mapped" : slicedCfs ? "use_sliced" : null,
+          cfs_acknowledged: slicedCfs,
+          cfs_mapping: mappedCfs ? selections : [],
         },
       });
       setReceipt(result.submission);
@@ -191,7 +212,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
     {cfs?.applicable && <div className="settingsCallout">
       <strong>Creality CFS · Live loaded filaments</strong>
       <p>{cfs.connected === true
-        ? "These materials were reported by the K2's native LAN telemetry. Choose a candidate slot for review; MakerVault does not yet apply a verified filament mapping to the print-start command."
+        ? "These materials were reported by the K2's native LAN telemetry. Match the sliced filaments against the loaded CFS slots before printing."
         : cfs.connected === false && cfs.verified
           ? "The latest native printer reading reports no CFS connected."
           : "CFS connection state is unavailable or stale. Remote print-start remains disabled until it can be verified."}</p>
@@ -208,7 +229,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
         </div>
         {source === "makervault" && assetId && (checking ? <p>Reading sliced filament requirements…</p> : requirements.length ? <>
           <strong>Sliced filament mapping review</strong>
-          <p>MakerVault proposes matching loaded slots from the G-code metadata. Your choices are not transmitted to the K2 yet.</p>
+          <p>MakerVault suggests matching CFS slots by material and colour. You can override the suggestion before sending the mapping to the K2.</p>
           {requirements.map(requirement => {
             const chosen = cfsAssignments[requirement.tool_index] ?? suggestedSlot(requirement);
             const selected = (cfs.slots || []).find(slot => slot.label === chosen);
@@ -235,13 +256,21 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
           {!filamentAnalysis?.complete && <p role="status">Slicer metadata is incomplete. Automatic mapping cannot be verified.</p>}
         </> : <p>There are no explicit sliced filament declarations in this G-code. An automatic matching recommendation cannot be made.</p>)}
         {source === "printer" && <p>Files already on the printer do not have source filament metadata in this dialog. No mapping is inferred from the filename.</p>}
-        <small>All mapping selections are read-only. Printing through either transport remains disabled when CFS is connected until the printer mapping protocol and acknowledgement are verified.</small>
+        <small>In mapped-print mode, selections are sent to the K2. The proprietary protocol does not confirm acceptance, so check its display after submitting.</small>
       </>}
     </div>}
-    {cfsSlicedAvailable && <div className="settingsCallout">
+    {(cfsSlicedAvailable || cfsMappedAvailable) && <div className="settingsCallout">
       <strong>CFS print preparation</strong>
-      <p>Moonraker can start this job with the mapping already stored in the G-code. Review the loaded CFS slots and sliced filament details above. MakerVault cannot yet transmit a different slot selection.</p>
-      <small>Print-start requires an explicit final confirmation. Unverified manual overrides cannot be used for printing.</small>
+      <p>Review the sliced filament and select the correct loaded CFS slot. You can send these selections to the K2 or use its original slicer mapping.</p>
+      {source === "makervault" && <label>Filament mapping
+        <select value={mappingMode} onChange={e => setMappingMode(e.target.value)}>
+          {cfsMappedAvailable && <option value="mapped">Use selected CFS slots — send mapping to K2</option>}
+          {cfsSlicedAvailable && <option value="original">Use original mapping embedded by the slicer</option>}
+        </select>
+      </label>}
+      <small>{mappingMode === "mapped"
+        ? "MakerVault will send a new native K2 filament mapping before print-start. The printer provides no confirmed acknowledgement; check its display."
+        : "The original slicer-selected mapping will be used without changes. Review the printer's loaded filaments."}</small>
     </div>}
     {capabilities && !capabilities.supported ? <div className="settingsCallout">
       <strong>Experimental adapter — printer file submission unavailable</strong>
@@ -276,14 +305,14 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
       {source !== "new" && <>
         {source === "makervault" && <label>Operation<select value={action} onChange={e => setAction(e.target.value)}>
           <option value="upload">Upload only — do not print</option>
-          <option value="print" disabled={cfs?.applicable && !capabilities?.can_start && !cfsSlicedAvailable}>Upload and start print{cfsSlicedAvailable ? " — original sliced CFS mapping" : cfs?.applicable && !capabilities?.can_start ? " — CFS mode unavailable" : ""}</option>
+          <option value="print" disabled={cfs?.applicable && !capabilities?.can_start && !cfsSlicedAvailable && !cfsMappedAvailable}>Upload and start print{cfsMappedAvailable ? " — review CFS slots" : cfsSlicedAvailable ? " — original sliced CFS mapping" : cfs?.applicable && !capabilities?.can_start ? " — CFS mode unavailable" : ""}</option>
         </select></label>}
         <div className="formActions">
           <button type="button" onClick={onClose}>Cancel</button>
           <button type="button" className="primary" onClick={submit}
             disabled={busy || checking || !canEdit || !capabilities?.supported ||
-              (source === "printer" ? !remotePath || !(capabilities.can_start || cfsSlicedAvailable) : !assetId || !capabilities.can_upload ||
-                (action === "print" && !(capabilities.can_start || cfsSlicedAvailable))) || verdict?.status === "mismatch"}>
+              (source === "printer" ? !remotePath || !(capabilities.can_start || cfsSlicedAvailable || cfsMappedAvailable) : !assetId || !capabilities.can_upload ||
+                (action === "print" && !(capabilities.can_start || cfsSlicedAvailable || cfsMappedAvailable))) || verdict?.status === "mismatch"}>
             {busy ? "Submitting…" : source === "printer" || action === "print" ? "Review & start print" : "Review & upload only"}
           </button>
         </div>
