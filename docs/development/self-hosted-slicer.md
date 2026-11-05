@@ -51,28 +51,15 @@ Creality Print, Bambu Studio, CuraEngine, ElegooSlicer, Snapmaker Orca and Anycu
 - `validate_engine_selection` requires an externally provided administrator-verified worker inventory containing an exact engine version, explicit enablement, successful verification and pinned SHA-256 image digest. The inventory must come from trusted server state, never from a browser request.
 - Contract unit tests assert unsupported inputs fail closed and Orca/Prusa profile formats remain distinct.
 
-## Implemented checkpoint — draft jobs and restricted worker contract
+## Implementation status — private drafts, native profiles and gated slicing
 
-- SliceJob model and migration 0076: owner-scoped input FileAsset, printer, optional physical spool, independent printer/process/filament preset references and durable state fields.
-- Authenticated `/api/printing/slicer/engines/` (informational) and `/api/printing/slicer/jobs/` (drafts only) plus owner-scoped job detail and deletion. Drafts do not execute, schedule, send commands or deduct spool stock. Engine availability is false until verified worker inventory exists.
-- `slicer_worker/runner.py` is an **unconnected worker-side Prusa CLI contract** with fixed file names, allowlisted arguments, post-processing script rejection, timeout/process-group cleanup, bounded output, and suppressed raw engine logs. No web or Celery code launches this runner.
-- Worker contract tests run in dedicated CI. Engine/version/profile compatibility and the optional restricted container remain **not yet validated**.
+The draft branch now contains a preparation workbench in **3D Printing → MakerVault Slicer**, owner-scoped SliceJob records (migration 0076), native SlicerProfile records (0077) and exact engine/version/profile references (0078). It supports existing STL and printer selections, optional physical spool references, import of original Prusa INI or Orca JSON presets, persisted draft configurations and job status. Imported profiles remain **candidate/unverified**.
 
-**Do not run untrusted slicer input on the host.** The runner is not a security sandbox; a separate unprivileged, network-restricted, resource-limited container and trusted native profile installation are required before an actual Slice button is enabled.
+The optional isolated PrusaSlicer worker protocol, one-shot authenticated dispatch, fixed CLI invocation, bounded input/output, no-root capabilities and private G-code FileAsset import are implemented in source. A **Slice now** action is enabled only when an explicitly installed, approved worker and all three verified native profiles pass server-side admission. Print submission and spool deduction remain wholly separate operations.
 
-## Native-profile checkpoint
+**The real slicer is not yet ready to run:** no tested digest-pinned slicer engine image or approved machine/filament/process fixture library is bundled. The user cannot approve profiles from the browser. Before enabling execution we must verify the exact CLI build and licences, run a known STL fixture end-to-end inside the isolated worker, audit sandbox limits and recovery, and validate the generated G-code against the slicer settings.
 
-The draft-only Slicer Workbench is available from **3D Printing → MakerVault Slicer** on the feature branch. It uses existing owned STL files, printers and physical spools and stores private draft configurations through `/api/printing/slicer/jobs/`. Slicing itself is deliberately unavailable.
-
-The backend now has `SlicerProfile` (migration `0077`) and per-job native profile references (migration `0078`) in addition to the `SliceJob` migration `0076`. Profiles are linked to existing owner-scoped FileAsset versions, preserve engine, version, printer/filament/process role, source label and checksum, and default to **candidate/unverified**.
-
-The `/api/printing/slicer/profiles/` endpoint registers and lists native PrusaSlicer `.ini` and OrcaSlicer `.json` assets. Import performs bounded UTF-8/JSON checks, ownership checks and post-processing command rejection. Registration does **not** verify actual slicer compatibility or permit execution. When a draft selects a profile, its owner, engine, version, kind and name must all match.
-
-The separate `slicer_worker/runner.py` prototype uses fixed, bounded files and a hard timeout for a Prusa CLI invocation, with post-processing disabled and raw engine logs suppressed. A dedicated GitHub Actions workflow runs its Python contract tests. It is not connected to the web app or Celery and must **not** be used on an unisolated host with untrusted input.
-
-**Engine version research (5 November 2026):** PrusaSlicer 2.9.7 is the preferred *candidate* because upstream published security fixes on 2 November; the Debian trixie package is still older. Neither source nor runtime has been vetted as a redistributable, pinned sandbox image. Do not use a mutable latest tag or silently fall back to the distro package.
-
-**Missing before real execution:** separately installable restricted container, version+digest verified engine, admin-approved native profile inventory, safe per-job staging, authentication/queue dispatch, output validation/import to private G-code assets and end-to-end slicer UI/acceptance tests. No printer action or physical spool deduction is coupled to slicing.
+Orca execution, interactive build plate manipulation, searchable Basic/Simple/Advanced controls and multi-material support are later phases. The [dedicated worker contract CI](../../.github/workflows/slicer-contract.yml) and Django/frontend checks cover code contracts, not real slicing.
 
 ## Safety and release gates
 
