@@ -94,7 +94,7 @@ function AccountSettingsFrame({ src, title }) {
   return <iframe className="settingsAccountFrame" title={title} src={src} style={{ height }} onLoad={frameLoaded} />;
 }
 
-export default function SettingsPage({ config, onBackupStarted }) {
+export default function SettingsPage({ config, onBackupStarted, onOpenPrinterConnections }) {
   const [settings, setSettings] = useState(null);
   const [form, setForm] = useState(null);
   const [integrations, setIntegrations] = useState([]);
@@ -511,6 +511,37 @@ export default function SettingsPage({ config, onBackupStarted }) {
 
     </>}
 
+    {activeTab === "printing" && config?.can_manage_workspace_settings && <>
+    <section className="panel settingsPanel">
+      <div className="panelHead">
+        <div>
+          <h3>Generic printer connections</h3>
+          <p>Connect any printer exposing a standard Moonraker or OctoPrint API. Connections belong to individual MakerVault printers and use their own authenticated file-storage APIs.</p>
+        </div>
+      </div>
+      <div className="printingIntegrationGrid settingsIntegrationGrid">
+        {[
+          {
+            name: "Generic Moonraker / Klipper",
+            detail: "For Klipper printers with an accessible Moonraker API. Uses Moonraker file listing, upload and print-start endpoints; no hardcoded printer directory.",
+            hint: "Usually http://printer-ip:7125"
+          },
+          {
+            name: "Generic OctoPrint",
+            detail: "For printers running OctoPrint. Uses OctoPrint's file-management and print-job APIs, independent of the printer's internal storage layout.",
+            hint: "Use your OctoPrint URL and API key"
+          }
+        ].map(entry => <article key={entry.name}>
+          <div className="settingsIntegrationHead"><strong>{entry.name}</strong><Badge tone="good">Supported connection</Badge></div>
+          <p>{entry.detail}</p>
+          <small>{entry.hint}</small>
+          <button type="button" onClick={() => onOpenPrinterConnections?.()}>
+            Configure in 3D Printing
+          </button>
+          <small>Choose an existing MakerVault printer, open its live connections, and add this adapter. Multiple sources can share one physical printer record.</small>
+        </article>)}
+      </div>
+    </section>
     {activeTab === "printing" && config?.can_manage_workspace_settings && <>
     <section className="panel settingsPanel settingsPrintingPanel">
       <div className="panelHead">
