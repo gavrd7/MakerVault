@@ -71,6 +71,39 @@ HEX_COLOUR = re.compile(r"^#[0-9A-Fa-f]{6}$")
 MATERIAL_TYPES = ("PLA", "PETG", "ABS", "ASA", "TPU", "PC", "PA", "PVA", "HIPS", "PCTG")
 
 
+FILAMENT_USAGE_HEADER = re.compile(
+    r"^;\s*filament\s*used\s*\[(mm|g|cm3)\]\s*[:=]\s*(.*?)\s*$", re.I
+)
+
+
+def _declared_used_filaments(text, count):
+    """Use slicer per-profile measured consumption only with a complete vector."""
+    if not 1 <= count <= 16:
+        return None
+    found = {}
+    for raw in text.splitlines():
+        if len(raw) > MAX_LINE:
+            continue
+        match = FILAMENT_USAGE_HEADER.match(raw.strip())
+        if match:
+            found.setdefault(match.group(1).lower(), match.group(2))
+    for unit in ("mm", "g", "cm3"):
+        value = found.get(unit)
+        if value is None:
+            continue
+        entries = [item.strip() for item in re.split(r"[,;]", value)]
+        if len(entries) != count or not all(NUMBER.fullmatch(item) for item in entries):
+            continue
+        values = [float(item) for item in entries]
+        if not all(math.isfinite(item) and item >= 0 for item in values):
+            continue
+        used = [index for index, amount in enumerate(values) if amount > 0.000001]
+        if used:
+            return {"used_tool_indices": used, "usage_confident": True, "usage_source": "slicer_consumption_" + unit,
+                    "usage_reason": ""}
+    return None
+
+
 TOOL_SELECT = re.compile(r"^T(\d{1,2})(?:\s|$)", re.I)
 E_VALUE = re.compile(r"(?:^|\s)E\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))(?=\s|$)", re.I)
 
@@ -136,6 +169,7 @@ def _used_extrusion_tools(text, *, declared_count, truncated=False):
             ambiguous = True
     known = bool(extruding) and detected_deposition and not ambiguous and not truncated
     return {"used_tool_indices": sorted(extruding) if known else [],
+            "usage_source": "toolpath_extrusion" if known else "unknown",
             "usage_confident": known,
             "usage_reason": ("" if known else
                 "Actual depositing tools could not be determined from this G-code; the slicer's original mapping can still be used.")}
@@ -177,6 +211,17 @@ def _filament_requirements(text, *, truncated):
             "preset": preset, "complete": bool(material and colour),
         })
     tool_usage = _used_extrusion_tools(text, declared_count=count, truncated=truncated)
+    declared_usage = None if truncated else _declared_used_filaments(text, count)
+    if declared_usage is not None:
+        # The slicer's final accounting is a better source than tooling during
+        # prime/purge macros. If both analyses are definite but disagree, fail
+        # closed instead of silently mapping a different tool.
+        if tool_usage["usage_confident"] and tool_usage["used_tool_indices"] != declared_usage["used_tool_indices"]:
+            tool_usage = {"used_tool_indices": [], "usage_confident": False,
+                          "usage_source": "conflicting_evidence",
+                          "usage_reason": "Toolpath and slicer filament consumption disagree."}
+        else:
+            tool_usage = declared_usage
     used = [item for item in requirements if item["tool_index"] in tool_usage["used_tool_indices"]]
     complete = bool(requirements) and all(item["complete"] for item in requirements) and not truncated
     return {
