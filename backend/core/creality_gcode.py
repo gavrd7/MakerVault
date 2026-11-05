@@ -132,24 +132,40 @@ def _parse_file_list(payload):
         rows = []
         for item in value[:1000]:
             name = item if isinstance(item, str) else (
-                item.get("fileName") or item.get("filename") or item.get("name") or item.get("path")
+                item.get("path") or item.get("fileName") or item.get("filename") or item.get("name")
             ) if isinstance(item, dict) else None
+            # A supplied full path is authoritative: do not silently fall
+            # back to a safe-looking display name for an unsafe file path.
             safe = _safe_printer_file(name)
             if safe:
-                rows.append({"path": safe, "size_bytes": (item.get("file_size", item.get("size")) if isinstance(item, dict) else None),
+                size = item.get("file_size", item.get("size")) if isinstance(item, dict) else None
+                if isinstance(size, bool):
+                    size = None
+                elif isinstance(size, (int, str)) and str(size).isdigit():
+                    size = int(size)
+                else:
+                    size = None
+                rows.append({"path": safe, "size_bytes": size,
                              "modified": None, "permissions": "r"})
         return rows
     return None
 
 
-async def _list_files(endpoint):
+async def _list_files(endpoint, *, stock_k1=False):
     merged = None
     observed_keys = set()
     frames_received = 0
     try:
+        # The K1's stock file-list endpoint uses ordinary WebSocket frames.
+        # Keep the previously established K2 transport unchanged.
+        connect_kwargs = {
+            "ping_interval": None, "open_timeout": 5,
+            "close_timeout": 1, "proxy": None,
+        }
+        if not stock_k1:
+            connect_kwargs["subprotocols"] = ["wsslicer"]
         async with websockets.connect(
-            normalise_creality_endpoint(endpoint), ping_interval=None,
-            subprotocols=["wsslicer"], open_timeout=5, close_timeout=1, proxy=None
+            normalise_creality_endpoint(endpoint), **connect_kwargs
         ) as ws:
             await ws.send(json.dumps({"method": "get", "params": {"reqGcodeFile": 1}}))
             deadline = asyncio.get_running_loop().time() + 8
@@ -188,8 +204,15 @@ async def _list_files(endpoint):
 
 
 def list_files(connection):
+    from .printer_storage_profiles import storage_profile
+    printer = getattr(connection, "printer", None)
+    model = " ".join((
+        str(getattr(printer, "model", "") or ""),
+        str(getattr(getattr(printer, "catalog_model", None), "name", "") or ""),
+    ))
+    stock_k1 = storage_profile("creality_local", model)["key"] == "creality_k1"
     try:
-        return asyncio.run(_list_files(connection.endpoint_url))
+        return asyncio.run(_list_files(connection.endpoint_url, stock_k1=stock_k1))
     except CrealityGcodeError:
         raise
     except RuntimeError as exc:
