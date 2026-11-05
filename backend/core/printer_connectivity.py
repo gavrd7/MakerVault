@@ -696,7 +696,7 @@ def poll_octoprint(endpoint_url: str, config: dict | None = None) -> dict:
         "state": state,
         "state_label": state_text or state.title(),
         "job": {
-            "file_name": str(file_data.get("display") or file_data.get("name") or file_data.get("path") or ""),
+            "file_name": str(file_data.get("path") or file_data.get("name") or file_data.get("display") or ""),
             "progress": round(max(0.0, min(100.0, completion)), 2) if completion is not None else None,
             "elapsed_seconds": elapsed,
             "remaining_seconds": remaining,
