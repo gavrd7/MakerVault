@@ -66,6 +66,52 @@ class GcodeAnalysisTests(SimpleTestCase):
         self.assertFalse(bad["filaments"]["complete"])
         self.assertEqual(bad["filaments"]["requirements"][0]["color_hex"], "")
 
+    def test_only_extruding_tool_is_mapped_from_four_profiles(self):
+        gcode = (
+            "; filament_type = PLA; PLA; PLA; PLA\n"
+            "; filament_colour = #000000; #e83d89; #ffffff; #668798\n"
+            "M82\nT2\nG92 E0\nG1 X10 Y10 E0.4\n"
+            "T0\nG1 X12 Y12 F3000\n"
+            "T2\nG1 X13 Y13 E0.8\n"
+        )
+        result = analyse_text(gcode)["filaments"]
+        self.assertTrue(result["usage_confident"])
+        self.assertEqual(result["used_tool_indices"], [2])
+        self.assertEqual(len(result["requirements"]), 4)
+        self.assertEqual([r["tool_index"] for r in result["used_requirements"]], [2])
+        self.assertEqual(result["used_requirements"][0]["color_hex"], "#ffffff")
+
+    def test_actual_two_material_extruders_not_configured_presets(self):
+        report = analyse_text(
+            "; filament_type = PLA; PETG; ABS\n"
+            "; filament_colour = #ffffff; #000000; #ff0000\n"
+            "M83\nT0\nG1 X1 E0.2\n"
+            "T1\nG1 X2 E0.3\n"
+            "T2\nG1 E4\n"
+        )["filaments"]
+        self.assertTrue(report["usage_confident"])
+        self.assertEqual([r["tool_index"] for r in report["used_requirements"]], [0, 1])
+        self.assertEqual([r["material"] for r in report["used_requirements"]], ["PLA", "PETG"])
+
+    def test_ambiguous_used_tools_do_not_invent_mapping(self):
+        headers = "; filament_type = PLA; PLA; PLA; PLA\n"
+        result = analyse_text(headers + "G1 X1 Y1 E0.2\n")["filaments"]
+        self.assertFalse(result["usage_confident"])
+        self.assertFalse(result["used_requirements"])
+        result = analyse_text(headers + "T2\nG1 X1 Y1 E0.2\n", truncated=True)["filaments"]
+        self.assertFalse(result["usage_confident"])
+        result = analyse_text(headers + "T8\nG1 X1 Y1 E0.2\n")["filaments"]
+        self.assertFalse(result["usage_confident"])
+
+    def test_single_declared_profile_and_e_reset_supported(self):
+        result = analyse_text(
+            "; filament_type = PLA\n"
+            "M82\nG92 E10\nG1 X1 Y1 E10.25\n"
+            "G92 E0\nG1 X2 Y2 E0.2\n"
+        )["filaments"]
+        self.assertTrue(result["usage_confident"])
+        self.assertEqual(result["used_tool_indices"], [0])
+
     def test_explicit_printer_and_bounds(self):
         result = analyse_text(
             "; printer_model = Creality K2 Plus\n"
