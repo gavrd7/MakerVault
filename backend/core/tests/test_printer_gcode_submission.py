@@ -864,6 +864,55 @@ class NativeGcodeAdapterTests(SimpleTestCase):
         asyncio.run(_start_single_spool("ws://k1.local:9999", "3DBenchy.gcode", "/usr/data"))
         session.send.assert_awaited_once()
 
+    @patch("core.creality_gcode.websockets.connect")
+    def test_stock_k1_start_uses_no_k2_subprotocol(self, connect):
+        import asyncio
+        from core.creality_gcode import _start_single_spool
+        session = AsyncMock()
+        session.recv.side_effect = EOFError("K1 closes after dispatch")
+        context = MagicMock()
+        context.__aenter__ = AsyncMock(return_value=session)
+        context.__aexit__ = AsyncMock(return_value=None)
+        connect.return_value = context
+        asyncio.run(_start_single_spool("ws://k1.local:9999", "ghost.gcode", "/usr/data"))
+        self.assertNotIn("subprotocols", connect.call_args.kwargs)
+        session.send.assert_awaited_once()
+
+    @patch("core.creality_gcode.websockets.connect")
+    def test_stock_k1_acknowledges_heartbeat_without_restarting_print(self, connect):
+        import asyncio
+        import json
+        from core.creality_gcode import _start_single_spool
+        session = AsyncMock()
+        session.recv.side_effect = [
+            json.dumps({"ModeCode": "heart_beat"}),
+            EOFError("printer closed"),
+        ]
+        context = MagicMock()
+        context.__aenter__ = AsyncMock(return_value=session)
+        context.__aexit__ = AsyncMock(return_value=None)
+        connect.return_value = context
+        asyncio.run(_start_single_spool("ws://k1.local:9999", "ghost.gcode", "/usr/data"))
+        self.assertEqual(session.send.await_count, 2)
+        sent = [call.args[0] for call in session.send.await_args_list]
+        self.assertEqual(json.loads(sent[0])["params"], {
+            "opGcodeFile": "printprt:/usr/data/printer_data/gcodes/ghost.gcode",
+        })
+        self.assertEqual(sent[1], "ok")
+
+    @patch("core.creality_gcode.websockets.connect")
+    def test_stock_k1_does_not_retry_start_on_unexpected_response(self, connect):
+        import asyncio
+        from core.creality_gcode import _start_single_spool
+        session = AsyncMock()
+        session.recv.return_value = '{"result":"unknown"}'
+        context = MagicMock()
+        context.__aenter__ = AsyncMock(return_value=session)
+        context.__aexit__ = AsyncMock(return_value=None)
+        connect.return_value = context
+        asyncio.run(_start_single_spool("ws://k1.local:9999", "ghost.gcode", "/usr/data"))
+        session.send.assert_awaited_once()
+
     def test_creality_upload_target_is_same_host_no_credentials(self):
         printer = connection("creality_local")
         printer.endpoint_url = "ws://k2.local:9999"
