@@ -77,6 +77,16 @@ class GcodeAnalysisTests(SimpleTestCase):
         self.assertEqual(report["used_tool_indices"], [2])
         self.assertEqual(report["used_requirements"][0]["color_hex"], "#ffffff")
 
+    def test_missing_unused_profile_color_does_not_affect_used_completeness(self):
+        report = analyse_text(
+            "; filament_type = PLA; PLA; PLA\n"
+            "; filament_colour = not-known; #ffffff; not-known\n"
+            "T1\nG92 E0\nG1 X10 Y10 E0.1\n"
+        )["filaments"]
+        self.assertFalse(report["complete"])
+        self.assertTrue(report["used_complete"])
+        self.assertEqual(report["used_tool_indices"], [1])
+
     def test_slicer_filament_consumption_can_resolve_ambiguous_toolpath(self):
         report = analyse_text(
             "; filament_type = PLA; PLA; PLA; PLA\n"
