@@ -181,9 +181,32 @@ class NativeGcodeAdapterTests(SimpleTestCase):
         cc.config["gcode_submission_enabled"] = True
         self.assertFalse(availability(cc)["can_start"])
         cc.config["creality_single_spool_start_enabled"] = True
+        cc.last_snapshot["source_metadata"] = {"cfs_connected": False}
         self.assertTrue(availability(cc)["can_start"])
         cc.last_snapshot["source_metadata"] = {"cfs_connected": True}
         self.assertFalse(availability(cc)["can_start"])
+
+    @patch("core.printer_gcode_submission.PrinterConnection.objects.filter")
+    def test_k2_cfs_is_shared_with_moonraker_and_blocks_start_only(self, filtered):
+        moon = connection("moonraker")
+        moon.printer = SimpleNamespace(model="K2", manufacturer="Creality", catalog_model=None)
+        moon.printer_id = "printer-one"
+        native = connection("creality_local")
+        native.last_snapshot["source_metadata"] = {"cfs_connected": True}
+        native.last_snapshot["materials"] = [{
+            "system": "creality_cfs", "unit_index": 0, "slot_index": 1,
+            "material": "PLA", "product_name": "Hyper PLA", "color_hex": "#ffffff",
+        }]
+        filtered.return_value.order_by.return_value = [native]
+        caps = availability(moon)
+        self.assertTrue(caps["can_upload"])
+        self.assertFalse(caps["can_start"])
+        self.assertTrue(caps["cfs"]["connected"])
+        self.assertEqual(caps["cfs"]["slots"][0]["label"], "1B")
+        native.last_snapshot["source_metadata"] = {"cfs_connected": False}
+        self.assertTrue(availability(moon)["can_start"])
+        native.last_seen_at = timezone.now() - timezone.timedelta(minutes=5)
+        self.assertFalse(availability(moon)["can_start"])
 
     @patch("core.creality_gcode.asyncio.run")
     def test_creality_start_rejects_path_traversal_without_websocket(self, worker):
