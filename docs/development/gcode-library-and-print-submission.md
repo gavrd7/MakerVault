@@ -65,3 +65,40 @@ Existing Pause/Resume/Cancel controls do not imply file upload or start capabili
 Verify multi-user file isolation; standalone/project references; optional G-code on model revisions; editor immutability; binary/truncated file behaviour; valid/invalid G-code metadata; source/target K2 vs K1 mismatch; no-model metadata; unsafe commands; active/busy/stale/disconnected printer states; permission/HTTPS/adapters; upload-only not starting; print only after explicit confirmation; idempotency and partial failures. Physical upload/start testing requires real printer hardware and should not rely only on mocked API calls.
 
 **Release gate:** The common library, Moonraker/OctoPrint/Prusa file commands, Bambu pinned read-only storage browser and Creality Moonraker setup are implemented only in draft form. Never describe printer upload/start as fully supported until automated tests, owner acceptance and real hardware validation of the exact printer and adapter have passed. Bambu upload/print, FlashForge multi-material start and Anycubic native transfer/start remain unimplemented. Creality K2 CFS mapped print-start is implemented in the draft branch but has not yet passed physical hardware acceptance.
+
+
+## K1 firmware 1.3.5.22 diagnostic evidence (2026-11-05)
+
+Two supervised, pre-safeguard native K1 start attempts were followed by an OS
+reboot at approximately 14:35 and 14:49 (printer-local clock). The current K1
+native start guard must **remain enabled**; do not send another print-start
+command for this investigation.
+
+The private K1 diagnostics show that its web server received `opGcodeFile`
+for existing `/usr/data/printer_data/gcodes/*.gcode` files, accompanied by
+`enableSelfTest: 0` in the older request. The master service selected those
+files and itself sent `BOX_ENABLE_CFS_PRINT ENABLE=0` to Klipper, which
+reported an unknown command. Creality continued into `CX_ROUGH_G28` and
+heater preparation. Approximately 28 seconds later, the Klipper socket was
+unavailable; the system uptime independently indicates a reboot. This narrows
+the failure window but does **not** prove the unknown CFS command, homing
+macro, or optional self-test flag caused the reboot. No definitive kernel
+panic/watchdog signature survives in the provided persistent logs.
+
+A read-only `reqGcodeFile` request generated `retGcodeFileInfo2` file-list
+data with `name`, absolute `path`, `file_size` and `create_time` fields
+on this firmware. K1 listing now uses a plain WebSocket session, accepts
+intervening telemetry/heartbeats, and validates the returned absolute path.
+K2 WebSocket settings remain independent. Regression fixtures use a minimal
+sanitised representation; **never commit the full diagnostic archive**, which
+contains potentially sensitive Creality service and network data.
+
+Follow-up validation:
+1. Run backend tests and staging checks. Confirm that the K1 reports
+   `blocked=True`, `can_start=False` while upload-only remains available.
+2. Perform a **read-only** K1 file browser check against existing files;
+   compare names and sizes to Creality's own file view. No print-start.
+3. Separately investigate whether the firmware's preparation thread,
+   Klipper/MCU, or supervisor triggers the reboot. Preserve crash evidence.
+4. Revisit native start only with a reviewed, supervised hardware test plan;
+   never enable it merely because file browsing works.
