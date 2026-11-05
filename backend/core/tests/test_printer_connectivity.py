@@ -148,6 +148,11 @@ class PrinterConnectivityAdapterTests(TestCase):
                 "source_metadata": {"klippy_state": klippy_state},
             }
             self.assertEqual(_reconcile_creality_processing(native, stale), stale)
+        moon_poll.return_value = {
+            "state": "idle", "online": True,
+            "source_metadata": {"klippy_state": "ready", "virtual_sdcard_active": True},
+        }
+        self.assertEqual(_reconcile_creality_processing(native, stale), stale)
         moon_poll.side_effect = PrinterConnectionError("unreachable")
         self.assertEqual(_reconcile_creality_processing(native, stale), stale)
         self.assertEqual(_reconcile_creality_processing(native, {"state": "printing"}), {"state": "printing"})
