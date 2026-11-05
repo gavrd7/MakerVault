@@ -836,6 +836,63 @@ def _verify_print_start_now(connection):
     # The normal poll reconciles the journal record itself.
 
 
+def _native_creality_clearly_idle(snapshot):
+    """Conservative idle proof from an actual native Creality status response.
+
+    A UI 'Idle' label by itself is insufficient: stock K-series firmware can
+    keep a stale filename/state during reboot or preparation. Do not release
+    unknown submissions when an active job, recovery or ambiguous state remains.
+    """
+    if not isinstance(snapshot, dict) or snapshot.get("online") is not True:
+        return False
+    if snapshot.get("state") != "idle":
+        return False
+    meta = snapshot.get("source_metadata") or {}
+    if meta.get("power_loss_recovery"):
+        return False
+    if str(meta.get("raw_state")) not in {"0", "0.0"}:
+        return False
+    if meta.get("device_state") not in (None, 0, "0"):
+        return False
+    job = snapshot.get("job") or {}
+    if job.get("file_name"):
+        return False
+    for field in ("progress", "remaining_seconds"):
+        value = job.get(field)
+        if value not in (None, 0, 0.0):
+            return False
+    return True
+
+
+def _native_idle_after_unknown(connection, unknown_after):
+    """Two new independent native reads after an ambiguous print submission.
+
+    This makes a *new* explicit user request possible after reboot, but never
+    rewrites the old receipt, resends a start or trusts only cached monitoring.
+    """
+    if connection.adapter != "creality_local":
+        return False
+    from .printer_connectivity import poll_connection
+    observations = []
+    for _ in range(2):
+        try:
+            snapshot = poll_connection(connection)
+        except Exception:
+            return False
+        if not _native_creality_clearly_idle(snapshot):
+            return False
+        try:
+            observed_at = timezone.datetime.fromisoformat(snapshot["captured_at"])
+        except (KeyError, TypeError, ValueError):
+            return False
+        if timezone.is_naive(observed_at) or observed_at <= unknown_after:
+            return False
+        if observations and observed_at <= observations[-1]:
+            return False
+        observations.append(observed_at)
+    return len(observations) == 2
+
+
 def _receipt(row):
     return {
         "request_id": str(row.pk), "status": row.status,
@@ -886,6 +943,29 @@ def submit(connection, user, payload):
         # Keep the original filename recognisable; suffix avoids overwrites.
         remote_path = _printer_transfer_name((asset.metadata or {}).get("original_name"), request_id)
 
+    # An uncertain old native start may outlive a completed print or reboot.
+    # Only a new, explicitly confirmed request can initiate these read-only
+    # checks, and only recent UNKNOWN print starts on this same connection
+    # qualify. In-flight transfers and other adapters remain blocked.
+    recovered_idle = False
+    recent_cutoff = timezone.now() - timedelta(minutes=10)
+    unresolved_before_lock = PrinterGcodeSubmission.objects.filter(
+        connection__printer_id=connection.printer_id,
+        status__in=["pending", "unknown"],
+        created_at__gte=recent_cutoff,
+    )
+    if (
+        connection.adapter == "creality_local"
+        and action == "print"
+        and not unresolved_before_lock.filter(status="pending").exists()
+    ):
+        unknown_rows = unresolved_before_lock.filter(status="unknown")
+        if unknown_rows.exists() and not unknown_rows.exclude(
+            connection=connection, action="print"
+        ).exists():
+            latest_unknown = unknown_rows.order_by("-created_at").first()
+            recovered_idle = _native_idle_after_unknown(connection, latest_unknown.created_at)
+
     # A repeated request ID is a status lookup, NEVER a second dispatch.
     with transaction.atomic():
         Printer.objects.select_for_update().get(pk=connection.printer_id)
@@ -896,9 +976,24 @@ def submit(connection, user, payload):
             return _receipt(old)
         connection.refresh_from_db()
         _require_action_ready(connection, action, use_sliced_cfs=use_sliced_cfs, use_mapped_cfs=use_mapped_cfs)
-        recent = PrinterGcodeSubmission.objects.filter(connection__printer_id=connection.printer_id)
-        if recent.filter(status__in=["pending", "unknown"], created_at__gte=timezone.now() - timedelta(minutes=10)).exists():
-            raise GcodeSubmissionError("An earlier submission has an unresolved outcome. Verify printer state before another request.")
+        recent = PrinterGcodeSubmission.objects.filter(
+            connection__printer_id=connection.printer_id,
+            created_at__gte=timezone.now() - timedelta(minutes=10),
+        )
+        # Pending jobs (including transfers) must always block another write.
+        if recent.filter(status="pending").exists():
+            raise GcodeSubmissionError("An earlier printer submission is still in progress.", 409)
+        unknown = recent.filter(status="unknown")
+        if unknown.exists() and not (
+            recovered_idle
+            and connection.adapter == "creality_local"
+            and action == "print"
+            and not unknown.exclude(connection=connection, action="print").exists()
+        ):
+            raise GcodeSubmissionError(
+                "An earlier submission has an unresolved outcome. Refresh and confirm "
+                "the printer is genuinely idle before another request.", 409
+            )
         row = PrinterGcodeSubmission.objects.create(
             id=request_id, connection=connection, requested_by=user, file_asset=asset,
             source=source, action=action, original_path=remote_path if source == "printer" else "",
