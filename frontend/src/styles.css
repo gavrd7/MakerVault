@@ -3385,3 +3385,91 @@ a:focus-visible,
   .gcodePrintModalContent > .formActions { justify-content:stretch; }
   .gcodePrintModalContent > .formActions button { flex:1; }
 }
+
+
+/* Printer overview: reusable for Creality, AMS, MMU and generic live connections. */
+.printingPrinterCard .printingPrinterOverviewTop{
+  display:grid;grid-template-columns:minmax(270px, .85fr) minmax(0, 1.65fr);
+  gap:18px;align-items:start;min-width:0;
+}
+.printingPrinterCard .printingPrinterHeader{align-items:start;min-width:0}
+.printingPrinterCard .printingPrinterControls{width:100%;justify-items:stretch;gap:12px}
+.printingPrinterCard .printingPrinterActions{
+  display:flex;flex-wrap:wrap;align-items:stretch;justify-content:flex-start;
+  width:100%;gap:8px;
+}
+.printingPrinterCard .printingPrinterAction{
+  display:inline-flex;align-items:center;justify-content:center;min-height:40px;
+  padding:9px 12px;white-space:normal;text-align:center;line-height:1.25;
+}
+.printingPrinterCard .printingSlotPanel{
+  min-width:0;border:1px solid #293648;border-radius:12px;
+  padding:14px;background:#0d151f;
+}
+.printingSlotPanelHeader{
+  display:flex;align-items:baseline;justify-content:space-between;
+  gap:8px;margin-bottom:12px;flex-wrap:wrap;
+}
+.printingSlotPanelHeader strong{color:#e6ebf4;font-size:14px}
+.printingSlotPanelHeader small{color:#8493a8;font-size:11px}
+.printingPrinterCard .printingSlotGrid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(min(205px,100%),1fr));
+  grid-auto-rows:auto;align-items:stretch;gap:10px;margin:0;
+}
+.printingPrinterCard .printingSlot{
+  display:grid;grid-template-columns:20px minmax(0,1fr);gap:10px;
+  padding:12px;min-width:0;height:100%;border-radius:11px;
+  border:1px solid #314155;background:#111c29;align-items:start;
+}
+.printingPrinterCard .printingSlot .printingSwatch{
+  width:19px;height:19px;border-radius:6px;margin-top:2px;flex:none;
+}
+.printingPrinterCard .printingSlot>div{display:flex;flex-direction:column;align-items:flex-start;min-width:0;gap:4px}
+.printingPrinterCard .printingSlot strong{font-size:13px;line-height:1.4;margin:0}
+.printingPrinterCard .printingSlot small{
+  margin:0;font-size:11px;line-height:1.5;color:#91a0b3;
+  max-width:100%;overflow-wrap:anywhere;
+}
+.printingPrinterCard .printingSlot .slotInventoryAction{
+  margin-top:9px;min-height:32px;max-width:100%;
+  padding:6px 10px;font-size:11px;line-height:1.25;
+}
+.printingPrinterCard .printerLiveSummary{margin-top:15px}
+.printingPrinterCard .printerLiveFooter{
+  display:flex;align-items:flex-end;justify-content:space-between;
+  flex-wrap:wrap;gap:10px;margin-top:10px;min-width:0;
+}
+.printingPrinterCard .printerLiveQuickStats{flex:1 1 250px;min-width:0;margin:0}
+.printingPrinterCard .printerLiveFooter .printerLiveOpen{
+  flex:none;min-height:36px;margin:0 0 0 auto;padding:8px 13px;
+  font-size:12px;align-self:flex-end;
+}
+.printingPrinterCard .printerLiveActions{margin-top:10px}
+.printingPrinterCard .printerLiveActions .printerJobControls{flex:1 1 auto}
+@container (max-width:1000px){
+  .printingPrinterCard .printingPrinterOverviewTop{
+    grid-template-columns:minmax(0,1fr);
+  }
+  .printingPrinterCard .printingSlotGrid{
+    grid-template-columns:repeat(auto-fit,minmax(min(210px,100%),1fr));
+  }
+}
+@container (max-width:620px){
+  .printingPrinterCard .printingPrinterActions{
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;
+  }
+  .printingPrinterCard .printingPrinterAction{width:100%;min-width:0;min-height:44px}
+  .printingPrinterCard .printingSlotGrid{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  }
+  .printingPrinterCard .printingSlot{padding:10px;gap:8px}
+  .printingPrinterCard .printerLiveFooter{align-items:stretch}
+  .printingPrinterCard .printerLiveFooter .printerLiveOpen{min-height:44px}
+}
+@container (max-width:400px){
+  .printingPrinterCard .printingSlotGrid{
+    grid-template-columns:minmax(0,1fr)!important;
+  }
+  .printingPrinterCard .printerLiveFooter{flex-direction:column;align-items:stretch}
+  .printingPrinterCard .printerLiveFooter .printerLiveOpen{width:100%;margin:0}
+}
