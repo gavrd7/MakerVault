@@ -116,7 +116,8 @@ def _read_owned_file(asset, owner_id, maximum, label):
 
 
 def process_queued_job(job_id):
-    """At most one active run; retries cannot replay completed/running jobs."""
+    """At most one active run; worker loss becomes a failed, never resent job."""
+    installed = verified_installation()
     with transaction.atomic():
         job = SliceJob.objects.select_for_update().select_related(
             "owner", "input_asset", "printer",
@@ -124,7 +125,13 @@ def process_queued_job(job_id):
         ).filter(pk=job_id).first()
         if not job or job.status != "queued":
             return {"status": "skipped"}
-        validate_scheduling_for_worker(job)
+        try:
+            validate_scheduling_for_worker(job, installed)
+        except SlicerExecutionError:
+            job.status = "failed"
+            job.message = "The verified worker or native profiles are no longer available."
+            job.save(update_fields=["status", "message", "updated_at"])
+            return {"status": "failed"}
         job.status = "running"
         job.progress = 5
         job.message = "Preparing isolated slicing input."
@@ -156,12 +163,13 @@ def process_queued_job(job_id):
         return {"status": "failed"}
 
 
-def validate_scheduling_for_worker(job):
+def validate_scheduling_for_worker(job, installed):
     """Recheck immediately before entering running state; no separate queueing."""
     if job.status != "queued":
         raise SlicerExecutionError("Job is not queued.")
-    if not verified_installation():
+    if not installed:
         raise SlicerExecutionError("Isolated slicing worker is no longer approved.")
+    validate_engine_selection(job.engine, job.engine_version, installed)
     if job.printer.owner_id != job.owner_id or job.input_asset.owner_id != job.owner_id:
         raise SlicerExecutionError("Job ownership changed.")
     for kind in ("printer", "filament", "process"):
@@ -169,6 +177,6 @@ def validate_scheduling_for_worker(job):
         if (
             not profile or profile.status != "verified" or profile.owner_id != job.owner_id
             or profile.engine != job.engine or profile.engine_version != job.engine_version
-            or profile.kind != kind
+            or profile.kind != kind or profile.name != getattr(job, f"{kind}_preset")
         ):
             raise SlicerExecutionError("Native slicer profiles are no longer verified.")
