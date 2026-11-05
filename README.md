@@ -110,7 +110,7 @@ A concise view of what's delivered and where MakerVault may go next. Checkmarks 
 
 ### Planned / under evaluation
 
-- [ ] **G-code Library and explicit print submission:** organise and preview uploaded G-code and send supported jobs to compatible printers with explicit user control ([issue #155](https://github.com/gavrd7/MakerVault/issues/155))
+- [ ] **G-code Library and explicit print submission (PR #169):** preview and inspect G-code, upload to supported printers, and explicitly submit prints. K2 native LAN uploads and Moonraker print-start have been physically tested; CFS tool-to-slot mapping via native Creality WebSocket is implemented but still requires controlled hardware verification. Printer compatibility and firmware support vary. There are no extra experimental checkboxes in the print workflow; see [development guidance](docs/development/gcode-library-and-print-submission.md) for current limitations ([issue #155](https://github.com/gavrd7/MakerVault/issues/155))
 - [ ] **Self-hosted multi-engine FDM slicing:** optional local slicing service and one MakerVault UI, subject to engine, CLI and licence evaluation
 - [ ] **MakerVault Weigh Station:** connected scale/RFID hardware with a removable printable platform (hardware development)
 - [x] **Read-only CFS material-tag decoding**, K2 printer material-database snapshots, scoped online material lookup and explicit physical spool UID association; no CFS tag writing or printer database push
