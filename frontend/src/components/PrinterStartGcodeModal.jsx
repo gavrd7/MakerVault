@@ -22,8 +22,11 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   const [bambuPin, setBambuPin] = useState("");
   const [filamentAnalysis, setFilamentAnalysis] = useState(null);
   const [cfsAssignments, setCfsAssignments] = useState({});
+  const [useSlicedCfs, setUseSlicedCfs] = useState(false);
+  const [cfsAcknowledged, setCfsAcknowledged] = useState(false);
   const base = "/api/printing/printers/" + printer.id + "/connections/" + connection.id + "/gcode";
   const cfs = capabilities?.cfs || null;
+  const cfsSlicedAvailable = Boolean(capabilities?.can_start_sliced_mapping);
   const requirements = source === "makervault" ? (filamentAnalysis?.requirements || []) : [];
   const sameMaterial = (left, right) => Boolean(left && right) && left.trim().toUpperCase() === right.trim().toUpperCase();
   const matches = (requirement, slot) => sameMaterial(requirement.material, slot.material);
@@ -137,13 +140,16 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   async function submit() {
     const name = source === "printer" ? remotePath : current?.filename;
     const operation = source === "printer" ? "print" : action;
+    const slicedCfs = operation === "print" && cfsSlicedAvailable && useSlicedCfs;
     if (!name) { setError("Select a G-code file."); return; }
+    if (operation === "print" && !capabilities?.can_start && !slicedCfs) { setError("Choose a supported print mode first."); return; }
+    if (slicedCfs && !cfsAcknowledged) { setError("Confirm the loaded CFS filaments and original slicer mapping before starting."); return; }
     if (verdict?.status === "mismatch") { setError("Printer model mismatch; submission blocked."); return; }
     if ((source === "printer" || verdict?.status !== "metadata_match") && !ack) {
       setError("Confirm your review of unverified printer compatibility."); return;
     }
     if (!window.confirm("Printer: " + printer.name + "\nFile: " + name + "\nAction: " +
-      (operation === "print" ? "START PRINT" : "UPLOAD ONLY, no printing") + "\n\nContinue?")) return;
+      (operation === "print" ? "START PRINT" : "UPLOAD ONLY, no printing") + (slicedCfs ? "\nCFS: USE ORIGINAL SLICER MAPPING; NO SLOT OVERRIDE\nConfirm the filament on the K2 screen before proceeding." : "") + "\n\nContinue?")) return;
     setBusy(true); setError(""); setReceipt(null);
     setTransferStage("Submitting request and checking printer readiness…");
     const requestId = window.crypto.randomUUID();
@@ -163,6 +169,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
           source: source === "printer" ? "printer" : "makervault",
           action: operation, printer_path: remotePath,
           file_asset_id: assetId, confirmed: true, acknowledge_unknown: ack,
+          cfs_mode: slicedCfs ? "use_sliced" : null, cfs_acknowledged: slicedCfs && cfsAcknowledged,
         },
       });
       setReceipt(result.submission);
@@ -269,6 +276,16 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
         <small>All mapping selections are read-only. Printing through either transport remains disabled when CFS is connected until the printer mapping protocol and acknowledgement are verified.</small>
       </>}
     </div>}
+    {cfsSlicedAvailable && <div className="settingsCallout">
+      <strong>Print using the G-code's existing CFS mapping</strong>
+      <p>The K2 previously accepted slicer-mapped G-code via Moonraker. This mode does not send a new filament selection. Any candidate slot chosen above is for review only and will NOT change the print.</p>
+      <label className="checkRow"><input type="checkbox" checked={useSlicedCfs} disabled={busy} onChange={e => { setUseSlicedCfs(e.target.checked); setCfsAcknowledged(false); }} />
+        Allow explicit print-start using the original sliced mapping
+      </label>
+      {useSlicedCfs && <label className="checkRow"><input type="checkbox" checked={cfsAcknowledged} disabled={busy} onChange={e => setCfsAcknowledged(e.target.checked)} />
+        I have checked the K2's actual loaded CFS filaments and its expected mapping. I understand MakerVault cannot override or verify the active slot selection.
+      </label>}
+    </div>}
     {capabilities && !capabilities.supported ? <div className="settingsCallout">
       <strong>Experimental adapter — printer file submission unavailable</strong>
       <p>This source supports monitoring, but its storage and start-print protocol is not implemented or verified here. Bambu storage listing is experimental and read-only; Bambu print-start, proprietary Creality and other manufacturer transfer paths still require dedicated implementation and hardware validation.</p>
@@ -302,7 +319,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
       {source !== "new" && <>
         {source === "makervault" && <label>Operation<select value={action} onChange={e => setAction(e.target.value)}>
           <option value="upload">Upload only — do not print</option>
-          <option value="print" disabled={cfs?.applicable && !capabilities?.can_start}>Upload and start print{cfs?.applicable && !capabilities?.can_start ? " — CFS verification required" : ""}</option>
+          <option value="print" disabled={cfs?.applicable && !capabilities?.can_start && !cfsSlicedAvailable}>Upload and start print{cfsSlicedAvailable ? " — original sliced CFS mapping" : cfs?.applicable && !capabilities?.can_start ? " — CFS mode unavailable" : ""}</option>
         </select></label>}
         {(source === "printer" || verdict?.status !== "metadata_match") && <label className="checkRow">
           <input type="checkbox" checked={ack} onChange={e => setAck(e.target.checked)} />
@@ -312,8 +329,8 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
           <button type="button" onClick={onClose}>Cancel</button>
           <button type="button" className="primary" onClick={submit}
             disabled={busy || checking || !canEdit || !capabilities?.supported ||
-              (source === "printer" ? !remotePath || !capabilities.can_start : !assetId || !capabilities.can_upload ||
-                (action === "print" && !capabilities.can_start)) || verdict?.status === "mismatch"}>
+              (source === "printer" ? !remotePath || !(capabilities.can_start || (cfsSlicedAvailable && useSlicedCfs && cfsAcknowledged)) : !assetId || !capabilities.can_upload ||
+                (action === "print" && !(capabilities.can_start || (cfsSlicedAvailable && useSlicedCfs && cfsAcknowledged)))) || verdict?.status === "mismatch"}>
             {busy ? "Submitting…" : source === "printer" || action === "print" ? "Review & start print" : "Review & upload only"}
           </button>
         </div>
