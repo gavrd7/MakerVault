@@ -12,7 +12,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   const [newFile, setNewFile] = useState(null);
   const [capabilities, setCapabilities] = useState(null);
   const [verdict, setVerdict] = useState(null);
-  const [ack, setAck] = useState(false);
+
   const [busy, setBusy] = useState(false);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState("");
@@ -22,8 +22,8 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   const [bambuPin, setBambuPin] = useState("");
   const [filamentAnalysis, setFilamentAnalysis] = useState(null);
   const [cfsAssignments, setCfsAssignments] = useState({});
-  const [useSlicedCfs, setUseSlicedCfs] = useState(false);
-  const [cfsAcknowledged, setCfsAcknowledged] = useState(false);
+
+
   const base = "/api/printing/printers/" + printer.id + "/connections/" + connection.id + "/gcode";
   const cfs = capabilities?.cfs || null;
   const cfsSlicedAvailable = Boolean(capabilities?.can_start_sliced_mapping);
@@ -64,7 +64,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
     setVerdict(null);
     setFilamentAnalysis(null);
     setCfsAssignments({});
-    setAck(false);
+
     if (source !== "makervault" || !assetId) return () => { active = false; };
     setChecking(true);
     apiFetch("/api/files/" + assetId + "/gcode/inspect/?printer_id=" + encodeURIComponent(printer.id))
@@ -91,35 +91,6 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
     finally { setBusy(false); }
   }
 
-  async function toggleNativeTransfer() {
-    if (!["prusa", "creality_local", "flashforge"].includes(connection.adapter)) return;
-    const enabled = !capabilities?.enabled;
-    if (enabled && !window.confirm("Enable EXPERIMENTAL native printer file operations for " + printer.name + "? This is unverified on hardware. Files can be sent to this printer only after an additional confirmation.")) return;
-    setBusy(true); setError("");
-    try {
-      await apiFetch(base + "/native-opt-in/", { method: "PATCH", body: { enabled } });
-      await load();
-    } catch (err) { setError(err.message); }
-    finally { setBusy(false); }
-  }
-
-  async function toggleCrealityStart() {
-    if (connection.adapter !== "creality_local" || !capabilities?.enabled) return;
-    const enable = !capabilities?.can_start && capabilities?.requires_start_opt_in;
-    if (enable && !window.confirm(
-      "Enable EXPERIMENTAL Creality native single-spool print-start? This sends an actual start command to the selected printer. It is disabled whenever CFS is connected, and the proprietary protocol does not acknowledge delivery."
-    )) return;
-    setBusy(true); setError("");
-    try {
-      await apiFetch(base + "/native-opt-in/", {
-        method: "PATCH",
-        body: { enabled: true, single_spool_start: enable },
-      });
-      await load();
-    } catch (err) { setError(err.message); }
-    finally { setBusy(false); }
-  }
-
   async function configureBambuPin() {
     if (bambuPin.trim() && !/^(?:[0-9a-fA-F]{2}:?){32}$/.test(bambuPin.trim())) {
       setError("Supply exactly 64 hex characters (colons optional) for the independently verified certificate SHA-256.");
@@ -140,16 +111,18 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   async function submit() {
     const name = source === "printer" ? remotePath : current?.filename;
     const operation = source === "printer" ? "print" : action;
-    const slicedCfs = operation === "print" && cfsSlicedAvailable && useSlicedCfs;
+    const slicedCfs = operation === "print" && cfsSlicedAvailable;
+    const overrides = requirements.map(r => ({ requirement: r, chosen: cfsAssignments[r.tool_index] ?? suggestedSlot(r) }))
+      .filter(({ requirement, chosen }) => chosen && chosen !== suggestedSlot(requirement));
+    if (slicedCfs && overrides.length) {
+      setError("These CFS slot overrides have not been applied to the printer. Print-start is disabled until the K2 mapping protocol is verified. Use Upload only or the original mapping."); return;
+    }
     if (!name) { setError("Select a G-code file."); return; }
     if (operation === "print" && !capabilities?.can_start && !slicedCfs) { setError("Choose a supported print mode first."); return; }
-    if (slicedCfs && !cfsAcknowledged) { setError("Confirm the loaded CFS filaments and original slicer mapping before starting."); return; }
+
     if (verdict?.status === "mismatch") { setError("Printer model mismatch; submission blocked."); return; }
-    if ((source === "printer" || verdict?.status !== "metadata_match") && !ack) {
-      setError("Confirm your review of unverified printer compatibility."); return;
-    }
     if (!window.confirm("Printer: " + printer.name + "\nFile: " + name + "\nAction: " +
-      (operation === "print" ? "START PRINT" : "UPLOAD ONLY, no printing") + (slicedCfs ? "\nCFS: USE ORIGINAL SLICER MAPPING; NO SLOT OVERRIDE\nConfirm the filament on the K2 screen before proceeding." : "") + "\n\nContinue?")) return;
+      (operation === "print" ? "START PRINT" : "UPLOAD ONLY, no printing") + (slicedCfs ? "\\nCFS: Original sliced mapping — MakerVault cannot yet apply overrides.\\nCheck actual filament selection on the printer." : "") + "\\n\\nContinue?")) return;
     setBusy(true); setError(""); setReceipt(null);
     setTransferStage("Submitting request and checking printer readiness…");
     const requestId = window.crypto.randomUUID();
@@ -168,8 +141,8 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
           request_id: requestId,
           source: source === "printer" ? "printer" : "makervault",
           action: operation, printer_path: remotePath,
-          file_asset_id: assetId, confirmed: true, acknowledge_unknown: ack,
-          cfs_mode: slicedCfs ? "use_sliced" : null, cfs_acknowledged: slicedCfs && cfsAcknowledged,
+          file_asset_id: assetId, confirmed: true, acknowledge_unknown: true,
+          cfs_mode: slicedCfs ? "use_sliced" : null, cfs_acknowledged: slicedCfs,
         },
       });
       setReceipt(result.submission);
@@ -194,23 +167,6 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
           <small>Native HTTP upload can be verified independently using an enabled Moonraker storage connection on this same printer.</small>
         </details>
       : <div className="settingsCallout">{notice}</div>)}
-    {["prusa", "creality_local", "flashforge"].includes(connection.adapter) && <div className="settingsCallout">
-      <strong>Experimental native G-code transfer</strong>
-      <p>{connection.adapter === "creality_local" ? "Native upload is supported experimentally. Single-spool start is a separate opt-in; CFS printing remains disabled until mapping is validated." : connection.adapter === "prusa" ? "Native PrusaLink v1 transfer and print-start are experimental and require the correct firmware capabilities." : "Adventurer 5M / 5M Pro: upload-only or explicitly confirmed start. Multi-material FlashForge models are not enabled."}</p>
-      <label className="checkRow">
-        <input type="checkbox" checked={Boolean(capabilities?.enabled)} disabled={!canEdit || busy} onChange={toggleNativeTransfer} />
-        Enable experimental G-code file transfer for this printer
-      </label>
-    </div>}
-    {connection.adapter === "creality_local" && <div className="settingsCallout">
-      <strong>Experimental stock Creality print-start</strong>
-      <p>Native single-spool print-start is available for hardware validation on K1/K2, separately enabled from file uploads. It will not run while CFS is detected, and the printer protocol does not acknowledge command acceptance. Confirm the printer and loaded filament physically.</p>
-      <label className="checkRow">
-        <input type="checkbox" checked={Boolean(capabilities?.enabled && !capabilities?.requires_start_opt_in)} disabled={!canEdit || busy || !capabilities?.enabled} onChange={toggleCrealityStart} />
-        Allow experimental single-spool native start (never CFS)
-      </label>
-      {capabilities?.enabled && !capabilities?.can_start && !capabilities?.requires_start_opt_in && <small>Start remains unavailable: printer is busy/offline, CFS is connected, or telemetry is stale.</small>}
-    </div>}
     {connection.adapter === "creality_local" && <details className="settingsCallout">
       <summary><strong>Alternative transport: Moonraker / Klipper (optional)</strong></summary>
       <p>MakerVault uses stock Creality LAN protocols for this connection. Moonraker is optional when the printer separately exposes its API; it is not required for native file browsing, uploads or single-spool prints.</p>
@@ -283,14 +239,9 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
       </>}
     </div>}
     {cfsSlicedAvailable && <div className="settingsCallout">
-      <strong>Print using the G-code's existing CFS mapping</strong>
-      <p>The K2 previously accepted slicer-mapped G-code via Moonraker. This mode does not send a new filament selection. Any candidate slot chosen above is for review only and will NOT change the print.</p>
-      <label className="checkRow"><input type="checkbox" checked={useSlicedCfs} disabled={busy} onChange={e => { setUseSlicedCfs(e.target.checked); setCfsAcknowledged(false); }} />
-        Allow explicit print-start using the original sliced mapping
-      </label>
-      {useSlicedCfs && <label className="checkRow"><input type="checkbox" checked={cfsAcknowledged} disabled={busy} onChange={e => setCfsAcknowledged(e.target.checked)} />
-        I have checked the K2's actual loaded CFS filaments and its expected mapping. I understand MakerVault cannot override or verify the active slot selection.
-      </label>}
+      <strong>CFS print preparation</strong>
+      <p>Moonraker can start this job with the mapping already stored in the G-code. Review the loaded CFS slots and sliced filament details above. MakerVault cannot yet transmit a different slot selection.</p>
+      <small>Print-start requires an explicit final confirmation. Unverified manual overrides cannot be used for printing.</small>
     </div>}
     {capabilities && !capabilities.supported ? <div className="settingsCallout">
       <strong>Experimental adapter — printer file submission unavailable</strong>
@@ -327,15 +278,12 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
           <option value="upload">Upload only — do not print</option>
           <option value="print" disabled={cfs?.applicable && !capabilities?.can_start && !cfsSlicedAvailable}>Upload and start print{cfsSlicedAvailable ? " — original sliced CFS mapping" : cfs?.applicable && !capabilities?.can_start ? " — CFS mode unavailable" : ""}</option>
         </select></label>}
-        {(source === "printer" || verdict?.status !== "metadata_match") && <label className="checkRow">
-          <input type="checkbox" checked={ack} onChange={e => setAck(e.target.checked)} />
-          I have reviewed this file for {printer.name} and understand the printer profile is unverified.
-        </label>}
+}
         <div className="formActions">
           <button type="button" onClick={onClose}>Cancel</button>
           <button type="button" className="primary" onClick={submit}
             disabled={busy || checking || !canEdit || !capabilities?.supported ||
-              (source === "printer" ? !remotePath || !(capabilities.can_start || (cfsSlicedAvailable && useSlicedCfs && cfsAcknowledged)) : !assetId || !capabilities.can_upload ||
+              (source === "printer" ? !remotePath || !(capabilities.can_start || cfsSlicedAvailable) : !assetId || !capabilities.can_upload ||
                 (action === "print" && !(capabilities.can_start || (cfsSlicedAvailable && useSlicedCfs && cfsAcknowledged)))) || verdict?.status === "mismatch"}>
             {busy ? "Submitting…" : source === "printer" || action === "print" ? "Review & start print" : "Review & upload only"}
           </button>
