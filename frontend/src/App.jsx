@@ -252,7 +252,7 @@ export default function App() {
     if (section === "Projects") return <ProjectsPage projects={projects} setProjects={setProjects} config={config} refreshDashboard={refreshDashboard} refreshInventory={refreshInventory} onOpenMakerTags={openMakerTagsForRecord} boards={boards} components={components} inventory={inventory} openProjectId={projectTarget} onOpenConsumed={() => setProjectTarget("")} />;
     if (section === "3D Printing" || section === "Model Library") return <PrintingPage key={section} config={config} projects={projects} onOpenMakerTags={openMakerTagsForRecord} onModelLibraryBack={() => { setSearchTarget(null); setSection("3D Printing"); }} searchTarget={searchTarget} onOpenConsumed={token => setSearchTarget(current => consumePrinterIntent(current, token))} />;
     if (section === "Files") return <FilesPage projects={projects} config={config} searchTarget={searchTarget?.type === "files" ? searchTarget : null} onOpenModel={modelId => { setSearchTarget({ type: "models", id: modelId, token: Date.now() }); setSection("Model Library"); }} onOpenProject={projectId => { setProjectTarget(projectId); setSection("Projects"); }} />;
-    if (section === "Settings") return <SettingsPage config={config} onBackupStarted={watchBackup} />;
+    if (section === "Settings") return <SettingsPage config={config} onBackupStarted={watchBackup} onOpenPrinterConnections={() => { setSearchTarget(null); setSection("3D Printing"); }} />;
     return <AboutPage config={config} />;
   }
 
