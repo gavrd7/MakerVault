@@ -113,6 +113,9 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
       {printerCheck && <p role="status"><strong>{printerCheck.status === "mismatch" ? "Printer mismatch — block printing" : printerCheck.status === "metadata_match" ? "Printer metadata matches (not safety-verified)" : "Printer compatibility unknown — do not start"}:</strong> {printerCheck.reason}</p>}
       <p><strong>Intended printer:</strong> {analysis.printer_hints?.join(", ") || "Unknown — no verified printer metadata"}</p>
       {analysis.slicer_hints?.length > 0 && <p><strong>Slicer:</strong> {analysis.slicer_hints.join(", ")}</p>}
+      <p><strong>Sliced nozzle:</strong> {analysis.print_setup?.nozzle_diameters_mm?.length
+        ? analysis.print_setup.nozzle_diameters_mm.map(size => `${size} mm`).join(", ")
+        : "Not specified"} · <strong>Build plate:</strong> {analysis.print_setup?.bed_type || "Not specified"}</p>
       <p><strong>XY moves:</strong> {analysis.xy_moves?.toLocaleString() || 0} · <strong>Coordinates:</strong> {["X", "Y", "Z"].map(axis => bounds[axis]?.[0] == null ? `${axis} unknown` : `${axis} ${bounds[axis][0].toFixed(1)}–${bounds[axis][1].toFixed(1)} mm`).join(" · ")}</p>
       {(analysis.warnings || []).map((warning, i) => <div className="projectUploadHint" key={i}>{warning}</div>)}
       {mode === "visual" ? <div style={{ maxWidth: 600, margin: "12px auto" }}>
