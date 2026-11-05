@@ -424,6 +424,8 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
     {receipt && <div className="settingsCallout" role="status">
       <strong>{receipt.status === "unknown" && (receipt.message?.startsWith("Awaiting native Creality start verification") || receipt.message?.startsWith("Print-start sent without acknowledgement; awaiting live job verification"))
         ? "Print command sent — checking live status"
+        : receipt.status === "started" && receipt.message?.startsWith("Print-start command accepted; awaiting live job verification")
+          ? "Print command accepted — checking live status"
         : receipt.status === "started" && (receipt.message?.includes("confirmed by live Creality telemetry") || receipt.message?.startsWith("Print started — verified by live printer telemetry"))
           ? "Print started — verified"
           : receipt.status === "unknown" && receipt.message?.includes("mapping and print-start commands dispatched")
