@@ -423,12 +423,14 @@ def _mapped_cfs_entries(connection, requirements, requested):
         if not isinstance(item, dict) or type(item.get("tool_index")) is not int or not isinstance(item.get("slot_label"), str):
             raise GcodeSubmissionError("Invalid CFS mapping.", 400)
         index = item["tool_index"]
-        if index in selections or not 0 <= index < len(requirements):
+        valid_tools = {int(req["tool_index"]) for req in requirements if isinstance(req, dict) and type(req.get("tool_index")) is int}
+        if index in selections or index not in valid_tools:
             raise GcodeSubmissionError("Duplicate or invalid slicer tool index.", 400)
         selections[index] = item["slot_label"]
     slots = {slot["label"]: slot for slot in context["slots"]}
     mapping = []
-    for index, requirement in enumerate(requirements):
+    for requirement in requirements:
+        index = int(requirement["tool_index"])
         selected = slots.get(selections.get(index))
         material = str(requirement.get("material") or "").strip().upper()
         if not selected or not material:
@@ -439,6 +441,8 @@ def _mapped_cfs_entries(connection, requirements, requested):
         colour = str(selected.get("color_hex") or "")
         if not re.fullmatch(r"#[0-9a-fA-F]{6}", colour):
             raise GcodeSubmissionError("Selected CFS slot colour is unreadable.", 409)
+        if not 0 <= index <= 3:
+            raise GcodeSubmissionError("This K2 mapping supports slicer tools 0–3 only.", 409)
         mapping.append({"id": "T1" + "ABCD"[index], "type": actual, "color": colour,
                         "boxId": selected["box_id"], "materialId": selected["slot_id"]})
     return mapping
@@ -639,8 +643,10 @@ def submit(connection, user, payload):
         else:
             analysis = inspect_asset(asset)["analysis"]
             report = analysis
+        if use_mapped_cfs and not (report.get("filaments") or {}).get("usage_confident"):
+            raise GcodeSubmissionError("Cannot reliably identify which filaments are actually printed. Use the original slicer mapping or upload only.", 409)
         if use_mapped_cfs:
-            mapping_entries = _mapped_cfs_entries(connection, (report.get("filaments") or {}).get("requirements"), payload.get("cfs_mapping"))
+            mapping_entries = _mapped_cfs_entries(connection, (report.get("filaments") or {}).get("used_requirements"), payload.get("cfs_mapping"))
         verdict = compare_printer_metadata(report, connection.printer)
         if verdict["status"] == "mismatch":
             raise GcodeSubmissionError(verdict["reason"])
@@ -665,7 +671,7 @@ def submit(connection, user, payload):
         connection.refresh_from_db()
         _require_action_ready(connection, action, use_sliced_cfs=use_sliced_cfs, use_mapped_cfs=use_mapped_cfs)
         if use_mapped_cfs:
-            mapping_entries = _mapped_cfs_entries(connection, (report.get("filaments") or {}).get("requirements"), payload.get("cfs_mapping"))
+            mapping_entries = _mapped_cfs_entries(connection, (report.get("filaments") or {}).get("used_requirements"), payload.get("cfs_mapping"))
         base, headers = (None, None) if connection.adapter in {"flashforge", "creality_local"} else _printer_endpoint(connection)
         if connection.adapter == "prusa":
             _prusalink_capability_probe(connection, upload=(source == "makervault"))
@@ -744,7 +750,7 @@ def submit(connection, user, payload):
                 mapped_native_connection.refresh_from_db()
                 if connection.adapter == "creality_local":
                     connection.refresh_from_db()
-                mapping_entries = _mapped_cfs_entries(connection, (report.get("filaments") or {}).get("requirements"), payload.get("cfs_mapping"))
+                mapping_entries = _mapped_cfs_entries(connection, (report.get("filaments") or {}).get("used_requirements"), payload.get("cfs_mapping"))
             progress("Sending the explicitly confirmed print-start command.")
             dispatch_attempted = True
             try:
