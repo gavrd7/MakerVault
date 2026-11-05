@@ -58,6 +58,80 @@ class GcodePrinterContractTests(SimpleTestCase):
         with self.assertRaises(GcodeSubmissionError):
             inspect_printer_file(native, "ghost.gcode")
 
+    def test_creality_start_confirmation_requires_same_file_and_active_raw_state(self):
+        from core.printer_gcode_submission import _creality_started_file
+        snapshot = {
+            "online": True, "state": "printing",
+            "job": {"file_name": "3DBenchy.gcode", "progress": 1},
+            "source_metadata": {"raw_state": 1},
+        }
+        self.assertTrue(_creality_started_file(snapshot, "3DBenchy.gcode"))
+        self.assertFalse(_creality_started_file(snapshot, "ghost.gcode"))
+        self.assertFalse(_creality_started_file({**snapshot, "state": "idle"}, "3DBenchy.gcode"))
+        self.assertFalse(_creality_started_file({**snapshot, "state": "processing"}, "3DBenchy.gcode"))
+        self.assertFalse(_creality_started_file({**snapshot, "online": False}, "3DBenchy.gcode"))
+        self.assertFalse(_creality_started_file({
+            **snapshot, "source_metadata": {"raw_state": 0},
+        }, "3DBenchy.gcode"))
+        self.assertFalse(_creality_started_file({
+            **snapshot, "job": {"file_name": ""},
+        }, "3DBenchy.gcode"))
+
+    @patch("core.printer_gcode_submission.PrinterGcodeSubmission.objects.filter")
+    def test_native_start_receipt_reconciles_only_exact_active_print(self, filter_rows):
+        from core.printer_gcode_submission import (
+            reconcile_creality_start_receipts, _creality_start_receipt_message,
+        )
+        printer = connection("creality_local")
+        printer.id = "connection-1"
+        row = SimpleNamespace(
+            pk="receipt-1", remote_path="3DBenchy.gcode",
+            message=_creality_start_receipt_message("3DBenchy.gcode"),
+        )
+        candidates = Mock()
+        candidates.order_by.return_value.__getitem__ = Mock(return_value=[row])
+        filter_rows.side_effect = [candidates, Mock()]
+        snapshot = {
+            "online": True, "captured_at": timezone.now().isoformat(),
+            "state": "printing", "job": {"file_name": "3DBenchy.gcode"},
+            "source_metadata": {"raw_state": 1},
+        }
+        filter_rows.return_value.update.return_value = 1
+        self.assertEqual(reconcile_creality_start_receipts(printer, snapshot), 1)
+        self.assertEqual(filter_rows.call_count, 2)
+        self.assertEqual(filter_rows.call_args.kwargs["pk"], "receipt-1")
+        self.assertEqual(filter_rows.call_args.kwargs["status"], "unknown")
+        self.assertEqual(filter_rows.call_args.return_value.update.call_args.kwargs["status"], "started")
+
+    @patch("core.printer_gcode_submission.PrinterGcodeSubmission.objects.filter")
+    def test_native_start_does_not_upgrade_unrelated_or_old_telemetry(self, filtered):
+        from core.printer_gcode_submission import reconcile_creality_start_receipts
+        printer = connection("creality_local")
+        snapshot = {
+            "online": True, "state": "printing", "job": {"file_name": "other.gcode"},
+            "source_metadata": {"raw_state": 1},
+            "captured_at": timezone.now().isoformat(),
+        }
+        filtered.return_value.order_by.return_value.__getitem__ = Mock(
+            return_value=[SimpleNamespace(pk="r1", remote_path="3DBenchy.gcode")]
+        )
+        self.assertEqual(reconcile_creality_start_receipts(printer, snapshot), 0)
+        self.assertEqual(filtered.call_count, 1)
+        self.assertEqual(reconcile_creality_start_receipts(printer, {**snapshot, "captured_at": ""}), 0)
+        self.assertEqual(filtered.call_count, 1)
+
+    @patch("core.printer_gcode_submission._creality_started_file")
+    @patch("core.printer_connectivity.poll_connection")
+    def test_native_confirmation_poll_is_read_only_and_not_a_retry(self, poll, matches):
+        from core.printer_gcode_submission import _verify_creality_start_now
+        printer = connection("creality_local")
+        matches.return_value = True
+        self.assertTrue(_verify_creality_start_now(printer, "3DBenchy.gcode"))
+        poll.assert_called_once_with(printer)
+        matches.assert_called_once_with(poll.return_value, "3DBenchy.gcode")
+        poll.side_effect = RuntimeError("printer temporarily unavailable")
+        self.assertFalse(_verify_creality_start_now(printer, "3DBenchy.gcode"))
+
     def test_printer_transfer_name_preserves_original_before_suffix(self):
         import uuid
         token = uuid.UUID("c1609a3c-d200-4b12-aabb-112233445566")
