@@ -149,6 +149,7 @@ class GcodePrinterContractTests(SimpleTestCase):
         k2 = connection("creality_local")
         k2.printer = SimpleNamespace(model="K2", catalog_model=None)
         self.assertFalse(_k1_native_start_suspended(k2))
+        k2.last_snapshot["source_metadata"] = {"cfs_connected": False}
         self.assertTrue(availability(k2)["can_start"])
         generic = connection("moonraker")
         generic.printer = SimpleNamespace(model="K1", catalog_model=None)
@@ -621,7 +622,9 @@ class NativeGcodeAdapterTests(SimpleTestCase):
         self.assertFalse(availability(cc)["can_start"])
         cc.config["creality_single_spool_start_enabled"] = True
         cc.last_snapshot["source_metadata"] = {"cfs_connected": False}
-        self.assertTrue(availability(cc)["can_start"])
+        # A previous experimental opt-in cannot bypass the new K1
+        # hardware-restart safety gate, even with no CFS connected.
+        self.assertFalse(availability(cc)["can_start"])
         cc.last_snapshot["source_metadata"] = {"cfs_connected": True}
         self.assertFalse(availability(cc)["can_start"])
 
