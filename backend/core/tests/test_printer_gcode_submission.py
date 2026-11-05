@@ -1,7 +1,7 @@
 """Contract tests for experimental printer file APIs. No hardware is commanded."""
 from io import BytesIO
 from types import SimpleNamespace
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import Mock, MagicMock, AsyncMock, patch
 
 from django.test import SimpleTestCase
 from django.utils import timezone
@@ -42,10 +42,9 @@ class GcodePrinterContractTests(SimpleTestCase):
                    b"; filament_colour = #000000; #e83d89; #ffffff; #668798\n"
                    b"T2\nG92 E0\nG1 X10 Y10 E0.2\n")
         listed.return_value = [{"path": "ghost.gcode", "size_bytes": len(content)}]
-        response = Mock(status_code=200)
+        response = MagicMock(status_code=200)
         response.iter_content.return_value = [content]
-        response.__enter__ = Mock(return_value=response)
-        response.__exit__ = Mock(return_value=False)
+        response.__enter__.return_value = response
         get.return_value = response
         result = inspect_printer_file(native, "ghost.gcode")
         self.assertTrue(result["filaments"]["usage_confident"])
