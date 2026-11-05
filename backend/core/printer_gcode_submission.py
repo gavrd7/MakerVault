@@ -327,9 +327,10 @@ def creality_cfs_context(connection):
         return {"applicable": False, "connected": False, "verified": False, "slots": []}
     if not any(word in model_name.lower() for word in ("k2", "k1")):
         return {"applicable": False, "connected": False, "verified": False, "slots": []}
-    sources = list(PrinterConnection.objects.filter(
-        printer_id=connection.printer_id, adapter="creality_local", enabled=True
-    ).order_by("-last_seen_at"))
+    sources = ([connection] if connection.adapter == "creality_local" else
+               list(PrinterConnection.objects.filter(
+                   printer_id=connection.printer_id, adapter="creality_local", enabled=True
+               ).order_by("-last_seen_at")))
     if not sources:
         return {"applicable": True, "connected": None, "verified": False, "slots": [],
                 "reason": "No native Creality source is configured to verify CFS state."}
@@ -339,7 +340,7 @@ def creality_cfs_context(connection):
     fresh = bool(source.status == "connected" and source.last_seen_at and
                  source.last_seen_at >= timezone.now() - timedelta(seconds=60)
                  and snap.get("online") is True)
-    connected = metadata.get("cfs_connected") if fresh else None
+    connected = metadata.get("cfs_connected") if fresh and isinstance(metadata.get("cfs_connected"), bool) else None
     raw = snap.get("materials") or []
     slots = []
     if connected is True:
