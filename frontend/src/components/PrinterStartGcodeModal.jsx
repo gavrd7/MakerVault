@@ -28,10 +28,12 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   const [printerInspecting, setPrinterInspecting] = useState(false);
   const [cfsAssignments, setCfsAssignments] = useState({});
   const [mappingMode, setMappingMode] = useState("mapped");
+  const [k1TestAcknowledged, setK1TestAcknowledged] = useState(false);
 
 
   const base = "/api/printing/printers/" + printer.id + "/connections/" + connection.id + "/gcode";
   const cfs = capabilities?.cfs || null;
+  const k1TestEnabled = connection.adapter === "creality_local" && capabilities?.k1_native_test_enabled === true;
   const cfsSlicedAvailable = Boolean(capabilities?.can_start_sliced_mapping);
   const cfsOriginalSupported = Boolean(capabilities?.supports_original_mapping);
   const cfsMappedAvailable = Boolean(capabilities?.can_start_mapped_cfs);
@@ -204,6 +206,9 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
     }
     if (!name) { setError("Select a G-code file."); return; }
     if (operation === "print" && !capabilities?.can_start && !slicedCfs && !mappedCfs) { setError("Choose a supported print mode first."); return; }
+    if (operation === "print" && k1TestEnabled && !k1TestAcknowledged) {
+      setError("Acknowledge the K1 restart risk before starting a supervised test."); return;
+    }
 
     if (verdict?.status === "mismatch") { setError("Printer model mismatch; submission blocked."); return; }
     const mappingSummary = mappedCfs
@@ -213,6 +218,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
       (operation === "print" ? "START PRINT" : "UPLOAD ONLY, no printing") +
       (mappingSummary ? "\n\nCFS mapping:\n" + mappingSummary : "") +
       (mappedCfs ? "\n\nK2 native start has no command acknowledgement. Check the selected filament on the printer." : "") +
+      (k1TestEnabled && operation === "print" ? "\n\nWARNING: Experimental K1 native start previously caused the entire printer to reboot. Supervise this test and check printer readiness." : "") +
       "\n\nContinue?")) return;
     setBusy(true); setError(""); setReceipt(null);
     setTransferStage("Submitting request and checking printer readiness…");
@@ -235,6 +241,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
           file_asset_id: assetId, confirmed: true, acknowledge_unknown: true,
           cfs_mode: mappedCfs ? "mapped" : slicedCfs ? "use_sliced" : null,
           cfs_acknowledged: slicedCfs,
+          k1_test_acknowledged: operation === "print" && k1TestEnabled && k1TestAcknowledged,
           cfs_mapping: mappedCfs ? selections : [],
         },
       });
@@ -316,7 +323,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
         : "Not specified"} · <strong>Build plate:</strong> {selectedSetup?.bed_type || "Not specified"}</p>
       <small>These are the slicer's recorded settings, not detected printer hardware. They are provided for reference and never restrict submission.</small>
     </div>}
-    {cfs?.applicable && <div className="settingsCallout">
+    {cfs?.applicable && cfs.connected !== false && <div className="settingsCallout">
       <strong>Creality CFS · Live loaded filaments</strong>
       <p>{cfs.connected === true
         ? "These materials were reported by the K2's native LAN telemetry. Match the sliced filaments against the loaded CFS slots before printing."
@@ -393,6 +400,16 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
         <p>{verdict.reason}</p>
       </div>)}
       {source !== "new" && <>
+        {k1TestEnabled && <div className="settingsCallout" role="group" aria-label="Experimental K1 native print test">
+          <strong>K1 native print-start — supervised test</strong>
+          <p>This firmware previously rebooted during print preparation. Test only while physically attending the printer. No command is retried automatically.</p>
+          <label style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+            <input type="checkbox" checked={k1TestAcknowledged}
+              onChange={e => setK1TestAcknowledged(e.target.checked)}
+              style={{ width: "auto", marginTop: 4 }} />
+            <span>I understand the restart risk and will supervise this K1 test.</span>
+          </label>
+        </div>}
         {source === "makervault" && <label>Operation<select value={action} onChange={e => setAction(e.target.value)}>
           <option value="upload">Upload only — do not print</option>
           <option value="print" disabled={cfs?.applicable && !capabilities?.can_start && !cfsSlicedAvailable && !cfsMappedAvailable}>Upload and start print{cfsMappedAvailable ? " — review CFS slots" : cfsSlicedAvailable ? " — original sliced CFS mapping" : cfs?.applicable && !capabilities?.can_start ? " — CFS mode unavailable" : ""}</option>
@@ -408,6 +425,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
           <button type="button" onClick={onClose}>Cancel</button>
           <button type="button" className="primary" onClick={submit}
             disabled={busy || checking || printerInspecting || !canEdit || !capabilities?.supported ||
+              (k1TestEnabled && (source === "printer" || action === "print") && !k1TestAcknowledged) ||
               (source === "printer" ? !remotePath || !(capabilities.can_start || cfsSlicedAvailable || (cfsMappedAvailable && requirements.length > 0 && !!printerInspection)) : !assetId || !capabilities.can_upload ||
                 (action === "print" && !(capabilities.can_start || cfsSlicedAvailable || cfsMappedAvailable))) || verdict?.status === "mismatch"}>
             {busy ? "Submitting…" : source === "printer" || action === "print" ? "Review & start print" : "Review & upload only"}
