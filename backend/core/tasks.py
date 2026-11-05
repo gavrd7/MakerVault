@@ -486,3 +486,10 @@ def scheduled_creality_material_database_tick():
         except MaterialDatabaseError:
             failed += 1
     return {"checked": checked, "failed": failed}
+
+
+@shared_task(bind=True, max_retries=0, acks_late=True, reject_on_worker_lost=False)
+def execute_slice_job_task(self, job_id):
+    """One explicit slicing attempt; never automatically retry or print."""
+    from .slicer_execution import process_queued_job
+    return process_queued_job(job_id)

@@ -11,6 +11,9 @@ from django.views.decorators.http import require_http_methods
 from .models import FileAsset, Printer, SliceJob, Spool, SlicerProfile
 from .slicer_engines import engine_catalogue, get_engine
 from .slicer_profiles import SlicerProfileError, inspect_native_profile
+from .slicer_execution import (
+    SlicerExecutionError, verified_installation, validate_scheduling, queue_draft,
+)
 
 
 def _error(message, status=400):
@@ -19,14 +22,22 @@ def _error(message, status=400):
 
 def _rows(user):
     return SliceJob.objects.filter(owner=user).select_related(
-        "input_asset", "printer", "spool", "output_asset"
+        "input_asset", "printer", "spool", "output_asset",
+        "printer_profile", "filament_profile", "process_profile"
     )
 
 
-def serialise(job):
+def serialise(job, installed=None):
+    can_slice = False
+    if installed:
+        try:
+            can_slice = validate_scheduling(job, installed)
+        except (SlicerExecutionError, ValueError):
+            pass
     return {
         "id": str(job.id),
         "status": job.status,
+        "can_slice": can_slice,
         "progress": job.progress,
         "engine": job.engine,
         "engine_version": job.engine_version,
@@ -141,14 +152,23 @@ def _draft(user, data):
 @login_required
 @require_http_methods(["GET"])
 def engines(request):
-    return JsonResponse({"engines": engine_catalogue(), "worker_configured": False})
+    installed = verified_installation()
+    rows = engine_catalogue()
+    for row in rows:
+        if row["key"] in installed:
+            row.update({"available": True, "enabled": True, "status": "validated"})
+    return JsonResponse({"engines": rows, "worker_configured": bool(installed)})
 
 
 @login_required
 @require_http_methods(["GET", "POST"])
 def jobs(request):
     if request.method == "GET":
-        return JsonResponse({"jobs": [serialise(job) for job in _rows(request.user)[:100]]})
+        installed = verified_installation()
+        return JsonResponse({
+            "jobs": [serialise(job, installed) for job in _rows(request.user)[:100]],
+            "worker_configured": bool(installed),
+        })
     if not request.user.has_perm("core.add_fileasset"):
         return _error("You do not have permission to prepare slicing jobs.", 403)
     try:
@@ -174,7 +194,8 @@ def job_detail(request, job_id):
             return _error("Only unscheduled slicing drafts can be deleted.", 409)
         job.delete()
         return JsonResponse({"deleted": True})
-    return JsonResponse({"job": serialise(job), "execution_available": False})
+    installed = verified_installation()
+    return JsonResponse({"job": serialise(job, installed), "execution_available": bool(installed)})
 
 
 def _profile_summary(profile):
@@ -234,3 +255,16 @@ def profiles(request):
     except IntegrityError:
         return _error("A profile with this engine, version, kind and name already exists.", 409)
     return JsonResponse({"profile": _profile_summary(profile), "execution_available": False}, status=201)
+
+
+@login_required
+@require_http_methods(["POST"])
+def job_start(request, job_id):
+    """A separate explicit slice action; never submits to any printer."""
+    if not request.user.has_perm("core.add_fileasset"):
+        return _error("You do not have permission to start slicing.", 403)
+    try:
+        job = queue_draft(job_id, request.user)
+    except (SlicerExecutionError, ValueError) as exc:
+        return _error(str(exc), 409)
+    return JsonResponse({"job": serialise(job), "queued": True}, status=202)

@@ -8,6 +8,7 @@ urlpatterns = [
     path("printing/slicer/jobs/", slicer_api.jobs, name="api-slicer-jobs"),
     path("printing/slicer/profiles/", slicer_api.profiles, name="api-slicer-profiles"),
     path("printing/slicer/jobs/<uuid:job_id>/", slicer_api.job_detail, name="api-slicer-job-detail"),
+    path("printing/slicer/jobs/<uuid:job_id>/start/", slicer_api.job_start, name="api-slicer-job-start"),
 
     path("device/v1/pending-work/", device_pending_work.pending_work, name="device-pending-work"),
     path("device/tag-lookup/", device_tag_lookup.begin, name="api-device-tag-lookup-begin"),
