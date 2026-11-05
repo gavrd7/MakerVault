@@ -166,6 +166,7 @@ class GcodePrinterContractTests(SimpleTestCase):
         self.assertTrue(availability(k1)["k1_native_model"])
         self.assertFalse(availability(k1)["can_start"])
         k1.config = {**(k1.config or {}), "k1_native_start_test_enabled": True}
+        k1.last_snapshot["source_metadata"] = {"cfs_connected": False}
         self.assertTrue(availability(k1)["k1_native_test_enabled"])
         self.assertTrue(availability(k1)["can_start"])
         with self.assertRaisesRegex(GcodeSubmissionError, "crash-risk acknowledgement"):
