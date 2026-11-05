@@ -701,17 +701,22 @@ class NativeGcodeAdapterTests(SimpleTestCase):
         self.assertIsNone(_safe_printer_file("../escape.gcode"))
         self.assertIsNone(_safe_printer_file("/etc/escape.gcode"))
 
-    def test_creality_native_start_requires_separate_opt_in_and_no_cfs(self):
+    def test_creality_native_start_requires_idle_no_cfs_not_legacy_opt_in(self):
         cc = connection("creality_local")
         cc.printer = SimpleNamespace(model="K1", catalog_model=None)
-        cc.config["gcode_submission_enabled"] = True
-        self.assertFalse(availability(cc)["can_start"])
-        cc.config["creality_single_spool_start_enabled"] = True
+        # Native file starts use the normal explicit confirmation flow.
+        # Old experimental configuration flags neither enable nor block it.
+        cc.config["gcode_submission_enabled"] = False
+        cc.config["creality_single_spool_start_enabled"] = False
         cc.last_snapshot["source_metadata"] = {"cfs_connected": False}
-        # A previous experimental opt-in cannot bypass the new K1
-        # hardware-restart safety gate, even with no CFS connected.
-        self.assertFalse(availability(cc)["can_start"])
+        self.assertTrue(availability(cc)["can_start"])
+        _require_action_ready(cc, "print")
+        cc.config["creality_single_spool_start_enabled"] = True
+        self.assertTrue(availability(cc)["can_start"])
         cc.last_snapshot["source_metadata"] = {"cfs_connected": True}
+        self.assertFalse(availability(cc)["can_start"])
+        cc.last_snapshot["source_metadata"] = {"cfs_connected": False}
+        cc.last_snapshot["state"] = "printing"
         self.assertFalse(availability(cc)["can_start"])
 
     def test_k2_detection_and_post_print_terminal_states(self):
