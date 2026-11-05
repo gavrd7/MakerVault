@@ -16,7 +16,7 @@ import requests
 from django.db import transaction
 from django.utils import timezone
 
-from .gcode_analysis import compare_printer_metadata, inspect_asset
+from .gcode_analysis import MAX_SCAN_BYTES, analyse_text, compare_printer_metadata, inspect_asset
 from .models import FileAsset, Printer, PrinterConnection, PrinterGcodeSubmission
 from .printer_connectivity import normalise_moonraker_endpoint, normalise_printer_endpoint
 from .manufacturer_printer_adapters import normalise_prusalink_endpoint
@@ -312,6 +312,44 @@ def _verify_creality_upload(connection, remote_path, expected_size):
     )
 
 
+def inspect_printer_file(connection, remote_path):
+    """Optional, bounded, read-only G-code inspection over an existing Moonraker API.
+
+    Does not require Moonraker for the native Creality adapter generally. No
+    other printer protocols are assumed capable of returning file contents.
+    """
+    if not _valid_path(remote_path):
+        raise GcodeSubmissionError("Invalid printer file path.", 400)
+    source = (_same_printer_moonraker(connection) if connection.adapter == "creality_local"
+              else connection if connection.adapter in MOONRAKER_ADAPTERS else None)
+    if source is None or not _online(source):
+        raise GcodeSubmissionError("Read-only file inspection is not available through this printer connection.", 409)
+    match = next((item for item in list_printer_gcodes(source) if item["path"] == remote_path), None)
+    if not match:
+        raise GcodeSubmissionError("The selected file is no longer available on the printer.", 404)
+    size = match.get("size_bytes")
+    if type(size) is not int or size < 0 or size > MAX_SCAN_BYTES:
+        raise GcodeSubmissionError("This printer file cannot be fully inspected within the 32 MiB analysis limit.", 409)
+    base, headers = _moonraker(source)
+    try:
+        with requests.get(
+            base + "/server/files/gcodes/" + quote(remote_path, safe="/"),
+            headers=headers, timeout=(3, 25), stream=True, allow_redirects=False,
+        ) as response:
+            if response.status_code != 200:
+                raise GcodeSubmissionError("Printer did not return the requested G-code for inspection.", 502)
+            data = bytearray()
+            for chunk in response.iter_content(chunk_size=65536):
+                data.extend(chunk)
+                if len(data) > MAX_SCAN_BYTES or len(data) > size:
+                    raise GcodeSubmissionError("Printer file exceeded its declared size or analysis limit.", 409)
+    except requests.RequestException as exc:
+        raise GcodeSubmissionError("The printer G-code could not be read for inspection.", 502) from exc
+    if len(data) != size or b"\\x00" in data[:262144]:
+        raise GcodeSubmissionError("Printer G-code is incomplete or not plain text.", 409)
+    return analyse_text(data.decode("utf-8", errors="replace"))
+
+
 def _metadata(connection, path):
     if connection.adapter in {"octoprint", "prusa", "flashforge"}:
         return {}  # Printer storage filenames alone are not verified slicer profiles.
@@ -565,8 +603,8 @@ def submit(connection, user, payload):
     source, action = payload.get("source"), payload.get("action")
     use_sliced_cfs = payload.get("cfs_mode") == "use_sliced"
     use_mapped_cfs = payload.get("cfs_mode") == "mapped"
-    if use_mapped_cfs and (action != "print" or source != "makervault"):
-        raise GcodeSubmissionError("Mapped CFS starts require an existing MakerVault G-code file.", 400)
+    if use_mapped_cfs and action != "print":
+        raise GcodeSubmissionError("Mapped CFS starts require an explicit print action.", 400)
     if payload.get("cfs_mode") not in (None, "", "use_sliced", "mapped"):
         raise GcodeSubmissionError("Unsupported CFS print mode.", 400)
     if use_sliced_cfs and (action != "print" or payload.get("cfs_acknowledged") is not True):
@@ -634,12 +672,13 @@ def submit(connection, user, payload):
         # upload or print command with unknown delivery status.
         _require_action_ready(connection, action, use_sliced_cfs=use_sliced_cfs, use_mapped_cfs=use_mapped_cfs)
         if source == "printer":
-            if connection.adapter == "creality_local" and not use_sliced_cfs and (connection.last_snapshot or {}).get("source_metadata", {}).get("cfs_connected"):
+            if connection.adapter == "creality_local" and not (use_sliced_cfs or use_mapped_cfs) and (connection.last_snapshot or {}).get("source_metadata", {}).get("cfs_connected"):
                 raise GcodeSubmissionError("Creality CFS is connected: single-spool start is blocked pending material mapping.")
             if remote_path not in {f["path"] for f in list_printer_gcodes(connection)}:
                 raise GcodeSubmissionError("Printer file no longer exists. Refresh the printer file list.")
             meta = _metadata(connection, remote_path)
-            report = {"printer_hints": [meta["printer_model"]] if meta.get("printer_model") else []}
+            report = (inspect_printer_file(connection, remote_path) if use_mapped_cfs else
+                      {"printer_hints": [meta["printer_model"]] if meta.get("printer_model") else []})
         else:
             analysis = inspect_asset(asset)["analysis"]
             report = analysis
