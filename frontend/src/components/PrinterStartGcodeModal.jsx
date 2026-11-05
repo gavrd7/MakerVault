@@ -197,9 +197,9 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
       <p>MakerVault uses stock Creality LAN protocols for this connection. Moonraker is optional when the printer separately exposes its API; it is not required for native file browsing, uploads or single-spool prints.</p>
       {onConfigureMoonraker && <button type="button" onClick={onConfigureMoonraker}>Configure additional Moonraker source</button>}
     </details>}
-    {connection.adapter === "prusa" && <div className="settingsCallout"><strong>Experimental PrusaLink transfer</strong><p>Native PrusaLink v1 file listing, upload and start support is unverified on physical hardware. Unsupported firmware returns an error; never assume print acceptance until confirmed on the printer.</p></div>}
+    {connection.adapter === "prusa" && <div className="settingsCallout"><strong>PrusaLink file transfer</strong><p>Native PrusaLink v1 file listing, upload and start support is unverified on physical hardware. Unsupported firmware returns an error; never assume print acceptance until confirmed on the printer.</p></div>}
     {connection.adapter === "bambu_local" && <div className="printingManageForm">
-      <strong>Bambu LAN storage — read-only experimental browser</strong>
+      <strong>Bambu LAN storage — file browser</strong>
       <p>Bambu may expose its files over implicit FTPS on port 990. The browser requires an independently verified certificate SHA-256 fingerprint; no file is uploaded and no print command is available.</p>
       <label>FTPS certificate SHA-256 fingerprint
         <input value={bambuPin} onChange={e => setBambuPin(e.target.value)} placeholder="64 hexadecimal characters, colons optional" autoComplete="off" />
@@ -214,8 +214,8 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
       <small>FTPS availability differs by Bambu model and firmware. A PIN mismatch or unsupported TLS handshake fails closed. Starting Bambu print jobs is not implemented.</small>
     </div>}
     {capabilities && !capabilities.supported ? <div className="settingsCallout">
-      <strong>Experimental adapter — printer file submission unavailable</strong>
-      <p>This source supports monitoring, but its storage and start-print protocol is not implemented or verified here. Bambu storage listing is experimental and read-only; Bambu print-start, proprietary Creality and other manufacturer transfer paths still require dedicated implementation and hardware validation.</p>
+      <strong>Printer file submission unavailable</strong>
+      <p>This source supports monitoring, but its storage and start-print protocol is not implemented or verified here. Bambu storage listing is read-only; Bambu print-start, proprietary Creality and other manufacturer transfer paths still require dedicated implementation and hardware validation.</p>
     </div> : <>
       <label>Source<select value={source} onChange={e => { setSource(e.target.value); setError(""); setReceipt(null); }}>
         <option value="new">Upload a new G-code file</option>
@@ -283,9 +283,9 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
               <small role="status">{!selected ? "No CFS slot selected." : !requirement.material ? "Material unknown — cannot check compatibility." : !materialMatch ? "Material mismatch — do not print using this selection." : colourMatch ? "Material and colour match the slicer metadata (advisory only)." : "Material matches, but colour differs or is unknown."}</small>
             </div>;
           })}
-          {!filamentAnalysis?.complete && <p role="status">Slicer metadata is incomplete. Automatic mapping cannot be verified.</p>}
-        </> : <p>There are no explicit sliced filament declarations in this G-code. An automatic matching recommendation cannot be made.</p>)}
-        {source === "printer" && <p>Files already on the printer do not have source filament metadata in this dialog. No mapping is inferred from the filename.</p>}
+          {!filamentAnalysis?.complete && <p role="status">Slicer metadata is incomplete. Check the intended material and colour carefully; mapped printing requires a known material type for every tool.</p>}
+        </> : <p>No sliced filament material information could be found. MakerVault cannot safely send a new CFS mapping for this file. You can upload it without printing, or use the original slicer mapping where supported.</p>)}
+        {source === "printer" && <p>Files already on the printer do not have source filament metadata in this dialog. MakerVault does not infer filament mapping from filenames. Use a saved G-code file to review and change CFS mappings.</p>}
         <small>In mapped-print mode, selections are sent to the K2. The proprietary protocol does not confirm acceptance, so check its display after submitting.</small>
       </>}
     </div>}
