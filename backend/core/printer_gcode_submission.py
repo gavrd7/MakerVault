@@ -433,8 +433,12 @@ def _mapped_cfs_entries(connection, requirements, requested):
 
 def availability(connection):
     adapter = connection.adapter
-    native_opt_in = (connection.config or {}).get("gcode_submission_enabled") is True
-    authorised = bool(connection.controls_enabled)  # owner/role permissions, not UI experiment switches
+    # Native transports are opt-in at the final submission confirmation, not
+    # via experiment switches. Other control adapters retain their existing
+    # connection-level permission setting.
+    authorised = bool(connection.enabled and (
+        connection.controls_enabled or adapter in {"creality_local", "prusa", "flashforge"}
+    ))
     from .flashforge_gcode import supports_simple_print
     simple_flashforge = adapter == "flashforge" and bool(getattr(connection, "printer", None)) and supports_simple_print(connection.printer)
     upload_supported = adapter in FILE_ADAPTERS or adapter == "creality_local" or simple_flashforge
