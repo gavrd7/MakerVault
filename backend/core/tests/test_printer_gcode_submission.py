@@ -15,6 +15,7 @@ from core.printer_gcode_submission import (
     GcodeSubmissionError, _valid_path, availability,
     list_printer_gcodes, _octoprint_upload_receipt, _verify_moonraker_upload,
     _verify_creality_upload, _require_action_ready, _mapped_cfs_entries, _printer_transfer_name,
+    inspect_printer_file,
 )
 
 
@@ -30,6 +31,34 @@ def connection(adapter, *, enabled=True, status="connected", state="idle"):
 
 
 class GcodePrinterContractTests(SimpleTestCase):
+    @patch("core.printer_gcode_submission._same_printer_moonraker")
+    @patch("core.printer_gcode_submission.list_printer_gcodes")
+    @patch("core.printer_gcode_submission.requests.get")
+    def test_read_only_printer_file_inspection_finds_used_filament(self, get, listed, source):
+        moon = connection("moonraker")
+        native = connection("creality_local")
+        source.return_value = moon
+        content = (b"; filament_type = PLA; PLA; PLA; PLA\n"
+                   b"; filament_colour = #000000; #e83d89; #ffffff; #668798\n"
+                   b"T2\nG92 E0\nG1 X10 Y10 E0.2\n")
+        listed.return_value = [{"path": "ghost.gcode", "size_bytes": len(content)}]
+        response = Mock(status_code=200)
+        response.iter_content.return_value = [content]
+        response.__enter__ = Mock(return_value=response)
+        response.__exit__ = Mock(return_value=False)
+        get.return_value = response
+        result = inspect_printer_file(native, "ghost.gcode")
+        self.assertTrue(result["filaments"]["usage_confident"])
+        self.assertEqual(result["filaments"]["used_tool_indices"], [2])
+        self.assertEqual(result["filaments"]["used_requirements"][0]["color_hex"], "#ffffff")
+        self.assertIn("/server/files/gcodes/ghost.gcode", get.call_args.args[0])
+        self.assertFalse(get.call_args.kwargs["allow_redirects"])
+        with self.assertRaises(GcodeSubmissionError):
+            inspect_printer_file(native, "../bad.gcode")
+        source.return_value = None
+        with self.assertRaises(GcodeSubmissionError):
+            inspect_printer_file(native, "ghost.gcode")
+
     def test_printer_transfer_name_preserves_original_before_suffix(self):
         import uuid
         token = uuid.UUID("c1609a3c-d200-4b12-aabb-112233445566")
