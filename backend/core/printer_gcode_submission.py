@@ -444,6 +444,14 @@ def _mapped_cfs_entries(connection, requirements, requested):
     return mapping
 
 
+def _printer_transfer_name(original_name, request_id):
+    """Preserve the original name first, suffix with a stable job identity."""
+    original = PurePosixPath(str(original_name or "job.gcode")).name
+    stem = re.sub(r"[^A-Za-z0-9_.-]", "_", re.sub(r"(?i)\\.gcode$", "", original))
+    stem = stem.strip("._")[:120] or "job"
+    return f"{stem}-mv-{request_id.hex[:12]}.gcode"
+
+
 def _ready_for_start(snapshot):
     # Moonraker/Creality may retain a terminal print_stats state after
     # completion/cancellation until the next job. Never admit active states.
@@ -584,13 +592,8 @@ def submit(connection, user, payload):
             raise GcodeSubmissionError("Select an owned, current plain-text G-code file.", 404)
         if asset.file.size > MAX_UPLOAD_BYTES:
             raise GcodeSubmissionError("This release supports printer transfers up to 64 MiB. Large files require the streaming transport.", 413)
-        # Keep the recognisable original filename first. A deterministic
-        # per-submission suffix prevents collision/overwrite and makes retry
-        # receipts stable even when printer storage changes between requests.
-        original = PurePosixPath(str((asset.metadata or {}).get("original_name") or "job.gcode")).name
-        stem = re.sub(r"[^A-Za-z0-9_.-]", "_", re.sub(r"(?i)\\.gcode$", "", original))
-        stem = stem.strip("._")[:120] or "job"
-        remote_path = f"{stem}-mv-{request_id.hex[:12]}.gcode"
+        # Keep the original filename recognisable; suffix avoids overwrites.
+        remote_path = _printer_transfer_name((asset.metadata or {}).get("original_name"), request_id)
 
     # A repeated request ID is a status lookup, NEVER a second dispatch.
     with transaction.atomic():
