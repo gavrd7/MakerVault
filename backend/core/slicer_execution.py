@@ -76,7 +76,7 @@ def validate_scheduling(job, installed=None):
 def queue_draft(job_id, user):
     installed = verified_installation()
     with transaction.atomic():
-        job = SliceJob.objects.select_for_update().select_related(
+        job = SliceJob.objects.select_for_update(of=("self",)).select_related(
             "owner", "printer", "input_asset",
             "printer_profile", "filament_profile", "process_profile",
         ).filter(pk=job_id, owner=user).first()
@@ -119,7 +119,7 @@ def process_queued_job(job_id):
     """At most one active run; worker loss becomes a failed, never resent job."""
     installed = verified_installation()
     with transaction.atomic():
-        job = SliceJob.objects.select_for_update().select_related(
+        job = SliceJob.objects.select_for_update(of=("self",)).select_related(
             "owner", "input_asset", "printer",
             "printer_profile", "filament_profile", "process_profile",
         ).filter(pk=job_id).first()
