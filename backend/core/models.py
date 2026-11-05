@@ -1193,6 +1193,18 @@ class SliceJob(TimeStampedModel):
     input_asset = models.ForeignKey(
         FileAsset, on_delete=models.PROTECT, related_name="slice_inputs"
     )
+    printer_profile = models.ForeignKey(
+        "SlicerProfile", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="printer_slice_jobs"
+    )
+    filament_profile = models.ForeignKey(
+        "SlicerProfile", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="filament_slice_jobs"
+    )
+    process_profile = models.ForeignKey(
+        "SlicerProfile", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="process_slice_jobs"
+    )
     output_asset = models.ForeignKey(
         FileAsset, on_delete=models.SET_NULL, null=True, blank=True, related_name="slice_outputs"
     )
@@ -1229,6 +1241,15 @@ class SliceJob(TimeStampedModel):
             raise ValidationError({"spool": "Spool must belong to the job owner."})
         if self.input_asset_id and self.input_asset.category not in {"mesh", "slicer"}:
             raise ValidationError({"input_asset": "Select a model or slicer project file."})
+        for kind in ("printer", "filament", "process"):
+            profile = getattr(self, f"{kind}_profile", None)
+            if profile and (
+                profile.owner_id != self.owner_id
+                or profile.engine != self.engine
+                or profile.engine_version != self.engine_version
+                or profile.kind != kind
+            ):
+                raise ValidationError({f"{kind}_profile": "Native slicer profile does not match this job."})
         if self.status == "draft" and self.output_asset_id:
             raise ValidationError({"output_asset": "Draft slice jobs cannot have output G-code."})
 
