@@ -29,7 +29,12 @@ def verified_installation():
         return {}
     digest = os.environ.get("MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST", "")
     version = os.environ.get("MAKERVAULT_SLICER_PRUSA_VERSION", "")
-    if not digest or not version:
+    image_ref = os.environ.get("MAKERVAULT_SLICER_WORKER_IMAGE", "")
+    if (
+        not digest or not version or not image_ref
+        or not image_ref.endswith("@" + digest)
+        or image_ref.count("@") != 1
+    ):
         return {}
     try:
         worker = health()

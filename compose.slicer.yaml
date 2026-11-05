@@ -9,13 +9,17 @@ services:
     environment:
       MAKERVAULT_SLICER_WORKER_URL: http://slicer-worker:8088
       MAKERVAULT_SLICER_WORKER_TOKEN: ${MAKERVAULT_SLICER_WORKER_TOKEN:?Configure a strong worker token}
+      MAKERVAULT_SLICER_EXECUTION_ENABLED: ${MAKERVAULT_SLICER_EXECUTION_ENABLED:-0}
+      MAKERVAULT_SLICER_PRUSA_VERSION: ${MAKERVAULT_SLICER_PRUSA_VERSION:?Set the exact verified PrusaSlicer version}
+      MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST: ${MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST:?Set the pinned verified worker image SHA-256 digest}
+      MAKERVAULT_SLICER_WORKER_IMAGE: ${MAKERVAULT_SLICER_WORKER_IMAGE:?Set the digest-pinned worker image reference}
     networks:
       - makervault_backend
       - makervault_slicer
 
   slicer-worker:
     profiles: ["slicer"]
-    image: ${MAKERVAULT_SLICER_WORKER_IMAGE:?Set an independently verified digest-pinned worker image}
+    image: ${MAKERVAULT_SLICER_WORKER_IMAGE:?Set an independently verified worker image with @sha256 digest}
     container_name: makervault-slicer-worker
     restart: unless-stopped
     user: "10001:10001"
