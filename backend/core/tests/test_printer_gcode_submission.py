@@ -14,6 +14,7 @@ from core.gcode_analysis import inspect_asset
 from core.printer_gcode_submission import (
     GcodeSubmissionError, _valid_path, availability,
     list_printer_gcodes, _octoprint_upload_receipt, _verify_moonraker_upload,
+    _verify_creality_upload, _require_action_ready,
 )
 
 
@@ -201,12 +202,35 @@ class NativeGcodeAdapterTests(SimpleTestCase):
         caps = availability(moon)
         self.assertTrue(caps["can_upload"])
         self.assertFalse(caps["can_start"])
+        self.assertTrue(caps["can_start_sliced_mapping"])
+        with self.assertRaises(GcodeSubmissionError):
+            _require_action_ready(moon, "print")
+        _require_action_ready(moon, "print", use_sliced_cfs=True)
         self.assertTrue(caps["cfs"]["connected"])
         self.assertEqual(caps["cfs"]["slots"][0]["label"], "1B")
         native.last_snapshot["source_metadata"] = {"cfs_connected": False}
         self.assertTrue(availability(moon)["can_start"])
         native.last_seen_at = timezone.now() - timezone.timedelta(minutes=5)
         self.assertFalse(availability(moon)["can_start"])
+        self.assertFalse(availability(moon)["can_start_sliced_mapping"])
+        with self.assertRaises(GcodeSubmissionError):
+            _require_action_ready(moon, "print", use_sliced_cfs=True)
+
+    @patch("core.printer_gcode_submission.PrinterConnection.objects.filter")
+    @patch("core.printer_gcode_submission._verify_moonraker_upload")
+    def test_native_creality_upload_uses_same_printer_moonraker_verification(self, verify, filtered):
+        native = connection("creality_local")
+        native.printer_id = "one-printer"
+        moon = connection("moonraker")
+        filtered.return_value.order_by.return_value = [moon]
+        verify.return_value = {"path": "mv_ghost.gcode", "size_bytes": 1200}
+        result = _verify_creality_upload(native, "mv_ghost.gcode", 1200)
+        self.assertEqual(result["size_bytes"], 1200)
+        verify.assert_called_once_with(moon, "mv_ghost.gcode", 1200)
+        self.assertEqual(filtered.call_args.kwargs["printer_id"], "one-printer")
+        moon.status = "disconnected"
+        with self.assertRaises(GcodeSubmissionError):
+            _verify_creality_upload(native, "mv_ghost.gcode", 1200)
 
     @patch("core.creality_gcode.asyncio.run")
     def test_creality_start_rejects_path_traversal_without_websocket(self, worker):
