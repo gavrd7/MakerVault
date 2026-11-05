@@ -33,6 +33,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   const base = "/api/printing/printers/" + printer.id + "/connections/" + connection.id + "/gcode";
   const cfs = capabilities?.cfs || null;
   const cfsSlicedAvailable = Boolean(capabilities?.can_start_sliced_mapping);
+  const cfsOriginalSupported = Boolean(capabilities?.supports_original_mapping);
   const cfsMappedAvailable = Boolean(capabilities?.can_start_mapped_cfs);
   const selectedAnalysis = source === "printer" ? printerInspection?.filaments : filamentAnalysis;
   const selectedSetup = source === "printer" ? printerInspection?.print_setup : slicedPrintSetup;
@@ -139,7 +140,14 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
     const name = source === "printer" ? remotePath : current?.filename;
     const operation = source === "printer" ? "print" : action;
     const mappedCfs = operation === "print" && mappingMode === "mapped" && cfsMappedAvailable && requirements.length > 0 && !usageUnknown && (source === "printer" ? !!printerInspection : !!assetId);
-    const slicedCfs = operation === "print" && !mappedCfs && cfsSlicedAvailable;
+    const originalSelected = operation === "print" && mappingMode === "original" && cfs?.connected === true;
+    const slicedCfs = originalSelected && cfsSlicedAvailable;
+    if (originalSelected && !cfsSlicedAvailable) {
+      setError(cfsOriginalSupported
+        ? "Original slicer mapping is supported, but the printer is not ready. Refresh its status after the current print finishes."
+        : "Original slicer mapping is unavailable on this connection. Select compatible CFS slots instead.");
+      return;
+    }
     const selections = requirements.map(r => ({
       tool_index: r.tool_index, slot_label: cfsAssignments[r.tool_index] ?? suggestedSlot(r)
     }));
@@ -217,11 +225,6 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
           <small>Native HTTP upload can be verified independently using an enabled Moonraker storage connection on this same printer.</small>
         </details>
       : <div className="settingsCallout">{notice}</div>)}
-    {connection.adapter === "creality_local" && <details className="settingsCallout">
-      <summary><strong>Alternative transport: Moonraker / Klipper (optional)</strong></summary>
-      <p>MakerVault uses stock Creality LAN protocols for this connection. Moonraker is optional when the printer separately exposes its API; it is not required for native file browsing, uploads or single-spool prints.</p>
-      {onConfigureMoonraker && <button type="button" onClick={onConfigureMoonraker}>Configure additional Moonraker source</button>}
-    </details>}
     {connection.adapter === "prusa" && <div className="settingsCallout"><strong>PrusaLink file transfer</strong><p>Native PrusaLink v1 file listing, upload and start support is unverified on physical hardware. Unsupported firmware returns an error; never assume print acceptance until confirmed on the printer.</p></div>}
     {connection.adapter === "bambu_local" && <div className="printingManageForm">
       <strong>Bambu LAN storage — file browser</strong>
@@ -328,18 +331,20 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
         <small>In mapped-print mode, selections are sent to the K2. The proprietary protocol does not confirm acceptance, so check its display after submitting.</small>
       </>}
     </div>}
-    {source !== "new" && (cfsSlicedAvailable || (cfsMappedAvailable && requirements.length > 0 && !usageUnknown)) && <div className="settingsCallout">
+    {source !== "new" && (cfs?.connected === true || cfsOriginalSupported || cfsMappedAvailable) && <div className="settingsCallout">
       <strong>CFS print preparation</strong>
       <p>Review the sliced filament and select the correct loaded CFS slot. You can send these selections to the K2 or use its original slicer mapping.</p>
       <label>Filament mapping
-        <select value={requirements.length && !usageUnknown ? mappingMode : "original"} onChange={e => setMappingMode(e.target.value)}>
+        <select value={mappingMode === "mapped" && (!cfsMappedAvailable || !requirements.length || usageUnknown) ? "original" : mappingMode} onChange={e => setMappingMode(e.target.value)}>
           {cfsMappedAvailable && requirements.length > 0 && !usageUnknown && <option value="mapped">Use selected CFS slots — send mapping to K2</option>}
-          {cfsSlicedAvailable && <option value="original">Use original mapping embedded by the slicer</option>}
+          <option value="original" disabled={!cfsOriginalSupported}>Use original mapping embedded by the slicer{!cfsOriginalSupported ? " — unavailable on this connection" : ""}</option>
         </select>
       </label>
       <small>{requirements.length > 0 && mappingMode === "mapped"
-        ? "MakerVault will send a new native K2 filament mapping before print-start. The printer provides no confirmed acknowledgement; check its display."
-        : "The original slicer-selected mapping will be used without changes. Review the printer's loaded filaments."}</small>
+        ? "MakerVault will send a new native K2 filament mapping before print-start. Check the printer display."
+        : cfsOriginalSupported
+          ? "The original slicer assignments are retained." + (!cfsSlicedAvailable ? " Wait until the printer is ready before starting." : "")
+          : "Original mapping requires a supported printer connection; you can still choose loaded CFS slots manually."}</small>
     </div>}
       {source === "makervault" && (checking ? <p>Analysing printer metadata…</p> : verdict && <div className="settingsCallout" role="status">
         <strong>{verdict.status === "mismatch" ? "Printer mismatch — blocked" : verdict.status === "metadata_match" ? "Printer name matches; full safety not verified" : "Printer identity unknown"}</strong>
@@ -351,6 +356,13 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
           <option value="print" disabled={cfs?.applicable && !capabilities?.can_start && !cfsSlicedAvailable && !cfsMappedAvailable}>Upload and start print{cfsMappedAvailable ? " — review CFS slots" : cfsSlicedAvailable ? " — original sliced CFS mapping" : cfs?.applicable && !capabilities?.can_start ? " — CFS mode unavailable" : ""}</option>
         </select></label>}
         <div className="formActions">
+          {connection.adapter === "creality_local" && <details style={{ marginRight: "auto", alignSelf: "center", maxWidth: "min(100%, 370px)", textAlign: "left" }}>
+            <summary style={{ cursor: "pointer", fontSize: "0.85rem" }}>Other connection option</summary>
+            <div style={{ paddingTop: 8, fontSize: "0.85rem" }}>
+              <p>Moonraker / Klipper is an optional additional printer connection. Native Creality monitoring, CFS detection and uploads do not require it.</p>
+              {onConfigureMoonraker && <button type="button" onClick={onConfigureMoonraker}>Configure Moonraker connection</button>}
+            </div>
+          </details>}
           <button type="button" onClick={onClose}>Cancel</button>
           <button type="button" className="primary" onClick={submit}
             disabled={busy || checking || printerInspecting || !canEdit || !capabilities?.supported ||
