@@ -396,9 +396,18 @@ def creality_cfs_context(connection):
     }
 
 
+def _is_k2(connection):
+    printer = getattr(connection, "printer", None)
+    model = " ".join((str(getattr(printer, "model", "") or ""),
+                      str(getattr(getattr(printer, "catalog_model", None), "name", "") or "")))
+    return bool(re.search(r"\\bK2(?:\\b|$)", model.upper()))
+
+
 def _mapped_cfs_entries(connection, requirements, requested):
     """Build validated tool-to-slot mappings from current native CFS telemetry."""
     context = creality_cfs_context(connection)
+    if not _is_k2(connection):
+        raise GcodeSubmissionError("Native CFS slot mapping currently supports K2 models only.", 409)
     if not context["verified"] or context["connected"] is not True:
         raise GcodeSubmissionError("Fresh CFS slot information is required before mapping.", 409)
     if not isinstance(requirements, list) or not 1 <= len(requirements) <= 4:
@@ -449,7 +458,7 @@ def availability(connection):
     # Moonraker can run the original, slicer-embedded CFS mapping without
     # changing any slots. It cannot apply a MakerVault-selected override.
     mapped_mapping_candidate = bool(
-        adapter in {"moonraker", "creality_local"} and online and authorised
+        _is_k2(connection) and adapter in {"moonraker", "creality_local"} and online and authorised
         and cfs["applicable"] and cfs["verified"] and cfs["connected"] is True
         and cfs["slots"] and (connection.last_snapshot or {}).get("state") == "idle"
         and not (connection.last_snapshot or {}).get("source_metadata", {}).get("power_loss_recovery")
