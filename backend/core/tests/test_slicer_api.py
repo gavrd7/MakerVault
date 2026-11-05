@@ -18,7 +18,8 @@ class SliceJobApiTests(TestCase):
         self.owner.user_permissions.add(permission)
         self.printer = Printer.objects.create(owner=self.owner, name="Test printer", model="Test FDM")
         self.input_asset = FileAsset.objects.create(
-            owner=self.owner, name="part.stl", category="mesh"
+            owner=self.owner, name="Printable Part", category="mesh",
+            metadata={"extension": ".stl", "original_name": "part.stl"}
         )
         self.url = "/api/printing/slicer/jobs/"
         self.payload = {
@@ -54,6 +55,13 @@ class SliceJobApiTests(TestCase):
         detail = self.client.get(f"{self.url}{job.pk}/")
         self.assertEqual(detail.status_code, 200)
         self.assertFalse(detail.json()["execution_available"])
+
+    def test_stl_extension_is_taken_from_metadata_not_display_title(self):
+        self.client.force_login(self.owner)
+        self.assertEqual(self.post().status_code, 201)
+        self.input_asset.metadata = {"extension": ".3mf", "original_name": "part.3mf"}
+        self.input_asset.save(update_fields=["metadata"])
+        self.assertEqual(self.post().status_code, 400)
 
     def test_drafts_are_owner_scoped_even_when_id_known(self):
         self.client.force_login(self.owner)

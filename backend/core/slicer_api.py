@@ -76,7 +76,16 @@ def _draft(user, data):
     if not input_asset or input_asset.category not in {"mesh", "slicer"}:
         raise ValueError("Choose a model asset you own.")
     # Initial preparation accepts STL only; 3MF parsing requires a verified worker.
-    if not input_asset.name.lower().endswith(".stl"):
+    metadata = input_asset.metadata or {}
+    original_filename = str(metadata.get("original_name") or "")
+    stored_filename = str(input_asset.file.name or "")
+    suffix = str(metadata.get("extension") or "").lower()
+    if not (
+        suffix == ".stl"
+        or original_filename.lower().endswith(".stl")
+        or stored_filename.lower().endswith(".stl")
+        or input_asset.name.lower().endswith(".stl")
+    ):
         raise ValueError("The initial slicing workflow accepts STL input only.")
     printer = Printer.objects.filter(pk=_uuid(data.get("printer_id")), owner=user, is_active=True).first()
     if not printer:
