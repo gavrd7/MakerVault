@@ -648,7 +648,28 @@ def availability(connection):
         and _ready_for_start(moonraker_for_sliced.last_snapshot)
         and not (connection.last_snapshot or {}).get("source_metadata", {}).get("power_loss_recovery")
     )
+    # Explain why supervised K1 printing is unavailable. These are
+    # read-only diagnostics; never weaken the existing start checks.
+    k1_blockers = []
+    if _k1_native_start_suspended(connection):
+        if not _k1_native_test_enabled(connection):
+            k1_blockers.append("Supervised K1 native print-start is not enabled for this connection.")
+        if not online:
+            k1_blockers.append("Native printer telemetry is offline or older than 60 seconds.")
+        if not authorised:
+            k1_blockers.append("Printer connection or submission permissions are disabled.")
+        if cfs_blocks_start:
+            k1_blockers.append("A fresh native reading must explicitly confirm no CFS is connected.")
+        meta = (connection.last_snapshot or {}).get("source_metadata") or {}
+        if meta.get("cfs_connected") is True:
+            k1_blockers.append("Native telemetry reports CFS hardware connected.")
+        if not _ready_for_start(connection.last_snapshot):
+            k1_blockers.append("Printer is not confirmed idle (reported state: %s)." % str(
+                (connection.last_snapshot or {}).get("state") or "unknown")[:32])
+        if meta.get("power_loss_recovery"):
+            k1_blockers.append("Printer reports an active power-loss recovery condition.")
     return {
+        "k1_start_blockers": k1_blockers,
         "can_browse": adapter in BROWSE_ADAPTERS,
         "k1_native_test_enabled": _k1_native_test_enabled(connection),
         "k1_native_model": _k1_native_start_suspended(connection),
