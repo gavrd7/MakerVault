@@ -118,6 +118,40 @@ class PrinterConnectivityAdapterTests(TestCase):
         self.assertEqual(snapshot["source_metadata"]["klippy_state"], "ready")
         self.assertTrue(all(call.kwargs["headers"]["X-Api-Key"] == "secret" for call in get_mock.call_args_list))
 
+    @patch("core.printer_connectivity.poll_moonraker")
+    @patch("core.models.PrinterConnection.objects.filter")
+    def test_stale_creality_processing_reconciles_only_with_live_ready_moonraker(self, filtered, moon_poll):
+        from types import SimpleNamespace
+        from core.printer_connectivity import _reconcile_creality_processing
+        native = SimpleNamespace(printer_id="my-k2")
+        moon = SimpleNamespace(endpoint_url="http://k2.local:7125", config={})
+        filtered.return_value.order_by.return_value = [moon]
+        stale = {
+            "state": "processing", "state_label": "Preparing", "online": True,
+            "job": {"file_name": "ghost.gcode", "progress": 0},
+            "source_metadata": {"cfs_connected": True},
+        }
+        moon_poll.return_value = {
+            "state": "cancelled", "online": True,
+            "source_metadata": {"klippy_state": "ready"},
+        }
+        result = _reconcile_creality_processing(native, stale)
+        self.assertEqual(result["state"], "idle")
+        self.assertEqual(result["job"]["file_name"], "")
+        self.assertEqual(result["source_metadata"]["previous_job_filename"], "ghost.gcode")
+        self.assertTrue(result["source_metadata"]["cfs_connected"])
+        self.assertEqual(stale["state"], "processing")
+        self.assertEqual(filtered.call_args.kwargs["printer_id"], "my-k2")
+        for printer_state, klippy_state in (("printing", "ready"), ("idle", "shutdown"), ("unknown", "ready")):
+            moon_poll.return_value = {
+                "state": printer_state, "online": True,
+                "source_metadata": {"klippy_state": klippy_state},
+            }
+            self.assertEqual(_reconcile_creality_processing(native, stale), stale)
+        moon_poll.side_effect = PrinterConnectionError("unreachable")
+        self.assertEqual(_reconcile_creality_processing(native, stale), stale)
+        self.assertEqual(_reconcile_creality_processing(native, {"state": "printing"}), {"state": "printing"})
+
     def test_creality_endpoint_accepts_existing_host_field(self):
         self.assertEqual(
             normalise_creality_endpoint("192.168.1.34"),
