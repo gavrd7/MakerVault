@@ -39,6 +39,8 @@ class OrcaFixtureVerificationTests(TestCase):
         self.assertFalse(report["approved_for_production"])
         self.assertEqual(report["gcode_bytes"], len(b"; fixture output\nG1 X10 Y20 E1\n"))
         self.assertEqual(len(report["gcode_sha256"]), 64)
+        self.assertEqual(report["engine_binary_sha256"], __import__("hashlib").sha256(self.binary.read_bytes()).hexdigest())
+        self.assertFalse(report["approved_for_production"])
 
     def test_rejects_empty_or_unsafe_output(self):
         for generated in (b"", b"; no path\n", b"M112\nG1 X1 Y1\n", b"G1 X1 Y1\x00"):

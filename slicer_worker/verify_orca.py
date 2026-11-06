@@ -11,6 +11,7 @@ verified. It fails unless the real CLI emits bounded, compatible G-code.
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -18,8 +19,16 @@ from .orca_runner import run_orca
 from .runner import MAX_MODEL_BYTES, MAX_PROFILE_BYTES, WorkerError
 
 
-def verify_fixture(binary: Path, model: Path, printer: Path, filament: Path, process: Path):
+def verify_fixture(binary: Path, model: Path, printer: Path, filament: Path, process: Path, engine_version: str = ""):
     binary = Path(binary)
+    if not isinstance(engine_version, str) or len(engine_version) > 80:
+        raise WorkerError("Invalid exact engine version.")
+    if binary.is_symlink() or not binary.is_file() or not 0 < binary.stat().st_size <= 1024 * 1024 * 1024:
+        raise WorkerError("The fixture must use an existing reviewed Orca executable.")
+    engine_sha = hashlib.sha256()
+    with binary.open("rb") as binary_file:
+        while block := binary_file.read(1024 * 1024):
+            engine_sha.update(block)
     with TemporaryDirectory(prefix="makervault-orca-fixture-") as temp:
         root = Path(temp)
         for source, name, size in (
@@ -48,6 +57,8 @@ def verify_fixture(binary: Path, model: Path, printer: Path, filament: Path, pro
                     raise WorkerError("Unsafe firmware-control command in fixture output.")
         return {
             "engine": "orcaslicer",
+            "engine_version": engine_version,
+            "engine_binary_sha256": engine_sha.hexdigest(),
             "fixture_sha256": hashlib.sha256((root / "input.stl").read_bytes()).hexdigest(),
             "printer_profile_sha256": hashlib.sha256((root / "printer.json").read_bytes()).hexdigest(),
             "filament_profile_sha256": hashlib.sha256((root / "filament.json").read_bytes()).hexdigest(),
@@ -63,9 +74,11 @@ def main():
     parser = argparse.ArgumentParser(description="Validate one real OrcaSlicer CLI fixture")
     for name in ("binary", "model", "printer", "filament", "process"):
         parser.add_argument("--" + name, required=True, type=Path)
+    parser.add_argument("--engine-version", required=True, type=str,
+                        help="Exact release/build version independently checked by administrator")
     args = parser.parse_args()
     try:
-        result = verify_fixture(args.binary, args.model, args.printer, args.filament, args.process)
+        result = verify_fixture(args.binary, args.model, args.printer, args.filament, args.process, args.engine_version)
     except WorkerError as exc:
         parser.exit(1, "Orca fixture verification failed: " + str(exc) + "\n")
     print(json.dumps(result, sort_keys=True))

@@ -1156,6 +1156,8 @@ class SlicerProfile(TimeStampedModel):
     content_sha256 = models.CharField(max_length=64)
     status = models.CharField(max_length=16, choices=STATES, default="candidate")
     provenance = models.CharField(max_length=200, blank=True)
+    verification_evidence = models.JSONField(default=dict, blank=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["engine", "kind", "name", "-created_at"]
