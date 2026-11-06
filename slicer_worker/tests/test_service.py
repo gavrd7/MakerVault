@@ -27,6 +27,29 @@ class SlicerWorkerProtocolTests(TestCase):
         }):
             self.assertIsNone(configured_engine())
 
+    def test_exact_binary_checksum_is_required_without_launching_the_slicer(self):
+        import hashlib
+        from tempfile import TemporaryDirectory
+        from pathlib import Path
+        with TemporaryDirectory() as tmp:
+            binary = Path(tmp) / "orca"
+            binary.write_bytes(b"verified fixture engine")
+            binary.chmod(0o700)
+            settings = {
+                "SLICER_WORKER_ENABLED": "1",
+                "SLICER_WORKER_TOKEN": "x" * 40,
+                "SLICER_ENGINE": "orcaslicer",
+                "SLICER_ENGINE_BINARY": str(binary),
+                "SLICER_ENGINE_VERSION": "2.4.2",
+                "SLICER_ENGINE_BINARY_SHA256": hashlib.sha256(binary.read_bytes()).hexdigest(),
+            }
+            with patch.dict(os.environ, settings, clear=True):
+                self.assertEqual(configured_engine()["engine"], "orcaslicer")
+            with patch.dict(os.environ, {**settings, "SLICER_ENGINE_BINARY_SHA256": "0" * 64}, clear=True):
+                self.assertIsNone(configured_engine())
+            with patch.dict(os.environ, {k: v for k, v in settings.items() if k != "SLICER_ENGINE_BINARY_SHA256"}, clear=True):
+                self.assertIsNone(configured_engine())
+
     def test_fixed_payload_accepts_only_bounded_inputs(self):
         decoded = _decode_payload(self.payload())
         self.assertEqual(decoded["model"], b"stl")

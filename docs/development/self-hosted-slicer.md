@@ -83,6 +83,8 @@ The branch now includes `slicer_worker/verify_orca.py`, which runs one real Orca
 
 **Worker recovery:** draft and queued jobs can be cancelled before a worker claims them (separate permission required); running jobs cannot yet be cancelled because a safe remote process-termination protocol is not installed. The administrative command `python manage.py reconcile_slice_jobs` marks queue entries older than 30 minutes and running entries older than 25 minutes as **stale** without retrying them. A late worker output cannot replace a stale job. The optional worker now answers health checks independently but limits execution to one concurrent slice.
 
+**Binary verification:** worker readiness now verifies an exact `SLICER_ENGINE_BINARY_SHA256` against the actual installed executable rather than invoking an unverified Orca `--version` flag. This checksum is an integrity check, **not independent proof of the binary's claimed version, licence or safe behaviour**. Approval requires a reviewed release/build identity and successful real fixture receipt. The opt-in Compose overlay requires `MAKERVAULT_SLICER_ENGINE_BINARY_SHA256`; no default checksum is supplied.
+
 **Deployment status:** No engine image or profiles are automatically downloaded, installed or enabled by normal MakerVault updates. Worker execution remains opt-in and depends on exact pinned image/version, matched runtime health and admin-approved native profile records. Real Orca fixture execution, worker container integrity, licence/SBOM review and profile-approval tooling remain prerequisites before user testing.
 
 ## Safety and release gates

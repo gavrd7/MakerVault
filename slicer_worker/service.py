@@ -12,7 +12,7 @@ from threading import BoundedSemaphore
 import json
 import os
 from pathlib import Path
-import subprocess
+from functools import lru_cache
 import tempfile
 import uuid
 
@@ -28,33 +28,44 @@ MAX_OUTPUT_BYTES = MAX_GCODE_BYTES
 SLICE_SLOT = BoundedSemaphore(value=1)
 
 
+@lru_cache(maxsize=8)
+def _binary_digest(path, file_size, modified_ns, inode):
+    """Cache only a pinned executable whose inode/size/mtime are unchanged."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as stream:
+        while chunk := stream.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def configured_engine():
-    """An installed executable is not enough: admin must opt in explicitly."""
+    """A reviewed exact binary checksum is required; no GUI/CLI probing."""
     token = os.environ.get("SLICER_WORKER_TOKEN", "")
     engine = os.environ.get("SLICER_ENGINE", "orcaslicer")
     binary = os.environ.get("SLICER_ENGINE_BINARY", "")
+    expected_sha256 = os.environ.get("SLICER_ENGINE_BINARY_SHA256", "")
     version = os.environ.get("SLICER_ENGINE_VERSION", "")
     if (
         os.environ.get("SLICER_WORKER_ENABLED") != "1"
         or len(token) < 32 or engine not in {"orcaslicer", "prusaslicer"}
         or not binary or not version or len(version) > 80
+        or len(expected_sha256) != 64
+        or any(char not in "0123456789abcdef" for char in expected_sha256)
     ):
         return None
     path = Path(binary)
     if not path.is_absolute() or path.is_symlink() or not path.is_file():
         return None
     try:
-        result = subprocess.run(
-            [str(path), "--version"], capture_output=True, timeout=8,
-            env={"HOME": "/tmp", "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"},
-            check=False,
-        )
-    except (OSError, subprocess.SubprocessError):
+        stat = path.stat()
+        if stat.st_size <= 0 or stat.st_size > 1024 * 1024 * 1024:
+            return None
+        if _binary_digest(str(path), stat.st_size, stat.st_mtime_ns, stat.st_ino) != expected_sha256:
+            return None
+    except (OSError, ValueError):
         return None
-    # Exact verified version still requires a pinned build/fixture; this
-    # health check only rules out obviously unrelated executable installs.
-    if result.returncode != 0 or version.encode() not in result.stdout[:1024]:
-        return None
+    # The declared version must be cross-checked against a trusted release
+    # and real fixture receipt by the administrator before enabling the image.
     return {"binary": path, "engine": engine, "version": version, "token": token}
 
 
