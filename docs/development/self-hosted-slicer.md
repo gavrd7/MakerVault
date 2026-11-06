@@ -123,6 +123,14 @@ This checks all three profiles but makes **no changes**. Only after verifying th
 
 The app remains disabled without `MAKERVAULT_SLICER_EXECUTION_ENABLED=1`. That flag **does not bypass** native-profile verification, exact hash checks or the normal separate printer-submission confirmation. This procedure is an acceptance specification, not a claim that a real engine run or security review has passed.
 
+## Preparation UI: source geometry and native machine volume
+
+The first workbench inspection stage is now implemented without installing a slicer:
+- Selecting a private STL scans at most 32 MiB, validates binary or ASCII facet structure and displays measured X/Y/Z bounds and triangle count beside MakerVault's existing 3D model preview. An invalid file reports an inspection error; it is not silently accepted as printable.
+- Selecting an imported Orca machine profile displays the `printable_area` polygon's bounding extent and `printable_height` when those fields are present in the original, checksum-verified native JSON. Missing or inherited machine presets are labelled incomplete/unavailable until their authentic parent chain is provided.
+- These are **two independent read-only measurements**. They do not modify geometry, position an object on the plate, account for bed exclusions, detect nozzle crashes or certify that a slice/print can succeed. Real placement, orientation, volume compatibility and support generation remain tasks for the verified Orca engine and forthcoming interactive plate editor.
+- Both inspection endpoints enforce FileAsset or SlicerProfile owner isolation, bound input sizes, and avoid passing arbitrary paths or execution options to a slicer.
+
 ## Safety and release gates
 
 1. Verify service isolation and no untrusted model/profile can escape a job sandbox, access the network/secret mounts or run arbitrary CLI flags.
