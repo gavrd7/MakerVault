@@ -29,7 +29,7 @@ class OrcaRunnerTests(TestCase):
         self.assertEqual(cmd[1], str(self.root / "input.stl"))
         self.assertEqual(cmd[cmd.index("--slice") + 1], "1")
         self.assertEqual(cmd[cmd.index("--load-filaments") + 1], str(self.root / "filament.json"))
-        self.assertIn(str(self.root / "printer.json") + ";" + str(self.root / "process.json"), cmd)
+        self.assertIn(str(self.root / "process.json") + ";" + str(self.root / "printer.json"), cmd)
 
     def test_rejects_fake_stl_before_launching_orca(self):
         (self.root / "input.stl").write_bytes(b"not a real STL")
