@@ -5,6 +5,7 @@ from . import api_views, printed_parts, camera_views, reusable_spools, reusable_
 
 urlpatterns = [
     path("printing/slicer/engines/", slicer_api.engines, name="api-slicer-engines"),
+    path("printing/slicer/meshes/<uuid:asset_id>/inspection/", slicer_api.inspect_mesh, name="api-slicer-inspect-mesh"),
     path("printing/slicer/jobs/", slicer_api.jobs, name="api-slicer-jobs"),
     path("printing/slicer/profiles/", slicer_api.profiles, name="api-slicer-profiles"),
     path("printing/slicer/profiles/<uuid:profile_id>/dependencies/", slicer_api.profile_dependencies, name="api-slicer-profile-dependencies"),

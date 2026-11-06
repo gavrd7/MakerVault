@@ -39,6 +39,25 @@ class SliceJobApiTests(TestCase):
             content_type="application/json",
         )
 
+    def test_read_only_mesh_inspection_requires_ownership_and_valid_stl(self):
+        from django.core.files.base import ContentFile
+        stl = (b"solid sample\\nfacet normal 0 0 1\\nouter loop\\n"
+               b"vertex 0 0 0\\nvertex 10 0 0\\nvertex 0 10 2\\n"
+               b"endloop\\nendfacet\\nendsolid sample\\n")
+        self.input_asset.file = ContentFile(stl, name="part.stl")
+        self.input_asset.save(update_fields=["file"])
+        self.client.force_login(self.owner)
+        url = f"/api/printing/slicer/meshes/{self.input_asset.pk}/inspection/"
+        result = self.client.get(url)
+        self.assertEqual(result.status_code, 200, result.content)
+        self.assertEqual(result.json()["mesh"]["size_mm"], [10, 10, 2])
+        self.assertEqual(result.json()["mesh"]["printer_fit"], "not_checked")
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.get(url).status_code, 404)
+        self.client.force_login(self.owner)
+        self.input_asset.file.save("part.stl", ContentFile(b"not an STL"), save=True)
+        self.assertEqual(self.client.get(url).status_code, 422)
+
     def test_inert_draft_lifecycle_and_engine_catalogue(self):
         self.client.force_login(self.owner)
         engines = self.client.get("/api/printing/slicer/engines/")

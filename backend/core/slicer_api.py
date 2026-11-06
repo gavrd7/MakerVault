@@ -12,6 +12,7 @@ from .models import FileAsset, Printer, SliceJob, Spool, SlicerProfile
 from .slicer_engines import engine_catalogue, get_engine
 from .slicer_profiles import SlicerProfileError, inspect_native_profile
 from .slicer_profile_lineage import inspect_orca_lineage
+from .slicer_mesh import inspect_stl, MeshInspectionError, MAX_INSPECTION_BYTES
 from .slicer_execution import (
     SlicerExecutionError, verified_installation, validate_scheduling, queue_draft,
 )
@@ -153,6 +154,31 @@ def _draft(user, data):
         nozzle_mm=nozzle, plate=_preset(data, "plate", 80) if "plate" in data else "default",
         status="draft", settings={},
     )
+
+
+@login_required
+@require_http_methods(["GET"])
+def inspect_mesh(request, asset_id):
+    """Source-file dimensions only; never an implied build-plate compatibility check."""
+    asset = FileAsset.objects.filter(
+        pk=asset_id, owner=request.user, category="mesh"
+    ).first()
+    if not asset:
+        return _error("STL model not found.", 404)
+    metadata = asset.metadata or {}
+    filename = str(metadata.get("original_name") or asset.name)
+    if not (filename.lower().endswith(".stl") or
+            str(metadata.get("extension") or "").lower() == ".stl"):
+        return _error("Only STL models can be inspected.", 400)
+    if not asset.file:
+        return _error("Selected STL has no stored content.", 422)
+    try:
+        with asset.file.open("rb") as stream:
+            raw = stream.read(MAX_INSPECTION_BYTES + 1)
+        result = inspect_stl(raw)
+    except (OSError, ValueError, MeshInspectionError):
+        return _error("STL geometry could not be safely inspected.", 422)
+    return JsonResponse({"file_asset_id": str(asset.pk), "mesh": result})
 
 
 @login_required
