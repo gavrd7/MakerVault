@@ -15,12 +15,13 @@ const initialForm = {
  * Safe preparation-only entry point. A verified slicing worker, real engine-native
  * profile IDs and isolated execution are required before enabling a Slice action.
  */
-export default function SlicerWorkbench({ files = [], printers = [], spools = [], canPrepare = false, canPrint = false, canCancel = false, onBack, onOpenGcode }) {
+export default function SlicerWorkbench({ files = [], printers = [], spools = [], canPrepare = false, canPrint = false, onBack, onOpenGcode }) {
   const [form, setForm] = useState(initialForm);
   const [engines, setEngines] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [profiles, setProfiles] = useState([]);
   const [workerConfigured, setWorkerConfigured] = useState(false);
+  const [mayCancel, setMayCancel] = useState(false);
   const [printSelection, setPrintSelection] = useState(null);
   const [importFile, setImportFile] = useState(null);
   const [importKind, setImportKind] = useState("printer");
@@ -71,6 +72,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       setEngines(catalogue.engines || []);
       setJobs(existing.jobs || []);
       setWorkerConfigured(existing.worker_configured === true);
+      setMayCancel(existing.can_cancel === true);
       setProfiles(native.profiles || []);
     } catch (err) {
       setError(err.message || "Could not load slicing drafts.");
@@ -89,6 +91,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         const result = await apiFetch("/api/printing/slicer/jobs/");
         setJobs(result.jobs || []);
         setWorkerConfigured(result.worker_configured === true);
+        setMayCancel(result.can_cancel === true);
       } catch {
         // Existing draft listing remains visible; manual Refresh reports errors.
       }
@@ -358,7 +361,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           </div>
           <div className="cameraSourceActions">
             {job.can_slice && canPrepare && <button type="button" disabled={busy} onClick={() => startSlice(job)}>Slice now</button>}
-            {canCancel && (job.status === "draft" || job.status === "queued") && <button type="button" disabled={busy} onClick={() => cancelPending(job)}>Cancel {job.status === "queued" ? "queued slice" : "draft"}</button>}
+            {mayCancel && (job.status === "draft" || job.status === "queued") && <button type="button" disabled={busy} onClick={() => cancelPending(job)}>Cancel {job.status === "queued" ? "queued slice" : "draft"}</button>}
             {job.status === "completed" && job.output_asset?.id && canPrint && <button type="button" className="primary" disabled={busy} onClick={() => requestPrint(job)}>Print from slicer</button>}
             {job.status === "completed" && job.output_asset_id && <button type="button" onClick={onOpenGcode}>Open G-code library</button>}
           </div>

@@ -173,6 +173,7 @@ def jobs(request):
         return JsonResponse({
             "jobs": [serialise(job, installed) for job in _rows(request.user)[:100]],
             "worker_configured": bool(installed),
+            "can_cancel": request.user.has_perm("core.change_slicejob"),
         })
     if not request.user.has_perm("core.add_fileasset"):
         return _error("You do not have permission to prepare slicing jobs.", 403)
