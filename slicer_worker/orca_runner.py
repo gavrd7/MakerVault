@@ -76,7 +76,9 @@ def orca_command(binary: Path, workdir: Path):
         str(binary), str(model), "--load-settings",
         str(profiles[2]) + ";" + str(profiles[0]),
         "--load-filaments", str(profiles[1]),
+        "--load-defaultfila",
         "--arrange", "1", "--slice", "1",
+        "--mtcpp", "500000", "--mstpp", "300",
         "--outputdir", str(outdir),
     ]
 

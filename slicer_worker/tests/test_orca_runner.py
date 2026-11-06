@@ -28,6 +28,9 @@ class OrcaRunnerTests(TestCase):
         self.assertEqual(cmd[0], str(self.binary))
         self.assertEqual(cmd[1], str(self.root / "input.stl"))
         self.assertEqual(cmd[cmd.index("--slice") + 1], "1")
+        self.assertIn("--load-defaultfila", cmd)
+        self.assertEqual(cmd[cmd.index("--mtcpp") + 1], "500000")
+        self.assertEqual(cmd[cmd.index("--mstpp") + 1], "300")
         self.assertEqual(cmd[cmd.index("--load-filaments") + 1], str(self.root / "filament.json"))
         self.assertIn(str(self.root / "process.json") + ";" + str(self.root / "printer.json"), cmd)
 
