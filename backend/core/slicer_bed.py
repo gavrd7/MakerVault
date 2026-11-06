@@ -17,11 +17,12 @@ def inspect_orca_plate(profile):
     if profile.engine != "orcaslicer" or profile.kind != "printer":
         raise SlicerProfileError("A native Orca machine profile is required.")
     data = _inspect_source(profile)
-    if data.get("inherits"):
-        return {"status": "requires_parent", "parent": str(data["inherits"])[:200]}
+    parent = data.get("inherits")
     area = data.get("printable_area")
     height = data.get("printable_height")
     if not isinstance(area, list) or not (3 <= len(area) <= 24):
+        if parent:
+            return {"status": "requires_parent", "parent": str(parent)[:200]}
         return {"status": "unavailable", "reason": "Missing native printable-area polygon."}
     try:
         height = float(height)
@@ -49,7 +50,8 @@ def inspect_orca_plate(profile):
     except (TypeError, ValueError, OverflowError):
         return {"status": "invalid", "reason": "Native printable geometry is malformed."}
     return {
-        "status": "available",
+        "status": "partial" if parent else "available",
+        "parent": str(parent)[:200] if parent else None,
         "polygon_mm": points,
         "bounds_mm": {
             "min": [xmin, ymin, 0],

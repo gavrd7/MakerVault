@@ -26,6 +26,17 @@ class OrcaPlateInspectionTests(SimpleTestCase):
         result = self.inspect({"inherits": "Creality K1 base", "printable_area": ["0x0", "220x0", "220x220"]})
         self.assertEqual(result["status"], "requires_parent")
 
+    def test_child_machine_with_explicit_bed_dimensions_is_partial_not_approved(self):
+        result = self.inspect({
+            "inherits": "fdm_creality_common",
+            "printable_area": ["0x0", "260x0", "260x260", "0x260"],
+            "printable_height": "260",
+        })
+        self.assertEqual(result["status"], "partial")
+        self.assertEqual(result["size_mm"], [260, 260, 260])
+        self.assertEqual(result["parent"], "fdm_creality_common")
+        self.assertEqual(result["fit_check"], "not_performed")
+
     def test_incomplete_and_invalid_profiles_do_not_claim_fit(self):
         for obj in (
             {}, {"printable_area": ["0x0", "220x0", "220x220"]},

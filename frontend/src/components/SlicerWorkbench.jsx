@@ -369,9 +369,11 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         <div className="cameraSourceIdentity">
           <strong>Native Orca printer build volume</strong>
           {nativePlate.loading ? <small>Reading machine preset…</small> :
-            nativePlate.plate?.status === "available" ?
+            ["available", "partial"].includes(nativePlate.plate?.status) ?
               <>
                 <small>Declared extent: {nativePlate.plate.size_mm.join(" × ")} mm (X × Y × Z)</small>
+                {nativePlate.plate.status === "partial" &&
+                  <small>Other machine settings remain inherited from: {nativePlate.plate.parent}. Parent profile verification is still required.</small>}
                 <small>This is the source preset's bed polygon extent, not a verified fit or placement check.</small>
               </> :
             nativePlate.plate?.status === "requires_parent" ?
