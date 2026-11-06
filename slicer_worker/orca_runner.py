@@ -111,7 +111,7 @@ def run_orca(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIME
                 if dst.tell() > MAX_GCODE_BYTES:
                     raise WorkerError("G-code exceeded size limit.")
         with target.open("rb") as stream:
-            if b"\\x00" in stream.read(4096):
+            if b"\x00" in stream.read(4096):
                 raise WorkerError("OrcaSlicer produced unsupported binary G-code.")
         return {"status": "completed", "gcode_path": str(target), "bytes": target.stat().st_size}
     except OSError as exc:

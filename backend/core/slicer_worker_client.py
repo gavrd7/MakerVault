@@ -57,7 +57,7 @@ def health():
             raise SlicerWorkerError("Worker returned invalid health information.")
         return {
             "ready": payload.get("ready") is True,
-            "engine": payload.get("engine") if payload.get("engine") == "prusaslicer" else None,
+            "engine": payload.get("engine") if payload.get("engine") in {"orcaslicer", "prusaslicer"} else None,
             "version": str(payload.get("version") or "")[:80],
         }
     except (requests.RequestException, ValueError) as exc:
@@ -73,7 +73,7 @@ def _encode(raw, limit):
 
 
 def run_remote_job(job_id, engine, version, model, printer_profile, filament_profile, process_profile):
-    if engine != "prusaslicer" or not isinstance(version, str) or not version or len(version) > 80:
+    if engine not in {"orcaslicer", "prusaslicer"} or not isinstance(version, str) or not version or len(version) > 80:
         raise SlicerWorkerError("Unsupported slicing worker engine/version.")
     try:
         canonical_id = str(uuid.UUID(str(job_id)))
@@ -116,7 +116,7 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
             data = base64.b64decode(encoded, validate=True)
         except (ValueError, base64.binascii.Error):
             raise SlicerWorkerError("Invalid encoded G-code output.") from None
-        if not data or len(data) > MAX_GCODE or b"\\x00" in data[:4096]:
+        if not data or len(data) > MAX_GCODE or b"\x00" in data[:4096]:
             raise SlicerWorkerError("Worker returned unsupported G-code content.")
         if result.get("bytes") != len(data) or result.get("sha256") != hashlib.sha256(data).hexdigest():
             raise SlicerWorkerError("Worker G-code checksum/length verification failed.")

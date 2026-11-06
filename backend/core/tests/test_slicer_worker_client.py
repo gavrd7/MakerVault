@@ -38,6 +38,8 @@ class SlicerWorkerClientTests(SimpleTestCase):
         self.assertFalse(kwargs["allow_redirects"])
         self.assertTrue(kwargs["headers"]["Authorization"].startswith("Bearer "))
         self.assertEqual(kwargs["timeout"], (3, 900))
+        result = run_remote_job(uuid.uuid4(), "orcaslicer", "2.9.7", b"stl", b"machine", b"filament", b"process")
+        self.assertEqual(result, gcode)
 
     def test_dangerous_engine_or_invalid_inputs_are_rejected_before_transport(self):
         with self.assertRaises(SlicerWorkerError):
