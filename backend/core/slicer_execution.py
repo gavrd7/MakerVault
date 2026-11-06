@@ -6,6 +6,7 @@ and verified worker and explicitly approves all three engine-native profiles.
 """
 import hashlib
 import os
+from datetime import timedelta
 from django.db import transaction
 from django.utils import timezone
 
@@ -186,3 +187,35 @@ def validate_scheduling_for_worker(job, installed):
             or profile.kind != kind or profile.name != getattr(job, f"{kind}_preset")
         ):
             raise SlicerExecutionError("Native slicer profiles are no longer verified.")
+
+
+def reconcile_stale_jobs(*, now=None, limit=250):
+    """Mark abandoned queued/running jobs stale, never redispatch them.
+
+    For a running worker that later finishes, output storage rejects any job
+    already marked stale. This avoids duplicate slicing and ghost output.
+    Run through the optional admin command or a future supervised scheduler.
+    """
+    now = now or timezone.now()
+    if not isinstance(limit, int) or not 1 <= limit <= 1000:
+        raise SlicerExecutionError("Invalid stale-job reconciliation limit.")
+    thresholds = (
+        ("queued", now - timedelta(minutes=30)),
+        ("running", now - timedelta(minutes=25)),
+    )
+    counts = {}
+    with transaction.atomic():
+        for status, cutoff in thresholds:
+            ids = list(
+                SliceJob.objects.filter(status=status, updated_at__lt=cutoff)
+                .order_by("updated_at").values_list("pk", flat=True)[:limit]
+            )
+            updated = SliceJob.objects.filter(
+                pk__in=ids, status=status, updated_at__lt=cutoff
+            ).update(
+                status="stale",
+                message="Worker outcome is unknown. Review and create a new draft if required.",
+                updated_at=now,
+            ) if ids else 0
+            counts[status] = updated
+    return counts
