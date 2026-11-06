@@ -40,3 +40,15 @@ class SlicerWorkerProtocolTests(TestCase):
             with self.subTest(invalid=invalid):
                 with self.assertRaises(WorkerError):
                     _decode_payload({**self.payload(), **invalid})
+
+
+class SlicerWorkerConcurrencyTests(TestCase):
+    def test_worker_slot_allows_one_active_slice(self):
+        from slicer_worker.service import SLICE_SLOT
+        self.assertTrue(SLICE_SLOT.acquire(blocking=False))
+        try:
+            self.assertFalse(SLICE_SLOT.acquire(blocking=False))
+        finally:
+            SLICE_SLOT.release()
+        self.assertTrue(SLICE_SLOT.acquire(blocking=False))
+        SLICE_SLOT.release()

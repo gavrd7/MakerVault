@@ -7,7 +7,8 @@ All file paths are hardcoded scratch names; no arbitrary CLI arguments.
 import base64
 import hashlib
 import hmac
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from threading import BoundedSemaphore
 import json
 import os
 from pathlib import Path
@@ -21,6 +22,10 @@ from .orca_runner import run_orca
 
 MAX_REQUEST_BYTES = 48 * 1024 * 1024
 MAX_OUTPUT_BYTES = MAX_GCODE_BYTES
+
+# One bounded slice at a time. Threaded health checks remain responsive while
+# the one approved job is executing, without concurrent CPU/memory spikes.
+SLICE_SLOT = BoundedSemaphore(value=1)
 
 
 def configured_engine():
@@ -127,6 +132,8 @@ class Handler(BaseHTTPRequestHandler):
             length = 0
         if not 0 < length <= MAX_REQUEST_BYTES:
             return self._json(413, {"error": "Invalid or oversized request."})
+        if not SLICE_SLOT.acquire(blocking=False):
+            return self._json(429, {"error": "Worker is already processing a slice."})
         try:
             self.connection.settimeout(30)
             request = json.loads(self.rfile.read(length))
@@ -158,12 +165,16 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(422, {"error": "Slicing input or output was rejected."})
         except OSError:
             return self._json(500, {"error": "Worker failed to process the slicing job."})
+        finally:
+            SLICE_SLOT.release()
 
 
 def main():
     # Socket is intentionally not published by the optional Compose overlay.
     # Only the MakerVault app is attached to the separate internal network.
-    HTTPServer(("0.0.0.0", 8088), Handler).serve_forever()
+    server = ThreadingHTTPServer(("0.0.0.0", 8088), Handler)
+    server.daemon_threads = True
+    server.serve_forever()
 
 
 if __name__ == "__main__":
