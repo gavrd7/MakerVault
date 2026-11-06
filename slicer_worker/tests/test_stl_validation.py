@@ -37,6 +37,19 @@ class StlValidationTests(TestCase):
             with self.subTest(raw=raw[:25]), self.assertRaises(StlValidationError):
                 validate_stl(raw)
 
+    def test_ascii_stl_rejects_misordered_and_unclosed_facets(self):
+        for raw in (
+            ASCII_TRIANGLE.replace(b"outer loop", b"endloop", 1),
+            ASCII_TRIANGLE.replace(b"endfacet", b""),
+            ASCII_TRIANGLE.replace(b"endsolid part", b""),
+            ASCII_TRIANGLE.replace(b"vertex 0 10 0", b""),
+            ASCII_TRIANGLE.replace(b"facet normal 0 0 1", b"facet normal inf 0 1"),
+            ASCII_TRIANGLE + b"facet normal 0 0 1\\n",
+            b"solid empty\\nendsolid empty\\n",
+        ):
+            with self.subTest(raw=raw[:80]), self.assertRaises(StlValidationError):
+                validate_stl(raw)
+
     def test_committed_small_tetrahedron_fixture(self):
         from pathlib import Path
         fixture_path = Path(__file__).parents[1] / "fixtures" / "tetrahedron.stl"

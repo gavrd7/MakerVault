@@ -37,35 +37,48 @@ def validate_stl(data: bytes) -> dict:
             if not finite_vertices:
                 raise StlValidationError("STL contains no nonzero geometry.")
             return {"format": "binary", "triangles": triangles}
-    # Strict ASCII fallback; reject malformed binary with misleading 'solid'
-    # header by requiring every line to match the ASCII STL grammar.
+    # Enforce ASCII STL nesting, not just counts of facets and vertices.
+    # Malformed or truncated facet boundaries must never be passed to Orca.
+    if len(data) > 32 * 1024 * 1024:
+        raise StlValidationError("STL exceeds the model size limit.")
     try:
         content = data.decode("ascii")
     except UnicodeDecodeError:
         raise StlValidationError("STL is not valid binary or ASCII.") from None
-    lines = content.splitlines()
-    if not lines or not lines[0].strip().lower().startswith("solid"):
+    lines = (line.strip() for line in content.splitlines() if line.strip())
+    first = next(lines, "")
+    if not first.lower().startswith("solid"):
         raise StlValidationError("Invalid ASCII STL header.")
+    state = "facet"
     faces = 0
-    vertices = 0
-    for line in lines[1:]:
-        line = line.strip()
-        if not line:
+    for line in lines:
+        if len(line) > 4096:
+            raise StlValidationError("STL contains an excessively long line.")
+        lowered = line.lower()
+        if state == "facet" and lowered.startswith("endsolid"):
+            if not faces:
+                raise StlValidationError("STL has no triangles.")
+            state = "done"
             continue
-        if _FACET.fullmatch(line):
+        if state == "facet" and (match := _FACET.fullmatch(line)):
+            if not all(math.isfinite(float(n)) and abs(float(n)) <= MAX_COORDINATE_MM for n in match.groups()):
+                raise StlValidationError("STL normal is not finite.")
+            state = "outer"
+        elif state == "outer" and lowered == "outer loop":
+            state = "vertex1"
+        elif state in {"vertex1", "vertex2", "vertex3"} and (match := _VERTEX.fullmatch(line)):
+            if not all(math.isfinite(float(n)) and abs(float(n)) <= MAX_COORDINATE_MM for n in match.groups()):
+                raise StlValidationError("STL has non-finite or extreme coordinates.")
+            state = {"vertex1": "vertex2", "vertex2": "vertex3", "vertex3": "endloop"}[state]
+        elif state == "endloop" and lowered == "endloop":
+            state = "endfacet"
+        elif state == "endfacet" and lowered == "endfacet":
             faces += 1
             if faces > MAX_STL_TRIANGLES:
                 raise StlValidationError("STL triangle count exceeds limit.")
-        elif (match := _VERTEX.fullmatch(line)):
-            vertices += 1
-            if not all(math.isfinite(float(x)) and abs(float(x)) <= MAX_COORDINATE_MM for x in match.groups()):
-                raise StlValidationError("STL contains non-finite or extreme coordinates.")
-        elif line.lower().startswith("endsolid"):
-            continue
-        elif line.lower() in {"outer loop", "endloop", "endfacet"}:
-            continue
+            state = "facet"
         else:
-            raise StlValidationError("Invalid ASCII STL structure.")
-    if not faces or vertices != faces * 3:
-        raise StlValidationError("STL face and vertex counts do not agree.")
+            raise StlValidationError("Malformed ASCII STL facet structure.")
+    if state != "done":
+        raise StlValidationError("ASCII STL ended before a complete solid was closed.")
     return {"format": "ascii", "triangles": faces}
