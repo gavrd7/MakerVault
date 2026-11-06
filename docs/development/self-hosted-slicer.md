@@ -22,6 +22,16 @@ The authenticated engine discovery API reports two separate signals: `deployment
 
 The status is checked at page load and every 60 seconds. An already-open slicer workspace also falls back to an unavailable message if a subsequent status refresh reports loss of the worker. This is a UI affordance only; backend job admission remains fail closed independently.
 
+## Agreed release deployment design (supersedes prototype overlay)
+
+The supported release target is **one optional slicing-service container defined within the normal `compose.yaml`**, commented out by default. Do not require Docker Compose profiles or a separate `compose.slicer.yaml` in the finished release. The current overlay remains a developer-only prototype until replaced.
+
+Slicing engines are independently installable and independently verified **inside that one service**. A Creality Print-only installation must not depend on OrcaSlicer being installed. The service must discover installed engine/version identities, route each job to its explicitly selected approved engine, and prevent a missing or failing engine from disabling unrelated verified engines. The prototype's single `MAKERVAULT_SLICER_ENGINE` setting is **not** the final multi-engine solution.
+
+Implement explicit administrator-managed engine install, upgrade, removal and rollback with reviewed distributions, licences, pinned binary hashes, worker image identity, persistence and audited per-engine fixtures. No automatic installation or blind updates. Per-engine independent process isolation within a shared container needs dedicated security review.
+
+User-facing guidance: [Slicer installation and engine management](../guide/3d-printing/slicer.md). Do not present the future commands as available before an approved release.
+
 ## Delivery order
 
 ### A. Provider-neutral contract, engine inventory and permission model
