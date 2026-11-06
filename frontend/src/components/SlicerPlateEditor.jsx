@@ -8,9 +8,27 @@ const PALETTE = ["#58b5e4", "#f59e0b", "#a78bfa", "#10b981", "#ef4444", "#f472b6
 const MAX_OBJECTS = 12;
 const MAX_FILE_BYTES = 32 * 1024 * 1024;
 
+function plateUuid() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  // crypto.getRandomValues is available in ordinary LAN HTTP contexts where
+  // crypto.randomUUID (secure contexts only) is not exposed.
+  const bytes = new Uint8Array(16);
+  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, value => value.toString(16).padStart(2, "0")).join("");
+  return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join("-");
+}
+
 export function newPlateInstance(assetId, index = 0) {
   return {
-    instance_id: crypto.randomUUID(), asset_id: String(assetId),
+    instance_id: plateUuid(), asset_id: String(assetId),
     x_mm: (index % 4) * 25, y_mm: Math.floor(index / 4) * 25,
     rotation_deg: 0, scale_percent: 100, color: PALETTE[index % PALETTE.length],
   };
