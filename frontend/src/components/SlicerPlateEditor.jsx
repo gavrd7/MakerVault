@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { apiFetch } from "../api";
+import { plateExtentWarning } from "./slicerPlateGeometry";
 
 const PALETTE = ["#58b5e4", "#f59e0b", "#a78bfa", "#10b981", "#ef4444", "#f472b6"];
 const MAX_OBJECTS = 12;
@@ -52,6 +53,7 @@ export default function SlicerPlateEditor({
   const [assetChoice, setAssetChoice] = useState("");
   const [uploadBusy, setUploadBusy] = useState(false);
   const [error, setError] = useState("");
+  const [dimensions, setDimensions] = useState({});
   const sourceFiles = useMemo(() => files.filter(file =>
     file.category === "mesh" && /\.stl$/i.test(file.filename || file.name || "") && file.url
   ), [files]);
@@ -59,6 +61,12 @@ export default function SlicerPlateEditor({
   const bedY = plate?.size_mm?.[1] > 0 ? Number(plate.size_mm[1]) : 220;
   const chosen = objects.find(item => item.instance_id === selected) || objects[0] || null;
   const objectKey = objects.map(item => item.instance_id + ":" + item.asset_id).join("|");
+  const extentWarnings = objects.map((item, index) => ({
+    id: item.instance_id,
+    label: sourceFiles.find(file => String(file.id) === item.asset_id)?.name || "Model " + (index + 1),
+    message: dimensions[item.instance_id]
+      ? plateExtentWarning(item, dimensions[item.instance_id], bedX, bedY) : "",
+  })).filter(row => row.message);
 
   function addAsset(id) {
     if (!id) return;
@@ -114,7 +122,13 @@ export default function SlicerPlateEditor({
     } catch (err) {
       setError((err.message || "Could not upload STL files.") +
         (imported.length ? " Successfully uploaded files remain in your MakerVault Files library." : ""));
-      if (imported.length) await onFilesUploaded?.();
+      if (imported.length) {
+        try { await onFilesUploaded?.(); } catch { /* Uploaded assets remain in Files. */ }
+        const additions = imported.map((id, index) => newPlateInstance(id, objects.length + index));
+        onChange([...objects, ...additions]);
+        if (!objects.length) onPrimaryChange?.(imported[0]);
+        setSelected(additions[0].instance_id);
+      }
     } finally {
       setUploadBusy(false);
     }
@@ -309,6 +323,9 @@ export default function SlicerPlateEditor({
             -(box.min.y + box.max.y) / 2,
             -box.min.z,
           );
+          setDimensions(current => ({ ...current, [item.instance_id]: {
+            width: box.max.x - box.min.x, depth: box.max.y - box.min.y,
+          } }));
           const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({
             color: item.color, roughness: 0.72, metalness: 0.04, side: THREE.DoubleSide,
           }));
@@ -359,9 +376,15 @@ export default function SlicerPlateEditor({
     {error && <p className="integrationError" role="alert">{error}</p>}
     <div ref={hostRef} aria-label="Interactive three-dimensional model plate preview" style={{
       height: 370, width: "100%", borderRadius: 12, overflow: "hidden", border: "1px solid var(--border, #435365)",
-      background: "#0f1720", touchAction: "pan-y",
+      background: "#0f1720", touchAction: "none",
     }} />
     <p>Plate extent: {pretty(bedX)} × {pretty(bedY)} mm. Drag a model to move it on the bed (1 mm steps), tap to select, or orbit the view around empty space. Precise numeric transforms are available below. This does not certify fit or generate G-code.</p>
+    {extentWarnings.length > 0 && <div role="status" className="integrationError">
+      <strong>Preliminary plate-fit warnings</strong>
+      <ul>{extentWarnings.map(warning => <li key={warning.id}>{warning.label}: {warning.message}</li>)}</ul>
+      These checks use an XY rectangular envelope of the preview mesh, not the exact printable polygon,
+      excluded regions, model height or toolhead clearance. They do not certify printability.
+    </div>}
     {objects.length > 0 && <div className="formGrid">
       <label className="full">Model instance
         <select value={chosen?.instance_id || ""} onChange={event => setSelected(event.target.value)}>
