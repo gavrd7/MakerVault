@@ -80,6 +80,8 @@ def _check_profile_evidence(profile, installation):
 
 def validate_scheduling(job, installed=None):
     """Pure admission check; caller must hold a row lock before queueing."""
+    if (job.settings or {}).get("plate_objects"):
+        raise SlicerExecutionError("Visual plate arrangements await verified multi-object slicing support.")
     if job.status != "draft" or job.output_asset_id:
         raise SlicerExecutionError("Only unscheduled slice drafts can be queued.")
     if not installed:
@@ -202,6 +204,8 @@ def validate_scheduling_for_worker(job, installed):
         raise SlicerExecutionError("Isolated slicing worker is no longer approved.")
     installation = validate_engine_selection(job.engine, job.engine_version, installed)
     installation["binary_sha256"] = installed[job.engine].get("binary_sha256")
+    if (job.settings or {}).get("plate_objects"):
+        raise SlicerExecutionError("Visual plate arrangements cannot run in the single-model worker.")
     if job.printer.owner_id != job.owner_id or job.input_asset.owner_id != job.owner_id:
         raise SlicerExecutionError("Job ownership changed.")
     for kind in ("printer", "filament", "process"):

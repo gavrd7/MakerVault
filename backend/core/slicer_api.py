@@ -1,5 +1,7 @@
 """Owner-scoped slicer drafts and engine discovery; no execution endpoints yet."""
 import json
+import math
+import re
 import uuid
 from decimal import Decimal, InvalidOperation
 
@@ -94,6 +96,51 @@ def _preset(data, key, max_length=200):
     return value
 
 
+def _draft_plate_settings(user, input_asset, settings):
+    """Persist preview-only plate geometry; never compile it into slicer flags."""
+    if settings in ({}, None):
+        return {}
+    if not isinstance(settings, dict) or set(settings) != {"plate_objects"}:
+        raise ValueError("Unsupported slicer plate settings.")
+    objects = settings["plate_objects"]
+    if not isinstance(objects, list) or not 1 <= len(objects) <= 12:
+        raise ValueError("The visual build plate supports one to twelve model instances.")
+    seen = set()
+    saved = []
+    for item in objects:
+        if not isinstance(item, dict) or set(item) != {
+            "instance_id", "asset_id", "x_mm", "y_mm", "rotation_deg",
+            "scale_percent", "color",
+        }:
+            raise ValueError("Invalid plate model instance.")
+        instance_id = str(_uuid(item["instance_id"]))
+        asset_id = _uuid(item["asset_id"])
+        if instance_id in seen:
+            raise ValueError("Plate instance IDs must be unique.")
+        seen.add(instance_id)
+        asset = FileAsset.objects.filter(pk=asset_id, owner=user, category="mesh").first()
+        if not asset or not str((asset.metadata or {}).get("extension") or (asset.name or "")[-4:]).lower().endswith(".stl"):
+            raise ValueError("Every plate model must be an owned STL asset.")
+        values = {}
+        for key, bound in (("x_mm", 10000), ("y_mm", 10000), ("rotation_deg", 360), ("scale_percent", 400)):
+            raw = item[key]
+            if isinstance(raw, bool) or not isinstance(raw, (int, float)) or not math.isfinite(raw):
+                raise ValueError("Plate coordinates must be finite numbers.")
+            if key == "scale_percent" and not 5 <= raw <= bound:
+                raise ValueError("Plate scale must be between 5% and 400%.")
+            if key != "scale_percent" and abs(raw) > bound:
+                raise ValueError("Plate transform exceeds its allowed range.")
+            values[key] = round(float(raw), 3)
+        color = item["color"]
+        if not isinstance(color, str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
+            raise ValueError("Choose a six-digit colour for each model.")
+        saved.append({"instance_id": instance_id, "asset_id": str(asset_id),
+                      **values, "color": color.lower()})
+    if saved[0]["asset_id"] != str(input_asset.pk):
+        raise ValueError("The first plate model must match the selected primary STL.")
+    return {"plate_objects": saved}
+
+
 def _draft(user, data):
     if not isinstance(data, dict) or len(json.dumps(data)) > 8192:
         raise ValueError("Slice configuration must be a small JSON object.")
@@ -132,9 +179,7 @@ def _draft(user, data):
     if not nozzle.is_finite() or not Decimal("0.10") <= nozzle <= Decimal("2.00") or nozzle.as_tuple().exponent < -2:
         raise ValueError("Nozzle diameter must be between 0.10 and 2.00 mm with at most two decimals.")
     settings_data = data.get("settings", {})
-    if not isinstance(settings_data, dict) or settings_data:
-        # Each engine setting requires a typed schema before it is accepted.
-        raise ValueError("Custom settings are unavailable until engine profiles are validated.")
+    settings_data = _draft_plate_settings(user, input_asset, settings_data)
     native_profiles = {}
     native_labels = {}
     for kind in ("printer", "filament", "process"):
@@ -159,7 +204,7 @@ def _draft(user, data):
         engine=engine.key, engine_version=version,
         **native_labels,
         nozzle_mm=nozzle, plate=_preset(data, "plate", 80) if "plate" in data else "default",
-        status="draft", settings={},
+        status="draft", settings=settings_data,
     )
 
 
