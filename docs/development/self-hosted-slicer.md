@@ -26,14 +26,18 @@ The G-code output must return through the existing owner-scoped FileAsset versio
 - Validate the produced G-code as an expected bounded file, scan using the existing G-code inspector, and import to the private FileAsset store. No background auto-dispatch to printers.
 - Jobs must survive worker restart: queued/running/completed/failed/cancelled/stale; abandoned running jobs are reconciled without duplicate execution.
 
-### C. First end-to-end slicer: PrusaSlicer
-- Test a **specific version** of PrusaSlicer headless CLI and native INI profiles, verify licences/distribution, and record an automated fixture: known small STL + machine/process/filament presets → bounded G-code with expected metadata.
-- Show a model and single plate, printer and nozzle, one actual spool reference paired to one native filament profile, process preset, Basic/Simple/Advanced settings and a Slice button.
-- Report queue/progress/errors, create a new private G-code asset, and open the existing viewer. Separate download / Save / Submit-to-printer actions.
+### C. First end-to-end slicer: OrcaSlicer (default)
+- Verify an exact digest-pinned OrcaSlicer headless build and its native printer/process/filament JSON settings against a controlled STL fixture.
+- Keep the worker command path and profiles independent from Prusa. Validate actual output G-code and ensure required settings are present.
+- Build the initial single-plate MakerVault UI with printer/nozzle, physical spool linked to separate native filament preset, process controls and a Slice button.
+- Complete queue/progress/error handling, private G-code import, and **Print from slicer** through the existing explicit printer-submission modal.
 
-### D. Second engine: OrcaSlicer
-- Verify a pinned headless build and its specific CLI invocation with native machine/process and filament JSON profiles. Do not translate Prusa INI to Orca JSON by approximation.
-- Reuse the same UI contract with engine-specific preset choice and settings. Validate an actual Orca test fixture before enabling.
+### D. Additional engine order and distinct verification
+1. **Creality Print** — second priority, verified headless CLI and native JSON presets; integrate K1/K2 profile options where appropriate.
+2. **Bambu Studio** — third, separate native JSON/profile and license checks.
+3. **PrusaSlicer** — fourth. Existing isolated runner prototype stays as reusable development groundwork, but is not the primary engine or an automatically installed service.
+4. **Snapmaker Orca** — fifth, validated independently rather than assumed compatible with OrcaSlicer.
+5. **Others** — CuraEngine, ElegooSlicer, Anycubic Slicer Next and sensible integrations for supported printer adapters, each conditional on real CLI/profile/license validation.
 
 ### E. Enhanced plate, profiles and multi-material
 - Model placement and transforms with server-validated build-volume bounds, units and plate orientation.
@@ -43,7 +47,7 @@ The G-code output must return through the existing owner-scoped FileAsset versio
 - Reuse v1.6.0 K2 CFS mapping on *subsequent explicit print submission*, never as a hidden slicing side effect.
 
 ### F. Additional engines only after genuine CLI/licence verification
-Creality Print, Bambu Studio, CuraEngine, ElegooSlicer, Snapmaker Orca and Anycubic Slicer Next are future candidates, **not** active integrations. Validate distribution terms, headless CLI availability, profile compatibility and model-specific behaviour independently.
+Creality Print, Bambu Studio, PrusaSlicer, Snapmaker Orca, CuraEngine, ElegooSlicer and Anycubic Slicer Next are ordered candidates rather than automatically active or installed integrations. Validate distribution terms, headless CLI availability, profile compatibility and model-specific behaviour independently.
 
 ## Initial work in this branch
 
@@ -55,7 +59,7 @@ Creality Print, Bambu Studio, CuraEngine, ElegooSlicer, Snapmaker Orca and Anycu
 
 The draft branch now contains a preparation workbench in **3D Printing → MakerVault Slicer**, owner-scoped SliceJob records (migration 0076), native SlicerProfile records (0077) and exact engine/version/profile references (0078). It supports existing STL and printer selections, optional physical spool references, import of original Prusa INI or Orca JSON presets, persisted draft configurations and job status. Imported profiles remain **candidate/unverified**.
 
-The optional isolated PrusaSlicer worker protocol, one-shot authenticated dispatch, fixed CLI invocation, bounded input/output, no-root capabilities and private G-code FileAsset import are implemented in source. A **Slice now** action is enabled only when an explicitly installed, approved worker and all three verified native profiles pass server-side admission. Print submission and spool deduction remain wholly separate operations.
+The pre-existing optional isolated PrusaSlicer worker prototype, one-shot authenticated dispatch, fixed CLI invocation, bounded input/output, no-root capabilities and private G-code FileAsset import are implemented in source. A **Slice now** action is enabled only when an explicitly installed, approved worker and all three verified native profiles pass server-side admission. Print submission and spool deduction remain wholly separate operations.
 
 ### Print directly from the slicer
 
@@ -65,7 +69,7 @@ Once a slice completes and its output has been saved privately in the G-code Lib
 
 The opt-in Compose overlay requires a strong internal worker token and exact engine version. The MakerVault service also requires an explicit execution flag, a worker image reference containing `@sha256:` and an exact matching digest. The backend rejects mismatches or an unready worker. These settings do **not** substitute for independent binary security and real fixture validation.
 
-**The real slicer is not yet ready to run:** no tested digest-pinned slicer engine image or approved machine/filament/process fixture library is bundled. The user cannot approve profiles from the browser. Before enabling execution we must verify the exact CLI build and licences, run a known STL fixture end-to-end inside the isolated worker, audit sandbox limits and recovery, and validate the generated G-code against the slicer settings.
+**OrcaSlicer is the default and highest execution priority; the real slicer is not yet ready to run:** no tested digest-pinned slicer engine image or approved machine/filament/process fixture library is bundled. The user cannot approve profiles from the browser. Before enabling execution we must verify the exact CLI build and licences, run a known STL fixture end-to-end inside the isolated worker, audit sandbox limits and recovery, and validate the generated G-code against the slicer settings.
 
 Orca execution, interactive build plate manipulation, searchable Basic/Simple/Advanced controls and multi-material support are later phases. The [dedicated worker contract CI](../../.github/workflows/slicer-contract.yml) and Django/frontend checks cover code contracts, not real slicing.
 

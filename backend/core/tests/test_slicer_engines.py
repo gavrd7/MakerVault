@@ -8,13 +8,14 @@ DIGEST = "sha256:" + "a" * 64
 
 
 class SlicerEngineRegistryTests(SimpleTestCase):
-    def test_catalogue_includes_two_candidate_engines_without_claiming_availability(self):
+    def test_catalogue_is_user_prioritised_and_does_not_claim_availability(self):
         rows = engine_catalogue()
-        self.assertEqual([row["key"] for row in rows], ["orcaslicer", "prusaslicer"])
+        self.assertEqual([row["key"] for row in rows], ["orcaslicer", "crealityprint", "bambustudio", "prusaslicer", "snapmakerorca"])
         self.assertTrue(all(row["status"] == "candidate" for row in rows))
         self.assertTrue(all(row["available"] is False and row["enabled"] is False for row in rows))
-        self.assertEqual({row["profile_format"] for row in rows}, {"orca-json", "prusa-ini"})
+        self.assertEqual({row["profile_format"] for row in rows}, {"orca-json", "creality-json", "bambu-json", "prusa-ini", "snapmaker-orca-json"})
         self.assertEqual(len({engine.key for engine in ENGINES}), len(ENGINES))
+        self.assertEqual(rows[0]["key"], "orcaslicer")
 
     def test_unknown_engine_or_client_path_fails_closed(self):
         with self.assertRaisesRegex(ValueError, "Unsupported"):

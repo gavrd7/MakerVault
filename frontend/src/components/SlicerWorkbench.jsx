@@ -5,7 +5,7 @@ import PrinterStartGcodeModal from "./PrinterStartGcodeModal";
 import { availableSlicerPrintConnections, preferredSlicerPrintConnection } from "./slicerPrintRouting";
 
 const initialForm = {
-  engine: "prusaslicer", engine_version: "", input_asset_id: "", printer_id: "",
+  engine: "orcaslicer", engine_version: "", input_asset_id: "", printer_id: "",
   spool_id: "", printer_preset: "", filament_preset: "", process_preset: "",
   nozzle_mm: "0.40", plate: "default",
   printer_profile_id: "", filament_profile_id: "", process_profile_id: "",
@@ -221,8 +221,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         <label>Engine
           <select required disabled={!canPrepare || busy || loading} value={form.engine} onChange={e => update("engine", e.target.value)}>
             {engines.length ? engines.map(engine =>
-              <option key={engine.key} value={engine.key}>{engine.label} · {engine.status} · not installed</option>
-            ) : <option value="prusaslicer">PrusaSlicer · not installed</option>}
+              <option key={engine.key} value={engine.key}>{engine.label}{engine.key === "orcaslicer" ? " · default" : ""} · {engine.status} · not installed</option>
+            ) : <option value="orcaslicer">OrcaSlicer · default · not installed</option>}
           </select>
         </label>
         <label>Requested engine version (not yet installed)

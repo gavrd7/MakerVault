@@ -40,11 +40,32 @@ ENGINES = (
         cli_reference="https://github.com/OrcaSlicer/OrcaSlicer/wiki/cli_actions",
     ),
     SlicerEngine(
+        key="crealityprint",
+        label="Creality Print",
+        upstream="https://github.com/CrealityOfficial/CrealityPrint",
+        profile_format="creality-json",
+        cli_reference="https://github.com/CrealityOfficial/CrealityPrint",
+    ),
+    SlicerEngine(
+        key="bambustudio",
+        label="Bambu Studio",
+        upstream="https://github.com/bambulab/BambuStudio",
+        profile_format="bambu-json",
+        cli_reference="https://github.com/bambulab/BambuStudio/wiki/Command-Line-Usage",
+    ),
+    SlicerEngine(
         key="prusaslicer",
         label="PrusaSlicer",
         upstream="https://github.com/prusa3d/PrusaSlicer",
         profile_format="prusa-ini",
         cli_reference="https://github.com/prusa3d/PrusaSlicer/wiki/Command-Line-Interface",
+    ),
+    SlicerEngine(
+        key="snapmakerorca",
+        label="Snapmaker Orca",
+        upstream="https://github.com/Snapmaker/OrcaSlicer",
+        profile_format="snapmaker-orca-json",
+        cli_reference="https://github.com/Snapmaker/OrcaSlicer",
     ),
 )
 
