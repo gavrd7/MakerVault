@@ -9,6 +9,19 @@ Provide **one MakerVault Slicer UI** for an explicitly selected engine and pinne
 
 The G-code output must return through the existing owner-scoped FileAsset versioning pipeline and can then be inspected, saved/downloaded or submitted to a compatible printer using the existing **explicit start** workflow. Completing a slice **never starts a print** or deducts spool inventory.
 
+## Optional installation and navigation fallback
+
+MakerVault's slicer container(s) are **optional**. The main 3D Printing page and G-code workflows remain usable without any slicer worker.
+
+The authenticated engine discovery API reports two separate signals: `deployment_enabled` means an administrator explicitly enabled slicing execution, while `worker_configured` means an approved, verified worker currently passes admission and health checks. The frontend uses these signals to disable **MakerVault Slicer** in the main navigation and to show an explanatory unavailable panel in 3D Printing:
+
+- Execution not enabled: **No slicer installed or enabled**; the workspace cannot be opened.
+- Enabled but not verified/healthy: **Slicer service unavailable**; check worker, binary identity and profile configuration rather than implying the user declined installation.
+- API unreachable or status unknown: fail closed, without suggesting the engine is installed.
+- Healthy and approved worker: navigation and preparation workbench become accessible; per-job profile verification and permissions still control execution.
+
+The status is checked at page load and every 60 seconds. An already-open slicer workspace also falls back to an unavailable message if a subsequent status refresh reports loss of the worker. This is a UI affordance only; backend job admission remains fail closed independently.
+
 ## Delivery order
 
 ### A. Provider-neutral contract, engine inventory and permission model
