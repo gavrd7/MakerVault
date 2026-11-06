@@ -87,6 +87,21 @@ The branch now includes `slicer_worker/verify_orca.py`, which runs one real Orca
 
 **Deployment status:** No engine image or profiles are automatically downloaded, installed or enabled by normal MakerVault updates. Worker execution remains opt-in and depends on exact pinned image/version, matched runtime health and admin-approved native profile records. Real Orca fixture execution, worker container integrity, licence/SBOM review and profile-approval tooling remain prerequisites before user testing.
 
+### Repeatable real-engine fixture
+
+The source includes `slicer_worker/fixtures/tetrahedron.stl`, a small four-triangle, 10 mm tetrahedron with no vendor or printer dependencies. Inside a **reviewed, isolated and pinned** Orca worker image, pair it with the *exact matching version's* trusted complete native machine, filament and process exports:
+
+```sh
+python3 -m slicer_worker.verify_orca \
+  --binary /path/to/verified/orca-slicer \
+  --model slicer_worker/fixtures/tetrahedron.stl \
+  --printer /verified-profiles/machine.json \
+  --filament /verified-profiles/filament.json \
+  --process /verified-profiles/process.json
+```
+
+The command records input/profile/output checksums and leaves `approved_for_production=false`. Review generated time/material/temperature/geometry metadata against the expected native presets; do **not** declare an engine validated from fixture completion alone. A multi-level vendor profile requires its complete, verified parent bundle before that fixture can run.
+
 ## Safety and release gates
 
 1. Verify service isolation and no untrusted model/profile can escape a job sandbox, access the network/secret mounts or run arbitrary CLI flags.

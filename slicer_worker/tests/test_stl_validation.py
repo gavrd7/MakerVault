@@ -37,6 +37,12 @@ class StlValidationTests(TestCase):
             with self.subTest(raw=raw[:25]), self.assertRaises(StlValidationError):
                 validate_stl(raw)
 
+    def test_committed_small_tetrahedron_fixture(self):
+        from pathlib import Path
+        fixture_path = Path(__file__).parents[1] / "fixtures" / "tetrahedron.stl"
+        report = validate_stl(fixture_path.read_bytes())
+        self.assertEqual(report, {"format": "ascii", "triangles": 4})
+
     def test_triangle_count_cap(self):
         data = b"header".ljust(80, b" ") + struct.pack("<I", 500_001)
         with self.assertRaises(StlValidationError):
