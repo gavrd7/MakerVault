@@ -19,6 +19,7 @@ class WorkerApprovalTests(SimpleTestCase):
 
     @patch("core.slicer_execution.health", return_value={
         "ready": True, "engine": "orcaslicer", "version": "2.9.7",
+        "binary_sha256": "b" * 64,
     })
     def test_requires_explicit_enablement_matching_digest_and_worker_version(self, worker):
         with patch.dict("os.environ", self.approved, clear=True):
@@ -35,7 +36,16 @@ class WorkerApprovalTests(SimpleTestCase):
                     self.assertEqual(verified_installation(), {})
 
     @patch("core.slicer_execution.health", return_value={
+        "ready": True, "engine": "orcaslicer", "version": "2.9.7",
+        "binary_sha256": "c" * 64,
+    })
+    def test_worker_binary_hash_mismatch_disables_execution(self, worker):
+        with patch.dict("os.environ", self.approved, clear=True):
+            self.assertEqual(verified_installation(), {})
+
+    @patch("core.slicer_execution.health", return_value={
         "ready": False, "engine": "orcaslicer", "version": "2.9.7",
+        "binary_sha256": "b" * 64,
     })
     def test_unready_worker_does_not_enable_slice(self, worker):
         with patch.dict("os.environ", self.approved, clear=True):

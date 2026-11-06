@@ -59,6 +59,9 @@ def health():
             "ready": payload.get("ready") is True,
             "engine": payload.get("engine") if payload.get("engine") in {"orcaslicer", "prusaslicer"} else None,
             "version": str(payload.get("version") or "")[:80],
+            "binary_sha256": payload.get("binary_sha256")
+                if isinstance(payload.get("binary_sha256"), str) and len(payload["binary_sha256"]) == 64
+                else None,
         }
     except (requests.RequestException, ValueError) as exc:
         raise SlicerWorkerError("Isolated slicing worker is unreachable or incompatible.") from exc

@@ -43,7 +43,11 @@ def verified_installation():
         return {}
     try:
         worker = health()
-        if not worker["ready"] or worker["engine"] != engine or worker["version"] != version:
+        if (
+            not worker["ready"] or worker["engine"] != engine
+            or worker["version"] != version
+            or worker.get("binary_sha256") != binary_sha256
+        ):
             return {}
         validate_engine_selection(engine, version, {
             engine: {

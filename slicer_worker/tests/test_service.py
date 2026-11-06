@@ -45,6 +45,7 @@ class SlicerWorkerProtocolTests(TestCase):
             }
             with patch.dict(os.environ, settings, clear=True):
                 self.assertEqual(configured_engine()["engine"], "orcaslicer")
+                self.assertEqual(configured_engine()["binary_sha256"], settings["SLICER_ENGINE_BINARY_SHA256"])
             with patch.dict(os.environ, {**settings, "SLICER_ENGINE_BINARY_SHA256": "0" * 64}, clear=True):
                 self.assertIsNone(configured_engine())
             with patch.dict(os.environ, {k: v for k, v in settings.items() if k != "SLICER_ENGINE_BINARY_SHA256"}, clear=True):

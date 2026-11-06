@@ -66,7 +66,8 @@ def configured_engine():
         return None
     # The declared version must be cross-checked against a trusted release
     # and real fixture receipt by the administrator before enabling the image.
-    return {"binary": path, "engine": engine, "version": version, "token": token}
+    return {"binary": path, "engine": engine, "version": version, "token": token,
+            "binary_sha256": expected_sha256}
 
 
 def _decode_payload(payload):
@@ -125,6 +126,7 @@ class Handler(BaseHTTPRequestHandler):
         return self._json(200, {
             "ready": bool(current), "engine": current["engine"] if current else None,
             "version": current["version"] if current else None,
+            "binary_sha256": current["binary_sha256"] if current else None,
         })
 
     def do_POST(self):
