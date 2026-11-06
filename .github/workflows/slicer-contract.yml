@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - "slicer_worker/**"
+      - "compose.slicer.yaml"
       - ".github/workflows/slicer-contract.yml"
   push:
     branches: [main]
     paths:
       - "slicer_worker/**"
+      - "compose.slicer.yaml"
       - ".github/workflows/slicer-contract.yml"
 
 permissions:
@@ -24,3 +26,15 @@ jobs:
         run: python3 -m unittest discover -s slicer_worker/tests -p "test_*.py" -v
       - name: Compile worker modules
         run: python3 -m compileall -q slicer_worker
+      - name: Validate opt-in worker Compose overlay without starting containers
+        env:
+          POSTGRES_PASSWORD: ci-only-placeholder
+          MAKERVAULT_SLICER_WORKER_TOKEN: "0123456789012345678901234567890123456789"
+          MAKERVAULT_SLICER_WORKER_IMAGE: "ghcr.io/example/slicer@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          MAKERVAULT_SLICER_ENGINE_BINARY_SHA256: "0000000000000000000000000000000000000000000000000000000000000000"
+          MAKERVAULT_SLICER_ENGINE_VERSION: "ci-only-placeholder"
+        run: |
+          printf 'POSTGRES_PASSWORD=ci-only-placeholder\n' > .env
+          docker compose -f compose.yaml -f compose.slicer.yaml --profile slicer config --quiet
+
