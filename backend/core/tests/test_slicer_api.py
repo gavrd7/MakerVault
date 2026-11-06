@@ -39,6 +39,32 @@ class SliceJobApiTests(TestCase):
             content_type="application/json",
         )
 
+    def test_optional_slicer_deployment_reports_absent_or_unavailable(self):
+        from unittest.mock import patch
+
+        self.client.force_login(self.owner)
+        url = "/api/printing/slicer/engines/"
+        with patch.dict("os.environ", {"MAKERVAULT_SLICER_EXECUTION_ENABLED": "0"}):
+            response = self.client.get(url)
+            self.assertEqual(response.status_code, 200)
+            self.assertFalse(response.json()["deployment_enabled"])
+            self.assertFalse(response.json()["worker_configured"])
+
+        # Execution enabled is not evidence of an installed or approved worker.
+        with patch.dict("os.environ", {"MAKERVAULT_SLICER_EXECUTION_ENABLED": "1"}):
+            with patch("core.slicer_api.verified_installation", return_value={}):
+                response = self.client.get(url)
+                self.assertTrue(response.json()["deployment_enabled"])
+                self.assertFalse(response.json()["worker_configured"])
+
+        with patch.dict("os.environ", {"MAKERVAULT_SLICER_EXECUTION_ENABLED": "1"}):
+            with patch("core.slicer_api.verified_installation", return_value={
+                "orcaslicer": {"version": "2.4.2", "enabled": True, "verified": True}
+            }):
+                response = self.client.get(url)
+                self.assertTrue(response.json()["deployment_enabled"])
+                self.assertTrue(response.json()["worker_configured"])
+
     def test_read_only_mesh_inspection_requires_ownership_and_valid_stl(self):
         from django.core.files.base import ContentFile
         stl = (b"solid sample\nfacet normal 0 0 1\nouter loop\n"
