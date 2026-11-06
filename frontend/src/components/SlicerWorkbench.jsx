@@ -30,6 +30,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [nativePlate, setNativePlate] = useState(null);
   const [importFile, setImportFile] = useState(null);
   const [importKind, setImportKind] = useState("printer");
+  const [officialQuery, setOfficialQuery] = useState("Creality K2");
+  const [officialResults, setOfficialResults] = useState(null);
+  const [officialBusy, setOfficialBusy] = useState(false);
+  const [officialError, setOfficialError] = useState("");
   const [importName, setImportName] = useState("");
   const [importSource, setImportSource] = useState("");
   const [loading, setLoading] = useState(true);
@@ -235,6 +239,44 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     }
   }
 
+  async function searchOfficialProfiles(event) {
+    event.preventDefault();
+    setOfficialError(""); setOfficialResults(null); setOfficialBusy(true);
+    try {
+      const q = officialQuery.trim();
+      if (q.length < 2) throw new Error("Enter at least two characters to search official presets.");
+      const params = new URLSearchParams({ q, kind: importKind, vendor: "Creality" });
+      const result = await apiFetch("/api/printing/slicer/official-profiles/?" + params.toString());
+      setOfficialResults(result);
+    } catch (err) {
+      setOfficialError(err.message || "Official profile search is unavailable. You can still import a local file.");
+    } finally {
+      setOfficialBusy(false);
+    }
+  }
+
+  async function importOfficialProfile(candidate) {
+    setOfficialError(""); setOfficialBusy(true);
+    try {
+      const result = await apiFetch("/api/printing/slicer/official-profiles/", {
+        method: "POST",
+        body: {
+          kind: importKind, vendor: "Creality",
+          name: candidate.name, sub_path: candidate.sub_path,
+        },
+      });
+      setProfiles(current => [result.profile, ...current]);
+      setForm(current => ({
+        ...current, engine: "orcaslicer", engine_version: result.engine_version,
+      }));
+      setNotice("Official Orca preset imported as an unverified candidate. Its native parent presets must also be present and verified before slicing.");
+    } catch (err) {
+      setOfficialError(err.message || "Could not import the selected official native profile.");
+    } finally {
+      setOfficialBusy(false);
+    }
+  }
+
   async function importProfile(event) {
     event.preventDefault();
     setError(""); setNotice(""); setBusy(true);
@@ -403,6 +445,50 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     <section className="panel printingSection" aria-labelledby="slicer-profile-import">
       <h3 id="slicer-profile-import">Engine-native profiles</h3>
       <p>Import a preset exported by the selected slicer. PrusaSlicer INI and OrcaSlicer JSON remain separate. Imported profiles are preserved in private Files and are <strong>not verified for execution</strong>.</p>
+      <div className="printingActionGroup" aria-labelledby="slicer-official-profiles-heading">
+        <h4 id="slicer-official-profiles-heading">Search official slicer profiles</h4>
+        <p>Browse the original OrcaSlicer v2.4.2 Creality preset catalogue (K1/K2 and related profiles). Other engines and vendors will be added once their native profile catalogues are verified. Official presets are imported as unverified candidates, not automatically approved.</p>
+        <form className="formGrid" onSubmit={searchOfficialProfiles}>
+          <label>Official source
+            <select value={form.engine === "orcaslicer" ? "orcaslicer" : "unavailable"} disabled>
+              <option value="orcaslicer">OrcaSlicer · official v2.4.2 / Creality</option>
+              <option value="unavailable">Official catalogue not yet connected for this engine</option>
+            </select>
+          </label>
+          <label>Profile type
+            <select value={importKind} disabled={officialBusy} onChange={e => { setImportKind(e.target.value); setOfficialResults(null); }}>
+              <option value="printer">Printer / machine</option>
+              <option value="filament">Filament</option>
+              <option value="process">Process</option>
+            </select>
+          </label>
+          <label className="full">Search official presets
+            <input value={officialQuery} maxLength="80" onChange={e => setOfficialQuery(e.target.value)} placeholder="e.g. Creality K2, Generic PLA, 0.20mm" />
+          </label>
+          <div className="full settingsActions">
+            <button type="submit" disabled={officialBusy || form.engine !== "orcaslicer" || officialQuery.trim().length < 2}>
+              {officialBusy ? "Searching…" : "Search official profiles"}
+            </button>
+          </div>
+        </form>
+        {officialError && <p className="integrationError" role="alert">{officialError}</p>}
+        {officialResults && <div className="printingStack" role="region" aria-label="Official profile search results">
+          <p>{officialResults.total_matches} matching official presets · showing up to {officialResults.profiles.length} · original upstream release {officialResults.ref}</p>
+          {officialResults.profiles.map(candidate => <div className="cameraSourceRow" key={candidate.sub_path}>
+            <div className="cameraSourceIdentity">
+              <strong>{candidate.name}</strong>
+              <small>{candidate.sub_path} · not verified</small>
+            </div>
+            <div className="cameraSourceActions">
+              <button type="button" onClick={() => importOfficialProfile(candidate)} disabled={!canPrepare || officialBusy}>
+                Import candidate
+              </button>
+            </div>
+          </div>)}
+          {!officialResults.profiles.length && <p>No matching presets in this official catalogue. Try another search or use manual import below.</p>}
+        </div>}
+      </div>
+      <h4>Import a local native profile file</h4>
       <form className="formGrid" onSubmit={importProfile}>
         <label>Profile type
           <select value={importKind} disabled={busy || !canPrepare} onChange={e => setImportKind(e.target.value)}>
