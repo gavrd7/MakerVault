@@ -27,6 +27,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [printSelection, setPrintSelection] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
   const [meshInspection, setMeshInspection] = useState(null);
+  const [nativePlate, setNativePlate] = useState(null);
   const [importFile, setImportFile] = useState(null);
   const [importKind, setImportKind] = useState("printer");
   const [importName, setImportName] = useState("");
@@ -83,6 +84,24 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     return () => { active = false; };
   }, [selectedFile?.id]);
 
+
+  useEffect(() => {
+    const id = form.engine === "orcaslicer" ? form.printer_profile_id : "";
+    if (!id) {
+      setNativePlate(null);
+      return undefined;
+    }
+    let active = true;
+    setNativePlate({ id, loading: true });
+    apiFetch("/api/printing/slicer/profiles/" + id + "/plate/")
+      .then(result => {
+        if (active) setNativePlate({ id, plate: result.plate });
+      })
+      .catch(() => {
+        if (active) setNativePlate({ id, error: "Native build volume could not be inspected." });
+      });
+    return () => { active = false; };
+  }, [form.engine, form.printer_profile_id]);
 
   async function refresh() {
     setLoading(true);
@@ -346,6 +365,20 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           <button type="submit" className="primary" disabled={!canPrepare || busy || loading || !stlFiles.length || !printers.length}>{busy ? "Saving…" : "Save slicing draft"}</button>
         </div>
       </form>
+      {form.engine === "orcaslicer" && nativePlate?.id === form.printer_profile_id && <div className="cameraSourceRow" aria-label="Native Orca build plate information">
+        <div className="cameraSourceIdentity">
+          <strong>Native Orca printer build volume</strong>
+          {nativePlate.loading ? <small>Reading machine preset…</small> :
+            nativePlate.plate?.status === "available" ?
+              <>
+                <small>Declared extent: {nativePlate.plate.size_mm.join(" × ")} mm (X × Y × Z)</small>
+                <small>This is the source preset's bed polygon extent, not a verified fit or placement check.</small>
+              </> :
+            nativePlate.plate?.status === "requires_parent" ?
+              <small>Parent machine preset required: {nativePlate.plate.parent}</small> :
+              <small>{nativePlate.error || nativePlate.plate?.reason || "Build volume is not available from this preset."}</small>}
+        </div>
+      </div>}
       {selectedFile?.url && <div className="cameraSourceRow" aria-label="Selected model inspection">
         <ModelThumbnail file={selectedFile} />
         <div className="cameraSourceIdentity">
