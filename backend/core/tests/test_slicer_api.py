@@ -41,9 +41,9 @@ class SliceJobApiTests(TestCase):
 
     def test_read_only_mesh_inspection_requires_ownership_and_valid_stl(self):
         from django.core.files.base import ContentFile
-        stl = (b"solid sample\\nfacet normal 0 0 1\\nouter loop\\n"
-               b"vertex 0 0 0\\nvertex 10 0 0\\nvertex 0 10 2\\n"
-               b"endloop\\nendfacet\\nendsolid sample\\n")
+        stl = (b"solid sample\nfacet normal 0 0 1\nouter loop\n"
+               b"vertex 0 0 0\nvertex 10 0 0\nvertex 0 10 2\n"
+               b"endloop\nendfacet\nendsolid sample\n")
         self.input_asset.file = ContentFile(stl, name="part.stl")
         self.input_asset.save(update_fields=["file"])
         self.client.force_login(self.owner)

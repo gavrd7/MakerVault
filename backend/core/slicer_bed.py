@@ -20,6 +20,8 @@ def inspect_orca_plate(profile):
     parent = data.get("inherits")
     area = data.get("printable_area")
     height = data.get("printable_height")
+    if height is None and parent:
+        return {"status": "requires_parent", "parent": str(parent)[:200]}
     if not isinstance(area, list) or not (3 <= len(area) <= 24):
         if parent:
             return {"status": "requires_parent", "parent": str(parent)[:200]}
