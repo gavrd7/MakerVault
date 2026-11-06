@@ -404,6 +404,9 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
             <div className="printingHeroActions">
               <button type="button" disabled title="A verified slicer worker must be available before opening the slicer.">Open MakerVault Slicer</button>
             </div>
+            <p><a href="https://github.com/gavrd7/MakerVault/blob/feature/self-hosted-slicer-foundation/docs/guide/3d-printing/slicer.md" target="_blank" rel="noopener noreferrer">
+              Slicer installation, engine management and update guidance ↗
+            </a></p>
           </>}
         </section>
         <section className="printingActionGroup">
