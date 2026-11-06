@@ -54,6 +54,11 @@ def serialise(job, installed=None):
         "printer": {"id": str(job.printer_id), "name": job.printer.name},
         "spool": {"id": str(job.spool_id), "name": job.spool.spool_id} if job.spool_id else None,
         "output_asset_id": str(job.output_asset_id) if job.output_asset_id else None,
+        "output_asset": {
+            "id": str(job.output_asset.pk),
+            "name": job.output_asset.name,
+            "filename": (job.output_asset.metadata or {}).get("original_name") or job.output_asset.name,
+        } if job.output_asset_id else None,
         "message": job.message,
         "created_at": job.created_at.isoformat(),
         "updated_at": job.updated_at.isoformat(),

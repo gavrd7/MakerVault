@@ -318,6 +318,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       printers={data?.printers || []}
       spools={data?.spools || []}
       canPrepare={Boolean(config?.permissions?.add_file)}
+      canPrint={Boolean(config?.permissions?.change_printer)}
       onBack={() => setWorkspaceView("overview")}
       onOpenGcode={async () => {
         await load();

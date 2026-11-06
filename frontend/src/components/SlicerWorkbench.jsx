@@ -1,5 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../api";
+import { Modal } from "./Common";
+import PrinterStartGcodeModal from "./PrinterStartGcodeModal";
+import { availableSlicerPrintConnections, preferredSlicerPrintConnection } from "./slicerPrintRouting";
 
 const initialForm = {
   engine: "prusaslicer", engine_version: "", input_asset_id: "", printer_id: "",
@@ -12,12 +15,13 @@ const initialForm = {
  * Safe preparation-only entry point. A verified slicing worker, real engine-native
  * profile IDs and isolated execution are required before enabling a Slice action.
  */
-export default function SlicerWorkbench({ files = [], printers = [], spools = [], canPrepare = false, onBack, onOpenGcode }) {
+export default function SlicerWorkbench({ files = [], printers = [], spools = [], canPrepare = false, canPrint = false, onBack, onOpenGcode }) {
   const [form, setForm] = useState(initialForm);
   const [engines, setEngines] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [profiles, setProfiles] = useState([]);
   const [workerConfigured, setWorkerConfigured] = useState(false);
+  const [printSelection, setPrintSelection] = useState(null);
   const [importFile, setImportFile] = useState(null);
   const [importKind, setImportKind] = useState("printer");
   const [importName, setImportName] = useState("");
@@ -107,6 +111,31 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     }
   }
 
+
+  function requestPrint(job) {
+    if (job.status !== "completed" || !job.output_asset?.id) return;
+    const printer = printers.find(item => String(item.id) === String(job.printer?.id));
+    if (!printer) {
+      setError("The printer used for this slice is no longer available.");
+      return;
+    }
+    const connections = availableSlicerPrintConnections(printer);
+    if (!connections.length) {
+      setError("Set up an enabled printer connection before printing from the slicer.");
+      return;
+    }
+    setError("");
+    setPrintSelection({
+      job,
+      printer,
+      connectionId: String(preferredSlicerPrintConnection(printer).id),
+      choosing: connections.length > 1,
+    });
+  }
+
+  function openPrinterReview() {
+    setPrintSelection(current => current ? { ...current, choosing: false } : null);
+  }
 
   async function saveDraft(event) {
     event.preventDefault();
@@ -313,10 +342,40 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           </div>
           <div className="cameraSourceActions">
             {job.can_slice && canPrepare && <button type="button" disabled={busy} onClick={() => startSlice(job)}>Slice now</button>}
+            {job.status === "completed" && job.output_asset?.id && canPrint && <button type="button" className="primary" disabled={busy} onClick={() => requestPrint(job)}>Print from slicer</button>}
             {job.status === "completed" && job.output_asset_id && <button type="button" onClick={onOpenGcode}>Open G-code library</button>}
           </div>
         </div>
       )}</div> : <p>No slicing drafts saved yet.</p>}
     </section>
+
+    {printSelection?.choosing && <Modal title="Choose printer connection" subtitle={"Print " + (printSelection.job.output_asset?.filename || "sliced G-code") + " on " + printSelection.printer.name} onClose={() => setPrintSelection(null)}>
+      <p>This uses MakerVault's existing printer-submission checks and requires a separate confirmation before printing.</p>
+      <div className="formGrid">
+        <label className="full">Printer connection
+          <select value={printSelection.connectionId} onChange={event => setPrintSelection(current => current ? { ...current, connectionId: event.target.value } : null)}>
+            {availableSlicerPrintConnections(printSelection.printer).map(connection => <option key={connection.id} value={String(connection.id)}>{connection.adapter_label || connection.adapter || "Printer connection"}{connection.status ? " · " + connection.status : ""}</option>)}
+          </select>
+        </label>
+        <div className="full settingsActions">
+          <button type="button" onClick={() => setPrintSelection(null)}>Cancel</button>
+          <button type="button" className="primary" onClick={openPrinterReview}>Review print</button>
+        </div>
+      </div>
+    </Modal>}
+    {printSelection && !printSelection.choosing && (() => {
+      const connection = availableSlicerPrintConnections(printSelection.printer)
+        .find(item => String(item.id) === printSelection.connectionId);
+      return connection ? <PrinterStartGcodeModal
+        key={printSelection.job.id + ":" + connection.id}
+        printer={printSelection.printer}
+        connection={connection}
+        canEdit={canPrint}
+        initialAsset={printSelection.job.output_asset}
+        initialAction="print"
+        onChanged={refresh}
+        onClose={() => setPrintSelection(null)}
+      /> : null;
+    })()}
   </div>;
 }

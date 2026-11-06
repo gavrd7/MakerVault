@@ -3,9 +3,9 @@ import { apiFetch } from "../api";
 import { findSlicedRequirement } from "../utils/gcodeMapping";
 import { Modal } from "./Common";
 
-export default function PrinterStartGcodeModal({ printer, connection, canEdit, onConfigureMoonraker, onClose, onChanged, initialAsset = null }) {
+export default function PrinterStartGcodeModal({ printer, connection, canEdit, onConfigureMoonraker, onClose, onChanged, initialAsset = null, initialAction = "upload" }) {
   const [source, setSource] = useState("makervault");
-  const [action, setAction] = useState("upload");
+  const [action, setAction] = useState(initialAction === "print" ? "print" : "upload");
   const [files, setFiles] = useState([]);
   const [remoteFiles, setRemoteFiles] = useState([]);
   const [assetId, setAssetId] = useState(initialAsset?.id ? String(initialAsset.id) : "");
