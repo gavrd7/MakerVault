@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../api";
 import { Modal } from "./Common";
+import { FileModelViewerModal, ModelThumbnail } from "./ModelViewer";
 import PrinterStartGcodeModal from "./PrinterStartGcodeModal";
 import { availableSlicerPrintConnections, preferredSlicerPrintConnection } from "./slicerPrintRouting";
 
@@ -24,6 +25,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [workerConfigured, setWorkerConfigured] = useState(false);
   const [mayCancel, setMayCancel] = useState(false);
   const [printSelection, setPrintSelection] = useState(null);
+  const [previewFile, setPreviewFile] = useState(null);
   const [importFile, setImportFile] = useState(null);
   const [importKind, setImportKind] = useState("printer");
   const [importName, setImportName] = useState("");
@@ -59,6 +61,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       ...(profile ? { [kind + "_preset"]: profile.name } : {}),
     }));
   };
+  const selectedFile = stlFiles.find(file => String(file.id) === form.input_asset_id);
   const selectedPrinter = printers.find(item => String(item.id) === form.printer_id);
 
   async function refresh() {
@@ -323,6 +326,17 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           <button type="submit" className="primary" disabled={!canPrepare || busy || loading || !stlFiles.length || !printers.length}>{busy ? "Saving…" : "Save slicing draft"}</button>
         </div>
       </form>
+      {selectedFile?.url && <div className="cameraSourceRow" aria-label="Selected model inspection">
+        <ModelThumbnail file={selectedFile} />
+        <div className="cameraSourceIdentity">
+          <strong>{selectedFile.name || selectedFile.filename}</strong>
+          <small>Source: {selectedFile.filename} · {selectedFile.size_bytes ? Math.round(selectedFile.size_bytes / 1024) + " KiB" : "size unknown"}</small>
+          <small>This is a source-model preview, not a slice or build-plate placement simulation.</small>
+        </div>
+        <div className="cameraSourceActions">
+          <button type="button" onClick={() => setPreviewFile(selectedFile)}>Inspect model</button>
+        </div>
+      </div>}
       {!stlFiles.length && <p>Add a plain-text STL model to Files or Model Library before preparing a slicing draft.</p>}
     </section>
 
@@ -399,6 +413,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       )}</div> : <p>No slicing drafts saved yet.</p>}
     </section>
 
+    {previewFile && <FileModelViewerModal file={previewFile} onClose={() => setPreviewFile(null)} />}
     {printSelection?.choosing && <Modal title="Choose printer connection" subtitle={"Print " + (printSelection.job.output_asset?.filename || "sliced G-code") + " on " + printSelection.printer.name} onClose={() => setPrintSelection(null)}>
       <p>This uses MakerVault's existing printer-submission checks and requires a separate confirmation before printing.</p>
       <div className="formGrid">
