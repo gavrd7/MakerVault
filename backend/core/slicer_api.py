@@ -14,6 +14,12 @@ from .slicer_profiles import SlicerProfileError, inspect_native_profile
 from .slicer_profile_lineage import inspect_orca_lineage
 from .slicer_mesh import inspect_stl, MeshInspectionError, MAX_INSPECTION_BYTES
 from .slicer_bed import inspect_orca_plate
+from .slicer_official_profiles import (
+    OfficialProfileError, search_official_profiles, fetch_official_profile,
+    ENGINE_VERSION as OFFICIAL_ORCA_VERSION, SOURCE as OFFICIAL_ORCA_SOURCE,
+    REF as OFFICIAL_ORCA_REF,
+)
+from django.core.files.base import ContentFile
 from .slicer_execution import (
     SlicerExecutionError, verified_installation, validate_scheduling, queue_draft,
 )
@@ -241,6 +247,67 @@ def _profile_summary(profile):
         "content_sha256": profile.content_sha256,
         "provenance": profile.provenance,
     }
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def official_profiles(request):
+    """Search/import only a fixed, tagged official source, never arbitrary URLs."""
+    if request.method == "GET":
+        try:
+            results = search_official_profiles(
+                request.GET.get("q", ""),
+                request.GET.get("kind", "printer"),
+                request.GET.get("vendor", "Creality"),
+            )
+        except OfficialProfileError as exc:
+            return _error(str(exc), 503 if "source" in str(exc).lower() or "contact" in str(exc).lower() else 400)
+        return JsonResponse(results)
+    if not request.user.has_perm("core.add_fileasset"):
+        return _error("You do not have permission to import official native profiles.", 403)
+    if len(request.body) > 4096:
+        return _error("Official profile selection is too large.", 413)
+    try:
+        selection = json.loads(request.body.decode("utf-8"))
+        if not isinstance(selection, dict) or set(selection) - {"vendor", "kind", "name", "sub_path"}:
+            raise ValueError("Invalid official profile selection.")
+        kind = selection.get("kind")
+        vendor = selection.get("vendor", "Creality")
+        name = selection.get("name")
+        subpath = selection.get("sub_path")
+        if not isinstance(name, str) or len(name) > 200:
+            raise ValueError("Invalid native profile name.")
+        if SlicerProfile.objects.filter(
+            owner=request.user, engine="orcaslicer",
+            engine_version=OFFICIAL_ORCA_VERSION, kind=kind, name=name,
+        ).exists():
+            return _error("This exact official preset has already been imported.", 409)
+        raw = fetch_official_profile(kind, name, subpath, vendor)
+        asset = FileAsset(
+            owner=request.user, name=name + ".json", category="source",
+            metadata={"original_name": name + ".json", "extension": ".json"},
+        )
+        asset.file = ContentFile(raw, name="official-orca-profile.json")
+        inspected = inspect_native_profile(asset, "orcaslicer")
+        provenance = f"{OFFICIAL_ORCA_SOURCE}@{OFFICIAL_ORCA_REF}/{vendor}/{subpath}"
+        if len(provenance) > 200:
+            raise ValueError("Official source identity is too long.")
+        with transaction.atomic():
+            asset.save()
+            profile = SlicerProfile.objects.create(
+                owner=request.user, file_asset=asset, engine="orcaslicer",
+                engine_version=OFFICIAL_ORCA_VERSION, kind=kind, name=name,
+                provenance=provenance, content_sha256=inspected["sha256"], status="candidate",
+            )
+    except (OfficialProfileError, ValueError, TypeError, UnicodeDecodeError, SlicerProfileError) as exc:
+        return _error(str(exc))
+    except IntegrityError:
+        return _error("The selected official profile is already registered.", 409)
+    return JsonResponse({
+        "profile": _profile_summary(profile), "engine_version": OFFICIAL_ORCA_VERSION,
+        "execution_available": False,
+        "warning": "Official origin does not imply runtime approval; profile inheritance may remain unresolved.",
+    }, status=201)
 
 
 @login_required
