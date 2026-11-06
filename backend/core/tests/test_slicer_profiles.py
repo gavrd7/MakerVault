@@ -102,6 +102,26 @@ class SlicerProfileApiTests(TestCase):
         self.assertEqual(self.client.get(self.url).json()["profiles"], [])
         self.assertEqual(self.post().status_code, 403)
 
+    def test_build_plate_read_only_endpoint_is_owner_scoped(self):
+        from unittest.mock import patch
+        profile = SlicerProfile.objects.create(
+            owner=self.owner, engine="orcaslicer", engine_version="2.4.2",
+            kind="printer", name="Generic bed", file_asset=self.file,
+            content_sha256="c" * 64,
+        )
+        url = f"/api/printing/slicer/profiles/{profile.pk}/plate/"
+        self.client.force_login(self.owner)
+        expected = {
+            "status": "available", "polygon_mm": [[0, 0], [200, 0], [200, 200], [0, 200]],
+            "size_mm": [200, 200, 200], "fit_check": "not_performed",
+        }
+        with patch("core.slicer_api.inspect_orca_plate", return_value=expected):
+            response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["plate"]["size_mm"], [200, 200, 200])
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.get(url).status_code, 404)
+
     @patch("core.slicer_api.inspect_native_profile", return_value={"sha256": "b" * 64, "bytes": 120})
     def test_client_cannot_set_verified_status_or_foreign_asset(self, inspect):
         self.client.force_login(self.owner)
