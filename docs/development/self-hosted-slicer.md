@@ -102,6 +102,27 @@ python3 -m slicer_worker.verify_orca \
 
 The command records input/profile/output checksums and leaves `approved_for_production=false`. Review generated time/material/temperature/geometry metadata against the expected native presets; do **not** declare an engine validated from fixture completion alone. A multi-level vendor profile requires its complete, verified parent bundle before that fixture can run.
 
+## Reviewed Orca worker and native-preset activation (not yet performed)
+
+The implementation now includes an explicit, **dry-run-first** administrative approval path. It does not create or trust engine installations automatically. Do not attempt these steps on production without a separately reviewed, digest-pinned image and a real fixture-generated receipt.
+
+1. Build/review the official Orca engine for the isolated worker, pin the container image `@sha256:` and the exact executable SHA-256, and verify its release identity, licence and dependencies.
+2. Inside that isolated worker, run the existing `slicer_worker/verify_orca.py` utility with `--engine-version`, the committed tetrahedron STL and complete native machine/filament/process exports. Save its JSON receipt and **separately review actual emitted G-code and slicer settings**. A mock result does not count.
+3. Import those three exact native profiles into the MakerVault owner's Files and Slicer profile catalogue. Their stored content hashes must equal the fixture receipt. Inherited profiles are not eligible until native parent-bundle execution is implemented and independently verified.
+4. On the **trusted administrative host/container**, with the reviewed digest and binary hash configured, run:
+
+```sh
+python manage.py approve_slicer_fixture \
+  --receipt /secure/reviewed-orca-fixture.json \
+  --printer-profile UUID \
+  --filament-profile UUID \
+  --process-profile UUID
+```
+
+This checks all three profiles but makes **no changes**. Only after verifying the image, the complete generated G-code, the fixture receipt and the intended printer settings may the administrator rerun with `--approve`, `--acknowledge-image-reviewed`, `--acknowledge-gcode-reviewed` and `--expected-gcode-sha256` set to the independently reviewed output hash. The command refuses a different image digest, executable hash or engine version. Approval records an audit receipt on each profile; the runtime additionally rejects profile evidence belonging to another worker image.
+
+The app remains disabled without `MAKERVAULT_SLICER_EXECUTION_ENABLED=1`. That flag **does not bypass** native-profile verification, exact hash checks or the normal separate printer-submission confirmation. This procedure is an acceptance specification, not a claim that a real engine run or security review has passed.
+
 ## Safety and release gates
 
 1. Verify service isolation and no untrusted model/profile can escape a job sandbox, access the network/secret mounts or run arbitrary CLI flags.
