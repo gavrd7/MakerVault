@@ -11,6 +11,7 @@ from django.views.decorators.http import require_http_methods
 from .models import FileAsset, Printer, SliceJob, Spool, SlicerProfile
 from .slicer_engines import engine_catalogue, get_engine
 from .slicer_profiles import SlicerProfileError, inspect_native_profile
+from .slicer_profile_lineage import inspect_orca_lineage
 from .slicer_execution import (
     SlicerExecutionError, verified_installation, validate_scheduling, queue_draft,
 )
@@ -261,6 +262,28 @@ def profiles(request):
     except IntegrityError:
         return _error("A profile with this engine, version, kind and name already exists.", 409)
     return JsonResponse({"profile": _profile_summary(profile), "execution_available": False}, status=201)
+
+
+@login_required
+@require_http_methods(["GET"])
+def profile_dependencies(request, profile_id):
+    """Inspect only the current user's exact Orca engine/version/kind profiles."""
+    profile = SlicerProfile.objects.filter(
+        pk=profile_id, owner=request.user
+    ).select_related("file_asset").first()
+    if not profile:
+        return _error("Native profile not found.", 404)
+    if profile.engine != "orcaslicer":
+        return _error("Dependency inspection currently supports OrcaSlicer only.", 409)
+    candidates = list(SlicerProfile.objects.filter(
+        owner=request.user, engine=profile.engine,
+        engine_version=profile.engine_version, kind=profile.kind
+    ).select_related("file_asset")[:500])
+    try:
+        result = inspect_orca_lineage(profile, candidates)
+    except SlicerProfileError:
+        return _error("Native profile dependency inspection failed.", 422)
+    return JsonResponse({"profile_id": str(profile.pk), "lineage": result})
 
 
 @login_required
