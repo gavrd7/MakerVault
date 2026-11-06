@@ -131,6 +131,21 @@ The first workbench inspection stage is now implemented without installing a sli
 - These are **two independent read-only measurements**. They do not modify geometry, position an object on the plate, account for bed exclusions, detect nozzle crashes or certify that a slice/print can succeed. Real placement, orientation, volume compatibility and support generation remain tasks for the verified Orca engine and forthcoming interactive plate editor.
 - Both inspection endpoints enforce FileAsset or SlicerProfile owner isolation, bound input sizes, and avoid passing arbitrary paths or execution options to a slicer.
 
+## Native K1/K2 profile bundle audit — additional offline preparation
+
+The upstream Orca profile candidates are recorded in `slicer_worker/fixtures/creality-orca-v2.4.2.json`. To check that a locally obtained **reviewed and pinned** Orca v2.4.2 resources tree contains the required original Creality machine, process and filament files and all their parent names, run:
+
+```sh
+python3 -m slicer_worker.verify_orca_bundle \
+  --resources /trusted/orca/resources/profiles \
+  --manifest slicer_worker/fixtures/creality-orca-v2.4.2.json \
+  --output /tmp/orca-native-profile-audit.json
+```
+
+The read-only audit reports exact file hashes, missing or ambiguous parents and cycles. It searches the intended Creality category and the shared `OrcaFilamentLibrary` for filament ancestors, not unrelated vendor directories. It fails with a nonzero exit code when native parents are unresolved, and **never flattens profiles or marks them verified**. The audit is complementary to, not a substitute for, validating a real Orca CLI fixture and native engine/profile compatibility. The worker continues to reject inherited profiles until a separately verified bundle execution mechanism exists.
+
+The fixed single-STL Orca invocation now includes `--load-defaultfila` for an unassigned single model and explicit `--mtcpp 500000` / `--mstpp 300` bounds, in addition to worker-level CPU, memory and wall-time limits. The HTTP worker bounds both active slicing (one job) and active request threads (eight), so probes cannot spawn unbounded threads.
+
 ## Safety and release gates
 
 1. Verify service isolation and no untrusted model/profile can escape a job sandbox, access the network/secret mounts or run arbitrary CLI flags.
