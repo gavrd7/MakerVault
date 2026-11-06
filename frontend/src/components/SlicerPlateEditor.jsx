@@ -26,6 +26,10 @@ export default function SlicerPlateEditor({
 }) {
   const hostRef = useRef(null);
   const sceneRef = useRef(null);
+  const latestObjectsRef = useRef(objects);
+  const latestOnChangeRef = useRef(onChange);
+  latestObjectsRef.current = objects;
+  latestOnChangeRef.current = onChange;
   const [selected, setSelected] = useState("");
   const [assetChoice, setAssetChoice] = useState("");
   const [uploadBusy, setUploadBusy] = useState(false);
@@ -150,17 +154,65 @@ export default function SlicerPlateEditor({
 
     const meshes = new Map();
     const raycaster = new THREE.Raycaster();
-    function pick(event) {
+    const bedPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+    let dragging = null;
+
+    function rayFromPointer(event) {
       const rect = renderer.domElement.getBoundingClientRect();
       const point = new THREE.Vector2(
         ((event.clientX - rect.left) / rect.width) * 2 - 1,
         -((event.clientY - rect.top) / rect.height) * 2 + 1,
       );
       raycaster.setFromCamera(point, camera);
-      const hits = raycaster.intersectObjects([...meshes.values()], false);
-      if (hits.length) setSelected(hits[0].object.userData.instanceId);
+      return raycaster;
     }
-    renderer.domElement.addEventListener("click", pick);
+
+    function pointerDown(event) {
+      if (!canEdit || event.button > 0) return;
+      rayFromPointer(event);
+      const hits = raycaster.intersectObjects([...meshes.values()], false);
+      if (!hits.length) return;
+      const target = hits[0].object;
+      const location = new THREE.Vector3();
+      if (!raycaster.ray.intersectPlane(bedPlane, location)) return;
+      const id = target.userData.instanceId;
+      setSelected(id);
+      dragging = {
+        id, pointerId: event.pointerId,
+        deltaX: target.position.x - location.x,
+        deltaY: target.position.y - location.y,
+      };
+      controls.enabled = false;
+      renderer.domElement.setPointerCapture?.(event.pointerId);
+      event.preventDefault();
+    }
+
+    function pointerMove(event) {
+      if (!dragging || dragging.pointerId !== event.pointerId) return;
+      rayFromPointer(event);
+      const location = new THREE.Vector3();
+      if (!raycaster.ray.intersectPlane(bedPlane, location)) return;
+      const x = Math.max(-10000, Math.min(10000, Math.round(location.x + dragging.deltaX)));
+      const y = Math.max(-10000, Math.min(10000, Math.round(location.y + dragging.deltaY)));
+      const current = latestObjectsRef.current;
+      if (!current.some(item => item.instance_id === dragging.id)) return;
+      latestOnChangeRef.current(current.map(item => item.instance_id === dragging.id
+        ? { ...item, x_mm: x, y_mm: y }
+        : item));
+    }
+
+    function pointerUp(event) {
+      if (!dragging || dragging.pointerId !== event.pointerId) return;
+      dragging = null;
+      controls.enabled = true;
+      if (renderer.domElement.hasPointerCapture?.(event.pointerId)) {
+        renderer.domElement.releasePointerCapture(event.pointerId);
+      }
+    }
+    renderer.domElement.addEventListener("pointerdown", pointerDown);
+    renderer.domElement.addEventListener("pointermove", pointerMove);
+    renderer.domElement.addEventListener("pointerup", pointerUp);
+    renderer.domElement.addEventListener("pointercancel", pointerUp);
     const resize = () => {
       if (!mount.clientWidth || !mount.clientHeight) return;
       renderer.setSize(mount.clientWidth, mount.clientHeight, false);
@@ -179,7 +231,10 @@ export default function SlicerPlateEditor({
       disposed = true;
       sceneRef.current = null;
       observer.disconnect();
-      renderer.domElement.removeEventListener("click", pick);
+      renderer.domElement.removeEventListener("pointerdown", pointerDown);
+      renderer.domElement.removeEventListener("pointermove", pointerMove);
+      renderer.domElement.removeEventListener("pointerup", pointerUp);
+      renderer.domElement.removeEventListener("pointercancel", pointerUp);
       renderer.setAnimationLoop(null);
       controls.dispose();
       for (const mesh of meshes.values()) {
@@ -240,7 +295,7 @@ export default function SlicerPlateEditor({
             color: item.color, roughness: 0.72, metalness: 0.04, side: THREE.DoubleSide,
           }));
           mesh.userData.instanceId = item.instance_id;
-          const latest = objects.find(row => row.instance_id === item.instance_id);
+          const latest = latestObjectsRef.current.find(row => row.instance_id === item.instance_id) || item;
           mesh.position.set(latest.x_mm, latest.y_mm, 0);
           mesh.rotation.z = latest.rotation_deg * Math.PI / 180;
           mesh.scale.setScalar(latest.scale_percent / 100);
@@ -262,8 +317,9 @@ export default function SlicerPlateEditor({
       mesh.rotation.z = item.rotation_deg * Math.PI / 180;
       mesh.scale.setScalar(item.scale_percent / 100);
       mesh.material.color.set(item.color);
+      mesh.material.emissive.set(item.instance_id === (chosen?.instance_id || selected) ? "#182f43" : "#000000");
     }
-  }, [objects]);
+  }, [objects, selected]);
 
   return <section className="panel printingSection" aria-labelledby="slicer-plate-heading">
     <h3 id="slicer-plate-heading">Visual build plate</h3>
@@ -287,7 +343,7 @@ export default function SlicerPlateEditor({
       height: 370, width: "100%", borderRadius: 12, overflow: "hidden", border: "1px solid var(--border, #435365)",
       background: "#0f1720", touchAction: "pan-y",
     }} />
-    <p>Plate extent: {pretty(bedX)} × {pretty(bedY)} mm. Orbit the view with touch/mouse, and tap a model to select it. This does not certify fit or generate G-code.</p>
+    <p>Plate extent: {pretty(bedX)} × {pretty(bedY)} mm. Drag a model to move it on the bed (1 mm steps), tap to select, or orbit the view around empty space. Precise numeric transforms are available below. This does not certify fit or generate G-code.</p>
     {objects.length > 0 && <div className="formGrid">
       <label className="full">Model instance
         <select value={chosen?.instance_id || ""} onChange={event => setSelected(event.target.value)}>
