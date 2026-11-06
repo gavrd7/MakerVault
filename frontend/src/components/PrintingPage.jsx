@@ -157,7 +157,7 @@ function newestGeometryAnalysis(model) {
   return null;
 }
 
-export default function PrintingPage({ config, projects, searchTarget = null, onOpenConsumed, onOpenMakerTags = () => {}, onModelLibraryBack = null }) {
+export default function PrintingPage({ config, projects, searchTarget = null, onOpenConsumed, onOpenMakerTags = () => {}, onModelLibraryBack = null, initialWorkspaceView = "overview", onOpenSlicer = null }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [sourceNotice, setSourceNotice] = useState("");
@@ -174,7 +174,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
   const [cameraOffer, setCameraOffer] = useState(null);
   const [previewPrinter, setPreviewPrinter] = useState("");
   const [claimSlot, setClaimSlot] = useState(null);
-  const [workspaceView, setWorkspaceView] = useState("overview");
+  const [workspaceView, setWorkspaceView] = useState(initialWorkspaceView);
 
   async function load(options = {}) {
     const includeFilaments = options?.includeFilaments !== false;
@@ -319,7 +319,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       spools={data?.spools || []}
       canPrepare={Boolean(config?.permissions?.add_file)}
       canPrint={Boolean(config?.permissions?.change_printer)}
-      onBack={() => setWorkspaceView("overview")}
+      onBack={() => initialWorkspaceView === "slicer" && onModelLibraryBack ? onModelLibraryBack() : setWorkspaceView("overview")}
       onOpenGcode={async () => {
         await load();
         setWorkspaceView("overview");
@@ -368,10 +368,16 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
           <div className="printingHeroActions">
             <button type="button" onClick={() => setWorkspaceView("models")}>Model library</button>
             <button type="button" onClick={() => setModal("gcode")}>G-code library</button>
-            <button type="button" onClick={() => setWorkspaceView("slicer")}>MakerVault Slicer</button>
             {canAddModel && <button type="button" onClick={() => setModal("model")}>Add model</button>}
             {canAddPrintJob && <button type="button" onClick={() => setModal("print")}>Add print history</button>}
             <button type="button" onClick={() => document.getElementById("printing-printed-parts")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Printed parts</button>
+          </div>
+        </section>
+        <section className="printingActionGroup" aria-labelledby="printing-slicer-heading">
+          <h3 id="printing-slicer-heading">MakerVault Slicer</h3>
+          <p>Prepare models and slicing profiles in MakerVault's dedicated self-hosted slicer workspace.</p>
+          <div className="printingHeroActions">
+            <button type="button" onClick={() => onOpenSlicer ? onOpenSlicer() : setWorkspaceView("slicer")}>Open MakerVault Slicer</button>
           </div>
         </section>
         <section className="printingActionGroup">
