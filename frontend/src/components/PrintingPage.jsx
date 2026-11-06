@@ -320,6 +320,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       canPrepare={Boolean(config?.permissions?.add_file)}
       canPrint={Boolean(config?.permissions?.change_printer)}
       onBack={() => initialWorkspaceView === "slicer" && onModelLibraryBack ? onModelLibraryBack() : setWorkspaceView("overview")}
+      onFilesUploaded={load}
       onOpenGcode={async () => {
         await load();
         setWorkspaceView("overview");

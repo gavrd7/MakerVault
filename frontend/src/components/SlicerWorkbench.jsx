@@ -3,6 +3,7 @@ import { apiFetch } from "../api";
 import { Modal } from "./Common";
 import { FileModelViewerModal, ModelThumbnail } from "./ModelViewer";
 import PrinterStartGcodeModal from "./PrinterStartGcodeModal";
+import SlicerPlateEditor from "./SlicerPlateEditor";
 import { availableSlicerPrintConnections, preferredSlicerPrintConnection } from "./slicerPrintRouting";
 
 const initialForm = {
@@ -16,7 +17,7 @@ const initialForm = {
  * Safe preparation-only entry point. A verified slicing worker, real engine-native
  * profile IDs and isolated execution are required before enabling a Slice action.
  */
-export default function SlicerWorkbench({ files = [], printers = [], spools = [], canPrepare = false, canPrint = false, onBack, onOpenGcode }) {
+export default function SlicerWorkbench({ files = [], printers = [], spools = [], canPrepare = false, canPrint = false, onBack, onOpenGcode, onFilesUploaded }) {
   const [form, setForm] = useState(initialForm);
   const [engines, setEngines] = useState([]);
   const [jobs, setJobs] = useState([]);
@@ -26,6 +27,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [mayCancel, setMayCancel] = useState(false);
   const [printSelection, setPrintSelection] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
+  const [plateObjects, setPlateObjects] = useState([]);
   const [meshInspection, setMeshInspection] = useState(null);
   const [nativePlate, setNativePlate] = useState(null);
   const [importFile, setImportFile] = useState(null);
@@ -212,7 +214,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         body: {
           ...form,
           spool_id: form.spool_id || null,
-          settings: {},
+          settings: plateObjects.length ? { plate_objects: plateObjects } : {},
         },
       });
       setJobs(current => [job, ...current]);
@@ -442,6 +444,16 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       {!stlFiles.length && <p>Add a plain-text STL model to Files or Model Library before preparing a slicing draft.</p>}
     </section>
 
+    <SlicerPlateEditor
+      files={stlFiles}
+      objects={plateObjects}
+      onChange={setPlateObjects}
+      onPrimaryChange={id => update("input_asset_id", String(id))}
+      plate={nativePlate?.plate && ["available", "partial"].includes(nativePlate.plate.status) ? nativePlate.plate : null}
+      canEdit={canPrepare}
+      onFilesUploaded={onFilesUploaded}
+    />
+
     <section className="panel printingSection" aria-labelledby="slicer-profile-import">
       <h3 id="slicer-profile-import">Engine-native profiles</h3>
       <p>Import a preset exported by the selected slicer. PrusaSlicer INI and OrcaSlicer JSON remain separate. Imported profiles are preserved in private Files and are <strong>not verified for execution</strong>.</p>
@@ -543,6 +555,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           <div className="cameraSourceIdentity">
             <strong>{job.input_asset?.name || "Model"} · {job.printer?.name || "Printer"}</strong>
             <small>{job.engine} {job.engine_version} · {job.status} · {job.process_preset}</small>
+            {job.settings?.plate_objects?.length > 0 && <small>
+              Saved visual plate: {job.settings.plate_objects.length} model instance{job.settings.plate_objects.length === 1 ? "" : "s"} · preparation-only
+            </small>}
             <small>{job.spool?.name ? "Spool " + job.spool.name + " · " : ""}
               {job.status === "completed" ? "G-code saved privately; inspect before printing" :
                 job.status === "draft" ? "Configuration saved; not sliced" :
@@ -550,6 +565,24 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             {(job.status === "queued" || job.status === "running") && <progress value={job.progress || 0} max="100" aria-label="Slicing progress" />}
           </div>
           <div className="cameraSourceActions">
+            {job.status === "draft" && job.settings?.plate_objects?.length > 0 && <button type="button" disabled={busy} onClick={() => {
+              setPlateObjects(job.settings.plate_objects);
+              setForm(current => ({
+                ...current, engine: job.engine, engine_version: job.engine_version,
+                input_asset_id: job.input_asset?.id || "",
+                printer_id: job.printer?.id || "",
+                spool_id: job.spool?.id || "",
+                printer_preset: job.printer_preset,
+                filament_preset: job.filament_preset,
+                process_preset: job.process_preset,
+                printer_profile_id: job.printer_profile_id || "",
+                filament_profile_id: job.filament_profile_id || "",
+                process_profile_id: job.process_profile_id || "",
+                nozzle_mm: job.nozzle_mm,
+              }));
+              setNotice("Visual plate draft loaded for editing. Saving will create a new draft.");
+              document.getElementById("slicer-plate-heading")?.scrollIntoView({ behavior: "smooth" });
+            }}>Edit visual plate</button>}
             {job.can_slice && canPrepare && <button type="button" disabled={busy} onClick={() => startSlice(job)}>Slice now</button>}
             {mayCancel && (job.status === "draft" || job.status === "queued") && <button type="button" disabled={busy} onClick={() => cancelPending(job)}>Cancel {job.status === "queued" ? "queued slice" : "draft"}</button>}
             {job.status === "completed" && job.output_asset?.id && canPrint && <button type="button" className="primary" disabled={busy} onClick={() => requestPrint(job)}>Print from slicer</button>}
