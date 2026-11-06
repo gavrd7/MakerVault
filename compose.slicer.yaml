@@ -10,7 +10,8 @@ services:
       MAKERVAULT_SLICER_WORKER_URL: http://slicer-worker:8088
       MAKERVAULT_SLICER_WORKER_TOKEN: ${MAKERVAULT_SLICER_WORKER_TOKEN:?Configure a strong worker token}
       MAKERVAULT_SLICER_EXECUTION_ENABLED: ${MAKERVAULT_SLICER_EXECUTION_ENABLED:-0}
-      MAKERVAULT_SLICER_PRUSA_VERSION: ${MAKERVAULT_SLICER_PRUSA_VERSION:?Set the exact verified PrusaSlicer version}
+      MAKERVAULT_SLICER_ENGINE: ${MAKERVAULT_SLICER_ENGINE:-orcaslicer}
+      MAKERVAULT_SLICER_ENGINE_VERSION: ${MAKERVAULT_SLICER_ENGINE_VERSION:?Set the exact verified engine version}
       MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST: ${MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST:?Set the pinned verified worker image SHA-256 digest}
       MAKERVAULT_SLICER_WORKER_IMAGE: ${MAKERVAULT_SLICER_WORKER_IMAGE:?Set the digest-pinned worker image reference}
     networks:
@@ -37,8 +38,9 @@ services:
     environment:
       SLICER_WORKER_ENABLED: "1"
       SLICER_WORKER_TOKEN: ${MAKERVAULT_SLICER_WORKER_TOKEN:?Configure a strong worker token}
-      SLICER_PRUSA_BINARY: ${MAKERVAULT_SLICER_PRUSA_BINARY:-/usr/bin/prusa-slicer}
-      SLICER_PRUSA_VERSION: ${MAKERVAULT_SLICER_PRUSA_VERSION:?Set the exact verified PrusaSlicer version}
+      SLICER_ENGINE: ${MAKERVAULT_SLICER_ENGINE:-orcaslicer}
+      SLICER_ENGINE_BINARY: ${MAKERVAULT_SLICER_ENGINE_BINARY:-/usr/bin/orca-slicer}
+      SLICER_ENGINE_VERSION: ${MAKERVAULT_SLICER_ENGINE_VERSION:?Set the exact verified engine version}
     networks:
       - makervault_slicer
     # Deliberately no ports, DB/Redis/secret mounts, Docker socket or host bind mounts.

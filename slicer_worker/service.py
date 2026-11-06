@@ -16,6 +16,7 @@ import tempfile
 import uuid
 
 from .runner import MAX_GCODE_BYTES, MAX_MODEL_BYTES, MAX_PROFILE_BYTES, WorkerError, run_prusa
+from .orca_runner import run_orca
 
 
 MAX_REQUEST_BYTES = 48 * 1024 * 1024
@@ -25,11 +26,13 @@ MAX_OUTPUT_BYTES = MAX_GCODE_BYTES
 def configured_engine():
     """An installed executable is not enough: admin must opt in explicitly."""
     token = os.environ.get("SLICER_WORKER_TOKEN", "")
-    binary = os.environ.get("SLICER_PRUSA_BINARY", "")
-    version = os.environ.get("SLICER_PRUSA_VERSION", "")
+    engine = os.environ.get("SLICER_ENGINE", "orcaslicer")
+    binary = os.environ.get("SLICER_ENGINE_BINARY", "")
+    version = os.environ.get("SLICER_ENGINE_VERSION", "")
     if (
         os.environ.get("SLICER_WORKER_ENABLED") != "1"
-        or len(token) < 32 or not binary or not version or len(version) > 80
+        or len(token) < 32 or engine not in {"orcaslicer", "prusaslicer"}
+        or not binary or not version or len(version) > 80
     ):
         return None
     path = Path(binary)
@@ -47,7 +50,7 @@ def configured_engine():
     # health check only rules out obviously unrelated executable installs.
     if result.returncode != 0 or version.encode() not in result.stdout[:1024]:
         return None
-    return {"binary": path, "version": version, "token": token}
+    return {"binary": path, "engine": engine, "version": version, "token": token}
 
 
 def _decode_payload(payload):
@@ -60,8 +63,8 @@ def _decode_payload(payload):
         uuid.UUID(str(payload["job_id"]))
     except (TypeError, ValueError):
         raise WorkerError("Invalid job identifier.") from None
-    if payload["engine"] != "prusaslicer":
-        raise WorkerError("This worker only supports PrusaSlicer.")
+    if payload["engine"] not in {"orcaslicer", "prusaslicer"}:
+        raise WorkerError("Unsupported isolated worker engine.")
     files = {}
     for key, limit in (
         ("model", MAX_MODEL_BYTES),
@@ -104,7 +107,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(404, {"error": "Not found."})
         current = configured_engine()
         return self._json(200, {
-            "ready": bool(current), "engine": "prusaslicer",
+            "ready": bool(current), "engine": current["engine"] if current else None,
             "version": current["version"] if current else None,
         })
 
@@ -129,17 +132,20 @@ class Handler(BaseHTTPRequestHandler):
             request = json.loads(self.rfile.read(length))
             if not isinstance(request, dict):
                 raise WorkerError("Job request must be a JSON object.")
-            if request.get("engine_version") != current["version"]:
-                raise WorkerError("Requested engine version is unavailable.")
+            if request.get("engine") != current["engine"] or request.get("engine_version") != current["version"]:
+                raise WorkerError("Requested engine/version is unavailable.")
             files = _decode_payload(request)
             with tempfile.TemporaryDirectory(prefix="makervault-slice-") as tmp:
                 workdir = Path(tmp)
+                extension = ".json" if current["engine"] == "orcaslicer" else ".ini"
                 for field, name in (
-                    ("model", "input.stl"), ("printer_profile", "printer.ini"),
-                    ("filament_profile", "filament.ini"), ("process_profile", "process.ini"),
+                    ("model", "input.stl"), ("printer_profile", "printer" + extension),
+                    ("filament_profile", "filament" + extension),
+                    ("process_profile", "process" + extension),
                 ):
                     (workdir / name).write_bytes(files[field])
-                receipt = run_prusa(current["binary"], workdir)
+                runner = run_orca if current["engine"] == "orcaslicer" else run_prusa
+                receipt = runner(current["binary"], workdir)
                 data = (workdir / "output.gcode").read_bytes()
                 if not data or len(data) > MAX_OUTPUT_BYTES:
                     raise WorkerError("Generated G-code exceeded the output size limit.")

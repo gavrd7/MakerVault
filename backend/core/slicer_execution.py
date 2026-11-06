@@ -28,7 +28,8 @@ def verified_installation():
     if os.environ.get("MAKERVAULT_SLICER_EXECUTION_ENABLED") != "1":
         return {}
     digest = os.environ.get("MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST", "")
-    version = os.environ.get("MAKERVAULT_SLICER_PRUSA_VERSION", "")
+    engine = os.environ.get("MAKERVAULT_SLICER_ENGINE", "orcaslicer")
+    version = os.environ.get("MAKERVAULT_SLICER_ENGINE_VERSION", "")
     image_ref = os.environ.get("MAKERVAULT_SLICER_WORKER_IMAGE", "")
     if (
         not digest or not version or not image_ref
@@ -38,17 +39,17 @@ def verified_installation():
         return {}
     try:
         worker = health()
-        if not worker["ready"] or worker["engine"] != "prusaslicer" or worker["version"] != version:
+        if not worker["ready"] or worker["engine"] != engine or worker["version"] != version:
             return {}
-        validate_engine_selection("prusaslicer", version, {
-            "prusaslicer": {
+        validate_engine_selection(engine, version, {
+            engine: {
                 "version": version, "enabled": True, "verified": True,
                 "image_digest": digest,
             }
         })
     except (ValueError, SlicerWorkerError):
         return {}
-    return {"prusaslicer": {
+    return {engine: {
         "version": version, "enabled": True, "verified": True,
         "image_digest": digest,
     }}
