@@ -20,6 +20,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [engines, setEngines] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [profiles, setProfiles] = useState([]);
+  const [profileLineages, setProfileLineages] = useState({});
   const [workerConfigured, setWorkerConfigured] = useState(false);
   const [mayCancel, setMayCancel] = useState(false);
   const [printSelection, setPrintSelection] = useState(null);
@@ -174,6 +175,21 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       setError(err.message || "Could not save the slicing draft.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function inspectProfile(profile) {
+    if (profile.engine !== "orcaslicer") return;
+    setError("");
+    setProfileLineages(current => ({ ...current, [profile.id]: { checking: true } }));
+    try {
+      const result = await apiFetch("/api/printing/slicer/profiles/" + profile.id + "/dependencies/");
+      setProfileLineages(current => ({ ...current, [profile.id]: result.lineage }));
+    } catch (err) {
+      setProfileLineages(current => ({
+        ...current,
+        [profile.id]: { status: "invalid", error: err.message || "Profile inspection failed." },
+      }));
     }
   }
 
@@ -340,7 +356,21 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             <div className="cameraSourceIdentity">
               <strong>{profile.name} · {profile.kind}</strong>
               <small>{profile.engine} {profile.engine_version} · {profile.status} · {profile.provenance || "No source supplied"}</small>
+              {profileLineages[profile.id] && <small role="status">
+                {profileLineages[profile.id].checking ? "Checking native parent presets…" :
+                  profileLineages[profile.id].status === "complete" ? "Parent chain present — still unverified for slicing" :
+                  profileLineages[profile.id].status === "missing" ? "Missing native parent: " + profileLineages[profile.id].missing :
+                  profileLineages[profile.id].status === "cycle" ? "Circular native parent reference detected" :
+                  profileLineages[profile.id].status === "too_deep" ? "Parent chain exceeds allowed depth" :
+                  profileLineages[profile.id].error || "Native preset dependency inspection failed"}
+              </small>}
+              {profileLineages[profile.id]?.chain?.length > 1 && <small>
+                Parent chain: {profileLineages[profile.id].chain.map(entry => entry.name).join(" → ")}
+              </small>}
             </div>
+            {profile.engine === "orcaslicer" && <div className="cameraSourceActions">
+              <button type="button" disabled={profileLineages[profile.id]?.checking} onClick={() => inspectProfile(profile)}>Check parent presets</button>
+            </div>}
           </div>
         )}
       </div>
