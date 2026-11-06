@@ -81,7 +81,7 @@ class SliceJobApiTests(TestCase):
         self.assertFalse(result.json()["job"]["can_slice"])
         with self.assertRaisesRegex(SlicerExecutionError, "multi-object slicing"):
             validate_scheduling(row, {"prusaslicer": {"enabled": True, "verified": True}})
-        self.assertEqual(self.client.post(f"{self.url}{row.pk}/start/").status_code, 403)
+        self.assertEqual(self.client.post(f"{self.url}{row.pk}/start/").status_code, 409)
 
     def test_visual_plate_rejects_foreign_files_and_untrusted_settings(self):
         self.client.force_login(self.owner)
