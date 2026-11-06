@@ -157,7 +157,7 @@ function newestGeometryAnalysis(model) {
   return null;
 }
 
-export default function PrintingPage({ config, projects, searchTarget = null, onOpenConsumed, onOpenMakerTags = () => {}, onModelLibraryBack = null, initialWorkspaceView = "overview", onOpenSlicer = null }) {
+export default function PrintingPage({ config, projects, searchTarget = null, onOpenConsumed, onOpenMakerTags = () => {}, onModelLibraryBack = null, initialWorkspaceView = "overview", onOpenSlicer = null, slicerStatus = { state: "checking" } }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [sourceNotice, setSourceNotice] = useState("");
@@ -312,6 +312,18 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
     />;
   }
 
+  if (workspaceView === "slicer" && slicerStatus.state !== "ready") {
+    return <section className="panel printingSection">
+      <h2>MakerVault Slicer unavailable</h2>
+      <p>{slicerStatus.state === "not_installed"
+        ? "No slicing service is enabled for this MakerVault installation. The slicer is optional; install and configure the separate slicing worker to enable this workspace."
+        : slicerStatus.state === "unavailable"
+          ? "Slicer execution is enabled, but no verified slicing worker is currently available. Check the optional worker container, health, engine verification and configuration."
+          : "Slicer availability could not be confirmed. Refresh the page or check the server connection."}</p>
+      <button type="button" onClick={() => initialWorkspaceView === "slicer" && onModelLibraryBack ? onModelLibraryBack() : setWorkspaceView("overview")}>Back to 3D Printing</button>
+    </section>;
+  }
+
   if (workspaceView === "slicer") {
     return <SlicerWorkbench
       files={data?.model_files || []}
@@ -376,10 +388,23 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
         </section>
         <section className="printingActionGroup" aria-labelledby="printing-slicer-heading">
           <h3 id="printing-slicer-heading">MakerVault Slicer</h3>
-          <p>Prepare models and slicing profiles in MakerVault's dedicated self-hosted slicer workspace.</p>
-          <div className="printingHeroActions">
-            <button type="button" onClick={() => onOpenSlicer ? onOpenSlicer() : setWorkspaceView("slicer")}>Open MakerVault Slicer</button>
-          </div>
+          {slicerStatus.state === "ready" ? <>
+            <p>Prepare models and slicing profiles in MakerVault's dedicated self-hosted slicer workspace.</p>
+            <div className="printingHeroActions">
+              <button type="button" onClick={() => onOpenSlicer ? onOpenSlicer() : setWorkspaceView("slicer")}>Open MakerVault Slicer</button>
+            </div>
+          </> : <>
+            <p role="status">{slicerStatus.state === "not_installed"
+              ? "No slicer installed or enabled. MakerVault's optional slicing worker is not configured. Install the separate slicer service to use this feature; 3D Printing and G-code management remain available."
+              : slicerStatus.state === "unavailable"
+                ? "Slicer service unavailable. Execution is enabled, but the configured worker is offline, unverified or not ready. Check its container and engine configuration."
+                : slicerStatus.state === "checking"
+                  ? "Checking for an optional slicing worker…"
+                  : "Could not check slicer availability. The slicer will remain disabled until availability can be confirmed."}</p>
+            <div className="printingHeroActions">
+              <button type="button" disabled title="A verified slicer worker must be available before opening the slicer.">Open MakerVault Slicer</button>
+            </div>
+          </>}
         </section>
         <section className="printingActionGroup">
           <h3>Filaments</h3>
