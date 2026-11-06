@@ -58,6 +58,52 @@ class SliceJobApiTests(TestCase):
         self.input_asset.file.save("part.stl", ContentFile(b"not an STL"), save=True)
         self.assertEqual(self.client.get(url).status_code, 422)
 
+    def test_visual_multi_stl_plate_is_saved_but_never_slicable(self):
+        from core.slicer_execution import SlicerExecutionError, validate_scheduling
+        self.client.force_login(self.owner)
+        second = FileAsset.objects.create(
+            owner=self.owner, name="second.stl", category="mesh",
+            metadata={"extension": ".stl", "original_name": "second.stl"},
+        )
+        instances = [
+            {"instance_id": str(uuid.uuid4()), "asset_id": str(self.input_asset.pk),
+             "x_mm": 0, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100,
+             "color": "#58b5e4"},
+            {"instance_id": str(uuid.uuid4()), "asset_id": str(second.pk),
+             "x_mm": 25, "y_mm": 30, "rotation_deg": 90, "scale_percent": 80,
+             "color": "#f59e0b"},
+        ]
+        result = self.post({**self.payload, "settings": {"plate_objects": instances}})
+        self.assertEqual(result.status_code, 201, result.content)
+        row = SliceJob.objects.get(pk=result.json()["job"]["id"])
+        self.assertEqual(len(row.settings["plate_objects"]), 2)
+        self.assertEqual(row.settings["plate_objects"][1]["rotation_deg"], 90.0)
+        self.assertFalse(result.json()["job"]["can_slice"])
+        with self.assertRaisesRegex(SlicerExecutionError, "multi-object slicing"):
+            validate_scheduling(row, {"prusaslicer": {"enabled": True, "verified": True}})
+        self.assertEqual(self.client.post(f"{self.url}{row.pk}/start/").status_code, 403)
+
+    def test_visual_plate_rejects_foreign_files_and_untrusted_settings(self):
+        self.client.force_login(self.owner)
+        foreign = FileAsset.objects.create(
+            owner=self.other, name="not-yours.stl", category="mesh",
+            metadata={"extension": ".stl"},
+        )
+        valid = {"instance_id": str(uuid.uuid4()), "asset_id": str(self.input_asset.pk),
+                 "x_mm": 0, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100,
+                 "color": "#58b5e4"}
+        for obj in (
+            {**valid, "asset_id": str(foreign.pk)},
+            {**valid, "x_mm": float("inf")},
+            {**valid, "scale_percent": 0},
+            {**valid, "color": "#red"},
+            {**valid, "script": "M112"},
+        ):
+            with self.subTest(instance=obj):
+                response = self.post({**self.payload, "settings": {"plate_objects": [obj]}})
+                self.assertEqual(response.status_code, 400, response.content)
+        self.assertEqual(SliceJob.objects.count(), 0)
+
     def test_inert_draft_lifecycle_and_engine_catalogue(self):
         self.client.force_login(self.owner)
         engines = self.client.get("/api/printing/slicer/engines/")
