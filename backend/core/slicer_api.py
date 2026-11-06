@@ -1,5 +1,6 @@
 """Owner-scoped slicer drafts and engine discovery; no execution endpoints yet."""
 import json
+import os
 import math
 import re
 import uuid
