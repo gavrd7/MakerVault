@@ -26,6 +26,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [mayCancel, setMayCancel] = useState(false);
   const [printSelection, setPrintSelection] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
+  const [meshInspection, setMeshInspection] = useState(null);
   const [importFile, setImportFile] = useState(null);
   const [importKind, setImportKind] = useState("printer");
   const [importName, setImportName] = useState("");
@@ -63,6 +64,25 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   };
   const selectedFile = stlFiles.find(file => String(file.id) === form.input_asset_id);
   const selectedPrinter = printers.find(item => String(item.id) === form.printer_id);
+
+  useEffect(() => {
+    if (!selectedFile?.id) {
+      setMeshInspection(null);
+      return undefined;
+    }
+    let active = true;
+    const id = String(selectedFile.id);
+    setMeshInspection({ id, loading: true });
+    apiFetch("/api/printing/slicer/meshes/" + id + "/inspection/")
+      .then(data => {
+        if (active) setMeshInspection({ id, mesh: data.mesh });
+      })
+      .catch(() => {
+        if (active) setMeshInspection({ id, error: "Geometry inspection unavailable. Verify the STL before slicing." });
+      });
+    return () => { active = false; };
+  }, [selectedFile?.id]);
+
 
   async function refresh() {
     setLoading(true);
@@ -331,7 +351,12 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         <div className="cameraSourceIdentity">
           <strong>{selectedFile.name || selectedFile.filename}</strong>
           <small>Source: {selectedFile.filename} · {selectedFile.size_bytes ? Math.round(selectedFile.size_bytes / 1024) + " KiB" : "size unknown"}</small>
-          <small>This is a source-model preview, not a slice or build-plate placement simulation.</small>
+          {meshInspection?.id === String(selectedFile.id) && (meshInspection.loading
+            ? <small>Inspecting source STL geometry…</small>
+            : meshInspection.mesh
+              ? <small>Model dimensions: {meshInspection.mesh.size_mm.join(" × ")} mm · {meshInspection.mesh.triangles.toLocaleString()} triangles</small>
+              : <small role="alert">{meshInspection.error}</small>)}
+          <small>Dimensions are source coordinates, not an automatic placement or printer build-volume check.</small>
         </div>
         <div className="cameraSourceActions">
           <button type="button" onClick={() => setPreviewFile(selectedFile)}>Inspect model</button>
