@@ -241,7 +241,13 @@ def engines(request):
     for row in rows:
         if row["key"] in installed:
             row.update({"available": True, "enabled": True, "status": "validated"})
-    return JsonResponse({"engines": rows, "worker_configured": bool(installed)})
+    return JsonResponse({
+        "engines": rows,
+        "worker_configured": bool(installed),
+        # Deployment intent is distinct from a healthy, approved engine.
+        # Never infer an installed container merely because code is present.
+        "deployment_enabled": os.environ.get("MAKERVAULT_SLICER_EXECUTION_ENABLED") == "1",
+    })
 
 
 @login_required
