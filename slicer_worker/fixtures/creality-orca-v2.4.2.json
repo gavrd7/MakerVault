@@ -1,0 +1,38 @@
+{
+  "schema": "makervault.orca-fixture-candidates.v1",
+  "upstream_repo": "OrcaSlicer/OrcaSlicer",
+  "upstream_ref": "v2.4.2",
+  "upstream_profile_index": "resources/profiles/Creality.json",
+  "status": "candidate-needs-parent-resolution-and-real-fixture",
+  "note": "Source references only. No profile content is bundled, installed, downloaded, or considered safe for execution.",
+  "printers": [
+    {
+      "model": "Creality K1",
+      "machine_profile": "resources/profiles/Creality/machine/Creality K1 (0.4 nozzle).json",
+      "process_profile": "resources/profiles/Creality/process/0.20mm Standard @Creality K1 (0.4 nozzle).json",
+      "filament_profile": "resources/profiles/Creality/filament/Creality Generic PLA @K1-all.json",
+      "declared_volume_mm": [
+        220,
+        220,
+        250
+      ],
+      "unresolved_machine_parent": "fdm_creality_common",
+      "unresolved_process_parent": "fdm_process_creality_common",
+      "unresolved_filament_parent": "Creality Generic PLA"
+    },
+    {
+      "model": "Creality K2",
+      "machine_profile": "resources/profiles/Creality/machine/Creality K2 0.4 nozzle.json",
+      "process_profile": "resources/profiles/Creality/process/0.20mm Standard @Creality K2 0.4 nozzle.json",
+      "filament_profile": "resources/profiles/Creality/filament/Creality Generic PLA @K2-all.json",
+      "declared_volume_mm": [
+        260,
+        260,
+        260
+      ],
+      "unresolved_machine_parent": "fdm_creality_common",
+      "unresolved_process_parent": "fdm_process_creality_common",
+      "unresolved_filament_parent": "Creality Generic PLA"
+    }
+  ]
+}
