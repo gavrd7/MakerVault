@@ -12,6 +12,7 @@ class WorkerApprovalTests(SimpleTestCase):
             "MAKERVAULT_SLICER_EXECUTION_ENABLED": "1",
             "MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST": self.digest,
             "MAKERVAULT_SLICER_ENGINE_VERSION": "2.9.7",
+            "MAKERVAULT_SLICER_ENGINE_BINARY_SHA256": "b" * 64,
             "MAKERVAULT_SLICER_ENGINE": "orcaslicer",
             "MAKERVAULT_SLICER_WORKER_IMAGE": "registry.example.invalid/slicer@" + self.digest,
         }

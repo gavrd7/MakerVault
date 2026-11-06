@@ -32,10 +32,13 @@ def verified_installation():
     engine = os.environ.get("MAKERVAULT_SLICER_ENGINE", "orcaslicer")
     version = os.environ.get("MAKERVAULT_SLICER_ENGINE_VERSION", "")
     image_ref = os.environ.get("MAKERVAULT_SLICER_WORKER_IMAGE", "")
+    binary_sha256 = os.environ.get("MAKERVAULT_SLICER_ENGINE_BINARY_SHA256", "")
     if (
         not digest or not version or not image_ref
         or not image_ref.endswith("@" + digest)
         or image_ref.count("@") != 1
+        or len(binary_sha256) != 64
+        or any(char not in "0123456789abcdef" for char in binary_sha256)
     ):
         return {}
     try:
@@ -53,7 +56,22 @@ def verified_installation():
     return {engine: {
         "version": version, "enabled": True, "verified": True,
         "image_digest": digest,
+        "binary_sha256": binary_sha256,
     }}
+
+
+def _check_profile_evidence(profile, installation):
+    evidence = profile.verification_evidence or {}
+    if (
+        evidence.get("engine_version") != installation["version"]
+        or evidence.get("image_digest") != installation["image_digest"]
+        or evidence.get("engine_binary_sha256") != installation.get("binary_sha256")
+        or not isinstance(evidence.get("receipt_sha256"), str)
+        or len(evidence["receipt_sha256"]) != 64
+        or not isinstance(evidence.get("gcode_sha256"), str)
+        or len(evidence["gcode_sha256"]) != 64
+    ):
+        raise SlicerExecutionError("Native profile approval no longer matches this pinned worker.")
 
 
 def validate_scheduling(job, installed=None):
@@ -62,7 +80,8 @@ def validate_scheduling(job, installed=None):
         raise SlicerExecutionError("Only unscheduled slice drafts can be queued.")
     if not installed:
         raise SlicerExecutionError("No administrator-verified slicing worker is enabled.")
-    validate_engine_selection(job.engine, job.engine_version, installed)
+    installation = validate_engine_selection(job.engine, job.engine_version, installed)
+    installation["binary_sha256"] = installed[job.engine].get("binary_sha256")
     if not job.printer.is_active or job.printer.owner_id != job.owner_id:
         raise SlicerExecutionError("Selected printer is inactive or unavailable.")
     if job.input_asset.owner_id != job.owner_id or job.input_asset.category != "mesh":
@@ -77,6 +96,7 @@ def validate_scheduling(job, installed=None):
             or profile.name != getattr(job, f"{kind}_preset")
         ):
             raise SlicerExecutionError("Slicing profile identity changed; prepare a new draft.")
+        _check_profile_evidence(profile, installation)
     return True
 
 
@@ -176,7 +196,8 @@ def validate_scheduling_for_worker(job, installed):
         raise SlicerExecutionError("Job is not queued.")
     if not installed:
         raise SlicerExecutionError("Isolated slicing worker is no longer approved.")
-    validate_engine_selection(job.engine, job.engine_version, installed)
+    installation = validate_engine_selection(job.engine, job.engine_version, installed)
+    installation["binary_sha256"] = installed[job.engine].get("binary_sha256")
     if job.printer.owner_id != job.owner_id or job.input_asset.owner_id != job.owner_id:
         raise SlicerExecutionError("Job ownership changed.")
     for kind in ("printer", "filament", "process"):
@@ -187,6 +208,7 @@ def validate_scheduling_for_worker(job, installed):
             or profile.kind != kind or profile.name != getattr(job, f"{kind}_preset")
         ):
             raise SlicerExecutionError("Native slicer profiles are no longer verified.")
+        _check_profile_evidence(profile, installation)
 
 
 def reconcile_stale_jobs(*, now=None, limit=250):

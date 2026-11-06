@@ -13,6 +13,7 @@ services:
       MAKERVAULT_SLICER_ENGINE: ${MAKERVAULT_SLICER_ENGINE:-orcaslicer}
       MAKERVAULT_SLICER_ENGINE_VERSION: ${MAKERVAULT_SLICER_ENGINE_VERSION:?Set the exact verified engine version}
       MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST: ${MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST:?Set the pinned verified worker image SHA-256 digest}
+      MAKERVAULT_SLICER_ENGINE_BINARY_SHA256: ${MAKERVAULT_SLICER_ENGINE_BINARY_SHA256:?Set the verified exact engine binary SHA-256}
       MAKERVAULT_SLICER_WORKER_IMAGE: ${MAKERVAULT_SLICER_WORKER_IMAGE:?Set the digest-pinned worker image reference}
     networks:
       - makervault_backend
