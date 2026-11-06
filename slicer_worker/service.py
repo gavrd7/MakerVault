@@ -8,7 +8,7 @@ import base64
 import hashlib
 import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from threading import BoundedSemaphore
+from threading import BoundedSemaphore, Thread
 import json
 import os
 from pathlib import Path
@@ -26,6 +26,35 @@ MAX_OUTPUT_BYTES = MAX_GCODE_BYTES
 # One bounded slice at a time. Threaded health checks remain responsive while
 # the one approved job is executing, without concurrent CPU/memory spikes.
 SLICE_SLOT = BoundedSemaphore(value=1)
+
+# A thread-per-connection HTTP server must also bound idle/slow request
+# connections, independently of the single active slicer subprocess.
+MAX_WORKER_CONNECTIONS = 8
+
+
+class BoundedWorkerHTTPServer(ThreadingHTTPServer):
+    """No unbounded per-client threads, including during long slices."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._connections = BoundedSemaphore(MAX_WORKER_CONNECTIONS)
+
+    def process_request(self, request, client_address):
+        if not self._connections.acquire(blocking=False):
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self._connections.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._connections.release()
+
 
 
 @lru_cache(maxsize=8)
@@ -185,7 +214,7 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     # Socket is intentionally not published by the optional Compose overlay.
     # Only the MakerVault app is attached to the separate internal network.
-    server = ThreadingHTTPServer(("0.0.0.0", 8088), Handler)
+    server = BoundedWorkerHTTPServer(("0.0.0.0", 8088), Handler)
     server.daemon_threads = True
     server.serve_forever()
 

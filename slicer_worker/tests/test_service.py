@@ -76,3 +76,21 @@ class SlicerWorkerConcurrencyTests(TestCase):
             SLICE_SLOT.release()
         self.assertTrue(SLICE_SLOT.acquire(blocking=False))
         SLICE_SLOT.release()
+
+
+class WorkerHttpConnectionLimitTests(TestCase):
+    def test_worker_server_limit_is_independent_of_one_slice_slot(self):
+        from unittest.mock import Mock
+        from slicer_worker.service import BoundedWorkerHTTPServer, MAX_WORKER_CONNECTIONS
+        self.assertLessEqual(MAX_WORKER_CONNECTIONS, 16)
+        server = object.__new__(BoundedWorkerHTTPServer)
+        from threading import BoundedSemaphore
+        server._connections = BoundedSemaphore(MAX_WORKER_CONNECTIONS)
+        closed = []
+        server.shutdown_request = lambda request: closed.append(request)
+        with patch("slicer_worker.service.ThreadingHTTPServer.process_request") as dispatch:
+            for i in range(MAX_WORKER_CONNECTIONS):
+                server.process_request(i, ("127.0.0.1", i))
+            self.assertEqual(dispatch.call_count, MAX_WORKER_CONNECTIONS)
+            server.process_request("overflow", ("127.0.0.1", 1234))
+            self.assertEqual(closed, ["overflow"])
