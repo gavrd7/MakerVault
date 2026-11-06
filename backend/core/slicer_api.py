@@ -264,6 +264,32 @@ def profiles(request):
 
 @login_required
 @require_http_methods(["POST"])
+def job_cancel(request, job_id):
+    """Cancel drafts or queued jobs without terminating an in-flight worker.
+
+    The Celery task can only claim a queued row. Running jobs require a
+    separate authenticated worker cancellation protocol before cancellation
+    is offered; silently marking those cancelled could leave execution live.
+    """
+    from django.db import transaction
+    with transaction.atomic():
+        job = SliceJob.objects.select_for_update(of=("self",)).filter(
+            pk=job_id, owner=request.user,
+        ).first()
+        if not job:
+            return _error("Slice job not found.", 404)
+        if job.status not in {"draft", "queued"}:
+            return _error("Only drafts and jobs awaiting a worker can be cancelled.", 409)
+        if not request.user.has_perm("core.change_slicejob"):
+            return _error("You do not have permission to cancel slicing jobs.", 403)
+        job.status = "cancelled"
+        job.message = "Cancelled before slicing started."
+        job.save(update_fields=["status", "message", "updated_at"])
+    return JsonResponse({"job": serialise(job), "cancelled": True})
+
+
+@login_required
+@require_http_methods(["POST"])
 def job_start(request, job_id):
     """A separate explicit slice action; never submits to any printer."""
     if not request.user.has_perm("core.add_fileasset"):

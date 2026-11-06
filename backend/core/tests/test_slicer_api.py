@@ -152,6 +152,32 @@ class SliceJobApiTests(TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertEqual(SliceJob.objects.get(pk=job_id).status, "failed")
 
+    def test_cancel_queued_job_does_not_run_or_change_printer(self):
+        from core.slicer_execution import process_queued_job
+        from core.models import PrinterGcodeSubmission
+        self.client.force_login(self.owner)
+        job_id = self.post().json()["job"]["id"]
+        self.owner.user_permissions.add(Permission.objects.get(codename="change_slicejob"))
+        self.client.force_login(self.owner)
+        SliceJob.objects.filter(pk=job_id).update(status="queued")
+        count = PrinterGcodeSubmission.objects.count()
+        result = self.client.post(f"{self.url}{job_id}/cancel/", "{}", content_type="application/json")
+        self.assertEqual(result.status_code, 200, result.content)
+        self.assertEqual(result.json()["job"]["status"], "cancelled")
+        self.assertEqual(process_queued_job(job_id)["status"], "skipped")
+        self.assertEqual(PrinterGcodeSubmission.objects.count(), count)
+        self.assertEqual(self.client.post(f"{self.url}{job_id}/start/").status_code, 409)
+
+    def test_cannot_cancel_running_job_or_another_owners_job(self):
+        self.client.force_login(self.owner)
+        job_id = self.post().json()["job"]["id"]
+        self.owner.user_permissions.add(Permission.objects.get(codename="change_slicejob"))
+        self.client.force_login(self.owner)
+        SliceJob.objects.filter(pk=job_id).update(status="running")
+        self.assertEqual(self.client.post(f"{self.url}{job_id}/cancel/").status_code, 409)
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.post(f"{self.url}{job_id}/cancel/").status_code, 404)
+
     def test_unscheduled_draft_delete_requires_permission(self):
         self.client.force_login(self.owner)
         job_id = self.post().json()["job"]["id"]
