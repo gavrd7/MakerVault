@@ -10,6 +10,7 @@ from pathlib import Path
 import signal
 import subprocess
 
+from .stl_validation import StlValidationError, validate_stl
 from .runner import (
     DEFAULT_TIMEOUT_SECONDS, MAX_GCODE_BYTES, MAX_MODEL_BYTES, MAX_PROFILE_BYTES,
     WorkerError, _regular_file, _output_path,
@@ -57,6 +58,10 @@ def orca_command(binary: Path, workdir: Path):
     if binary.is_symlink() or not binary.is_file() or not os.access(binary, os.X_OK):
         raise WorkerError("Approved OrcaSlicer binary is unavailable.")
     model = _regular_file(workdir, "input.stl", MAX_MODEL_BYTES)
+    try:
+        validate_stl(model.read_bytes())
+    except StlValidationError as exc:
+        raise WorkerError("Input STL failed structural validation.") from exc
     profiles = [
         _regular_file(workdir, name, MAX_PROFILE_BYTES)
         for name in ("printer.json", "filament.json", "process.json")

@@ -1,3 +1,4 @@
+import struct
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
@@ -15,7 +16,10 @@ class OrcaRunnerTests(TestCase):
         self.binary = self.root / "orca-slicer"
         self.binary.write_text("#!/bin/sh\nexit 0\n")
         self.binary.chmod(0o700)
-        (self.root / "input.stl").write_bytes(b"sample-model")
+        (self.root / "input.stl").write_bytes(
+            b"STL fixture".ljust(80, b" ") + struct.pack("<I", 1)
+            + struct.pack("<12fH", 0, 0, 1, 0, 0, 0, 10, 0, 0, 0, 10, 0, 0)
+        )
         for name in ("printer.json", "filament.json", "process.json"):
             (self.root / name).write_text('{"name":"Native preset"}')
 
@@ -26,6 +30,11 @@ class OrcaRunnerTests(TestCase):
         self.assertEqual(cmd[cmd.index("--slice") + 1], "1")
         self.assertEqual(cmd[cmd.index("--load-filaments") + 1], str(self.root / "filament.json"))
         self.assertIn(str(self.root / "printer.json") + ";" + str(self.root / "process.json"), cmd)
+
+    def test_rejects_fake_stl_before_launching_orca(self):
+        (self.root / "input.stl").write_bytes(b"not a real STL")
+        with self.assertRaisesRegex(WorkerError, "STL"):
+            orca_command(self.binary, self.root)
 
     def test_forbids_postprocessing_and_network_settings(self):
         for field in ("post_process_scripts", "printhost_apikey", "print_host"):
