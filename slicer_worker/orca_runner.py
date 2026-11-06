@@ -31,6 +31,11 @@ def _native_json(path):
         raise WorkerError("Invalid native Orca JSON profile.") from None
     if not isinstance(value, dict):
         raise WorkerError("Orca profile must be a JSON object.")
+    # Orca system/user profiles commonly inherit missing machine and material
+    # settings. A worker with only three staged files cannot safely resolve
+    # external parents, so do not silently substitute defaults.
+    if value.get("inherits"):
+        raise WorkerError("Orca profile requires an unbundled parent preset; use a verified complete native profile bundle.")
     def check(node, depth=0):
         if depth > 12:
             raise WorkerError("Native Orca profile nesting exceeds its limit.")

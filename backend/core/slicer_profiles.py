@@ -56,6 +56,8 @@ def _check_orca_json(raw):
                 walk(item, depth + 1)
 
     walk(value)
+    # Preserve imported child profiles as candidates, but expose that their
+    # parent chain must be resolved and approved before worker execution.
     return value
 
 
@@ -88,4 +90,12 @@ def inspect_native_profile(asset, engine_key):
                 raise SlicerProfileError("Post-processing commands are unsupported.")
     else:
         _check_orca_json(decoded)
-    return {"sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw), "extension": extension, "engine": engine.key}
+    inherits = ""
+    if engine.profile_format != "prusa-ini":
+        inherits = str(_check_orca_json(decoded).get("inherits") or "")[:200]
+    return {
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "bytes": len(raw), "extension": extension, "engine": engine.key,
+        "inherits": inherits,
+        "requires_parent_bundle": bool(inherits),
+    }

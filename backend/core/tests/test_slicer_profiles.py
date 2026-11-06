@@ -55,6 +55,14 @@ class NativeProfileInspectionTests(SimpleTestCase):
             with self.subTest(body=body[:40]), self.assertRaises(SlicerProfileError):
                 inspect_native_profile(self.asset("machine.ini", body), "prusaslicer")
 
+    def test_inherited_orca_profile_is_preserved_but_flagged_incomplete(self):
+        report = inspect_native_profile(
+            self.asset("child.json", b'{"name":"Child","inherits":"Vendor machine base"}'),
+            "orcaslicer",
+        )
+        self.assertTrue(report["requires_parent_bundle"])
+        self.assertEqual(report["inherits"], "Vendor machine base")
+
     def test_fails_closed_for_profile_format_mismatch(self):
         with self.assertRaises(SlicerProfileError):
             inspect_native_profile(self.asset("machine.json", b'{"name":"profile"}'), "prusaslicer")

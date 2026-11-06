@@ -33,6 +33,11 @@ class OrcaRunnerTests(TestCase):
             with self.subTest(field=field), self.assertRaises(WorkerError):
                 orca_command(self.binary, self.root)
 
+    def test_inherited_profiles_are_not_sliced_without_parent_bundle(self):
+        (self.root / "printer.json").write_text('{"name":"Printer child","inherits":"Vendor base"}')
+        with self.assertRaisesRegex(WorkerError, "parent preset"):
+            orca_command(self.binary, self.root)
+
     def test_successful_mock_orca_output_is_normalised(self):
         outdir = self.root / "orca-output"
         class FakeProcess:
