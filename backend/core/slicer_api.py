@@ -13,6 +13,7 @@ from .slicer_engines import engine_catalogue, get_engine
 from .slicer_profiles import SlicerProfileError, inspect_native_profile
 from .slicer_profile_lineage import inspect_orca_lineage
 from .slicer_mesh import inspect_stl, MeshInspectionError, MAX_INSPECTION_BYTES
+from .slicer_bed import inspect_orca_plate
 from .slicer_execution import (
     SlicerExecutionError, verified_installation, validate_scheduling, queue_draft,
 )
@@ -288,6 +289,21 @@ def profiles(request):
     except IntegrityError:
         return _error("A profile with this engine, version, kind and name already exists.", 409)
     return JsonResponse({"profile": _profile_summary(profile), "execution_available": False}, status=201)
+
+
+@login_required
+@require_http_methods(["GET"])
+def profile_plate(request, profile_id):
+    profile = SlicerProfile.objects.filter(
+        pk=profile_id, owner=request.user, engine="orcaslicer", kind="printer"
+    ).select_related("file_asset").first()
+    if not profile:
+        return _error("Native Orca machine profile not found.", 404)
+    try:
+        geometry = inspect_orca_plate(profile)
+    except SlicerProfileError:
+        return _error("Native printer geometry could not be safely inspected.", 422)
+    return JsonResponse({"profile_id": str(profile.pk), "plate": geometry})
 
 
 @login_required
