@@ -17,3 +17,10 @@ class OrcaCrealityFixtureManifestTests(TestCase):
                 self.assertTrue(printer[field].endswith(".json"))
             for field in ("unresolved_machine_parent", "unresolved_process_parent", "unresolved_filament_parent"):
                 self.assertTrue(printer[field])
+            for kind in ("machine", "process", "filament"):
+                chain = printer["parent_chains"][kind]
+                self.assertGreaterEqual(len(chain), 3)
+                self.assertTrue(all(isinstance(name, str) and name for name in chain))
+        k1 = result["printers"][0]
+        self.assertTrue(k1["filament_profile"].endswith("/Creality Generic PLA.json"))
+        self.assertNotIn("@K1-all", k1["filament_profile"])
