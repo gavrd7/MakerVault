@@ -73,6 +73,18 @@ The opt-in Compose overlay requires a strong internal worker token and exact eng
 
 Orca real-engine fixture validation, interactive build plate manipulation, searchable Basic/Simple/Advanced controls and multi-material support remain pending. The Orca CLI adapter has been implemented in source; this is not proof of a successful real-engine slice. The [dedicated worker contract CI](../../.github/workflows/slicer-contract.yml) and Django/frontend checks cover code contracts, not real slicing.
 
+## Orca-first verification and recovery checkpoint (6 November 2026)
+
+**Engine order:** OrcaSlicer (default) → Creality Print → Bambu Studio → PrusaSlicer → Snapmaker Orca → other printer-relevant engines. The Orca-specific runner has native JSON/CLI staging and file checks, but real CLI slicing remains unverified until a pinned worker image and native profiles complete a fixture run. Neither a mocked runner test nor a profile import demonstrates a working slicer.
+
+The branch now includes `slicer_worker/verify_orca.py`, which runs one real Orca CLI fixture **only inside an approved isolated container**. Feed it a known STL and complete engine-native machine, filament and process profile files; it returns SHA-256 checksums and bounded output metadata while explicitly setting `approved_for_production=false`. This receipt must be reviewed against the actual expected printer/material settings before installation can be approved.
+
+**Native Orca inheritance:** profile JSON may specify `inherits`, which can refer to a vendor/system preset not present in the isolated worker. Import preserves this metadata as an unverified candidate; the current worker rejects such unresolved children rather than silently slicing with wrong defaults. Implement a trusted, versioned native parent-bundle resolver and test with real vendor profiles before enabling inherited presets. Avoid lossy automatic conversion to Prusa INI.
+
+**Worker recovery:** draft and queued jobs can be cancelled before a worker claims them (separate permission required); running jobs cannot yet be cancelled because a safe remote process-termination protocol is not installed. The administrative command `python manage.py reconcile_slice_jobs` marks queue entries older than 30 minutes and running entries older than 25 minutes as **stale** without retrying them. A late worker output cannot replace a stale job. The optional worker now answers health checks independently but limits execution to one concurrent slice.
+
+**Deployment status:** No engine image or profiles are automatically downloaded, installed or enabled by normal MakerVault updates. Worker execution remains opt-in and depends on exact pinned image/version, matched runtime health and admin-approved native profile records. Real Orca fixture execution, worker container integrity, licence/SBOM review and profile-approval tooling remain prerequisites before user testing.
+
 ## Safety and release gates
 
 1. Verify service isolation and no untrusted model/profile can escape a job sandbox, access the network/secret mounts or run arbitrary CLI flags.
