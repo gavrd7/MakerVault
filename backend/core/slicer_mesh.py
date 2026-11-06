@@ -11,9 +11,9 @@ import struct
 MAX_INSPECTION_BYTES = 32 * 1024 * 1024
 MAX_TRIANGLES = 500_000
 COORD_LIMIT_MM = 1_000_000
-NUMBER = r"[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?"
-VERTEX = re.compile(r"^vertex\\s+("+NUMBER+r")\\s+("+NUMBER+r")\\s+("+NUMBER+r")$", re.I)
-FACET = re.compile(r"^facet\\s+normal\\s+("+NUMBER+r")\\s+("+NUMBER+r")\\s+("+NUMBER+r")$", re.I)
+NUMBER = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?"
+VERTEX = re.compile(r"^vertex\s+("+NUMBER+r")\s+("+NUMBER+r")\s+("+NUMBER+r")$", re.I)
+FACET = re.compile(r"^facet\s+normal\s+("+NUMBER+r")\s+("+NUMBER+r")\s+("+NUMBER+r")$", re.I)
 
 
 class MeshInspectionError(ValueError):
