@@ -43,6 +43,7 @@ export default function App() {
   const [components, setComponents] = useState([]);
   const [projects, setProjects] = useState([]);
   const [config, setConfig] = useState(null);
+  const [slicerStatus, setSlicerStatus] = useState({ state: "checking" });
   const [error, setError] = useState("");
   const [importOpen, setImportOpen] = useState(false);
   const [notice, setNotice] = useState("");
@@ -93,6 +94,25 @@ export default function App() {
     ]).then(([d, i, c, b, comp, p]) => {
       setDashboard(d); setInventory(i.rows || []); setConfig(c); setBoards(b.rows || []); setComponents(comp.rows || []); setProjects(p.rows || []);
     }).catch(err => setError(err.message || "MakerVault could not load its initial data."));
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const checkSlicer = async () => {
+      try {
+        const result = await apiFetch("/api/printing/slicer/engines/");
+        if (!active) return;
+        setSlicerStatus({
+          state: result.worker_configured ? "ready"
+            : result.deployment_enabled ? "unavailable" : "not_installed",
+        });
+      } catch {
+        if (active) setSlicerStatus({ state: "unknown" });
+      }
+    };
+    checkSlicer();
+    const timer = window.setInterval(checkSlicer, 60000);
+    return () => { active = false; window.clearInterval(timer); };
   }, []);
 
   useEffect(() => {
@@ -236,6 +256,7 @@ export default function App() {
   }
 
   function navigateSection(next) {
+    if (next === "MakerVault Slicer" && slicerStatus.state !== "ready") return;
     setMakerTagReturn(null);
     setSearchTarget(next === "Model Library" ? { type: "models", token: Date.now() } : null);
     setSection(next);
@@ -250,7 +271,7 @@ export default function App() {
     if (section === "Board Catalogue") return <BoardsPage boards={boards} setBoards={setBoards} components={components} projects={projects} config={config} onOpenImport={() => setImportOpen(true)} refreshDashboard={refreshDashboard} openBoardId={searchTarget?.type === "boards" ? searchTarget.id : ""} openToken={searchTarget?.token} onInventoryCreated={async (item, items = [item]) => { setInventory(rows => { const ids = new Set(items.map(entry => entry.id)); return [...rows.filter(row => !ids.has(row.id)), ...items].sort((a,b) => a.inventory_id.localeCompare(b.inventory_id)); }); await refreshDashboard(); }} />;
     if (section === "Components") return <ComponentsPage components={components} setComponents={setComponents} boards={boards} projects={projects} config={config} refreshDashboard={refreshDashboard} openComponentId={searchTarget?.type === "components" ? searchTarget.id : ""} openToken={searchTarget?.token} onInventoryCreated={async (item, items = [item]) => { setInventory(rows => { const ids = new Set(items.map(entry => entry.id)); return [...rows.filter(row => !ids.has(row.id)), ...items].sort((a,b) => a.inventory_id.localeCompare(b.inventory_id)); }); await refreshDashboard(); }} />;
     if (section === "Projects") return <ProjectsPage projects={projects} setProjects={setProjects} config={config} refreshDashboard={refreshDashboard} refreshInventory={refreshInventory} onOpenMakerTags={openMakerTagsForRecord} boards={boards} components={components} inventory={inventory} openProjectId={projectTarget} onOpenConsumed={() => setProjectTarget("")} />;
-    if (section === "3D Printing" || section === "MakerVault Slicer" || section === "Model Library") return <PrintingPage key={section} initialWorkspaceView={section === "MakerVault Slicer" ? "slicer" : "overview"} onOpenSlicer={() => { setSearchTarget(null); setSection("MakerVault Slicer"); }} config={config} projects={projects} onOpenMakerTags={openMakerTagsForRecord} onModelLibraryBack={() => { setSearchTarget(null); setSection("3D Printing"); }} searchTarget={searchTarget} onOpenConsumed={token => setSearchTarget(current => consumePrinterIntent(current, token))} />;
+    if (section === "3D Printing" || section === "MakerVault Slicer" || section === "Model Library") return <PrintingPage key={section} initialWorkspaceView={section === "MakerVault Slicer" ? "slicer" : "overview"} onOpenSlicer={() => { if (slicerStatus.state === "ready") { setSearchTarget(null); setSection("MakerVault Slicer"); } }} slicerStatus={slicerStatus} config={config} projects={projects} onOpenMakerTags={openMakerTagsForRecord} onModelLibraryBack={() => { setSearchTarget(null); setSection("3D Printing"); }} searchTarget={searchTarget} onOpenConsumed={token => setSearchTarget(current => consumePrinterIntent(current, token))} />;
     if (section === "Files") return <FilesPage projects={projects} config={config} searchTarget={searchTarget?.type === "files" ? searchTarget : null} onOpenModel={modelId => { setSearchTarget({ type: "models", id: modelId, token: Date.now() }); setSection("Model Library"); }} onOpenProject={projectId => { setProjectTarget(projectId); setSection("Projects"); }} />;
     if (section === "Settings") return <SettingsPage config={config} onBackupStarted={watchBackup} onOpenPrinterConnections={() => { setSearchTarget(null); setSection("3D Printing"); }} />;
     return <AboutPage config={config} />;
@@ -266,7 +287,11 @@ export default function App() {
         <small className="brandVersion">{config?.version ? "v" + config.version : "version loading…"} · AGPL</small>
       </div>
       <GlobalSearch onOpenResult={openSearchResult} onOpenAdvanced={openAdvancedSearch} />
-      <nav>{NAV.map(n => <button key={n} className={section === n ? "active" : ""} onClick={() => navigateSection(n)}>{n}</button>)}</nav>
+      <nav>{NAV.map(n => <button key={n} className={section === n ? "active" : ""}
+        disabled={n === "MakerVault Slicer" && slicerStatus.state !== "ready"}
+        title={n === "MakerVault Slicer" && slicerStatus.state !== "ready"
+          ? "The optional slicer service is not available. See 3D Printing for details." : undefined}
+        onClick={() => navigateSection(n)}>{n}</button>)}</nav>
       <div className="asideBottom">{config?.is_superuser && <a href="/admin/">Administration</a>}<a href="/accounts/logout/">Sign out</a></div>
     </aside>
     <main>
