@@ -104,7 +104,7 @@ def _validate_gcode(path, *, min_extrusion_span_x=None):
     return {"gcode_sha256": hashlib.sha256(data).hexdigest(), "gcode_bytes": len(data)}
 
 
-def run_probe(*, engine, version, binary, printer, filament, process, timeout=120, model=None, expected_objects=1):
+def run_probe(*, engine, version, binary, printer, filament, process, timeout=120, model=None, expected_objects=1, expected_islands=1):
     """Run the *real* worker adapter with the *real* binary and report evidence.
 
     No mock success, no automatic deployment and no stored G-code artifact.
@@ -115,19 +115,22 @@ def run_probe(*, engine, version, binary, printer, filament, process, timeout=12
         raise WorkerError("A pinned engine version is required.")
     if not isinstance(timeout, int) or not 1 <= timeout <= 900:
         raise WorkerError("Probe timeout must be between 1 and 900 seconds.")
-    if expected_objects not in (1, 2) or (expected_objects == 2 and not model):
+    if (expected_objects not in (1, 2) or expected_islands not in (1, 2)
+            or ((expected_objects == 2 or expected_islands == 2) and not model)
+            or (expected_objects == 2 and expected_islands == 2)):
         raise WorkerError("Explicit two-object 3MF input is required for multi-model acceptance.")
     model_bytes = None
     if model is not None:
-        if expected_objects != 2 or Path(model).suffix.lower() != ".3mf":
+        if (expected_objects != 2 and expected_islands != 2) or Path(model).suffix.lower() != ".3mf":
             raise WorkerError("Only the two-object core 3MF acceptance fixture is supported.")
         model_bytes = _read_source(model, 32 * 1024 * 1024)
         validate_worker_3mf(model_bytes)
         with zipfile.ZipFile(io.BytesIO(model_bytes)) as package:
             xml = ET.fromstring(package.read("3D/3dmodel.model"))
         namespace = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
-        if len(xml.findall("./" + namespace + "build/" + namespace + "item")) != 2:
-            raise WorkerError("The multi-model fixture must contain exactly two build instances.")
+        count = len(xml.findall("./" + namespace + "build/" + namespace + "item"))
+        if count != expected_objects:
+            raise WorkerError("The reference 3MF does not contain the expected build instance count.")
     binary_sha256 = _fingerprint(binary)
     inputs = {
         "printer.json": _read_source(printer, MAX_PROFILE_BYTES),
@@ -144,7 +147,7 @@ def run_probe(*, engine, version, binary, printer, filament, process, timeout=12
         if receipt.get("status") != "completed":
             raise WorkerError("The engine did not complete the slicing fixture.")
         output = _validate_gcode(root / "output.gcode",
-                                 min_extrusion_span_x=35 if expected_objects == 2 else None)
+                                 min_extrusion_span_x=35 if expected_objects == 2 or expected_islands == 2 else None)
     return {
         "status": "passed",
         "engine": engine, "engine_version": version,
@@ -152,6 +155,7 @@ def run_probe(*, engine, version, binary, printer, filament, process, timeout=12
         "fixture": "makervault-two-object-3mf-v1" if model_bytes is not None
                    else "makervault-tetrahedron-binary-v1",
         "object_count": expected_objects,
+        "expected_geometry_islands": expected_islands,
         "profile_sha256": {key.removesuffix(".json"): hashlib.sha256(data).hexdigest()
                            for key, data in inputs.items()},
         **output,
@@ -170,6 +174,7 @@ def main(argv=None):
     parser.add_argument("--timeout", type=int, default=120)
     parser.add_argument("--model", help="Optional real two-model MakerVault core 3MF fixture")
     parser.add_argument("--expected-objects", type=int, choices=(1, 2), default=1)
+    parser.add_argument("--expected-islands", type=int, choices=(1, 2), default=1)
     args = parser.parse_args(argv)
     try:
         print(json.dumps(run_probe(**vars(args)), indent=2, sort_keys=True))
