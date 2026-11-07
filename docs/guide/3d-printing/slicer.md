@@ -27,7 +27,7 @@ The single slicing-service container will support independently selected engine 
 
 The planned administrator workflow is to select an engine and supported pinned version, review its source/licence/integrity information, explicitly install it, then import or select and verify that engine's native presets. A service may contain several engines, but a slice is routed only to the requested installed and approved engine/version.
 
-**Current PR limitations:** PR #171 has an engine candidate catalogue, preset discovery/import, saved slicing drafts and a guarded single-engine worker prototype. It does **not** yet have a production-ready engine installer, multi-engine dispatcher, verified real-engine slicing package, or simultaneous multi-engine execution.
+**Current PR limitations:** PR #171 now has separate OrcaSlicer and Creality Print worker adapters, an independently verified shared-worker engine registry, official K1/K2 profile discovery for both engines, basic GUI native-profile customisation, and saved slicing drafts. It still lacks a production-ready engine installer, independently verified Linux engine binaries, complete GUI setting coverage, multi-object execution and a successful end-to-end real slicing fixture for either engine. Engine identity verification does not by itself prove that slicing works.
 
 ## Updating, removing and rolling back engines (planned)
 
