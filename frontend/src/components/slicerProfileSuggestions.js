@@ -21,7 +21,8 @@ const printerMatch = (profile, printer, nozzle) => {
   const model = words(printer.model || printer.name);
   if (!model) return true;
   const label = words(profile.name);
-  const matchModel = model.split(" ").filter(Boolean).some(word => word.length >= 2 && label.split(" ").includes(word));
+  const terms = model.split(" ").filter(word => word.length >= 2 && !["creality", "bambu", "prusa", "printer", "series"].includes(word));
+  const matchModel = terms.length > 0 && terms.every(word => label.split(" ").includes(word));
   if (!matchModel) return false;
   const size = Number(nozzle);
   const nozzleString = Number.isFinite(size) ? size.toFixed(1) : "";
