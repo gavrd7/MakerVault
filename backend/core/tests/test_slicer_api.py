@@ -39,6 +39,19 @@ class SliceJobApiTests(TestCase):
             content_type="application/json",
         )
 
+    def test_gcode_library_preference_is_explicit_and_private(self):
+        self.client.force_login(self.owner)
+        response = self.post()
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertFalse(response.json()["job"]["settings"].get("save_gcode_to_library", False))
+        chosen = self.post({**self.payload, "settings": {"save_gcode_to_library": True}})
+        self.assertEqual(chosen.status_code, 201, chosen.content)
+        self.assertTrue(chosen.json()["job"]["settings"]["save_gcode_to_library"])
+        for invalid in ("yes", 1, None):
+            with self.subTest(value=invalid):
+                result = self.post({**self.payload, "settings": {"save_gcode_to_library": invalid}})
+                self.assertEqual(result.status_code, 400)
+
     def test_customise_creality_profile_in_gui_preserves_original(self):
         from django.core.files.base import ContentFile
         import hashlib
