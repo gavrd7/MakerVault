@@ -41,7 +41,7 @@ function pretty(value) {
 
 export default function SlicerPlateEditor({
   files = [], objects = [], onChange, onPrimaryChange, plate = null,
-  canEdit = false, onFilesUploaded, defaultColor = null, onManualColorChange,
+  canEdit = false, onFilesUploaded, defaultColor = null, onManualColorChange, footer = null,
 }) {
   const hostRef = useRef(null);
   const sceneRef = useRef(null);
@@ -545,5 +545,6 @@ export default function SlicerPlateEditor({
         </div>
       </aside>
     </div>
+    {footer && <div className="slicerPlateFooter">{footer}</div>}
   </section>;
 }
