@@ -890,6 +890,12 @@
 
 .dashboardLivePanel{overflow:hidden}
 .dashboardLiveGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(360px,100%),1fr));gap:10px;padding:14px 16px 16px}
+/* Offline printers remain visible without forcing a blank camera card to fill a live row. */
+.dashboardLiveGrid{align-items:start}
+.dashboardLivePrinter-offline{border-left:3px solid #ee6d78;align-self:start}
+.dashboardLiveOffline{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;color:#8b98aa;font-size:12px}
+.dashboardLiveOffline .printerLiveOpen{margin-left:auto}
+
 .dashboardLivePrinter{display:grid;grid-template-columns:64px minmax(0,1fr);gap:11px;width:100%;padding:11px;text-align:left;border:1px solid #2b3542;border-radius:11px;background:linear-gradient(135deg,#101720,#0d131a);color:#dfe7f3}
 .dashboardLivePrinter:hover{border-color:#4b5a70;background:#131c27}
 .dashboardLivePrinter-printing,.dashboardLivePrinter-processing,.dashboardLivePrinter-paused{border-left:3px solid #8c76ff}
