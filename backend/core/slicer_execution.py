@@ -25,43 +25,75 @@ class SlicerExecutionError(ValueError):
 
 
 def verified_installation():
-    """Fail closed: explicit deployment approval plus worker health is required."""
+    """Fail closed for each independently approved engine in the shared worker.
+
+    Legacy single-engine settings remain supported. Multi-engine approval requires
+    a pinned common image and a JSON map of exact versions and binary hashes.
+    The API only reports an engine available when that exact entry is healthy.
+    """
     if os.environ.get("MAKERVAULT_SLICER_EXECUTION_ENABLED") != "1":
         return {}
     digest = os.environ.get("MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST", "")
-    engine = os.environ.get("MAKERVAULT_SLICER_ENGINE", "orcaslicer")
-    version = os.environ.get("MAKERVAULT_SLICER_ENGINE_VERSION", "")
     image_ref = os.environ.get("MAKERVAULT_SLICER_WORKER_IMAGE", "")
-    binary_sha256 = os.environ.get("MAKERVAULT_SLICER_ENGINE_BINARY_SHA256", "")
     if (
-        not digest or not version or not image_ref
+        not digest.startswith("sha256:") or len(digest) != 71
+        or any(c not in "0123456789abcdef" for c in digest[7:])
         or not image_ref.endswith("@" + digest)
         or image_ref.count("@") != 1
-        or len(binary_sha256) != 64
-        or any(char not in "0123456789abcdef" for char in binary_sha256)
     ):
         return {}
+    configured = os.environ.get("MAKERVAULT_SLICER_ENGINES_JSON", "")
+    if configured:
+        try:
+            import json
+            approvals = json.loads(configured)
+        except (ValueError, TypeError):
+            return {}
+        if not isinstance(approvals, dict) or not approvals or len(approvals) > 3:
+            return {}
+    else:
+        approvals = {os.environ.get("MAKERVAULT_SLICER_ENGINE", "orcaslicer"): {
+            "version": os.environ.get("MAKERVAULT_SLICER_ENGINE_VERSION", ""),
+            "binary_sha256": os.environ.get("MAKERVAULT_SLICER_ENGINE_BINARY_SHA256", ""),
+        }}
     try:
         worker = health()
-        if (
-            not worker["ready"] or worker["engine"] != engine
-            or worker["version"] != version
-            or worker.get("binary_sha256") != binary_sha256
-        ):
-            return {}
-        validate_engine_selection(engine, version, {
-            engine: {
-                "version": version, "enabled": True, "verified": True,
-                "image_digest": digest,
-            }
-        })
     except (ValueError, SlicerWorkerError):
         return {}
-    return {engine: {
-        "version": version, "enabled": True, "verified": True,
-        "image_digest": digest,
-        "binary_sha256": binary_sha256,
-    }}
+    if not worker.get("ready"):
+        return {}
+    health_engines = worker.get("engines") or {}
+    # Compatible with the original single-engine health response.
+    if not health_engines and worker.get("engine") and worker.get("version"):
+        health_engines = {worker["engine"]: {
+            "version": worker["version"],
+            "binary_sha256": worker.get("binary_sha256"),
+            "ready": True,
+        }}
+    installed = {}
+    for engine, entry in approvals.items():
+        if not isinstance(entry, dict) or set(entry) != {"version", "binary_sha256"}:
+            continue
+        version, checksum = entry["version"], entry["binary_sha256"]
+        if (not isinstance(version, str) or not 1 <= len(version) <= 80
+                or not isinstance(checksum, str) or len(checksum) != 64
+                or any(c not in "0123456789abcdef" for c in checksum)):
+            continue
+        worker_entry = health_engines.get(engine)
+        if (not isinstance(worker_entry, dict) or worker_entry.get("ready") is not True
+                or worker_entry.get("version") != version
+                or worker_entry.get("binary_sha256") != checksum):
+            continue
+        candidate = {engine: {
+            "version": version, "enabled": True, "verified": True,
+            "image_digest": digest, "binary_sha256": checksum,
+        }}
+        try:
+            validate_engine_selection(engine, version, candidate)
+        except ValueError:
+            continue
+        installed.update(candidate)
+    return installed
 
 
 def _check_profile_evidence(profile, installation):
