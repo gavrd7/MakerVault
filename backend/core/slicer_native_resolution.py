@@ -9,7 +9,7 @@ import json
 from .models import SlicerProfile
 from .slicer_profiles import SlicerProfileError, _check_orca_json
 
-MAX_RESOLVED_BYTES = 2 * 1024 * 1024
+MAX_RESOLVED_BYTES = 1024 * 1024
 MAX_PARENT_DEPTH = 12
 
 
