@@ -22,11 +22,13 @@ from .slicer_bed import inspect_orca_plate, inspect_creality_plate
 from .slicer_official_chain import official_profile_chain
 from .slicer_creality_official_profiles import (
     search_creality_profiles, fetch_creality_profile, available_creality_vendors,
+    official_catalogue_models as creality_catalogue_models,
     ENGINE_VERSION as OFFICIAL_CRE_VERSION, SOURCE as OFFICIAL_CRE_SOURCE,
     REF as OFFICIAL_CRE_REF,
 )
 from .slicer_official_profiles import (
     OfficialProfileError, search_official_profiles, fetch_official_profile, available_official_vendors,
+    official_catalogue_models as orca_catalogue_models,
     ENGINE_VERSION as OFFICIAL_ORCA_VERSION, SOURCE as OFFICIAL_ORCA_SOURCE,
     REF as OFFICIAL_ORCA_REF,
 )
@@ -378,6 +380,17 @@ def official_profiles(request):
                 "official_search_available": bool(provider),
                 "verified_for_execution": False,
             })
+        if request.GET.get("models") == "1":
+            model_catalogues = {"orcaslicer": orca_catalogue_models,
+                                "crealityprint": creality_catalogue_models}
+            provider = model_catalogues.get(selected)
+            if not provider:
+                return _error("This slicer has no official printer catalogue.")
+            try:
+                models = provider(request.GET.get("vendor", "Creality"))
+            except OfficialProfileError as exc:
+                return _error(str(exc), 400)
+            return JsonResponse({"engine": selected, "models": models})
         searcher = {
             "orcaslicer": search_official_profiles,
             "crealityprint": search_creality_profiles,
@@ -400,6 +413,15 @@ def official_profiles(request):
                 if not printer:
                     return _error("Selected printer is not available to this account.", 404)
                 printer_model = (printer.model or printer.name or "").strip()
+            # Optional catalogue model overrides the default selected printer.
+            # Resolve it from a pinned vendor manifest, not arbitrary client text.
+            chosen_model = request.GET.get("model")
+            if chosen_model:
+                model_catalogues = {"orcaslicer": orca_catalogue_models,
+                                    "crealityprint": creality_catalogue_models}
+                if chosen_model not in model_catalogues[selected](request.GET.get("vendor", "Creality")):
+                    return _error("Choose a printer model listed in the official catalogue.")
+                printer_model = chosen_model
             args = (
                 request.GET.get("q", ""),
                 request.GET.get("kind", "printer"),
