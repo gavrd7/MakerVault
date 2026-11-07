@@ -24,6 +24,12 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [jobs, setJobs] = useState([]);
   const [profiles, setProfiles] = useState([]);
   const [profileModal, setProfileModal] = useState("");
+  const [editingProfile, setEditingProfile] = useState(null);
+  const [editProfileName, setEditProfileName] = useState("");
+  const [editProfileSchema, setEditProfileSchema] = useState({});
+  const [editProfileValues, setEditProfileValues] = useState({});
+  const [editProfileBusy, setEditProfileBusy] = useState(false);
+  const [editProfileError, setEditProfileError] = useState("");
   const [showDrafts, setShowDrafts] = useState(false);
   const [customBed, setCustomBed] = useState({ enabled: false, x: "220", y: "220" });
   const [profileLineages, setProfileLineages] = useState({});
@@ -299,6 +305,56 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     }
   }
 
+  async function openProfileEditor(profile) {
+    setEditingProfile(profile);
+    setEditProfileName(profile.name + " - Custom");
+    setEditProfileSchema({});
+    setEditProfileValues({});
+    setEditProfileError("");
+    setEditProfileBusy(true);
+    setProfileModal("edit");
+    try {
+      const result = await apiFetch("/api/printing/slicer/profiles/" + profile.id + "/customise/");
+      setEditProfileSchema(result.settings || {});
+      setEditProfileValues(Object.fromEntries(Object.entries(result.settings || {}).map(
+        ([key, spec]) => [key, spec.current == null ? "" : String(spec.current)]
+      )));
+    } catch (err) {
+      setEditProfileError(err.message || "Cannot load the original preset for editing.");
+    } finally {
+      setEditProfileBusy(false);
+    }
+  }
+
+  async function saveCustomProfile(event) {
+    event.preventDefault();
+    if (!editingProfile || editProfileBusy) return;
+    const settings = Object.fromEntries(
+      Object.entries(editProfileValues)
+        .filter(([, raw]) => String(raw).trim() !== "")
+        .map(([key, raw]) => [key, Number(raw)])
+    );
+    if (!Object.keys(settings).length) {
+      setEditProfileError("Enter at least one supported native setting.");
+      return;
+    }
+    setEditProfileError("");
+    setEditProfileBusy(true);
+    try {
+      const result = await apiFetch("/api/printing/slicer/profiles/" + editingProfile.id + "/customise/", {
+        method: "POST", body: { name: editProfileName.trim(), settings },
+      });
+      setProfiles(current => [result.profile, ...current]);
+      setProfileModal("saved");
+      setNotice("Custom " + editingProfile.kind + " preset saved as an unverified copy. The original was preserved.");
+      setEditingProfile(null);
+    } catch (err) {
+      setEditProfileError(err.message || "Could not save the custom profile.");
+    } finally {
+      setEditProfileBusy(false);
+    }
+  }
+
   async function removeProfile(profile) {
     if (!window.confirm("Remove saved " + profile.kind + " profile \"" + profile.name + "\"? Existing source files remain in MakerVault Files. Profiles referenced by slicing jobs cannot be removed.")) return;
     setError(""); setBusy(true);
@@ -511,6 +567,37 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       onFilesUploaded={onFilesUploaded}
     />
 
+    {profileModal === "edit" && editingProfile && <Modal title={"Customise " + editingProfile.kind + " profile"} subtitle={editingProfile.engine + " · " + editingProfile.engine_version} onClose={() => setProfileModal("")} wide>
+      <p>The original native preset remains unchanged. This creates a new, unverified copy with supported settings; inherited profiles still need their parent presets before slicing.</p>
+      {editProfileError && <p role="alert" className="integrationError">{editProfileError}</p>}
+      <form className="formGrid" onSubmit={saveCustomProfile}>
+        <label className="full">Custom profile name
+          <input required maxLength="200" value={editProfileName} disabled={editProfileBusy} onChange={e => setEditProfileName(e.target.value)} />
+        </label>
+        {Object.entries(editProfileSchema).map(([key, spec]) => <label key={key}>
+          {({
+  nozzle_diameter: "Nozzle diameter (mm)",
+  retract_length: "Retraction length (mm)",
+  nozzle_temperature: "Nozzle temperature (°C)",
+  bed_temperature: "Bed temperature (°C)",
+  filament_flow_ratio: "Filament flow ratio",
+  layer_height: "Layer height (mm)",
+  initial_layer_print_height: "Initial layer height (mm)",
+  sparse_infill_density: "Infill (%)",
+  wall_loops: "Wall loops",
+  outer_wall_speed: "Outer wall speed (mm/s)",
+})[key] || key.replaceAll("_", " ")}
+          <input type="number" min={spec.min} max={spec.max} step="any" value={editProfileValues[key] ?? ""}
+            disabled={editProfileBusy} onChange={e => setEditProfileValues(current => ({ ...current, [key]: e.target.value }))} />
+        </label>)}
+        <div className="full settingsActions">
+          <button type="button" disabled={editProfileBusy} onClick={() => setProfileModal("manage")}>Cancel</button>
+          <button type="submit" className="primary" disabled={editProfileBusy || !Object.keys(editProfileSchema).length}>
+            {editProfileBusy ? "Saving…" : "Save custom profile"}
+          </button>
+        </div>
+      </form>
+    </Modal>}
     {profileModal === "search" && <Modal title="Search official profiles" onClose={() => setProfileModal("")} wide>
       <div className="printingActionGroup" aria-labelledby="slicer-official-profiles-heading">
         <h4 id="slicer-official-profiles-heading">Search official slicer profiles</h4>
@@ -605,6 +692,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             </div>
             <div className="cameraSourceActions">
               {profile.engine === "orcaslicer" && <button type="button" disabled={profileLineages[profile.id]?.checking} onClick={() => inspectProfile(profile)}>Check parent presets</button>}
+              {["orcaslicer", "crealityprint"].includes(profile.engine) && <button type="button" disabled={busy} onClick={() => openProfileEditor(profile)}>Edit as custom</button>}
               <button type="button" disabled={busy} onClick={() => removeProfile(profile)}>Remove profile</button>
             </div>
           </div>
@@ -635,6 +723,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             </div>
             <div className="cameraSourceActions">
               {profile.engine === "orcaslicer" && <button type="button" disabled={profileLineages[profile.id]?.checking} onClick={() => inspectProfile(profile)}>Check parent presets</button>}
+              {["orcaslicer", "crealityprint"].includes(profile.engine) && <button type="button" disabled={busy} onClick={() => openProfileEditor(profile)}>Edit as custom</button>}
               <button type="button" disabled={busy} onClick={() => removeProfile(profile)}>Remove profile</button>
             </div>
           </div>
