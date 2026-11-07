@@ -40,7 +40,7 @@ def _pinned_image(config=DOTENV):
     return image
 
 
-def probe(printer, filament, process, *, model=None, config=DOTENV, runner=subprocess.run):
+def probe(printer, filament, process, *, model=None, compound=False, config=DOTENV, runner=subprocess.run):
     """Exercise real engine without app, network, Docker socket or host mounts."""
     image = _pinned_image(config)
     sources = {"printer": printer, "filament": filament, "process": process}
@@ -89,7 +89,10 @@ def probe(printer, filament, process, *, model=None, config=DOTENV, runner=subpr
             "--process", "/fixtures/process.json",
         ]
         if model is not None:
-            command.extend(["--model", "/fixtures/fixture.3mf", "--expected-objects", "2"])
+            command.extend(["--model", "/fixtures/fixture.3mf", "--expected-objects",
+                            "1" if compound else "2"])
+            if compound:
+                command.extend(["--expected-islands", "2"])
         return runner(command, check=False).returncode
 
 
@@ -98,9 +101,10 @@ def main(argv=None):
     for name in ("printer", "filament", "process"):
         parser.add_argument("--" + name, type=Path, required=True)
     parser.add_argument("--model", type=Path, help="Optional two-object MakerVault 3MF acceptance fixture")
+    parser.add_argument("--compound", action="store_true", help="Experimental combined-mesh 3MF geometry-island test")
     args = parser.parse_args(argv)
     try:
-        return probe(args.printer, args.filament, args.process, model=args.model)
+        return probe(args.printer, args.filament, args.process, model=args.model, compound=args.compound)
     except (ValueError, OSError, subprocess.SubprocessError) as exc:
         print("Offline Orca acceptance probe refused: " + str(exc), file=sys.stderr)
         return 1
