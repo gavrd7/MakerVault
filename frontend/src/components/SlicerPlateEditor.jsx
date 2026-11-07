@@ -49,6 +49,7 @@ export default function SlicerPlateEditor({
   const latestOnChangeRef = useRef(onChange);
   const dimensionsRef = useRef({});
   const pendingArrangeRef = useRef(false);
+  const pendingAddIdsRef = useRef(new Set());
   latestObjectsRef.current = objects;
   latestOnChangeRef.current = onChange;
   const [selected, setSelected] = useState("");
@@ -108,10 +109,16 @@ export default function SlicerPlateEditor({
     pendingArrangeRef.current = false;
     const result = autoArrangePlate(objects, dimensions, bedX, bedY, 5);
     if (result.objects) {
+      pendingAddIdsRef.current.clear();
       onChange(result.objects);
       setError("");
     } else {
-      setError(result.error);
+      const previous = objects.filter(item => !pendingAddIdsRef.current.has(item.instance_id));
+      pendingAddIdsRef.current.clear();
+      onChange(previous);
+      if (!previous.length) onPrimaryChange?.("");
+      setSelected(previous[0]?.instance_id || "");
+      setError(result.error + " The newly added models were not placed; adjust the plate or try fewer models.");
     }
   }, [objectKey, dimensions, bedX, bedY]);
 
@@ -124,6 +131,7 @@ export default function SlicerPlateEditor({
     const next = newPlateInstance(id, objects.length);
     if (defaultColor) next.color = defaultColor;
     pendingArrangeRef.current = true;
+    pendingAddIdsRef.current.add(next.instance_id);
     onChange([...objects, next]);
     if (!objects.length && !String(id).startsWith("local:")) onPrimaryChange?.(id);
     setSelected(next.instance_id);
@@ -191,6 +199,7 @@ export default function SlicerPlateEditor({
       if (previews.length) {
         setLocalAssets(current => [...current, ...previews]);
         pendingArrangeRef.current = true;
+        additions.forEach(item => pendingAddIdsRef.current.add(item.instance_id));
         onChange([...objects, ...additions]);
         if (!objects.length && saveImports) onPrimaryChange?.(additions[0].asset_id);
         setSelected(additions[0].instance_id);
