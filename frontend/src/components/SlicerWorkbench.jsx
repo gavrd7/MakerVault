@@ -409,12 +409,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         }
       }
       manuallyChosenProfiles.current.add(imported.kind);
-      setProfiles(current => [
-        imported,
-        ...current.map(profile => asDefault && imported.is_default &&
-          profile.engine === imported.engine && profile.engine_version === imported.engine_version &&
-          profile.kind === imported.kind ? { ...profile, is_default: false } : profile),
-      ]);
+      // Official imports now include a complete dependency chain. Reload the
+      // catalogue rather than hiding those newly imported parent presets.
+      const loaded = await apiFetch("/api/printing/slicer/profiles/");
+      setProfiles(loaded.profiles || []);
       setForm(current => ({
         ...current, engine: imported.engine, engine_version: result.engine_version,
         [imported.kind + "_profile_id"]: imported.id,
@@ -422,7 +420,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       }));
       setNotice("Official " + (imported.engine === "crealityprint" ? "Creality Print" : "OrcaSlicer") +
         " profile imported" + (imported.is_default ? " and saved as your default" : "") +
-        ". It remains unverified until its native dependencies and engine pass checks.");
+        ". " + Math.max(0, (result.parent_chain_length || 1) - 1) +
+        " required parent preset(s) were included. All remain unverified until a real engine fixture passes.");
     } catch (err) {
       setOfficialError(err.message || "Could not import the selected official native profile.");
     } finally {
