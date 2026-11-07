@@ -8,6 +8,53 @@
 
 No. Printer integrations, models, G-code files, print history and G-code submission work without it. MakerVault will disable the **MakerVault Slicer** navigation entry and show guidance in **3D Printing** when no verified worker is available.
 
+## Adding the slicer container to an existing installation
+
+**An existing MakerVault installation does not need to be reinstalled, reset or given Docker privileges.** The optional slicer service is a separate container on the same private Compose network. The host administrator needs Docker access **once** to add the service; MakerVault's web application itself must not receive the Docker socket or privileged mode. The normal app, database, Redis, printer connections and existing storage volumes remain in place.
+
+### Existing staging installation — available now for experimental testing
+
+For an existing **Debian x86_64 staging** checkout of PR #171, use the explicitly invoked OrcaSlicer staging installer. It stages the binary, creates a private configuration file, builds the optional worker and adds the worker using a Compose overlay. Back up your MakerVault data before testing and confirm there is adequate disk space for the extra image.
+
+```bash
+cd ~/MakerVault-Staging
+git pull --ff-only origin feature/self-hosted-slicer-foundation
+
+# Download and checksum-verify the upstream OrcaSlicer release;
+# build the optional local worker image.
+sudo python3 scripts/install_slicer_staging.py prepare-orca
+
+# Add and start the isolated worker alongside the existing app.
+sudo python3 scripts/install_slicer_staging.py enable
+
+# Confirm the worker is present; this alone does NOT prove slicing works.
+sudo python3 scripts/install_slicer_staging.py status
+```
+
+Once the service is running, return to **MakerVault Slicer → View engine installations**. Import compatible native printer, filament and process profiles for OrcaSlicer. An administrator must run **Test slice and approve** with real G-code output before the engine/profile combination can be used for ordinary slicing. The present staging installer does **not** yet install or update engines from a browser.
+
+**For routine staging updates once the slicer worker has been installed**, retain the slicer overlay and both environment files. Otherwise a normal three-file Compose update may remove the app's worker connection settings:
+
+```bash
+cd ~/MakerVault-Staging
+sudo python3 scripts/install_slicer_staging.py enable
+```
+
+To switch the slicer service off without touching the rest of MakerVault:
+
+```bash
+cd ~/MakerVault-Staging
+sudo python3 scripts/install_slicer_staging.py disable
+```
+
+Do **not** use `docker compose down -v` or delete existing MakerVault named volumes. Do not commit, publish or share `.slicer-staging.env`: it contains the private worker access token. If the staging installation uses a custom Compose layout, inspect the generated configuration before enabling the service.
+
+### Existing production installation — planned workflow
+
+The stable production image and browser-based engine manager are **not yet released**, so the staging commands above are not production installation instructions. The intended production sequence is: update MakerVault normally without replacing its existing volumes; enable the one optional slicer-service container in the supported Compose configuration; start **only that additional service**; then install, update or uninstall individual supported slicer engines through the MakerVault administrator UI.
+
+Once the optional container is deployed, normal engine management should require neither redeploying MakerVault nor giving the web container host-level privileges. Engine binaries will live in a separate persistent volume and the management API will be scoped to that service. There is no requirement to stop, reinstall or reset an existing MakerVault database to add the slicer.
+
 ## Install OrcaSlicer on a separate staging server (experimental)
 
 For developers testing PR #171 on Debian x86_64, there is now an **explicit opt-in staging installer**. It retrieves OrcaSlicer 2.4.2 from the official GitHub release, verifies the release asset's SHA-256, builds a locally pinned isolated Docker worker and enables worker connectivity for the staging app. It does **not** install or enable Creality Print.
