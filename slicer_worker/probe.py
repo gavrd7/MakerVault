@@ -19,6 +19,9 @@ import shutil
 import struct
 import sys
 import tempfile
+import io
+import zipfile
+from xml.etree import ElementTree as ET
 
 from .runner import MAX_PROFILE_BYTES, MAX_GCODE_BYTES, WorkerError
 from .orca_runner import run_orca
@@ -115,6 +118,11 @@ def run_probe(*, engine, version, binary, printer, filament, process, timeout=12
             raise WorkerError("Only the two-object core 3MF acceptance fixture is supported.")
         model_bytes = _read_source(model, 32 * 1024 * 1024)
         validate_worker_3mf(model_bytes)
+        with zipfile.ZipFile(io.BytesIO(model_bytes)) as package:
+            xml = ET.fromstring(package.read("3D/3dmodel.model"))
+        namespace = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
+        if len(xml.findall("./" + namespace + "build/" + namespace + "item")) != 2:
+            raise WorkerError("The multi-model fixture must contain exactly two build instances.")
     binary_sha256 = _fingerprint(binary)
     inputs = {
         "printer.json": _read_source(printer, MAX_PROFILE_BYTES),
