@@ -62,3 +62,51 @@ def inspect_orca_plate(profile):
         "size_mm": [round(xmax - xmin, 3), round(ymax - ymin, 3), round(height, 3)],
         "fit_check": "not_performed",
     }
+
+
+def inspect_creality_plate(profile):
+    """Display Creality's own declared K1/K2 bed without claiming slice safety."""
+    if profile.engine != "crealityprint" or profile.kind != "printer":
+        raise SlicerProfileError("A native Creality Print machine profile is required.")
+    data = _inspect_source(profile)
+    parent = data.get("inherits")
+    area = data.get("printable_area")
+    height = data.get("printable_height")
+    if not isinstance(area, str) or height is None:
+        return {"status": "requires_parent" if parent else "unavailable",
+                "parent": str(parent)[:200] if parent else None}
+    points = []
+    try:
+        for pair in area.split(","):
+            match = POINT.fullmatch(pair)
+            if not match:
+                raise ValueError("Malformed native printable area")
+            x, y = map(float, match.groups())
+            if not all(math.isfinite(v) and abs(v) <= 10000 for v in (x, y)):
+                raise ValueError("Invalid native coordinates")
+            points.append([x, y])
+        z = float(height)
+        if len(points) not in (4, 5) or not math.isfinite(z) or not 0 < z <= 10000:
+            raise ValueError("Unsupported native printable area")
+        if len(points) == 5 and points[-1] == points[0]:
+            points.pop()
+        if len(points) != 4:
+            raise ValueError("Unsupported polygon")
+        xmin, xmax = min(p[0] for p in points), max(p[0] for p in points)
+        ymin, ymax = min(p[1] for p in points), max(p[1] for p in points)
+        if xmax <= xmin or ymax <= ymin or len(set(map(tuple, points))) != 4:
+            raise ValueError("Invalid native bounds")
+        if set(map(tuple, points)) != {
+            (xmin, ymin), (xmin, ymax), (xmax, ymin), (xmax, ymax)
+        }:
+            raise ValueError("Non-rectangular native build plate")
+    except (TypeError, ValueError, OverflowError):
+        return {"status": "invalid", "reason": "Native Creality build area is malformed."}
+    return {
+        "status": "partial" if parent else "available",
+        "parent": str(parent)[:200] if parent else None,
+        "polygon_mm": points,
+        "bounds_mm": {"min": [xmin, ymin, 0], "max": [xmax, ymax, z]},
+        "size_mm": [round(xmax - xmin, 3), round(ymax - ymin, 3), round(z, 3)],
+        "fit_check": "not_performed",
+    }
