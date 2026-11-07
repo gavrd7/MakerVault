@@ -333,6 +333,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
         <p>Staging-only preparation mode. You can explore the visual plate, import models, search native profiles and save drafts, but slicing execution and printing generated G-code are unavailable until a verified worker is installed.</p>
       </section>}
       <SlicerWorkbench
+      initialDraftId={searchTarget?.type === "slicer_job" ? searchTarget.id : null}
       files={data?.model_files || []}
       printers={data?.printers || []}
       spools={data?.spools || []}
@@ -363,7 +364,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       onBack={() => { if (onModelLibraryBack && searchTarget?.type === "models") onModelLibraryBack(); else setWorkspaceView("overview"); }}
       onChanged={load}
       searchTarget={searchTarget}
-      onOpenSlicer={() => onOpenSlicer ? onOpenSlicer() : setWorkspaceView("slicer")}
+      onOpenSlicer={jobId => onOpenSlicer ? onOpenSlicer(jobId) : setWorkspaceView("slicer")}
     />;
   }
 
@@ -675,7 +676,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
     />}
     {savedSlicerOpen && <SavedSlicerJobsModal
       onClose={() => setSavedSlicerOpen(false)}
-      onOpenSlicer={() => onOpenSlicer ? onOpenSlicer() : setWorkspaceView("slicer")} />}
+      onOpenSlicer={jobId => onOpenSlicer ? onOpenSlicer(jobId) : setWorkspaceView("slicer")} />}
     {modal === "gcode" && <GcodeLibraryModal files={data?.gcode_files || []} projects={projects || []} canUpload={Boolean(config?.permissions?.add_file)} onClose={() => setModal("")} onSaved={load} />}
     {modal === "model" && <ModelModal projects={projects || []} canUpload={Boolean(config?.permissions?.add_file)} onClose={() => setModal("")} onSaved={saved} />}
     {modal === "print" && <PrintJobModal
