@@ -408,6 +408,13 @@ class SliceJobApiTests(TestCase):
         self.client.force_login(self.other)
         self.assertEqual(self.client.post(f"{self.url}{job_id}/cancel/").status_code, 404)
 
+    def test_saved_drafts_list_exposes_delete_permission(self):
+        self.client.force_login(self.owner)
+        self.assertFalse(self.client.get(self.url).json()["can_delete"])
+        self.owner.user_permissions.add(Permission.objects.get(codename="delete_slicejob"))
+        self.client.force_login(self.owner)
+        self.assertTrue(self.client.get(self.url).json()["can_delete"])
+
     def test_unscheduled_draft_delete_requires_permission(self):
         self.client.force_login(self.owner)
         job_id = self.post().json()["job"]["id"]
