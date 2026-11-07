@@ -129,20 +129,54 @@ def _save_env(text):
             temp.unlink()
 
 
+def _resume_staged_bundle():
+    """Resume only an intact, digest-verified staging bundle after a failed build."""
+    path = BUNDLE / "manifest.json"
+    binary = BUNDLE / "orcaslicer.AppImage"
+    if (BUNDLE.is_symlink() or path.is_symlink() or binary.is_symlink()
+            or not path.is_file() or not binary.is_file()):
+        raise ValueError("Existing engine assets are incomplete; inspect staging before retrying.")
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    entries = manifest.get("engines", {})
+    if not isinstance(entries, dict) or set(entries) != {"orcaslicer"}:
+        raise ValueError("The staged bundle is not an isolated OrcaSlicer installation.")
+    entry = entries["orcaslicer"]
+    digest = hashlib.sha256()
+    if not 0 < binary.stat().st_size <= MAX_DOWNLOAD:
+        raise ValueError("Staged OrcaSlicer AppImage size is invalid.")
+    with binary.open("rb") as stream:
+        while chunk := stream.read(1024 * 1024):
+            digest.update(chunk)
+    if (entry.get("version") != VERSION or
+            entry.get("binary") != "/opt/engines/orcaslicer.AppImage" or
+            entry.get("binary_sha256") != digest.hexdigest()):
+        raise ValueError("Staged engine identity or SHA-256 has changed; refusing reuse.")
+    return {
+        "app_approvals_json": json.dumps({
+            "orcaslicer": {"version": VERSION, "binary_sha256": digest.hexdigest()}
+        }, separators=(",", ":")),
+        "worker_engines_json": json.dumps(entries, separators=(",", ":")),
+    }
+
+
 def prepare_orca():
     if not (ROOT / ".env").is_file() or not OVERLAY.is_file():
         raise ValueError("Run from a MakerVault staging checkout with a configured .env.")
-    if DOTENV.exists() or BUNDLE.exists():
-        raise ValueError("Staging slicer already prepared. Do not overwrite it; use status or disable.")
-    url, expected_sha = _github_asset()
-    with tempfile.TemporaryDirectory(prefix="makervault-orca-") as tmp:
-        appimage = Path(tmp) / ASSET
-        print("Downloading pinned official OrcaSlicer " + VERSION + " (SHA-256 verified)…")
-        _download_verified(url, expected_sha, appimage)
-        from slicer_worker.stage_engines import stage_engines
-        prepared = stage_engines(
-            [("orcaslicer", VERSION, str(appimage), expected_sha)], BUNDLE
-        )
+    if DOTENV.exists():
+        raise ValueError("Slicer already configured. Use enable, disable or status.")
+    if BUNDLE.exists():
+        print("Resuming a staged binary after verifying its original SHA-256…")
+        prepared = _resume_staged_bundle()
+    else:
+        url, expected_sha = _github_asset()
+        with tempfile.TemporaryDirectory(prefix="makervault-orca-") as tmp:
+            appimage = Path(tmp) / ASSET
+            print("Downloading pinned official OrcaSlicer " + VERSION + " (SHA-256 verified)…")
+            _download_verified(url, expected_sha, appimage)
+            from slicer_worker.stage_engines import stage_engines
+            prepared = stage_engines(
+                [("orcaslicer", VERSION, str(appimage), expected_sha)], BUNDLE
+            )
     print("Building isolated candidate slicer image (without running the engine)…")
     _run(["docker", "build", "-f", "slicer_worker/Dockerfile.bundle",
           "-t", "makervault-slicer-worker:staging", "."])
