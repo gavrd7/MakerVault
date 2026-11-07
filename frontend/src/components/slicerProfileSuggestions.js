@@ -34,9 +34,9 @@ const printerMatch = (profile, printer, nozzle) => {
   const terms = model.split(" ").filter(word => word.length >= 2 && !["creality", "bambu", "prusa", "printer", "series", "combo", "cfs"].includes(word));
   const matchModel = terms.length > 0 && terms.every(word => label.split(" ").includes(word));
   if (!matchModel) return false;
+  const nativeNozzle = String(profile.name).match(/\b([0-9]+(?:\.[0-9]+)?)\s*(?:mm\s*)?nozzle\b/i);
   const size = Number(nozzle);
-  const nozzleString = Number.isFinite(size) ? size.toFixed(1) : "";
-  return !/\b\d\.\d\s*(?:nozzle|mm)\b/.test(label) || label.includes(nozzleString);
+  return !nativeNozzle || !Number.isFinite(size) || Math.abs(Number(nativeNozzle[1]) - size) < 0.001;
 };
 
 export function chooseSuggestedProfile(profiles, jobs, { engine, version, kind, printer = null, nozzle = "0.4", material = "" }) {
