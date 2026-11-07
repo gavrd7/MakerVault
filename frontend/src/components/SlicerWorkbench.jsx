@@ -70,6 +70,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [materialProfileMatches, setMaterialProfileMatches] = useState(null);
   const [officialBusy, setOfficialBusy] = useState(false);
   const [officialError, setOfficialError] = useState("");
+  const [officialImportNotice, setOfficialImportNotice] = useState("");
   const [importName, setImportName] = useState("");
   const [importSource, setImportSource] = useState("");
   const [loading, setLoading] = useState(true);
@@ -481,6 +482,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         [imported.kind + "_profile_id"]: imported.id,
         [imported.kind + "_preset"]: imported.name,
       }));
+      setOfficialImportNotice(imported.name + " imported as a " + imported.kind + " profile. You can select another profile type or return to your selected profiles.");
       setNotice("Official " + (imported.engine === "crealityprint" ? "Creality Print" : "OrcaSlicer") +
         " profile imported" + (imported.is_default ? " and saved as your default" : "") +
         ". " + Math.max(0, (result.parent_chain_length || 1) - 1) +
@@ -622,6 +624,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     loadOfficialVendors();
     setOfficialQuery(defaultOfficialSearch(kind, { printer: selectedPrinter, spool: selectedSpool, nozzle: form.nozzle_mm }));
     setOfficialResults(null); // Never carry results into another engine/vendor catalogue.
+    setOfficialImportNotice("");
     setOfficialError("");
     setProfileModal("search");
   }
@@ -919,6 +922,14 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       <p>You can continue preparing slicing drafts without installing either engine.</p>
     </Modal>}
     {profileModal === "search" && <Modal title="Search official profiles" onClose={() => setProfileModal("")} wide>
+      <div className="slicerProfileNavigation">
+        <button type="button" onClick={() => setProfileModal("")} disabled={officialBusy}>
+          ← Back to selected profiles
+        </button>
+        <button type="button" onClick={() => { setManagingSavedProfiles(false); setProfileModal("saved"); }} disabled={officialBusy}>
+          View saved profiles
+        </button>
+      </div>
       <div className="printingActionGroup" aria-labelledby="slicer-official-profiles-heading">
         <h4 id="slicer-official-profiles-heading">Search official slicer profiles</h4>
         <p>Search the selected engine's pinned official manufacturer catalogues for printer, filament and process presets. An engine may not provide a profile for every printer. Imports remain unverified candidates; profiles cannot be shared between engines.</p>
@@ -938,7 +949,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             </select>
           </label>
           <label>Profile type
-            <select value={importKind} disabled={officialBusy} onChange={e => { setImportKind(e.target.value); setOfficialQuery(defaultOfficialSearch(e.target.value, { printer: selectedPrinter, spool: selectedSpool, nozzle: form.nozzle_mm })); setOfficialResults(null); }}>
+            <select value={importKind} disabled={officialBusy} onChange={e => { setImportKind(e.target.value); setOfficialQuery(defaultOfficialSearch(e.target.value, { printer: selectedPrinter, spool: selectedSpool, nozzle: form.nozzle_mm })); setOfficialResults(null); setOfficialImportNotice(""); }}>
               <option value="printer">Printer / machine</option>
               <option value="filament">Filament</option>
               <option value="process">Process</option>
@@ -955,6 +966,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         </form>
         <div className="full settingsActions"><button type="button" onClick={() => { setProfileModal("import"); setOfficialError(""); }}>Import native profile file instead</button></div>
         {officialError && <p className="integrationError" role="alert">{officialError}</p>}
+        {officialImportNotice && <p role="status" className="slicerProfileImportNotice">{officialImportNotice}</p>}
         {officialResults && <div className="printingStack" role="region" aria-label="Official profile search results">
           <p>{officialResults.total_matches} matching official presets in {officialResults.vendor} · showing up to {officialResults.profiles.length} · original upstream release {officialResults.ref}</p>
           {officialResults.profiles.map(candidate => <div className="cameraSourceRow" key={candidate.sub_path}>
@@ -977,6 +989,14 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
     </Modal>}
     {profileModal === "import" && <Modal title="Import native profile" onClose={() => setProfileModal("")} wide>
+      <div className="slicerProfileNavigation">
+        <button type="button" onClick={() => setProfileModal("search")} disabled={busy}>
+          ← Back to official profiles
+        </button>
+        <button type="button" onClick={() => setProfileModal("")} disabled={busy}>
+          Back to selected profiles
+        </button>
+      </div>
       <p>Import an engine-native profile as an unverified candidate. Existing originals are preserved.</p>
       <h4>Import a local native profile file</h4>
       <form className="formGrid" onSubmit={importProfile}>
