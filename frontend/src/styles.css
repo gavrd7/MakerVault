@@ -3696,3 +3696,37 @@ a:focus-visible,
   .slicerPlatePanel>.formGrid,.slicerPlatePanel .formGrid:has(input[type="number"]){grid-template-columns:minmax(0,1fr)}
   .slicerPlatePanel>.formGrid>.full{grid-column:auto}
 }
+
+/* Editor workspace: maximise the preview while retaining a compact control rail. */
+.slicerPlateWorkspace{display:grid;grid-template-columns:minmax(0, 2.05fr) minmax(290px, 1fr);gap:18px;align-items:start;margin-top:16px}
+.slicerPlateCanvasColumn{min-width:0}
+.slicerPlateCanvas{width:100%;height:clamp(460px,54vh,740px);border-radius:12px;overflow:hidden;border:1px solid var(--border,#435365);background:#0f1720;touch-action:none}
+.slicerPlateControls{min-width:0;display:flex;flex-direction:column;gap:16px}
+.slicerPlateControlsGroup{border:1px solid #2b3542;border-radius:12px;padding:16px;min-width:0;background:rgba(10,16,22,.35)}
+.slicerPlateControlsGroup h4{margin:0 0 12px}
+.slicerPlatePanel .slicerPlateControls .formGrid,
+.slicerPlatePanel .slicerPlateControls .formGrid:has(input[type="number"]){display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 12px;margin:0}
+.slicerPlatePanel .slicerPlateControls .slicerPlateImportFields{grid-template-columns:1fr}
+.slicerPlatePanel .slicerPlateControls .formGrid>.full{grid-column:1/-1;max-width:none}
+.slicerPlatePanel .slicerPlateControls label{min-width:0}
+.slicerPlatePanel .slicerPlateControls input,
+.slicerPlatePanel .slicerPlateControls select{width:100%;max-width:100%;min-width:0}
+.slicerPlatePanel .slicerPlateControls .checkRow input{width:auto}
+.slicerPlatePanel .slicerPlateControls .settingsActions{display:flex;align-items:end;justify-content:flex-start;margin:0}
+.slicerPlateControls .slicerPlateToolbar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0 0 12px}
+.slicerPlateControls .slicerPlateToolbar label{grid-column:1/-1;min-width:0}
+.slicerPlateControls .slicerPlateToolbar button{min-width:0;white-space:normal}
+.slicerPlatePanel .slicerPlateControls .slicerPlateHint{margin:0}
+@media(max-width:1050px){
+  .slicerPlateWorkspace{grid-template-columns:minmax(0,1.5fr) minmax(270px,1fr)}
+}
+@media(max-width:800px){
+  .slicerPlateWorkspace{grid-template-columns:1fr}
+  .slicerPlateCanvas{height:clamp(340px,48vh,550px)}
+  .slicerPlateControls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .slicerPlateControls>.integrationError{grid-column:1/-1}
+}
+@media(max-width:560px){
+  .slicerPlateControls{grid-template-columns:1fr}
+  .slicerPlateCanvas{height:360px}
+}
