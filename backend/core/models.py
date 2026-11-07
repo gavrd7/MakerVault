@@ -1167,6 +1167,11 @@ class SlicerProfile(TimeStampedModel):
                 fields=["owner", "engine", "engine_version", "kind", "name"],
                 name="unique_slicer_profile_identity",
             ),
+            models.UniqueConstraint(
+                fields=["owner", "engine", "engine_version", "kind"],
+                condition=models.Q(is_default=True),
+                name="unique_slicer_profile_default",
+            ),
         ]
 
     def clean(self):
