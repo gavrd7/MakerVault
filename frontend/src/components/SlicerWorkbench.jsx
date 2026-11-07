@@ -22,6 +22,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [engines, setEngines] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [profiles, setProfiles] = useState([]);
+  const [profileModal, setProfileModal] = useState("");
+  const [customBed, setCustomBed] = useState({ enabled: false, x: "220", y: "220" });
   const [profileLineages, setProfileLineages] = useState({});
   const [workerConfigured, setWorkerConfigured] = useState(false);
   const [mayCancel, setMayCancel] = useState(false);
@@ -331,7 +333,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       </div>
     </section>
 
-    <section className="panel printingSection" aria-labelledby="slicer-preparation-heading">
+    <div className="slicerWorkbenchTop">\n    <section className="panel printingSection" aria-labelledby="slicer-preparation-heading">
       <h3 id="slicer-preparation-heading">Slicing configuration</h3>
       <p role="status">{workerConfigured
         ? "A verified isolated worker is configured. Only drafts with administrator-verified native profiles can be sliced. Slicing never starts a print."
@@ -373,6 +375,60 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             {spools.map(spool => <option key={spool.id} value={spool.id}>{spool.spool_id} · {spool.filament}</option>)}
           </select>
         </label>
+        <label>Build plate
+          <select disabled={!canPrepare || busy} value={form.plate} onChange={e => update("plate", e.target.value)}>
+            <option value="default">Default plate</option>
+          </select>
+        </label>
+        <div className="full settingsActions">
+          <button type="submit" className="primary" disabled={!canPrepare || busy || loading || !stlFiles.length || !printers.length}>{busy ? "Saving…" : "Save slicing draft"}</button>
+        </div>
+      </form>
+      {form.engine === "orcaslicer" && nativePlate?.id === form.printer_profile_id && <div className="cameraSourceRow" aria-label="Native Orca build plate information">
+        <div className="cameraSourceIdentity">
+          <strong>Native Orca printer build volume</strong>
+          {nativePlate.loading ? <small>Reading machine preset…</small> :
+            ["available", "partial"].includes(nativePlate.plate?.status) ?
+              <>
+                <small>Declared extent: {nativePlate.plate.size_mm.join(" × ")} mm (X × Y × Z)</small>
+                {nativePlate.plate.status === "partial" &&
+                  <small>Other machine settings remain inherited from: {nativePlate.plate.parent}. Parent profile verification is still required.</small>}
+                <small>This is the source preset's bed polygon extent, not a verified fit or placement check.</small>
+              </> :
+            nativePlate.plate?.status === "requires_parent" ?
+              <small>Parent machine preset required: {nativePlate.plate.parent}</small> :
+              <small>{nativePlate.error || nativePlate.plate?.reason || "Build volume is not available from this preset."}</small>}
+        </div>
+      </div>}
+      {false && selectedFile?.url && <div className="cameraSourceRow" aria-label="Selected model inspection">
+        <ModelThumbnail file={selectedFile} />
+        <div className="cameraSourceIdentity">
+          <strong>{selectedFile.name || selectedFile.filename}</strong>
+          <small>Source: {selectedFile.filename} · {selectedFile.size_bytes ? Math.round(selectedFile.size_bytes / 1024) + " KiB" : "size unknown"}</small>
+          {meshInspection?.id === String(selectedFile.id) && (meshInspection.loading
+            ? <small>Inspecting source STL geometry…</small>
+            : meshInspection.mesh
+              ? <small>Model dimensions: {meshInspection.mesh.size_mm.join(" × ")} mm · {meshInspection.mesh.triangles.toLocaleString()} triangles</small>
+              : <small role="alert">{meshInspection.error}</small>)}
+          <small>Dimensions are source coordinates, not an automatic placement or printer build-volume check.</small>
+        </div>
+        <div className="cameraSourceActions">
+          <button type="button" onClick={() => setPreviewFile(selectedFile)}>Inspect model</button>
+        </div>
+      </div>}
+      {!stlFiles.length && <p>Add a plain-text STL model to Files or Model Library before preparing a slicing draft.</p>}
+    </section>
+    <aside className="panel printingSection slicerProfileSidebar" aria-label="Profile management">
+      <h3>Profile management</h3>
+      <p>Choose engine-native profiles independently of the physical spool. Saved profiles are never trusted for slicing until verified.</p>
+      <div className="slicerProfileActions">
+        <button type="button" onClick={() => setProfileModal("search")}>Search official profiles</button>
+        <button type="button" onClick={() => setProfileModal("manage")}>Manage profiles</button>
+        <button type="button" onClick={() => setProfileModal("import")}>Import profile</button>
+        <button type="button" onClick={() => setProfileModal("saved")}>Saved profiles ({profiles.filter(item => item.engine === form.engine).length})</button>
+      </div>
+      <h4>Selected profiles</h4>
+      <div className="slicerSelectedProfiles formGrid">
         {forKind("printer").length > 0 && <label>Native printer profile (unverified)
           <select disabled={!canPrepare || busy} value={form.printer_profile_id} onChange={e => selectNativeProfile("printer", e.target.value)}>
             <option value="">Use a draft label instead</option>
@@ -400,63 +456,30 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         <label>Engine process preset (draft label)
           <input required maxLength="200" disabled={!canPrepare || busy} value={form.process_preset} onChange={e => update("process_preset", e.target.value)} placeholder="Native quality/process preset" />
         </label>
-        <label>Build plate
-          <select disabled={!canPrepare || busy} value={form.plate} onChange={e => update("plate", e.target.value)}>
-            <option value="default">Default plate</option>
-          </select>
-        </label>
-        <div className="full settingsActions">
-          <button type="submit" className="primary" disabled={!canPrepare || busy || loading || !stlFiles.length || !printers.length}>{busy ? "Saving…" : "Save slicing draft"}</button>
-        </div>
-      </form>
-      {form.engine === "orcaslicer" && nativePlate?.id === form.printer_profile_id && <div className="cameraSourceRow" aria-label="Native Orca build plate information">
-        <div className="cameraSourceIdentity">
-          <strong>Native Orca printer build volume</strong>
-          {nativePlate.loading ? <small>Reading machine preset…</small> :
-            ["available", "partial"].includes(nativePlate.plate?.status) ?
-              <>
-                <small>Declared extent: {nativePlate.plate.size_mm.join(" × ")} mm (X × Y × Z)</small>
-                {nativePlate.plate.status === "partial" &&
-                  <small>Other machine settings remain inherited from: {nativePlate.plate.parent}. Parent profile verification is still required.</small>}
-                <small>This is the source preset's bed polygon extent, not a verified fit or placement check.</small>
-              </> :
-            nativePlate.plate?.status === "requires_parent" ?
-              <small>Parent machine preset required: {nativePlate.plate.parent}</small> :
-              <small>{nativePlate.error || nativePlate.plate?.reason || "Build volume is not available from this preset."}</small>}
-        </div>
+
+      </div>
+      <h4>Build plate</h4>
+      <label className="checkRow"><input type="checkbox" checked={customBed.enabled} onChange={e => setCustomBed(current => ({ ...current, enabled: e.target.checked }))} /><span>Custom preview bed size</span></label>
+      {customBed.enabled && <div className="formGrid">
+        <label>Width (mm)<input type="number" min="1" max="1000" step="1" value={customBed.x} onChange={e => setCustomBed(current => ({ ...current, x: e.target.value }))} /></label>
+        <label>Depth (mm)<input type="number" min="1" max="1000" step="1" value={customBed.y} onChange={e => setCustomBed(current => ({ ...current, y: e.target.value }))} /></label>
+        <p className="full">Preview-only override; does not modify or certify the engine's native printer profile.</p>
       </div>}
-      {selectedFile?.url && <div className="cameraSourceRow" aria-label="Selected model inspection">
-        <ModelThumbnail file={selectedFile} />
-        <div className="cameraSourceIdentity">
-          <strong>{selectedFile.name || selectedFile.filename}</strong>
-          <small>Source: {selectedFile.filename} · {selectedFile.size_bytes ? Math.round(selectedFile.size_bytes / 1024) + " KiB" : "size unknown"}</small>
-          {meshInspection?.id === String(selectedFile.id) && (meshInspection.loading
-            ? <small>Inspecting source STL geometry…</small>
-            : meshInspection.mesh
-              ? <small>Model dimensions: {meshInspection.mesh.size_mm.join(" × ")} mm · {meshInspection.mesh.triangles.toLocaleString()} triangles</small>
-              : <small role="alert">{meshInspection.error}</small>)}
-          <small>Dimensions are source coordinates, not an automatic placement or printer build-volume check.</small>
-        </div>
-        <div className="cameraSourceActions">
-          <button type="button" onClick={() => setPreviewFile(selectedFile)}>Inspect model</button>
-        </div>
-      </div>}
-      {!stlFiles.length && <p>Add a plain-text STL model to Files or Model Library before preparing a slicing draft.</p>}
-    </section>
+    </aside>
+    </div>
+
 
     <SlicerPlateEditor
       files={stlFiles}
       objects={plateObjects}
       onChange={setPlateObjects}
       onPrimaryChange={id => update("input_asset_id", String(id))}
-      plate={nativePlate?.plate && ["available", "partial"].includes(nativePlate.plate.status) ? nativePlate.plate : null}
+      plate={customBed.enabled ? { size_mm: [Number(customBed.x), Number(customBed.y)] } : (nativePlate?.plate && ["available", "partial"].includes(nativePlate.plate.status) ? nativePlate.plate : null)}
       canEdit={canPrepare}
       onFilesUploaded={onFilesUploaded}
     />
 
-    <section className="panel printingSection" aria-labelledby="slicer-profile-import">
-      <h3 id="slicer-profile-import">Engine-native profiles</h3>
-      <p>Import a preset exported by the selected slicer. PrusaSlicer INI and OrcaSlicer JSON remain separate. Imported profiles are preserved in private Files and are <strong>not verified for execution</strong>.</p>
+    {profileModal === "search" && <Modal title="Search official profiles" onClose={() => setProfileModal("")} wide>
       <div className="printingActionGroup" aria-labelledby="slicer-official-profiles-heading">
         <h4 id="slicer-official-profiles-heading">Search official slicer profiles</h4>
         <p>Browse the original OrcaSlicer v2.4.2 Creality preset catalogue (K1/K2 and related profiles). Other engines and vendors will be added once their native profile catalogues are verified. Official presets are imported as unverified candidates, not automatically approved.</p>
@@ -500,6 +523,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           {!officialResults.profiles.length && <p>No matching presets in this official catalogue. Try another search or use manual import below.</p>}
         </div>}
       </div>
+
+    </Modal>}
+    {profileModal === "import" && <Modal title="Import native profile" onClose={() => setProfileModal("")} wide>
+      <p>Import an engine-native profile as an unverified candidate. Existing originals are preserved.</p>
       <h4>Import a local native profile file</h4>
       <form className="formGrid" onSubmit={importProfile}>
         <label>Profile type
@@ -522,6 +549,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           <button type="submit" disabled={!canPrepare || busy || !form.engine_version.trim() || !importFile}>{busy ? "Importing…" : "Import profile for review"}</button>
         </div>
       </form>
+
+    </Modal>}
+    {profileModal === "saved" && <Modal title="Saved slicer profiles" onClose={() => setProfileModal("")} wide>
+      <p>Profiles for the currently selected engine. Use Manage profiles for dependency checks or to prepare a customised import.</p>
       <div className="printingStack">
         {profiles.filter(item => item.engine === form.engine).map(profile =>
           <div className="cameraSourceRow" key={profile.id}>
@@ -546,7 +577,37 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           </div>
         )}
       </div>
-    </section>
+
+    </Modal>}
+    {profileModal === "manage" && <Modal title="Manage slicer profiles" onClose={() => setProfileModal("")} wide>
+      <p>Profiles are engine/version-specific. To customise a downloaded profile, export its original native file, edit it in a compatible slicer, then import it under a new name. In-place native profile editing and safe deletion of referenced profiles are not yet implemented.</p>
+      <div className="settingsActions"><button type="button" onClick={() => setProfileModal("saved")}>View saved profiles</button><button type="button" onClick={() => setProfileModal("import")}>Import a custom profile</button></div>
+      <div className="printingStack">
+        {profiles.filter(item => item.engine === form.engine).map(profile =>
+          <div className="cameraSourceRow" key={profile.id}>
+            <div className="cameraSourceIdentity">
+              <strong>{profile.name} · {profile.kind}</strong>
+              <small>{profile.engine} {profile.engine_version} · {profile.status} · {profile.provenance || "No source supplied"}</small>
+              {profileLineages[profile.id] && <small role="status">
+                {profileLineages[profile.id].checking ? "Checking native parent presets…" :
+                  profileLineages[profile.id].status === "complete" ? "Parent chain present — still unverified for slicing" :
+                  profileLineages[profile.id].status === "missing" ? "Missing native parent: " + profileLineages[profile.id].missing :
+                  profileLineages[profile.id].status === "cycle" ? "Circular native parent reference detected" :
+                  profileLineages[profile.id].status === "too_deep" ? "Parent chain exceeds allowed depth" :
+                  profileLineages[profile.id].error || "Native preset dependency inspection failed"}
+              </small>}
+              {profileLineages[profile.id]?.chain?.length > 1 && <small>
+                Parent chain: {profileLineages[profile.id].chain.map(entry => entry.name).join(" → ")}
+              </small>}
+            </div>
+            {profile.engine === "orcaslicer" && <div className="cameraSourceActions">
+              <button type="button" disabled={profileLineages[profile.id]?.checking} onClick={() => inspectProfile(profile)}>Check parent presets</button>
+            </div>}
+          </div>
+        )}
+      </div>
+
+    </Modal>}
 
     <section className="panel printingSection" aria-label="Saved slicing drafts">
       <h3>Saved slicing drafts</h3>
