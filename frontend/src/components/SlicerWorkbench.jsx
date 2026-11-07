@@ -432,6 +432,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       setJobs(current => [job, ...current]);
       if (!sliceNow) {
         setNotice("Slicing configuration saved as a private draft. No slicer or printer command was run.");
+        setShowDrafts(true);
       } else {
         const queued = await apiFetch("/api/printing/slicer/jobs/" + job.id + "/start/", {
           method: "POST", body: {},
