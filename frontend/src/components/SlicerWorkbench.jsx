@@ -52,6 +52,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [importFile, setImportFile] = useState(null);
   const [importKind, setImportKind] = useState("printer");
   const [officialQuery, setOfficialQuery] = useState("");
+  const [officialVendor, setOfficialVendor] = useState("Creality");
+  const [officialVendors, setOfficialVendors] = useState([]);
   const [officialResults, setOfficialResults] = useState(null);
   const [materialProfileMatches, setMaterialProfileMatches] = useState(null);
   const [officialBusy, setOfficialBusy] = useState(false);
@@ -437,7 +439,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     try {
       const q = officialQuery.trim();
       if (q.length < 2) throw new Error("Enter at least two characters to search official presets.");
-      const params = new URLSearchParams({ q, kind: importKind, vendor: "Creality", engine: form.engine });
+      const params = new URLSearchParams({ q, kind: importKind, vendor: officialVendor, engine: form.engine });
       const result = await apiFetch("/api/printing/slicer/official-profiles/?" + params.toString());
       setOfficialResults(result);
     } catch (err) {
@@ -453,7 +455,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       const result = await apiFetch("/api/printing/slicer/official-profiles/", {
         method: "POST",
         body: {
-          kind: importKind, vendor: "Creality", engine: form.engine,
+          kind: importKind, vendor: officialVendor, engine: form.engine,
           name: candidate.name, sub_path: candidate.sub_path,
         },
       });
@@ -595,8 +597,25 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     }
   }
 
+  async function loadOfficialVendors() {
+    try {
+      const params = new URLSearchParams({ engine: form.engine, catalogues: "1" });
+      const response = await apiFetch("/api/printing/slicer/official-profiles/?" + params.toString());
+      const vendors = response.vendors || [];
+      setOfficialVendors(vendors);
+      setOfficialVendor(current => vendors.some(v => v.id === current) ? current : (vendors[0]?.id || ""));
+    } catch (err) {
+      setOfficialVendors([]);
+      setOfficialError(err.message || "Could not load official catalogues. Manual import remains available.");
+    }
+  }
+
   function openOfficialSearch(kind = materialHint ? "filament" : form.printer_id ? "printer" : "process") {
     setImportKind(kind);
+    setOfficialVendor("Creality");
+    setOfficialVendors([]);
+    setOfficialError("");
+    loadOfficialVendors();
     setOfficialQuery(defaultOfficialSearch(kind, { printer: selectedPrinter, spool: selectedSpool, nozzle: form.nozzle_mm }));
     setOfficialResults(kind === "filament" && materialProfileMatches?.material === materialHint
       ? materialProfileMatches.results || null : null);
@@ -935,13 +954,21 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     {profileModal === "search" && <Modal title="Search official profiles" onClose={() => setProfileModal("")} wide>
       <div className="printingActionGroup" aria-labelledby="slicer-official-profiles-heading">
         <h4 id="slicer-official-profiles-heading">Search official slicer profiles</h4>
-        <p>Search the selected engine's pinned official Creality catalogue for K1/K2 printer, filament and process presets. Imports are unverified candidates; native profiles are not shared between engines.</p>
+        <p>Search the selected engine's pinned official manufacturer catalogues for printer, filament and process presets. An engine may not provide a profile for every printer. Imports remain unverified candidates; profiles cannot be shared between engines.</p>
         <form className="formGrid" onSubmit={searchOfficialProfiles}>
           <label>Official source
             <select value={["orcaslicer", "crealityprint"].includes(form.engine) ? form.engine : "unavailable"} disabled>
-              <option value="orcaslicer">OrcaSlicer · v2.4.2 / Creality</option>
-              <option value="crealityprint">Creality Print · v7.3.0 / Creality</option>
+              <option value="orcaslicer">OrcaSlicer · v2.4.2</option>
+              <option value="crealityprint">Creality Print · v7.3.0</option>
               <option value="unavailable">No pinned official catalogue for this engine</option>
+            </select>
+          </label>
+          <label>Manufacturer / upstream catalogue
+            <select value={officialVendor} disabled={officialBusy || !officialVendors.length} onChange={e => {
+              setOfficialVendor(e.target.value); setOfficialResults(null);
+            }}>
+              {officialVendors.map(vendor => <option key={vendor.id} value={vendor.id}>{vendor.label}</option>)}
+              {!officialVendors.length && <option value="">No catalogue loaded</option>}
             </select>
           </label>
           <label>Profile type
@@ -955,14 +982,14 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             <input value={officialQuery} maxLength="80" onChange={e => setOfficialQuery(e.target.value)} placeholder="e.g. printer model, Generic PLA, 0.20mm" />
           </label>
           <div className="full settingsActions">
-            <button type="submit" disabled={officialBusy || !["orcaslicer", "crealityprint"].includes(form.engine) || officialQuery.trim().length < 2}>
+            <button type="submit" disabled={officialBusy || !officialVendor || !officialVendors.length || !["orcaslicer", "crealityprint"].includes(form.engine) || officialQuery.trim().length < 2}>
               {officialBusy ? "Searching…" : "Search official profiles"}
             </button>
           </div>
         </form>
         {officialError && <p className="integrationError" role="alert">{officialError}</p>}
         {officialResults && <div className="printingStack" role="region" aria-label="Official profile search results">
-          <p>{officialResults.total_matches} matching official presets · showing up to {officialResults.profiles.length} · original upstream release {officialResults.ref}</p>
+          <p>{officialResults.total_matches} matching official presets in {officialResults.vendor} · showing up to {officialResults.profiles.length} · original upstream release {officialResults.ref}</p>
           {officialResults.profiles.map(candidate => <div className="cameraSourceRow" key={candidate.sub_path}>
             <div className="cameraSourceIdentity">
               <strong>{candidate.name}</strong>
