@@ -28,7 +28,8 @@ jobs:
           python3 scripts/build_orca_reference_fixture.py --printer k1 --output /tmp/makervault-orca-k1
           python3 scripts/build_orca_reference_fixture.py --printer k2 --output /tmp/makervault-orca-k2
           python3 scripts/build_orca_reference_fixture.py --printer prusa-mk4 --output /tmp/makervault-orca-prusa
-          python3 scripts/build_slicer_multimodel_fixture.py --output /tmp/makervault-orca-plate.3mf
+          python3 scripts/build_slicer_multimodel_fixture.py --output /tmp/makervault-orca-plate.3mf \
+            --compound-output /tmp/makervault-orca-compound.3mf
       - name: Download SHA-256 verified official Orca 2.4.2 and build isolated image
         run: python3 scripts/install_slicer_staging.py prepare-orca
       - name: Check restricted worker loads real executable
@@ -93,13 +94,27 @@ jobs:
             --mount type=bind,src=/tmp/makervault-orca-plate.3mf,dst=/fixtures/plate.3mf,readonly \
             --entrypoint /opt/engines/orcaslicer.AppImage "$IMAGE" \
             /fixtures/plate.3mf --info
-      - name: Verify real two-model MakerVault 3MF build plate with official Orca engine
+      - name: Check native two-object 3MF (known issue under investigation)
+        id: native_multi
+        continue-on-error: true
         run: |
           python3 scripts/probe_slicer_staging.py \
             --printer /tmp/makervault-orca-k1/printer.json \
             --filament /tmp/makervault-orca-k1/filament.json \
             --process /tmp/makervault-orca-k1/process.json \
             --model /tmp/makervault-orca-plate.3mf
+      - name: Verify compound mesh preserves both model locations and extrusion paths
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k1/printer.json \
+            --filament /tmp/makervault-orca-k1/filament.json \
+            --process /tmp/makervault-orca-k1/process.json \
+            --model /tmp/makervault-orca-compound.3mf --compound
+      - name: Keep native 3MF integration fail-closed until actual MakerVault path is fixed
+        if: steps.native_multi.outcome == 'failure'
+        run: |
+          echo "::error::MakerVault's native multi-object 3MF path is not yet validated. Do not enable it for users."
+          exit 1
       - name: Diagnose failed native K2 slice without changing runtime admission policy
         if: failure() && steps.k2.outcome == 'failure'
         run: |
