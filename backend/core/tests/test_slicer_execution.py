@@ -37,6 +37,19 @@ class WorkerApprovalTests(SimpleTestCase):
 
     @patch("core.slicer_execution.health", return_value={
         "ready": True, "engine": "orcaslicer", "version": "2.9.7",
+        "binary_sha256": "b" * 64,
+    })
+    def test_staging_immutable_local_image_id_is_allowed_only_on_exact_match(self, worker):
+        environment = {**self.approved, "MAKERVAULT_SLICER_WORKER_IMAGE": self.digest}
+        with patch.dict("os.environ", environment, clear=True):
+            self.assertEqual(verified_installation()["orcaslicer"]["image_digest"], self.digest)
+        with patch.dict("os.environ", {
+            **environment, "MAKERVAULT_SLICER_WORKER_IMAGE": "sha256:" + "f" * 64
+        }, clear=True):
+            self.assertEqual(verified_installation(), {})
+
+    @patch("core.slicer_execution.health", return_value={
+        "ready": True, "engine": "orcaslicer", "version": "2.9.7",
         "binary_sha256": "c" * 64,
     })
     def test_worker_binary_hash_mismatch_disables_execution(self, worker):
