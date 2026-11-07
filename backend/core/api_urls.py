@@ -8,6 +8,7 @@ urlpatterns = [
     path("printing/slicer/meshes/<uuid:asset_id>/inspection/", slicer_api.inspect_mesh, name="api-slicer-inspect-mesh"),
     path("printing/slicer/jobs/", slicer_api.jobs, name="api-slicer-jobs"),
     path("printing/slicer/profiles/", slicer_api.profiles, name="api-slicer-profiles"),
+    path("printing/slicer/profiles/<uuid:profile_id>/", slicer_api.delete_profile, name="api-slicer-delete-profile"),
     path("printing/slicer/official-profiles/", slicer_api.official_profiles, name="api-slicer-official-profiles"),
     path("printing/slicer/profiles/<uuid:profile_id>/dependencies/", slicer_api.profile_dependencies, name="api-slicer-profile-dependencies"),
     path("printing/slicer/profiles/<uuid:profile_id>/plate/", slicer_api.profile_plate, name="api-slicer-profile-plate"),
