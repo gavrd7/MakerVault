@@ -190,6 +190,15 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       setWorkerConfigured(existing.worker_configured === true);
       setMayCancel(existing.can_cancel === true);
       setProfiles(native.profiles || []);
+      setForm(current => {
+        if (current.engine_version) return current;
+        const engine = (catalogue.engines || []).find(item => item.key === current.engine);
+        const installedVersion = engine?.installed_version;
+        const availableProfile = (native.profiles || []).find(item => item.engine === current.engine && item.is_default)
+          || (native.profiles || []).find(item => item.engine === current.engine);
+        const version = installedVersion || availableProfile?.engine_version;
+        return version ? { ...current, engine_version: version } : current;
+      });
     } catch (err) {
       setError(err.message || "Could not load slicing drafts.");
     } finally {
@@ -436,6 +445,37 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     }
   }
 
+  async function toggleProfileDefault(profile) {
+    setError("");
+    setBusy(true);
+    try {
+      const newDefault = !profile.is_default;
+      await apiFetch("/api/printing/slicer/profiles/" + profile.id + "/default/", {
+        method: "POST", body: { default: newDefault },
+      });
+      setProfiles(current => current.map(item => ({
+        ...item,
+        is_default: item.id === profile.id ? newDefault :
+          newDefault && item.engine === profile.engine &&
+          item.engine_version === profile.engine_version && item.kind === profile.kind
+          ? false : item.is_default,
+      })));
+      setNotice((newDefault ? "Default saved: " : "Default cleared: ") + profile.name);
+    } catch (err) {
+      setError(err.message || "Could not update the default profile.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function openOfficialSearch(kind = materialHint ? "filament" : form.printer_id ? "printer" : "process") {
+    setImportKind(kind);
+    setOfficialQuery(defaultOfficialSearch(kind, { printer: selectedPrinter, spool: selectedSpool, nozzle: form.nozzle_mm }));
+    setOfficialResults(null);
+    setOfficialError("");
+    setProfileModal("search");
+  }
+
   async function removeProfile(profile) {
     if (!window.confirm("Remove saved " + profile.kind + " profile \"" + profile.name + "\"? Existing source files remain in MakerVault Files. Profiles referenced by slicing jobs cannot be removed.")) return;
     setError(""); setBusy(true);
@@ -515,10 +555,11 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       <form className="formGrid" onSubmit={saveDraft}>
         <label>Engine
           <select required disabled={!canPrepare || busy || loading} value={form.engine} onChange={e => {
+            manuallyChosenProfiles.current.clear();
             const chosenEngine = engines.find(item => item.key === e.target.value);
             setForm(current => ({
               ...current, engine: e.target.value,
-              engine_version: chosenEngine?.installed_version || "",
+              engine_version: chosenEngine?.installed_version || profiles.find(profile => profile.engine === e.target.value)?.engine_version || "",
               printer_profile_id: "", filament_profile_id: "", process_profile_id: "",
             }));
           }}>
@@ -546,7 +587,11 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         <label>Printer
           <select required disabled={!canPrepare || busy} value={form.printer_id} onChange={e => {
             const printer = printers.find(item => String(item.id) === e.target.value);
-            setForm(current => ({ ...current, printer_id: e.target.value, nozzle_mm: String(printer?.nozzle_mm || "0.40") }));
+            manuallyChosenProfiles.current.delete("printer");
+            setForm(current => ({
+              ...current, printer_id: e.target.value, nozzle_mm: String(printer?.nozzle_mm || "0.40"),
+              printer_profile_id: "", printer_preset: "",
+            }));
           }}>
             <option value="">Choose an owned printer</option>
             {printers.filter(item => item.is_active !== false).map(printer => <option key={printer.id} value={printer.id}>{printer.name}</option>)}
@@ -596,7 +641,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       <h3>Profile management</h3>
       <p>Choose engine-native profiles independently of the physical spool. Saved profiles are never trusted for slicing until verified.</p>
       <div className="slicerProfileActions">
-        <button type="button" onClick={() => setProfileModal("search")}>Search official profiles</button>
+        <button type="button" onClick={() => openOfficialSearch()}>Search official profiles</button>
         <button type="button" onClick={() => setProfileModal("manage")}>Manage profiles</button>
         <button type="button" onClick={() => setProfileModal("import")}>Import profile</button>
         <button type="button" onClick={() => setProfileModal("saved")}>Saved profiles ({profiles.filter(item => item.engine === form.engine).length})</button>
