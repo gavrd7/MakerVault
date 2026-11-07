@@ -54,10 +54,11 @@ test("profile import screens provide back navigation and local success feedback"
   assert.match(source, /setOfficialImportNotice\(imported\.name/);
 });
 
-test("official profile search narrows by selected printer and can show all candidates", () => {
-  assert.match(source, /filterOfficialByPrinter && selectedPrinter\?\.id/);
-  assert.match(source, /params\.set\("printer_id", String\(selectedPrinter\.id\)\)/);
-  assert.match(source, /Show profiles for/);
-  assert.match(source, /setFilterOfficialByPrinter\(e\.target\.checked\)/);
+test("official profile search lists catalogue models and scopes fuzzy results", () => {
+  assert.match(source, /models: "1"/);
+  assert.match(source, /Printer model/);
+  assert.match(source, /officialModels\.map\(model/);
+  assert.match(source, /All models \/ generic profiles/);
+  assert.match(source, /params\.set\("model", officialModel\)/);
   assert.match(source, /name-based, not verified compatibility/);
 });
