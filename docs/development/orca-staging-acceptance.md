@@ -39,3 +39,31 @@ This script deliberately **does not** import profiles into MakerVault, mark
 profiles verified, unlock the GUI's Slice action, or send anything to a printer.
 Those are separate acceptance and administrator-approval steps. A successful
 single-STL probe also does not validate multi-object 3MF or CFS mapping.
+
+
+## Real GitHub Actions acceptance (7 November 2026)
+
+The [real-engine CI workflow](../../.github/workflows/orca-real-smoke.yml) downloads
+the pinned official OrcaSlicer v2.4.2 AppImage, verifies its upstream release
+SHA-256, builds the restricted image and executes real extrusion-bearing
+tetrahedron slices using a K1 and a K2 reference fixture.
+
+**K1:** the fully resolved native machine/process/Generic PLA profile fixture
+slices successfully with the unmodified native printing settings (except the
+explicit removal of unsafe print-host/post-processing fields).
+
+**K2:** the upstream official Orca v2.4.2 K2 0.4 nozzle machine preset sets
+`retraction_distances_when_cut` to `30`, but the engine rejects that setting
+because its accepted range is `10..18`. The unmodified K2 fixture **failed**
+and must not be represented as approved. The *test-only* fixture builder
+checks that the original value is exactly `30`, logs the substitution and
+sets it to `18` for an isolated slicing compatibility experiment. That
+modified fixture **passed**, producing verified G-code with extrusion.
+**This substitution is not production approval and must never be applied
+silently to an imported K2 printer profile**. The K2 machine profile needs
+a reviewed compatible upstream preset or an independently verified
+administrator-approved override before it is used for actual K2 prints.
+
+The application execution switch and all per-profile approval gates remain
+independent; a passing CI reference fixture does not unlock printing, prove
+printer-ready G-code or validate multi-material/CFS and 3MF bed workflows.
