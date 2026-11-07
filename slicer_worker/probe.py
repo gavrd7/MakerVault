@@ -94,8 +94,13 @@ def _validate_gcode(path, *, min_extrusion_span_x=None):
             x = re.search(rb"(?:^|\s)X([-+]?(?:\d+(?:\.\d*)?|\.\d+))(?=\s|$)", code)
             if x:
                 x_positions.append(float(x.group(1)))
-        if len(x_positions) < 2 or max(x_positions) - min(x_positions) < min_extrusion_span_x:
-            raise WorkerError("The two-model fixture produced no separated extrusion toolpaths.")
+        span = max(x_positions) - min(x_positions) if x_positions else 0
+        if len(x_positions) < 2 or span < min_extrusion_span_x:
+            raise WorkerError(
+                "Two-object fixture extrusion coverage insufficient: "
+                f"X-extrusion moves={len(x_positions)}, X-span={span:.2f} mm; "
+                f"required >= {min_extrusion_span_x} mm."
+            )
     return {"gcode_sha256": hashlib.sha256(data).hexdigest(), "gcode_bytes": len(data)}
 
 
