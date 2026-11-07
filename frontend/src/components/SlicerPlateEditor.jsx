@@ -432,7 +432,7 @@ export default function SlicerPlateEditor({
       <button type="button" disabled={!canEdit || !chosen || objects.length >= MAX_OBJECTS} onClick={() => addAsset(chosen.asset_id)}>Duplicate selected</button>
     </div>}
 
-    {objects.length > 0 && <div className="formGrid slicerPlateTransformFields>
+    {objects.length > 0 && <div className="formGrid slicerPlateTransformFields">
       <label>X position (mm)
         <input type="number" min={-10000} max={10000} step="0.5" value={chosen?.x_mm ?? 0}
           disabled={!canEdit} onChange={event => patch("x_mm", pretty(event.target.value))} />
@@ -455,14 +455,11 @@ export default function SlicerPlateEditor({
       </label>
       <div className="settingsActions">
         <button type="button" disabled={!canEdit} onClick={() => patch("rotation_deg", ((chosen.rotation_deg + 90) % 360))}>Rotate 90°</button>
-        <button type="button" disabled={!canEdit || objects.length >= MAX_OBJECTS}
-          onClick={() => addAsset(chosen.asset_id)}>Duplicate</button>
-        <button type="button" disabled={!canEdit} onClick={removeSelected}>Remove model</button>
       </div>
     </div>}
 
         </div>
       </aside>
     </div>
-  </section>
+  </section>;
 }
