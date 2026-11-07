@@ -296,6 +296,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       setProfiles(current => [result.profile, ...current]);
       setForm(current => ({
         ...current, engine: result.profile.engine, engine_version: result.engine_version,
+        printer_profile_id: "", filament_profile_id: "", process_profile_id: "",
       }));
       setNotice("Official " + (result.profile.engine === "crealityprint" ? "Creality Print" : "OrcaSlicer") +
         " profile imported as an unverified candidate. Its native parent presets must also be verified before slicing.");
