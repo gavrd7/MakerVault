@@ -96,7 +96,7 @@ The single slicing-service container will support independently selected engine 
 
 The planned administrator workflow is to select an engine and supported pinned version, review its source/licence/integrity information, explicitly install it, then import or select and verify that engine's native presets. A service may contain several engines, but a slice is routed only to the requested installed and approved engine/version.
 
-**Current PR limitations:** PR #171 now has separate OrcaSlicer and Creality Print worker adapters, an independently verified shared-worker engine registry, official Orca and Creality Print profile discovery across their own pinned upstream manufacturer catalogues, basic GUI native-profile customisation, and saved slicing drafts. It still lacks a production-ready engine installer, independently verified Linux engine binaries, complete GUI setting coverage, multi-object execution and a successful end-to-end real slicing fixture for either engine. Engine identity verification does not by itself prove that slicing works.
+**Current PR limitations:** PR #171 includes OrcaSlicer and Creality Print worker adapters, a separately installed, pinned and isolated engine worker, upstream multi-manufacturer profile browsing, native-profile customisation, saved slice drafts, G-code output and a visual build plate. **The real OrcaSlicer 2.4.2 binary has passed single-STL fixtures for K1, a test-only-adjusted K2, and Prusa MK4, plus a two-model, single-filament compound 3MF fixture built by MakerVault.** Actual staging end-to-end profile approval and G-code review still require operator testing. There is no verified native multi-extruder/CFS print workflow, full GUI setting parity or production-ready multi-engine installer. Creality Print and the other engines are not yet real-CLI approved.
 
 ## Profile defaults and spool-aware suggestions (development)
 
@@ -144,3 +144,23 @@ MakerVault's slicer selection is **not restricted by printer brand**. The select
 The shared profile-source endpoint reports catalogue availability for every listed engine. **OrcaSlicer v2.4.2** currently browses 65 pinned upstream profile families; **Creality Print v7.3.0** currently browses 36 pinned profile families. These counts refer to source catalogues, not tested printer models. The other catalogue engine entries currently support **manual native-profile registration as unverified candidates**; their official browsers and engine runtimes are not yet validated or enabled for slicing. No missing catalogue is silently substituted with an OrcaSlicer/Creality Print preset.
 
 For any engine without a searchable catalogue, choose **Import native profile file instead**, use that engine's original native format, and expect an explicit independent verification gate before execution. Profiles may be configured for offline slicing without enabling printer-network control, which is handled separately by printer adapters.
+
+## Slicing multiple STL models with OrcaSlicer
+
+The visual build plate saves individual model files, positions, scale, rotation
+and preview colours as draft data. When an administrator enables the pinned
+OrcaSlicer worker and approves the exact native printer, filament and process
+profiles, MakerVault can prepare a **single-material** multi-STL slice. The
+worker input is a bounded compound 3MF which combines the models' transformed
+geometry into separate islands inside one mesh. This is intentional: the
+official OrcaSlicer 2.4.2 command-line executable was demonstrated to slice
+only one of multiple independent build objects from a minimal core 3MF, while
+the compound-geometry route passed a real two-island extrusion fixture test.
+
+The combined slice uses **one native filament profile for all imported models**.
+Individual model preview colours do not yet select physical extruders or CFS
+slots. Separate native materials, tool-changing, multiple build plates,
+firmware-specific commands and physical printer behaviour still need explicit
+engine- and printer-specific validation. Non-Orca multi-STL slice execution
+remains disabled until separately verified. A successful slice stores G-code
+for review; it does **not** send or start printing or deduct filament stock.
