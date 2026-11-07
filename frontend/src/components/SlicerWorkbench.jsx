@@ -9,6 +9,17 @@ import { slicerSpoolHex, recolorUnmodifiedPlate } from "./slicerSpoolColour";
 import { spoolMaterial, chooseSuggestedProfile, defaultOfficialSearch, suggestOfficialVendor } from "./slicerProfileSuggestions";
 import { availableSlicerPrintConnections, preferredSlicerPrintConnection } from "./slicerPrintRouting";
 
+function ProfileActionIcon({ name }) {
+  return <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+    stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+    aria-hidden="true">
+    {name === "search" && <><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 5 5" /></>}
+    {name === "upload" && <><path d="M12 16V3m-5 5 5-5 5 5" /><path d="M4 16v4h16v-4" /></>}
+    {name === "bookmark" && <path d="M6 3h12v18l-6-4-6 4V3Z" />}
+    {name === "settings" && <><circle cx="12" cy="12" r="3" /><path d="M12 2v3m0 14v3M2 12h3m14 0h3M4.93 4.93l2.12 2.12m9.9 9.9 2.12 2.12m0-14.14-2.12 2.12m-9.9 9.9-2.12 2.12" /></>}
+  </svg>;
+}
+
 const initialForm = {
   engine: "orcaslicer", engine_version: "", input_asset_id: "", printer_id: "",
   spool_id: "", printer_preset: "", filament_preset: "", process_preset: "",
@@ -26,6 +37,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [jobs, setJobs] = useState([]);
   const [profiles, setProfiles] = useState([]);
   const [profileModal, setProfileModal] = useState("");
+  const [managingSavedProfiles, setManagingSavedProfiles] = useState(false);
   const [editingProfile, setEditingProfile] = useState(null);
   const [editProfileName, setEditProfileName] = useState("");
   const [editProfileSchema, setEditProfileSchema] = useState({});
@@ -369,6 +381,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       setError("This plate contains temporary models. To save a persistent draft, first import those STL files with ‘Also save imported models to MakerVault Files’ selected.");
       return;
     }
+    if (["printer", "filament", "process"].some(kind => !form[kind + "_profile_id"])) {
+      setError("Select a native printer, filament and process profile before saving or slicing.");
+      return;
+    }
     setBusy(true);
     let savedJob = null;
     try {
@@ -686,7 +702,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         : "Preparation mode — no administrator-approved slicing worker is available. Saving a draft does not run a slicer, send a printer command or change spool inventory."}</p>
       {error && <p className="integrationError" role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
-      <form className="formGrid" onSubmit={saveDraft}>
+      <form id="slicer-configuration-form" className="formGrid" onSubmit={saveDraft}>
         <div className="full slicerEngineSelection">
           <strong className="slicerEngineSelectionLabel">Slicing engine</strong>
           <SlicerEngineChoices engines={engines.length ? engines :
@@ -759,28 +775,15 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               ? nativePlate.plate.size_mm.join(" × ") + " mm"
               : "Not available from this profile"}</span>
         </div>}
-      <div className="slicerDraftActions">
-        <div className="full settingsActions">
-          <button type="submit" value="draft" disabled={!canPrepare || busy || loading || !plateObjects.length || !printers.length}>{busy ? "Saving…" : "Save slicing draft"}</button>
-          {workerConfigured && engines.some(engine => engine.key === form.engine && engine.available) &&
-            <button type="submit" value="slice" className="primary"
-              disabled={!canPrepare || busy || loading || !plateObjects.length || !printers.length ||
-                !form.printer_profile_id || !form.filament_profile_id || !form.process_profile_id}>
-              {busy ? "Preparing…" : "Save and slice"}
-            </button>}
-        </div>
-      </div>
-      {!plateObjects.length && <p>Add at least one STL to the visual build plate below before saving or slicing.</p>}
       </form>
     </section>
     <aside className="panel printingSection slicerProfileSidebar" aria-label="Profile management">
       <h3>Profile management</h3>
-      <p>Choose engine-native profiles independently of the physical spool. Saved profiles are never trusted for slicing until verified.</p>
+      <p>Choose engine-native profiles. Manage imported profiles through Saved profiles.</p>
       <div className="slicerProfileActions">
-        <button type="button" onClick={() => openOfficialSearch()}>Search official profiles</button>
-        <button type="button" onClick={() => setProfileModal("manage")}>Manage profiles</button>
-        <button type="button" onClick={() => setProfileModal("import")}>Import profile</button>
-        <button type="button" onClick={() => setProfileModal("saved")}>Saved profiles ({profiles.filter(item => item.engine === form.engine).length})</button>
+        <button type="button" onClick={() => openOfficialSearch()}><ProfileActionIcon name="search" />Search official profiles</button>
+        <button type="button" onClick={() => setProfileModal("import")}><ProfileActionIcon name="upload" />Import profile</button>
+        <button type="button" onClick={() => { setManagingSavedProfiles(false); setProfileModal("saved"); }}><ProfileActionIcon name="bookmark" />Saved profiles ({profiles.filter(item => item.engine === form.engine).length})</button>
       </div>
       {materialHint && <div className="slicerMaterialMatch">
         <strong>Filament match: {materialHint}</strong>
@@ -794,48 +797,21 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         </button>
       </div>}
       <h4>Selected profiles</h4>
-      <div className="slicerSelectedProfiles formGrid">
-        {forKind("printer").length > 0 && <label>Native printer profile (unverified)
-          <select disabled={!canPrepare || busy} value={form.printer_profile_id} onChange={e => selectNativeProfile("printer", e.target.value)}>
-            <option value="">Use a draft label instead</option>
-            {forKind("printer").map(profile => <option key={profile.id} value={profile.id}>{profile.name} · {profile.status}{profile.is_default ? " · default" : ""}</option>)}
+      <div className="slicerSelectedProfiles">
+        {["printer", "filament", "process"].map(kind => <label key={kind}>
+          {kind.charAt(0).toUpperCase() + kind.slice(1)} profile
+          <select disabled={!canPrepare || busy} value={form[kind + "_profile_id"]}
+            onChange={event => selectNativeProfile(kind, event.target.value)}>
+            <option value="">Select {kind} profile</option>
+            {forKind(kind).map(profile => <option key={profile.id} value={profile.id}>
+              {profile.name}{profile.is_default ? " · default" : ""}{profile.status !== "verified" ? " · unverified" : ""}
+            </option>)}
           </select>
-        </label>}
-        <label>Engine printer preset (draft label)
-          <input required maxLength="200" disabled={!canPrepare || busy} value={form.printer_preset} onChange={e => update("printer_preset", e.target.value)} placeholder={selectedPrinter?.name || "Native machine preset"} />
-        </label>
-        {forKind("filament").length > 0 && <label>Native filament profile (unverified)
-          <select disabled={!canPrepare || busy} value={form.filament_profile_id} onChange={e => selectNativeProfile("filament", e.target.value)}>
-            <option value="">Use a draft label instead</option>
-            {forKind("filament").map(profile => <option key={profile.id} value={profile.id}>{profile.name} · {profile.status}{profile.is_default ? " · default" : ""}</option>)}
-          </select>
-        </label>}
-        <label>Engine filament preset (draft label)
-          <input required maxLength="200" disabled={!canPrepare || busy} value={form.filament_preset} onChange={e => update("filament_preset", e.target.value)} placeholder="Native filament preset" />
-        </label>
-        {forKind("process").length > 0 && <label>Native process profile (unverified)
-          <select disabled={!canPrepare || busy} value={form.process_profile_id} onChange={e => selectNativeProfile("process", e.target.value)}>
-            <option value="">Use a draft label instead</option>
-            {forKind("process").map(profile => <option key={profile.id} value={profile.id}>{profile.name} · {profile.status}{profile.is_default ? " · default" : ""}</option>)}
-          </select>
-        </label>}
-        <label>Engine process preset (draft label)
-          <input required maxLength="200" disabled={!canPrepare || busy} value={form.process_preset} onChange={e => update("process_preset", e.target.value)} placeholder="Native quality/process preset" />
-        </label>
-
+        </label>)}
       </div>
       {Object.keys(profileSuggestions).length > 0 && <p className="slicerProfileHint">
-        Suggested from {Object.values(profileSuggestions).join(", ")}. You can change any selection or set a different default.
+        Suggested from {Object.values(profileSuggestions).join(", ")}.
       </p>}
-      {canVerifyProfiles && <div className="slicerProfileVerification">
-        <h4>Verify selected profiles</h4>
-        <p>An administrator can test the exact native profile trio on an installed engine before enabling real slicing. This runs a controlled fixture, not a printer.</p>
-        <button type="button" disabled={!workerConfigured || verifyingProfiles ||
-          !form.printer_profile_id || !form.filament_profile_id || !form.process_profile_id}
-          onClick={verifySelectedProfiles}>
-          {verifyingProfiles ? "Running test slice…" : "Test slice and approve"}
-        </button>
-      </div>}
       <h4>Build plate</h4>
       <label className="checkRow"><input type="checkbox" checked={customBed.enabled} onChange={e => setCustomBed(current => ({ ...current, enabled: e.target.checked }))} /><span>Custom preview bed size</span></label>
       {customBed.enabled && <div className="formGrid">
@@ -869,6 +845,22 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           ? { size_mm: [Number(selectedPrinter.build_volume.x), Number(selectedPrinter.build_volume.y)] } : null))}
       canEdit={canPrepare}
       onFilesUploaded={onFilesUploaded}
+      footer={<>
+        {!plateObjects.length && <p className="slicerPlateActionHint">Add an STL to the plate before saving or slicing.</p>}
+        <div className="slicerDraftActions settingsActions">
+          <button type="submit" form="slicer-configuration-form" value="draft"
+            disabled={!canPrepare || busy || loading || !plateObjects.length || !printers.length ||
+              !form.printer_profile_id || !form.filament_profile_id || !form.process_profile_id}>
+            {busy ? "Saving…" : "Save slicing draft"}
+          </button>
+          {workerConfigured && engines.some(engine => engine.key === form.engine && engine.available) &&
+            <button type="submit" form="slicer-configuration-form" value="slice" className="primary"
+              disabled={!canPrepare || busy || loading || !plateObjects.length || !printers.length ||
+                !form.printer_profile_id || !form.filament_profile_id || !form.process_profile_id}>
+              {busy ? "Preparing…" : "Save and slice"}
+            </button>}
+        </div>
+      </>}
     />
 
     {profileModal === "edit" && editingProfile && <Modal title={"Customise " + editingProfile.kind + " profile"} subtitle={editingProfile.engine + " · " + editingProfile.engine_version} onClose={() => setProfileModal("")} wide>
@@ -897,7 +889,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             disabled={editProfileBusy} onChange={e => setEditProfileValues(current => ({ ...current, [key]: e.target.value }))} />
         </label>)}
         <div className="full settingsActions">
-          <button type="button" disabled={editProfileBusy} onClick={() => setProfileModal("manage")}>Cancel</button>
+          <button type="button" disabled={editProfileBusy} onClick={() => setProfileModal("saved")}>Cancel</button>
           <button type="submit" className="primary" disabled={editProfileBusy || !Object.keys(editProfileSchema).length}>
             {editProfileBusy ? "Saving…" : "Save custom profile"}
           </button>
@@ -1011,7 +1003,24 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
     </Modal>}
     {profileModal === "saved" && <Modal title="Saved slicer profiles" onClose={() => setProfileModal("")} wide>
-      <p>Profiles for the currently selected engine. Use Manage profiles for dependency checks or to prepare a customised import.</p>
+      <p>Profiles for the selected engine. Management actions include editing, defaults, removal and parent-dependency checks.</p>
+      <div className="settingsActions">
+        <button type="button" onClick={() => setManagingSavedProfiles(current => !current)}>
+          <ProfileActionIcon name="settings" />{managingSavedProfiles ? "Done managing" : "Manage"}
+        </button>
+        {managingSavedProfiles && <button type="button" onClick={() => setProfileModal("import")}>
+          <ProfileActionIcon name="upload" />Import profile
+        </button>}
+      </div>
+      {managingSavedProfiles && canVerifyProfiles && <div className="slicerProfileVerification">
+        <h4>Approve selected native profiles</h4>
+        <p>Run an isolated test slice before using a profile set for actual slicing.</p>
+        <button type="button" disabled={!workerConfigured || verifyingProfiles ||
+          !form.printer_profile_id || !form.filament_profile_id || !form.process_profile_id}
+          onClick={verifySelectedProfiles}>
+          {verifyingProfiles ? "Running test slice…" : "Test slice and approve"}
+        </button>
+      </div>
       <div className="printingStack">
         {profiles.filter(item => item.engine === form.engine).map(profile =>
           <div className="cameraSourceRow" key={profile.id}>
@@ -1030,54 +1039,19 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
                 Parent chain: {profileLineages[profile.id].chain.map(entry => entry.name).join(" → ")}
               </small>}
             </div>
-            <div className="cameraSourceActions">
+            {managingSavedProfiles && <div className="cameraSourceActions">
               {profile.engine === "orcaslicer" && <button type="button" disabled={profileLineages[profile.id]?.checking} onClick={() => inspectProfile(profile)}>Check parent presets</button>}
               {["orcaslicer", "crealityprint"].includes(profile.engine) && <button type="button" disabled={busy} onClick={() => openProfileEditor(profile)}>Edit as custom</button>}
               <button type="button" disabled={busy} onClick={() => toggleProfileDefault(profile)}>
                 {profile.is_default ? "Clear default" : "Set as default"}
               </button>
               <button type="button" disabled={busy} onClick={() => removeProfile(profile)}>Remove profile</button>
-            </div>
+            </div>}
           </div>
         )}
       </div>
 
     </Modal>}
-    {profileModal === "manage" && <Modal title="Manage slicer profiles" onClose={() => setProfileModal("")} wide>
-      <p>Set a default for each printer, filament and process category, or edit a profile as a separate custom copy. All defaults are private and specific to the slicer engine and version.</p>
-      <div className="settingsActions"><button type="button" onClick={() => setProfileModal("saved")}>View saved profiles</button><button type="button" onClick={() => setProfileModal("import")}>Import a custom profile</button></div>
-      <div className="printingStack">
-        {profiles.filter(item => item.engine === form.engine).map(profile =>
-          <div className="cameraSourceRow" key={profile.id}>
-            <div className="cameraSourceIdentity">
-              <strong>{profile.name} · {profile.kind}{profile.is_default ? " · Default" : ""}</strong>
-              <small>{profile.engine} {profile.engine_version} · {profile.status} · {profile.provenance || "No source supplied"}</small>
-              {profileLineages[profile.id] && <small role="status">
-                {profileLineages[profile.id].checking ? "Checking native parent presets…" :
-                  profileLineages[profile.id].status === "complete" ? "Parent chain present — still unverified for slicing" :
-                  profileLineages[profile.id].status === "missing" ? "Missing native parent: " + profileLineages[profile.id].missing :
-                  profileLineages[profile.id].status === "cycle" ? "Circular native parent reference detected" :
-                  profileLineages[profile.id].status === "too_deep" ? "Parent chain exceeds allowed depth" :
-                  profileLineages[profile.id].error || "Native preset dependency inspection failed"}
-              </small>}
-              {profileLineages[profile.id]?.chain?.length > 1 && <small>
-                Parent chain: {profileLineages[profile.id].chain.map(entry => entry.name).join(" → ")}
-              </small>}
-            </div>
-            <div className="cameraSourceActions">
-              {profile.engine === "orcaslicer" && <button type="button" disabled={profileLineages[profile.id]?.checking} onClick={() => inspectProfile(profile)}>Check parent presets</button>}
-              {["orcaslicer", "crealityprint"].includes(profile.engine) && <button type="button" disabled={busy} onClick={() => openProfileEditor(profile)}>Edit as custom</button>}
-              <button type="button" disabled={busy} onClick={() => toggleProfileDefault(profile)}>
-                {profile.is_default ? "Clear default" : "Set as default"}
-              </button>
-              <button type="button" disabled={busy} onClick={() => removeProfile(profile)}>Remove profile</button>
-            </div>
-          </div>
-        )}
-      </div>
-
-    </Modal>}
-
     {showDrafts && <Modal title="Saved slicing drafts" onClose={() => setShowDrafts(false)} wide>
       <button type="button" disabled={loading} onClick={refresh}>Refresh drafts</button>
       <h3>Saved slicing drafts</h3>
