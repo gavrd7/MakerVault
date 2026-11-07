@@ -23,6 +23,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [jobs, setJobs] = useState([]);
   const [profiles, setProfiles] = useState([]);
   const [profileModal, setProfileModal] = useState("");
+  const [showDrafts, setShowDrafts] = useState(false);
   const [customBed, setCustomBed] = useState({ enabled: false, x: "220", y: "220" });
   const [profileLineages, setProfileLineages] = useState({});
   const [workerConfigured, setWorkerConfigured] = useState(false);
@@ -345,7 +346,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       </div>
       <div className="printingHeroActions">
         <button type="button" onClick={onBack}>← Printing overview</button>
-        <button type="button" disabled={loading} onClick={refresh}>Refresh drafts</button>
+        <button type="button" onClick={() => setShowDrafts(true)}>Saved drafts ({jobs.length})</button>
       </div>
     </section>
 
@@ -612,7 +613,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
     </Modal>}
 
-    <section className="panel printingSection" aria-label="Saved slicing drafts">
+    {showDrafts && <Modal title="Saved slicing drafts" onClose={() => setShowDrafts(false)} wide>
+      <button type="button" disabled={loading} onClick={refresh}>Refresh drafts</button>
       <h3>Saved slicing drafts</h3>
       {jobs.length ? <div className="printingStack">{jobs.map(job =>
         <div key={job.id} className="cameraSourceRow">
@@ -654,8 +656,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           </div>
         </div>
       )}</div> : <p>No slicing drafts saved yet.</p>}
-    </section>
-
+    </Modal>
     {previewFile && <FileModelViewerModal file={previewFile} onClose={() => setPreviewFile(null)} />}
     {printSelection?.choosing && <Modal title="Choose printer connection" subtitle={"Print " + (printSelection.job.output_asset?.filename || "sliced G-code") + " on " + printSelection.printer.name} onClose={() => setPrintSelection(null)}>
       <p>This uses MakerVault's existing printer-submission checks and requires a separate confirmation before printing.</p>
