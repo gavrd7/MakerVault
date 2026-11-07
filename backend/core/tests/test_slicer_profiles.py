@@ -45,6 +45,25 @@ class NativeProfileInspectionTests(SimpleTestCase):
             with self.subTest(data=data), self.assertRaises(SlicerProfileError):
                 inspect_native_profile(self.asset("filament.json", data), "orcaslicer")
 
+    def test_any_manufacturer_native_candidate_is_accepted_in_its_own_engine_format(self):
+        # No hardcoded printer allowlist; registration does not verify execution.
+        for engine in ("orcaslicer", "crealityprint", "bambustudio", "snapmakerorca"):
+            for machine in ("Voron 2.4", "Prusa MK4", "Custom CoreXY"):
+                with self.subTest(engine=engine, machine=machine):
+                    import json
+                    native = json.dumps({
+                        "type": "machine", "name": machine,
+                        "nozzle_diameter": ["0.4"],
+                    }).encode()
+                    report = inspect_native_profile(self.asset("machine.json", native), engine)
+                    self.assertEqual(report["engine"], engine)
+                    self.assertEqual(report["extension"], ".json")
+        for machine in ("Voron 2.4", "Prusa MK4", "Custom CoreXY"):
+            with self.subTest(engine="prusaslicer", machine=machine):
+                native = ("printer_model = " + machine + "\\nnozzle_diameter = 0.4\\n").encode()
+                report = inspect_native_profile(self.asset("machine.ini", native), "prusaslicer")
+                self.assertEqual(report["extension"], ".ini")
+
     def test_rejects_prusa_profile_post_processing(self):
         for body in (
             b"post_process_scripts = /tmp/script\n",
