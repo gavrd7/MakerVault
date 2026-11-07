@@ -21,7 +21,7 @@ def resolved_native_profile(profile, *, depth=0, seen=None):
         raise SlicerProfileError("Native profile inheritance is circular or too deep.")
     if not profile.file_asset.file or profile.file_asset.owner_id != profile.owner_id:
         raise SlicerProfileError("Native profile source is not owned or available.")
-    with profile.file_asset.file.open("rb") as source:
+    with profile.file_asset.file.storage.open(profile.file_asset.file.name, "rb") as source:
         raw = source.read(1024 * 1024 + 1)
     if len(raw) > 1024 * 1024 or hashlib.sha256(raw).hexdigest() != profile.content_sha256:
         raise SlicerProfileError("Native profile content changed since import.")
