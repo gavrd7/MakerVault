@@ -29,6 +29,8 @@ def validate_worker_3mf(data):
                 raise WorkerError("3MF archive expansion exceeds the limit.")
             raw = package.read("3D/3dmodel.model")
         root = ET.fromstring(raw)
+    except WorkerError:
+        raise
     except (ValueError, zipfile.BadZipFile, ET.ParseError, OSError):
         raise WorkerError("Invalid 3MF project geometry.") from None
     if root.tag != "{%s}model" % CORE_NS:
