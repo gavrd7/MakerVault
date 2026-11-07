@@ -1020,7 +1020,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           onClick={verifySelectedProfiles}>
           {verifyingProfiles ? "Running test slice…" : "Test slice and approve"}
         </button>
-      </div>
+      </div>}
       <div className="printingStack">
         {profiles.filter(item => item.engine === form.engine).map(profile =>
           <div className="cameraSourceRow" key={profile.id}>
