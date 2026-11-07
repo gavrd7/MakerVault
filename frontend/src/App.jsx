@@ -104,6 +104,7 @@ export default function App() {
         if (!active) return;
         setSlicerStatus({
           state: result.worker_configured ? "ready"
+            : result.preview_enabled ? "preview"
             : result.deployment_enabled ? "unavailable" : "not_installed",
         });
       } catch {
@@ -256,7 +257,7 @@ export default function App() {
   }
 
   function navigateSection(next) {
-    if (next === "MakerVault Slicer" && slicerStatus.state !== "ready") return;
+    if (next === "MakerVault Slicer" && !["ready", "preview"].includes(slicerStatus.state)) return;
     setMakerTagReturn(null);
     setSearchTarget(next === "Model Library" ? { type: "models", token: Date.now() } : null);
     setSection(next);
@@ -288,8 +289,8 @@ export default function App() {
       </div>
       <GlobalSearch onOpenResult={openSearchResult} onOpenAdvanced={openAdvancedSearch} />
       <nav>{NAV.map(n => <button key={n} className={section === n ? "active" : ""}
-        disabled={n === "MakerVault Slicer" && slicerStatus.state !== "ready"}
-        title={n === "MakerVault Slicer" && slicerStatus.state !== "ready"
+        disabled={n === "MakerVault Slicer" && !["ready", "preview"].includes(slicerStatus.state)}
+        title={n === "MakerVault Slicer" && !["ready", "preview"].includes(slicerStatus.state)
           ? "The optional slicer service is not available. See 3D Printing for details." : undefined}
         onClick={() => navigateSection(n)}>{n}</button>)}</nav>
       <div className="asideBottom">{config?.is_superuser && <a href="/admin/">Administration</a>}<a href="/accounts/logout/">Sign out</a></div>
