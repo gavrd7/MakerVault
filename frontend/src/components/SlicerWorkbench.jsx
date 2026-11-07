@@ -210,7 +210,12 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
   async function saveDraft(event) {
     event.preventDefault();
-    setError(""); setNotice(""); setBusy(true);
+    setError(""); setNotice("");
+    if (plateObjects.some(item => String(item.asset_id).startsWith("local:"))) {
+      setError("This plate contains temporary models. To save a persistent draft, first import those STL files with ‘Also save imported models to MakerVault Files’ selected.");
+      return;
+    }
+    setBusy(true);
     try {
       const { job } = await apiFetch("/api/printing/slicer/jobs/", {
         method: "POST",
