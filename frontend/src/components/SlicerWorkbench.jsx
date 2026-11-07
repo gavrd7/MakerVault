@@ -154,7 +154,12 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   function chooseSpool(id) {
     const spool = spools.find(item => String(item.id) === String(id));
     const hex = slicerSpoolHex(spool);
-    update("spool_id", id);
+    const materialChanged = spoolMaterial(selectedSpool) !== spoolMaterial(spool);
+    if (materialChanged) manuallyChosenProfiles.current.delete("filament");
+    setForm(current => ({
+      ...current, spool_id: id,
+      ...(materialChanged ? { filament_profile_id: "", filament_preset: "" } : {}),
+    }));
     // Never overwrite per-object colours explicitly edited by the user.
     if (hex) setPlateObjects(current => recolorUnmodifiedPlate(current, hex, manuallyColouredModels.current));
   }
@@ -636,10 +641,11 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         <label>Printer
           <select required disabled={!canPrepare || busy} value={form.printer_id} onChange={e => {
             const printer = printers.find(item => String(item.id) === e.target.value);
-            manuallyChosenProfiles.current.delete("printer");
+            manuallyChosenProfiles.current.clear();
             setForm(current => ({
               ...current, printer_id: e.target.value, nozzle_mm: String(printer?.nozzle_mm || "0.40"),
-              printer_profile_id: "", printer_preset: "",
+              printer_profile_id: "", filament_profile_id: "", process_profile_id: "",
+              printer_preset: "", filament_preset: "", process_preset: "",
             }));
           }}>
             <option value="">Choose an owned printer</option>
@@ -706,6 +712,15 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           {materialProfileMatches?.loading ? "Finding matching profiles…" : "Review matching filament profiles"}
         </button>
       </div>}
+      <div className="slicerProfileRecommendationActions">
+        <button type="button" onClick={() => {
+          manuallyChosenProfiles.current.clear();
+          setForm(current => ({
+            ...current, printer_profile_id: "", filament_profile_id: "",
+            process_profile_id: "", printer_preset: "", filament_preset: "", process_preset: "",
+          }));
+        }}>Restore suggested profiles</button>
+      </div>
       <h4>Selected profiles</h4>
       <div className="slicerSelectedProfiles formGrid">
         {forKind("printer").length > 0 && <label>Native printer profile (unverified)
