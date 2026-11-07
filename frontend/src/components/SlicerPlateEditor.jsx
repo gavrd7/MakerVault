@@ -377,7 +377,7 @@ export default function SlicerPlateEditor({
     }
   }, [objects, selected]);
 
-  return <section className="panel printingSection" aria-labelledby="slicer-plate-heading">
+  return <section className="panel printingSection slicerPlatePanel" aria-labelledby="slicer-plate-heading">
     <h3 id="slicer-plate-heading">Visual build plate</h3>
     <p>Arrange models, change their size and position, and preview the build plate. Multi-object slicing is not yet available.</p>
     <div className="formGrid">
