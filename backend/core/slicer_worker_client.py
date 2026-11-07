@@ -88,7 +88,9 @@ def _encode(raw, limit):
     return base64.b64encode(raw).decode("ascii")
 
 
-def run_remote_job(job_id, engine, version, model, printer_profile, filament_profile, process_profile, *, timeout_seconds=900):
+def run_remote_job(job_id, engine, version, model, printer_profile, filament_profile, process_profile, *, timeout_seconds=900, model_format="stl"):
+    if model_format not in {"stl", "3mf"}:
+        raise SlicerWorkerError("Unsupported slicer input format.")
     if not isinstance(timeout_seconds, int) or not 1 <= timeout_seconds <= 900:
         raise SlicerWorkerError("Invalid slicing timeout.")
     if engine not in {"orcaslicer", "crealityprint", "prusaslicer"} or not isinstance(version, str) or not version or len(version) > 80:
@@ -105,6 +107,8 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
         "filament_profile": _encode(filament_profile, MAX_REQUEST_PROFILE),
         "process_profile": _encode(process_profile, MAX_REQUEST_PROFILE),
     }
+    if model_format == "3mf":
+        payload["model_format"] = "3mf"
     session = _session()
     response = None
     try:
