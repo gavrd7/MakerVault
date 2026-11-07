@@ -314,6 +314,7 @@ def jobs(request):
             "jobs": [serialise(job, installed) for job in _rows(request.user)[:100]],
             "worker_configured": bool(installed),
             "can_cancel": request.user.has_perm("core.change_slicejob"),
+            "can_delete": request.user.has_perm("core.delete_slicejob"),
         })
     if not request.user.has_perm("core.add_fileasset"):
         return _error("You do not have permission to prepare slicing jobs.", 403)
