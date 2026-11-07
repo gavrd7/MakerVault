@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "backend"))
 sys.path.insert(0, str(ROOT))
 
-from core.slicer_plate_3mf import build_plate_3mf, NS
+from core.slicer_plate_3mf import build_plate_3mf, build_compound_plate_3mf, NS
 from slicer_worker.probe import fixture_stl
 from slicer_worker.three_mf_validation import validate_worker_3mf
 
@@ -44,63 +44,29 @@ def generate(path):
 
 
 def compound_preview(path, target):
-    """Test-only flattening: preserve two islands' XY placement as one mesh.
-
-    This does not support per-object material assignment and is NOT selected by
-    production slicing. It isolates Orca's plate-assignment behaviour.
-    """
-    with zipfile.ZipFile(path) as archive:
-        original = ET.fromstring(archive.read("3D/3dmodel.model"))
-        content_types = archive.read("[Content_Types].xml")
-        relationships = archive.read("_rels/.rels")
+    """Run the production compound builder against the same two source STLs."""
+    targets = [
+        ({"x_mm": -35, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100}, fixture_stl()),
+        ({"x_mm": 35, "y_mm": 0, "rotation_deg": 90, "scale_percent": 100}, fixture_stl()),
+    ]
+    data = build_compound_plate_3mf(targets, bed_width=220, bed_depth=220)
+    validate_worker_3mf(data)
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        root = ET.fromstring(archive.read("3D/3dmodel.model"))
     ns = "{" + NS + "}"
-    originals = original.findall("./" + ns + "resources/" + ns + "object")
-    transforms = original.findall("./" + ns + "build/" + ns + "item")
-    if len(originals) != 2 or len(transforms) != 2:
-        raise ValueError("Compound probe requires two model instances.")
-    merged = ET.Element(ns + "model", {
-        "unit": "millimeter", "{http://www.w3.org/XML/1998/namespace}lang": "en-US"
-    })
-    resources = ET.SubElement(merged, ns + "resources")
-    composite = ET.SubElement(resources, ns + "object", {"id": "1", "type": "model"})
-    mesh = ET.SubElement(composite, ns + "mesh")
-    vertices = ET.SubElement(mesh, ns + "vertices")
-    triangles = ET.SubElement(mesh, ns + "triangles")
-    for obj, item in zip(originals, transforms):
-        m = [float(value) for value in item.attrib["transform"].split()]
-        if len(m) != 12:
-            raise ValueError("Unexpected 3MF model transform.")
-        source_vertices = obj.findall("./" + ns + "mesh/" + ns + "vertices/" + ns + "vertex")
-        source_faces = obj.findall("./" + ns + "mesh/" + ns + "triangles/" + ns + "triangle")
-        offset = len(vertices)
-        for vertex in source_vertices:
-            x, y, z = (float(vertex.attrib[key]) for key in ("x", "y", "z"))
-            placed = (
-                m[0] * x + m[3] * y + m[6] * z + m[9],
-                m[1] * x + m[4] * y + m[7] * z + m[10],
-                m[2] * x + m[5] * y + m[8] * z + m[11],
-            )
-            ET.SubElement(vertices, ns + "vertex", {
-                axis: format(value, ".6f")
-                for axis, value in zip(("x", "y", "z"), placed)
-            })
-        for face in source_faces:
-            ET.SubElement(triangles, ns + "triangle", {
-                name: str(offset + int(face.attrib[name]))
-                for name in ("v1", "v2", "v3")
-            })
-    build = ET.SubElement(merged, ns + "build")
-    ET.SubElement(build, ns + "item", {"objectid": "1",
-        "transform": "1 0 0 0 1 0 0 0 1 0 0 0"})
+    meshes = root.findall("./" + ns + "resources/" + ns + "object/" + ns + "mesh")
+    if len(meshes) != 1:
+        raise ValueError("The production compound builder did not generate one safe mesh.")
+    vertices = meshes[0].find(ns + "vertices")
+    triangles = meshes[0].find(ns + "triangles")
+    positions = [float(v.attrib["x"]) for v in vertices]
+    if len(triangles) != 8 or max(positions) - min(positions) < 60:
+        raise ValueError("The production builder lost geometry or the separate X positions.")
     target = Path(target)
     if target.exists() or target.is_symlink():
-        raise ValueError("Composite output already exists.")
-    with zipfile.ZipFile(target, "x", compression=zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr("3D/3dmodel.model", ET.tostring(merged, encoding="utf-8", xml_declaration=True))
-        archive.writestr("[Content_Types].xml", content_types)
-        archive.writestr("_rels/.rels", relationships)
-    validate_worker_3mf(target.read_bytes())
-    print("Created test-only combined-mesh 3MF fixture: " + str(target))
+        raise ValueError("Compound output already exists.")
+    target.write_bytes(data)
+    print("Created production-builder compound 3MF fixture: " + str(target))
 
 
 def main():
