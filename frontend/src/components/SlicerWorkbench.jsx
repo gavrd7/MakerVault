@@ -773,6 +773,15 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             onChange={event => setSaveGcodeToLibrary(event.target.checked)} />
           Automatically add generated G-code to MakerVault's G-code library after a successful slice
         </label>
+      {["orcaslicer", "crealityprint"].includes(form.engine) && nativePlate?.id === form.printer_profile_id &&
+        <div className="slicerNativeVolume" aria-label="Native slicer build volume">
+          <strong>Build volume</strong>
+          <span>{nativePlate.loading ? "Loading…" :
+            ["available", "partial"].includes(nativePlate.plate?.status) && Array.isArray(nativePlate.plate?.size_mm)
+              ? nativePlate.plate.size_mm.join(" × ") + " mm"
+              : "Not available from this profile"}</span>
+        </div>}
+      <div className="slicerDraftActions">
         <div className="full settingsActions">
           <button type="submit" value="draft" disabled={!canPrepare || busy || loading || !stlFiles.length || !printers.length}>{busy ? "Saving…" : "Save slicing draft"}</button>
           {workerConfigured && engines.some(engine => engine.key === form.engine && engine.available) &&
@@ -782,23 +791,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               {busy ? "Preparing…" : "Save and slice"}
             </button>}
         </div>
-      </form>
-      {["orcaslicer", "crealityprint"].includes(form.engine) && nativePlate?.id === form.printer_profile_id && <div className="cameraSourceRow" aria-label="Native slicer build plate information">
-        <div className="cameraSourceIdentity">
-          <strong>Native {form.engine === "crealityprint" ? "Creality Print" : "OrcaSlicer"} build volume</strong>
-          {nativePlate.loading ? <small>Reading machine preset…</small> :
-            ["available", "partial"].includes(nativePlate.plate?.status) ?
-              <>
-                <small>Declared extent: {nativePlate.plate.size_mm.join(" × ")} mm (X × Y × Z)</small>
-                {nativePlate.plate.status === "partial" &&
-                  <small>Other machine settings remain inherited from: {nativePlate.plate.parent}. Parent profile verification is still required.</small>}
-                <small>This is the source preset's bed polygon extent, not a verified fit or placement check.</small>
-              </> :
-            nativePlate.plate?.status === "requires_parent" ?
-              <small>Parent machine preset required: {nativePlate.plate.parent}</small> :
-              <small>{nativePlate.error || nativePlate.plate?.reason || "Build volume is not available from this preset."}</small>}
-        </div>
-      </div>}
+      </div>
       {!stlFiles.length && <p>Add a plain-text STL model to Files or Model Library before preparing a slicing draft.</p>}
     </section>
     <aside className="panel printingSection slicerProfileSidebar" aria-label="Profile management">
@@ -821,15 +814,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           {materialProfileMatches?.loading ? "Finding matching profiles…" : "Review matching filament profiles"}
         </button>
       </div>}
-      <div className="slicerProfileRecommendationActions">
-        <button type="button" onClick={() => {
-          manuallyChosenProfiles.current.clear();
-          setForm(current => ({
-            ...current, printer_profile_id: "", filament_profile_id: "",
-            process_profile_id: "", printer_preset: "", filament_preset: "", process_preset: "",
-          }));
-        }}>Restore suggested profiles</button>
-      </div>
       <h4>Selected profiles</h4>
       <div className="slicerSelectedProfiles formGrid">
         {forKind("printer").length > 0 && <label>Native printer profile (unverified)
@@ -880,6 +864,15 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         <label>Depth (mm)<input type="number" min="1" max="1000" step="1" value={customBed.y} onChange={e => setCustomBed(current => ({ ...current, y: e.target.value }))} /></label>
         <p className="full">Preview-only override; does not modify or certify the engine's native printer profile.</p>
       </div>}
+      <div className="slicerProfileRecommendationActions">
+        <button type="button" onClick={() => {
+          manuallyChosenProfiles.current.clear();
+          setForm(current => ({
+            ...current, printer_profile_id: "", filament_profile_id: "",
+            process_profile_id: "", printer_preset: "", filament_preset: "", process_preset: "",
+          }));
+        }}>Restore suggested profiles</button>
+      </div>
     </aside>
     </div>
 
