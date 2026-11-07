@@ -38,6 +38,20 @@ class OfficialNativeProfileChainTests(SimpleTestCase):
         self.assertEqual(len(chain), 3)
         self.assertEqual(fetch.call_count, 3)
 
+    @patch("core.slicer_official_chain.fetch_official_profile")
+    @patch("core.slicer_official_chain.orca_entries")
+    def test_non_creality_vendor_uses_its_own_pinned_parent_chain(self, index, fetch):
+        index.return_value = self.entries
+        fetch.side_effect = self.fetch
+        chain = official_profile_chain(
+            "orcaslicer", "printer", "K1 0.4 nozzle", "machine/k1.json", "Prusa"
+        )
+        self.assertEqual([row[0] for row in chain], [
+            "fdm_base", "fdm_creality_common", "K1 0.4 nozzle",
+        ])
+        self.assertEqual(index.call_args.args, ("Prusa", "printer"))
+        self.assertTrue(all(call.args[3] == "Prusa" for call in fetch.call_args_list))
+
     @patch("core.slicer_official_chain.fetch_creality_profile")
     @patch("core.slicer_official_chain.creality_entries")
     def test_creality_uses_own_pinned_parents(self, index, fetch):
