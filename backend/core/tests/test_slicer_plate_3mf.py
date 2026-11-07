@@ -1,6 +1,6 @@
 import io
 import zipfile
-from xml.etree import ElementTree as ET
+from defusedxml import ElementTree as ET
 from django.test import SimpleTestCase
 from core.slicer_approval import fixture_stl
 from core.slicer_plate_3mf import build_plate_3mf, NS
