@@ -30,6 +30,7 @@ from .slicer_official_profiles import (
     REF as OFFICIAL_ORCA_REF,
 )
 from django.core.files.base import ContentFile
+from .slicer_approval import approve_profiles_for_worker
 from .slicer_execution import (
     SlicerExecutionError, verified_installation, validate_scheduling, queue_draft,
 )
@@ -257,6 +258,32 @@ def engines(request):
         # Never infer an installed container merely because code is present.
         "deployment_enabled": os.environ.get("MAKERVAULT_SLICER_EXECUTION_ENABLED") == "1",
         "preview_enabled": os.environ.get("MAKERVAULT_SLICER_PREVIEW_ENABLED") == "1" and request.user.is_superuser,
+    })
+
+
+@login_required
+@require_http_methods(["POST"])
+def approve_native_profiles(request):
+    """Explicit superuser fixture verification. Importing never approves profiles."""
+    if not request.user.is_superuser:
+        return _error("Only an administrator can verify slicing profiles.", 403)
+    if len(request.body) > 4096:
+        return _error("Fixture approval request is too large.", 413)
+    try:
+        data = json.loads(request.body.decode("utf-8"))
+        if not isinstance(data, dict) or set(data) != {"engine", "engine_version", "profiles"}:
+            raise ValueError("Select one engine and three matching native profiles.")
+        engine = get_engine(data["engine"]).key
+        version = _preset(data, "engine_version", 80)
+        result = approve_profiles_for_worker(
+            owner=request.user, engine=engine, version=version,
+            profile_ids=data["profiles"],
+        )
+    except (ValueError, KeyError, TypeError, UnicodeDecodeError, SlicerExecutionError) as exc:
+        return _error(str(exc), 409)
+    return JsonResponse({
+        "verified": True, **result,
+        "warning": "Fixture verified for this exact engine, image, binary and profile trio only. No print was started.",
     })
 
 
