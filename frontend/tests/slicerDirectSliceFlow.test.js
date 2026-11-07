@@ -67,3 +67,10 @@ test("printer model catalogue failures are shown to the user", () => {
   assert.match(source, /Could not load printer models from the official catalogue/);
   assert.match(source, /setOfficialError\(/);
 });
+
+test("manual model search overrides dropdown without requiring a model selection", () => {
+  assert.match(source, /Manual printer\/model search \(optional\)/);
+  assert.match(source, /const q = \[officialManualModel\.trim\(\), officialQuery\.trim\(\)\]/);
+  assert.match(source, /!officialManualModel\.trim\(\) && officialModel/);
+  assert.match(source, /Typing here overrides the printer-model dropdown/);
+});
