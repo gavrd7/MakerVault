@@ -31,6 +31,21 @@ export default function SavedSlicerJobsModal({ onClose, onOpenSlicer, assetIds =
     (job.settings?.plate_objects || []).some(part => allowedIds.has(String(part.asset_id))));
   const visible = matching.filter(job => showAll || job.status === "draft");
 
+  async function addGcodeToLibrary(job) {
+    if (job.status !== "completed" || !job.output_asset_id || job.gcode_in_library) return;
+    setBusyId(job.id); setError("");
+    try {
+      await apiFetch("/api/printing/slicer/jobs/" + job.id + "/save-gcode/", {
+        method: "POST", body: {},
+      });
+      await reload();
+    } catch (err) {
+      setError(err.message || "Could not add the generated G-code to your library.");
+    } finally {
+      setBusyId("");
+    }
+  }
+
   async function cancel(job) {
     if (!["draft", "queued"].includes(job.status)) return;
     setBusyId(job.id); setError("");
@@ -64,6 +79,11 @@ export default function SavedSlicerJobsModal({ onClose, onOpenSlicer, assetIds =
             <button type="button" onClick={() => { onClose(); onOpenSlicer?.(); }}>Open in slicer</button>
             {job.status === "draft" && job.can_slice &&
               <span title="A verified engine is available. Open the slicer to start this draft.">Ready to slice</span>}
+            {job.status === "completed" && job.output_asset_id && !job.gcode_in_library &&
+              <button type="button" disabled={Boolean(busyId)} onClick={() => addGcodeToLibrary(job)}>
+                {busyId === job.id ? "Saving…" : "Add G-code to library"}
+              </button>}
+            {job.status === "completed" && job.gcode_in_library && <small>G-code in library</small>}
             {["draft", "queued"].includes(job.status) &&
               <button type="button" disabled={Boolean(busyId)} onClick={() => cancel(job)}>
                 {busyId === job.id ? "Cancelling…" : "Cancel draft"}
