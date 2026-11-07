@@ -273,7 +273,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     try {
       const q = officialQuery.trim();
       if (q.length < 2) throw new Error("Enter at least two characters to search official presets.");
-      const params = new URLSearchParams({ q, kind: importKind, vendor: "Creality" });
+      const params = new URLSearchParams({ q, kind: importKind, vendor: "Creality", engine: form.engine });
       const result = await apiFetch("/api/printing/slicer/official-profiles/?" + params.toString());
       setOfficialResults(result);
     } catch (err) {
@@ -289,15 +289,16 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       const result = await apiFetch("/api/printing/slicer/official-profiles/", {
         method: "POST",
         body: {
-          kind: importKind, vendor: "Creality",
+          kind: importKind, vendor: "Creality", engine: form.engine,
           name: candidate.name, sub_path: candidate.sub_path,
         },
       });
       setProfiles(current => [result.profile, ...current]);
       setForm(current => ({
-        ...current, engine: "orcaslicer", engine_version: result.engine_version,
+        ...current, engine: result.profile.engine, engine_version: result.engine_version,
       }));
-      setNotice("Official Orca preset imported as an unverified candidate. Its native parent presets must also be present and verified before slicing.");
+      setNotice("Official " + (result.profile.engine === "crealityprint" ? "Creality Print" : "OrcaSlicer") +
+        " profile imported as an unverified candidate. Its native parent presets must also be verified before slicing.");
     } catch (err) {
       setOfficialError(err.message || "Could not import the selected official native profile.");
     } finally {
@@ -608,12 +609,13 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     {profileModal === "search" && <Modal title="Search official profiles" onClose={() => setProfileModal("")} wide>
       <div className="printingActionGroup" aria-labelledby="slicer-official-profiles-heading">
         <h4 id="slicer-official-profiles-heading">Search official slicer profiles</h4>
-        <p>Browse the original OrcaSlicer v2.4.2 Creality preset catalogue (K1/K2 and related profiles). Other engines and vendors will be added once their native profile catalogues are verified. Official presets are imported as unverified candidates, not automatically approved.</p>
+        <p>Search the selected engine's pinned official Creality catalogue for K1/K2 printer, filament and process presets. Imports are unverified candidates; native profiles are not shared between engines.</p>
         <form className="formGrid" onSubmit={searchOfficialProfiles}>
           <label>Official source
-            <select value={form.engine === "orcaslicer" ? "orcaslicer" : "unavailable"} disabled>
-              <option value="orcaslicer">OrcaSlicer · official v2.4.2 / Creality</option>
-              <option value="unavailable">Official catalogue not yet connected for this engine</option>
+            <select value={["orcaslicer", "crealityprint"].includes(form.engine) ? form.engine : "unavailable"} disabled>
+              <option value="orcaslicer">OrcaSlicer · v2.4.2 / Creality</option>
+              <option value="crealityprint">Creality Print · v7.3.0 / Creality</option>
+              <option value="unavailable">No pinned official catalogue for this engine</option>
             </select>
           </label>
           <label>Profile type
@@ -627,7 +629,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             <input value={officialQuery} maxLength="80" onChange={e => setOfficialQuery(e.target.value)} placeholder="e.g. Creality K2, Generic PLA, 0.20mm" />
           </label>
           <div className="full settingsActions">
-            <button type="submit" disabled={officialBusy || form.engine !== "orcaslicer" || officialQuery.trim().length < 2}>
+            <button type="submit" disabled={officialBusy || !["orcaslicer", "crealityprint"].includes(form.engine) || officialQuery.trim().length < 2}>
               {officialBusy ? "Searching…" : "Search official profiles"}
             </button>
           </div>
