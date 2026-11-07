@@ -53,3 +53,11 @@ test("profile import screens provide back navigation and local success feedback"
   assert.match(source, /officialImportNotice && <p role="status"/);
   assert.match(source, /setOfficialImportNotice\(imported\.name/);
 });
+
+test("official profile search narrows by selected printer and can show all candidates", () => {
+  assert.match(source, /filterOfficialByPrinter && selectedPrinter\?\.id/);
+  assert.match(source, /params\.set\("printer_id", String\(selectedPrinter\.id\)\)/);
+  assert.match(source, /Show profiles for/);
+  assert.match(source, /setFilterOfficialByPrinter\(e\.target\.checked\)/);
+  assert.match(source, /name-based, not verified compatibility/);
+});
