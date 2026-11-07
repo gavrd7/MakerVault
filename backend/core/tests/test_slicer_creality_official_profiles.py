@@ -2,7 +2,7 @@ from unittest.mock import patch
 from django.test import SimpleTestCase
 
 from core.slicer_creality_official_profiles import (
-    OfficialProfileError, fetch_creality_profile, search_creality_profiles,
+    OfficialProfileError, fetch_creality_profile, search_creality_profiles, available_creality_vendors,
 )
 
 
@@ -27,6 +27,20 @@ class PinnedCrealityProfileTests(SimpleTestCase):
         self.assertEqual(found["total_matches"], 2)
         self.assertFalse(any("private" in row["sub_path"] for row in found["profiles"]))
 
+    @patch("core.slicer_creality_official_profiles._manifest")
+    def test_cross_manufacturer_pinned_catalogue_search(self, manifest):
+        vendors = {row["id"] for row in available_creality_vendors()}
+        self.assertTrue({"Prusa", "Voron", "Anycubic", "Elegoo", "Custom"} <= vendors)
+        manifest.return_value = {
+            **self.manifest,
+            "name": "Prusa",
+            "machine_list": [{"name": "Prusa MK4 0.4 nozzle", "sub_path": "machine/Prusa MK4 0.4 nozzle.json"}],
+        }
+        found = search_creality_profiles("MK4", "printer", vendor="Prusa")
+        self.assertEqual(found["vendor"], "Prusa")
+        self.assertEqual(found["profiles"][0]["name"], "Prusa MK4 0.4 nozzle")
+        self.assertEqual(manifest.call_args.args, ("Prusa",))
+
     @patch("core.slicer_creality_official_profiles._get_json")
     @patch("core.slicer_creality_official_profiles._manifest")
     def test_import_is_pinned_and_rejects_wrong_type(self, manifest, get):
@@ -44,3 +58,4 @@ class PinnedCrealityProfileTests(SimpleTestCase):
             fetch_creality_profile(
                 "printer", "Creality K1 0.4 nozzle", "machine/Creality K1 0.4 nozzle.json"
             )
+
