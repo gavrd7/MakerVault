@@ -20,7 +20,7 @@ const initialForm = {
  * Safe preparation-only entry point. A verified slicing worker, real engine-native
  * profile IDs and isolated execution are required before enabling a Slice action.
  */
-export default function SlicerWorkbench({ files = [], printers = [], spools = [], canPrepare = false, canPrint = false, onBack, onOpenGcode, onFilesUploaded }) {
+export default function SlicerWorkbench({ files = [], printers = [], spools = [], canPrepare = false, canPrint = false, onBack, onOpenGcode, onFilesUploaded, initialDraftId = null }) {
   const [form, setForm] = useState(initialForm);
   const [engines, setEngines] = useState([]);
   const [jobs, setJobs] = useState([]);
@@ -43,6 +43,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [previewFile, setPreviewFile] = useState(null);
   const [plateObjects, setPlateObjects] = useState([]);
   const [saveGcodeToLibrary, setSaveGcodeToLibrary] = useState(false);
+  const openedDraftRef = useRef(null);
   const manuallyColouredModels = useRef(new Set());
   const manuallyChosenProfiles = useRef(new Set());
   const [profileSuggestions, setProfileSuggestions] = useState({});
@@ -241,6 +242,47 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       setLoading(false);
     }
   }
+
+  function loadSavedDraft(job) {
+    if (!job) return;
+    setShowDrafts(false);
+    if (job.status !== "draft") {
+      setShowDrafts(true);
+      setNotice("This slicing job is " + job.status + ". Select a saved draft to edit, or review its output.");
+      return;
+    }
+    const savedObjects = job.settings?.plate_objects || [];
+    manuallyColouredModels.current = new Set(savedObjects.map(item => item.instance_id));
+    manuallyChosenProfiles.current = new Set(["printer", "filament", "process"]);
+    setPlateObjects(savedObjects);
+    setForm(current => ({
+      ...current,
+      engine: job.engine, engine_version: job.engine_version,
+      input_asset_id: job.input_asset?.id || "",
+      printer_id: job.printer?.id || "",
+      spool_id: job.spool?.id || "",
+      printer_preset: job.printer_preset,
+      filament_preset: job.filament_preset,
+      process_preset: job.process_preset,
+      printer_profile_id: job.printer_profile_id || "",
+      filament_profile_id: job.filament_profile_id || "",
+      process_profile_id: job.process_profile_id || "",
+      nozzle_mm: job.nozzle_mm,
+    }));
+    setSaveGcodeToLibrary(job.settings?.save_gcode_to_library === true);
+    setNotice("Saved slicing draft loaded. Saving edits creates a new draft, preserving the original.");
+    window.requestAnimationFrame(() =>
+      document.getElementById("slicer-plate-heading")?.scrollIntoView({ behavior: "smooth" })
+    );
+  }
+
+  useEffect(() => {
+    if (loading || !initialDraftId || openedDraftRef.current === initialDraftId) return;
+    const job = jobs.find(item => item.id === initialDraftId);
+    openedDraftRef.current = initialDraftId;
+    if (job) loadSavedDraft(job);
+    else setError("That saved slicing draft is not available to this account.");
+  }, [loading, initialDraftId, jobs]);
 
   useEffect(() => { refresh(); }, []);
 
@@ -1041,27 +1083,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             {(job.status === "queued" || job.status === "running") && <progress value={job.progress || 0} max="100" aria-label="Slicing progress" />}
           </div>
           <div className="cameraSourceActions">
-            {job.status === "draft" && job.settings?.plate_objects?.length > 0 && <button type="button" disabled={busy} onClick={() => {
-              // A saved plate carries explicit colours; do not replace them with the spool default.
-              manuallyColouredModels.current = new Set(job.settings.plate_objects.map(item => item.instance_id));
-              setPlateObjects(job.settings.plate_objects);
-              setForm(current => ({
-                ...current, engine: job.engine, engine_version: job.engine_version,
-                input_asset_id: job.input_asset?.id || "",
-                printer_id: job.printer?.id || "",
-                spool_id: job.spool?.id || "",
-                printer_preset: job.printer_preset,
-                filament_preset: job.filament_preset,
-                process_preset: job.process_preset,
-                printer_profile_id: job.printer_profile_id || "",
-                filament_profile_id: job.filament_profile_id || "",
-                process_profile_id: job.process_profile_id || "",
-                nozzle_mm: job.nozzle_mm,
-              }));
-              setSaveGcodeToLibrary(job.settings?.save_gcode_to_library === true);
-              setNotice("Visual plate draft loaded for editing. Saving will create a new draft.");
-              document.getElementById("slicer-plate-heading")?.scrollIntoView({ behavior: "smooth" });
-            }}>Edit visual plate</button>}
+            {job.status === "draft" && <button type="button" disabled={busy}
+              onClick={() => loadSavedDraft(job)}>Edit draft</button>}
             {job.can_slice && canPrepare && <button type="button" disabled={busy} onClick={() => startSlice(job)}>Slice now</button>}
             {mayCancel && (job.status === "draft" || job.status === "queued") && <button type="button" disabled={busy} onClick={() => cancelPending(job)}>Cancel {job.status === "queued" ? "queued slice" : "draft"}</button>}
             {job.status === "completed" && job.output_asset?.id && job.gcode_in_library && canPrint && <button type="button" className="primary" disabled={busy} onClick={() => requestPrint(job)}>Print from slicer</button>}
