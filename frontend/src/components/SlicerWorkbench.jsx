@@ -388,6 +388,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           setOfficialError("Profile imported, but setting its default failed: " + (err.message || "Please use Manage profiles."));
         }
       }
+      manuallyChosenProfiles.current.add(imported.kind);
       setProfiles(current => [
         imported,
         ...current.map(profile => asDefault && imported.is_default &&
