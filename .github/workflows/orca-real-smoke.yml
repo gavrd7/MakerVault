@@ -1,0 +1,55 @@
+name: OrcaSlicer real binary smoke test
+
+on:
+  pull_request:
+    paths:
+      - "slicer_worker/**"
+      - "scripts/install_slicer_staging.py"
+      - "scripts/probe_slicer_staging.py"
+      - ".github/workflows/orca-real-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  official-orca-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare GitHub Actions staging environment (no app services)
+        run: printf 'POSTGRES_PASSWORD=ci-only-placeholder\n' > .env
+      - name: Download SHA-256 verified official Orca 2.4.2 and build isolated image
+        run: python3 scripts/install_slicer_staging.py prepare-orca
+      - name: Check restricted worker loads real executable
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE=$(sed -n 's/^MAKERVAULT_SLICER_WORKER_IMAGE=//p' .slicer-staging.env)
+          test "${IMAGE#sha256:}" != "$IMAGE"
+          echo "Testing pinned OrcaSlicer AppImage runtime (no printer, no network)."
+          set +e
+          timeout 90s docker run --rm --network none --read-only \
+            --user 10001:10001 --cap-drop ALL \
+            --security-opt no-new-privileges:true --pids-limit 96 \
+            --memory 3g --cpus 2 \
+            --tmpfs /tmp:rw,exec,nosuid,nodev,size=1g,mode=1777 \
+            -e APPIMAGE_EXTRACT_AND_RUN=1 -e QT_QPA_PLATFORM=offscreen \
+            -e QT_OPENGL=software -e LIBGL_ALWAYS_SOFTWARE=1 \
+            --entrypoint /opt/engines/orcaslicer.AppImage "$IMAGE" --help
+          STATUS=$?
+          set -e
+          echo "Official Orca runtime exit code: $STATUS"
+          if [ "$STATUS" -eq 124 ]; then
+            echo "::error::Official Orca AppImage timed out in the isolated worker."
+            exit 1
+          fi
+          if [ "$STATUS" -ne 0 ]; then
+            echo "::error::Official Orca AppImage cannot start with the checked CLI command."
+            exit 1
+          fi
+          echo "Official Orca CLI started. This is NOT a validated G-code slice."
+      - name: Explain remaining fixture gate
+        run: |
+          echo "::notice::Native K1/K2 printer, filament and process profiles and an actual extrusion-bearing G-code fixture still require approval."
