@@ -36,6 +36,14 @@ test("last-used only matches same printer and exact engine version",()=>{
   assert.equal(chooseSuggestedProfile(profiles,[],{engine:"crealityprint",version:"7.3.0",kind:"printer",printer:{id:"p3",model:"Creality K3"},nozzle:"0.4"}),null);
 });
 
+test("K2 Combo uses the base K2 native machine profile",()=>{
+  const chosen=chooseSuggestedProfile([
+    make("k2","printer","Creality K2 0.4 nozzle"),
+  ],[],{engine:"crealityprint",version:"7.3.0",kind:"printer",
+        printer:{id:"k2",model:"Creality K2 Combo"},nozzle:"0.4"});
+  assert.equal(chosen?.profile.id,"k2");
+});
+
 test("PETG profile filter excludes incompatible PLA defaults",()=>{
   const profiles=[make("pla","filament","Generic PLA",{is_default:true}),
     make("petg","filament","Generic PETG")];
