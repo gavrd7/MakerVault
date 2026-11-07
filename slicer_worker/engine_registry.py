@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 from functools import lru_cache
 
-SUPPORTED = frozenset({"orcaslicer", "crealityprint"})
+SUPPORTED = frozenset({"orcaslicer", "crealityprint", "prusaslicer"})
 
 
 @lru_cache(maxsize=32)
