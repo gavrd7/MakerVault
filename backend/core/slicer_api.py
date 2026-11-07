@@ -9,6 +9,7 @@ from decimal import Decimal, InvalidOperation
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.db import IntegrityError, transaction
+from django.db.models.deletion import ProtectedError
 from django.views.decorators.http import require_http_methods
 
 from .models import FileAsset, Printer, SliceJob, Spool, SlicerProfile
@@ -409,6 +410,27 @@ def profiles(request):
     except IntegrityError:
         return _error("A profile with this engine, version, kind and name already exists.", 409)
     return JsonResponse({"profile": _profile_summary(profile), "execution_available": False}, status=201)
+
+
+@login_required
+@require_http_methods(["DELETE"])
+def delete_profile(request, profile_id):
+    """Delete only this user's profile registration; preserve its source FileAsset.
+
+    Slices retain immutable native-profile references. Protected records cannot
+    be removed until their dependent jobs have been resolved separately.
+    """
+    if not request.user.has_perm("core.delete_slicerprofile"):
+        return _error("You do not have permission to remove slicer profiles.", 403)
+    profile = SlicerProfile.objects.filter(pk=profile_id, owner=request.user).first()
+    if profile is None:
+        return _error("Slicer profile not found.", 404)
+    try:
+        profile.delete()
+    except ProtectedError:
+        return _error("This profile is referenced by saved slicing jobs and cannot be removed.", 409)
+    return JsonResponse({"removed": True, "profile_id": str(profile_id),
+                         "source_file_preserved": True})
 
 
 @login_required
