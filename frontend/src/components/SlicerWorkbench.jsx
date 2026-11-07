@@ -51,7 +51,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [nativePlate, setNativePlate] = useState(null);
   const [importFile, setImportFile] = useState(null);
   const [importKind, setImportKind] = useState("printer");
-  const [officialQuery, setOfficialQuery] = useState("Creality K2");
+  const [officialQuery, setOfficialQuery] = useState("");
   const [officialResults, setOfficialResults] = useState(null);
   const [materialProfileMatches, setMaterialProfileMatches] = useState(null);
   const [officialBusy, setOfficialBusy] = useState(false);
@@ -952,7 +952,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             </select>
           </label>
           <label className="full">Search official presets
-            <input value={officialQuery} maxLength="80" onChange={e => setOfficialQuery(e.target.value)} placeholder="e.g. Creality K2, Generic PLA, 0.20mm" />
+            <input value={officialQuery} maxLength="80" onChange={e => setOfficialQuery(e.target.value)} placeholder="e.g. printer model, Generic PLA, 0.20mm" />
           </label>
           <div className="full settingsActions">
             <button type="submit" disabled={officialBusy || !["orcaslicer", "crealityprint"].includes(form.engine) || officialQuery.trim().length < 2}>
