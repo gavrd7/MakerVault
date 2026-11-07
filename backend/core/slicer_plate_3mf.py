@@ -9,6 +9,7 @@ import re
 import struct
 import zipfile
 from xml.etree import ElementTree as ET
+from defusedxml import ElementTree as SafeET
 
 from .slicer_mesh import MeshInspectionError
 from .slicer_profiles import SlicerProfileError
@@ -191,7 +192,7 @@ def build_compound_plate_3mf(objects_with_stl, *, bed_width, bed_depth):
     source = build_plate_3mf(objects_with_stl, bed_width=bed_width, bed_depth=bed_depth)
     ns = "{" + NS + "}"
     with zipfile.ZipFile(io.BytesIO(source)) as archive:
-        root = ET.fromstring(archive.read("3D/3dmodel.model"))
+        root = SafeET.fromstring(archive.read("3D/3dmodel.model"))
         types = archive.read("[Content_Types].xml")
         relationships = archive.read("_rels/.rels")
     original_objects = root.findall("./" + ns + "resources/" + ns + "object")
