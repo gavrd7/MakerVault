@@ -75,6 +75,14 @@ def generate(destination, printer, *, opener=urlopen):
     target.mkdir(parents=True, exist_ok=True)
     for kind, name in FIXTURES[printer].items():
         data = resolved(kind, name, opener=opener)
+        if printer == "k2" and kind == "printer":
+            # Reference-only compatibility experiment: the pinned official
+            # Creality K2 profile sets 30 while Orca 2.4.2 enforces 10..18.
+            # Never copy this modification into production printer profiles.
+            if data.get("retraction_distances_when_cut") != "30":
+                raise ValueError("Official K2 retraction setting changed; review fixture before testing.")
+            data["retraction_distances_when_cut"] = "18"
+            print("K2 TEST-ONLY override: retraction_distances_when_cut 30 -> 18; NOT production-approved.", file=sys.stderr)
         # Real upstream system presets may contain print-host/postprocess keys.
         # Test-only sandbox strips these even if empty; production's normal
         # validator remains strict and must still independently approve files.
