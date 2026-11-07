@@ -18,6 +18,8 @@ import uuid
 
 from .runner import MAX_GCODE_BYTES, MAX_MODEL_BYTES, MAX_PROFILE_BYTES, WorkerError, run_prusa
 from .orca_runner import run_orca
+from .creality_runner import run_creality
+from .engine_registry import configured_engines
 
 
 MAX_REQUEST_BYTES = 48 * 1024 * 1024
@@ -57,46 +59,10 @@ class BoundedWorkerHTTPServer(ThreadingHTTPServer):
 
 
 
-@lru_cache(maxsize=8)
-def _binary_digest(path, file_size, modified_ns, inode):
-    """Cache only a pinned executable whose inode/size/mtime are unchanged."""
-    digest = hashlib.sha256()
-    with open(path, "rb") as stream:
-        while chunk := stream.read(1024 * 1024):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def configured_engine():
-    """A reviewed exact binary checksum is required; no GUI/CLI probing."""
-    token = os.environ.get("SLICER_WORKER_TOKEN", "")
-    engine = os.environ.get("SLICER_ENGINE", "orcaslicer")
-    binary = os.environ.get("SLICER_ENGINE_BINARY", "")
-    expected_sha256 = os.environ.get("SLICER_ENGINE_BINARY_SHA256", "")
-    version = os.environ.get("SLICER_ENGINE_VERSION", "")
-    if (
-        os.environ.get("SLICER_WORKER_ENABLED") != "1"
-        or len(token) < 32 or engine not in {"orcaslicer", "prusaslicer"}
-        or not binary or not version or len(version) > 80
-        or len(expected_sha256) != 64
-        or any(char not in "0123456789abcdef" for char in expected_sha256)
-    ):
-        return None
-    path = Path(binary)
-    if not path.is_absolute() or path.is_symlink() or not path.is_file():
-        return None
-    try:
-        stat = path.stat()
-        if stat.st_size <= 0 or stat.st_size > 1024 * 1024 * 1024:
-            return None
-        if _binary_digest(str(path), stat.st_size, stat.st_mtime_ns, stat.st_ino) != expected_sha256:
-            return None
-    except (OSError, ValueError):
-        return None
-    # The declared version must be cross-checked against a trusted release
-    # and real fixture receipt by the administrator before enabling the image.
-    return {"binary": path, "engine": engine, "version": version, "token": token,
-            "binary_sha256": expected_sha256}
+    """Legacy single-engine accessor for tests and older installations."""
+    entries = configured_engines()
+    return next(iter(entries.values()), None) if len(entries) == 1 else None
 
 
 def _decode_payload(payload):
@@ -109,7 +75,7 @@ def _decode_payload(payload):
         uuid.UUID(str(payload["job_id"]))
     except (TypeError, ValueError):
         raise WorkerError("Invalid job identifier.") from None
-    if payload["engine"] not in {"orcaslicer", "prusaslicer"}:
+    if payload["engine"] not in {"orcaslicer", "crealityprint", "prusaslicer"}:
         raise WorkerError("Unsupported isolated worker engine.")
     files = {}
     for key, limit in (
@@ -151,21 +117,25 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path != "/health":
             return self._json(404, {"error": "Not found."})
-        current = configured_engine()
+        engines = configured_engines()
+        current = next(iter(engines.values()), None) if len(engines) == 1 else None
         return self._json(200, {
-            "ready": bool(current), "engine": current["engine"] if current else None,
+            "ready": bool(engines), "engine": current["engine"] if current else None,
             "version": current["version"] if current else None,
             "binary_sha256": current["binary_sha256"] if current else None,
+            "engines": {key: {"version": value["version"],
+                              "binary_sha256": value["binary_sha256"], "ready": True}
+                        for key, value in engines.items()},
         })
 
     def do_POST(self):
         if self.path != "/v1/slice":
             return self._json(404, {"error": "Not found."})
-        current = configured_engine()
-        if not current:
-            return self._json(503, {"error": "Worker engine is not installed and verified."})
+        engines = configured_engines()
+        if not engines:
+            return self._json(503, {"error": "No verified slicing engine is installed."})
         supplied = self.headers.get("Authorization", "")
-        expected = "Bearer " + current["token"]
+        expected = "Bearer " + next(iter(engines.values()))["token"]
         if not hmac.compare_digest(supplied, expected):
             return self._json(403, {"error": "Worker request is unauthorized."})
         try:
@@ -181,19 +151,22 @@ class Handler(BaseHTTPRequestHandler):
             request = json.loads(self.rfile.read(length))
             if not isinstance(request, dict):
                 raise WorkerError("Job request must be a JSON object.")
-            if request.get("engine") != current["engine"] or request.get("engine_version") != current["version"]:
+            current = engines.get(request.get("engine"))
+            if not current or request.get("engine_version") != current["version"]:
                 raise WorkerError("Requested engine/version is unavailable.")
             files = _decode_payload(request)
             with tempfile.TemporaryDirectory(prefix="makervault-slice-") as tmp:
                 workdir = Path(tmp)
-                extension = ".json" if current["engine"] == "orcaslicer" else ".ini"
+                extension = ".json" if current["engine"] in {"orcaslicer", "crealityprint"} else ".ini"
                 for field, name in (
                     ("model", "input.stl"), ("printer_profile", "printer" + extension),
                     ("filament_profile", "filament" + extension),
                     ("process_profile", "process" + extension),
                 ):
                     (workdir / name).write_bytes(files[field])
-                runner = run_orca if current["engine"] == "orcaslicer" else run_prusa
+                runner = {"orcaslicer": run_orca,
+                          "crealityprint": run_creality,
+                          "prusaslicer": run_prusa}[current["engine"]]
                 receipt = runner(current["binary"], workdir)
                 data = (workdir / "output.gcode").read_bytes()
                 if not data or len(data) > MAX_OUTPUT_BYTES:
