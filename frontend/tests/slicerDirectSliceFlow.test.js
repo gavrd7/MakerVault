@@ -8,9 +8,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const source = fs.readFileSync(path.join(root, "src/components/SlicerWorkbench.jsx"), "utf8");
 
 test("main workbench directly submits approved slicing jobs after draft creation", () => {
-  assert.match(source, /form="slicer-configuration-form" value="slice" className="primary"/);
+  assert.match(source, /onClick=\{\(\) => saveDraft\("slice"\)\} className="primary"/);
   assert.match(source, /Save and slice/);
-  assert.match(source, /event\.nativeEvent\?\.submitter\?\.value === "slice"/);
+  assert.match(source, /const sliceNow = mode === "slice"/);
   assert.match(source, /apiFetch\("\/api\/printing\/slicer\/jobs\/" \+ job\.id \+ "\/start\/"/);
   assert.match(source, /workerConfigured && engines\.some/);
 });
@@ -73,4 +73,20 @@ test("manual model search overrides dropdown without requiring a model selection
   assert.match(source, /const q = \[officialManualModel\.trim\(\), officialQuery\.trim\(\)\]/);
   assert.match(source, /!officialManualModel\.trim\(\) && officialModel/);
   assert.match(source, /Typing here overrides the printer-model dropdown/);
+});
+
+test("plate actions call the shared workflow directly and show local errors", () => {
+  assert.match(source, /onClick=\{\(\) => saveDraft\("draft"\)\}/);
+  assert.match(source, /onClick=\{\(\) => saveDraft\("slice"\)\}/);
+  assert.match(source, /className="slicerPlateActionFeedback"/);
+  assert.match(source, /role="alert">\{error\}/);
+  assert.match(source, /Choose an engine version, printer and valid nozzle diameter/);
+});
+
+test("saved drafts can be deleted without touching model files", () => {
+  assert.match(source, /can_delete === true/);
+  assert.match(source, /job\.status !== "draft" \|\| !mayDeleteDraft/);
+  assert.match(source, /method: "DELETE"/);
+  assert.match(source, /Delete draft/);
+  assert.match(source, /The source model was preserved/);
 });
