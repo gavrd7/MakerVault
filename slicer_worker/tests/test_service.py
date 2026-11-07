@@ -66,6 +66,54 @@ class SlicerWorkerProtocolTests(TestCase):
                     _decode_payload({**self.payload(), **invalid})
 
 
+class MultiEngineInventoryTests(TestCase):
+    def test_orca_and_creality_can_be_approved_independently(self):
+        import hashlib
+        import json
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from slicer_worker.engine_registry import configured_engines
+        with TemporaryDirectory() as root:
+            a = Path(root) / "orca"
+            b = Path(root) / "creality"
+            for item in (a, b):
+                item.write_bytes(b"mock test fixture " + item.name.encode())
+                item.chmod(0o700)
+            entries = {
+                "orcaslicer": {"binary": str(a), "version": "2.4.2",
+                               "binary_sha256": hashlib.sha256(a.read_bytes()).hexdigest()},
+                "crealityprint": {"binary": str(b), "version": "7.3.0",
+                                  "binary_sha256": hashlib.sha256(b.read_bytes()).hexdigest()},
+            }
+            env = {"SLICER_WORKER_ENABLED": "1", "SLICER_WORKER_TOKEN": "x" * 40,
+                   "SLICER_ENGINES_JSON": json.dumps(entries)}
+            with patch.dict(os.environ, env, clear=True):
+                self.assertEqual(set(configured_engines()), set(entries))
+                entries["orcaslicer"]["binary_sha256"] = "0" * 64
+                with patch.dict(os.environ, {**env, "SLICER_ENGINES_JSON": json.dumps(entries)}, clear=True):
+                    # Invalid inventory is not silently accepted.
+                    self.assertEqual(configured_engines(), {})
+
+    def test_only_creality_does_not_require_orca(self):
+        import hashlib
+        import json
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from slicer_worker.engine_registry import configured_engines
+        with TemporaryDirectory() as root:
+            binary = Path(root) / "creality"
+            binary.write_bytes(b"test-only fixture")
+            binary.chmod(0o700)
+            with patch.dict(os.environ, {
+                "SLICER_WORKER_ENABLED": "1", "SLICER_WORKER_TOKEN": "x" * 40,
+                "SLICER_ENGINES_JSON": json.dumps({
+                    "crealityprint": {"binary": str(binary), "version": "7.3.0",
+                                      "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest()},
+                }),
+            }, clear=True):
+                self.assertEqual(set(configured_engines()), {"crealityprint"})
+
+
 class SlicerWorkerConcurrencyTests(TestCase):
     def test_worker_slot_allows_one_active_slice(self):
         from slicer_worker.service import SLICE_SLOT
