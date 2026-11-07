@@ -1,4 +1,6 @@
 import os
+import io
+import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
@@ -55,6 +57,44 @@ class RealEngineProbeTests(TestCase):
                 output.write_bytes(gcode)
                 with self.assertRaises(WorkerError):
                     _validate_gcode(output)
+
+    def test_two_object_3mf_requires_real_separated_extrusion(self):
+        ns = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+        vertices = '<vertices><vertex x="0" y="0" z="0"/><vertex x="10" y="0" z="0"/><vertex x="0" y="10" z="0"/></vertices>'
+        faces = '<triangles><triangle v1="0" v2="1" v3="2"/></triangles>'
+        objects = "".join(f'<object id="{i}" type="model"><mesh>{vertices}{faces}</mesh></object>'
+                          for i in (1, 2))
+        items = '<item objectid="1" transform="1 0 0 0 1 0 0 0 1 80 100 0"/>' + \\
+                '<item objectid="2" transform="1 0 0 0 1 0 0 0 1 150 100 0"/>'
+        content = (f'<model xmlns="{ns}" unit="millimeter"><resources>{objects}</resources>'
+                   f'<build>{items}</build></model>').encode()
+        fixture = self.root / "two-models.3mf"
+        with zipfile.ZipFile(fixture, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("3D/3dmodel.model", content)
+            archive.writestr("[Content_Types].xml", "<Types/>")
+            archive.writestr("_rels/.rels", "<Relationships/>")
+
+        def fake_runner(binary, root, *, timeout_seconds):
+            self.assertTrue((root / "input.3mf").is_file())
+            self.assertFalse((root / "input.stl").exists())
+            (root / "output.gcode").write_bytes(
+                b"G1 X81 Y100 E1.0\\nG1 X151 Y100 E2.0\\n"
+            )
+            return {"status": "completed"}
+
+        with patch("slicer_worker.probe.ENGINES", {"crealityprint": fake_runner}):
+            result = run_probe(**self.kwargs(), model=str(fixture), expected_objects=2)
+        self.assertEqual(result["status"], "passed")
+        self.assertEqual(result["object_count"], 2)
+        self.assertEqual(result["fixture"], "makervault-two-object-3mf-v1")
+
+        def incomplete(binary, root, *, timeout_seconds):
+            (root / "output.gcode").write_bytes(b"G1 X81 Y100 E1.0\\nG1 X85 Y100 E2.0\\n")
+            return {"status": "completed"}
+
+        with patch("slicer_worker.probe.ENGINES", {"crealityprint": incomplete}):
+            with self.assertRaisesRegex(WorkerError, "separated extrusion"):
+                run_probe(**self.kwargs(), model=str(fixture), expected_objects=2)
 
     def test_no_unapproved_or_symlink_binary(self):
         with self.assertRaises(WorkerError):
