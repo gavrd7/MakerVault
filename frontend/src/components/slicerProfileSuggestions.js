@@ -16,14 +16,23 @@ const profileMatchesMaterial = (profile, material) => {
   return new RegExp("(^| )" + material + "( |$)").test(text);
 };
 
-// Profiles carrying an explicit K1/K2 machine suffix must not be silently
-// applied to the other printer. Profiles with no such suffix remain candidates.
+// A native process/filament profile may carry a machine qualifier after @.
+// Never infer compatibility from K1/K2 names alone; treat ANY explicit machine
+// qualifier as requiring a match with the selected printer's identity.
 const machineSuffixCompatible = (profile, printer) => {
   if (!printer) return true;
-  const chosen = words(printer.model || printer.name);
-  const native = words(profile.name);
-  const suffix = native.match(/\bk[12]\b/g);
-  return !suffix || suffix.every(model => chosen.split(" ").includes(model));
+  const raw = String(profile.name || "");
+  const at = raw.indexOf("@");
+  if (at === -1) return true; // Generic material/process profile, still unverified.
+  const qualifier = raw.slice(at + 1)
+    .replace(/\b\d+(?:\.\d+)?\s*(?:mm\s*)?nozzle\b/gi, " ");
+  const expected = words(qualifier).split(" ")
+    .filter(t => t && !["all", "nozzle", "mm", "series", "combo"].includes(t));
+  if (!expected.length) return true;
+  const available = new Set(words([
+    printer.manufacturer, printer.brand, printer.model, printer.name,
+  ].filter(Boolean).join(" ")).split(" "));
+  return expected.every(t => available.has(t));
 };
 
 const printerMatch = (profile, printer, nozzle) => {
