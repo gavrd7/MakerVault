@@ -119,7 +119,7 @@ def _validate_plate_execution(job):
     if not objects:
         return True
     if job.engine not in {"orcaslicer", "crealityprint"}:
-        raise SlicerExecutionError("3MF plate jobs require OrcaSlicer or Creality Print.")
+        raise SlicerExecutionError("Verified multi-object slicing requires OrcaSlicer or Creality Print.")
     if not isinstance(objects, list) or not 1 <= len(objects) <= 12:
         raise SlicerExecutionError("Plate model list is invalid.")
     if not job.printer_profile_id:
