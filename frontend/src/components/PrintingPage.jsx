@@ -401,10 +401,10 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
                 : slicerStatus.state === "checking"
                   ? "Checking for an optional slicing worker…"
                   : "Could not check slicer availability. The slicer will remain disabled until availability can be confirmed."}</p>
-            <div className="printingHeroActions">
+            <div className="printingHeroActions" style={{ marginTop: 14 }}>
               <button type="button" disabled title="A verified slicer worker must be available before opening the slicer.">Open MakerVault Slicer</button>
             </div>
-            <p><a href="https://github.com/gavrd7/MakerVault/blob/feature/self-hosted-slicer-foundation/docs/guide/3d-printing/slicer.md" target="_blank" rel="noopener noreferrer">
+            <p style={{ textAlign: "center", marginTop: 20, marginBottom: 6 }}><a href="https://github.com/gavrd7/MakerVault/blob/feature/self-hosted-slicer-foundation/docs/guide/3d-printing/slicer.md" target="_blank" rel="noopener noreferrer">
               Slicer installation, engine management and update guidance ↗
             </a></p>
           </>}
