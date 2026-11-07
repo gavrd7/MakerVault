@@ -82,3 +82,37 @@ jobs:
           docker run --rm --network none --read-only --tmpfs /tmp:rw,nosuid,size=128m \
             --entrypoint python3 makervault-slicer-ci:candidate \
             -c 'from pathlib import Path; import slicer_worker.probe, slicer_worker.service; assert Path("/opt/engines/crealityprint.AppImage").is_file(); assert not Path("/opt/engines/orcaslicer.AppImage").exists()'
+      - name: Boot isolated staging worker from immutable local image ID
+        env:
+          POSTGRES_PASSWORD: ci-only-placeholder
+        run: |
+          IMAGE=$(docker image inspect --format '{{.Id}}' makervault-slicer-ci:candidate)
+          ENGINE_SHA=$(sha256sum slicer-engine-assets/crealityprint.AppImage | cut -d' ' -f1)
+          printf 'POSTGRES_PASSWORD=ci-only-placeholder\n' > .env
+          cat > .slicer-staging.env <<EOF
+          MAKERVAULT_SLICER_EXECUTION_ENABLED=1
+          MAKERVAULT_SLICER_WORKER_IMAGE=${IMAGE}
+          MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST=${IMAGE}
+          MAKERVAULT_SLICER_WORKER_TOKEN=0123456789012345678901234567890123456789
+          MAKERVAULT_SLICER_ENGINES_JSON='{"crealityprint":{"version":"7.3.0","binary_sha256":"${ENGINE_SHA}"}}'
+          SLICER_ENGINES_JSON='{"crealityprint":{"binary":"/opt/engines/crealityprint.AppImage","version":"7.3.0","binary_sha256":"${ENGINE_SHA}"}}'
+          EOF
+          chmod 600 .slicer-staging.env
+          docker compose --env-file .env --env-file .slicer-staging.env \
+            -f compose.yaml -f compose.slicer.staging.yaml \
+            up -d --no-deps slicer-worker
+          sleep 4
+          docker compose --env-file .env --env-file .slicer-staging.env \
+            -f compose.yaml -f compose.slicer.staging.yaml \
+            ps slicer-worker
+          docker compose --env-file .env --env-file .slicer-staging.env \
+            -f compose.yaml -f compose.slicer.staging.yaml \
+            exec -T slicer-worker python3 -c 'import json,urllib.request; r=json.load(urllib.request.urlopen("http://127.0.0.1:8088/health")); assert r["ready"] and "crealityprint" in r["engines"]'
+      - name: Remove staging worker used by candidate-image CI
+        if: always()
+        run: |
+          if test -f .slicer-staging.env; then
+            docker compose --env-file .env --env-file .slicer-staging.env \
+              -f compose.yaml -f compose.slicer.staging.yaml down --remove-orphans || true
+          fi
+
