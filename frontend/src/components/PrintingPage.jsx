@@ -12,6 +12,7 @@ import { suggestNextVersion } from "./FileVersionModal";
 import GcodeViewerModal from "./GcodeViewerModal";
 import GcodeLibraryModal from "./GcodeLibraryModal";
 import SlicerWorkbench from "./SlicerWorkbench";
+import SavedSlicerJobsModal from "./SavedSlicerJobsModal";
 import PrinterStartGcodeModal from "./PrinterStartGcodeModal";
 
 function grams(value) {
@@ -163,6 +164,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
   const [sourceNotice, setSourceNotice] = useState("");
   const [partJob, setPartJob] = useState(null);
   const [modal, setModal] = useState("");
+  const [savedSlicerOpen, setSavedSlicerOpen] = useState(false);
   const [editingLocation, setEditingLocation] = useState(null);
   const [deletingLocation, setDeletingLocation] = useState(null);
   const [locationError, setLocationError] = useState("");
@@ -361,6 +363,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       onBack={() => { if (onModelLibraryBack && searchTarget?.type === "models") onModelLibraryBack(); else setWorkspaceView("overview"); }}
       onChanged={load}
       searchTarget={searchTarget}
+      onOpenSlicer={() => onOpenSlicer ? onOpenSlicer() : setWorkspaceView("slicer")}
     />;
   }
 
@@ -398,6 +401,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
             <p>{slicerStatus.state === "preview" ? "Workbench preview enabled for staging: explore model placement and slicing profiles without an installed engine. Slicing execution remains disabled." : "Prepare models and slicing profiles in MakerVault's dedicated self-hosted slicer workspace."}</p>
             <div className="printingHeroActions">
               <button type="button" onClick={() => onOpenSlicer ? onOpenSlicer() : setWorkspaceView("slicer")}>Open MakerVault Slicer</button>
+              <button type="button" onClick={() => setSavedSlicerOpen(true)}>Saved slice drafts</button>
             </div>
           </> : <>
             <p role="status">{slicerStatus.state === "not_installed"
@@ -568,7 +572,8 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
           {recentModels.map(model => <article className="printingListRow printingModelRow" key={model.id}>
             <div><strong>{model.name}</strong><small>{model.project || "Standalone model"} · {model.revision_count} revision{model.revision_count === 1 ? "" : "s"}</small></div>
             <div className="printingBadges">{model.revisions.flatMap(r => r.assets).slice(0,3).map(asset => <Badge key={asset.id}>{asset.file.category_label}</Badge>)}</div>
-            {canChangeModel && <button onClick={() => setManageModel(model)}>Manage</button>}
+            <button type="button" onClick={() => setSliceDraftModel(model)}>Saved slice drafts</button>
+                {canChangeModel && <button onClick={() => setManageModel(model)}>Manage</button>}
           </article>)}
           {!recentModels.length && <div className="printingEmptyInline">No 3D models yet.</div>}
         </div>
@@ -668,6 +673,9 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       onClose={() => setClaimSlot(null)}
       onSaved={async () => { setClaimSlot(null); await load(); }}
     />}
+    {savedSlicerOpen && <SavedSlicerJobsModal
+      onClose={() => setSavedSlicerOpen(false)}
+      onOpenSlicer={() => onOpenSlicer ? onOpenSlicer() : setWorkspaceView("slicer")} />}
     {modal === "gcode" && <GcodeLibraryModal files={data?.gcode_files || []} projects={projects || []} canUpload={Boolean(config?.permissions?.add_file)} onClose={() => setModal("")} onSaved={load} />}
     {modal === "model" && <ModelModal projects={projects || []} canUpload={Boolean(config?.permissions?.add_file)} onClose={() => setModal("")} onSaved={saved} />}
     {modal === "print" && <PrintJobModal
@@ -1072,9 +1080,10 @@ function SpoolIdentityModal({ spool, onClose, onSaved }) {
   </Modal>;
 }
 
-function ModelLibraryPage({ models, files, gcodeFiles = [], printers, projects, canAddModel, canChangeModel, canDeleteModel, canUpload, onBack, onChanged, searchTarget = null }) {
+function ModelLibraryPage({ models, files, gcodeFiles = [], printers, projects, canAddModel, canChangeModel, canDeleteModel, canUpload, onBack, onChanged, searchTarget = null, onOpenSlicer }) {
   const [query, setQuery] = useState("");
   const [gcodeOpen, setGcodeOpen] = useState(false);
+  const [sliceDraftModel, setSliceDraftModel] = useState(null);
 
   useEffect(() => {
     if (searchTarget?.type !== "models" || !searchTarget.id) return;
@@ -1172,6 +1181,12 @@ function ModelLibraryPage({ models, files, gcodeFiles = [], printers, projects, 
       </div>
     </section>
 
+    {sliceDraftModel && <SavedSlicerJobsModal
+      title={"Saved slices · " + sliceDraftModel.name}
+      assetIds={sliceDraftModel.revisions.flatMap(rev => rev.assets)
+        .map(asset => asset.file?.id).filter(Boolean)}
+      onOpenSlicer={onOpenSlicer}
+      onClose={() => setSliceDraftModel(null)} />}
     {gcodeViewerFile && <GcodeViewerModal file={gcodeViewerFile} onClose={() => setGcodeViewerFile(null)} />}
     {gcodeOpen && <GcodeLibraryModal files={gcodeFiles} projects={projects} canUpload={canUpload} onClose={() => setGcodeOpen(false)} onSaved={onChanged} />}
     {addOpen && <ModelModal projects={projects} canUpload={canUpload} onClose={() => setAddOpen(false)} onSaved={async () => { setAddOpen(false); await onChanged(); }} />}
