@@ -49,23 +49,23 @@ def configured_engines():
         if key not in SUPPORTED or not isinstance(entry, dict) or set(entry) != {
             "binary", "version", "binary_sha256"
         }:
-            return {}
+            continue
         binary, version, digest = entry["binary"], entry["version"], entry["binary_sha256"]
         if not isinstance(binary, str) or not isinstance(version, str) or not 1 <= len(version) <= 80:
-            return {}
+            continue
         if not isinstance(digest, str) or len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
-            return {}
+            continue
         path = Path(binary)
         if not path.is_absolute() or path.is_symlink() or not path.is_file() or not os.access(path, os.X_OK):
-            return {}
+            continue
         try:
             stat = path.stat()
             if not 0 < stat.st_size <= 1024 * 1024 * 1024:
-                return {}
+                continue
             if _hash_binary(str(path), stat.st_size, stat.st_mtime_ns, stat.st_ino) != digest:
-                return {}
+                continue
         except (OSError, ValueError):
-            return {}
+            continue
         result[key] = {"engine": key, "binary": path, "version": version,
                        "binary_sha256": digest, "token": token}
     return result
