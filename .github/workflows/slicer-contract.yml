@@ -5,6 +5,7 @@ on:
     paths:
       - "slicer_worker/**"
       - "compose.slicer.yaml"
+      - ".dockerignore"
       - ".github/workflows/slicer-contract.yml"
   push:
     branches: [main]
@@ -38,3 +39,22 @@ jobs:
           printf 'POSTGRES_PASSWORD=ci-only-placeholder\n' > .env
           docker compose -f compose.yaml -f compose.slicer.yaml --profile slicer config --quiet
 
+
+  candidate-image-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stage a clearly non-executable CI fixture (never a real engine)
+        run: |
+          printf 'CI fixture only, not a slicing engine\\n' > /tmp/creality-fixture.AppImage
+          SHA=$(sha256sum /tmp/creality-fixture.AppImage | cut -d' ' -f1)
+          python3 -m slicer_worker.stage_engines \
+            --engine crealityprint 7.3.0 /tmp/creality-fixture.AppImage "$SHA"
+      - name: Build optional isolated worker candidate image
+        run: docker build -f slicer_worker/Dockerfile.bundle -t makervault-slicer-ci:candidate .
+      - name: Confirm image contains worker code and only the selected engine asset
+        run: |
+          docker run --rm --network none --read-only --tmpfs /tmp:rw,nosuid,size=128m \
+            --entrypoint python3 makervault-slicer-ci:candidate \
+            -c 'from pathlib import Path; import slicer_worker.probe, slicer_worker.service; assert Path("/opt/engines/crealityprint.AppImage").is_file(); assert not Path("/opt/engines/orcaslicer.AppImage").exists()'
