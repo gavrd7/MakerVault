@@ -352,11 +352,24 @@ def official_profiles(request):
     if request.method == "GET":
         selected = request.GET.get("engine", "orcaslicer")
         if request.GET.get("catalogues") == "1":
-            if selected == "orcaslicer":
-                return JsonResponse({"engine": selected, "vendors": available_official_vendors(), "ref": OFFICIAL_ORCA_REF})
-            if selected == "crealityprint":
-                return JsonResponse({"engine": selected, "vendors": available_creality_vendors(), "ref": OFFICIAL_CRE_REF})
-            return _error("No pinned official catalogue for this engine.")
+            try:
+                native = get_engine(selected)
+            except ValueError as exc:
+                return _error(str(exc))
+            sources = {
+                "orcaslicer": (available_official_vendors, OFFICIAL_ORCA_REF),
+                "crealityprint": (available_creality_vendors, OFFICIAL_CRE_REF),
+            }
+            provider = sources.get(selected)
+            return JsonResponse({
+                "engine": selected,
+                "vendors": provider[0]() if provider else [],
+                "ref": provider[1] if provider else None,
+                "native_profile_format": native.profile_format,
+                "manual_import_available": True,
+                "official_search_available": bool(provider),
+                "verified_for_execution": False,
+            })
         searcher = {
             "orcaslicer": search_official_profiles,
             "crealityprint": search_creality_profiles,
