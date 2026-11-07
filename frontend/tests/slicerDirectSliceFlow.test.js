@@ -8,7 +8,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const source = fs.readFileSync(path.join(root, "src/components/SlicerWorkbench.jsx"), "utf8");
 
 test("main workbench directly submits approved slicing jobs after draft creation", () => {
-  assert.match(source, /value="slice" className="primary"/);
+  assert.match(source, /form="slicer-configuration-form" value="slice" className="primary"/);
   assert.match(source, /Save and slice/);
   assert.match(source, /event\.nativeEvent\?\.submitter\?\.value === "slice"/);
   assert.match(source, /apiFetch\("\/api\/printing\/slicer\/jobs\/" \+ job\.id \+ "\/start\/"/);
@@ -26,4 +26,22 @@ test("visual build plate is the only model selector for slicing", () => {
   assert.match(source, /input_asset_id: plateObjects\[0\]\.asset_id/);
   assert.match(source, /if \(!plateObjects\.length\)/);
   assert.match(source, /!plateObjects\.length \|\| !printers\.length/);
+});
+
+test("slicer profile actions are consolidated in the saved profiles modal", () => {
+  assert.doesNotMatch(source, /profileModal === "manage"/);
+  assert.doesNotMatch(source, />Manage profiles<\/button>/);
+  assert.match(source, /setManagingSavedProfiles\(current => !current\)/);
+  assert.match(source, /Saved profiles \(/);
+  assert.match(source, /<ProfileActionIcon name="bookmark"/);
+  assert.match(source, /<ProfileActionIcon name="upload"/);
+});
+
+test("profile selectors replace duplicate editable preset labels", () => {
+  assert.match(source, /\["printer", "filament", "process"\]\.map\(kind/);
+  assert.doesNotMatch(source, /Engine printer preset \(draft label\)/);
+  assert.doesNotMatch(source, /Engine filament preset \(draft label\)/);
+  assert.doesNotMatch(source, /Engine process preset \(draft label\)/);
+  assert.match(source, /id="slicer-configuration-form"/);
+  assert.match(source, /footer=\{<>/);
 });
