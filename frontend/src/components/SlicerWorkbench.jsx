@@ -379,12 +379,19 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         <label>Engine
           <select required disabled={!canPrepare || busy || loading} value={form.engine} onChange={e => update("engine", e.target.value)}>
             {engines.length ? engines.map(engine =>
-              <option key={engine.key} value={engine.key}>{engine.label}{engine.key === "orcaslicer" ? " · default" : ""} · {engine.status} · not installed</option>
-            ) : <option value="orcaslicer">OrcaSlicer · default · not installed</option>}
+              <option key={engine.key} value={engine.key}>
+                {engine.label} · {engine.available ? "verified worker available" : "not installed / not verified"}
+              </option>
+            ) : <option value="orcaslicer">OrcaSlicer · status unknown</option>}
           </select>
         </label>
-        <label>Requested engine version (not yet installed)
-          <input required maxLength="80" disabled={!canPrepare || busy} value={form.engine_version} onChange={e => update("engine_version", e.target.value)} placeholder="Exact tested version when available" />
+        <p className="full slicerEngineStatus" role="status">
+          {engines.find(engine => engine.key === form.engine)?.available
+            ? "The selected engine has passed worker identity checks. Compatible native profiles are still required for slicing."
+            : "The selected engine is not installed or verified. You can prepare drafts, but slicing is disabled."}
+        </p>
+        <label>Requested engine version
+          <input required maxLength="80" disabled={!canPrepare || busy} value={form.engine_version} onChange={e => update("engine_version", e.target.value)} placeholder="Exact installed/version-matched engine version" />
         </label>
         <label className="full">Model STL
           <select required disabled={!canPrepare || busy} value={form.input_asset_id} onChange={e => update("input_asset_id", e.target.value)}>
