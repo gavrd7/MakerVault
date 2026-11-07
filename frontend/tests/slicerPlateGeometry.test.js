@@ -69,3 +69,20 @@ test("overlap check treats unknown geometry as unavailable rather than safe", ()
   assert.equal(plateFootprintsOverlap(a, box, b, box, 2), true);
   assert.equal(plateFootprintsOverlap(a, null, b, box, 2), null);
 });
+
+test("auto-arrange keeps every model's preview colour and identity unchanged", () => {
+  const objects = [
+    { ...item, instance_id: "blue", color: "#58b5e4" },
+    { ...item, instance_id: "orange", color: "#f59e0b" },
+  ];
+  const dimensions = {
+    blue: { width: 35, depth: 25 },
+    orange: { width: 35, depth: 25 },
+  };
+  const arranged = autoArrangePlate(objects, dimensions, 120, 120, 5);
+  assert.equal(arranged.error, undefined);
+  assert.deepEqual(arranged.objects.map(model => [model.instance_id, model.color]), [
+    ["blue", "#58b5e4"], ["orange", "#f59e0b"],
+  ]);
+  assert.deepEqual(objects.map(model => [model.x_mm, model.y_mm]), [[0, 0], [0, 0]]);
+});
