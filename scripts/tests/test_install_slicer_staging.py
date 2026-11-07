@@ -72,6 +72,27 @@ class ConfigurationTests(unittest.TestCase):
         self.assertNotIn("--profile", args)
         self.assertIn("--env-file", args)
 
+    def test_interrupted_build_can_resume_only_checksum_verified_assets(self):
+        import hashlib
+        import json
+        bundle = self.root / "slicer-engine-assets"
+        bundle.mkdir()
+        binary = bundle / "orcaslicer.AppImage"
+        binary.write_bytes(b"test-only candidate bytes")
+        digest = hashlib.sha256(binary.read_bytes()).hexdigest()
+        (bundle / "manifest.json").write_text(json.dumps({
+            "engines": {"orcaslicer": {
+                "version": installer.VERSION,
+                "binary": "/opt/engines/orcaslicer.AppImage",
+                "binary_sha256": digest,
+            }}
+        }))
+        result = installer._resume_staged_bundle()
+        self.assertIn(digest, result["app_approvals_json"])
+        binary.write_bytes(b"tampered candidate bytes")
+        with self.assertRaisesRegex(ValueError, "SHA-256"):
+            installer._resume_staged_bundle()
+
     def test_enable_and_disable_are_explicit_and_reversible(self):
         (self.root / "slicer-engine-assets").mkdir()
         calls = []
