@@ -30,6 +30,25 @@ The authenticated engine discovery API reports two separate signals: `deployment
 
 The status is checked at page load and every 60 seconds. An already-open slicer workspace also falls back to an unavailable message if a subsequent status refresh reports loss of the worker. This is a UI affordance only; backend job admission remains fail closed independently.
 
+## Real engine binary acceptance test (no activation)
+
+Before an engine is made available in the slicer settings, use the **offline acceptance probe** inside a disposable, restricted Linux test container that already contains an independently reviewed OrcaSlicer or Creality Print executable and its **resolved**, matching K1/K2 printer, filament and process JSON profiles. Nothing is downloaded or installed by the probe.
+
+Example with an independently obtained engine and profile files:
+
+```bash
+python3 -m slicer_worker.probe \
+  --engine orcaslicer --version 2.4.2 \
+  --binary /opt/engines/orcaslicer \
+  --printer /fixtures/printer.json \
+  --filament /fixtures/filament.json \
+  --process /fixtures/process.json
+```
+
+Run the same test with `--engine crealityprint`, its own version/binary and **Creality-native** JSON profiles. The command uses the exact production runner, a small tetrahedron STL, a hard timeout and G-code validation. On success it prints a JSON receipt containing the binary SHA-256, three input profile SHA-256s, G-code SHA-256, output size and fixture identity. The process exits nonzero if the binary cannot launch, the CLI stalls, a profile is rejected, no G-code is created or no extrusion moves are found. Because a source executable is untrusted until audited, this test must **not** run on the MakerVault web host or with printer credentials.
+
+**A passing probe is evidence, not an automatic engine approval.** Verify the binary came from the official upstream distribution; review the relevant licence, dependencies and container isolation. Record the image digest, exact binary hash, profile identities and test receipt. Do not equate the worker's binary-hash health check with successful slicing or activate the production configuration until the administrator fixture approval and release acceptance checks pass. Production deployment must ultimately provide this same preflight through the MakerVault administrator GUI.
+
 ## OrcaSlicer + Creality Print shared-worker prototype
 
 The first two target engines are now **OrcaSlicer and Creality Print** (PrusaSlicer remains an engine candidate and legacy worker adapter). A **single worker process** can enumerate independently pinned executables and select the requested engine at job dispatch time.
