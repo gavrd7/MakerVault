@@ -89,6 +89,7 @@ jobs:
             --tmpfs /tmp:rw,exec,nosuid,nodev,size=1g,mode=1777 \
             -e APPIMAGE_EXTRACT_AND_RUN=1 -e QT_QPA_PLATFORM=offscreen \
             -e QT_OPENGL=software -e LIBGL_ALWAYS_SOFTWARE=1 \
+            -e HOME=/tmp -e TMPDIR=/tmp \
             --mount type=bind,src=/tmp/makervault-orca-plate.3mf,dst=/fixtures/plate.3mf,readonly \
             --entrypoint /opt/engines/orcaslicer.AppImage "$IMAGE" \
             /fixtures/plate.3mf --info
