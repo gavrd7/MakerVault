@@ -184,7 +184,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
 
   useEffect(() => {
-    const id = form.engine === "orcaslicer" ? form.printer_profile_id : "";
+    const id = ["orcaslicer", "crealityprint"].includes(form.engine) ? form.printer_profile_id : "";
     if (!id) {
       setNativePlate(null);
       return undefined;
@@ -674,9 +674,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           <button type="submit" className="primary" disabled={!canPrepare || busy || loading || !stlFiles.length || !printers.length}>{busy ? "Saving…" : "Save slicing draft"}</button>
         </div>
       </form>
-      {form.engine === "orcaslicer" && nativePlate?.id === form.printer_profile_id && <div className="cameraSourceRow" aria-label="Native Orca build plate information">
+      {["orcaslicer", "crealityprint"].includes(form.engine) && nativePlate?.id === form.printer_profile_id && <div className="cameraSourceRow" aria-label="Native slicer build plate information">
         <div className="cameraSourceIdentity">
-          <strong>Native Orca printer build volume</strong>
+          <strong>Native {form.engine === "crealityprint" ? "Creality Print" : "OrcaSlicer"} build volume</strong>
           {nativePlate.loading ? <small>Reading machine preset…</small> :
             ["available", "partial"].includes(nativePlate.plate?.status) ?
               <>
