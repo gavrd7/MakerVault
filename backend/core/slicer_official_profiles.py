@@ -7,7 +7,7 @@ Source authenticity is not execution approval: every import stays candidate.
 from functools import lru_cache
 from pathlib import PurePosixPath
 
-from .slicer_official_filter import narrow_catalogue
+from .slicer_official_filter import narrow_catalogue, models_from_machines, fuzzy_name_match
 
 import requests
 
@@ -104,13 +104,17 @@ def _entries(vendor, kind):
     return entries
 
 
+def official_catalogue_models(vendor="Creality"):
+    return models_from_machines(_entries(vendor, "printer"))
+
+
 def search_official_profiles(query, kind, vendor="Creality", printer_model=None):
     if not isinstance(query, str) or not 2 <= len(query.strip()) <= 80:
         raise OfficialProfileError("Search using at least two characters.")
     if not isinstance(vendor, str) or vendor not in VENDORS:
         raise OfficialProfileError("Choose an available official profile vendor.")
     term = query.strip().casefold()
-    matches = [(name, subpath) for name, subpath in _entries(vendor, kind) if term in name.casefold()]
+    matches = [(name, subpath) for name, subpath in _entries(vendor, kind) if fuzzy_name_match(name, term)]
     if printer_model:
         matches = narrow_catalogue(matches, kind, printer_model)
     return {
