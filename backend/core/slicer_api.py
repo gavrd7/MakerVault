@@ -165,7 +165,15 @@ def _draft(user, data):
         raise ValueError("Unknown slicing configuration fields.")
     engine = get_engine(data.get("engine"))
     version = _preset(data, "engine_version", 80)
-    input_asset = FileAsset.objects.filter(pk=_uuid(data.get("input_asset_id")), owner=user).first()
+    # The visual build plate is authoritative. Its first owned STL is the
+    # primary asset stored on SliceJob for existing library/job integrations.
+    plate_objects = (data.get("settings") or {}).get("plate_objects") if isinstance(data.get("settings", {}), dict) else None
+    primary_id = plate_objects[0].get("asset_id") if (
+        isinstance(plate_objects, list) and plate_objects and isinstance(plate_objects[0], dict)
+    ) else data.get("input_asset_id")
+    if data.get("input_asset_id") and plate_objects and str(data["input_asset_id"]) != str(primary_id):
+        raise ValueError("The first plate model must match the selected primary STL.")
+    input_asset = FileAsset.objects.filter(pk=_uuid(primary_id), owner=user).first()
     if not input_asset or input_asset.category not in {"mesh", "slicer"}:
         raise ValueError("Choose a model asset you own.")
     # Initial preparation accepts STL only; 3MF parsing requires a verified worker.
