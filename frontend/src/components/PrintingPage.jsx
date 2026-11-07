@@ -312,7 +312,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
     />;
   }
 
-  if (workspaceView === "slicer" && slicerStatus.state !== "ready") {
+  if (workspaceView === "slicer" && !["ready", "preview"].includes(slicerStatus.state)) {
     return <section className="panel printingSection">
       <h2>MakerVault Slicer unavailable</h2>
       <p>{slicerStatus.state === "not_installed"
@@ -325,7 +325,12 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
   }
 
   if (workspaceView === "slicer") {
-    return <SlicerWorkbench
+    return <>
+      {slicerStatus.state === "preview" && <section className="panel printingSection" role="status">
+        <strong>Workbench preview — no slicer engine installed</strong>
+        <p>Staging-only preparation mode. You can explore the visual plate, import models, search native profiles and save drafts, but slicing execution and printing generated G-code are unavailable until a verified worker is installed.</p>
+      </section>}
+      <SlicerWorkbench
       files={data?.model_files || []}
       printers={data?.printers || []}
       spools={data?.spools || []}
@@ -338,7 +343,8 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
         setWorkspaceView("overview");
         setModal("gcode");
       }}
-    />;
+    />
+    </>;
   }
 
   if (workspaceView === "models") {
@@ -388,8 +394,8 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
         </section>
         <section className="printingActionGroup" aria-labelledby="printing-slicer-heading">
           <h3 id="printing-slicer-heading">MakerVault Slicer</h3>
-          {slicerStatus.state === "ready" ? <>
-            <p>Prepare models and slicing profiles in MakerVault's dedicated self-hosted slicer workspace.</p>
+          {["ready", "preview"].includes(slicerStatus.state) ? <>
+            <p>{slicerStatus.state === "preview" ? "Workbench preview enabled for staging: explore model placement and slicing profiles without an installed engine. Slicing execution remains disabled." : "Prepare models and slicing profiles in MakerVault's dedicated self-hosted slicer workspace."}</p>
             <div className="printingHeroActions">
               <button type="button" onClick={() => onOpenSlicer ? onOpenSlicer() : setWorkspaceView("slicer")}>Open MakerVault Slicer</button>
             </div>
