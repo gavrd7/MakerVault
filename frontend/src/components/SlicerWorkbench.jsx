@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../api";
 import { Modal } from "./Common";
 import { FileModelViewerModal, ModelThumbnail } from "./ModelViewer";
 import PrinterStartGcodeModal from "./PrinterStartGcodeModal";
 import SlicerPlateEditor from "./SlicerPlateEditor";
+import { slicerSpoolHex, recolorUnmodifiedPlate } from "./slicerSpoolColour";
 import { availableSlicerPrintConnections, preferredSlicerPrintConnection } from "./slicerPrintRouting";
 
 const initialForm = {
@@ -31,6 +32,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [printSelection, setPrintSelection] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
   const [plateObjects, setPlateObjects] = useState([]);
+  const manuallyColouredModels = useRef(new Set());
   const [meshInspection, setMeshInspection] = useState(null);
   const [nativePlate, setNativePlate] = useState(null);
   const [importFile, setImportFile] = useState(null);
@@ -74,6 +76,16 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   };
   const selectedFile = stlFiles.find(file => String(file.id) === form.input_asset_id);
   const selectedPrinter = printers.find(item => String(item.id) === form.printer_id);
+  const selectedSpool = spools.find(item => String(item.id) === String(form.spool_id));
+  const selectedSpoolHex = slicerSpoolHex(selectedSpool);
+
+  function chooseSpool(id) {
+    const spool = spools.find(item => String(item.id) === String(id));
+    const hex = slicerSpoolHex(spool);
+    update("spool_id", id);
+    // Never overwrite per-object colours explicitly edited by the user.
+    if (hex) setPlateObjects(current => recolorUnmodifiedPlate(current, hex, manuallyColouredModels.current));
+  }
 
   useEffect(() => {
     if (!selectedFile?.id) {
@@ -393,10 +405,14 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           <input required type="number" step="0.01" min="0.1" max="2" disabled={!canPrepare || busy} value={form.nozzle_mm} onChange={e => update("nozzle_mm", e.target.value)} />
         </label>
         <label className="full">Physical filament spool (optional; does not replace the slicer's filament preset)
-          <select disabled={!canPrepare || busy} value={form.spool_id} onChange={e => update("spool_id", e.target.value)}>
+          <select disabled={!canPrepare || busy} value={form.spool_id} onChange={e => chooseSpool(e.target.value)}>
             <option value="">No physical spool selected</option>
             {spools.map(spool => <option key={spool.id} value={spool.id}>{spool.spool_id} · {spool.filament}</option>)}
           </select>
+          {selectedSpoolHex && <span className="slicerSpoolColour">
+            <span className="slicerSpoolSwatch" style={{ backgroundColor: selectedSpoolHex }} aria-hidden="true" />
+            Preview colour: {selectedSpoolHex} · Individual models can override this colour
+          </span>}
         </label>
         <label>Build plate
           <select disabled={!canPrepare || busy} value={form.plate} onChange={e => update("plate", e.target.value)}>
@@ -480,6 +496,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       files={stlFiles}
       objects={plateObjects}
       onChange={setPlateObjects}
+      defaultColor={selectedSpoolHex}
+      onManualColorChange={instanceId => manuallyColouredModels.current.add(instanceId)}
       onPrimaryChange={id => update("input_asset_id", String(id))}
       plate={customBed.enabled ? { size_mm: [Number(customBed.x), Number(customBed.y)] } : (nativePlate?.plate && ["available", "partial"].includes(nativePlate.plate.status) ? nativePlate.plate : null)}
       canEdit={canPrepare}
@@ -637,6 +655,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           </div>
           <div className="cameraSourceActions">
             {job.status === "draft" && job.settings?.plate_objects?.length > 0 && <button type="button" disabled={busy} onClick={() => {
+              // A saved plate carries explicit colours; do not replace them with the spool default.
+              manuallyColouredModels.current = new Set(job.settings.plate_objects.map(item => item.instance_id));
               setPlateObjects(job.settings.plate_objects);
               setForm(current => ({
                 ...current, engine: job.engine, engine_version: job.engine_version,
