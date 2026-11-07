@@ -21,7 +21,7 @@ from .slicer_mesh import inspect_stl, MeshInspectionError, MAX_INSPECTION_BYTES
 from .slicer_bed import inspect_orca_plate, inspect_creality_plate
 from .slicer_official_chain import official_profile_chain
 from .slicer_creality_official_profiles import (
-    search_creality_profiles, fetch_creality_profile,
+    search_creality_profiles, fetch_creality_profile, available_creality_vendors,
     ENGINE_VERSION as OFFICIAL_CRE_VERSION, SOURCE as OFFICIAL_CRE_SOURCE,
     REF as OFFICIAL_CRE_REF,
 )
@@ -355,7 +355,7 @@ def official_profiles(request):
             if selected == "orcaslicer":
                 return JsonResponse({"engine": selected, "vendors": available_official_vendors(), "ref": OFFICIAL_ORCA_REF})
             if selected == "crealityprint":
-                return JsonResponse({"engine": selected, "vendors": [{"id": "Creality", "label": "Creality"}], "ref": OFFICIAL_CRE_REF})
+                return JsonResponse({"engine": selected, "vendors": available_creality_vendors(), "ref": OFFICIAL_CRE_REF})
             return _error("No pinned official catalogue for this engine.")
         searcher = {
             "orcaslicer": search_official_profiles,
