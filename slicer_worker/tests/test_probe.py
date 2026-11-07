@@ -73,6 +73,15 @@ class RealEngineProbeTests(TestCase):
             archive.writestr("3D/3dmodel.model", content)
             archive.writestr("[Content_Types].xml", "<Types/>")
             archive.writestr("_rels/.rels", "<Relationships/>")
+            archive.writestr("Metadata/model_settings.config",
+                '<config><plate><metadata key="plater_id" value="1"/>'
+                '<model_instance><metadata key="object_id" value="1"/>'
+                '<metadata key="instance_id" value="0"/>'
+                '<metadata key="identify_id" value="1"/></model_instance>'
+                '<model_instance><metadata key="object_id" value="2"/>'
+                '<metadata key="instance_id" value="0"/>'
+                '<metadata key="identify_id" value="2"/></model_instance>'
+                '</plate></config>')
 
         def fake_runner(binary, root, *, timeout_seconds):
             self.assertTrue((root / "input.3mf").is_file())
