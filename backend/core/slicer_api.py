@@ -425,9 +425,29 @@ def customise_profile(request, profile_id):
     if profile.kind not in EDITABLE_PROFILE_SETTINGS:
         return _error("Unsupported native profile type.")
     if request.method == "GET":
+        current = {}
+        try:
+            with profile.file_asset.file.open("rb") as source:
+                raw = source.read(1024 * 1024 + 1)
+            properties = json.loads(raw.decode("utf-8-sig"))
+            if not isinstance(properties, dict):
+                raise ValueError("Unsupported native profile.")
+            for key, limits in EDITABLE_PROFILE_SETTINGS[profile.kind].items():
+                value = properties.get(key)
+                if isinstance(value, list):
+                    value = value[0] if value else None
+                try:
+                    numeric = float(value)
+                except (ValueError, TypeError):
+                    continue
+                if math.isfinite(numeric) and limits[0] <= numeric <= limits[1]:
+                    current[key] = numeric
+        except (OSError, ValueError, UnicodeDecodeError):
+            return _error("Cannot inspect original native profile.", 422)
         return JsonResponse({
             "profile": _profile_summary(profile),
-            "settings": {name: {"min": limits[0], "max": limits[1]}
+            "settings": {name: {"min": limits[0], "max": limits[1],
+                               "current": current.get(name)}
                          for name, limits in EDITABLE_PROFILE_SETTINGS[profile.kind].items()},
             "warning": "Custom presets are unverified; original native preset is preserved.",
         })
