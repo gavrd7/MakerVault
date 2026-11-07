@@ -66,7 +66,7 @@ def _render_mesh(raw, element):
             ids.append(indexed[centred])
         ET.SubElement(faces, f"{{{NS}}}triangle",
                       {"v1": str(ids[0]), "v2": str(ids[1]), "v3": str(ids[2])})
-    return len(triangles)
+    return len(triangles), maximum[0] - minimum[0], maximum[1] - minimum[1]
 
 
 def _transform(item, offset_x, offset_y):
@@ -110,7 +110,20 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth):
         if total_bytes > MAX_SOURCE_TOTAL:
             raise SlicerProfileError("Total plate model size exceeds the limit.")
         obj = ET.SubElement(resources, f"{{{NS}}}object", {"id": str(index), "type": "model"})
-        total_triangles += _render_mesh(raw, obj)
+        count, width, depth = _render_mesh(raw, obj)
+        total_triangles += count
+        scale = float(item["scale_percent"]) / 100
+        angle = math.radians(float(item["rotation_deg"]))
+        cosine, sine = math.cos(angle), math.sin(angle)
+        centre_x = bed_width / 2 + float(item["x_mm"])
+        centre_y = bed_depth / 2 + float(item["y_mm"])
+        # Every transformed XY corner must fit inside the declared rectangle.
+        for x in (-width / 2, width / 2):
+            for y in (-depth / 2, depth / 2):
+                moved_x = centre_x + scale * (x * cosine - y * sine)
+                moved_y = centre_y + scale * (x * sine + y * cosine)
+                if not (0 <= moved_x <= bed_width and 0 <= moved_y <= bed_depth):
+                    raise SlicerProfileError("A model extends outside the verified build plate.")
         if total_triangles > MAX_TRIANGLES:
             raise SlicerProfileError("Total plate triangles exceed the limit.")
         ET.SubElement(build, f"{{{NS}}}item", {
