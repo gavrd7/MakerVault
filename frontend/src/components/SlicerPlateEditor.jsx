@@ -455,7 +455,7 @@ export default function SlicerPlateEditor({
       <h3 id="slicer-plate-heading">Visual build plate</h3>
       <button type="button" onClick={() => arrangeModels()} disabled={!canEdit || !objects.length || uploadBusy}>Auto-arrange models</button>
     </div>
-    <p>Arrange models, change their size and position, and preview the build plate. Multi-object slicing is not yet available.</p>
+    <p>Arrange models, change their size and position, and preview the build plate. Multiple models can be sliced together with an approved OrcaSlicer worker using one filament profile. Individual preview colours do not assign separate print materials.</p>
     <div className="slicerPlateWorkspace">
       <div className="slicerPlateCanvasColumn">
     <div ref={hostRef} className="slicerPlateCanvas" aria-label="Interactive three-dimensional model plate preview" />
