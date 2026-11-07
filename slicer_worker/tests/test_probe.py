@@ -64,8 +64,8 @@ class RealEngineProbeTests(TestCase):
         faces = '<triangles><triangle v1="0" v2="1" v3="2"/></triangles>'
         objects = "".join(f'<object id="{i}" type="model"><mesh>{vertices}{faces}</mesh></object>'
                           for i in (1, 2))
-        items = '<item objectid="1" transform="1 0 0 0 1 0 0 0 1 80 100 0"/>' + \\
-                '<item objectid="2" transform="1 0 0 0 1 0 0 0 1 150 100 0"/>'
+        items = ('<item objectid="1" transform="1 0 0 0 1 0 0 0 1 80 100 0"/>'
+                 '<item objectid="2" transform="1 0 0 0 1 0 0 0 1 150 100 0"/>')
         content = (f'<model xmlns="{ns}" unit="millimeter"><resources>{objects}</resources>'
                    f'<build>{items}</build></model>').encode()
         fixture = self.root / "two-models.3mf"
@@ -78,7 +78,7 @@ class RealEngineProbeTests(TestCase):
             self.assertTrue((root / "input.3mf").is_file())
             self.assertFalse((root / "input.stl").exists())
             (root / "output.gcode").write_bytes(
-                b"G1 X81 Y100 E1.0\\nG1 X151 Y100 E2.0\\n"
+                b"G1 X81 Y100 E1.0\nG1 X151 Y100 E2.0\n"
             )
             return {"status": "completed"}
 
@@ -89,7 +89,7 @@ class RealEngineProbeTests(TestCase):
         self.assertEqual(result["fixture"], "makervault-two-object-3mf-v1")
 
         def incomplete(binary, root, *, timeout_seconds):
-            (root / "output.gcode").write_bytes(b"G1 X81 Y100 E1.0\\nG1 X85 Y100 E2.0\\n")
+            (root / "output.gcode").write_bytes(b"G1 X81 Y100 E1.0\nG1 X85 Y100 E2.0\n")
             return {"status": "completed"}
 
         with patch("slicer_worker.probe.ENGINES", {"crealityprint": incomplete}):
