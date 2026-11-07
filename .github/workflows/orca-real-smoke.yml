@@ -63,11 +63,22 @@ jobs:
             --filament /tmp/makervault-orca-k1/filament.json \
             --process /tmp/makervault-orca-k1/process.json
       - name: Verify real K2 sliced tetrahedron using complete upstream-native profile parents
+        id: k2
         run: |
           python3 scripts/probe_slicer_staging.py \
             --printer /tmp/makervault-orca-k2/printer.json \
             --filament /tmp/makervault-orca-k2/filament.json \
             --process /tmp/makervault-orca-k2/process.json
+      - name: Diagnose failed native K2 slice without changing runtime admission policy
+        if: failure() && steps.k2.outcome == 'failure'
+        run: |
+          IMAGE=$(sed -n 's/^MAKERVAULT_SLICER_WORKER_IMAGE=//p' .slicer-staging.env)
+          docker run --rm --network none --read-only --user 10001:10001 \
+            --cap-drop ALL --security-opt no-new-privileges:true --pids-limit 96 \
+            --memory 3g --cpus 2 --tmpfs /tmp:rw,exec,nosuid,nodev,size=1g,mode=1777 \
+            --mount type=bind,src=/tmp/makervault-orca-k2,dst=/fixtures,readonly \
+            --entrypoint python3 "$IMAGE" -m slicer_worker.diagnose_orca_fixture \
+            --printer /fixtures/printer.json --filament /fixtures/filament.json --process /fixtures/process.json
       - name: Explain remaining fixture gate
         run: |
           echo "::notice::Even a passed K1/K2 fixture is evidence only; administrator review of G-code and separate approval are still required."
