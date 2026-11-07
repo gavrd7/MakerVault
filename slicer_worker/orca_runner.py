@@ -11,6 +11,7 @@ import signal
 import subprocess
 
 from .stl_validation import StlValidationError, validate_stl
+from .three_mf_validation import validate_worker_3mf
 from .runner import (
     DEFAULT_TIMEOUT_SECONDS, MAX_GCODE_BYTES, MAX_MODEL_BYTES, MAX_PROFILE_BYTES,
     WorkerError, _regular_file, _output_path,
@@ -57,11 +58,15 @@ def orca_command(binary: Path, workdir: Path):
     """Fixed single-model, single-plate slicing command."""
     if binary.is_symlink() or not binary.is_file() or not os.access(binary, os.X_OK):
         raise WorkerError("Approved OrcaSlicer binary is unavailable.")
-    model = _regular_file(workdir, "input.stl", MAX_MODEL_BYTES)
-    try:
-        validate_stl(model.read_bytes())
-    except StlValidationError as exc:
-        raise WorkerError("Input STL failed structural validation.") from exc
+    is_project = (workdir / "input.3mf").exists()
+    model = _regular_file(workdir, "input.3mf" if is_project else "input.stl", MAX_MODEL_BYTES)
+    if is_project:
+        validate_worker_3mf(model.read_bytes())
+    else:
+        try:
+            validate_stl(model.read_bytes())
+        except StlValidationError as exc:
+            raise WorkerError("Input STL failed structural validation.") from exc
     profiles = [
         _regular_file(workdir, name, MAX_PROFILE_BYTES)
         for name in ("printer.json", "filament.json", "process.json")
@@ -77,7 +82,8 @@ def orca_command(binary: Path, workdir: Path):
         str(profiles[2]) + ";" + str(profiles[0]),
         "--load-filaments", str(profiles[1]),
         "--load-defaultfila",
-        "--arrange", "1", "--slice", "1",
+        *(["--arrange", "1"] if not is_project else []),
+        "--slice", "1",
         "--mtcpp", "500000", "--mstpp", "300",
         "--outputdir", str(outdir),
     ]
