@@ -333,7 +333,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       </div>
     </section>
 
-    <div className="slicerWorkbenchTop">\n    <section className="panel printingSection" aria-labelledby="slicer-preparation-heading">
+    <div className="slicerWorkbenchTop">
+    <section className="panel printingSection" aria-labelledby="slicer-preparation-heading">
       <h3 id="slicer-preparation-heading">Slicing configuration</h3>
       <p role="status">{workerConfigured
         ? "A verified isolated worker is configured. Only drafts with administrator-verified native profiles can be sliced. Slicing never starts a print."
