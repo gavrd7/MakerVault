@@ -44,6 +44,27 @@ class OfficialProfileApiTests(TestCase):
         self.assertEqual(response.json()["engine_version"], "2.4.2")
         self.assertEqual(fetch.call_args.args, ("K2", "printer", "Creality"))
 
+    def test_any_pinned_orca_vendor_is_available_without_download(self):
+        self.client.force_login(self.user)
+        with patch("core.slicer_api.search_official_profiles") as search:
+            response = self.client.get(self.url, {"catalogues": "1", "engine": "orcaslicer"})
+        self.assertEqual(response.status_code, 200)
+        vendors = {item["id"] for item in response.json()["vendors"]}
+        self.assertTrue({"Creality", "Prusa", "Voron", "Anycubic", "Custom"} <= vendors)
+        search.assert_not_called()
+
+    def test_selected_manufacturer_is_forwarded_to_backend_search(self):
+        self.client.force_login(self.user)
+        with patch("core.slicer_api.search_official_profiles", return_value={
+            "engine": "orcaslicer", "vendor": "Prusa", "profiles": [],
+        }) as search:
+            response = self.client.get(self.url, {
+                "engine": "orcaslicer", "vendor": "Prusa",
+                "kind": "printer", "q": "MK4",
+            })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(search.call_args.args, ("MK4", "printer", "Prusa"))
+
     def test_official_import_is_candidate_only_and_owned(self):
         self.client.force_login(self.user)
         with patch("core.slicer_api.fetch_official_profile", return_value=self.native):
