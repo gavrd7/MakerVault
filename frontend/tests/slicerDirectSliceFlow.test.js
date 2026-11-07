@@ -45,3 +45,11 @@ test("profile selectors replace duplicate editable preset labels", () => {
   assert.match(source, /id="slicer-configuration-form"/);
   assert.match(source, /footer=\{<>/);
 });
+
+test("profile import screens provide back navigation and local success feedback", () => {
+  assert.match(source, /Back to selected profiles/);
+  assert.match(source, /Back to official profiles/);
+  assert.match(source, /View saved profiles/);
+  assert.match(source, /officialImportNotice && <p role="status"/);
+  assert.match(source, /setOfficialImportNotice\(imported\.name/);
+});
