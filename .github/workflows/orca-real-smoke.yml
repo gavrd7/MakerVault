@@ -7,6 +7,7 @@ on:
       - "scripts/install_slicer_staging.py"
       - "scripts/probe_slicer_staging.py"
       - "scripts/build_orca_reference_fixture.py"
+      - "scripts/build_slicer_multimodel_fixture.py"
       - ".github/workflows/orca-real-smoke.yml"
   workflow_dispatch:
 
@@ -23,10 +24,11 @@ jobs:
         run: printf 'POSTGRES_PASSWORD=ci-only-placeholder\n' > .env
       - name: Prepare test-only native K1 and K2 fixtures before expensive image build
         run: |
-          python3 -m compileall -q scripts/build_orca_reference_fixture.py scripts/probe_slicer_staging.py
+          python3 -m compileall -q scripts/build_orca_reference_fixture.py scripts/probe_slicer_staging.py scripts/build_slicer_multimodel_fixture.py
           python3 scripts/build_orca_reference_fixture.py --printer k1 --output /tmp/makervault-orca-k1
           python3 scripts/build_orca_reference_fixture.py --printer k2 --output /tmp/makervault-orca-k2
           python3 scripts/build_orca_reference_fixture.py --printer prusa-mk4 --output /tmp/makervault-orca-prusa
+          python3 scripts/build_slicer_multimodel_fixture.py --output /tmp/makervault-orca-plate.3mf
       - name: Download SHA-256 verified official Orca 2.4.2 and build isolated image
         run: python3 scripts/install_slicer_staging.py prepare-orca
       - name: Check restricted worker loads real executable
@@ -76,6 +78,13 @@ jobs:
             --printer /tmp/makervault-orca-prusa/printer.json \
             --filament /tmp/makervault-orca-prusa/filament.json \
             --process /tmp/makervault-orca-prusa/process.json
+      - name: Verify real two-model MakerVault 3MF build plate with official Orca engine
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k1/printer.json \
+            --filament /tmp/makervault-orca-k1/filament.json \
+            --process /tmp/makervault-orca-k1/process.json \
+            --model /tmp/makervault-orca-plate.3mf
       - name: Diagnose failed native K2 slice without changing runtime admission policy
         if: failure() && steps.k2.outcome == 'failure'
         run: |
