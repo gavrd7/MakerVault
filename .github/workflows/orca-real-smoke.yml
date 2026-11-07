@@ -54,16 +54,16 @@ jobs:
       - name: Verify real K1 sliced tetrahedron using complete upstream-native profile parents
         run: |
           python3 scripts/build_orca_reference_fixture.py --printer k1 --output /tmp/makervault-orca-k1
-          python3 scripts/probe_slicer_staging.py \\
-            --printer /tmp/makervault-orca-k1/printer.json \\
-            --filament /tmp/makervault-orca-k1/filament.json \\
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k1/printer.json \
+            --filament /tmp/makervault-orca-k1/filament.json \
             --process /tmp/makervault-orca-k1/process.json
       - name: Verify real K2 sliced tetrahedron using complete upstream-native profile parents
         run: |
           python3 scripts/build_orca_reference_fixture.py --printer k2 --output /tmp/makervault-orca-k2
-          python3 scripts/probe_slicer_staging.py \\
-            --printer /tmp/makervault-orca-k2/printer.json \\
-            --filament /tmp/makervault-orca-k2/filament.json \\
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k2/printer.json \
+            --filament /tmp/makervault-orca-k2/filament.json \
             --process /tmp/makervault-orca-k2/process.json
       - name: Explain remaining fixture gate
         run: |
