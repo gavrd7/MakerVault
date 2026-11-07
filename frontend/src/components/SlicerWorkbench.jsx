@@ -458,8 +458,12 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         return candidate === model || (model && candidate.endsWith(" " + model));
       });
       setOfficialModel(match || "");
-    }).catch(() => {
-      if (active) setOfficialModels([]);
+    }).catch(err => {
+      if (active) {
+        setOfficialModels([]);
+        setOfficialError("Could not load printer models from the official catalogue: " +
+          (err.message || "Please try another manufacturer or reload the catalogue."));
+      }
     }).finally(() => { if (active) setOfficialModelsBusy(false); });
     return () => { active = false; };
   }, [profileModal, officialVendor, form.engine, selectedPrinter?.id, selectedPrinter?.model, selectedPrinter?.name]);
