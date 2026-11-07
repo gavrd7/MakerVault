@@ -3730,3 +3730,7 @@ a:focus-visible,
   .slicerPlateControls{grid-template-columns:1fr}
   .slicerPlateCanvas{height:360px}
 }
+
+/* Spool colour hints are informational; native slicing profiles remain separate. */
+.slicerSpoolColour{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:#98a9bf}
+.slicerSpoolSwatch{display:inline-block;width:22px;height:16px;flex:0 0 22px;border:1px solid #657486;border-radius:4px}
