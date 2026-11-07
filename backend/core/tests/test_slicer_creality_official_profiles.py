@@ -43,6 +43,27 @@ class PinnedCrealityProfileTests(SimpleTestCase):
 
     @patch("core.slicer_creality_official_profiles._get_json")
     @patch("core.slicer_creality_official_profiles._manifest")
+    def test_prusa_native_profile_uses_crealityprint_not_orca_source(self, manifest, get):
+        manifest.return_value = {
+            **self.manifest,
+            "name": "Prusa",
+            "machine_list": [{"name": "Prusa MK4 0.4 nozzle", "sub_path": "machine/Prusa MK4 0.4 nozzle.json"}],
+        }
+        get.return_value = (
+            {"type": "machine", "name": "Prusa MK4 0.4 nozzle", "inherits": "fdm_machine_common"},
+            b'{"type":"machine","name":"Prusa MK4 0.4 nozzle","inherits":"fdm_machine_common"}',
+        )
+        raw = fetch_creality_profile("printer", "Prusa MK4 0.4 nozzle",
+                                     "machine/Prusa MK4 0.4 nozzle.json", "Prusa")
+        self.assertIn(b"fdm_machine_common", raw)
+        self.assertIn("CrealityOfficial/CrealityPrint/v7.3.0/resources/profiles/Prusa/",
+                      get.call_args.args[0])
+        with self.assertRaises(OfficialProfileError):
+            fetch_creality_profile("printer", "Prusa MK4 0.4 nozzle",
+                                  "machine/Prusa MK4 0.4 nozzle.json", "Nonexistent")
+
+    @patch("core.slicer_creality_official_profiles._get_json")
+    @patch("core.slicer_creality_official_profiles._manifest")
     def test_import_is_pinned_and_rejects_wrong_type(self, manifest, get):
         manifest.return_value = self.manifest
         get.return_value = ({"type": "machine", "inherits": "fdm_creality_common"}, b'{"type":"machine"}')
