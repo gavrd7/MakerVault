@@ -13,6 +13,7 @@ from django.utils import timezone
 from .models import SliceJob
 from .slicer_engines import validate_engine_selection
 from .slicer_output import store_generated_gcode
+from .slicer_native_resolution import resolved_native_profile
 from .slicer_worker_client import SlicerWorkerError, health, run_remote_job
 
 
@@ -209,7 +210,8 @@ def process_queued_job(job_id):
             data = _read_owned_file(profile.file_asset, job.owner_id, MAX_PROFILE, "Native profile")
             if hashlib.sha256(data).hexdigest() != profile.content_sha256:
                 raise SlicerExecutionError("Native profile contents changed since verification.")
-            profiles.append(data)
+            profiles.append(resolved_native_profile(profile)
+                            if job.engine in {"orcaslicer", "crealityprint"} else data)
         if job.input_asset.sha256 and hashlib.sha256(model).hexdigest() != job.input_asset.sha256:
             raise SlicerExecutionError("Model contents changed since the job was prepared.")
         output = run_remote_job(
