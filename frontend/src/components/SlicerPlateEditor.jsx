@@ -396,7 +396,7 @@ export default function SlicerPlateEditor({
     </div>}
 
     {objects.length > 0 && <p role="status" className="slicerPlateHint">{objects.length} model{objects.length === 1 ? "" : "s"} on the plate
-      {objects.some(item => String(item.asset_id).startsWith("local:")) ? " · Temporary models will be lost on reload." : " · Plate ready to save as a draft."}</p>
+      {objects.some(item => String(item.asset_id).startsWith("local:")) ? " · Temporary models will be lost on reload." : " · Plate ready to save as a draft."}</p>}
 
       </div>
       <aside className="slicerPlateControls" aria-label="Build plate controls">
