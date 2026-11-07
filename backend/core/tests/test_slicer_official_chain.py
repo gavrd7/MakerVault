@@ -72,6 +72,18 @@ class OfficialNativeProfileChainTests(SimpleTestCase):
         with self.assertRaisesRegex(OfficialProfileError, "circular"):
             official_profile_chain("orcaslicer", "printer", "K1 0.4 nozzle", "machine/k1.json")
 
+    @patch("core.slicer_official_chain.fetch_creality_profile")
+    @patch("core.slicer_official_chain.creality_entries")
+    def test_crealityprint_cross_manufacturer_parent_chain(self, index, fetch):
+        index.return_value = self.entries
+        fetch.side_effect = self.fetch
+        chain = official_profile_chain(
+            "crealityprint", "printer", "K1 0.4 nozzle", "machine/k1.json", "Voron"
+        )
+        self.assertEqual(chain[0][0], "fdm_base")
+        self.assertEqual(index.call_args.args, ("printer", "Voron"))
+        self.assertTrue(all(call.args[3] == "Voron" for call in fetch.call_args_list))
+
     @patch("core.slicer_official_chain.orca_entries")
     def test_client_cannot_select_a_profile_url_outside_pinned_manifest(self, index):
         index.return_value = self.entries
