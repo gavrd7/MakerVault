@@ -337,3 +337,34 @@ successful K1/K2 test does not certify them. User-defined profiles must remain
 possible, with explicit unsupported-capability feedback rather than silent
 fallbacks. Machine-specific overrides must be saved as separately named,
 unverified candidates; never edit an official profile in place.
+
+
+## Cross-manufacturer parity across all slicer engines
+
+**Scope:** all FDM slicing engines must accept manufacturer-neutral printer
+selection and independently imported, engine-native printer/filament/process
+profiles. Supported printer models are never a MakerVault brand allowlist.
+Engine capability determines whether a particular native profile can actually
+slice. Printer communication is a separate optional adapter.
+
+| Slicer engine | Native profile format | Pinned official catalogue browser | Runtime acceptance |
+| --- | --- | --- | --- |
+| OrcaSlicer | Orca JSON | 65 upstream profile families, v2.4.2 | Real K1, K2 (K2 test-only setting), and Prusa MK4 fixture slices passed |
+| Creality Print | Creality JSON | 36 upstream profile families, v7.3.0, including third-party/custom machines | Native discovery/import tests; physical and executable acceptance pending |
+| Bambu Studio | Bambu JSON | Not yet integrated; manual native import available | Not validated |
+| PrusaSlicer | Prusa INI | Not yet integrated; manual native import available | Not validated |
+| Snapmaker Orca | Snapmaker Orca JSON | Not yet integrated; manual native import available | Not validated |
+
+Source counts represent pinned upstream **catalogue families**, not printer
+models, certified output, or execution-ready support. MakerVault advertises
+native-file import capability for every known engine but does not invent a
+catalogue or substitute a different engine's profiles when no official source
+is available. Import remains candidate-only until the exact engine version,
+worker image/binary and profile trio generate reviewed, bounded G-code.
+
+Future engine adapters must expose their own pinned source identities, native
+profile parsing and parent resolution, machine/firmware capability gates,
+engine-version compatibility limits, and real CLI fixture tests with at least
+two unrelated printer manufacturers. A new engine **must not** be declared
+generally test-ready solely because an existing Orca profile worked. User
+provided native profiles remain a supported alternative to catalogue search.
