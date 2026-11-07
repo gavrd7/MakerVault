@@ -39,6 +39,24 @@ class SliceJobApiTests(TestCase):
             content_type="application/json",
         )
 
+    def test_preview_is_admin_only_and_never_reports_worker_installed(self):
+        from unittest.mock import patch
+        url = "/api/printing/slicer/engines/"
+        with patch.dict("os.environ", {
+            "MAKERVAULT_SLICER_PREVIEW_ENABLED": "1",
+            "MAKERVAULT_SLICER_EXECUTION_ENABLED": "0",
+        }):
+            self.client.force_login(self.owner)
+            result = self.client.get(url)
+            self.assertFalse(result.json()["preview_enabled"])
+            self.assertFalse(result.json()["worker_configured"])
+            self.owner.is_superuser = True
+            self.owner.save(update_fields=["is_superuser"])
+            result = self.client.get(url)
+            self.assertTrue(result.json()["preview_enabled"])
+            self.assertFalse(result.json()["worker_configured"])
+            self.assertFalse(result.json()["deployment_enabled"])
+
     def test_optional_slicer_deployment_reports_absent_or_unavailable(self):
         from unittest.mock import patch
 
