@@ -1155,6 +1155,7 @@ class SlicerProfile(TimeStampedModel):
     )
     content_sha256 = models.CharField(max_length=64)
     status = models.CharField(max_length=16, choices=STATES, default="candidate")
+    is_default = models.BooleanField(default=False, db_index=True)
     provenance = models.CharField(max_length=200, blank=True)
     verification_evidence = models.JSONField(default=dict, blank=True)
     verified_at = models.DateTimeField(null=True, blank=True)
