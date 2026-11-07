@@ -248,6 +248,7 @@ def engines(request):
         # Deployment intent is distinct from a healthy, approved engine.
         # Never infer an installed container merely because code is present.
         "deployment_enabled": os.environ.get("MAKERVAULT_SLICER_EXECUTION_ENABLED") == "1",
+        "preview_enabled": os.environ.get("MAKERVAULT_SLICER_PREVIEW_ENABLED") == "1" and request.user.is_superuser,
     })
 
 
