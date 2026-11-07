@@ -109,6 +109,34 @@ class OfficialProfileApiTests(TestCase):
             duplicate = self.post()
         self.assertEqual(duplicate.status_code, 409)
 
+    def test_cross_manufacturer_crealityprint_import_stays_native_and_unverified(self):
+        self.client.force_login(self.user)
+        raw = json.dumps({
+            "type": "machine", "name": "Prusa MK4 0.4 nozzle",
+            "nozzle_diameter": ["0.4"],
+            "printable_area": ["0x0", "250x0", "250x210", "0x210"],
+        }).encode()
+        selection = {
+            "engine": "crealityprint", "kind": "printer", "vendor": "Prusa",
+            "name": "Prusa MK4 0.4 nozzle",
+            "sub_path": "machine/Prusa MK4 0.4 nozzle.json",
+        }
+        with patch("core.slicer_api.official_profile_chain", return_value=[
+            ("Prusa MK4 0.4 nozzle", selection["sub_path"], raw)
+        ]) as chain:
+            response = self.post(selection)
+        self.assertEqual(response.status_code, 201, response.content)
+        chain.assert_called_once_with(
+            "crealityprint", "printer", selection["name"], selection["sub_path"], "Prusa"
+        )
+        profile = SlicerProfile.objects.get(pk=response.json()["profile"]["id"])
+        self.assertEqual(profile.engine, "crealityprint")
+        self.assertEqual(profile.engine_version, "7.3.0")
+        self.assertEqual(profile.status, "candidate")
+        self.assertIn("CrealityOfficial/CrealityPrint@v7.3.0/Prusa/", profile.provenance)
+        self.assertFalse(response.json()["execution_available"])
+        self.addCleanup(lambda asset=profile.file_asset: asset.file.delete(save=False))
+
     def test_unprivileged_user_cannot_import(self):
         self.client.force_login(self.other)
         with patch("core.slicer_api.fetch_official_profile") as external:
