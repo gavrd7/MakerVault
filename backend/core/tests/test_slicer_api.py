@@ -76,6 +76,49 @@ class SliceJobApiTests(TestCase):
             "name": "Unsafe", "settings": {"post_process": 1},
         }), content_type="application/json").status_code, 400)
 
+    def test_native_defaults_are_owned_engine_version_and_kind_scoped(self):
+        from django.core.files.base import ContentFile
+        from django.db import IntegrityError
+        from django.db import transaction as db_transaction
+        import hashlib
+
+        def add_profile(name, engine="crealityprint", version="7.3.0", kind="filament"):
+            raw = json.dumps({"type": kind, "name": name}).encode()
+            asset = FileAsset(owner=self.owner, name=name, category="source",
+                              metadata={"extension": ".json", "original_name": name + ".json"})
+            asset.file = ContentFile(raw, name=name.replace(" ", "_") + ".json")
+            asset.save()
+            return SlicerProfile.objects.create(owner=self.owner, file_asset=asset,
+                 engine=engine, engine_version=version, kind=kind, name=name,
+                 content_sha256=hashlib.sha256(raw).hexdigest())
+
+        petg = add_profile("Generic PETG")
+        pla = add_profile("Generic PLA")
+        orca = add_profile("Generic PETG Orca", engine="orcaslicer")
+        self.client.force_login(self.other)
+        url = f"/api/printing/slicer/profiles/{petg.pk}/default/"
+        self.assertEqual(self.client.post(url, json.dumps({"default": True}),
+            content_type="application/json").status_code, 404)
+        self.client.force_login(self.owner)
+        self.assertEqual(self.client.post(url, json.dumps({"default": True}),
+            content_type="application/json").status_code, 200)
+        self.assertTrue(SlicerProfile.objects.get(pk=petg.pk).is_default)
+        other_url = f"/api/printing/slicer/profiles/{pla.pk}/default/"
+        self.assertEqual(self.client.post(other_url, json.dumps({"default": True}),
+            content_type="application/json").status_code, 200)
+        self.assertFalse(SlicerProfile.objects.get(pk=petg.pk).is_default)
+        self.assertTrue(SlicerProfile.objects.get(pk=pla.pk).is_default)
+        orca_url = f"/api/printing/slicer/profiles/{orca.pk}/default/"
+        self.assertEqual(self.client.post(orca_url, json.dumps({"default": True}),
+            content_type="application/json").status_code, 200)
+        self.assertTrue(SlicerProfile.objects.get(pk=orca.pk).is_default)
+        self.assertEqual(self.client.post(other_url, json.dumps({"default": False}),
+            content_type="application/json").status_code, 200)
+        self.assertFalse(SlicerProfile.objects.get(pk=pla.pk).is_default)
+        self.assertTrue(SlicerProfile.objects.get(pk=orca.pk).is_default)
+        self.assertEqual(self.client.post(orca_url, json.dumps({"default": "yes"}),
+            content_type="application/json").status_code, 400)
+
     def test_preview_is_admin_only_and_never_reports_worker_installed(self):
         from unittest.mock import patch
         url = "/api/printing/slicer/engines/"
