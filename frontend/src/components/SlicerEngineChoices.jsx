@@ -2,8 +2,11 @@ import React from "react";
 
 /** UI-only display metadata. Engine installation/verification remains server-owned. */
 const LOGOS = Object.freeze({
-  orcaslicer: "/slicer-engines/orcaslicer.svg",
-  crealityprint: "/slicer-engines/crealityprint.svg",
+  orcaslicer: "/static/app/slicer-engines/orcaslicer.svg",
+  crealityprint: "/static/app/slicer-engines/crealityprint.svg",
+  bambustudio: "/static/app/slicer-engines/bambustudio.svg",
+  prusaslicer: "/static/app/slicer-engines/prusaslicer.svg",
+  snapmakerorca: "/static/app/slicer-engines/snapmakerorca.svg",
 });
 
 export function SlicerEngineLogo({ engine, label = "Slicer engine", size = "normal" }) {
