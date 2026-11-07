@@ -14,6 +14,7 @@ from .models import SlicerProfile
 from .slicer_execution import MAX_PROFILE, SlicerExecutionError, verified_installation, _read_owned_file
 from .slicer_worker_client import run_remote_job
 from .slicer_native_resolution import resolved_native_profile
+from .slicer_native_compatibility import check_native_compatibility
 
 
 def fixture_stl():
@@ -79,6 +80,7 @@ def approve_profiles_for_worker(*, owner, engine, version, profile_ids):
             raise SlicerExecutionError("A native profile has changed since import.")
         profiles[kind] = profile
         inputs[kind] = resolved_native_profile(profile) if engine in {"orcaslicer", "crealityprint"} else data
+        check_native_compatibility(engine, version, kind, inputs[kind])
 
     output = run_remote_job(
         uuid.uuid4(), engine, version, fixture_stl(),
