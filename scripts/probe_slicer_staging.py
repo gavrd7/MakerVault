@@ -40,7 +40,7 @@ def _pinned_image(config=DOTENV):
     return image
 
 
-def probe(printer, filament, process, *, config=DOTENV, runner=subprocess.run):
+def probe(printer, filament, process, *, model=None, config=DOTENV, runner=subprocess.run):
     """Exercise real engine without app, network, Docker socket or host mounts."""
     image = _pinned_image(config)
     sources = {"printer": printer, "filament": filament, "process": process}
@@ -63,6 +63,17 @@ def probe(printer, filament, process, *, config=DOTENV, runner=subprocess.run):
             dest = bundle / f"{name}.json"
             dest.write_bytes(raw)
             dest.chmod(0o444)
+        if model is not None:
+            source = Path(model)
+            if (source.is_symlink() or not source.is_file() or
+                    source.suffix.lower() != ".3mf" or
+                    not 0 < source.stat().st_size <= 32 * 1024 * 1024):
+                raise ValueError("Multi-model fixture must be a bounded regular 3MF file.")
+            # The worker independently checks the exact three allowed ZIP
+            # members, mesh count, and all finite geometry/transforms.
+            dest = bundle / "fixture.3mf"
+            dest.write_bytes(source.read_bytes())
+            dest.chmod(0o444)
         command = [
             "docker", "run", "--rm", "--network", "none", "--read-only",
             "--user", "10001:10001", "--cap-drop", "ALL",
@@ -77,6 +88,8 @@ def probe(printer, filament, process, *, config=DOTENV, runner=subprocess.run):
             "--filament", "/fixtures/filament.json",
             "--process", "/fixtures/process.json",
         ]
+        if model is not None:
+            command.extend(["--model", "/fixtures/fixture.3mf", "--expected-objects", "2"])
         return runner(command, check=False).returncode
 
 
@@ -84,9 +97,10 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("printer", "filament", "process"):
         parser.add_argument("--" + name, type=Path, required=True)
+    parser.add_argument("--model", type=Path, help="Optional two-object MakerVault 3MF acceptance fixture")
     args = parser.parse_args(argv)
     try:
-        return probe(args.printer, args.filament, args.process)
+        return probe(args.printer, args.filament, args.process, model=args.model)
     except (ValueError, OSError, subprocess.SubprocessError) as exc:
         print("Offline Orca acceptance probe refused: " + str(exc), file=sys.stderr)
         return 1
