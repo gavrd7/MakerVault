@@ -30,6 +30,20 @@ The authenticated engine discovery API reports two separate signals: `deployment
 
 The status is checked at page load and every 60 seconds. An already-open slicer workspace also falls back to an unavailable message if a subsequent status refresh reports loss of the worker. This is a UI affordance only; backend job admission remains fail closed independently.
 
+## OrcaSlicer + Creality Print shared-worker prototype
+
+The first two target engines are now **OrcaSlicer and Creality Print** (PrusaSlicer remains an engine candidate and legacy worker adapter). A **single worker process** can enumerate independently pinned executables and select the requested engine at job dispatch time.
+
+At worker startup, the administrator can provide `SLICER_ENGINES_JSON`, a JSON object keyed by engine ID. Each entry requires only `binary` (absolute path inside the worker), `version` and `binary_sha256`. The application-side admission gate independently requires `MAKERVAULT_SLICER_ENGINES_JSON` mapping each approved engine to its exact `version` and `binary_sha256`, along with the existing **single pinned container image digest** and explicit execution enablement. Worker health reports each verified engine separately, and invalid or absent engines never become executable.
+
+These environment variables are **low-level experimental security controls, not installation instructions**. The finished single-container installation, administrator-managed engine installer, provenance catalogue, persistent engine storage, and version-specific binary/fixture receipts remain outstanding. Do not enable the worker with arbitrary executables, checksum-only fixtures, unverified images or manually guessed presets. Engine health validates identity, **not slicing correctness**.
+
+The Creality adapter uses upstream Creality Print's documented `--slice 0`, `--outputdir`, `--load_settings` and `--load_filaments` arguments. Its CLI is **not** treated as an alias for OrcaSlicer. Upstream Creality Print 7.3.0 issue #634 reports that command-line slicing can open the GUI and never return G-code on Windows. No version is declared production-verified until a real Linux headless fixture successfully emits bounded G-code and its printer/material/process profiles are approved. This is especially important for K1/K2/CFS compatibility.
+
+Both engine runners forbid post-processing hooks and unbundled parent profiles; preserve per-engine native files; run without shell execution or arbitrary user flags; enforce timeouts; require one bounded G-code output; and never issue printer commands or change filament inventory.
+
+The GUI must remain **fully usable without running the original slicer desktop GUI**: engine install/update management, searchable/editable native profiles, multi-object build plate, slicing controls, toolpath preview, slice progress, output and explicit print submission. The current preparation interface and worker adapters do **not** yet meet this complete acceptance criterion.
+
 ## Agreed release deployment design (supersedes prototype overlay)
 
 The supported release target is **one optional slicing-service container defined within the normal `compose.yaml`**, commented out by default. Do not require Docker Compose profiles or a separate `compose.slicer.yaml` in the finished release. The current overlay remains a developer-only prototype until replaced.
