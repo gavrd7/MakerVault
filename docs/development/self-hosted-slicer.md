@@ -302,3 +302,38 @@ The fixed single-STL Orca invocation now includes `--load-defaultfila` for an un
 - Upstream licence for PrusaSlicer and OrcaSlicer must be checked **per distributed binary/source/version**, not inferred only from the public repository homepage.
 
 The full slicer is a new major milestone and is not included in v1.6.0. Keep the milestone open until an end-to-end, isolated, hardware-appropriate slice workflow is verified.
+
+
+## Printer-independent compatibility contract
+
+**Printer support is not an allowlist of the developer's K1/K2 hardware.**
+The K1 and K2 are CI acceptance fixtures only. MakerVault must allow a user
+to configure any FDM printer supported by the chosen native slicing engine,
+including user-defined and community machine profiles. It must not equate a
+printer brand with an engine or require that MakerVault can connect to the
+physical printer merely to generate G-code.
+
+The compatibility contract has separate gates:
+
+1. **Engine runtime:** install an individually version-pinned engine into the
+   isolated worker; do not grant Docker socket access to the MakerVault app.
+2. **Machine profile:** select or import an engine-native machine preset with
+   the actual bed geometry, axes, firmware flavour, nozzle, start/end G-code,
+   extruder setup and capabilities. Official, user and community profiles
+   remain separate from execution approval and retain provenance.
+3. **Material/process:** choose compatible native filament and process presets,
+   resolving each engine's inheritance without mixing engine versions.
+4. **Native verification:** evaluate limits for the exact engine version,
+   irrespective of manufacturer or model; verify a real fixture slice and
+   review its G-code. Known rule failures must never be auto-clamped.
+5. **Optional print submission:** independently determine printer connectivity
+   and upload/start capabilities via the selected printer adapter. A printer
+   may be perfectly slicable while lacking an automated send/print adapter.
+
+Vendor catalogue coverage, specialty build shapes, multi-extruder/toolchanger
+settings, non-FDM technologies, safety-critical start G-code and firmware
+dialects require further adapter/profile work and physical validation. A
+successful K1/K2 test does not certify them. User-defined profiles must remain
+possible, with explicit unsupported-capability feedback rather than silent
+fallbacks. Machine-specific overrides must be saved as separately named,
+unverified candidates; never edit an official profile in place.
