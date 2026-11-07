@@ -18,8 +18,12 @@ class BuildPlate3MFTests(SimpleTestCase):
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
             self.assertEqual(set(archive.namelist()), {
                 "3D/3dmodel.model", "[Content_Types].xml", "_rels/.rels",
+                "Metadata/model_settings.config",
             })
             root = ET.fromstring(archive.read("3D/3dmodel.model"))
+            plate_manifest = ET.fromstring(archive.read("Metadata/model_settings.config"))
+        self.assertEqual(plate_manifest.tag, "config")
+        self.assertEqual(len(plate_manifest.find("plate").findall("model_instance")), 2)
         objects = root.findall(".//{%s}object" % NS)
         build = root.findall(".//{%s}build/{%s}item" % (NS, NS))
         self.assertEqual(len(objects), 2)
