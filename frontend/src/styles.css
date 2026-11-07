@@ -3771,14 +3771,14 @@ a:focus-visible,
 }
 .slicerProfileSidebar .slicerProfileRecommendationActions button{max-width:100%;width:auto}
 .slicerWorkbenchTop .slicerNativeVolume{
-  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:12px;
   min-width:0;margin:16px 0 4px;padding:14px 16px;border:1px solid var(--border-color,#435365);
   border-radius:10px;background:rgba(120,130,145,.045);flex-wrap:wrap;
 }
 .slicerNativeVolume strong{font-size:.9rem}
 .slicerNativeVolume span{font-variant-numeric:tabular-nums;white-space:nowrap}
 .slicerWorkbenchTop .slicerDraftActions{
-  display:flex;justify-content:flex-end;align-items:center;margin-top:18px;
+  grid-column:1/-1;display:flex;justify-content:flex-end;align-items:center;margin-top:18px;
   padding-top:10px;
 }
 .slicerWorkbenchTop .slicerDraftActions .settingsActions{
