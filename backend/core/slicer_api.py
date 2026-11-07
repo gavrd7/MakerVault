@@ -385,11 +385,24 @@ def official_profiles(request):
         if searcher is None:
             return _error("Official profile search is not available for this engine.")
         try:
-            results = searcher(
+            # Printer selection is resolved against the signed-in user's own
+            # records; never trust an arbitrary client-provided machine name.
+            printer_id = request.GET.get("printer_id")
+            printer_model = None
+            if printer_id:
+                printer = Printer.objects.filter(
+                    pk=_uuid(printer_id), owner=request.user, is_active=True
+                ).first()
+                if not printer:
+                    return _error("Selected printer is not available to this account.", 404)
+                printer_model = (printer.model or printer.name or "").strip()
+            args = (
                 request.GET.get("q", ""),
                 request.GET.get("kind", "printer"),
                 request.GET.get("vendor", "Creality"),
             )
+            results = searcher(*args, printer_model=printer_model) if printer_model else searcher(*args)
+            results["printer_model_filter"] = printer_model
         except OfficialProfileError as exc:
             return _error(str(exc), 503 if "source" in str(exc).lower() or "contact" in str(exc).lower() else 400)
         return JsonResponse(results)
