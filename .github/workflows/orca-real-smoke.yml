@@ -78,6 +78,18 @@ jobs:
             --printer /tmp/makervault-orca-prusa/printer.json \
             --filament /tmp/makervault-orca-prusa/filament.json \
             --process /tmp/makervault-orca-prusa/process.json
+      - name: Inspect whether Orca recognises both 3MF models and placements
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE=$(sed -n 's/^MAKERVAULT_SLICER_WORKER_IMAGE=//p' .slicer-staging.env)
+          docker run --rm --network none --read-only --user 10001:10001 \
+            --cap-drop ALL --security-opt no-new-privileges:true --pids-limit 96 \
+            --memory 3g --cpus 2 \
+            --tmpfs /tmp:rw,exec,nosuid,nodev,size=1g,mode=1777 \
+            --mount type=bind,src=/tmp,dst=/fixtures,readonly \
+            --entrypoint /opt/engines/orcaslicer.AppImage "$IMAGE" \
+            /fixtures/makervault-orca-plate.3mf --info
       - name: Verify real two-model MakerVault 3MF build plate with official Orca engine
         run: |
           python3 scripts/probe_slicer_staging.py \
