@@ -5,6 +5,9 @@ are loaded only from the pinned upstream Creality namespace and flattened for
 the offline, single-model real CLI acceptance test.
 """
 import argparse
+import sys
+
+from slicer_worker.orca_runner import FORBIDDEN_KEYS
 import json
 from pathlib import Path
 from urllib.parse import quote
@@ -68,6 +71,14 @@ def generate(destination, printer, *, opener=urlopen):
     target.mkdir(parents=True, exist_ok=True)
     for kind, name in FIXTURES[printer].items():
         data = resolved(kind, name, opener=opener)
+        # Real upstream system presets may contain print-host/postprocess keys.
+        # Test-only sandbox strips these even if empty; production's normal
+        # validator remains strict and must still independently approve files.
+        stripped = [key for key in data if key.strip().lower() in FORBIDDEN_KEYS]
+        for key in stripped:
+            del data[key]
+        if stripped:
+            print(f"Fixture-only stripped forbidden {kind} settings: {', '.join(sorted(stripped))}", file=sys.stderr)
         (target / (kind + ".json")).write_text(json.dumps(data, ensure_ascii=False, indent=2) + chr(10), encoding="utf-8")
     return target
 
