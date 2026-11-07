@@ -60,6 +60,7 @@ def serialise(job, installed=None):
         "status": job.status,
         "can_slice": can_slice,
         "progress": job.progress,
+        "gcode_in_library": bool(job.output_asset_id and job.output_asset.category == "gcode"),
         "engine": job.engine,
         "engine_version": job.engine_version,
         "printer_preset": job.printer_preset,
@@ -110,8 +111,13 @@ def _draft_plate_settings(user, input_asset, settings):
     """Persist preview-only plate geometry; never compile it into slicer flags."""
     if settings in ({}, None):
         return {}
-    if not isinstance(settings, dict) or set(settings) != {"plate_objects"}:
+    if not isinstance(settings, dict) or set(settings) - {"plate_objects", "save_gcode_to_library"}:
         raise ValueError("Unsupported slicer plate settings.")
+    save_to_library = settings.get("save_gcode_to_library", False)
+    if not isinstance(save_to_library, bool):
+        raise ValueError("G-code library preference must be true or false.")
+    if "plate_objects" not in settings:
+        return {"save_gcode_to_library": save_to_library}
     objects = settings["plate_objects"]
     if not isinstance(objects, list) or not 1 <= len(objects) <= 12:
         raise ValueError("The visual build plate supports one to twelve model instances.")
@@ -148,7 +154,7 @@ def _draft_plate_settings(user, input_asset, settings):
                       **values, "color": color.lower()})
     if saved[0]["asset_id"] != str(input_asset.pk):
         raise ValueError("The first plate model must match the selected primary STL.")
-    return {"plate_objects": saved}
+    return {"plate_objects": saved, "save_gcode_to_library": save_to_library}
 
 
 def _draft(user, data):
@@ -682,6 +688,36 @@ def job_cancel(request, job_id):
         job.message = "Cancelled before slicing started."
         job.save(update_fields=["status", "message", "updated_at"])
     return JsonResponse({"job": serialise(job), "cancelled": True})
+
+
+@login_required
+@require_http_methods(["POST"])
+def save_job_gcode_to_library(request, job_id):
+    """Explicit promotion of a completed private slicer output into G-code Files."""
+    if not request.user.has_perm("core.add_fileasset"):
+        return _error("You do not have permission to add G-code to the library.", 403)
+    with transaction.atomic():
+        job = SliceJob.objects.select_for_update().select_related("output_asset").filter(
+            pk=job_id, owner=request.user, status="completed",
+            output_asset__owner=request.user,
+        ).first()
+        if not job or not job.output_asset_id:
+            return _error("Completed G-code output is not available.", 404)
+        asset = job.output_asset
+        if asset.category != "gcode":
+            if asset.category != "other" or (asset.metadata or {}).get("generated_by") != "makervault-slicer":
+                return _error("This output cannot be promoted to the G-code library.", 409)
+            metadata = dict(asset.metadata or {})
+            if metadata.get("slice_job_id") != str(job.pk) or metadata.get("extension") != ".gcode":
+                return _error("The G-code output is not associated with this job.", 409)
+            metadata["slicer_library_status"] = "saved"
+            asset.category = "gcode"
+            asset.metadata = metadata
+            asset.full_clean()
+            asset.save(update_fields=["category", "metadata", "updated_at"])
+        job.message = "G-code saved to MakerVault library. Inspect before printing."
+        job.save(update_fields=["message", "updated_at"])
+    return JsonResponse({"job": serialise(job), "saved_to_library": True})
 
 
 @login_required
