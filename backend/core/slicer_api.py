@@ -18,7 +18,7 @@ from .slicer_profiles import SlicerProfileError, inspect_native_profile
 from .slicer_profile_edit import SETTINGS as EDITABLE_PROFILE_SETTINGS, customise_native_json
 from .slicer_profile_lineage import inspect_orca_lineage
 from .slicer_mesh import inspect_stl, MeshInspectionError, MAX_INSPECTION_BYTES
-from .slicer_bed import inspect_orca_plate
+from .slicer_bed import inspect_orca_plate, inspect_creality_plate
 from .slicer_creality_official_profiles import (
     search_creality_profiles, fetch_creality_profile,
     ENGINE_VERSION as OFFICIAL_CRE_VERSION, SOURCE as OFFICIAL_CRE_SOURCE,
@@ -605,12 +605,13 @@ def delete_profile(request, profile_id):
 @require_http_methods(["GET"])
 def profile_plate(request, profile_id):
     profile = SlicerProfile.objects.filter(
-        pk=profile_id, owner=request.user, engine="orcaslicer", kind="printer"
+        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint"], kind="printer"
     ).select_related("file_asset").first()
     if not profile:
-        return _error("Native Orca machine profile not found.", 404)
+        return _error("Owned Orca or Creality machine profile not found.", 404)
     try:
-        geometry = inspect_orca_plate(profile)
+        geometry = (inspect_creality_plate(profile) if profile.engine == "crealityprint"
+                    else inspect_orca_plate(profile))
     except SlicerProfileError:
         return _error("Native printer geometry could not be safely inspected.", 422)
     return JsonResponse({"profile_id": str(profile.pk), "plate": geometry})
