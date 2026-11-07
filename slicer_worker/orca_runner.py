@@ -116,9 +116,18 @@ def run_orca(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIME
         if outdir.is_symlink() or not outdir.is_dir():
             raise WorkerError("OrcaSlicer produced no safe output directory.")
         outputs = list(outdir.iterdir())
+        # Official Orca CLI releases can emit result.json or statistics next
+        # to plate_1.gcode. They are metadata, not a second sliced plate.
+        # Keep strict rejection of unknown, nested or linked artifacts.
         gcode = [p for p in outputs if p.suffix.lower() == ".gcode"]
-        if len(outputs) != 1 or len(gcode) != 1:
-            raise WorkerError("OrcaSlicer must produce exactly one plain-text G-code file.")
+        allowed_metadata = {"result.json"}
+        if (len(gcode) != 1 or len(outputs) > 4 or
+                any(p.is_symlink() or not p.is_file() or
+                    (p.suffix.lower() != ".gcode" and
+                     p.name not in allowed_metadata and
+                     not p.name.endswith(".statistics.json"))
+                    for p in outputs)):
+            raise WorkerError("OrcaSlicer must produce exactly one G-code plate and only expected metadata.")
         source = gcode[0]
         if source.is_symlink() or not source.is_file() or not 0 < source.stat().st_size <= MAX_GCODE_BYTES:
             raise WorkerError("OrcaSlicer output is missing or exceeds its limit.")
