@@ -42,6 +42,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [printSelection, setPrintSelection] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
   const [plateObjects, setPlateObjects] = useState([]);
+  const [saveGcodeToLibrary, setSaveGcodeToLibrary] = useState(false);
   const manuallyColouredModels = useRef(new Set());
   const manuallyChosenProfiles = useRef(new Set());
   const [profileSuggestions, setProfileSuggestions] = useState({});
@@ -275,6 +276,22 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     }
   }
 
+  async function saveOutputToLibrary(job) {
+    if (job.status !== "completed" || !job.output_asset_id || job.gcode_in_library) return;
+    setBusy(true); setError("");
+    try {
+      const result = await apiFetch("/api/printing/slicer/jobs/" + job.id + "/save-gcode/", {
+        method: "POST", body: {},
+      });
+      setJobs(current => current.map(item => item.id === job.id ? result.job : item));
+      setNotice("Generated G-code added to your MakerVault G-code library.");
+    } catch (err) {
+      setError(err.message || "Could not add G-code to the library.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function startSlice(job) {
     setError(""); setNotice(""); setBusy(true);
     try {
@@ -332,7 +349,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         body: {
           ...form,
           spool_id: form.spool_id || null,
-          settings: plateObjects.length ? { plate_objects: plateObjects } : {},
+          settings: { ...(plateObjects.length ? { plate_objects: plateObjects } : {}),
+            save_gcode_to_library: saveGcodeToLibrary },
         },
       });
       savedJob = job;
@@ -686,6 +704,11 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             <option value="default">Stock / default plate</option>
           </select>
         </label>
+        <label className="full">
+          <input type="checkbox" checked={saveGcodeToLibrary}
+            onChange={event => setSaveGcodeToLibrary(event.target.checked)} />
+          Automatically add generated G-code to MakerVault's G-code library after a successful slice
+        </label>
         <div className="full settingsActions">
           <button type="submit" value="draft" disabled={!canPrepare || busy || loading || !stlFiles.length || !printers.length}>{busy ? "Saving…" : "Save slicing draft"}</button>
           {workerConfigured && engines.some(engine => engine.key === form.engine && engine.available) &&
@@ -1035,13 +1058,17 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
                 process_profile_id: job.process_profile_id || "",
                 nozzle_mm: job.nozzle_mm,
               }));
+              setSaveGcodeToLibrary(job.settings?.save_gcode_to_library === true);
               setNotice("Visual plate draft loaded for editing. Saving will create a new draft.");
               document.getElementById("slicer-plate-heading")?.scrollIntoView({ behavior: "smooth" });
             }}>Edit visual plate</button>}
             {job.can_slice && canPrepare && <button type="button" disabled={busy} onClick={() => startSlice(job)}>Slice now</button>}
             {mayCancel && (job.status === "draft" || job.status === "queued") && <button type="button" disabled={busy} onClick={() => cancelPending(job)}>Cancel {job.status === "queued" ? "queued slice" : "draft"}</button>}
-            {job.status === "completed" && job.output_asset?.id && canPrint && <button type="button" className="primary" disabled={busy} onClick={() => requestPrint(job)}>Print from slicer</button>}
-            {job.status === "completed" && job.output_asset_id && <button type="button" onClick={onOpenGcode}>Open G-code library</button>}
+            {job.status === "completed" && job.output_asset?.id && job.gcode_in_library && canPrint && <button type="button" className="primary" disabled={busy} onClick={() => requestPrint(job)}>Print from slicer</button>}
+            {job.status === "completed" && job.output_asset_id && !job.gcode_in_library &&
+              <button type="button" disabled={busy} onClick={() => saveOutputToLibrary(job)}>Add G-code to library</button>}
+            {job.status === "completed" && job.output_asset_id && job.gcode_in_library &&
+              <button type="button" onClick={onOpenGcode}>Open G-code library</button>}
           </div>
         </div>
       )}</div> : <p>No slicing drafts saved yet.</p>}
