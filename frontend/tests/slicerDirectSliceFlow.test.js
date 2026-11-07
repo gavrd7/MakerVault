@@ -62,3 +62,8 @@ test("official profile search lists catalogue models and scopes fuzzy results", 
   assert.match(source, /params\.set\("model", officialModel\)/);
   assert.match(source, /name-based, not verified compatibility/);
 });
+
+test("printer model catalogue failures are shown to the user", () => {
+  assert.match(source, /Could not load printer models from the official catalogue/);
+  assert.match(source, /setOfficialError\(/);
+});
