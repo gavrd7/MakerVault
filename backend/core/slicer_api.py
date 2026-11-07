@@ -447,6 +447,7 @@ def customise_profile(request, profile_id):
         return _error("Unsupported native profile type.")
     if request.method == "GET":
         current = {}
+        available = {}
         try:
             with profile.file_asset.file.open("rb") as source:
                 raw = source.read(1024 * 1024 + 1)
@@ -454,11 +455,14 @@ def customise_profile(request, profile_id):
             if not isinstance(properties, dict):
                 raise ValueError("Unsupported native profile.")
             for key, limits in EDITABLE_PROFILE_SETTINGS[profile.kind].items():
+                if key not in properties:
+                    continue
+                available[key] = limits
                 value = properties.get(key)
                 if isinstance(value, list):
                     value = value[0] if value else None
                 try:
-                    numeric = float(value)
+                    numeric = float(value.removesuffix("%") if isinstance(value, str) else value)
                 except (ValueError, TypeError):
                     continue
                 if math.isfinite(numeric) and limits[0] <= numeric <= limits[1]:
@@ -469,7 +473,7 @@ def customise_profile(request, profile_id):
             "profile": _profile_summary(profile),
             "settings": {name: {"min": limits[0], "max": limits[1],
                                "current": current.get(name)}
-                         for name, limits in EDITABLE_PROFILE_SETTINGS[profile.kind].items()},
+                         for name, limits in available.items()},
             "warning": "Custom presets are unverified; original native preset is preserved.",
         })
     if not request.user.has_perm("core.add_fileasset"):
