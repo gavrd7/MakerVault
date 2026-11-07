@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.test import TestCase
 
-from core.models import FileAsset, SlicerProfile
+from core.models import FileAsset, Printer, SlicerProfile
 
 
 class OfficialProfileApiTests(TestCase):
@@ -88,6 +88,29 @@ class OfficialProfileApiTests(TestCase):
             })
         self.assertEqual(response.status_code, 200)
         self.assertEqual(search.call_args.args, ("MK4", "printer", "Prusa"))
+
+    def test_printer_filter_resolves_own_model_and_rejects_foreign_printers(self):
+        self.client.force_login(self.user)
+        own = Printer.objects.create(owner=self.user, name="K1", model="Creality K1")
+        foreign = Printer.objects.create(owner=self.other, name="K2", model="Creality K2")
+        with patch("core.slicer_api.search_official_profiles", return_value={
+            "engine": "orcaslicer", "profiles": [],
+        }) as search:
+            filtered = self.client.get(self.url, {
+                "engine": "orcaslicer", "vendor": "Creality",
+                "kind": "process", "q": "0.20mm", "printer_id": str(own.pk),
+            })
+            self.assertEqual(filtered.status_code, 200, filtered.content)
+            self.assertEqual(filtered.json()["printer_model_filter"], "Creality K1")
+            search.assert_called_once_with(
+                "0.20mm", "process", "Creality", printer_model="Creality K1"
+            )
+            search.reset_mock()
+            denied = self.client.get(self.url, {
+                "kind": "process", "q": "0.20mm", "printer_id": str(foreign.pk),
+            })
+            self.assertEqual(denied.status_code, 404)
+            search.assert_not_called()
 
     def test_official_import_is_candidate_only_and_owned(self):
         self.client.force_login(self.user)
