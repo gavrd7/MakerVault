@@ -10,4 +10,12 @@ class Migration(migrations.Migration):
             name="is_default",
             field=models.BooleanField(default=False, db_index=True),
         ),
+        migrations.AddConstraint(
+            model_name="slicerprofile",
+            constraint=models.UniqueConstraint(
+                fields=["owner", "engine", "engine_version", "kind"],
+                condition=models.Q(is_default=True),
+                name="unique_slicer_profile_default",
+            ),
+        ),
     ]
