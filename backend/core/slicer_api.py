@@ -554,7 +554,7 @@ def set_default_profile(request, profile_id):
     profile = SlicerProfile.objects.filter(pk=profile_id, owner=request.user).first()
     if not profile:
         return _error("Native slicer profile not found.", 404)
-    if not request.user.has_perm("core.change_slicerprofile"):
+    if not (request.user.has_perm("core.change_slicerprofile") or request.user.has_perm("core.add_fileasset")):
         return _error("You do not have permission to manage profile defaults.", 403)
     if len(request.body) > 128:
         return _error("Default profile request is too large.", 413)
