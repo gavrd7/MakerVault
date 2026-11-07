@@ -27,7 +27,7 @@ def _pinned_image(config=DOTENV):
     for line in config.read_text(encoding="utf-8").splitlines():
         if "=" in line and not line.lstrip().startswith("#"):
             key, value = line.split("=", 1)
-            variables[key.strip()] = value.strip().strip("'\\"")
+            variables[key.strip()] = value.strip().strip(chr(39) + chr(34))
     image = variables.get("MAKERVAULT_SLICER_WORKER_IMAGE", "")
     if not IMAGE_ID.fullmatch(image) or variables.get("MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST") != image:
         raise ValueError("Worker image is not pinned to the configured immutable SHA-256 ID.")
