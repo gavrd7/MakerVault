@@ -54,6 +54,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [officialQuery, setOfficialQuery] = useState("");
   const [officialVendor, setOfficialVendor] = useState("Creality");
   const [officialVendors, setOfficialVendors] = useState([]);
+  const [officialSourceInfo, setOfficialSourceInfo] = useState(null);
   const [officialResults, setOfficialResults] = useState(null);
   const [materialProfileMatches, setMaterialProfileMatches] = useState(null);
   const [officialBusy, setOfficialBusy] = useState(false);
@@ -602,10 +603,12 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       const params = new URLSearchParams({ engine: form.engine, catalogues: "1" });
       const response = await apiFetch("/api/printing/slicer/official-profiles/?" + params.toString());
       const vendors = response.vendors || [];
+      setOfficialSourceInfo(response);
       setOfficialVendors(vendors);
       setOfficialVendor(suggestOfficialVendor(selectedPrinter, vendors));
     } catch (err) {
       setOfficialVendors([]);
+      setOfficialSourceInfo(null);
       setOfficialError(err.message || "Could not load official catalogues. Manual import remains available.");
     }
   }
@@ -614,6 +617,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     setImportKind(kind);
     setOfficialVendor("Creality");
     setOfficialVendors([]);
+    setOfficialSourceInfo(null);
     setOfficialError("");
     loadOfficialVendors();
     setOfficialQuery(defaultOfficialSearch(kind, { printer: selectedPrinter, spool: selectedSpool, nozzle: form.nozzle_mm }));
@@ -955,12 +959,11 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       <div className="printingActionGroup" aria-labelledby="slicer-official-profiles-heading">
         <h4 id="slicer-official-profiles-heading">Search official slicer profiles</h4>
         <p>Search the selected engine's pinned official manufacturer catalogues for printer, filament and process presets. An engine may not provide a profile for every printer. Imports remain unverified candidates; profiles cannot be shared between engines.</p>
+        {officialSourceInfo && !officialSourceInfo.official_search_available && <p role="status">This engine does not yet have a verified upstream catalogue browser in MakerVault. You can still import native {officialSourceInfo.native_profile_format} profiles as unverified candidates; slicing requires a separately validated engine and profile combination.</p>}
         <form className="formGrid" onSubmit={searchOfficialProfiles}>
           <label>Official source
-            <select value={["orcaslicer", "crealityprint"].includes(form.engine) ? form.engine : "unavailable"} disabled>
-              <option value="orcaslicer">OrcaSlicer · v2.4.2</option>
-              <option value="crealityprint">Creality Print · v7.3.0</option>
-              <option value="unavailable">No pinned official catalogue for this engine</option>
+            <select value={form.engine} disabled>
+              <option value={form.engine}>{engines.find(engine => engine.key === form.engine)?.label || form.engine}</option>
             </select>
           </label>
           <label>Manufacturer / upstream catalogue
@@ -982,11 +985,12 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             <input value={officialQuery} maxLength="80" onChange={e => setOfficialQuery(e.target.value)} placeholder="e.g. printer model, Generic PLA, 0.20mm" />
           </label>
           <div className="full settingsActions">
-            <button type="submit" disabled={officialBusy || !officialVendor || !officialVendors.length || !["orcaslicer", "crealityprint"].includes(form.engine) || officialQuery.trim().length < 2}>
+            <button type="submit" disabled={officialBusy || !officialVendor || !officialVendors.length || officialQuery.trim().length < 2}>
               {officialBusy ? "Searching…" : "Search official profiles"}
             </button>
           </div>
         </form>
+        <div className="full settingsActions"><button type="button" onClick={() => { setProfileModal("import"); setOfficialError(""); }}>Import native profile file instead</button></div>
         {officialError && <p className="integrationError" role="alert">{officialError}</p>}
         {officialResults && <div className="printingStack" role="region" aria-label="Official profile search results">
           <p>{officialResults.total_matches} matching official presets in {officialResults.vendor} · showing up to {officialResults.profiles.length} · original upstream release {officialResults.ref}</p>
