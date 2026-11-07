@@ -115,3 +115,26 @@ test("native upstream selection uses the chosen printer rather than hardcoded Cr
   assert.equal(suggestOfficialVendor(null, [{id:"Creality", label:"Creality"}]), "Creality");
   assert.equal(defaultOfficialSearch("printer", {}), "0.4 nozzle");
 });
+
+test("generic printer qualifier filtering prevents cross-brand process or filament suggestions", () => {
+  const profiles = [
+    make("mk4","process","0.20mm Standard @MK4"),
+    make("k2","process","0.20mm Standard @Creality K2 0.4 nozzle"),
+    make("voron","process","0.20mm Standard @Voron 2.4"),
+  ];
+  const prusa = {model:"MK4", manufacturer:"Prusa"};
+  assert.equal(chooseSuggestedProfile(profiles, [], {
+    engine:"crealityprint", version:"7.3.0", kind:"process", printer:prusa,
+  })?.profile.id, "mk4");
+  const creality = {model:"Creality K2 Combo"};
+  assert.equal(chooseSuggestedProfile(profiles, [], {
+    engine:"crealityprint", version:"7.3.0", kind:"process", printer:creality,
+  })?.profile.id, "k2");
+  const custom = {model:"Voron 2.4"};
+  assert.equal(chooseSuggestedProfile(profiles, [], {
+    engine:"crealityprint", version:"7.3.0", kind:"process", printer:custom,
+  })?.profile.id, "voron");
+  assert.equal(chooseSuggestedProfile(profiles, [], {
+    engine:"crealityprint", version:"7.3.0", kind:"process", printer:{model:"Anycubic Kobra 2"},
+  }), null);
+});
