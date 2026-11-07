@@ -57,8 +57,8 @@ export default function SlicerPlateEditor({
   const sourceFiles = useMemo(() => files.filter(file =>
     file.category === "mesh" && /\.stl$/i.test(file.filename || file.name || "") && file.url
   ), [files]);
-  const bedX = plate?.size_mm?.[0] > 0 ? Number(plate.size_mm[0]) : 220;
-  const bedY = plate?.size_mm?.[1] > 0 ? Number(plate.size_mm[1]) : 220;
+  const bedX = Number(plate?.size_mm?.[0]) >= 1 && Number(plate?.size_mm?.[0]) <= 1000 ? Number(plate.size_mm[0]) : 220;
+  const bedY = Number(plate?.size_mm?.[1]) >= 1 && Number(plate?.size_mm?.[1]) <= 1000 ? Number(plate.size_mm[1]) : 220;
   const chosen = objects.find(item => item.instance_id === selected) || objects[0] || null;
   const objectKey = objects.map(item => item.instance_id + ":" + item.asset_id).join("|");
   const extentWarnings = objects.map((item, index) => ({
@@ -79,6 +79,14 @@ export default function SlicerPlateEditor({
     if (!objects.length) onPrimaryChange?.(id);
     setSelected(next.instance_id);
     setError("");
+  }
+
+  function removeSelected() {
+    if (!chosen) return;
+    const remaining = objects.filter(item => item.instance_id !== chosen.instance_id);
+    onChange(remaining);
+    onPrimaryChange?.(remaining[0]?.asset_id || "");
+    setSelected(remaining[0]?.instance_id || "");
   }
 
   function patch(field, value) {
@@ -374,6 +382,15 @@ export default function SlicerPlateEditor({
       </label>
     </div>
     {error && <p className="integrationError" role="alert">{error}</p>}
+    {objects.length > 0 && <div className="slicerPlateToolbar">
+      <label>Selected object
+        <select value={chosen?.instance_id || ""} onChange={event => setSelected(event.target.value)}>
+          {objects.map((item, index) => <option key={item.instance_id} value={item.instance_id}>{index + 1}. {sourceFiles.find(file => String(file.id) === item.asset_id)?.name || "STL model"}</option>)}
+        </select>
+      </label>
+      <button type="button" disabled={!canEdit || !chosen} onClick={removeSelected}>Remove selected model</button>
+      <button type="button" disabled={!canEdit || !chosen || objects.length >= MAX_OBJECTS} onClick={() => addAsset(chosen.asset_id)}>Duplicate selected</button>
+    </div>}
     <div ref={hostRef} aria-label="Interactive three-dimensional model plate preview" style={{
       height: 370, width: "100%", borderRadius: 12, overflow: "hidden", border: "1px solid var(--border, #435365)",
       background: "#0f1720", touchAction: "none",
@@ -417,12 +434,7 @@ export default function SlicerPlateEditor({
         <button type="button" disabled={!canEdit} onClick={() => patch("rotation_deg", ((chosen.rotation_deg + 90) % 360))}>Rotate 90°</button>
         <button type="button" disabled={!canEdit || objects.length >= MAX_OBJECTS}
           onClick={() => addAsset(chosen.asset_id)}>Duplicate</button>
-        <button type="button" disabled={!canEdit} onClick={() => {
-          const filtered = objects.filter(item => item.instance_id !== chosen.instance_id);
-          onChange(filtered);
-          if (filtered.length) onPrimaryChange?.(filtered[0].asset_id);
-          setSelected(filtered[0]?.instance_id || "");
-        }}>Remove model</button>
+        <button type="button" disabled={!canEdit} onClick={removeSelected}>Remove model</button>
       </div>
     </div>}
     {objects.length > 0 && <p role="status">{objects.length} model instance{objects.length === 1 ? "" : "s"} on the preparation plate. Saving a draft preserves this arrangement; slicing the arrangement remains disabled until verified.</p>}
