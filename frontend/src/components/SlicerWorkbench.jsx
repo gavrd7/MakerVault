@@ -793,6 +793,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         </div>
       </div>
       {!stlFiles.length && <p>Add a plain-text STL model to Files or Model Library before preparing a slicing draft.</p>}
+      </form>
     </section>
     <aside className="panel printingSection slicerProfileSidebar" aria-label="Profile management">
       <h3>Profile management</h3>
