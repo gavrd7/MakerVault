@@ -71,7 +71,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [officialBusy, setOfficialBusy] = useState(false);
   const [officialError, setOfficialError] = useState("");
   const [officialImportNotice, setOfficialImportNotice] = useState("");
-  const [filterOfficialByPrinter, setFilterOfficialByPrinter] = useState(true);
+  const [officialModels, setOfficialModels] = useState([]);
+  const [officialModel, setOfficialModel] = useState("");
+  const [officialModelsBusy, setOfficialModelsBusy] = useState(false);
   const [importName, setImportName] = useState("");
   const [importSource, setImportSource] = useState("");
   const [loading, setLoading] = useState(true);
@@ -436,6 +438,32 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     }
   }
 
+  // Catalogue models come from the pinned upstream index, never a guessed
+  // printer list. Changing manufacturer or engine invalidates old results.
+  useEffect(() => {
+    if (profileModal !== "search" || !officialVendor) return undefined;
+    let active = true;
+    setOfficialModelsBusy(true);
+    setOfficialModels([]);
+    setOfficialModel("");
+    apiFetch("/api/printing/slicer/official-profiles/?" + new URLSearchParams({
+      engine: form.engine, vendor: officialVendor, models: "1",
+    }).toString()).then(result => {
+      if (!active) return;
+      const models = result.models || [];
+      setOfficialModels(models);
+      const model = String(selectedPrinter?.model || selectedPrinter?.name || "").trim().toLowerCase();
+      const match = models.find(item => {
+        const candidate = item.toLowerCase();
+        return candidate === model || (model && candidate.endsWith(" " + model));
+      });
+      setOfficialModel(match || "");
+    }).catch(() => {
+      if (active) setOfficialModels([]);
+    }).finally(() => { if (active) setOfficialModelsBusy(false); });
+    return () => { active = false; };
+  }, [profileModal, officialVendor, form.engine, selectedPrinter?.id, selectedPrinter?.model, selectedPrinter?.name]);
+
   async function searchOfficialProfiles(event) {
     event.preventDefault();
     setOfficialError(""); setOfficialResults(null); setOfficialBusy(true);
@@ -443,7 +471,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       const q = officialQuery.trim();
       if (q.length < 2) throw new Error("Enter at least two characters to search official presets.");
       const params = new URLSearchParams({ q, kind: importKind, vendor: officialVendor, engine: form.engine });
-      if (filterOfficialByPrinter && selectedPrinter?.id) params.set("printer_id", String(selectedPrinter.id));
+      if (officialModel) params.set("model", officialModel);
       const result = await apiFetch("/api/printing/slicer/official-profiles/?" + params.toString());
       setOfficialResults(result);
     } catch (err) {
@@ -620,6 +648,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   function openOfficialSearch(kind = materialHint ? "filament" : form.printer_id ? "printer" : "process") {
     setImportKind(kind);
     setOfficialVendor("");
+    setOfficialModel("");
+    setOfficialModels([]);
     setOfficialVendors([]);
     setOfficialSourceInfo(null);
     setOfficialError("");
@@ -950,6 +980,13 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               {!officialVendors.length && <option value="">No catalogue loaded</option>}
             </select>
           </label>
+          <label>Printer model
+            <select value={officialModel} disabled={officialModelsBusy || !officialVendor}
+              onChange={e => { setOfficialModel(e.target.value); setOfficialResults(null); }}>
+              <option value="">All models / generic profiles</option>
+              {officialModels.map(model => <option key={model} value={model}>{model}</option>)}
+            </select>
+          </label>
           <label>Profile type
             <select value={importKind} disabled={officialBusy} onChange={e => { setImportKind(e.target.value); setOfficialQuery(defaultOfficialSearch(e.target.value, { printer: selectedPrinter, spool: selectedSpool, nozzle: form.nozzle_mm })); setOfficialResults(null); setOfficialImportNotice(""); }}>
               <option value="printer">Printer / machine</option>
@@ -957,13 +994,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               <option value="process">Process</option>
             </select>
           </label>
-          {selectedPrinter?.id && <label className="full checkRow slicerOfficialPrinterFilter">
-            <input type="checkbox" checked={filterOfficialByPrinter}
-              onChange={e => { setFilterOfficialByPrinter(e.target.checked); setOfficialResults(null); }} />
-            <span>Show profiles for {selectedPrinter.model || selectedPrinter.name} and unqualified generic profiles only</span>
-          </label>}
           <label className="full">Search official presets
-            <input value={officialQuery} maxLength="80" onChange={e => setOfficialQuery(e.target.value)} placeholder="e.g. printer model, Generic PLA, 0.20mm" />
+            <input value={officialQuery} maxLength="80" onChange={e => setOfficialQuery(e.target.value)} placeholder="e.g. K1 PLA or 0.20mm Standard" />
           </label>
           <div className="full settingsActions">
             <button type="submit" disabled={officialBusy || !officialVendor || !officialVendors.length || officialQuery.trim().length < 2}>
@@ -990,7 +1022,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               </button>
             </div>
           </div>)}
-          {!officialResults.profiles.length && <p>No matching presets. Try another search or uncheck the printer-model filter to browse the complete manufacturer catalogue.</p>}
+          {!officialResults.profiles.length && <p>No matching presets. Try another search or select All models to browse the complete manufacturer catalogue.</p>}
         </div>}
       </div>
 
