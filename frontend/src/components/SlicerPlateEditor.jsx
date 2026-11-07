@@ -530,6 +530,8 @@ export default function SlicerPlateEditor({
       </label>
       <div className="settingsActions">
         <button type="button" disabled={!canEdit} onClick={() => patch("rotation_deg", ((chosen.rotation_deg + 90) % 360))}>Rotate 90°</button>
+        <button type="button" disabled={!canEdit || !objects.length || uploadBusy}
+          onClick={() => arrangeModels()}>Auto-arrange</button>
       </div>
     </div>}
 
