@@ -47,7 +47,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const manuallyColouredModels = useRef(new Set());
   const manuallyChosenProfiles = useRef(new Set());
   const [profileSuggestions, setProfileSuggestions] = useState({});
-  const [meshInspection, setMeshInspection] = useState(null);
   const [nativePlate, setNativePlate] = useState(null);
   const [importFile, setImportFile] = useState(null);
   const [importKind, setImportKind] = useState("printer");
@@ -93,7 +92,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       ...(profile ? { [kind + "_preset"]: profile.name } : {}),
     }));
   };
-  const selectedFile = stlFiles.find(file => String(file.id) === form.input_asset_id);
   const selectedPrinter = printers.find(item => String(item.id) === form.printer_id);
   const selectedSpool = spools.find(item => String(item.id) === String(form.spool_id));
   const selectedSpoolHex = slicerSpoolHex(selectedSpool);
@@ -169,25 +167,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     // Never overwrite per-object colours explicitly edited by the user.
     if (hex) setPlateObjects(current => recolorUnmodifiedPlate(current, hex, manuallyColouredModels.current));
   }
-
-  useEffect(() => {
-    if (!selectedFile?.id) {
-      setMeshInspection(null);
-      return undefined;
-    }
-    let active = true;
-    const id = String(selectedFile.id);
-    setMeshInspection({ id, loading: true });
-    apiFetch("/api/printing/slicer/meshes/" + id + "/inspection/")
-      .then(data => {
-        if (active) setMeshInspection({ id, mesh: data.mesh });
-      })
-      .catch(() => {
-        if (active) setMeshInspection({ id, error: "Geometry inspection unavailable. Verify the STL before slicing." });
-      });
-    return () => { active = false; };
-  }, [selectedFile?.id]);
-
 
   useEffect(() => {
     const id = ["orcaslicer", "crealityprint"].includes(form.engine) ? form.printer_profile_id : "";
@@ -382,6 +361,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     event.preventDefault();
     const sliceNow = event.nativeEvent?.submitter?.value === "slice";
     setError(""); setNotice("");
+    if (!plateObjects.length) {
+      setError("Add at least one STL to the visual build plate before saving or slicing.");
+      return;
+    }
     if (plateObjects.some(item => String(item.asset_id).startsWith("local:"))) {
       setError("This plate contains temporary models. To save a persistent draft, first import those STL files with ‘Also save imported models to MakerVault Files’ selected.");
       return;
@@ -393,6 +376,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         method: "POST",
         body: {
           ...form,
+          input_asset_id: plateObjects[0].asset_id,
           spool_id: form.spool_id || null,
           settings: { ...(plateObjects.length ? { plate_objects: plateObjects } : {}),
             save_gcode_to_library: saveGcodeToLibrary },
@@ -730,12 +714,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         <label>Engine version
           <input required maxLength="80" disabled={!canPrepare || busy} value={form.engine_version} onChange={e => update("engine_version", e.target.value)} placeholder="Exact installed/version-matched engine version" />
         </label>
-        <label className="full">Model STL
-          <select required disabled={!canPrepare || busy} value={form.input_asset_id} onChange={e => update("input_asset_id", e.target.value)}>
-            <option value="">Choose an existing STL file</option>
-            {stlFiles.map(file => <option key={file.id} value={file.id}>{file.name} · {file.filename}</option>)}
-          </select>
-        </label>
         <label>Printer
           <select required disabled={!canPrepare || busy} value={form.printer_id} onChange={e => {
             const printer = printers.find(item => String(item.id) === e.target.value);
@@ -783,16 +761,16 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         </div>}
       <div className="slicerDraftActions">
         <div className="full settingsActions">
-          <button type="submit" value="draft" disabled={!canPrepare || busy || loading || !stlFiles.length || !printers.length}>{busy ? "Saving…" : "Save slicing draft"}</button>
+          <button type="submit" value="draft" disabled={!canPrepare || busy || loading || !plateObjects.length || !printers.length}>{busy ? "Saving…" : "Save slicing draft"}</button>
           {workerConfigured && engines.some(engine => engine.key === form.engine && engine.available) &&
             <button type="submit" value="slice" className="primary"
-              disabled={!canPrepare || busy || loading || !stlFiles.length || !printers.length ||
+              disabled={!canPrepare || busy || loading || !plateObjects.length || !printers.length ||
                 !form.printer_profile_id || !form.filament_profile_id || !form.process_profile_id}>
               {busy ? "Preparing…" : "Save and slice"}
             </button>}
         </div>
       </div>
-      {!stlFiles.length && <p>Add a plain-text STL model to Files or Model Library before preparing a slicing draft.</p>}
+      {!plateObjects.length && <p>Add at least one STL to the visual build plate below before saving or slicing.</p>}
       </form>
     </section>
     <aside className="panel printingSection slicerProfileSidebar" aria-label="Profile management">
