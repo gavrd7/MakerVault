@@ -112,6 +112,36 @@ class OfficialProfileApiTests(TestCase):
             self.assertEqual(denied.status_code, 404)
             search.assert_not_called()
 
+    def test_official_model_dropdown_and_validated_model_override(self):
+        self.client.force_login(self.user)
+        model_list = ["Creality K1", "Creality K1 Max", "Creality K2"]
+        with patch("core.slicer_api.orca_catalogue_models", return_value=model_list) as catalogue:
+            result = self.client.get(self.url, {
+                "engine": "orcaslicer", "vendor": "Creality", "models": "1",
+            })
+            self.assertEqual(result.status_code, 200, result.content)
+            self.assertEqual(result.json()["models"], model_list)
+            catalogue.assert_called_with("Creality")
+            with patch("core.slicer_api.search_official_profiles", return_value={
+                "engine": "orcaslicer", "profiles": [],
+            }) as search:
+                filtered = self.client.get(self.url, {
+                    "engine": "orcaslicer", "vendor": "Creality",
+                    "kind": "process", "q": "K1 standard", "model": "Creality K1",
+                })
+                self.assertEqual(filtered.status_code, 200, filtered.content)
+                search.assert_called_once_with(
+                    "K1 standard", "process", "Creality",
+                    printer_model="Creality K1"
+                )
+                search.reset_mock()
+                invalid = self.client.get(self.url, {
+                    "engine": "orcaslicer", "vendor": "Creality",
+                    "kind": "process", "q": "K1", "model": "Invented model",
+                })
+                self.assertEqual(invalid.status_code, 400)
+                search.assert_not_called()
+
     def test_official_import_is_candidate_only_and_owned(self):
         self.client.force_login(self.user)
         with patch("core.slicer_api.fetch_official_profile", return_value=self.native):
