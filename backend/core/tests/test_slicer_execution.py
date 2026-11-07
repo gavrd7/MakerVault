@@ -43,6 +43,50 @@ class WorkerApprovalTests(SimpleTestCase):
         with patch.dict("os.environ", self.approved, clear=True):
             self.assertEqual(verified_installation(), {})
 
+    @patch("core.slicer_execution.health")
+    def test_two_independent_approved_engines_share_one_worker(self, worker):
+        import json
+        worker.return_value = {
+            "ready": True,
+            "engines": {
+                "orcaslicer": {"ready": True, "version": "2.4.2", "binary_sha256": "b" * 64},
+                "crealityprint": {"ready": True, "version": "7.3.0", "binary_sha256": "c" * 64},
+            },
+        }
+        approvals = {
+            "orcaslicer": {"version": "2.4.2", "binary_sha256": "b" * 64},
+            "crealityprint": {"version": "7.3.0", "binary_sha256": "c" * 64},
+        }
+        settings = {
+            **self.approved,
+            "MAKERVAULT_SLICER_ENGINES_JSON": json.dumps(approvals),
+        }
+        with patch.dict("os.environ", settings, clear=True):
+            available = verified_installation()
+            self.assertEqual(set(available), {"orcaslicer", "crealityprint"})
+            self.assertEqual(available["crealityprint"]["version"], "7.3.0")
+            worker.return_value["engines"]["orcaslicer"]["binary_sha256"] = "d" * 64
+            available = verified_installation()
+            self.assertEqual(set(available), {"crealityprint"})
+            worker.return_value["engines"]["crealityprint"]["ready"] = False
+            self.assertEqual(verified_installation(), {})
+
+    @patch("core.slicer_execution.health", return_value={
+        "ready": True,
+        "engines": {
+            "crealityprint": {"ready": True, "version": "7.3.0", "binary_sha256": "c" * 64},
+        },
+    })
+    def test_creality_only_does_not_require_orca(self, worker):
+        import json
+        with patch.dict("os.environ", {
+            **self.approved,
+            "MAKERVAULT_SLICER_ENGINES_JSON": json.dumps({
+                "crealityprint": {"version": "7.3.0", "binary_sha256": "c" * 64}
+            }),
+        }, clear=True):
+            self.assertEqual(set(verified_installation()), {"crealityprint"})
+
     @patch("core.slicer_execution.health", return_value={
         "ready": False, "engine": "orcaslicer", "version": "2.9.7",
         "binary_sha256": "b" * 64,
