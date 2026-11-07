@@ -660,7 +660,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         </label>
         <label>Build plate
           <select disabled={!canPrepare || busy} value={form.plate} onChange={e => update("plate", e.target.value)}>
-            <option value="default">Default plate</option>
+            <option value="default">Stock / default plate</option>
           </select>
         </label>
         <div className="full settingsActions">
@@ -766,7 +766,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       defaultColor={selectedSpoolHex}
       onManualColorChange={instanceId => manuallyColouredModels.current.add(instanceId)}
       onPrimaryChange={id => update("input_asset_id", String(id))}
-      plate={customBed.enabled ? { size_mm: [Number(customBed.x), Number(customBed.y)] } : (nativePlate?.plate && ["available", "partial"].includes(nativePlate.plate.status) ? nativePlate.plate : null)}
+      plate={customBed.enabled ? { size_mm: [Number(customBed.x), Number(customBed.y)] }
+        : (nativePlate?.plate && ["available", "partial"].includes(nativePlate.plate.status) ? nativePlate.plate
+        : (Number(selectedPrinter?.build_volume?.x) > 0 && Number(selectedPrinter?.build_volume?.y) > 0
+          ? { size_mm: [Number(selectedPrinter.build_volume.x), Number(selectedPrinter.build_volume.y)] } : null))}
       canEdit={canPrepare}
       onFilesUploaded={onFilesUploaded}
     />
