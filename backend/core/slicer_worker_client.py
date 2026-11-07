@@ -88,7 +88,9 @@ def _encode(raw, limit):
     return base64.b64encode(raw).decode("ascii")
 
 
-def run_remote_job(job_id, engine, version, model, printer_profile, filament_profile, process_profile):
+def run_remote_job(job_id, engine, version, model, printer_profile, filament_profile, process_profile, *, timeout_seconds=900):
+    if not isinstance(timeout_seconds, int) or not 1 <= timeout_seconds <= 900:
+        raise SlicerWorkerError("Invalid slicing timeout.")
     if engine not in {"orcaslicer", "crealityprint", "prusaslicer"} or not isinstance(version, str) or not version or len(version) > 80:
         raise SlicerWorkerError("Unsupported slicing worker engine/version.")
     try:
@@ -110,7 +112,7 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
             url + "/v1/slice",
             data=json.dumps(payload, separators=(",", ":")).encode(),
             headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"},
-            stream=True, timeout=(3, 900), allow_redirects=False,
+            stream=True, timeout=(3, timeout_seconds), allow_redirects=False,
         )
         if response.status_code != 200:
             raise SlicerWorkerError("Isolated worker refused the slicing job.")
