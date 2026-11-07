@@ -7,7 +7,7 @@ This source tag is for profile discovery only, not verified CLI execution.
 from functools import lru_cache
 from pathlib import PurePosixPath
 
-from .slicer_official_filter import narrow_catalogue
+from .slicer_official_filter import narrow_catalogue, models_from_machines, fuzzy_name_match
 
 from .slicer_official_profiles import OfficialProfileError, _get_json
 
@@ -60,11 +60,15 @@ def _entries(kind, vendor="Creality"):
     return entries
 
 
+def official_catalogue_models(vendor="Creality"):
+    return models_from_machines(_entries("printer", vendor))
+
+
 def search_creality_profiles(query, kind, vendor="Creality", printer_model=None):
     if vendor not in VENDORS or not isinstance(query, str) or not 2 <= len(query.strip()) <= 80:
         raise OfficialProfileError("Choose an upstream manufacturer catalogue and search at least two characters.")
     term = query.strip().casefold()
-    matches = [(name, path) for name, path in _entries(kind, vendor) if term in name.casefold()]
+    matches = [(name, path) for name, path in _entries(kind, vendor) if fuzzy_name_match(name, term)]
     if printer_model:
         matches = narrow_catalogue(matches, kind, printer_model)
     return {
