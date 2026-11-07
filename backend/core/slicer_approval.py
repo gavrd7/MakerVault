@@ -82,6 +82,7 @@ def approve_profiles_for_worker(*, owner, engine, version, profile_ids):
     output = run_remote_job(
         uuid.uuid4(), engine, version, fixture_stl(),
         inputs["printer"], inputs["filament"], inputs["process"],
+        timeout_seconds=95,
     )
     gcode_hash = _approved_gcode(output)
     # Check worker and binary identity a second time after running the fixture;
