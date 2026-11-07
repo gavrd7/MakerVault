@@ -8,7 +8,7 @@ import json
 
 from .slicer_official_profiles import (
     OfficialProfileError, _entries as orca_entries,
-    fetch_official_profile,
+    fetch_official_profile, VENDORS as ORCA_VENDORS,
 )
 from .slicer_creality_official_profiles import (
     _entries as creality_entries,
@@ -23,8 +23,10 @@ def official_profile_chain(engine, kind, name, subpath, vendor="Creality"):
     """Return [(native_name, pinned_subpath, bytes)] ordered parent-first."""
     if engine not in {"orcaslicer", "crealityprint"}:
         raise OfficialProfileError("Unknown official slicer profile engine.")
-    if kind not in {"printer", "filament", "process"} or vendor != "Creality":
+    if kind not in {"printer", "filament", "process"}:
         raise OfficialProfileError("Unsupported official profile family.")
+    if (engine == "orcaslicer" and vendor not in ORCA_VENDORS) or (engine == "crealityprint" and vendor != "Creality"):
+        raise OfficialProfileError("Unsupported official profile vendor for this engine.")
     index = (
         dict(orca_entries(vendor, kind)) if engine == "orcaslicer"
         else dict(creality_entries(kind))
