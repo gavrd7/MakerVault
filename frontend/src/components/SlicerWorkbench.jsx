@@ -6,7 +6,7 @@ import PrinterStartGcodeModal from "./PrinterStartGcodeModal";
 import SlicerPlateEditor from "./SlicerPlateEditor";
 import SlicerEngineChoices from "./SlicerEngineChoices";
 import { slicerSpoolHex, recolorUnmodifiedPlate } from "./slicerSpoolColour";
-import { spoolMaterial, chooseSuggestedProfile, defaultOfficialSearch } from "./slicerProfileSuggestions";
+import { spoolMaterial, chooseSuggestedProfile, defaultOfficialSearch, suggestOfficialVendor } from "./slicerProfileSuggestions";
 import { availableSlicerPrintConnections, preferredSlicerPrintConnection } from "./slicerPrintRouting";
 
 const initialForm = {
@@ -603,7 +603,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       const response = await apiFetch("/api/printing/slicer/official-profiles/?" + params.toString());
       const vendors = response.vendors || [];
       setOfficialVendors(vendors);
-      setOfficialVendor(current => vendors.some(v => v.id === current) ? current : (vendors[0]?.id || ""));
+      setOfficialVendor(suggestOfficialVendor(selectedPrinter, vendors));
     } catch (err) {
       setOfficialVendors([]);
       setOfficialError(err.message || "Could not load official catalogues. Manual import remains available.");
