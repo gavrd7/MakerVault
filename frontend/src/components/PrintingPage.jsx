@@ -415,8 +415,8 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
             <div className="printingHeroActions" style={{ marginTop: 14 }}>
               <button type="button" disabled title="A verified slicer worker must be available before opening the slicer.">Open MakerVault Slicer</button>
             </div>
-            <p style={{ textAlign: "center", marginTop: 20, marginBottom: 6 }}><a href="https://github.com/gavrd7/MakerVault/blob/feature/self-hosted-slicer-foundation/docs/guide/3d-printing/slicer.md" target="_blank" rel="noopener noreferrer">
-              Slicer installation, engine management and update guidance ↗
+            <p style={{ textAlign: "center", marginTop: 20, marginBottom: 6 }}><a href="https://github.com/gavrd7/MakerVault/blob/feature/self-hosted-slicer-foundation/docs/guide/3d-printing/slicer.md#adding-the-slicer-container-to-an-existing-installation" target="_blank" rel="noopener noreferrer">
+              Add the optional slicer container to an existing MakerVault installation ↗
             </a></p>
           </>}
         </section>
