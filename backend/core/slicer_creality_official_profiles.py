@@ -1,6 +1,7 @@
 """Pinned official Creality Print native-profile catalogue.
 
-Separate from OrcaSlicer; imported profiles remain unverified candidates.\nProfile sources follow the pinned Creality Print release, not printer brands.
+Separate from OrcaSlicer; imported profiles remain unverified candidates.
+Profile sources follow the pinned Creality Print release, not printer brands.
 This source tag is for profile discovery only, not verified CLI execution.
 """
 from functools import lru_cache
