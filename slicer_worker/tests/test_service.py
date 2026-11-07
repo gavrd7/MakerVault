@@ -91,8 +91,8 @@ class MultiEngineInventoryTests(TestCase):
                 self.assertEqual(set(configured_engines()), set(entries))
                 entries["orcaslicer"]["binary_sha256"] = "0" * 64
                 with patch.dict(os.environ, {**env, "SLICER_ENGINES_JSON": json.dumps(entries)}, clear=True):
-                    # Invalid inventory is not silently accepted.
-                    self.assertEqual(configured_engines(), {})
+                    # An invalid Orca binary must not disable verified Creality.
+                    self.assertEqual(set(configured_engines()), {"crealityprint"})
 
     def test_only_creality_does_not_require_orca(self):
         import hashlib
