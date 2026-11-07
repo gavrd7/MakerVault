@@ -29,7 +29,7 @@ DIRECTORIES = {"printer": "machine", "process": "process", "filament": "filament
 
 def _get(kind, name, opener=urlopen):
     if not isinstance(name, str) or not 1 <= len(name) <= 160 or any(
-        ch in name for ch in ("/", "\\\\", "\\x00")
+        ch in name for ch in ("/", chr(92), chr(0))
     ) or name in {".", ".."}:
         raise ValueError("Unsafe upstream profile name.")
     url = SOURCE + "/" + DIRECTORIES[kind] + "/" + quote(name + ".json", safe="")
@@ -68,7 +68,7 @@ def generate(destination, printer, *, opener=urlopen):
     target.mkdir(parents=True, exist_ok=True)
     for kind, name in FIXTURES[printer].items():
         data = resolved(kind, name, opener=opener)
-        (target / (kind + ".json")).write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
+        (target / (kind + ".json")).write_text(json.dumps(data, ensure_ascii=False, indent=2) + chr(10), encoding="utf-8")
     return target
 
 
