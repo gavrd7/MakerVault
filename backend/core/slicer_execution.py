@@ -111,10 +111,27 @@ def _check_profile_evidence(profile, installation):
         raise SlicerExecutionError("Native profile approval no longer matches this pinned worker.")
 
 
+def _plate_is_single_unmodified_source(job):
+    """Single STL at original transform needs no worker-side 3MF construction."""
+    objects = (job.settings or {}).get("plate_objects")
+    if not objects:
+        return True
+    if not isinstance(objects, list) or len(objects) != 1:
+        return False
+    model = objects[0]
+    if str(model.get("asset_id")) != str(job.input_asset_id):
+        return False
+    return (
+        model.get("x_mm") == 0 and model.get("y_mm") == 0
+        and model.get("rotation_deg") == 0
+        and model.get("scale_percent") == 100
+    )
+
+
 def validate_scheduling(job, installed=None):
     """Pure admission check; caller must hold a row lock before queueing."""
-    if (job.settings or {}).get("plate_objects"):
-        raise SlicerExecutionError("Visual plate arrangements await verified multi-object slicing support.")
+    if not _plate_is_single_unmodified_source(job):
+        raise SlicerExecutionError("Transformed or multi-object plates require the verified 3MF worker path.")
     if job.status != "draft" or job.output_asset_id:
         raise SlicerExecutionError("Only unscheduled slice drafts can be queued.")
     if not installed:
@@ -238,8 +255,8 @@ def validate_scheduling_for_worker(job, installed):
         raise SlicerExecutionError("Isolated slicing worker is no longer approved.")
     installation = validate_engine_selection(job.engine, job.engine_version, installed)
     installation["binary_sha256"] = installed[job.engine].get("binary_sha256")
-    if (job.settings or {}).get("plate_objects"):
-        raise SlicerExecutionError("Visual plate arrangements cannot run in the single-model worker.")
+    if not _plate_is_single_unmodified_source(job):
+        raise SlicerExecutionError("Transformed or multi-object plates cannot run in the single-STL worker.")
     if job.printer.owner_id != job.owner_id or job.input_asset.owner_id != job.owner_id:
         raise SlicerExecutionError("Job ownership changed.")
     for kind in ("printer", "filament", "process"):
