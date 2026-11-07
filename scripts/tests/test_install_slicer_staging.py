@@ -4,19 +4,19 @@ from pathlib import Path
 import stat
 from tempfile import TemporaryDirectory
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, patch
 
 from scripts import install_slicer_staging as installer
 
 
 class ReleaseMetadataTests(unittest.TestCase):
     def test_reject_wrong_publisher_or_missing_digest(self):
-        response = Mock()
+        response = MagicMock()
         response.status = 200
         response.headers = {}
         response.read.return_value = b'{"assets":[{"name":"' + installer.ASSET.encode() + b'","digest":"", "browser_download_url":"https://github.com/evil/release"}]}'
-        response.__enter__ = Mock(return_value=response)
-        response.__exit__ = Mock(return_value=False)
+        response.__enter__ = MagicMock(return_value=response)
+        response.__exit__ = MagicMock(return_value=False)
         with patch.object(installer, "urlopen", return_value=response):
             with self.assertRaisesRegex(ValueError, "pinned path"):
                 installer._github_asset()
@@ -25,12 +25,12 @@ class ReleaseMetadataTests(unittest.TestCase):
         url = "https://github.com/OrcaSlicer/OrcaSlicer/releases/download/" + installer.TAG + "/" + installer.ASSET
         payload = ('{"assets":[{"name":"' + installer.ASSET +
                    '","digest":"sha256:' + "a" * 64 + '","browser_download_url":"' + url + '"}]}')
-        response = Mock()
+        response = MagicMock()
         response.status = 200
         response.headers = {}
         response.read.return_value = payload.encode()
-        response.__enter__ = Mock(return_value=response)
-        response.__exit__ = Mock(return_value=False)
+        response.__enter__ = MagicMock(return_value=response)
+        response.__exit__ = MagicMock(return_value=False)
         with patch.object(installer, "urlopen", return_value=response):
             self.assertEqual(installer._github_asset(), (url, "a" * 64))
 
