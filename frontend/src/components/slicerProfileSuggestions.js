@@ -39,7 +39,7 @@ export function chooseSuggestedProfile(profiles, jobs, { engine, version, kind, 
   if (explicit) return { profile: explicit, reason: "default" };
   const last = (jobs || []).find(job =>
     job.engine === engine && job.engine_version === version &&
-    (!printer || !job.printer_id || String(job.printer_id) === String(printer.id)) &&
+    (!printer || String(job.printer?.id || "") === String(printer.id)) &&
     filtered.some(p => p.id === job[kind + "_profile_id"])
   );
   if (last) {
