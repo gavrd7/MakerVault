@@ -56,13 +56,13 @@ class GeneratedSlicerFileTests(TestCase):
     def test_opt_in_auto_adds_completed_output_to_gcode_library(self):
         self.job.settings = {"save_gcode_to_library": True}
         self.job.save(update_fields=["settings"])
-        output = store_generated_gcode(self.job.pk, b"; generated\\nG1 X1 Y1 E0.5\\n")
+        output = store_generated_gcode(self.job.pk, b"; generated\nG1 X1 Y1 E0.5\n")
         self.assertEqual(output.category, "gcode")
         self.assertEqual(output.metadata["slicer_library_status"], "saved")
 
     def test_owner_must_explicitly_promote_private_completed_output(self):
         from django.contrib.auth.models import Permission
-        output = store_generated_gcode(self.job.pk, b"; generated\\nG1 X1 Y1 E0.5\\n")
+        output = store_generated_gcode(self.job.pk, b"; generated\nG1 X1 Y1 E0.5\n")
         endpoint = f"/api/printing/slicer/jobs/{self.job.pk}/save-gcode/"
         other = get_user_model().objects.create_user(username="unrelated-slice-user", password="test")
         self.client.force_login(other)
