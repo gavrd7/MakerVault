@@ -41,7 +41,7 @@ function pretty(value) {
 
 export default function SlicerPlateEditor({
   files = [], objects = [], onChange, onPrimaryChange, plate = null,
-  canEdit = false, onFilesUploaded,
+  canEdit = false, onFilesUploaded, defaultColor = null, onManualColorChange,
 }) {
   const hostRef = useRef(null);
   const sceneRef = useRef(null);
@@ -84,6 +84,7 @@ export default function SlicerPlateEditor({
       return;
     }
     const next = newPlateInstance(id, objects.length);
+    if (defaultColor) next.color = defaultColor;
     onChange([...objects, next]);
     if (!objects.length && !String(id).startsWith("local:")) onPrimaryChange?.(id);
     setSelected(next.instance_id);
@@ -135,7 +136,9 @@ export default function SlicerPlateEditor({
         }
         previews.push({ id, category: "mesh", name: file.name, filename: file.name,
           url: URL.createObjectURL(file), localOnly: !saveImports });
-        additions.push(newPlateInstance(id, objects.length + additions.length));
+        const addition = newPlateInstance(id, objects.length + additions.length);
+        if (defaultColor) addition.color = defaultColor;
+        additions.push(addition);
       }
     } catch (err) {
       setError((err.message || "Could not add models.") +
@@ -451,7 +454,7 @@ export default function SlicerPlateEditor({
       </label>
       <label>Preview/material colour
         <input type="color" value={chosen?.color || PALETTE[0]} disabled={!canEdit}
-          onChange={event => patch("color", event.target.value)} />
+          onChange={event => { onManualColorChange?.(chosen.instance_id); patch("color", event.target.value); }} />
       </label>
       <div className="settingsActions">
         <button type="button" disabled={!canEdit} onClick={() => patch("rotation_deg", ((chosen.rotation_deg + 90) % 360))}>Rotate 90°</button>
