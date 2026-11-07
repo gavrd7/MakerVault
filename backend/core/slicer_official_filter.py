@@ -63,3 +63,23 @@ def profile_matches_printer(name, kind, model):
 def narrow_catalogue(entries, kind, model):
     return [(name, path) for name, path in entries
             if profile_matches_printer(name, kind, model)]
+
+def models_from_machines(entries):
+    """Unique catalogue model labels, stripping only nozzle-size suffixes."""
+    models = set()
+    for name, _path in entries:
+        model = re.sub(r"\\s*\\(?\\d+(?:[.]\\d+)?\\s*(?:mm\\s*)?nozzle\\)?\\s*$", "", name, flags=re.I).strip()
+        if model:
+            models.add(model)
+    return sorted(models, key=str.casefold)
+
+
+def fuzzy_name_match(name, query):
+    """All search tokens may appear anywhere, irrespective of their order."""
+    terms = _words(query)
+    words = _words(name)
+    if not terms:
+        return False
+    # Exact token matching avoids treating K1 as K10 or K1 Max as K1.
+    return all(term in words or (len(term) >= 4 and any(
+        word.startswith(term) for word in words)) for term in terms)
