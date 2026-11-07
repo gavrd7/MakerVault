@@ -12,6 +12,7 @@ import subprocess
 
 from .stl_validation import StlValidationError, validate_stl
 from .three_mf_validation import validate_worker_3mf
+from .headless_env import slicing_environment
 from .runner import (
     DEFAULT_TIMEOUT_SECONDS, MAX_GCODE_BYTES, MAX_MODEL_BYTES, MAX_PROFILE_BYTES,
     WorkerError, _regular_file, _output_path,
@@ -100,8 +101,7 @@ def run_orca(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIME
     try:
         proc = subprocess.Popen(
             command, cwd=str(workdir),
-            env={"HOME": str(workdir), "TMPDIR": str(workdir), "LANG": "C.UTF-8",
-                 "LC_ALL": "C.UTF-8", "PATH": "/usr/bin:/bin"},
+            env=slicing_environment(workdir),
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
         )
         try:
