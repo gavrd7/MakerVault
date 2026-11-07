@@ -26,7 +26,7 @@ from .slicer_creality_official_profiles import (
     REF as OFFICIAL_CRE_REF,
 )
 from .slicer_official_profiles import (
-    OfficialProfileError, search_official_profiles, fetch_official_profile,
+    OfficialProfileError, search_official_profiles, fetch_official_profile, available_official_vendors,
     ENGINE_VERSION as OFFICIAL_ORCA_VERSION, SOURCE as OFFICIAL_ORCA_SOURCE,
     REF as OFFICIAL_ORCA_REF,
 )
@@ -351,6 +351,12 @@ def official_profiles(request):
     """Search/import native candidates from pinned official engine catalogues."""
     if request.method == "GET":
         selected = request.GET.get("engine", "orcaslicer")
+        if request.GET.get("catalogues") == "1":
+            if selected == "orcaslicer":
+                return JsonResponse({"engine": selected, "vendors": available_official_vendors(), "ref": OFFICIAL_ORCA_REF})
+            if selected == "crealityprint":
+                return JsonResponse({"engine": selected, "vendors": [{"id": "Creality", "label": "Creality"}], "ref": OFFICIAL_CRE_REF})
+            return _error("No pinned official catalogue for this engine.")
         searcher = {
             "orcaslicer": search_official_profiles,
             "crealityprint": search_creality_profiles,
