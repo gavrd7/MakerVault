@@ -30,6 +30,43 @@ The authenticated engine discovery API reports two separate signals: `deployment
 
 The status is checked at page load and every 60 seconds. An already-open slicer workspace also falls back to an unavailable message if a subsequent status refresh reports loss of the worker. This is a UI affordance only; backend job admission remains fail closed independently.
 
+## Candidate worker image from reviewed Linux AppImages
+
+This is a **developer-only, local acceptance-test image**, not the finished GUI engine installer. Download an exact Linux AppImage directly from the official <https://github.com/OrcaSlicer/OrcaSlicer/releases> and/or <https://github.com/CrealityOfficial/CrealityPrint/releases>, and independently verify the expected SHA-256. Do not copy third-party executables into the Git repository.
+
+From the MakerVault source checkout, with the local approved files available:
+
+```bash
+python3 -m slicer_worker.stage_engines \
+  --engine orcaslicer 2.4.2 /path/to/OrcaSlicer.AppImage VERIFIED_64_CHARACTER_SHA256
+# Alternatively: --engine crealityprint <tested-version> /path/to/CrealityPrint.AppImage VERIFIED_SHA256
+# Or supply both --engine groups together in one command.
+
+docker build -f slicer_worker/Dockerfile.bundle \
+  -t makervault-slicer-candidate:local .
+```
+
+The staging tool verifies all requested hashes **before copying**, refuses symlinks, duplicates and nonempty output directories, then writes a locally ignored `slicer-engine-assets/` directory and two suggested JSON configuration maps (one for the worker and one for app-side approval). Its status is **staged_not_tested**, not approved. Both engines are independent; no Orca installation is required for a Creality-only test.
+
+To test without joining the MakerVault network, place three verified, self-contained native engine profiles (printer, filament and process JSON) in an isolated fixture directory on the test host. Then run:
+
+```bash
+docker run --rm --network none --read-only \
+  --cap-drop ALL --security-opt no-new-privileges \
+  --pids-limit 96 --memory 3g --cpus 2 \
+  --tmpfs /tmp:rw,nosuid,size=1g \
+  --mount type=bind,src=/absolute/path/to/fixtures,dst=/fixtures,readonly \
+  makervault-slicer-candidate:local \
+  python3 -m slicer_worker.probe \
+    --engine orcaslicer --version 2.4.2 \
+    --binary /opt/engines/orcaslicer.AppImage \
+    --printer /fixtures/printer.json \
+    --filament /fixtures/filament.json \
+    --process /fixtures/process.json
+```
+
+Use matching `crealityprint` flags, binary and Creality-native profiles when testing Creality. A successful receipt verifies one engine/version/profile set in that specific environment, but **does not validate all printer types**. A nonzero exit may indicate an upstream GUI/CLI regression, missing Qt/GL runtime dependency, unsupported AppImage extraction, an inherited/invalid profile, or no generated extrusion. Never relax isolation or enable printing automatically just to make the command pass. Build/runtime dependencies and licence obligations must be reviewed before producing a redistributable image. This path does not automatically integrate a local image into MakerVault's pinned production image approval gate.
+
 ## Real engine binary acceptance test (no activation)
 
 Before an engine is made available in the slicer settings, use the **offline acceptance probe** inside a disposable, restricted Linux test container that already contains an independently reviewed OrcaSlicer or Creality Print executable and its **resolved**, matching K1/K2 printer, filament and process JSON profiles. Nothing is downloaded or installed by the probe.
