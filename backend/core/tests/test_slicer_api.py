@@ -220,6 +220,34 @@ class SliceJobApiTests(TestCase):
             validate_scheduling(row, {"prusaslicer": {"enabled": True, "verified": True}})
         self.assertEqual(self.client.post(f"{self.url}{row.pk}/start/").status_code, 409)
 
+    def test_plate_only_draft_uses_first_model_without_separate_stl_selection(self):
+        self.client.force_login(self.owner)
+        uploaded = FileAsset.objects.create(
+            owner=self.owner, name="New upload.stl", category="mesh",
+            metadata={"extension": ".stl", "original_name": "New upload.stl"},
+        )
+        plate = [{
+            "instance_id": str(uuid.uuid4()), "asset_id": str(uploaded.pk),
+            "x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+            "scale_percent": 100, "color": "#f59e0b",
+        }]
+        payload = {key: value for key, value in self.payload.items()
+                   if key != "input_asset_id"}
+        payload["settings"] = {"plate_objects": plate}
+        created = self.post(payload)
+        self.assertEqual(created.status_code, 201, created.content)
+        row = SliceJob.objects.get(pk=created.json()["job"]["id"])
+        self.assertEqual(row.input_asset_id, uploaded.pk)
+        self.assertEqual(row.settings["plate_objects"][0]["asset_id"], str(uploaded.pk))
+
+        # A stale top-level selection cannot silently replace the visible plate.
+        mismatch = self.post({**payload, "input_asset_id": str(self.input_asset.pk)})
+        self.assertEqual(mismatch.status_code, 400, mismatch.content)
+
+        # No chosen model remains invalid rather than selecting another file.
+        missing = self.post({**payload, "settings": {"save_gcode_to_library": False}})
+        self.assertEqual(missing.status_code, 400, missing.content)
+
     def test_visual_plate_rejects_foreign_files_and_untrusted_settings(self):
         self.client.force_login(self.owner)
         foreign = FileAsset.objects.create(
