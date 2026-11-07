@@ -3742,3 +3742,24 @@ a:focus-visible,
 .slicerMaterialMatch p{margin:0;color:var(--muted,#99a6b8);font-size:12px;line-height:1.5}
 .slicerMaterialMatch button{max-width:100%;white-space:normal;text-align:center}
 .slicerProfileHint{font-size:12px;line-height:1.5;color:var(--muted,#99a6b8);margin:8px 0 12px}
+
+
+/* Reusable native slicer branding, sized for desktop and narrow mobile screens. */
+.slicerEngineSelection{display:flex;flex-direction:column;align-items:stretch;gap:10px;min-width:0}
+.slicerEngineSelectionLabel{font-size:.92rem}
+.slicerEngineChoices{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:10px;min-width:0}
+.slicerEngineChoice{display:flex;align-items:center;gap:12px;min-width:0;padding:12px;border:1px solid var(--border-color,#576575);border-radius:12px;background:var(--card-bg,transparent);cursor:pointer;transition:border-color .14s ease,background-color .14s ease}
+.slicerEngineChoice.isSelected{border:2px solid var(--accent,#32a89d);padding:11px;background:rgba(31,158,147,.08)}
+.slicerEngineChoice:focus-within{outline:2px solid var(--accent,#32a89d);outline-offset:2px}
+.slicerEngineChoice.isDisabled{opacity:.55;cursor:not-allowed}
+.slicerEngineChoice input[type="radio"]{flex:0 0 auto;margin:0;accent-color:var(--accent,#32a89d)}
+.slicerEngineLogo{width:44px;height:44px;min-width:44px;object-fit:contain;border-radius:9px}
+.slicerEngineLogoSmall{width:28px;height:28px;min-width:28px}
+.slicerEngineLogoFallback{display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;background:rgba(120,130,145,.16)}
+.slicerEngineChoiceText{display:flex;flex-direction:column;min-width:0;gap:3px}
+.slicerEngineChoiceText strong,.slicerEngineChoiceText small{overflow-wrap:anywhere}
+.slicerEngineChoiceText small{font-size:.76rem;opacity:.75}
+.slicerEngineChoiceInfo{cursor:default;flex-wrap:wrap}
+.slicerEngineInstallHint{width:100%;font-size:.76rem;opacity:.75;padding-left:56px}
+.slicerEngineManageLink{align-self:flex-start;font-size:.85rem}
+@media(max-width:600px){.slicerEngineChoices{grid-template-columns:minmax(0,1fr)}.slicerEngineChoice{padding:10px}.slicerEngineChoice.isSelected{padding:9px}}
