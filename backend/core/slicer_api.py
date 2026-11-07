@@ -331,7 +331,7 @@ def _profile_summary(profile):
     return {
         "id": str(profile.pk), "engine": profile.engine,
         "engine_version": profile.engine_version, "kind": profile.kind,
-        "name": profile.name, "status": profile.status,
+        "name": profile.name, "status": profile.status, "is_default": profile.is_default,
         "file_asset_id": str(profile.file_asset_id),
         "content_sha256": profile.content_sha256,
         "provenance": profile.provenance,
@@ -545,6 +545,39 @@ def customise_profile(request, profile_id):
         "execution_available": False,
         "warning": "Custom profile saved as an unverified candidate. Original preserved.",
     }, status=201)
+
+
+@login_required
+@require_http_methods(["POST"])
+def set_default_profile(request, profile_id):
+    """Opt-in default for exactly this user's native engine/version/kind."""
+    profile = SlicerProfile.objects.filter(pk=profile_id, owner=request.user).first()
+    if not profile:
+        return _error("Native slicer profile not found.", 404)
+    if not request.user.has_perm("core.change_slicerprofile"):
+        return _error("You do not have permission to manage profile defaults.", 403)
+    if len(request.body) > 128:
+        return _error("Default profile request is too large.", 413)
+    try:
+        data = json.loads(request.body.decode("utf-8"))
+        if not isinstance(data, dict) or set(data) != {"default"} or not isinstance(data["default"], bool):
+            raise ValueError("Choose whether this profile is the default.")
+        # Lock the owner row to serialize updates even when two different
+        # native profile records are set as default simultaneously.
+        from django.contrib.auth import get_user_model
+        with transaction.atomic():
+            get_user_model().objects.select_for_update().get(pk=request.user.pk)
+            related = SlicerProfile.objects.filter(
+                owner=request.user, engine=profile.engine,
+                engine_version=profile.engine_version, kind=profile.kind,
+            )
+            related.update(is_default=False)
+            if data["default"]:
+                related.filter(pk=profile.pk).update(is_default=True)
+        profile.refresh_from_db()
+    except (ValueError, TypeError, UnicodeDecodeError):
+        return _error("Invalid default selection.")
+    return JsonResponse({"profile": _profile_summary(profile), "default": profile.is_default})
 
 
 @login_required
