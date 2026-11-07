@@ -44,6 +44,18 @@ test("PETG profile filter excludes incompatible PLA defaults",()=>{
   assert.equal(chooseSuggestedProfile([profiles[0]],[],{engine:"crealityprint",version:"7.3.0",kind:"filament",material:"PETG"}),null);
 });
 
+test("do not auto-fill a K1 with K2-only PETG or process presets",()=>{
+  const choices=[
+    make("k2","filament","Generic PETG @Creality K2"),
+    make("k1","filament","Generic PETG @Creality K1"),
+    make("processK2","process","0.20mm Standard @Creality K2"),
+    make("processK1","process","0.20mm Standard @Creality K1"),
+  ];
+  const opts={engine:"crealityprint",version:"7.3.0",printer,material:"PETG"};
+  assert.equal(chooseSuggestedProfile(choices,[],{...opts,kind:"filament"}).profile.id,"k1");
+  assert.equal(chooseSuggestedProfile(choices,[],{...opts,kind:"process"}).profile.id,"processK1");
+});
+
 test("0.20 mm standard is a fallback, not an invented preset",()=>{
   const profile=make("standard","process","0.20mm Standard @Creality K1");
   assert.equal(chooseSuggestedProfile([profile],[],{engine:"crealityprint",version:"7.3.0",kind:"process"}).profile.id,"standard");
