@@ -3,7 +3,7 @@ import zipfile
 from defusedxml import ElementTree as ET
 from django.test import SimpleTestCase
 from core.slicer_approval import fixture_stl
-from core.slicer_plate_3mf import build_plate_3mf, NS
+from core.slicer_plate_3mf import build_plate_3mf, build_compound_plate_3mf, NS
 from core.slicer_profiles import SlicerProfileError
 
 
@@ -37,6 +37,36 @@ class BuildPlate3MFTests(SimpleTestCase):
         self.assertEqual((second[9], second[10]), (130, 100))
         self.assertAlmostEqual(second[1], 0.5, places=5)
         self.assertAlmostEqual(second[3], -0.5, places=5)
+
+    def test_single_material_compound_keeps_both_printable_islands(self):
+        source = fixture_stl()
+        items = [
+            ({"x_mm": -35, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100}, source),
+            ({"x_mm": 35, "y_mm": 0, "rotation_deg": 90, "scale_percent": 100}, source),
+        ]
+        data = build_compound_plate_3mf(items, bed_width=220, bed_depth=220)
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            self.assertEqual(set(archive.namelist()), {
+                "3D/3dmodel.model", "[Content_Types].xml", "_rels/.rels",
+            })
+            root = ET.fromstring(archive.read("3D/3dmodel.model"))
+        objects = root.findall(".//{%s}object" % NS)
+        builds = root.findall(".//{%s}build/{%s}item" % (NS, NS))
+        self.assertEqual(len(objects), 1)
+        self.assertEqual(len(builds), 1)
+        self.assertEqual(len(objects[0].findall(".//{%s}triangle" % NS)), 8)
+        values = [float(v.attrib["x"]) for v in objects[0].findall(".//{%s}vertex" % NS)]
+        self.assertGreater(max(values) - min(values), 60)
+
+    def test_compound_rejects_bed_overflow_and_malformed_sources(self):
+        shape = fixture_stl()
+        model = {"x_mm": 0, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100}
+        with self.assertRaises(SlicerProfileError):
+            build_compound_plate_3mf([(model, shape), ({**model, "x_mm": 150}, shape)],
+                                     bed_width=220, bed_depth=220)
+        with self.assertRaises(SlicerProfileError):
+            build_compound_plate_3mf([(model, shape), (model, b"bad STL")],
+                                     bed_width=220, bed_depth=220)
 
     def test_missing_bed_and_invalid_mesh_fail_closed(self):
         item = {"x_mm": 0, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100}
