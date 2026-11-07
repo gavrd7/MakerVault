@@ -19,6 +19,11 @@ from .slicer_profile_edit import SETTINGS as EDITABLE_PROFILE_SETTINGS, customis
 from .slicer_profile_lineage import inspect_orca_lineage
 from .slicer_mesh import inspect_stl, MeshInspectionError, MAX_INSPECTION_BYTES
 from .slicer_bed import inspect_orca_plate
+from .slicer_creality_official_profiles import (
+    search_creality_profiles, fetch_creality_profile,
+    ENGINE_VERSION as OFFICIAL_CRE_VERSION, SOURCE as OFFICIAL_CRE_SOURCE,
+    REF as OFFICIAL_CRE_REF,
+)
 from .slicer_official_profiles import (
     OfficialProfileError, search_official_profiles, fetch_official_profile,
     ENGINE_VERSION as OFFICIAL_ORCA_VERSION, SOURCE as OFFICIAL_ORCA_SOURCE,
@@ -308,10 +313,17 @@ def _profile_summary(profile):
 @login_required
 @require_http_methods(["GET", "POST"])
 def official_profiles(request):
-    """Search/import only a fixed, tagged official source, never arbitrary URLs."""
+    """Search/import native candidates from pinned official engine catalogues."""
     if request.method == "GET":
+        selected = request.GET.get("engine", "orcaslicer")
+        searcher = {
+            "orcaslicer": search_official_profiles,
+            "crealityprint": search_creality_profiles,
+        }.get(selected)
+        if searcher is None:
+            return _error("Official profile search is not available for this engine.")
         try:
-            results = search_official_profiles(
+            results = searcher(
                 request.GET.get("q", ""),
                 request.GET.get("kind", "printer"),
                 request.GET.get("vendor", "Creality"),
@@ -325,8 +337,16 @@ def official_profiles(request):
         return _error("Official profile selection is too large.", 413)
     try:
         selection = json.loads(request.body.decode("utf-8"))
-        if not isinstance(selection, dict) or set(selection) - {"vendor", "kind", "name", "sub_path"}:
+        if not isinstance(selection, dict) or set(selection) - {"engine", "vendor", "kind", "name", "sub_path"}:
             raise ValueError("Invalid official profile selection.")
+        engine = selection.get("engine", "orcaslicer")
+        providers = {
+            "orcaslicer": (OFFICIAL_ORCA_VERSION, OFFICIAL_ORCA_SOURCE, OFFICIAL_ORCA_REF, fetch_official_profile),
+            "crealityprint": (OFFICIAL_CRE_VERSION, OFFICIAL_CRE_SOURCE, OFFICIAL_CRE_REF, fetch_creality_profile),
+        }
+        if engine not in providers:
+            return _error("Official import is not available for this engine.")
+        version, source, ref, fetcher = providers[engine]
         kind = selection.get("kind")
         vendor = selection.get("vendor", "Creality")
         name = selection.get("name")
@@ -334,25 +354,25 @@ def official_profiles(request):
         if not isinstance(name, str) or len(name) > 200:
             raise ValueError("Invalid native profile name.")
         if SlicerProfile.objects.filter(
-            owner=request.user, engine="orcaslicer",
-            engine_version=OFFICIAL_ORCA_VERSION, kind=kind, name=name,
+            owner=request.user, engine=engine,
+            engine_version=version, kind=kind, name=name,
         ).exists():
             return _error("This exact official preset has already been imported.", 409)
-        raw = fetch_official_profile(kind, name, subpath, vendor)
+        raw = fetcher(kind, name, subpath, vendor)
         asset = FileAsset(
             owner=request.user, name=name + ".json", category="source",
             metadata={"original_name": name + ".json", "extension": ".json"},
         )
-        asset.file = ContentFile(raw, name="official-orca-profile.json")
-        inspected = inspect_native_profile(asset, "orcaslicer")
-        provenance = f"{OFFICIAL_ORCA_SOURCE}@{OFFICIAL_ORCA_REF}/{vendor}/{subpath}"
+        asset.file = ContentFile(raw, name="official-" + engine + "-profile.json")
+        inspected = inspect_native_profile(asset, engine)
+        provenance = f"{source}@{ref}/{vendor}/{subpath}"
         if len(provenance) > 200:
             raise ValueError("Official source identity is too long.")
         with transaction.atomic():
             asset.save()
             profile = SlicerProfile.objects.create(
-                owner=request.user, file_asset=asset, engine="orcaslicer",
-                engine_version=OFFICIAL_ORCA_VERSION, kind=kind, name=name,
+                owner=request.user, file_asset=asset, engine=engine,
+                engine_version=version, kind=kind, name=name,
                 provenance=provenance, content_sha256=inspected["sha256"], status="candidate",
             )
     except (OfficialProfileError, ValueError, TypeError, UnicodeDecodeError, SlicerProfileError) as exc:
@@ -360,7 +380,7 @@ def official_profiles(request):
     except IntegrityError:
         return _error("The selected official profile is already registered.", 409)
     return JsonResponse({
-        "profile": _profile_summary(profile), "engine_version": OFFICIAL_ORCA_VERSION,
+        "profile": _profile_summary(profile), "engine_version": version,
         "execution_available": False,
         "warning": "Official origin does not imply runtime approval; profile inheritance may remain unresolved.",
     }, status=201)
