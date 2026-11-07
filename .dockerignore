@@ -12,3 +12,7 @@ media/
 
 # Do not send local third-party engine bundles to the MakerVault app build.
 slicer-engine-assets/
+
+# Slicer staging-only secret token and generated worker approval metadata.
+.slicer-staging.env
+.slicer-staging.env.pending
