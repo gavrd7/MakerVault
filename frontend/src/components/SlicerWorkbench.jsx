@@ -433,10 +433,17 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       {notice && <p role="status">{notice}</p>}
       <form className="formGrid" onSubmit={saveDraft}>
         <label>Engine
-          <select required disabled={!canPrepare || busy || loading} value={form.engine} onChange={e => update("engine", e.target.value)}>
+          <select required disabled={!canPrepare || busy || loading} value={form.engine} onChange={e => {
+            const chosenEngine = engines.find(item => item.key === e.target.value);
+            setForm(current => ({
+              ...current, engine: e.target.value,
+              engine_version: chosenEngine?.installed_version || "",
+              printer_profile_id: "", filament_profile_id: "", process_profile_id: "",
+            }));
+          }}>
             {engines.length ? engines.map(engine =>
               <option key={engine.key} value={engine.key}>
-                {engine.label} · {engine.available ? "verified worker available" : "not installed / not verified"}
+                {engine.label} · {engine.available ? "verified " + (engine.installed_version || "worker") : "not installed / not verified"}
               </option>
             ) : <option value="orcaslicer">OrcaSlicer · status unknown</option>}
           </select>
@@ -446,7 +453,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             ? "The selected engine has passed worker identity checks. Compatible native profiles are still required for slicing."
             : "The selected engine is not installed or verified. You can prepare drafts, but slicing is disabled."}
         </p>
-        <label>Requested engine version
+        <label>Engine version
           <input required maxLength="80" disabled={!canPrepare || busy} value={form.engine_version} onChange={e => update("engine_version", e.target.value)} placeholder="Exact installed/version-matched engine version" />
         </label>
         <label className="full">Model STL
