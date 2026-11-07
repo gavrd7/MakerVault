@@ -243,7 +243,8 @@ def engines(request):
     rows = engine_catalogue()
     for row in rows:
         if row["key"] in installed:
-            row.update({"available": True, "enabled": True, "status": "validated"})
+            row.update({"available": True, "enabled": True, "status": "validated",
+                        "installed_version": installed[row["key"]]["version"]})
     return JsonResponse({
         "engines": rows,
         "worker_configured": bool(installed),
