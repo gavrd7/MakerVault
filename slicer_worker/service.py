@@ -20,6 +20,7 @@ from .runner import MAX_GCODE_BYTES, MAX_MODEL_BYTES, MAX_PROFILE_BYTES, WorkerE
 from .orca_runner import run_orca
 from .creality_runner import run_creality
 from .engine_registry import configured_engines
+from .three_mf_validation import validate_worker_3mf
 
 
 MAX_REQUEST_BYTES = 48 * 1024 * 1024
@@ -66,10 +67,12 @@ def configured_engine():
 
 
 def _decode_payload(payload):
-    if not isinstance(payload, dict) or set(payload) != {
+    expected = {
         "job_id", "engine", "engine_version",
         "model", "printer_profile", "filament_profile", "process_profile",
-    }:
+    }
+    if not isinstance(payload, dict) or (set(payload) != expected and
+                                        set(payload) != expected | {"model_format"}):
         raise WorkerError("Invalid slicing job payload.")
     try:
         uuid.UUID(str(payload["job_id"]))
@@ -77,7 +80,10 @@ def _decode_payload(payload):
         raise WorkerError("Invalid job identifier.") from None
     if payload["engine"] not in {"orcaslicer", "crealityprint", "prusaslicer"}:
         raise WorkerError("Unsupported isolated worker engine.")
-    files = {}
+    model_format = payload.get("model_format", "stl")
+    if model_format not in {"stl", "3mf"}:
+        raise WorkerError("Unsupported model input format.")
+    files = {"model_format": model_format}
     for key, limit in (
         ("model", MAX_MODEL_BYTES),
         ("printer_profile", MAX_PROFILE_BYTES),
@@ -94,6 +100,8 @@ def _decode_payload(payload):
         if not raw or len(raw) > limit:
             raise WorkerError("Invalid slicing input size.")
         files[key] = raw
+    if model_format == "3mf":
+        validate_worker_3mf(files["model"])
     return files
 
 
@@ -159,7 +167,7 @@ class Handler(BaseHTTPRequestHandler):
                 workdir = Path(tmp)
                 extension = ".json" if current["engine"] in {"orcaslicer", "crealityprint"} else ".ini"
                 for field, name in (
-                    ("model", "input.stl"), ("printer_profile", "printer" + extension),
+                    ("model", "input." + files["model_format"]), ("printer_profile", "printer" + extension),
                     ("filament_profile", "filament" + extension),
                     ("process_profile", "process" + extension),
                 ):
