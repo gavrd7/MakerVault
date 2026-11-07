@@ -55,13 +55,26 @@ def health():
         payload = response.json()
         if not isinstance(payload, dict):
             raise SlicerWorkerError("Worker returned invalid health information.")
+        supported = {"orcaslicer", "crealityprint", "prusaslicer"}
+        engines = {}
+        if isinstance(payload.get("engines"), dict) and len(payload["engines"]) <= 3:
+            for key, entry in payload["engines"].items():
+                if key not in supported or not isinstance(entry, dict):
+                    continue
+                version, digest = entry.get("version"), entry.get("binary_sha256")
+                if (entry.get("ready") is True and isinstance(version, str)
+                        and 1 <= len(version) <= 80 and isinstance(digest, str)
+                        and len(digest) == 64
+                        and all(c in "0123456789abcdef" for c in digest)):
+                    engines[key] = {"version": version, "binary_sha256": digest, "ready": True}
         return {
             "ready": payload.get("ready") is True,
-            "engine": payload.get("engine") if payload.get("engine") in {"orcaslicer", "prusaslicer"} else None,
+            "engine": payload.get("engine") if payload.get("engine") in supported else None,
             "version": str(payload.get("version") or "")[:80],
             "binary_sha256": payload.get("binary_sha256")
                 if isinstance(payload.get("binary_sha256"), str) and len(payload["binary_sha256"]) == 64
                 else None,
+            "engines": engines,
         }
     except (requests.RequestException, ValueError) as exc:
         raise SlicerWorkerError("Isolated slicing worker is unreachable or incompatible.") from exc
@@ -76,7 +89,7 @@ def _encode(raw, limit):
 
 
 def run_remote_job(job_id, engine, version, model, printer_profile, filament_profile, process_profile):
-    if engine not in {"orcaslicer", "prusaslicer"} or not isinstance(version, str) or not version or len(version) > 80:
+    if engine not in {"orcaslicer", "crealityprint", "prusaslicer"} or not isinstance(version, str) or not version or len(version) > 80:
         raise SlicerWorkerError("Unsupported slicing worker engine/version.")
     try:
         canonical_id = str(uuid.UUID(str(job_id)))
