@@ -39,6 +39,43 @@ class SliceJobApiTests(TestCase):
             content_type="application/json",
         )
 
+    def test_customise_creality_profile_in_gui_preserves_original(self):
+        from django.core.files.base import ContentFile
+        import hashlib
+        original = b'{"name":"Original PLA","nozzle_temperature":["210"],"bed_temperature":["60"]}'
+        asset = FileAsset(owner=self.owner, name="Original PLA.json", category="source",
+                          metadata={"extension": ".json", "original_name": "Original PLA.json"})
+        asset.file = ContentFile(original, name="creality-test-original.json")
+        asset.save()
+        profile = SlicerProfile.objects.create(
+            owner=self.owner, file_asset=asset, engine="crealityprint",
+            engine_version="7.3.0", kind="filament", name="Original PLA",
+            content_sha256=hashlib.sha256(original).hexdigest(),
+            status="candidate",
+        )
+        url = f"/api/printing/slicer/profiles/{profile.pk}/customise/"
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.get(url).status_code, 404)
+        self.client.force_login(self.owner)
+        inspected = self.client.get(url)
+        self.assertEqual(inspected.status_code, 200, inspected.content)
+        self.assertEqual(inspected.json()["settings"]["nozzle_temperature"]["current"], 210)
+        response = self.client.post(url, data=json.dumps({
+            "name": "Custom PLA 220", "settings": {"nozzle_temperature": 220},
+        }), content_type="application/json")
+        self.assertEqual(response.status_code, 201, response.content)
+        custom = SlicerProfile.objects.get(pk=response.json()["profile"]["id"])
+        self.assertEqual(custom.engine, "crealityprint")
+        self.assertEqual(custom.status, "candidate")
+        self.assertNotEqual(custom.file_asset_id, profile.file_asset_id)
+        with custom.file_asset.file.open("rb") as stream:
+            self.assertEqual(json.load(stream)["nozzle_temperature"], ["220"])
+        with asset.file.open("rb") as stream:
+            self.assertEqual(stream.read(), original)
+        self.assertEqual(self.client.post(url, data=json.dumps({
+            "name": "Unsafe", "settings": {"post_process": 1},
+        }), content_type="application/json").status_code, 400)
+
     def test_preview_is_admin_only_and_never_reports_worker_installed(self):
         from unittest.mock import patch
         url = "/api/printing/slicer/engines/"
