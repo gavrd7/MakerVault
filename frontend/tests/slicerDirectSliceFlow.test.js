@@ -20,3 +20,10 @@ test("a failed worker queue leaves a visible, retrievable saved draft", () => {
   assert.match(source, /if \(savedJob\) setShowDrafts\(true\)/);
   assert.match(source, /No print was started or filament deducted/);
 });
+
+test("visual build plate is the only model selector for slicing", () => {
+  assert.doesNotMatch(source, /<label className="full">Model STL/);
+  assert.match(source, /input_asset_id: plateObjects\[0\]\.asset_id/);
+  assert.match(source, /if \(!plateObjects\.length\)/);
+  assert.match(source, /!plateObjects\.length \|\| !printers\.length/);
+});
