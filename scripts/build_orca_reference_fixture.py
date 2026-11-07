@@ -1,7 +1,7 @@
 """Build isolated *test-only* native Orca profile fixtures from upstream v2.4.2.
 
 This utility NEVER imports or approves profiles in MakerVault. Parent chains
-are loaded only from the pinned upstream Creality namespace and flattened for
+are loaded only from each pinned upstream vendor namespace and flattened for
 the offline, single-model real CLI acceptance test.
 """
 import argparse
@@ -18,28 +18,38 @@ if str(ROOT) not in sys.path:
 from slicer_worker.orca_runner import FORBIDDEN_KEYS
 
 REF = "v2.4.2"
-SOURCE = f"https://raw.githubusercontent.com/OrcaSlicer/OrcaSlicer/{REF}/resources/profiles/Creality"
+SOURCE = f"https://raw.githubusercontent.com/OrcaSlicer/OrcaSlicer/{REF}/resources/profiles"
 FIXTURES = {
     "k1": {
+        "vendor": "Creality",
         "printer": "Creality K1 (0.4 nozzle)",
         "process": "0.20mm Standard @Creality K1 (0.4 nozzle)",
         "filament": "Creality Generic PLA",
     },
     "k2": {
+        "vendor": "Creality",
         "printer": "Creality K2 0.4 nozzle",
         "process": "0.20mm Standard @Creality K2 0.4 nozzle",
         "filament": "Creality Generic PLA @K2-all",
+    },
+    "prusa-mk4": {
+        "vendor": "Prusa",
+        "printer": "Prusa MK4 0.4 nozzle",
+        "process": "0.20mm Standard @MK4",
+        "filament": "Prusa Generic PLA @MK4",
     },
 }
 DIRECTORIES = {"printer": "machine", "process": "process", "filament": "filament"}
 
 
-def _get(kind, name, opener=urlopen):
+def _get(kind, name, opener=urlopen, vendor="Creality"):
     if not isinstance(name, str) or not 1 <= len(name) <= 160 or any(
         ch in name for ch in ("/", chr(92), chr(0))
     ) or name in {".", ".."}:
         raise ValueError("Unsafe upstream profile name.")
-    url = SOURCE + "/" + DIRECTORIES[kind] + "/" + quote(name + ".json", safe="")
+    if vendor not in ("Creality", "Prusa"):
+        raise ValueError("Unsupported pinned fixture vendor.")
+    url = SOURCE + "/" + vendor + "/" + DIRECTORIES[kind] + "/" + quote(name + ".json", safe="")
     with opener(Request(url, headers={"User-Agent": "MakerVault-Orca-Offline-Fixture"}), timeout=30) as response:
         raw = response.read(1024 * 1024 + 1)
     if not raw or len(raw) > 1024 * 1024:
@@ -50,15 +60,15 @@ def _get(kind, name, opener=urlopen):
     return obj
 
 
-def resolved(kind, name, *, opener=urlopen, ancestors=()):
+def resolved(kind, name, *, opener=urlopen, ancestors=(), vendor="Creality"):
     if name in ancestors or len(ancestors) >= 12:
         raise ValueError("Official native profile inheritance is circular or too deep.")
-    child = _get(kind, name, opener=opener)
+    child = _get(kind, name, opener=opener, vendor=vendor)
     parent = child.get("inherits")
     if parent:
         if not isinstance(parent, str):
             raise ValueError("Invalid native parent name.")
-        result = resolved(kind, parent, opener=opener, ancestors=ancestors + (name,))
+        result = resolved(kind, parent, opener=opener, ancestors=ancestors + (name,), vendor=vendor)
         result.update(child)
     else:
         result = child.copy()
@@ -68,13 +78,15 @@ def resolved(kind, name, *, opener=urlopen, ancestors=()):
 
 def generate(destination, printer, *, opener=urlopen):
     if printer not in FIXTURES:
-        raise ValueError("Only pinned K1 and K2 reference fixtures are supported.")
+        raise ValueError("Only pinned reference fixtures are supported.")
     target = Path(destination)
     if target.is_symlink() or (target.exists() and any(target.iterdir())):
         raise ValueError("Output fixture directory must be empty and not a symlink.")
     target.mkdir(parents=True, exist_ok=True)
-    for kind, name in FIXTURES[printer].items():
-        data = resolved(kind, name, opener=opener)
+    fixture = FIXTURES[printer]
+    for kind in ("printer", "filament", "process"):
+        name = fixture[kind]
+        data = resolved(kind, name, opener=opener, vendor=fixture["vendor"])
         if printer == "k2" and kind == "printer":
             # Reference-only compatibility experiment: the pinned official
             # Creality K2 profile sets 30 while Orca 2.4.2 enforces 10..18.
