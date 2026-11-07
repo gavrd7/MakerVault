@@ -38,16 +38,51 @@ class GeneratedSlicerFileTests(TestCase):
             nozzle_mm="0.40", status="running",
         )
 
-    def test_successful_output_stays_in_private_gcode_and_no_print_submission(self):
+    def test_generated_output_is_private_until_explicitly_saved(self):
         from core.models import PrinterGcodeSubmission
         before = PrinterGcodeSubmission.objects.count()
         output = store_generated_gcode(self.job.pk, b"; generated\nG1 X1 Y1 E0.5\n")
         self.job.refresh_from_db()
         self.assertEqual(self.job.status, "completed")
         self.assertEqual(self.job.output_asset_id, output.pk)
-        self.assertEqual(output.category, "gcode")
+        self.assertEqual(output.category, "other")
+        self.assertEqual(output.metadata["slicer_library_status"], "pending")
         self.assertEqual(output.owner_id, self.owner.pk)
         self.assertEqual(output.metadata["generated_by"], "makervault-slicer")
         self.assertEqual(PrinterGcodeSubmission.objects.count(), before)
         with self.assertRaises(SlicerOutputError):
             store_generated_gcode(self.job.pk, b"G1 X2 Y2\n")
+
+    def test_opt_in_auto_adds_completed_output_to_gcode_library(self):
+        self.job.settings = {"save_gcode_to_library": True}
+        self.job.save(update_fields=["settings"])
+        output = store_generated_gcode(self.job.pk, b"; generated\\nG1 X1 Y1 E0.5\\n")
+        self.assertEqual(output.category, "gcode")
+        self.assertEqual(output.metadata["slicer_library_status"], "saved")
+
+    def test_owner_must_explicitly_promote_private_completed_output(self):
+        from django.contrib.auth.models import Permission
+        output = store_generated_gcode(self.job.pk, b"; generated\\nG1 X1 Y1 E0.5\\n")
+        endpoint = f"/api/printing/slicer/jobs/{self.job.pk}/save-gcode/"
+        other = get_user_model().objects.create_user(username="unrelated-slice-user", password="test")
+        self.client.force_login(other)
+        self.assertEqual(self.client.post(endpoint).status_code, 403)
+        self.owner.user_permissions.add(Permission.objects.get(codename="add_fileasset"))
+        self.client.force_login(self.owner)
+        response = self.client.post(endpoint, data="{}", content_type="application/json")
+        self.assertEqual(response.status_code, 200, response.content)
+        output.refresh_from_db()
+        self.assertEqual(output.category, "gcode")
+        self.assertEqual(output.metadata["slicer_library_status"], "saved")
+        self.assertEqual(self.client.post(endpoint, data="{}", content_type="application/json").status_code, 200)
+        self.assertEqual(FileAsset.objects.filter(owner=self.owner, category="gcode").count(), 1)
+
+    def test_cannot_promote_an_unsliced_draft(self):
+        self.job.status = "draft"
+        self.job.save(update_fields=["status"])
+        self.owner.user_permissions.add(
+            __import__("django.contrib.auth.models", fromlist=["Permission"]).Permission.objects.get(codename="add_fileasset")
+        )
+        self.client.force_login(self.owner)
+        endpoint = f"/api/printing/slicer/jobs/{self.job.pk}/save-gcode/"
+        self.assertEqual(self.client.post(endpoint, data="{}", content_type="application/json").status_code, 404)
