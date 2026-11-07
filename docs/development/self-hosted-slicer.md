@@ -46,6 +46,8 @@ docker build -f slicer_worker/Dockerfile.bundle \
   -t makervault-slicer-candidate:local .
 ```
 
+The optional Dockerfile has its own restricted build-context rules, and the root Docker ignore rules exclude `slicer-engine-assets/` from ordinary MakerVault application builds. This prevents third-party executables from being accidentally sent with the main application's build context.
+
 The staging tool verifies all requested hashes **before copying**, refuses symlinks, duplicates and nonempty output directories, then writes a locally ignored `slicer-engine-assets/` directory and two suggested JSON configuration maps (one for the worker and one for app-side approval). Its status is **staged_not_tested**, not approved. Both engines are independent; no Orca installation is required for a Creality-only test.
 
 To test without joining the MakerVault network, place three verified, self-contained native engine profiles (printer, filament and process JSON) in an isolated fixture directory on the test host. Then run:
