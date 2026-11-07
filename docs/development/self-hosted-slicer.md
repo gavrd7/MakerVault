@@ -9,6 +9,14 @@ Provide **one MakerVault Slicer UI** for an explicitly selected engine and pinne
 
 The G-code output must return through the existing owner-scoped FileAsset versioning pipeline and can then be inspected, saved/downloaded or submitted to a compatible printer using the existing **explicit start** workflow. Completing a slice **never starts a print** or deducts spool inventory.
 
+## Staging-only workbench preview (no slicer container)
+
+For UI testing **before** a verified slicer engine has been packaged, a deployment can opt into the preparation interface without installing the slicer service. Set `MAKERVAULT_SLICER_PREVIEW_ENABLED=1` in the staging `.env`, rebuild/recreate the main MakerVault service, and sign in with a **superuser** account. This flag defaults to `0` and only affects the authenticated frontend's workbench access; it does not enable the worker, engine installation or slicing.
+
+The UI explicitly identifies **Workbench preview — no slicer engine installed**. It allows inspection of the plate, model imports and draft/profile preparation, but no job can be queued without the existing approved worker and native profile gates. Do not confuse a successfully saved draft with a completed slice. The normal no-slicer fallback remains in effect for non-superusers and whenever the flag is disabled.
+
+To return to normal optional-installation behaviour, remove the environment setting (or set it to `0`) and recreate the app service. This preview flag is for staging, not a production installation route.
+
 ## Optional installation and navigation fallback
 
 MakerVault's slicer container(s) are **optional**. The main 3D Printing page and G-code workflows remain usable without any slicer worker.
