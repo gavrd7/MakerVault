@@ -73,3 +73,35 @@ test("0.20 mm standard is a fallback, not an invented preset",()=>{
   assert.equal(chooseSuggestedProfile([profile],[],{engine:"crealityprint",version:"7.3.0",kind:"process"}).profile.id,"standard");
   assert.equal(chooseSuggestedProfile([],[],{engine:"crealityprint",version:"7.3.0",kind:"process"}),null);
 });
+
+test("changing a physical spool family never inherits the old material's default", () => {
+  const saved = [
+    make("pla-default", "filament", "Creality Hyper PLA @Creality K1", {is_default:true}),
+    make("petg-candidate", "filament", "Generic PETG @Creality K1"),
+  ];
+  const scope = {engine:"crealityprint", version:"7.3.0", kind:"filament", printer};
+  assert.equal(chooseSuggestedProfile(saved, [], {...scope, material:"PLA"}).profile.id, "pla-default");
+  assert.equal(chooseSuggestedProfile(saved, [], {...scope, material:"PETG"}).profile.id, "petg-candidate");
+  assert.equal(chooseSuggestedProfile(saved, [], {...scope, material:"ABS"}), null);
+});
+
+test("printer-specific process defaults must not override a different printer", () => {
+  const profiles = [
+    make("k2-default", "process", "0.20mm Standard @Creality K2", {is_default:true}),
+    make("k1-standard", "process", "0.20mm Standard @Creality K1"),
+  ];
+  const selected = chooseSuggestedProfile(profiles, [], {
+    engine:"crealityprint", version:"7.3.0", kind:"process", printer,
+  });
+  assert.equal(selected.profile.id, "k1-standard");
+  assert.equal(selected.reason, "0.20 mm starter");
+});
+
+test("a chosen engine version never inherits another version's saved default", () => {
+  const candidates = [make("older", "process", "0.20mm Standard", {
+    engine_version: "7.2.0", is_default:true,
+  })];
+  assert.equal(chooseSuggestedProfile(candidates, [], {
+    engine:"crealityprint", version:"7.3.0", kind:"process",
+  }), null);
+});
