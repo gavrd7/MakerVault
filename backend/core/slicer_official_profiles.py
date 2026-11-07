@@ -16,7 +16,9 @@ ENGINE_VERSION = "2.4.2"
 SOURCE = "OrcaSlicer/OrcaSlicer"
 REF = "v2.4.2"
 BASE = f"https://raw.githubusercontent.com/{SOURCE}/{REF}/resources/profiles"
-VENDORS = ("Creality",)
+# Exact upstream v2.4.2 vendor manifest names, not printer allowlisting.
+# Each import remains a non-executable candidate until separately verified.
+VENDORS = ("Afinia", "Anker", "Anycubic", "Artillery", "BBL", "BIQU", "Blocks", "CONSTRUCT3D", "Chuanying", "Co Print", "CoLiDo", "Comgrow", "Creality", "Cubicon", "Custom", "DeltaMaker", "Dremel", "Elegoo", "Eryone", "FLSun", "Flashforge", "FlyingBear", "Folgertech", "Geeetech", "Ginger Additive", "InfiMech", "Kingroon", "LH", "LONGER", "Lulzbot", "M3D", "MagicMaker", "Mellow", "OpenEYE", "OrcaArena", "OrcaFilamentLibrary", "Peopoly", "Phrozen", "Positron3D", "Prusa", "Qidi", "RH3D", "Raise3D", "Ratrig", "RolohaunDesign", "SecKit", "SeeMeCNC", "Snapmaker", "Sovol", "Tiertime", "Tronxy", "TwoTrees", "UltiMaker", "Vivedino", "Volumic", "Voron", "Voxelab", "Vzbot", "WEMAKE3D", "Wanhao France", "Wanhao", "WonderMaker", "Z-Bolt", "iQ", "re3D",)
 KINDS = {"printer": "machine_list", "filament": "filament_list", "process": "process_list"}
 MAX_INDEX = 512 * 1024
 MAX_PRESET = 1024 * 1024
@@ -63,12 +65,17 @@ def _manifest(vendor):
     if vendor not in VENDORS:
         raise OfficialProfileError("Official vendor is not supported yet.")
     index, raw = _get_json(BASE + "/" + vendor + ".json", MAX_INDEX)
-    if index.get("name") != vendor:
-        raise OfficialProfileError("Official vendor index identity is unexpected.")
+    if not isinstance(index.get("name"), str) or not 1 <= len(index["name"]) <= 100:
+        raise OfficialProfileError("Official vendor index identity is invalid.")
     for kind, key in KINDS.items():
         if not isinstance(index.get(key), list) or len(index[key]) > 5000:
             raise OfficialProfileError("Official vendor index is incomplete or oversized.")
     return index
+
+
+def available_official_vendors():
+    """Pinned Orca catalogues; no host probing or automatic download."""
+    return [{"id": name, "label": name} for name in VENDORS]
 
 
 def _entries(vendor, kind):
