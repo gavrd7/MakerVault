@@ -7,6 +7,9 @@ the offline, single-model real CLI acceptance test.
 import argparse
 import sys
 
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 from slicer_worker.orca_runner import FORBIDDEN_KEYS
 import json
 from pathlib import Path
