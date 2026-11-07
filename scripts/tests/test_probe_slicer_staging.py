@@ -44,6 +44,26 @@ class AcceptanceProbeTests(unittest.TestCase):
         self.assertEqual(probe(*self.profiles, config=self.config, runner=runner), 0)
         self.assertEqual(len(calls), 1)
 
+    def test_two_object_3mf_only_passes_explicit_fixture_path_to_isolated_worker(self):
+        fixture = self.root / "two-object.3mf"
+        fixture.write_bytes(b"test-only-placeholder-worker-validates-3mf")
+        def runner(command, check):
+            self.assertEqual(check, False)
+            self.assertIn("--network", command)
+            self.assertEqual(command[command.index("--network") + 1], "none")
+            self.assertEqual(command[command.index("--model") + 1], "/fixtures/fixture.3mf")
+            self.assertEqual(command[command.index("--expected-objects") + 1], "2")
+            self.assertIn("--read-only", command)
+            return type("Result", (), {"returncode": 0})()
+        self.assertEqual(probe(*self.profiles, model=fixture, config=self.config, runner=runner), 0)
+
+    def test_reject_unsafe_two_object_fixture_without_starting_container(self):
+        fixture = self.root / "invalid.txt"
+        fixture.write_bytes(b"not a 3mf")
+        with self.assertRaisesRegex(ValueError, "3MF"):
+            probe(*self.profiles, model=fixture, config=self.config,
+                  runner=lambda *a, **k: self.fail("must not start"))
+
     def test_unresolved_profile_fails_without_launching(self):
         self.profiles[0].write_text('{"inherits":"base"}')
         with self.assertRaisesRegex(ValueError, "fully resolved"):
