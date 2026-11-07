@@ -52,11 +52,20 @@ export default function SlicerPlateEditor({
   const [selected, setSelected] = useState("");
   const [assetChoice, setAssetChoice] = useState("");
   const [uploadBusy, setUploadBusy] = useState(false);
+  const [saveImports, setSaveImports] = useState(false);
+  const [localAssets, setLocalAssets] = useState([]);
+  const localAssetsRef = useRef([]);
+  localAssetsRef.current = localAssets;
+  useEffect(() => () => { localAssetsRef.current.forEach(asset => URL.revokeObjectURL(asset.url)); }, []);
   const [error, setError] = useState("");
   const [dimensions, setDimensions] = useState({});
-  const sourceFiles = useMemo(() => files.filter(file =>
-    file.category === "mesh" && /\.stl$/i.test(file.filename || file.name || "") && file.url
-  ), [files]);
+  const sourceFiles = useMemo(() => [
+    ...localAssets,
+    ...files.filter(file =>
+      file.category === "mesh" && /\.stl$/i.test(file.filename || file.name || "") &&
+      file.url && !localAssets.some(local => local.id === String(file.id))
+    ),
+  ], [files, localAssets]);
   const bedX = Number(plate?.size_mm?.[0]) >= 1 && Number(plate?.size_mm?.[0]) <= 1000 ? Number(plate.size_mm[0]) : 220;
   const bedY = Number(plate?.size_mm?.[1]) >= 1 && Number(plate?.size_mm?.[1]) <= 1000 ? Number(plate.size_mm[1]) : 220;
   const chosen = objects.find(item => item.instance_id === selected) || objects[0] || null;
@@ -76,7 +85,7 @@ export default function SlicerPlateEditor({
     }
     const next = newPlateInstance(id, objects.length);
     onChange([...objects, next]);
-    if (!objects.length) onPrimaryChange?.(id);
+    if (!objects.length && !String(id).startsWith("local:")) onPrimaryChange?.(id);
     setSelected(next.instance_id);
     setError("");
   }
@@ -85,7 +94,7 @@ export default function SlicerPlateEditor({
     if (!chosen) return;
     const remaining = objects.filter(item => item.instance_id !== chosen.instance_id);
     onChange(remaining);
-    onPrimaryChange?.(remaining[0]?.asset_id || "");
+    onPrimaryChange?.(remaining.find(item => !String(item.asset_id).startsWith("local:"))?.asset_id || "");
     setSelected(remaining[0]?.instance_id || "");
   }
 
@@ -99,45 +108,49 @@ export default function SlicerPlateEditor({
   async function uploadFiles(event) {
     const imports = Array.from(event.target.files || []);
     event.target.value = "";
-    if (!imports.length) return;
-    if (!canEdit) return;
+    if (!imports.length || !canEdit) return;
     if (imports.length + objects.length > MAX_OBJECTS) {
-      setError("Too many STL models for this preparation plate.");
+      setError("Maximum twelve models per build plate.");
       return;
     }
     if (imports.some(file => !/\.stl$/i.test(file.name) || !file.size || file.size > MAX_FILE_BYTES)) {
-      setError("Select nonempty STL files smaller than 32 MiB each.");
+      setError("Choose nonempty STL files below 32 MiB each.");
       return;
     }
     setUploadBusy(true);
     setError("");
-    const imported = [];
+    const additions = [];
+    const previews = [];
     try {
       for (const file of imports) {
-        const form = new FormData();
-        form.append("file", file);
-        form.append("category", "mesh");
-        form.append("name", file.name);
-        const result = await apiFetch("/api/files/", { method: "POST", body: form });
-        if (!result?.file?.id) throw new Error("MakerVault did not return a model file ID.");
-        imported.push(result.file.id);
+        let id = "local:" + plateUuid();
+        if (saveImports) {
+          const form = new FormData();
+          form.append("file", file);
+          form.append("category", "mesh");
+          form.append("name", file.name);
+          const result = await apiFetch("/api/files/", { method: "POST", body: form });
+          if (!result?.file?.id) throw new Error("MakerVault did not return a model file ID.");
+          id = String(result.file.id);
+        }
+        previews.push({ id, category: "mesh", name: file.name, filename: file.name,
+          url: URL.createObjectURL(file), localOnly: !saveImports });
+        additions.push(newPlateInstance(id, objects.length + additions.length));
       }
-      await onFilesUploaded?.();
-      const additions = imported.map((id, index) => newPlateInstance(id, objects.length + index));
-      onChange([...objects, ...additions]);
-      if (!objects.length) onPrimaryChange?.(imported[0]);
-      setSelected(additions[0].instance_id);
     } catch (err) {
-      setError((err.message || "Could not upload STL files.") +
-        (imported.length ? " Successfully uploaded files remain in your MakerVault Files library." : ""));
-      if (imported.length) {
-        try { await onFilesUploaded?.(); } catch { /* Uploaded assets remain in Files. */ }
-        const additions = imported.map((id, index) => newPlateInstance(id, objects.length + index));
-        onChange([...objects, ...additions]);
-        if (!objects.length) onPrimaryChange?.(imported[0]);
-        setSelected(additions[0].instance_id);
-      }
+      setError((err.message || "Could not add models.") +
+        (additions.length ? " Earlier models in this batch remain on the plate." : ""));
     } finally {
+      if (previews.length) {
+        setLocalAssets(current => [...current, ...previews]);
+        onChange([...objects, ...additions]);
+        if (!objects.length && saveImports) onPrimaryChange?.(additions[0].asset_id);
+        setSelected(additions[0].instance_id);
+        if (saveImports) {
+          try { await onFilesUploaded?.(); }
+          catch { setError("Models were saved but the Files list could not refresh."); }
+        }
+      }
       setUploadBusy(false);
     }
   }
@@ -232,8 +245,8 @@ export default function SlicerPlateEditor({
       rayFromPointer(event);
       const location = new THREE.Vector3();
       if (!raycaster.ray.intersectPlane(bedPlane, location)) return;
-      const x = Math.max(-10000, Math.min(10000, Math.round(location.x + dragging.deltaX)));
-      const y = Math.max(-10000, Math.min(10000, Math.round(location.y + dragging.deltaY)));
+      const x = Math.max(-10000, Math.min(10000, Math.round((location.x + dragging.deltaX) * 2) / 2));
+      const y = Math.max(-10000, Math.min(10000, Math.round((location.y + dragging.deltaY) * 2) / 2));
       const current = latestObjectsRef.current;
       if (!current.some(item => item.instance_id === dragging.id)) return;
       latestOnChangeRef.current(current.map(item => item.instance_id === dragging.id
@@ -366,7 +379,7 @@ export default function SlicerPlateEditor({
 
   return <section className="panel printingSection" aria-labelledby="slicer-plate-heading">
     <h3 id="slicer-plate-heading">Visual build plate</h3>
-    <p>Arrange multiple STLs, assign preview colours and adjust placement, rotation and uniform scale. This is a working visual <strong>draft editor</strong>; the current single-model worker cannot slice these arrangements yet.</p>
+    <p>Arrange models, change their size and position, and preview the build plate. Multi-object slicing is not yet available.</p>
     <div className="formGrid">
       <label>Existing STL from Files
         <select value={assetChoice} onChange={event => setAssetChoice(event.target.value)} disabled={!canEdit || uploadBusy}>
@@ -377,9 +390,13 @@ export default function SlicerPlateEditor({
       <div className="settingsActions">
         <button type="button" onClick={() => addAsset(assetChoice)} disabled={!canEdit || !assetChoice || uploadBusy || objects.length >= MAX_OBJECTS}>Add STL to plate</button>
       </div>
-      <label className="full">Upload multiple STL files to the MakerVault library and plate
+      <label className="full">Add STL files from your device
         <input type="file" accept=".stl" multiple onChange={uploadFiles} disabled={!canEdit || uploadBusy || objects.length >= MAX_OBJECTS} />
       </label>
+      <label className="full checkRow"><input type="checkbox" checked={saveImports} onChange={event => setSaveImports(event.target.checked)} disabled={!canEdit || uploadBusy} />
+        <span>Also save imported models to MakerVault Files</span>
+      </label>
+      <p className="full slicerPlateHint">Unchecked: models stay in this browser session. Saving a persistent draft requires saved source files.</p>
     </div>
     {error && <p className="integrationError" role="alert">{error}</p>}
     {objects.length > 0 && <div className="slicerPlateToolbar">
@@ -395,7 +412,7 @@ export default function SlicerPlateEditor({
       height: 370, width: "100%", borderRadius: 12, overflow: "hidden", border: "1px solid var(--border, #435365)",
       background: "#0f1720", touchAction: "none",
     }} />
-    <p>Plate extent: {pretty(bedX)} × {pretty(bedY)} mm. Drag a model to move it on the bed (1 mm steps), tap to select, or orbit the view around empty space. Precise numeric transforms are available below. This does not certify fit or generate G-code.</p>
+    <p className="slicerPlateHint"><strong>Build plate volume:</strong> {pretty(bedX)} × {pretty(bedY)} mm (X × Y). Drag in 0.5 mm steps or enter coordinates below.</p>
     {extentWarnings.length > 0 && <div role="status" className="integrationError">
       <strong>Preliminary plate-fit warnings</strong>
       <ul>{extentWarnings.map(warning => <li key={warning.id}>{warning.label}: {warning.message}</li>)}</ul>
@@ -403,13 +420,6 @@ export default function SlicerPlateEditor({
       excluded regions, model height or toolhead clearance. They do not certify printability.
     </div>}
     {objects.length > 0 && <div className="formGrid">
-      <label className="full">Model instance
-        <select value={chosen?.instance_id || ""} onChange={event => setSelected(event.target.value)}>
-          {objects.map((item, index) => <option key={item.instance_id} value={item.instance_id}>
-            {index + 1}. {sourceFiles.find(file => String(file.id) === item.asset_id)?.name || "STL model"}
-          </option>)}
-        </select>
-      </label>
       <label>X position (mm)
         <input type="number" min={-10000} max={10000} step="0.5" value={chosen?.x_mm ?? 0}
           disabled={!canEdit} onChange={event => patch("x_mm", pretty(event.target.value))} />
@@ -437,6 +447,7 @@ export default function SlicerPlateEditor({
         <button type="button" disabled={!canEdit} onClick={removeSelected}>Remove model</button>
       </div>
     </div>}
-    {objects.length > 0 && <p role="status">{objects.length} model instance{objects.length === 1 ? "" : "s"} on the preparation plate. Saving a draft preserves this arrangement; slicing the arrangement remains disabled until verified.</p>}
+    {objects.length > 0 && <p role="status" className="slicerPlateHint">{objects.length} model{objects.length === 1 ? "" : "s"} on the plate
+      {objects.some(item => String(item.asset_id).startsWith("local:")) ? " · Temporary models will be lost on reload." : " · Plate ready to save as a draft."}</p>
   </section>;
 }
