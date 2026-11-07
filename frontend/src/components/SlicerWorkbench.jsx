@@ -71,6 +71,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [officialBusy, setOfficialBusy] = useState(false);
   const [officialError, setOfficialError] = useState("");
   const [officialImportNotice, setOfficialImportNotice] = useState("");
+  const [filterOfficialByPrinter, setFilterOfficialByPrinter] = useState(true);
   const [importName, setImportName] = useState("");
   const [importSource, setImportSource] = useState("");
   const [loading, setLoading] = useState(true);
@@ -442,6 +443,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       const q = officialQuery.trim();
       if (q.length < 2) throw new Error("Enter at least two characters to search official presets.");
       const params = new URLSearchParams({ q, kind: importKind, vendor: officialVendor, engine: form.engine });
+      if (filterOfficialByPrinter && selectedPrinter?.id) params.set("printer_id", String(selectedPrinter.id));
       const result = await apiFetch("/api/printing/slicer/official-profiles/?" + params.toString());
       setOfficialResults(result);
     } catch (err) {
@@ -955,6 +957,11 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               <option value="process">Process</option>
             </select>
           </label>
+          {selectedPrinter?.id && <label className="full checkRow slicerOfficialPrinterFilter">
+            <input type="checkbox" checked={filterOfficialByPrinter}
+              onChange={e => { setFilterOfficialByPrinter(e.target.checked); setOfficialResults(null); }} />
+            <span>Show profiles for {selectedPrinter.model || selectedPrinter.name} and unqualified generic profiles only</span>
+          </label>}
           <label className="full">Search official presets
             <input value={officialQuery} maxLength="80" onChange={e => setOfficialQuery(e.target.value)} placeholder="e.g. printer model, Generic PLA, 0.20mm" />
           </label>
@@ -968,7 +975,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         {officialError && <p className="integrationError" role="alert">{officialError}</p>}
         {officialImportNotice && <p role="status" className="slicerProfileImportNotice">{officialImportNotice}</p>}
         {officialResults && <div className="printingStack" role="region" aria-label="Official profile search results">
-          <p>{officialResults.total_matches} matching official presets in {officialResults.vendor} · showing up to {officialResults.profiles.length} · original upstream release {officialResults.ref}</p>
+          <p>{officialResults.total_matches} matching official presets in {officialResults.vendor} · showing up to {officialResults.profiles.length} · original upstream release {officialResults.ref}{officialResults.printer_model_filter ? " · filtered for " + officialResults.printer_model_filter + " (name-based, not verified compatibility)" : ""}</p>
           {officialResults.profiles.map(candidate => <div className="cameraSourceRow" key={candidate.sub_path}>
             <div className="cameraSourceIdentity">
               <strong>{candidate.name}</strong>
@@ -983,7 +990,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               </button>
             </div>
           </div>)}
-          {!officialResults.profiles.length && <p>No matching presets in this official catalogue. Try another search or use manual import below.</p>}
+          {!officialResults.profiles.length && <p>No matching presets. Try another search or uncheck the printer-model filter to browse the complete manufacturer catalogue.</p>}
         </div>}
       </div>
 
