@@ -52,7 +52,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [importFile, setImportFile] = useState(null);
   const [importKind, setImportKind] = useState("printer");
   const [officialQuery, setOfficialQuery] = useState("");
-  const [officialVendor, setOfficialVendor] = useState("Creality");
+  const [officialVendor, setOfficialVendor] = useState("");
   const [officialVendors, setOfficialVendors] = useState([]);
   const [officialSourceInfo, setOfficialSourceInfo] = useState(null);
   const [officialResults, setOfficialResults] = useState(null);
@@ -615,14 +615,13 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
   function openOfficialSearch(kind = materialHint ? "filament" : form.printer_id ? "printer" : "process") {
     setImportKind(kind);
-    setOfficialVendor("Creality");
+    setOfficialVendor("");
     setOfficialVendors([]);
     setOfficialSourceInfo(null);
     setOfficialError("");
     loadOfficialVendors();
     setOfficialQuery(defaultOfficialSearch(kind, { printer: selectedPrinter, spool: selectedSpool, nozzle: form.nozzle_mm }));
-    setOfficialResults(kind === "filament" && materialProfileMatches?.material === materialHint
-      ? materialProfileMatches.results || null : null);
+    setOfficialResults(null); // Never carry results into another engine/vendor catalogue.
     setOfficialError("");
     setProfileModal("search");
   }
