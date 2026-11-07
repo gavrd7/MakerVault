@@ -53,6 +53,30 @@ class OfficialProfileApiTests(TestCase):
         self.assertTrue({"Creality", "Prusa", "Voron", "Anycubic", "Custom"} <= vendors)
         search.assert_not_called()
 
+    def test_creality_print_and_manual_only_engines_report_capabilities(self):
+        self.client.force_login(self.user)
+        creality = self.client.get(self.url, {
+            "catalogues": "1", "engine": "crealityprint"
+        })
+        self.assertEqual(creality.status_code, 200)
+        self.assertTrue(creality.json()["official_search_available"])
+        self.assertEqual(creality.json()["native_profile_format"], "creality-json")
+        listed = {vendor["id"] for vendor in creality.json()["vendors"]}
+        self.assertTrue({"Prusa", "Voron", "Anycubic", "Custom", "Creality"} <= listed)
+        for engine, native_format in (
+            ("prusaslicer", "prusa-ini"),
+            ("bambustudio", "bambu-json"),
+            ("snapmakerorca", "snapmaker-orca-json"),
+        ):
+            with self.subTest(engine=engine):
+                result = self.client.get(self.url, {"catalogues": "1", "engine": engine})
+                self.assertEqual(result.status_code, 200)
+                self.assertEqual(result.json()["vendors"], [])
+                self.assertFalse(result.json()["official_search_available"])
+                self.assertTrue(result.json()["manual_import_available"])
+                self.assertFalse(result.json()["verified_for_execution"])
+                self.assertEqual(result.json()["native_profile_format"], native_format)
+
     def test_selected_manufacturer_is_forwarded_to_backend_search(self):
         self.client.force_login(self.user)
         with patch("core.slicer_api.search_official_profiles", return_value={
