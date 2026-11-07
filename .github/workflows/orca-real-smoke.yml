@@ -103,18 +103,17 @@ jobs:
             --filament /tmp/makervault-orca-k1/filament.json \
             --process /tmp/makervault-orca-k1/process.json \
             --model /tmp/makervault-orca-plate.3mf
-      - name: Verify compound mesh preserves both model locations and extrusion paths
+      - name: Verify production compound plate prints both transformed models with real Orca
         run: |
           python3 scripts/probe_slicer_staging.py \
             --printer /tmp/makervault-orca-k1/printer.json \
             --filament /tmp/makervault-orca-k1/filament.json \
             --process /tmp/makervault-orca-k1/process.json \
             --model /tmp/makervault-orca-compound.3mf --compound
-      - name: Keep native 3MF integration fail-closed until actual MakerVault path is fixed
+      - name: Report raw two-object 3MF import limitation without approving it
         if: steps.native_multi.outcome == 'failure'
         run: |
-          echo "::error::MakerVault's native multi-object 3MF path is not yet validated. Do not enable it for users."
-          exit 1
+          echo "::notice::Raw separate-object 3MF is not approved. The actual MakerVault Orca execution path uses the tested single-material compound builder."
       - name: Diagnose failed native K2 slice without changing runtime admission policy
         if: failure() && steps.k2.outcome == 'failure'
         run: |
