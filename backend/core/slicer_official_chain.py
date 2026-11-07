@@ -12,7 +12,7 @@ from .slicer_official_profiles import (
 )
 from .slicer_creality_official_profiles import (
     _entries as creality_entries,
-    fetch_creality_profile,
+    fetch_creality_profile, VENDORS as CREALITY_VENDORS,
 )
 
 MAX_CHAIN = 12
@@ -25,11 +25,11 @@ def official_profile_chain(engine, kind, name, subpath, vendor="Creality"):
         raise OfficialProfileError("Unknown official slicer profile engine.")
     if kind not in {"printer", "filament", "process"}:
         raise OfficialProfileError("Unsupported official profile family.")
-    if (engine == "orcaslicer" and vendor not in ORCA_VENDORS) or (engine == "crealityprint" and vendor != "Creality"):
+    if (engine == "orcaslicer" and vendor not in ORCA_VENDORS) or (engine == "crealityprint" and vendor not in CREALITY_VENDORS):
         raise OfficialProfileError("Unsupported official profile vendor for this engine.")
     index = (
         dict(orca_entries(vendor, kind)) if engine == "orcaslicer"
-        else dict(creality_entries(kind))
+        else dict(creality_entries(kind, vendor))
     )
     fetch = fetch_official_profile if engine == "orcaslicer" else fetch_creality_profile
     if index.get(name) != subpath:
