@@ -29,6 +29,16 @@ The planned administrator workflow is to select an engine and supported pinned v
 
 **Current PR limitations:** PR #171 now has separate OrcaSlicer and Creality Print worker adapters, an independently verified shared-worker engine registry, official K1/K2 profile discovery for both engines, basic GUI native-profile customisation, and saved slicing drafts. It still lacks a production-ready engine installer, independently verified Linux engine binaries, complete GUI setting coverage, multi-object execution and a successful end-to-end real slicing fixture for either engine. Engine identity verification does not by itself prove that slicing works.
 
+## Profile defaults and spool-aware suggestions (development)
+
+Within **Profile management → Manage profiles** or **Saved profiles**, choose **Set as default** for an imported printer, filament or process profile. Defaults are scoped to your account and that exact slicer engine/version. The official-profile search also offers **Import & set default**; imported profiles remain unverified until tested.
+
+The workbench prefers compatible defaults, then the most recent selection used for the same printer. For a process profile it can suggest an already imported **0.20 mm** standard preset when available. Choosing another printer refreshes its native selections, and the printer's recorded nozzle size is used initially. Use **Restore suggested profiles** to discard manual picks and apply the matching recommendations again.
+
+Selecting a physical spool such as PETG filters suggested native filament profiles and offers to review the official catalogue's matching candidates. This is **not an automatic download or approval**: the user chooses what to import. The physical spool's recorded hex colour is used for the visual build plate unless an object's colour was manually changed.
+
+Both OrcaSlicer and Creality Print machine profiles can provide build plate dimensions for the visual preview. Preview geometry does not certify that a plate is printable; native inheritance, exclusions, physical printer compatibility and real slicing still require independent validation.
+
 ## Updating, removing and rolling back engines (planned)
 
 Updates must be initiated by an administrator for the **specific engine**. Other installed engines must remain untouched. Downloaded binaries will need approved version metadata, licence validation, cryptographic integrity checks and tested slicing receipts before activation. Profiles are engine- and version-specific; do not silently convert them.
