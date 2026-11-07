@@ -70,5 +70,23 @@ export function autoArrangePlate(objects, dimensions, bedX, bedY, clearance = 5)
     if (!found) return { error: "Not enough free build plate space to arrange all models without overlap." };
     placed.push(found);
   }
+  // Centre the packed group on the displayed bed, without changing individual
+  // model rotations/scales or the conservative clearance between footprints.
+  if (placed.length) {
+    const bounds = placed.map(row => plateEnvelope(row, dimensions[row.instance_id]));
+    const minX = Math.min(...bounds.map(row => row.minX));
+    const maxX = Math.max(...bounds.map(row => row.maxX));
+    const minY = Math.min(...bounds.map(row => row.minY));
+    const maxY = Math.max(...bounds.map(row => row.maxY));
+    const offsetX = -(minX + maxX) / 2;
+    const offsetY = -(minY + maxY) / 2;
+    const centred = placed.map(row => ({
+      ...row,
+      x_mm: Math.round((row.x_mm + offsetX) * 100) / 100,
+      y_mm: Math.round((row.y_mm + offsetY) * 100) / 100,
+    }));
+    if (centred.every(row => !plateExtentWarning(row, dimensions[row.instance_id], bedX, bedY)))
+      return { objects: centred };
+  }
   return { objects: placed };
 }
