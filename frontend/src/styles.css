@@ -3817,3 +3817,9 @@ a:focus-visible,
 .slicerProfileNavigation{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 16px}
 .slicerProfileNavigation button{display:inline-flex;align-items:center;gap:6px}
 .slicerProfileImportNotice{padding:10px 12px;border:1px solid var(--border,#435365);border-radius:8px;margin:12px 0}
+
+/* Keep action results visible beside the buttons at the end of the plate
+   workflow, rather than only above the configuration area. */
+.slicerPlateActionFeedback{flex:1 1 260px;min-width:0}
+.slicerPlateActionFeedback p{margin:0}
+.slicerPlateActionFeedback .integrationError{max-width:100%;overflow-wrap:anywhere}
