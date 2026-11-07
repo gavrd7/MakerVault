@@ -72,6 +72,8 @@ export default function SlicerPlateEditor({
   ], [files, localAssets]);
   const bedX = Number(plate?.size_mm?.[0]) >= 1 && Number(plate?.size_mm?.[0]) <= 1000 ? Number(plate.size_mm[0]) : 220;
   const bedY = Number(plate?.size_mm?.[1]) >= 1 && Number(plate?.size_mm?.[1]) <= 1000 ? Number(plate.size_mm[1]) : 220;
+  // The controls show the first model by default; only an explicitly selected
+  // mesh should receive a visual highlight.
   const chosen = objects.find(item => item.instance_id === selected) || objects[0] || null;
   const objectKey = objects.map(item => item.instance_id + ":" + item.asset_id).join("|");
   const extentWarnings = objects.map((item, index) => ({
@@ -96,6 +98,8 @@ export default function SlicerPlateEditor({
       return false;
     }
     onChange(result.objects);
+    // Arranging is a plate-wide operation; do not leave the first/last mesh highlighted.
+    setSelected("");
     if (announce) setError("");
     return true;
   }
@@ -119,6 +123,7 @@ export default function SlicerPlateEditor({
     if (result.objects) {
       pendingAddIdsRef.current.clear();
       onChange(result.objects);
+      setSelected("");
       setError("");
     } else {
       const previous = objects.filter(item => !pendingAddIdsRef.current.has(item.instance_id));
@@ -414,7 +419,7 @@ export default function SlicerPlateEditor({
             width: box.max.x - box.min.x, depth: box.max.y - box.min.y,
           } }));
           const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({
-            color: item.color, roughness: 0.72, metalness: 0.04, side: THREE.DoubleSide,
+            color: item.color || PALETTE[0], roughness: 0.72, metalness: 0.04, side: THREE.DoubleSide,
           }));
           mesh.userData.instanceId = item.instance_id;
           const latest = latestObjectsRef.current.find(row => row.instance_id === item.instance_id) || item;
@@ -438,8 +443,10 @@ export default function SlicerPlateEditor({
       mesh.position.set(item.x_mm, item.y_mm, 0);
       mesh.rotation.z = item.rotation_deg * Math.PI / 180;
       mesh.scale.setScalar(item.scale_percent / 100);
-      mesh.material.color.set(item.color);
-      mesh.material.emissive.set(item.instance_id === (chosen?.instance_id || selected) ? "#182f43" : "#000000");
+      // Position-only changes must never alter the displayed filament colour.
+      mesh.material.color.set(item.color || PALETTE[0]);
+      mesh.material.emissive.set(item.instance_id === selected ? "#164051" : "#000000");
+      mesh.material.emissiveIntensity = item.instance_id === selected ? 0.18 : 0;
     }
   }, [objects, selected]);
 
