@@ -31,7 +31,7 @@ def verified_installation():
     """Fail closed for each independently approved engine in the shared worker.
 
     Legacy single-engine settings remain supported. Multi-engine approval requires
-    a pinned common image and a JSON map of exact versions and binary hashes.
+    a pinned image reference (registry digest or local image ID) and exact hashes.
     The API only reports an engine available when that exact entry is healthy.
     """
     if os.environ.get("MAKERVAULT_SLICER_EXECUTION_ENABLED") != "1":
@@ -41,8 +41,8 @@ def verified_installation():
     if (
         not digest.startswith("sha256:") or len(digest) != 71
         or any(c not in "0123456789abcdef" for c in digest[7:])
-        or not image_ref.endswith("@" + digest)
-        or image_ref.count("@") != 1
+        or not (image_ref == digest or
+                (image_ref.endswith("@" + digest) and image_ref.count("@") == 1))
     ):
         return {}
     configured = os.environ.get("MAKERVAULT_SLICER_ENGINES_JSON", "")
