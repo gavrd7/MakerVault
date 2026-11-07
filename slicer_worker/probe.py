@@ -88,7 +88,7 @@ def _validate_gcode(path, *, min_extrusion_span_x=None):
             code = line.partition(b";")[0].strip().upper()
             if not GCODE_EXTRUSION.match(code):
                 continue
-            x = re.search(rb"(?:^|\\s)X([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))(?=\\s|$)", code)
+            x = re.search(rb"(?:^|\s)X([-+]?(?:\d+(?:\.\d*)?|\.\d+))(?=\s|$)", code)
             if x:
                 x_positions.append(float(x.group(1)))
         if len(x_positions) < 2 or max(x_positions) - min(x_positions) < min_extrusion_span_x:
