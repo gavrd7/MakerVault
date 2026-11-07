@@ -62,6 +62,20 @@ class OrcaRunnerTests(TestCase):
         self.assertTrue(Path(result["gcode_path"]).is_file())
         self.assertEqual(result["bytes"], len(b"; sliced\nG1 X1 Y1 E0.1\n"))
 
+    def test_real_cli_result_json_does_not_invalidate_single_gcode(self):
+        outdir = self.root / "orca-output"
+        class FakeProcess:
+            returncode = 0
+            def communicate(inner, timeout=None):
+                outdir.mkdir()
+                (outdir / "plate_1.gcode").write_text("; sliced\\nG1 X1 Y1 E0.1\\n")
+                (outdir / "result.json").write_text('{"succeed":true}')
+                (outdir / "plate_1.statistics.json").write_text('{"time":23}')
+        with patch("slicer_worker.orca_runner.subprocess.Popen", return_value=FakeProcess()):
+            result = run_orca(self.binary, self.root)
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual((self.root / "output.gcode").read_text(), "; sliced\\nG1 X1 Y1 E0.1\\n")
+
     def test_extra_output_and_symlinks_fail_closed(self):
         outdir = self.root / "orca-output"
         class FakeProcess:
