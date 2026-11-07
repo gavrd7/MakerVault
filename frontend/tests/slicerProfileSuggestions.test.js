@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { spoolMaterial, chooseSuggestedProfile, defaultOfficialSearch } from "../src/components/slicerProfileSuggestions.js";
+import { spoolMaterial, chooseSuggestedProfile, defaultOfficialSearch, suggestOfficialVendor } from "../src/components/slicerProfileSuggestions.js";
 
 const make = (id, kind, name, extra={}) => ({
   id, kind, name, engine:"crealityprint", engine_version:"7.3.0", is_default:false, ...extra,
@@ -104,4 +104,14 @@ test("a chosen engine version never inherits another version's saved default", (
   assert.equal(chooseSuggestedProfile(candidates, [], {
     engine:"crealityprint", version:"7.3.0", kind:"process",
   }), null);
+});
+
+test("native upstream selection uses the chosen printer rather than hardcoded Creality", () => {
+  const vendors = ["Afinia", "BBL", "Creality", "Custom", "Prusa", "Voron"].map(id => ({id, label:id}));
+  assert.equal(suggestOfficialVendor({manufacturer:"Prusa", model:"MK4"}, vendors), "Prusa");
+  assert.equal(suggestOfficialVendor({brand:"Bambu Lab", name:"X1 Carbon"}, vendors), "BBL");
+  assert.equal(suggestOfficialVendor({name:"Voron 2.4"}, vendors), "Voron");
+  assert.equal(suggestOfficialVendor({name:"Unlisted Delta Prototype"}, vendors), "Custom");
+  assert.equal(suggestOfficialVendor(null, [{id:"Creality", label:"Creality"}]), "Creality");
+  assert.equal(defaultOfficialSearch("printer", {}), "0.4 nozzle");
 });
