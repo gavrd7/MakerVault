@@ -23,6 +23,7 @@ import tempfile
 from .runner import MAX_PROFILE_BYTES, MAX_GCODE_BYTES, WorkerError
 from .orca_runner import run_orca
 from .creality_runner import run_creality
+from .three_mf_validation import validate_worker_3mf
 
 ENGINES = {"orcaslicer": run_orca, "crealityprint": run_creality}
 GCODE_EXTRUSION = re.compile(
@@ -68,7 +69,7 @@ def _fingerprint(path):
     return digest.hexdigest()
 
 
-def _validate_gcode(path):
+def _validate_gcode(path, *, min_extrusion_span_x=None):
     file = Path(path)
     if file.is_symlink() or not file.is_file() or not 0 < file.stat().st_size <= MAX_GCODE_BYTES:
         raise WorkerError("The engine did not return a valid, bounded G-code file.")
@@ -78,10 +79,24 @@ def _validate_gcode(path):
         raise WorkerError("The engine produced invalid or binary G-code.")
     if not GCODE_EXTRUSION.search(data):
         raise WorkerError("The engine produced no extrusion movement; fixture rejected.")
+    if min_extrusion_span_x is not None:
+        # This is limited to the fixed two-object CI fixture. It verifies
+        # extruding toolpaths exist at both separated X locations rather than
+        # accepting G-code for a single object on the plate.
+        x_positions = []
+        for line in data.splitlines():
+            code = line.partition(b";")[0].strip().upper()
+            if not GCODE_EXTRUSION.match(code):
+                continue
+            x = re.search(rb"(?:^|\\s)X([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))(?=\\s|$)", code)
+            if x:
+                x_positions.append(float(x.group(1)))
+        if len(x_positions) < 2 or max(x_positions) - min(x_positions) < min_extrusion_span_x:
+            raise WorkerError("The two-model fixture produced no separated extrusion toolpaths.")
     return {"gcode_sha256": hashlib.sha256(data).hexdigest(), "gcode_bytes": len(data)}
 
 
-def run_probe(*, engine, version, binary, printer, filament, process, timeout=120):
+def run_probe(*, engine, version, binary, printer, filament, process, timeout=120, model=None, expected_objects=1):
     """Run the *real* worker adapter with the *real* binary and report evidence.
 
     No mock success, no automatic deployment and no stored G-code artifact.
@@ -92,6 +107,14 @@ def run_probe(*, engine, version, binary, printer, filament, process, timeout=12
         raise WorkerError("A pinned engine version is required.")
     if not isinstance(timeout, int) or not 1 <= timeout <= 900:
         raise WorkerError("Probe timeout must be between 1 and 900 seconds.")
+    if expected_objects not in (1, 2) or (expected_objects == 2 and not model):
+        raise WorkerError("Explicit two-object 3MF input is required for multi-model acceptance.")
+    model_bytes = None
+    if model is not None:
+        if expected_objects != 2 or Path(model).suffix.lower() != ".3mf":
+            raise WorkerError("Only the two-object core 3MF acceptance fixture is supported.")
+        model_bytes = _read_source(model, 32 * 1024 * 1024)
+        validate_worker_3mf(model_bytes)
     binary_sha256 = _fingerprint(binary)
     inputs = {
         "printer.json": _read_source(printer, MAX_PROFILE_BYTES),
@@ -100,18 +123,22 @@ def run_probe(*, engine, version, binary, printer, filament, process, timeout=12
     }
     with tempfile.TemporaryDirectory(prefix="makervault-engine-probe-") as tmp:
         root = Path(tmp)
-        (root / "input.stl").write_bytes(fixture_stl())
+        (root / ("input.3mf" if model_bytes is not None else "input.stl")).write_bytes(
+            model_bytes if model_bytes is not None else fixture_stl())
         for name, data in inputs.items():
             (root / name).write_bytes(data)
         receipt = ENGINES[engine](Path(binary), root, timeout_seconds=timeout)
         if receipt.get("status") != "completed":
             raise WorkerError("The engine did not complete the slicing fixture.")
-        output = _validate_gcode(root / "output.gcode")
+        output = _validate_gcode(root / "output.gcode",
+                                 min_extrusion_span_x=35 if expected_objects == 2 else None)
     return {
         "status": "passed",
         "engine": engine, "engine_version": version,
         "binary_sha256": binary_sha256,
-        "fixture": "makervault-tetrahedron-binary-v1",
+        "fixture": "makervault-two-object-3mf-v1" if model_bytes is not None
+                   else "makervault-tetrahedron-binary-v1",
+        "object_count": expected_objects,
         "profile_sha256": {key.removesuffix(".json"): hashlib.sha256(data).hexdigest()
                            for key, data in inputs.items()},
         **output,
@@ -128,6 +155,8 @@ def main(argv=None):
     parser.add_argument("--filament", required=True)
     parser.add_argument("--process", required=True)
     parser.add_argument("--timeout", type=int, default=120)
+    parser.add_argument("--model", help="Optional real two-model MakerVault core 3MF fixture")
+    parser.add_argument("--expected-objects", type=int, choices=(1, 2), default=1)
     args = parser.parse_args(argv)
     try:
         print(json.dumps(run_probe(**vars(args)), indent=2, sort_keys=True))
