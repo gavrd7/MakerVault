@@ -3669,3 +3669,8 @@ a:focus-visible,
 .slicerWorkbenchTop+.panel,.slicerWorkbenchTop~.panel{padding:22px}
 .slicerWorkbenchTop~.panel .formGrid{gap:14px}
 @media(max-width:960px){.slicerWorkbenchTop{grid-template-columns:1fr}.slicerWorkbenchTop>.panel{height:auto}}
+
+.slicerPlateToolbar{display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin:16px 0}
+.slicerPlateToolbar label{flex:1 1 260px;min-width:0}
+.slicerPlateToolbar button{flex:0 1 auto}
+@media(max-width:620px){.slicerPlateToolbar button{flex:1 1 100%}}
