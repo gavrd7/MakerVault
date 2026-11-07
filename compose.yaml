@@ -49,7 +49,21 @@ services:
       - ${KEY_STORAGE:-makervault_keys}:/app/keys
       - ${BACKUP_STORAGE:-makervault_backups}:/app/backups
     depends_on:
-      # OPTIONAL SLICER WORKER — DEVELOPMENT SCAFFOLD ONLY; DO NOT UNCOMMENT YET.
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - makervault_backend
+      # - makervault_slicer  # only if the optional slicer service is enabled
+    healthcheck:
+      test: ["CMD", "python", "/app/backend/manage.py", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+
+  # OPTIONAL SLICER WORKER — DEVELOPMENT SCAFFOLD ONLY; DO NOT UNCOMMENT YET.
   #
   # Once an approved image and engine installer are available, remove the comment
   # markers from the service below, the app settings and the dedicated network.
@@ -77,18 +91,6 @@ services:
   #   # No published ports, Docker socket, database credentials or host bind mounts.
 
   postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - makervault_backend
-      # - makervault_slicer  # only if the optional slicer service is enabled
-    healthcheck:
-      test: ["CMD", "python", "/app/backend/manage.py", "healthcheck"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 45s
 
   postgres:
     image: postgres:18.6
