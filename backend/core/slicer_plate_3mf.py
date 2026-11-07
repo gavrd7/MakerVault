@@ -133,10 +133,28 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth):
     model_xml = ET.tostring(model, encoding="utf-8", xml_declaration=True)
     if len(model_xml) > 96 * 1024 * 1024:
         raise SlicerProfileError("The generated 3MF mesh is too large.")
+    # OrcaSlicer/Creality Print need an explicit plate-to-instance manifest
+    # for multi-object CLI slicing. Core 3MF build items alone are valid 3MF,
+    # but the native CLI may print only the first item without this mapping.
+    # No user-controlled scripts or native settings are embedded.
+    plate_xml = None
+    if len(objects_with_stl) > 1:
+        manifest = ET.Element("config")
+        plate = ET.SubElement(manifest, "plate")
+        ET.SubElement(plate, "metadata", {"key": "plater_id", "value": "1"})
+        for index in range(1, len(objects_with_stl) + 1):
+            instance = ET.SubElement(plate, "model_instance")
+            for key, value in (("object_id", str(index)),
+                               ("instance_id", "0"),
+                               ("identify_id", str(index))):
+                ET.SubElement(instance, "metadata", {"key": key, "value": value})
+        plate_xml = ET.tostring(manifest, encoding="utf-8", xml_declaration=True)
     output = io.BytesIO()
     with zipfile.ZipFile(output, mode="w", compression=zipfile.ZIP_DEFLATED,
                          compresslevel=6, allowZip64=False) as package:
         package.writestr("3D/3dmodel.model", model_xml)
+        if plate_xml is not None:
+            package.writestr("Metadata/model_settings.config", plate_xml)
         package.writestr("[Content_Types].xml",
                          '<?xml version="1.0" encoding="UTF-8"?>'
                          '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
