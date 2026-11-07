@@ -681,7 +681,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           </div>
         </div>
       )}</div> : <p>No slicing drafts saved yet.</p>}
-    </Modal>
+    </Modal>}
     {previewFile && <FileModelViewerModal file={previewFile} onClose={() => setPreviewFile(null)} />}
     {printSelection?.choosing && <Modal title="Choose printer connection" subtitle={"Print " + (printSelection.job.output_asset?.filename || "sliced G-code") + " on " + printSelection.printer.name} onClose={() => setPrintSelection(null)}>
       <p>This uses MakerVault's existing printer-submission checks and requires a separate confirmation before printing.</p>
