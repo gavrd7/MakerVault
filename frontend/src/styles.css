@@ -3662,10 +3662,18 @@ a:focus-visible,
 .slicerWorkbenchTop .formGrid input,.slicerWorkbenchTop .formGrid select{max-width:100%}
 .slicerWorkbenchTop h3,.slicerProfileSidebar h4{margin-top:0;margin-bottom:14px}
 .slicerProfileSidebar{display:flex;flex-direction:column;gap:12px}
-.slicerProfileActions{display:grid;grid-template-columns:1fr;gap:10px}
-.slicerProfileActions button{width:100%;text-align:center;min-height:42px}
-.slicerSelectedProfiles{grid-template-columns:1fr!important}
-.slicerSelectedProfiles label{grid-column:1/-1}
+.slicerProfileActions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.slicerProfileActions button{width:100%;min-width:0;min-height:48px;display:flex;align-items:center;justify-content:center;gap:9px;text-align:left}
+.slicerProfileActions button:last-child{grid-column:1/-1}
+.slicerProfileActions svg,.slicerProfileVerification svg{flex-shrink:0}
+.slicerSelectedProfiles{display:grid;grid-template-columns:1fr!important;gap:10px}
+.slicerSelectedProfiles label{grid-column:1/-1;display:grid;grid-template-columns:minmax(85px,0.65fr) minmax(0,1.6fr);align-items:center;gap:10px}
+.slicerSelectedProfiles label select{min-width:0}
+.slicerPlateFooter{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:12px}
+.slicerPlateFooter .slicerDraftActions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin:0 0 0 auto}
+.slicerPlateActionHint{font-size:13px;color:var(--muted,#92a1b6);margin:0}
+@media(max-width:600px){.slicerSelectedProfiles label{grid-template-columns:1fr}.slicerPlateFooter .slicerDraftActions{width:100%}.slicerPlateFooter .slicerDraftActions button{flex:1}}
+
 .slicerWorkbenchTop+.panel,.slicerWorkbenchTop~.panel{padding:22px}
 .slicerWorkbenchTop~.panel .formGrid{gap:14px}
 @media(max-width:960px){.slicerWorkbenchTop{grid-template-columns:1fr}.slicerWorkbenchTop>.panel{height:auto}}
