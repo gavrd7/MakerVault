@@ -15,6 +15,7 @@ from .runner import (
     MAX_PROFILE_BYTES, WorkerError, _regular_file, _output_path,
 )
 from .stl_validation import StlValidationError, validate_stl
+from .three_mf_validation import validate_worker_3mf
 from .orca_runner import FORBIDDEN_KEYS
 
 
@@ -47,11 +48,15 @@ def creality_command(binary: Path, workdir: Path):
     """Construct fixed arguments without accepting arbitrary client options."""
     if binary.is_symlink() or not binary.is_file() or not os.access(binary, os.X_OK):
         raise WorkerError("Verified Creality Print executable is unavailable.")
-    model = _regular_file(workdir, "input.stl", MAX_MODEL_BYTES)
-    try:
-        validate_stl(model.read_bytes())
-    except StlValidationError as exc:
-        raise WorkerError("Input STL failed structural validation.") from exc
+    is_project = (workdir / "input.3mf").exists()
+    model = _regular_file(workdir, "input.3mf" if is_project else "input.stl", MAX_MODEL_BYTES)
+    if is_project:
+        validate_worker_3mf(model.read_bytes())
+    else:
+        try:
+            validate_stl(model.read_bytes())
+        except StlValidationError as exc:
+            raise WorkerError("Input STL failed structural validation.") from exc
     profiles = [
         _regular_file(workdir, name, MAX_PROFILE_BYTES)
         for name in ("printer.json", "filament.json", "process.json")
