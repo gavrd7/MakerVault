@@ -19,6 +19,7 @@ from .slicer_profile_edit import SETTINGS as EDITABLE_PROFILE_SETTINGS, customis
 from .slicer_profile_lineage import inspect_orca_lineage
 from .slicer_mesh import inspect_stl, MeshInspectionError, MAX_INSPECTION_BYTES
 from .slicer_bed import inspect_orca_plate, inspect_creality_plate
+from .slicer_official_chain import official_profile_chain
 from .slicer_creality_official_profiles import (
     search_creality_profiles, fetch_creality_profile,
     ENGINE_VERSION as OFFICIAL_CRE_VERSION, SOURCE as OFFICIAL_CRE_SOURCE,
@@ -386,22 +387,39 @@ def official_profiles(request):
             engine_version=version, kind=kind, name=name,
         ).exists():
             return _error("This exact official preset has already been imported.", 409)
-        raw = fetcher(kind, name, subpath, vendor)
-        asset = FileAsset(
-            owner=request.user, name=name + ".json", category="source",
-            metadata={"original_name": name + ".json", "extension": ".json"},
-        )
-        asset.file = ContentFile(raw, name="official-" + engine + "-profile.json")
-        inspected = inspect_native_profile(asset, engine)
-        provenance = f"{source}@{ref}/{vendor}/{subpath}"
-        if len(provenance) > 200:
-            raise ValueError("Official source identity is too long.")
+        # Fetch and validate the complete bounded parent chain *before*
+        # mutating the database. Never install a partial official preset.
+        chain = official_profile_chain(engine, kind, name, subpath, vendor)
+        prepared = []
+        for native_name, native_subpath, raw in chain:
+            if SlicerProfile.objects.filter(
+                owner=request.user, engine=engine,
+                engine_version=version, kind=kind, name=native_name,
+            ).exists():
+                continue
+            asset = FileAsset(
+                owner=request.user, name=native_name + ".json", category="source",
+                metadata={"original_name": native_name + ".json", "extension": ".json"},
+            )
+            asset.file = ContentFile(raw, name="official-" + engine + "-profile.json")
+            inspected = inspect_native_profile(asset, engine)
+            provenance = f"{source}@{ref}/{vendor}/{native_subpath}"
+            if len(provenance) > 200:
+                raise ValueError("Official source identity is too long.")
+            prepared.append((native_name, asset, inspected["sha256"], provenance))
         with transaction.atomic():
-            asset.save()
-            profile = SlicerProfile.objects.create(
-                owner=request.user, file_asset=asset, engine=engine,
+            created_names = []
+            for native_name, asset, digest, provenance in prepared:
+                asset.save()
+                SlicerProfile.objects.create(
+                    owner=request.user, file_asset=asset, engine=engine,
+                    engine_version=version, kind=kind, name=native_name,
+                    provenance=provenance, content_sha256=digest, status="candidate",
+                )
+                created_names.append(native_name)
+            profile = SlicerProfile.objects.get(
+                owner=request.user, engine=engine,
                 engine_version=version, kind=kind, name=name,
-                provenance=provenance, content_sha256=inspected["sha256"], status="candidate",
             )
     except (OfficialProfileError, ValueError, TypeError, UnicodeDecodeError, SlicerProfileError) as exc:
         return _error(str(exc))
@@ -409,8 +427,9 @@ def official_profiles(request):
         return _error("The selected official profile is already registered.", 409)
     return JsonResponse({
         "profile": _profile_summary(profile), "engine_version": version,
+        "imported_profiles": created_names, "parent_chain_length": len(chain),
         "execution_available": False,
-        "warning": "Official origin does not imply runtime approval; profile inheritance may remain unresolved.",
+        "warning": "Official profile and available parent chain imported as unverified candidates. A real engine fixture is still required.",
     }, status=201)
 
 
