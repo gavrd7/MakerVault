@@ -19,10 +19,10 @@ MAX_SOURCE_TOTAL = 48 * 1024 * 1024
 MAX_PROJECT_BYTES = 32 * 1024 * 1024
 
 def _triangles(raw):
-    from slicer_worker.stl_validation import validate_stl, StlValidationError
+    from .slicer_mesh import inspect_stl
     try:
-        fmt = validate_stl(raw)["format"]
-    except StlValidationError as exc:
+        fmt = inspect_stl(raw)["format"]
+    except MeshInspectionError as exc:
         raise SlicerProfileError("Invalid source STL for build plate.") from exc
     if fmt == "binary":
         for tri in struct.iter_unpack("<12fH", raw[84:]):
