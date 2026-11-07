@@ -75,5 +75,23 @@ export function defaultOfficialSearch(kind, { printer, spool, nozzle } = {}) {
   if (kind === "filament") return spoolMaterial(spool) || "Generic PLA";
   if (kind === "process") return "0.20mm";
   const machine = String(printer?.model || printer?.name || "").trim().slice(0, 80);
-  return machine || "Creality K1";
+  return machine || "0.4 nozzle";
+}
+
+/** Suggest an upstream catalogue only from a recognizable printer identity.
+ * The operator must still review native profile compatibility. */
+export function suggestOfficialVendor(printer, vendors = []) {
+  if (!Array.isArray(vendors) || !vendors.length) return "";
+  if (vendors.length === 1) return vendors[0].id;
+  const tokens = [
+    printer?.manufacturer, printer?.brand, printer?.model, printer?.name,
+  ].filter(Boolean).map(value => String(value).toLowerCase());
+  const aliases = { bbl: ["bambu", "bambulab"], flsun: ["flsun"], ratrig: ["rat rig", "ratrig"] };
+  const match = vendors.find(v => {
+    const id = String(v.id || "").toLowerCase();
+    const forms = [id, ...(aliases[id] || [])];
+    return forms.some(alias => tokens.some(t => t === alias ||
+      t.startsWith(alias + " ") || t.startsWith(alias + "-")));
+  });
+  return match?.id || vendors.find(v => v.id === "Custom")?.id || vendors[0].id;
 }
