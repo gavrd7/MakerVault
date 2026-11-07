@@ -380,7 +380,26 @@ export default function SlicerPlateEditor({
   return <section className="panel printingSection slicerPlatePanel" aria-labelledby="slicer-plate-heading">
     <h3 id="slicer-plate-heading">Visual build plate</h3>
     <p>Arrange models, change their size and position, and preview the build plate. Multi-object slicing is not yet available.</p>
-    <div className="formGrid">
+    <div className="slicerPlateWorkspace">
+      <div className="slicerPlateCanvasColumn">
+    <div ref={hostRef} className="slicerPlateCanvas" aria-label="Interactive three-dimensional model plate preview" />
+
+    <p className="slicerPlateHint"><strong>Build plate volume:</strong> {pretty(bedX)} × {pretty(bedY)} mm (X × Y). Drag in 0.5 mm steps or enter coordinates below.</p>
+    {extentWarnings.length > 0 && <div role="status" className="integrationError">
+      <strong>Preliminary plate-fit warnings</strong>
+      <ul>{extentWarnings.map(warning => <li key={warning.id}>{warning.label}: {warning.message}</li>)}</ul>
+      These checks use an XY rectangular envelope of the preview mesh, not the exact printable polygon,
+      excluded regions, model height or toolhead clearance. They do not certify printability.
+    </div>}
+
+    {objects.length > 0 && <p role="status" className="slicerPlateHint">{objects.length} model{objects.length === 1 ? "" : "s"} on the plate
+      {objects.some(item => String(item.asset_id).startsWith("local:")) ? " · Temporary models will be lost on reload." : " · Plate ready to save as a draft."}</p>
+
+      </div>
+      <aside className="slicerPlateControls" aria-label="Build plate controls">
+        <div className="slicerPlateControlsGroup">
+          <h4>Add models</h4>
+    <div className="formGrid slicerPlateImportFields">
       <label>Existing STL from Files
         <select value={assetChoice} onChange={event => setAssetChoice(event.target.value)} disabled={!canEdit || uploadBusy}>
           <option value="">Choose an STL to add</option>
@@ -398,7 +417,11 @@ export default function SlicerPlateEditor({
       </label>
       <p className="full slicerPlateHint">Unchecked: models stay in this browser session. Saving a persistent draft requires saved source files.</p>
     </div>
-    {error && <p className="integrationError" role="alert">{error}</p>}
+
+        </div>
+        {error && <p className="integrationError" role="alert">{error}</p>}
+        <div className="slicerPlateControlsGroup">
+          <h4>Selected model</h4>
     {objects.length > 0 && <div className="slicerPlateToolbar">
       <label>Selected object
         <select value={chosen?.instance_id || ""} onChange={event => setSelected(event.target.value)}>
@@ -408,18 +431,8 @@ export default function SlicerPlateEditor({
       <button type="button" disabled={!canEdit || !chosen} onClick={removeSelected}>Remove selected model</button>
       <button type="button" disabled={!canEdit || !chosen || objects.length >= MAX_OBJECTS} onClick={() => addAsset(chosen.asset_id)}>Duplicate selected</button>
     </div>}
-    <div ref={hostRef} aria-label="Interactive three-dimensional model plate preview" style={{
-      height: 370, width: "100%", borderRadius: 12, overflow: "hidden", border: "1px solid var(--border, #435365)",
-      background: "#0f1720", touchAction: "none",
-    }} />
-    <p className="slicerPlateHint"><strong>Build plate volume:</strong> {pretty(bedX)} × {pretty(bedY)} mm (X × Y). Drag in 0.5 mm steps or enter coordinates below.</p>
-    {extentWarnings.length > 0 && <div role="status" className="integrationError">
-      <strong>Preliminary plate-fit warnings</strong>
-      <ul>{extentWarnings.map(warning => <li key={warning.id}>{warning.label}: {warning.message}</li>)}</ul>
-      These checks use an XY rectangular envelope of the preview mesh, not the exact printable polygon,
-      excluded regions, model height or toolhead clearance. They do not certify printability.
-    </div>}
-    {objects.length > 0 && <div className="formGrid">
+
+    {objects.length > 0 && <div className="formGrid slicerPlateTransformFields>
       <label>X position (mm)
         <input type="number" min={-10000} max={10000} step="0.5" value={chosen?.x_mm ?? 0}
           disabled={!canEdit} onChange={event => patch("x_mm", pretty(event.target.value))} />
@@ -447,7 +460,9 @@ export default function SlicerPlateEditor({
         <button type="button" disabled={!canEdit} onClick={removeSelected}>Remove model</button>
       </div>
     </div>}
-    {objects.length > 0 && <p role="status" className="slicerPlateHint">{objects.length} model{objects.length === 1 ? "" : "s"} on the plate
-      {objects.some(item => String(item.asset_id).startsWith("local:")) ? " · Temporary models will be lost on reload." : " · Plate ready to save as a draft."}</p>
-  </section>;
+
+        </div>
+      </aside>
+    </div>
+  </section>
 }
