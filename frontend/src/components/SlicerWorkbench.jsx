@@ -374,9 +374,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     setPrintSelection(current => current ? { ...current, choosing: false } : null);
   }
 
-  async function saveDraft(event) {
-    event.preventDefault();
-    const sliceNow = event.nativeEvent?.submitter?.value === "slice";
+  async function saveDraft(mode = "draft") {
+    if (busy || loading || !canPrepare) return;
+    const sliceNow = mode === "slice";
     setError(""); setNotice("");
     if (!plateObjects.length) {
       setError("Add at least one STL to the visual build plate before saving or slicing.");
@@ -384,6 +384,11 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     }
     if (plateObjects.some(item => String(item.asset_id).startsWith("local:"))) {
       setError("This plate contains temporary models. To save a persistent draft, first import those STL files with ‘Also save imported models to MakerVault Files’ selected.");
+      return;
+    }
+    if (!form.engine_version.trim() || !form.printer_id || !Number.isFinite(Number(form.nozzle_mm)) ||
+        Number(form.nozzle_mm) < 0.1 || Number(form.nozzle_mm) > 2) {
+      setError("Choose an engine version, printer and valid nozzle diameter before saving or slicing.");
       return;
     }
     if (["printer", "filament", "process"].some(kind => !form[kind + "_profile_id"])) {
@@ -745,7 +750,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         : "Preparation mode — no administrator-approved slicing worker is available. Saving a draft does not run a slicer, send a printer command or change spool inventory."}</p>
       {error && <p className="integrationError" role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
-      <form id="slicer-configuration-form" className="formGrid" onSubmit={saveDraft}>
+      <form id="slicer-configuration-form" className="formGrid" onSubmit={event => { event.preventDefault(); saveDraft("draft"); }}>
         <div className="full slicerEngineSelection">
           <strong className="slicerEngineSelectionLabel">Slicing engine</strong>
           <SlicerEngineChoices engines={engines.length ? engines :
@@ -889,17 +894,20 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       canEdit={canPrepare}
       onFilesUploaded={onFilesUploaded}
       footer={<>
-        {!plateObjects.length && <p className="slicerPlateActionHint">Add an STL to the plate before saving or slicing.</p>}
+        <div className="slicerPlateActionFeedback" aria-live="polite">
+          {error && <p className="integrationError" role="alert">{error}</p>}
+          {notice && <p role="status">{notice}</p>}
+          {!error && !notice && !plateObjects.length &&
+            <p className="slicerPlateActionHint">Add an STL to the plate before saving or slicing.</p>}
+        </div>
         <div className="slicerDraftActions settingsActions">
-          <button type="submit" form="slicer-configuration-form" value="draft"
-            disabled={!canPrepare || busy || loading || !plateObjects.length || !printers.length ||
-              !form.printer_profile_id || !form.filament_profile_id || !form.process_profile_id}>
+          <button type="button" onClick={() => saveDraft("draft")}
+            disabled={!canPrepare || busy || loading || !plateObjects.length || !printers.length}>
             {busy ? "Saving…" : "Save slicing draft"}
           </button>
           {workerConfigured && engines.some(engine => engine.key === form.engine && engine.available) &&
-            <button type="submit" form="slicer-configuration-form" value="slice" className="primary"
-              disabled={!canPrepare || busy || loading || !plateObjects.length || !printers.length ||
-                !form.printer_profile_id || !form.filament_profile_id || !form.process_profile_id}>
+            <button type="button" onClick={() => saveDraft("slice")} className="primary"
+              disabled={!canPrepare || busy || loading || !plateObjects.length || !printers.length}>
               {busy ? "Preparing…" : "Save and slice"}
             </button>}
         </div>
