@@ -68,7 +68,7 @@ def models_from_machines(entries):
     """Unique catalogue model labels, stripping only nozzle-size suffixes."""
     models = set()
     for name, _path in entries:
-        model = re.sub(r"\\s*\\(?\\d+(?:[.]\\d+)?\\s*(?:mm\\s*)?nozzle\\)?\\s*$", "", name, flags=re.I).strip()
+        model = re.sub(r"\s*\(?\d+(?:[.]\d+)?\s*(?:mm\s*)?nozzle\)?\s*$", "", name, flags=re.I).strip()
         if model:
             models.add(model)
     return sorted(models, key=str.casefold)
