@@ -281,6 +281,22 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     }
   }
 
+  async function removeProfile(profile) {
+    if (!window.confirm("Remove saved " + profile.kind + " profile \"" + profile.name + "\"? Existing source files remain in MakerVault Files. Profiles referenced by slicing jobs cannot be removed.")) return;
+    setError(""); setBusy(true);
+    try {
+      await apiFetch("/api/printing/slicer/profiles/" + profile.id + "/", { method: "DELETE" });
+      setProfiles(current => current.filter(item => item.id !== profile.id));
+      setForm(current => current[profile.kind + "_profile_id"] === profile.id
+        ? { ...current, [profile.kind + "_profile_id"]: "" } : current);
+      setNotice("Profile registration removed. Its source file was preserved.");
+    } catch (err) {
+      setError(err.message || "Could not remove this profile.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function importProfile(event) {
     event.preventDefault();
     setError(""); setNotice(""); setBusy(true);
@@ -399,22 +415,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             nativePlate.plate?.status === "requires_parent" ?
               <small>Parent machine preset required: {nativePlate.plate.parent}</small> :
               <small>{nativePlate.error || nativePlate.plate?.reason || "Build volume is not available from this preset."}</small>}
-        </div>
-      </div>}
-      {false && selectedFile?.url && <div className="cameraSourceRow" aria-label="Selected model inspection">
-        <ModelThumbnail file={selectedFile} />
-        <div className="cameraSourceIdentity">
-          <strong>{selectedFile.name || selectedFile.filename}</strong>
-          <small>Source: {selectedFile.filename} · {selectedFile.size_bytes ? Math.round(selectedFile.size_bytes / 1024) + " KiB" : "size unknown"}</small>
-          {meshInspection?.id === String(selectedFile.id) && (meshInspection.loading
-            ? <small>Inspecting source STL geometry…</small>
-            : meshInspection.mesh
-              ? <small>Model dimensions: {meshInspection.mesh.size_mm.join(" × ")} mm · {meshInspection.mesh.triangles.toLocaleString()} triangles</small>
-              : <small role="alert">{meshInspection.error}</small>)}
-          <small>Dimensions are source coordinates, not an automatic placement or printer build-volume check.</small>
-        </div>
-        <div className="cameraSourceActions">
-          <button type="button" onClick={() => setPreviewFile(selectedFile)}>Inspect model</button>
         </div>
       </div>}
       {!stlFiles.length && <p>Add a plain-text STL model to Files or Model Library before preparing a slicing draft.</p>}
@@ -572,9 +572,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
                 Parent chain: {profileLineages[profile.id].chain.map(entry => entry.name).join(" → ")}
               </small>}
             </div>
-            {profile.engine === "orcaslicer" && <div className="cameraSourceActions">
-              <button type="button" disabled={profileLineages[profile.id]?.checking} onClick={() => inspectProfile(profile)}>Check parent presets</button>
-            </div>}
+            <div className="cameraSourceActions">
+              {profile.engine === "orcaslicer" && <button type="button" disabled={profileLineages[profile.id]?.checking} onClick={() => inspectProfile(profile)}>Check parent presets</button>}
+              <button type="button" disabled={busy} onClick={() => removeProfile(profile)}>Remove profile</button>
+            </div>
           </div>
         )}
       </div>
@@ -601,9 +602,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
                 Parent chain: {profileLineages[profile.id].chain.map(entry => entry.name).join(" → ")}
               </small>}
             </div>
-            {profile.engine === "orcaslicer" && <div className="cameraSourceActions">
-              <button type="button" disabled={profileLineages[profile.id]?.checking} onClick={() => inspectProfile(profile)}>Check parent presets</button>
-            </div>}
+            <div className="cameraSourceActions">
+              {profile.engine === "orcaslicer" && <button type="button" disabled={profileLineages[profile.id]?.checking} onClick={() => inspectProfile(profile)}>Check parent presets</button>}
+              <button type="button" disabled={busy} onClick={() => removeProfile(profile)}>Remove profile</button>
+            </div>
           </div>
         )}
       </div>
