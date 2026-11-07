@@ -5,6 +5,7 @@ import { FileModelViewerModal, ModelThumbnail } from "./ModelViewer";
 import PrinterStartGcodeModal from "./PrinterStartGcodeModal";
 import SlicerPlateEditor from "./SlicerPlateEditor";
 import { slicerSpoolHex, recolorUnmodifiedPlate } from "./slicerSpoolColour";
+import { spoolMaterial, chooseSuggestedProfile, defaultOfficialSearch } from "./slicerProfileSuggestions";
 import { availableSlicerPrintConnections, preferredSlicerPrintConnection } from "./slicerPrintRouting";
 
 const initialForm = {
@@ -41,6 +42,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [previewFile, setPreviewFile] = useState(null);
   const [plateObjects, setPlateObjects] = useState([]);
   const manuallyColouredModels = useRef(new Set());
+  const manuallyChosenProfiles = useRef(new Set());
+  const [profileSuggestions, setProfileSuggestions] = useState({});
   const [meshInspection, setMeshInspection] = useState(null);
   const [nativePlate, setNativePlate] = useState(null);
   const [importFile, setImportFile] = useState(null);
@@ -75,6 +78,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     profile.engine === form.engine && profile.engine_version === form.engine_version && profile.kind === kind
   );
   const selectNativeProfile = (kind, id) => {
+    manuallyChosenProfiles.current.add(kind);
     const profile = profiles.find(item => item.id === id);
     setForm(current => ({
       ...current,
@@ -86,6 +90,45 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const selectedPrinter = printers.find(item => String(item.id) === form.printer_id);
   const selectedSpool = spools.find(item => String(item.id) === String(form.spool_id));
   const selectedSpoolHex = slicerSpoolHex(selectedSpool);
+  const materialHint = spoolMaterial(selectedSpool);
+
+  // Reconcile only selections the user has not explicitly changed. Defaults
+  // are scoped to the exact worker engine/version; printer suggestions must
+  // match the selected machine and filament must match the physical material.
+  useEffect(() => {
+    if (loading || !profiles.length || !form.engine_version) return;
+    const next = {};
+    const reasons = {};
+    for (const kind of ["printer", "filament", "process"]) {
+      if (manuallyChosenProfiles.current.has(kind)) continue;
+      const suggestion = chooseSuggestedProfile(profiles, jobs, {
+        engine: form.engine, version: form.engine_version, kind,
+        printer: selectedPrinter, nozzle: form.nozzle_mm,
+        material: kind === "filament" ? materialHint : "",
+      });
+      if (suggestion) {
+        next[kind] = suggestion.profile;
+        reasons[kind] = suggestion.reason;
+      }
+    }
+    setProfileSuggestions(reasons);
+    if (!Object.keys(next).length) return;
+    setForm(current => {
+      let changed = false;
+      const updated = { ...current };
+      for (const [kind, profile] of Object.entries(next)) {
+        if (current[kind + "_profile_id"] !== profile.id ||
+            current[kind + "_preset"] !== profile.name) {
+          updated[kind + "_profile_id"] = profile.id;
+          updated[kind + "_preset"] = profile.name;
+          changed = true;
+        }
+      }
+      return changed ? updated : current;
+    });
+  }, [loading, profiles, jobs, form.engine, form.engine_version, form.printer_id,
+      form.nozzle_mm, form.spool_id, materialHint, selectedPrinter?.id]);
+
 
   function chooseSpool(id) {
     const spool = spools.find(item => String(item.id) === String(id));
