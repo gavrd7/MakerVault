@@ -338,7 +338,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     }
   }
 
-  async function importOfficialProfile(candidate) {
+  async function importOfficialProfile(candidate, asDefault = false) {
     setOfficialError(""); setOfficialBusy(true);
     try {
       const result = await apiFetch("/api/printing/slicer/official-profiles/", {
@@ -348,13 +348,31 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           name: candidate.name, sub_path: candidate.sub_path,
         },
       });
-      setProfiles(current => [result.profile, ...current]);
+      let imported = result.profile;
+      if (asDefault) {
+        try {
+          const preference = await apiFetch("/api/printing/slicer/profiles/" + imported.id + "/default/", {
+            method: "POST", body: { default: true },
+          });
+          imported = preference.profile;
+        } catch (err) {
+          setOfficialError("Profile imported, but setting its default failed: " + (err.message || "Please use Manage profiles."));
+        }
+      }
+      setProfiles(current => [
+        imported,
+        ...current.map(profile => asDefault && imported.is_default &&
+          profile.engine === imported.engine && profile.engine_version === imported.engine_version &&
+          profile.kind === imported.kind ? { ...profile, is_default: false } : profile),
+      ]);
       setForm(current => ({
-        ...current, engine: result.profile.engine, engine_version: result.engine_version,
-        printer_profile_id: "", filament_profile_id: "", process_profile_id: "",
+        ...current, engine: imported.engine, engine_version: result.engine_version,
+        [imported.kind + "_profile_id"]: imported.id,
+        [imported.kind + "_preset"]: imported.name,
       }));
-      setNotice("Official " + (result.profile.engine === "crealityprint" ? "Creality Print" : "OrcaSlicer") +
-        " profile imported as an unverified candidate. Its native parent presets must also be verified before slicing.");
+      setNotice("Official " + (imported.engine === "crealityprint" ? "Creality Print" : "OrcaSlicer") +
+        " profile imported" + (imported.is_default ? " and saved as your default" : "") +
+        ". It remains unverified until its native dependencies and engine pass checks.");
     } catch (err) {
       setOfficialError(err.message || "Could not import the selected official native profile.");
     } finally {
@@ -651,7 +669,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         {forKind("printer").length > 0 && <label>Native printer profile (unverified)
           <select disabled={!canPrepare || busy} value={form.printer_profile_id} onChange={e => selectNativeProfile("printer", e.target.value)}>
             <option value="">Use a draft label instead</option>
-            {forKind("printer").map(profile => <option key={profile.id} value={profile.id}>{profile.name} · {profile.status}</option>)}
+            {forKind("printer").map(profile => <option key={profile.id} value={profile.id}>{profile.name} · {profile.status}{profile.is_default ? " · default" : ""}</option>)}
           </select>
         </label>}
         <label>Engine printer preset (draft label)
@@ -660,7 +678,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         {forKind("filament").length > 0 && <label>Native filament profile (unverified)
           <select disabled={!canPrepare || busy} value={form.filament_profile_id} onChange={e => selectNativeProfile("filament", e.target.value)}>
             <option value="">Use a draft label instead</option>
-            {forKind("filament").map(profile => <option key={profile.id} value={profile.id}>{profile.name} · {profile.status}</option>)}
+            {forKind("filament").map(profile => <option key={profile.id} value={profile.id}>{profile.name} · {profile.status}{profile.is_default ? " · default" : ""}</option>)}
           </select>
         </label>}
         <label>Engine filament preset (draft label)
@@ -669,7 +687,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         {forKind("process").length > 0 && <label>Native process profile (unverified)
           <select disabled={!canPrepare || busy} value={form.process_profile_id} onChange={e => selectNativeProfile("process", e.target.value)}>
             <option value="">Use a draft label instead</option>
-            {forKind("process").map(profile => <option key={profile.id} value={profile.id}>{profile.name} · {profile.status}</option>)}
+            {forKind("process").map(profile => <option key={profile.id} value={profile.id}>{profile.name} · {profile.status}{profile.is_default ? " · default" : ""}</option>)}
           </select>
         </label>}
         <label>Engine process preset (draft label)
@@ -755,7 +773,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             </select>
           </label>
           <label>Profile type
-            <select value={importKind} disabled={officialBusy} onChange={e => { setImportKind(e.target.value); setOfficialResults(null); }}>
+            <select value={importKind} disabled={officialBusy} onChange={e => { setImportKind(e.target.value); setOfficialQuery(defaultOfficialSearch(e.target.value, { printer: selectedPrinter, spool: selectedSpool, nozzle: form.nozzle_mm })); setOfficialResults(null); }}>
               <option value="printer">Printer / machine</option>
               <option value="filament">Filament</option>
               <option value="process">Process</option>
@@ -781,6 +799,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             <div className="cameraSourceActions">
               <button type="button" onClick={() => importOfficialProfile(candidate)} disabled={!canPrepare || officialBusy}>
                 Import candidate
+              </button>
+              <button type="button" onClick={() => importOfficialProfile(candidate, true)} disabled={!canPrepare || officialBusy}>
+                Import &amp; set default
               </button>
             </div>
           </div>)}
@@ -821,7 +842,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         {profiles.filter(item => item.engine === form.engine).map(profile =>
           <div className="cameraSourceRow" key={profile.id}>
             <div className="cameraSourceIdentity">
-              <strong>{profile.name} · {profile.kind}</strong>
+              <strong>{profile.name} · {profile.kind}{profile.is_default ? " · Default" : ""}</strong>
               <small>{profile.engine} {profile.engine_version} · {profile.status} · {profile.provenance || "No source supplied"}</small>
               {profileLineages[profile.id] && <small role="status">
                 {profileLineages[profile.id].checking ? "Checking native parent presets…" :
@@ -838,6 +859,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             <div className="cameraSourceActions">
               {profile.engine === "orcaslicer" && <button type="button" disabled={profileLineages[profile.id]?.checking} onClick={() => inspectProfile(profile)}>Check parent presets</button>}
               {["orcaslicer", "crealityprint"].includes(profile.engine) && <button type="button" disabled={busy} onClick={() => openProfileEditor(profile)}>Edit as custom</button>}
+              <button type="button" disabled={busy} onClick={() => toggleProfileDefault(profile)}>
+                {profile.is_default ? "Clear default" : "Set as default"}
+              </button>
               <button type="button" disabled={busy} onClick={() => removeProfile(profile)}>Remove profile</button>
             </div>
           </div>
@@ -846,13 +870,13 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
     </Modal>}
     {profileModal === "manage" && <Modal title="Manage slicer profiles" onClose={() => setProfileModal("")} wide>
-      <p>Profiles are engine/version-specific. To customise a downloaded profile, export its original native file, edit it in a compatible slicer, then import it under a new name. In-place native profile editing and safe deletion of referenced profiles are not yet implemented.</p>
+      <p>Set a default for each printer, filament and process category, or edit a profile as a separate custom copy. All defaults are private and specific to the slicer engine and version.</p>
       <div className="settingsActions"><button type="button" onClick={() => setProfileModal("saved")}>View saved profiles</button><button type="button" onClick={() => setProfileModal("import")}>Import a custom profile</button></div>
       <div className="printingStack">
         {profiles.filter(item => item.engine === form.engine).map(profile =>
           <div className="cameraSourceRow" key={profile.id}>
             <div className="cameraSourceIdentity">
-              <strong>{profile.name} · {profile.kind}</strong>
+              <strong>{profile.name} · {profile.kind}{profile.is_default ? " · Default" : ""}</strong>
               <small>{profile.engine} {profile.engine_version} · {profile.status} · {profile.provenance || "No source supplied"}</small>
               {profileLineages[profile.id] && <small role="status">
                 {profileLineages[profile.id].checking ? "Checking native parent presets…" :
@@ -869,6 +893,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             <div className="cameraSourceActions">
               {profile.engine === "orcaslicer" && <button type="button" disabled={profileLineages[profile.id]?.checking} onClick={() => inspectProfile(profile)}>Check parent presets</button>}
               {["orcaslicer", "crealityprint"].includes(profile.engine) && <button type="button" disabled={busy} onClick={() => openProfileEditor(profile)}>Edit as custom</button>}
+              <button type="button" disabled={busy} onClick={() => toggleProfileDefault(profile)}>
+                {profile.is_default ? "Clear default" : "Set as default"}
+              </button>
               <button type="button" disabled={busy} onClick={() => removeProfile(profile)}>Remove profile</button>
             </div>
           </div>
