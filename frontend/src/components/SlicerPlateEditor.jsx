@@ -80,6 +80,14 @@ export default function SlicerPlateEditor({
     message: dimensions[item.instance_id]
       ? plateExtentWarning(item, dimensions[item.instance_id], bedX, bedY) : "",
   })).filter(row => row.message);
+  const overlapWarnings = objects.flatMap((item, index) => objects.slice(index + 1)
+    .filter(other => plateFootprintsOverlap(item, dimensions[item.instance_id],
+      other, dimensions[other.instance_id], 2) === true)
+    .map(other => ({
+      id: item.instance_id + ":" + other.instance_id,
+      message: (sourceFiles.find(file => String(file.id) === item.asset_id)?.name || "Model " + (index + 1)) +
+        " overlaps " + (sourceFiles.find(file => String(file.id) === other.asset_id)?.name || "another model"),
+    })));
 
   function arrangeModels(items = objects, announce = true) {
     const result = autoArrangePlate(items, dimensionsRef.current, bedX, bedY, 5);
@@ -438,7 +446,7 @@ export default function SlicerPlateEditor({
   return <section className="panel printingSection slicerPlatePanel" aria-labelledby="slicer-plate-heading">
     <div className="slicerPlateHeading">
       <h3 id="slicer-plate-heading">Visual build plate</h3>
-      <button type="button" onClick={() => arrangeModels()} disabled={!canEdit || objects.length < 2 || uploadBusy}>Auto-arrange models</button>
+      <button type="button" onClick={() => arrangeModels()} disabled={!canEdit || !objects.length || uploadBusy}>Auto-arrange models</button>
     </div>
     <p>Arrange models, change their size and position, and preview the build plate. Multi-object slicing is not yet available.</p>
     <div className="slicerPlateWorkspace">
@@ -451,6 +459,12 @@ export default function SlicerPlateEditor({
       <ul>{extentWarnings.map(warning => <li key={warning.id}>{warning.label}: {warning.message}</li>)}</ul>
       These checks use an XY rectangular envelope of the preview mesh, not the exact printable polygon,
       excluded regions, model height or toolhead clearance. They do not certify printability.
+    </div>}
+
+    {overlapWarnings.length > 0 && <div role="alert" className="integrationError">
+      <strong>Models overlap on the build plate.</strong>
+      <ul>{overlapWarnings.map(row => <li key={row.id}>{row.message}</li>)}</ul>
+      Select Auto-arrange models or move the affected objects before saving.
     </div>}
 
     {objects.length > 0 && <p role="status" className="slicerPlateHint">{objects.length} model{objects.length === 1 ? "" : "s"} on the plate
