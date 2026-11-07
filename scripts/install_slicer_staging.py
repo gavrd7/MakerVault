@@ -25,6 +25,9 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parent.parent
+# Direct `python3 scripts/...` execution otherwise puts only scripts/ on sys.path.
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 DOTENV = ROOT / ".slicer-staging.env"
 BUNDLE = ROOT / "slicer-engine-assets"
 OVERLAY = ROOT / "compose.slicer.staging.yaml"
