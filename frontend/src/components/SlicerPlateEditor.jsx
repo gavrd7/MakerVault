@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { apiFetch } from "../api";
-import { plateExtentWarning } from "./slicerPlateGeometry";
+import { plateExtentWarning, plateFootprintsOverlap, autoArrangePlate } from "./slicerPlateGeometry";
 
 const PALETTE = ["#58b5e4", "#f59e0b", "#a78bfa", "#10b981", "#ef4444", "#f472b6"];
 const MAX_OBJECTS = 12;
@@ -47,6 +47,8 @@ export default function SlicerPlateEditor({
   const sceneRef = useRef(null);
   const latestObjectsRef = useRef(objects);
   const latestOnChangeRef = useRef(onChange);
+  const dimensionsRef = useRef({});
+  const pendingArrangeRef = useRef(false);
   latestObjectsRef.current = objects;
   latestOnChangeRef.current = onChange;
   const [selected, setSelected] = useState("");
@@ -59,6 +61,7 @@ export default function SlicerPlateEditor({
   useEffect(() => () => { localAssetsRef.current.forEach(asset => URL.revokeObjectURL(asset.url)); }, []);
   const [error, setError] = useState("");
   const [dimensions, setDimensions] = useState({});
+  dimensionsRef.current = dimensions;
   const sourceFiles = useMemo(() => [
     ...localAssets,
     ...files.filter(file =>
@@ -77,6 +80,41 @@ export default function SlicerPlateEditor({
       ? plateExtentWarning(item, dimensions[item.instance_id], bedX, bedY) : "",
   })).filter(row => row.message);
 
+  function arrangeModels(items = objects, announce = true) {
+    const result = autoArrangePlate(items, dimensionsRef.current, bedX, bedY, 5);
+    if (result.error) {
+      if (announce) setError(result.error);
+      return false;
+    }
+    onChange(result.objects);
+    if (announce) setError("");
+    return true;
+  }
+
+  function validPlacement(candidate, items) {
+    const own = dimensionsRef.current[candidate.instance_id];
+    if (!own) return false;
+    if (plateExtentWarning(candidate, own, bedX, bedY)) return false;
+    return !items.some(other => other.instance_id !== candidate.instance_id &&
+      plateFootprintsOverlap(candidate, own, other,
+        dimensionsRef.current[other.instance_id], 2) !== false);
+  }
+
+  // Newly imported STLs are measured asynchronously. Arrange them as soon as
+  // ALL footprints are known; do not guess a size or stack at fixed 25mm steps.
+  useEffect(() => {
+    if (!pendingArrangeRef.current || !objects.length) return;
+    if (objects.some(item => !dimensions[item.instance_id])) return;
+    pendingArrangeRef.current = false;
+    const result = autoArrangePlate(objects, dimensions, bedX, bedY, 5);
+    if (result.objects) {
+      onChange(result.objects);
+      setError("");
+    } else {
+      setError(result.error);
+    }
+  }, [objectKey, dimensions, bedX, bedY]);
+
   function addAsset(id) {
     if (!id) return;
     if (objects.length >= MAX_OBJECTS) {
@@ -85,6 +123,7 @@ export default function SlicerPlateEditor({
     }
     const next = newPlateInstance(id, objects.length);
     if (defaultColor) next.color = defaultColor;
+    pendingArrangeRef.current = true;
     onChange([...objects, next]);
     if (!objects.length && !String(id).startsWith("local:")) onPrimaryChange?.(id);
     setSelected(next.instance_id);
@@ -101,9 +140,14 @@ export default function SlicerPlateEditor({
 
   function patch(field, value) {
     if (!chosen) return;
-    onChange(objects.map(item => item.instance_id === chosen.instance_id
-      ? { ...item, [field]: value }
-      : item));
+    const candidate = { ...chosen, [field]: value };
+    if (["x_mm", "y_mm", "rotation_deg", "scale_percent"].includes(field) &&
+        !validPlacement(candidate, objects)) {
+      setError("This position or transform overlaps another model, exceeds the build plate, or has dimensions still loading. Try Auto-arrange.");
+      return;
+    }
+    setError("");
+    onChange(objects.map(item => item.instance_id === chosen.instance_id ? candidate : item));
   }
 
   async function uploadFiles(event) {
@@ -146,6 +190,7 @@ export default function SlicerPlateEditor({
     } finally {
       if (previews.length) {
         setLocalAssets(current => [...current, ...previews]);
+        pendingArrangeRef.current = true;
         onChange([...objects, ...additions]);
         if (!objects.length && saveImports) onPrimaryChange?.(additions[0].asset_id);
         setSelected(additions[0].instance_id);
@@ -252,9 +297,10 @@ export default function SlicerPlateEditor({
       const y = Math.max(-10000, Math.min(10000, Math.round((location.y + dragging.deltaY) * 2) / 2));
       const current = latestObjectsRef.current;
       if (!current.some(item => item.instance_id === dragging.id)) return;
-      latestOnChangeRef.current(current.map(item => item.instance_id === dragging.id
-        ? { ...item, x_mm: x, y_mm: y }
-        : item));
+      const target = current.find(item => item.instance_id === dragging.id);
+      const candidate = { ...target, x_mm: x, y_mm: y };
+      if (!validPlacement(candidate, current)) return;
+      latestOnChangeRef.current(current.map(item => item.instance_id === dragging.id ? candidate : item));
     }
 
     function pointerUp(event) {
@@ -381,7 +427,10 @@ export default function SlicerPlateEditor({
   }, [objects, selected]);
 
   return <section className="panel printingSection slicerPlatePanel" aria-labelledby="slicer-plate-heading">
-    <h3 id="slicer-plate-heading">Visual build plate</h3>
+    <div className="slicerPlateHeading">
+      <h3 id="slicer-plate-heading">Visual build plate</h3>
+      <button type="button" onClick={() => arrangeModels()} disabled={!canEdit || objects.length < 2 || uploadBusy}>Auto-arrange models</button>
+    </div>
     <p>Arrange models, change their size and position, and preview the build plate. Multi-object slicing is not yet available.</p>
     <div className="slicerPlateWorkspace">
       <div className="slicerPlateCanvasColumn">
@@ -415,7 +464,7 @@ export default function SlicerPlateEditor({
       <label className="full">Add STL files from your device
         <input type="file" accept=".stl" multiple onChange={uploadFiles} disabled={!canEdit || uploadBusy || objects.length >= MAX_OBJECTS} />
       </label>
-      <label className="full checkRow"><input type="checkbox" checked={saveImports} onChange={event => setSaveImports(event.target.checked)} disabled={!canEdit || uploadBusy} />
+      <label className="full checkRow slicerPlateSaveImports"><input type="checkbox" checked={saveImports} onChange={event => setSaveImports(event.target.checked)} disabled={!canEdit || uploadBusy} />
         <span>Also save imported models to MakerVault Files</span>
       </label>
       <p className="full slicerPlateHint">Unchecked: models stay in this browser session. Saving a persistent draft requires saved source files.</p>
