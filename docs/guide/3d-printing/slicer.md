@@ -2,7 +2,7 @@
 
 > **Development status — PR #171:** The optional slicer is not yet released. The final multi-engine installer and approved container image do not exist yet. This guide describes the intended installation and the current limitations. Do not install an unverified engine merely to remove the “No slicer installed” warning.
 
-[MakerVault installation](../getting-started/install.md) · [Technical verification and developer setup](../../development/self-hosted-slicer.md) · [Slicer roadmap](https://github.com/gavrd7/MakerVault/issues/156)
+[MakerVault installation](../getting-started/install.md) · [Technical verification and developer setup](https://github.com/gavrd7/MakerVault/blob/feature/self-hosted-slicer-foundation/docs/development/self-hosted-slicer.md) · [Slicer roadmap](https://github.com/gavrd7/MakerVault/issues/156)
 
 ## Do I need the slicer?
 
@@ -48,4 +48,4 @@ Until a verified slicer worker is available, the navigation and Open Slicer butt
 
 ## Experimental developer validation
 
-See the [technical slicer guide](../../development/self-hosted-slicer.md) for the temporary isolated-worker overlay, pinned-image and executable checks, fixture receipts and approval procedures. Its existence does not imply that a complete real OrcaSlicer/Creality Print integration has passed verification. Slicing never automatically starts a print or deducts filament.
+See the [technical slicer guide](https://github.com/gavrd7/MakerVault/blob/feature/self-hosted-slicer-foundation/docs/development/self-hosted-slicer.md) for the temporary isolated-worker overlay, pinned-image and executable checks, fixture receipts and approval procedures. Its existence does not imply that a complete real OrcaSlicer/Creality Print integration has passed verification. Slicing never automatically starts a print or deducts filament.
