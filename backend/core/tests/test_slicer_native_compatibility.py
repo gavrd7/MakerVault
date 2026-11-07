@@ -18,6 +18,16 @@ class OrcaNativeCompatibilityTests(TestCase):
             check_native_compatibility("orcaslicer", "2.4.2", "printer", raw)
         self.assertEqual(json.loads(raw)["retraction_distances_when_cut"], "30")
 
+    def test_other_manufacturer_profiles_are_checked_identically(self):
+        for printer in ("Generic Cartesian 300", "Voron 2.4", "Prusa MK4", "Custom CoreXY"):
+            with self.subTest(printer=printer):
+                raw = json.dumps({
+                    "name": printer,
+                    "retraction_distances_when_cut": "30",
+                }).encode()
+                with self.assertRaisesRegex(SlicerNativeCompatibilityError, "regardless of printer"):
+                    check_native_compatibility("orcaslicer", "2.4.2", "printer", raw)
+
     def test_boundary_values_and_missing_key_are_allowed(self):
         for value in ("10", "18", ["10", "18"]):
             with self.subTest(value=value):
