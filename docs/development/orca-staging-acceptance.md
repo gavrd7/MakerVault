@@ -67,3 +67,26 @@ administrator-approved override before it is used for actual K2 prints.
 The application execution switch and all per-profile approval gates remain
 independent; a passing CI reference fixture does not unlock printing, prove
 printer-ready G-code or validate multi-material/CFS and 3MF bed workflows.
+
+## Verified two-model OrcaSlicer execution (7 November 2026)
+
+Real official OrcaSlicer v2.4.2 runs in a nonprivileged, no-network CI
+container using the actual MakerVault backend
+`build_compound_plate_3mf` implementation. Two source tetrahedra, positioned
+70 mm apart with independent transforms, are converted into one **single-
+material** compound 3MF mesh. The real CLI produced G-code with extrusion
+movements separated by more than 35 mm across X. The test also verifies the
+same exact bounded worker input validator and profile/binary identity gates.
+
+A conventional 3MF holding two separate `<build><item>` objects did *not*
+produce extrusion for both objects with this Orca CLI. Its CI diagnostic is
+non-blocking only because that **unsupported** format is never used for a
+production job. The production Orca path instead selects compound geometry
+and rejects non-Orca multi-model execution. Separate printable materials and
+tool assignments remain unverified and unavailable. The native K2 profile
+override remains **test-only**, not approved for K2 hardware.
+
+These are offline software acceptance tests, not hardware print certification
+or evidence that a staging user's specific native profiles have been approved.
+Profile approval must still run an administrator-controlled real fixture on
+the installed, pinned worker before any staging slice can be queued.
