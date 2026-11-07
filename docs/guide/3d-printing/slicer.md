@@ -67,7 +67,7 @@ sudo python3 scripts/install_slicer_staging.py enable
 sudo python3 scripts/install_slicer_staging.py status
 ```
 
-After installation, choose the Orca engine in MakerVault, import matching native printer/filament/process presets and use **Test slice and approve** (administrator only) to validate that actual slicing produces G-code. Only then can the normal **Save and slice** action succeed. This is deliberately a staging experiment: a working official Linux AppImage has not yet been demonstrated in this Docker image, and a passing health check verifies the binary's identity, not its ability to slice.
+After installation, choose the Orca engine in MakerVault, import matching native printer/filament/process presets and use **Test slice and approve** (administrator only) to validate that actual slicing produces G-code. Only then can the normal **Save and slice** action succeed. This is deliberately a staging experiment: the official OrcaSlicer 2.4.2 image has passed real K1 fixture slicing, with the K2 only passing a clearly identified test-only profile workaround. Neither receipt automatically approves a user's native profiles or printer.
 
 The optional staging configuration is held in a private `.slicer-staging.env`. Existing MakerVault storage is untouched. To turn engine execution back off:
 
@@ -96,7 +96,7 @@ The single slicing-service container will support independently selected engine 
 
 The planned administrator workflow is to select an engine and supported pinned version, review its source/licence/integrity information, explicitly install it, then import or select and verify that engine's native presets. A service may contain several engines, but a slice is routed only to the requested installed and approved engine/version.
 
-**Current PR limitations:** PR #171 now has separate OrcaSlicer and Creality Print worker adapters, an independently verified shared-worker engine registry, official K1/K2 profile discovery for both engines, basic GUI native-profile customisation, and saved slicing drafts. It still lacks a production-ready engine installer, independently verified Linux engine binaries, complete GUI setting coverage, multi-object execution and a successful end-to-end real slicing fixture for either engine. Engine identity verification does not by itself prove that slicing works.
+**Current PR limitations:** PR #171 now has separate OrcaSlicer and Creality Print worker adapters, an independently verified shared-worker engine registry, official Orca profile discovery across pinned upstream vendor catalogues (with Creality-only native discovery for Creality Print), basic GUI native-profile customisation, and saved slicing drafts. It still lacks a production-ready engine installer, independently verified Linux engine binaries, complete GUI setting coverage, multi-object execution and a successful end-to-end real slicing fixture for either engine. Engine identity verification does not by itself prove that slicing works.
 
 ## Profile defaults and spool-aware suggestions (development)
 
@@ -127,4 +127,12 @@ Until a verified slicer worker is available, the navigation and Open Slicer butt
 
 ## Experimental developer validation
 
-See the [technical slicer guide](https://github.com/gavrd7/MakerVault/blob/feature/self-hosted-slicer-foundation/docs/development/self-hosted-slicer.md) for the temporary isolated-worker overlay, pinned-image and executable checks, fixture receipts and approval procedures. Its existence does not imply that a complete real OrcaSlicer/Creality Print integration has passed verification. Slicing never automatically starts a print or deducts filament.
+See the [technical slicer guide](https://github.com/gavrd7/MakerVault/blob/feature/self-hosted-slicer-foundation/docs/development/self-hosted-slicer.md) for the temporary isolated-worker overlay, pinned-image and executable checks, fixture receipts and approval procedures. Its existence does not imply that a complete multi-engine, multi-printer slicing workflow has passed verification. Slicing never automatically starts a print or deducts filament.
+
+## Using a different printer or a custom machine profile
+
+OrcaSlicer v2.4.2's pinned official catalogue browser now exposes its upstream manufacturer families (including Prusa, Voron, Anycubic, Elegoo, Qidi and Custom), rather than requiring a Creality printer. Choose **MakerVault Slicer → Search official profiles → OrcaSlicer**, select the manufacturer/catalogue, then search printer, filament and process profiles separately. These are **upstream catalogue sources**, not a guarantee that every machine is supported or that the chosen preset can be used safely. The Creality Print catalogue remains Creality-specific.
+
+If a printer is not listed, use **Import native profile** with a profile supported by the chosen engine/version. Imported vendor or custom profiles remain candidates until the operator approves a successful, reviewed slicing fixture. Firmware-specific G-code, nozzle/extruder capabilities and geometry must match the actual printer. A printer does **not** need a network upload adapter merely to slice and save G-code; sending and starting a print is a separate action.
+
+Native parent profiles are only imported when their relationships are verifiable in the pinned source catalogue. If two manufacturers use the same native parent name with different contents, MakerVault refuses the conflicting import rather than silently mixing their printer settings. This cross-vendor namespace limitation remains a development item.
