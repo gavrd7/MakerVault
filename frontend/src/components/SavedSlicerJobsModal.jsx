@@ -76,7 +76,7 @@ export default function SavedSlicerJobsModal({ onClose, onOpenSlicer, assetIds =
             <small>{job.message || (job.status === "draft" ? "Saved configuration; not sliced" : "Slice job recorded")}</small>
           </div>
           <div className="cameraSourceActions">
-            <button type="button" onClick={() => { onClose(); onOpenSlicer?.(); }}>Open in slicer</button>
+            <button type="button" onClick={() => { onClose(); onOpenSlicer?.(job.id); }}>Open in slicer</button>
             {job.status === "draft" && job.can_slice &&
               <span title="A verified engine is available. Open the slicer to start this draft.">Ready to slice</span>}
             {job.status === "completed" && job.output_asset_id && !job.gcode_in_library &&
