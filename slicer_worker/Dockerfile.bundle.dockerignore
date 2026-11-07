@@ -1,0 +1,8 @@
+# Dedicated minimal context for slicer_worker/Dockerfile.bundle.
+# Override the root .dockerignore: only explicitly staged binaries and worker
+# code may enter the candidate image build context. No .env, media or secrets.
+**
+!slicer_worker/
+!slicer_worker/**
+!slicer-engine-assets/
+!slicer-engine-assets/**

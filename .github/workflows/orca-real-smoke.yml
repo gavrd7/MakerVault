@@ -1,0 +1,84 @@
+name: OrcaSlicer real binary smoke test
+
+on:
+  pull_request:
+    paths:
+      - "slicer_worker/**"
+      - "scripts/install_slicer_staging.py"
+      - "scripts/probe_slicer_staging.py"
+      - "scripts/build_orca_reference_fixture.py"
+      - ".github/workflows/orca-real-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  official-orca-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare GitHub Actions staging environment (no app services)
+        run: printf 'POSTGRES_PASSWORD=ci-only-placeholder\n' > .env
+      - name: Prepare test-only native K1 and K2 fixtures before expensive image build
+        run: |
+          python3 -m compileall -q scripts/build_orca_reference_fixture.py scripts/probe_slicer_staging.py
+          python3 scripts/build_orca_reference_fixture.py --printer k1 --output /tmp/makervault-orca-k1
+          python3 scripts/build_orca_reference_fixture.py --printer k2 --output /tmp/makervault-orca-k2
+      - name: Download SHA-256 verified official Orca 2.4.2 and build isolated image
+        run: python3 scripts/install_slicer_staging.py prepare-orca
+      - name: Check restricted worker loads real executable
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE=$(sed -n 's/^MAKERVAULT_SLICER_WORKER_IMAGE=//p' .slicer-staging.env)
+          test "${IMAGE#sha256:}" != "$IMAGE"
+          echo "Testing pinned OrcaSlicer AppImage runtime (no printer, no network)."
+          set +e
+          timeout 90s docker run --rm --network none --read-only \
+            --user 10001:10001 --cap-drop ALL \
+            --security-opt no-new-privileges:true --pids-limit 96 \
+            --memory 3g --cpus 2 \
+            --tmpfs /tmp:rw,exec,nosuid,nodev,size=1g,mode=1777 \
+            -e APPIMAGE_EXTRACT_AND_RUN=1 -e QT_QPA_PLATFORM=offscreen \
+            -e QT_OPENGL=software -e LIBGL_ALWAYS_SOFTWARE=1 \
+            --entrypoint /opt/engines/orcaslicer.AppImage "$IMAGE" --help
+          STATUS=$?
+          set -e
+          echo "Official Orca runtime exit code: $STATUS"
+          if [ "$STATUS" -eq 124 ]; then
+            echo "::error::Official Orca AppImage timed out in the isolated worker."
+            exit 1
+          fi
+          if [ "$STATUS" -ne 0 ]; then
+            echo "::error::Official Orca AppImage cannot start with the checked CLI command."
+            exit 1
+          fi
+          echo "Official Orca CLI started. This is NOT a validated G-code slice."
+      - name: Verify real K1 sliced tetrahedron using complete upstream-native profile parents
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k1/printer.json \
+            --filament /tmp/makervault-orca-k1/filament.json \
+            --process /tmp/makervault-orca-k1/process.json
+      - name: Verify real K2 sliced tetrahedron using complete upstream-native profile parents
+        id: k2
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k2/printer.json \
+            --filament /tmp/makervault-orca-k2/filament.json \
+            --process /tmp/makervault-orca-k2/process.json
+      - name: Diagnose failed native K2 slice without changing runtime admission policy
+        if: failure() && steps.k2.outcome == 'failure'
+        run: |
+          IMAGE=$(sed -n 's/^MAKERVAULT_SLICER_WORKER_IMAGE=//p' .slicer-staging.env)
+          docker run --rm --network none --read-only --user 10001:10001 \
+            --cap-drop ALL --security-opt no-new-privileges:true --pids-limit 96 \
+            --memory 3g --cpus 2 --tmpfs /tmp:rw,exec,nosuid,nodev,size=1g,mode=1777 \
+            --mount type=bind,src=/tmp/makervault-orca-k2,dst=/fixtures,readonly \
+            --entrypoint python3 "$IMAGE" -m slicer_worker.diagnose_orca_fixture \
+            --printer /fixtures/printer.json --filament /fixtures/filament.json --process /fixtures/process.json
+      - name: Explain remaining fixture gate
+        run: |
+          echo "::notice::Even a passed K1/K2 fixture is evidence only; administrator review of G-code and separate approval are still required."

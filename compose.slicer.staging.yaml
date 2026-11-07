@@ -1,0 +1,52 @@
+# Explicit staging-only engine enablement. Not included in standard Compose.
+# An installer writes .slicer-staging.env with the immutable local image ID,
+# SHA256 of each verified engine, a strong token and the execution flag.
+# Install only via the explicit installer, never automatically with app updates.
+services:
+  makervault:
+    environment:
+      MAKERVAULT_SLICER_PREVIEW_ENABLED: "1"
+      MAKERVAULT_SLICER_EXECUTION_ENABLED: ${MAKERVAULT_SLICER_EXECUTION_ENABLED:-0}
+      MAKERVAULT_SLICER_WORKER_URL: http://slicer-worker:8088
+      MAKERVAULT_SLICER_WORKER_TOKEN: ${MAKERVAULT_SLICER_WORKER_TOKEN:?Slicer worker token is required}
+      MAKERVAULT_SLICER_WORKER_IMAGE: ${MAKERVAULT_SLICER_WORKER_IMAGE:?Pinned worker image ID required}
+      MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST: ${MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST:?Pinned image digest required}
+      MAKERVAULT_SLICER_ENGINES_JSON: ${MAKERVAULT_SLICER_ENGINES_JSON:?Explicit approved binary hashes required}
+    networks:
+      - makervault_backend
+      - makervault_slicer
+
+  slicer-worker:
+    image: ${MAKERVAULT_SLICER_WORKER_IMAGE:?Pinned local image ID required}
+    pull_policy: never
+    restart: unless-stopped
+    user: "10001:10001"
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 96
+    mem_limit: 3g
+    cpus: 2
+    # AppImage needs executable scratch for its extraction runtime. This is
+    # restricted to this worker, not a host bind mount or MakerVault's media.
+    tmpfs:
+      - /tmp:rw,nosuid,size=1g,mode=1777
+    environment:
+      SLICER_WORKER_ENABLED: "1"
+      SLICER_WORKER_TOKEN: ${MAKERVAULT_SLICER_WORKER_TOKEN:?Worker token required}
+      SLICER_ENGINES_JSON: ${SLICER_ENGINES_JSON:?Verified engine registry required}
+    networks:
+      - makervault_slicer
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request,json,sys; s=json.load(urllib.request.urlopen('http://127.0.0.1:8088/health',timeout=2)); sys.exit(0 if s.get('ready') else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    # Deliberately no exposed ports, app secrets, Docker socket or host mount.
+
+networks:
+  makervault_slicer:
+    internal: true

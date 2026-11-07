@@ -1,0 +1,58 @@
+# OPTIONAL overlay. Never included in the default MakerVault deployment.
+# Only use with an independently built/audited image pinned by SHA-256 digest,
+# carrying the verified PrusaSlicer binary and this worker service.
+#
+# docker compose -f compose.yaml -f compose.slicer.yaml --profile slicer config
+# Running requires explicit administrator approval and a strong unique token.
+services:
+  makervault:
+    environment:
+      MAKERVAULT_SLICER_WORKER_URL: http://slicer-worker:8088
+      MAKERVAULT_SLICER_WORKER_TOKEN: ${MAKERVAULT_SLICER_WORKER_TOKEN:?Configure a strong worker token}
+      MAKERVAULT_SLICER_EXECUTION_ENABLED: ${MAKERVAULT_SLICER_EXECUTION_ENABLED:-0}
+      MAKERVAULT_SLICER_ENGINE: ${MAKERVAULT_SLICER_ENGINE:-orcaslicer}
+      MAKERVAULT_SLICER_ENGINE_VERSION: ${MAKERVAULT_SLICER_ENGINE_VERSION:?Set the exact verified engine version}
+      MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST: ${MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST:?Set the pinned verified worker image SHA-256 digest}
+      MAKERVAULT_SLICER_ENGINE_BINARY_SHA256: ${MAKERVAULT_SLICER_ENGINE_BINARY_SHA256:?Set the verified exact engine binary SHA-256}
+      MAKERVAULT_SLICER_WORKER_IMAGE: ${MAKERVAULT_SLICER_WORKER_IMAGE:?Set the digest-pinned worker image reference}
+    networks:
+      - makervault_backend
+      - makervault_slicer
+
+  slicer-worker:
+    profiles: ["slicer"]
+    image: ${MAKERVAULT_SLICER_WORKER_IMAGE:?Set an independently verified worker image with @sha256 digest}
+    container_name: makervault-slicer-worker
+    restart: unless-stopped
+    user: "10001:10001"
+    read_only: true
+    init: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 96
+    mem_limit: 2g
+    cpus: 2.0
+    tmpfs:
+      - /tmp:rw,nosuid,noexec,size=512m
+    environment:
+      SLICER_WORKER_ENABLED: "1"
+      SLICER_WORKER_TOKEN: ${MAKERVAULT_SLICER_WORKER_TOKEN:?Configure a strong worker token}
+      SLICER_ENGINE: ${MAKERVAULT_SLICER_ENGINE:-orcaslicer}
+      SLICER_ENGINE_BINARY: ${MAKERVAULT_SLICER_ENGINE_BINARY:-/usr/bin/orca-slicer}
+      SLICER_ENGINE_VERSION: ${MAKERVAULT_SLICER_ENGINE_VERSION:?Set the exact verified engine version}
+      SLICER_ENGINE_BINARY_SHA256: ${MAKERVAULT_SLICER_ENGINE_BINARY_SHA256:?Set the verified SHA-256 of the slicer executable}
+    networks:
+      - makervault_slicer
+    # Deliberately no ports, DB/Redis/secret mounts, Docker socket or host bind mounts.
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request,json,sys; s=json.load(urllib.request.urlopen('http://127.0.0.1:8088/health',timeout=2)); sys.exit(0 if s.get('ready') else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+networks:
+  makervault_slicer:
+    internal: true

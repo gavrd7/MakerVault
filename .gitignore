@@ -10,3 +10,10 @@ frontend/dist/
 .idea/
 .vscode/
 site/
+
+# Never commit third-party engine executables or local approval manifests.
+slicer-engine-assets/
+
+# Slicer staging-only secret token and generated worker approval metadata.
+.slicer-staging.env
+.slicer-staging.env.pending

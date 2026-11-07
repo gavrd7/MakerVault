@@ -1,8 +1,25 @@
 from django.urls import path
 from . import printer_gcode_api
+from . import slicer_api
 from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views, device_api_views, device_pairing, device_measurements, device_tag_registration, device_tag_lookup, weight_history_views, tag_ndef, device_ndef_write, device_cfs_lookup, device_makertag_operations, device_pending_work
 
 urlpatterns = [
+    path("printing/slicer/engines/", slicer_api.engines, name="api-slicer-engines"),
+    path("printing/slicer/profiles/approve/", slicer_api.approve_native_profiles, name="api-slicer-approve-native-profiles"),
+    path("printing/slicer/meshes/<uuid:asset_id>/inspection/", slicer_api.inspect_mesh, name="api-slicer-inspect-mesh"),
+    path("printing/slicer/jobs/", slicer_api.jobs, name="api-slicer-jobs"),
+    path("printing/slicer/profiles/", slicer_api.profiles, name="api-slicer-profiles"),
+    path("printing/slicer/profiles/<uuid:profile_id>/", slicer_api.delete_profile, name="api-slicer-delete-profile"),
+    path("printing/slicer/profiles/<uuid:profile_id>/customise/", slicer_api.customise_profile, name="api-slicer-customise-profile"),
+    path("printing/slicer/profiles/<uuid:profile_id>/default/", slicer_api.set_default_profile, name="api-slicer-default-profile"),
+    path("printing/slicer/official-profiles/", slicer_api.official_profiles, name="api-slicer-official-profiles"),
+    path("printing/slicer/profiles/<uuid:profile_id>/dependencies/", slicer_api.profile_dependencies, name="api-slicer-profile-dependencies"),
+    path("printing/slicer/profiles/<uuid:profile_id>/plate/", slicer_api.profile_plate, name="api-slicer-profile-plate"),
+    path("printing/slicer/jobs/<uuid:job_id>/", slicer_api.job_detail, name="api-slicer-job-detail"),
+    path("printing/slicer/jobs/<uuid:job_id>/start/", slicer_api.job_start, name="api-slicer-job-start"),
+    path("printing/slicer/jobs/<uuid:job_id>/save-gcode/", slicer_api.save_job_gcode_to_library, name="api-slicer-save-job-gcode"),
+    path("printing/slicer/jobs/<uuid:job_id>/cancel/", slicer_api.job_cancel, name="api-slicer-job-cancel"),
+
     path("device/v1/pending-work/", device_pending_work.pending_work, name="device-pending-work"),
     path("device/tag-lookup/", device_tag_lookup.begin, name="api-device-tag-lookup-begin"),
     path("device/tag-lookup/<uuid:lookup_id>/", device_tag_lookup.status, name="api-device-tag-lookup-status"),
