@@ -15,7 +15,7 @@ from .slicer_engines import validate_engine_selection
 from .slicer_output import store_generated_gcode
 from .slicer_native_resolution import resolved_native_profile
 from .slicer_bed_dimensions import trusted_plate_dimensions
-from .slicer_plate_3mf import build_plate_3mf
+from .slicer_plate_3mf import build_plate_3mf, build_compound_plate_3mf
 from .slicer_worker_client import SlicerWorkerError, health, run_remote_job
 
 
@@ -118,8 +118,8 @@ def _validate_plate_execution(job):
     objects = (job.settings or {}).get("plate_objects")
     if not objects:
         return True
-    if job.engine not in {"orcaslicer", "crealityprint"}:
-        raise SlicerExecutionError("Verified multi-object slicing requires OrcaSlicer or Creality Print.")
+    if job.engine != "orcaslicer":
+        raise SlicerExecutionError("Multi-model plate execution is currently verified only for the single-material OrcaSlicer worker.")
     if not isinstance(objects, list) or not 1 <= len(objects) <= 12:
         raise SlicerExecutionError("Plate model list is invalid.")
     if not job.printer_profile_id:
@@ -240,7 +240,7 @@ def process_queued_job(job_id):
                     raise SlicerExecutionError("A plate STL has changed since import.")
                 source_models.append((item, raw))
             width, depth = trusted_plate_dimensions(job.printer_profile)
-            model = build_plate_3mf(source_models, bed_width=width, bed_depth=depth)
+            model = build_compound_plate_3mf(source_models, bed_width=width, bed_depth=depth)
             model_format = "3mf"
         profiles = []
         for kind in ("printer", "filament", "process"):
