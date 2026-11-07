@@ -6,6 +6,7 @@ on:
       - "slicer_worker/**"
       - "scripts/install_slicer_staging.py"
       - "scripts/probe_slicer_staging.py"
+      - "scripts/build_orca_reference_fixture.py"
       - ".github/workflows/orca-real-smoke.yml"
   workflow_dispatch:
 
@@ -50,6 +51,20 @@ jobs:
             exit 1
           fi
           echo "Official Orca CLI started. This is NOT a validated G-code slice."
+      - name: Verify real K1 sliced tetrahedron using complete upstream-native profile parents
+        run: |
+          python3 scripts/build_orca_reference_fixture.py --printer k1 --output /tmp/makervault-orca-k1
+          python3 scripts/probe_slicer_staging.py \\
+            --printer /tmp/makervault-orca-k1/printer.json \\
+            --filament /tmp/makervault-orca-k1/filament.json \\
+            --process /tmp/makervault-orca-k1/process.json
+      - name: Verify real K2 sliced tetrahedron using complete upstream-native profile parents
+        run: |
+          python3 scripts/build_orca_reference_fixture.py --printer k2 --output /tmp/makervault-orca-k2
+          python3 scripts/probe_slicer_staging.py \\
+            --printer /tmp/makervault-orca-k2/printer.json \\
+            --filament /tmp/makervault-orca-k2/filament.json \\
+            --process /tmp/makervault-orca-k2/process.json
       - name: Explain remaining fixture gate
         run: |
-          echo "::notice::Native K1/K2 printer, filament and process profiles and an actual extrusion-bearing G-code fixture still require approval."
+          echo "::notice::Even a passed K1/K2 fixture is evidence only; administrator review of G-code and separate approval are still required."
