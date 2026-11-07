@@ -171,3 +171,80 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth):
     if len(archive) > MAX_PROJECT_BYTES:
         raise SlicerProfileError("Generated 3MF exceeds the worker upload limit.")
     return archive
+
+
+def build_compound_plate_3mf(objects_with_stl, *, bed_width, bed_depth):
+    """Single-material Orca-compatible plate with all STL transforms baked in.
+
+    Upstream Orca 2.4.2 CLI does not reliably slice every object in a generic
+    multi-item core 3MF. Merge geometrically separate shells into ONE mesh
+    while preserving each STL's rotation, scale and XY offset. Individual
+    physical materials / extruder assignments are NOT supported by this route.
+
+    Each input still runs through build_plate_3mf's strict ownership-independent
+    geometry, triangle-count, bed-fit and archive-size validations first.
+    """
+    if not isinstance(objects_with_stl, list) or not 1 <= len(objects_with_stl) <= 12:
+        raise SlicerProfileError("A plate needs one to twelve STL models.")
+    if len(objects_with_stl) == 1:
+        return build_plate_3mf(objects_with_stl, bed_width=bed_width, bed_depth=bed_depth)
+    source = build_plate_3mf(objects_with_stl, bed_width=bed_width, bed_depth=bed_depth)
+    ns = "{" + NS + "}"
+    with zipfile.ZipFile(io.BytesIO(source)) as archive:
+        root = ET.fromstring(archive.read("3D/3dmodel.model"))
+        types = archive.read("[Content_Types].xml")
+        relationships = archive.read("_rels/.rels")
+    original_objects = root.findall("./" + ns + "resources/" + ns + "object")
+    original_instances = root.findall("./" + ns + "build/" + ns + "item")
+    if len(original_objects) != len(objects_with_stl) or len(original_instances) != len(objects_with_stl):
+        raise SlicerProfileError("The generated plate does not contain every source model.")
+    composite = ET.Element(ns + "model", {
+        "unit": "millimeter", "{http://www.w3.org/XML/1998/namespace}lang": "en-US"
+    })
+    resources = ET.SubElement(composite, ns + "resources")
+    merged_mesh = ET.SubElement(
+        ET.SubElement(resources, ns + "object", {"id": "1", "type": "model"}),
+        ns + "mesh",
+    )
+    merged_vertices = ET.SubElement(merged_mesh, ns + "vertices")
+    merged_faces = ET.SubElement(merged_mesh, ns + "triangles")
+    for native_object, instance in zip(original_objects, original_instances):
+        transform = [float(v) for v in instance.attrib["transform"].split()]
+        if len(transform) != 12 or any(not math.isfinite(v) for v in transform):
+            raise SlicerProfileError("Invalid source model transform.")
+        vertices = native_object.findall("./" + ns + "mesh/" + ns + "vertices/" + ns + "vertex")
+        triangles = native_object.findall("./" + ns + "mesh/" + ns + "triangles/" + ns + "triangle")
+        vertex_offset = len(merged_vertices)
+        for vertex in vertices:
+            x, y, z = [float(vertex.attrib[axis]) for axis in ("x", "y", "z")]
+            location = (
+                transform[0] * x + transform[3] * y + transform[6] * z + transform[9],
+                transform[1] * x + transform[4] * y + transform[7] * z + transform[10],
+                transform[2] * x + transform[5] * y + transform[8] * z + transform[11],
+            )
+            if any(not math.isfinite(v) or abs(v) > 10000 for v in location):
+                raise SlicerProfileError("Combined plate geometry exceeds the safe bounds.")
+            ET.SubElement(merged_vertices, ns + "vertex", {
+                axis: format(value, ".6f")
+                for axis, value in zip(("x", "y", "z"), location)
+            })
+        for face in triangles:
+            ET.SubElement(merged_faces, ns + "triangle", {
+                key: str(vertex_offset + int(face.attrib[key]))
+                for key in ("v1", "v2", "v3")
+            })
+    build = ET.SubElement(composite, ns + "build")
+    ET.SubElement(build, ns + "item", {
+        "objectid": "1", "transform": "1 0 0 0 1 0 0 0 1 0 0 0"
+    })
+    encoded = ET.tostring(composite, encoding="utf-8", xml_declaration=True)
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, mode="w", compression=zipfile.ZIP_DEFLATED,
+                         compresslevel=6, allowZip64=False) as archive:
+        archive.writestr("3D/3dmodel.model", encoded)
+        archive.writestr("[Content_Types].xml", types)
+        archive.writestr("_rels/.rels", relationships)
+    data = output.getvalue()
+    if not data or len(data) > MAX_PROJECT_BYTES:
+        raise SlicerProfileError("Combined 3MF exceeds the safe worker upload limit.")
+    return data
