@@ -115,7 +115,7 @@ def run_creality(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_
                 dst.write(chunk)
                 if dst.tell() > MAX_GCODE_BYTES:
                     raise WorkerError("Creality Print output exceeds the G-code limit.")
-        if b"\\x00" in target.read_bytes()[:4096]:
+        if b"\x00" in target.read_bytes()[:4096]:
             raise WorkerError("Creality Print produced unsupported binary G-code.")
         return {"status": "completed", "gcode_path": str(target), "bytes": target.stat().st_size}
     except OSError as exc:
