@@ -3723,7 +3723,7 @@ a:focus-visible,
 .slicerPlatePanel .slicerPlateControls .settingsActions{display:flex;align-items:end;justify-content:flex-start;margin:0}
 .slicerPlateControls .slicerPlateToolbar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0 0 12px}
 .slicerPlateControls .slicerPlateToolbar label{grid-column:1/-1;min-width:0}
-.slicerPlateControls .slicerPlateToolbar button{min-width:0;white-space:normal}
+.slicerPlateControls .slicerPlateToolbar button{min-width:0;min-height:56px;height:100%;align-self:stretch;display:flex;align-items:center;justify-content:center;text-align:center;white-space:normal;line-height:1.35}
 .slicerPlatePanel .slicerPlateControls .slicerPlateHint{margin:0}
 @media(max-width:1050px){
   .slicerPlateWorkspace{grid-template-columns:minmax(0,1.5fr) minmax(270px,1fr)}
