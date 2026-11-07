@@ -1,7 +1,7 @@
 from unittest.mock import patch
 from django.test import SimpleTestCase
 from core.slicer_official_profiles import (
-    OfficialProfileError, search_official_profiles, fetch_official_profile,
+    OfficialProfileError, search_official_profiles, fetch_official_profile, available_official_vendors,
 )
 
 
@@ -25,6 +25,17 @@ class OfficialOrcaProfileTests(SimpleTestCase):
             self.assertEqual([item["name"] for item in result["profiles"]], ["Creality K2 0.4 nozzle"])
             self.assertEqual(result["import_status"], "candidate_only")
             self.assertFalse(any(x["name"] == "Bad" for x in result["profiles"]))
+
+    def test_other_printer_catalogues_are_discoverable_and_searchable(self):
+        vendors = {row["id"] for row in available_official_vendors()}
+        for vendor in ("Voron", "Prusa", "Anycubic", "Elegoo", "Custom", "Qidi"):
+            self.assertIn(vendor, vendors)
+            with self.subTest(vendor=vendor):
+                fixture = {**EXAMPLE, "name": vendor}
+                with patch("core.slicer_official_profiles._manifest", return_value=fixture):
+                    found = search_official_profiles("K2", "printer", vendor=vendor)
+                    self.assertEqual(found["vendor"], vendor)
+                    self.assertEqual(len(found["profiles"]), 1)
 
     def test_unknown_version_vendor_or_arbitrary_url_cannot_be_fetched(self):
         with patch("core.slicer_official_profiles._manifest", return_value=EXAMPLE):
