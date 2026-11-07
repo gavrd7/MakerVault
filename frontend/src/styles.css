@@ -3653,3 +3653,19 @@ a:focus-visible,
   .printerCameraSetupLayout .printerCameraDoneActions button{width:100%;min-height:44px}
   .printerCameraSetupLayout .printerCameraFlips{align-items:flex-start;flex-direction:column;gap:12px}
 }
+
+/* Slicer workbench: balanced configuration/profile management and consistent insets. */
+.slicerWorkbenchTop{display:grid;grid-template-columns:minmax(0,2fr) minmax(280px,1fr);gap:16px;align-items:start}
+.slicerWorkbenchTop>.panel{min-width:0;height:100%;padding:22px}
+.slicerWorkbenchTop .formGrid{gap:14px 16px}
+.slicerWorkbenchTop .formGrid label{min-width:0}
+.slicerWorkbenchTop .formGrid input,.slicerWorkbenchTop .formGrid select{max-width:100%}
+.slicerWorkbenchTop h3,.slicerProfileSidebar h4{margin-top:0;margin-bottom:14px}
+.slicerProfileSidebar{display:flex;flex-direction:column;gap:12px}
+.slicerProfileActions{display:grid;grid-template-columns:1fr;gap:10px}
+.slicerProfileActions button{width:100%;text-align:center;min-height:42px}
+.slicerSelectedProfiles{grid-template-columns:1fr!important}
+.slicerSelectedProfiles label{grid-column:1/-1}
+.slicerWorkbenchTop+.panel,.slicerWorkbenchTop~.panel{padding:22px}
+.slicerWorkbenchTop~.panel .formGrid{gap:14px}
+@media(max-width:960px){.slicerWorkbenchTop{grid-template-columns:1fr}.slicerWorkbenchTop>.panel{height:auto}}
