@@ -20,6 +20,12 @@ class OfficialModelScopeTests(SimpleTestCase):
         self.assertTrue(profile_matches_printer("Generic PLA @Creality K1", "filament", "Creality K1"))
         self.assertFalse(profile_matches_printer("Generic PLA @Creality K2", "filament", "Creality K1"))
         self.assertFalse(profile_matches_printer("0.20mm Standard @Creality K2", "process", "Creality K1"))
+        self.assertTrue(profile_matches_printer(
+            "0.20mm Standard @Creality K1 (0.4 nozzle)", "process", "Creality K1"))
+        self.assertFalse(profile_matches_printer(
+            "0.20mm Standard @Creality K1 Max_CFS-C 0.4 nozzle", "process", "Creality K1"))
+        self.assertFalse(profile_matches_printer(
+            "0.20mm Standard @Creality K1 SE 0.4 nozzle", "process", "Creality K1"))
         self.assertTrue(profile_matches_printer("0.20mm Standard", "process", "Creality K1"))
         self.assertFalse(profile_matches_printer("Creality K2 Hyper PLA", "filament", "Creality K1"))
         self.assertTrue(profile_matches_printer("Generic PLA", "filament", ""))
