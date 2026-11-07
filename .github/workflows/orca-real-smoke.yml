@@ -21,6 +21,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Prepare GitHub Actions staging environment (no app services)
         run: printf 'POSTGRES_PASSWORD=ci-only-placeholder\n' > .env
+      - name: Prepare test-only native K1 and K2 fixtures before expensive image build
+        run: |
+          python3 -m compileall -q scripts/build_orca_reference_fixture.py scripts/probe_slicer_staging.py
+          python3 scripts/build_orca_reference_fixture.py --printer k1 --output /tmp/makervault-orca-k1
+          python3 scripts/build_orca_reference_fixture.py --printer k2 --output /tmp/makervault-orca-k2
       - name: Download SHA-256 verified official Orca 2.4.2 and build isolated image
         run: python3 scripts/install_slicer_staging.py prepare-orca
       - name: Check restricted worker loads real executable
@@ -53,14 +58,12 @@ jobs:
           echo "Official Orca CLI started. This is NOT a validated G-code slice."
       - name: Verify real K1 sliced tetrahedron using complete upstream-native profile parents
         run: |
-          python3 scripts/build_orca_reference_fixture.py --printer k1 --output /tmp/makervault-orca-k1
           python3 scripts/probe_slicer_staging.py \
             --printer /tmp/makervault-orca-k1/printer.json \
             --filament /tmp/makervault-orca-k1/filament.json \
             --process /tmp/makervault-orca-k1/process.json
       - name: Verify real K2 sliced tetrahedron using complete upstream-native profile parents
         run: |
-          python3 scripts/build_orca_reference_fixture.py --printer k2 --output /tmp/makervault-orca-k2
           python3 scripts/probe_slicer_staging.py \
             --printer /tmp/makervault-orca-k2/printer.json \
             --filament /tmp/makervault-orca-k2/filament.json \
