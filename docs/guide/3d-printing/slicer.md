@@ -8,6 +8,28 @@
 
 No. Printer integrations, models, G-code files, print history and G-code submission work without it. MakerVault will disable the **MakerVault Slicer** navigation entry and show guidance in **3D Printing** when no verified worker is available.
 
+## Install OrcaSlicer on a separate staging server (experimental)
+
+For developers testing PR #171 on Debian x86_64, there is now an **explicit opt-in staging installer**. It retrieves OrcaSlicer 2.4.2 from the official GitHub release, verifies the release asset's SHA-256, builds a locally pinned isolated Docker worker and enables worker connectivity for the staging app. It does **not** install or enable Creality Print.
+
+```bash
+cd ~/MakerVault-Staging
+git pull --ff-only origin feature/self-hosted-slicer-foundation
+sudo python3 scripts/install_slicer_staging.py prepare-orca
+sudo python3 scripts/install_slicer_staging.py enable
+sudo python3 scripts/install_slicer_staging.py status
+```
+
+After installation, choose the Orca engine in MakerVault, import matching native printer/filament/process presets and use **Test slice and approve** (administrator only) to validate that actual slicing produces G-code. Only then can the normal **Save and slice** action succeed. This is deliberately a staging experiment: a working official Linux AppImage has not yet been demonstrated in this Docker image, and a passing health check verifies the binary's identity, not its ability to slice.
+
+The optional staging configuration is held in a private `.slicer-staging.env`. Existing MakerVault storage is untouched. To turn engine execution back off:
+
+```bash
+sudo python3 scripts/install_slicer_staging.py disable
+```
+
+For subsequent staging updates, repeat the installer's **enable** command rather than the old three-Compose-file update alone; the installer adds the additional optional service automatically. Do not use this on production. A fully browser-operated engine installer is still planned.
+
 ## Planned one-container installation
 
 The finished version will have **one optional slicing-service container**, under a clearly labelled and initially commented-out section in the standard `compose.yaml`. Uncommenting that service and configuring its required settings will be an administrator choice. Normal installations will not start or download slicer containers. No separate Compose overlays or profiles will be needed.
