@@ -1,3 +1,37 @@
+## Enable OrcaSlicer on a dedicated staging installation (experimental)
+
+This is the **first installable staging engine**, not a supported production release or the planned in-app engine installer. It obtains the exact OrcaSlicer **v2.4.2 Ubuntu 24.04 x86_64 AppImage** from the official GitHub release, requires a matching `sha256:` digest in GitHub's release metadata, builds a local worker container, and produces a private file containing an immutable image ID, binary hash and strong worker token.
+
+On the Debian staging host (Docker access required):
+
+```bash
+cd ~/MakerVault-Staging
+git pull --ff-only origin feature/self-hosted-slicer-foundation
+sudo python3 scripts/install_slicer_staging.py prepare-orca
+sudo python3 scripts/install_slicer_staging.py enable
+sudo python3 scripts/install_slicer_staging.py status
+```
+
+The `enable` command uses the regular `compose.yaml`, `compose.build.yaml` and (when present) `compose.staging.yaml` plus the isolated `compose.slicer.staging.yaml` overlay. It updates the staging app and brings up the optional worker together. **Subsequent staging rebuilds must use this same overlay and environment file** or the worker settings will be omitted from the application container:
+
+```bash
+sudo docker compose --env-file .env --env-file .slicer-staging.env \
+  -f compose.yaml -f compose.build.yaml -f compose.staging.yaml \
+  -f compose.slicer.staging.yaml up -d --build
+```
+
+The installer also works when `compose.staging.yaml` is absent, but that example assumes your existing staging overrides. Never commit or share `.slicer-staging.env`; it contains a secret worker token. The downloaded engine assets are kept outside the standard app Docker build context. The worker has no exposed network port, no host file mounts and no access to printer credentials, PostgreSQL or Redis.
+
+**After installation**, sign in as a MakerVault administrator, select OrcaSlicer v2.4.2, import compatible K1/K2 printer, filament and process profiles (including their native parent presets), and use **Test slice and approve**. Only a real fixture that produces valid G-code can approve that exact profile set. Then use **Save and slice** on a model. No printer starts automatically. The official AppImage itself is still unverified until this end-to-end test succeeds; a healthy worker is only a binary-identity check, not a promise that slicing will work.
+
+To turn the staging engine off without removing its files:
+
+```bash
+sudo python3 scripts/install_slicer_staging.py disable
+```
+
+This staged installer currently targets **OrcaSlicer only**. Creality Print remains supported by the worker adapter and candidate image tooling, but does not yet have a verified official headless Linux release to offer for one-command installation. No installation is initiated from a browser because the web application intentionally does not have Docker host privileges.
+
 # MakerVault Slicer — implementation architecture and acceptance plan
 
 Milestone: [Self-hosted multi-engine FDM slicer #156](https://github.com/gavrd7/MakerVault/issues/156).
