@@ -51,6 +51,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [canVerifyProfiles, setCanVerifyProfiles] = useState(false);
   const [verifyingProfiles, setVerifyingProfiles] = useState(false);
   const [mayCancel, setMayCancel] = useState(false);
+  const [mayDeleteDraft, setMayDeleteDraft] = useState(false);
   const [printSelection, setPrintSelection] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
   const [plateObjects, setPlateObjects] = useState([]);
@@ -217,6 +218,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       setJobs(existing.jobs || []);
       setWorkerConfigured(existing.worker_configured === true);
       setMayCancel(existing.can_cancel === true);
+      setMayDeleteDraft(existing.can_delete === true);
       setProfiles(native.profiles || []);
       setForm(current => {
         if (current.printer_id || !printers.length) return current;
@@ -294,12 +296,30 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         setJobs(result.jobs || []);
         setWorkerConfigured(result.worker_configured === true);
         setMayCancel(result.can_cancel === true);
+        setMayDeleteDraft(result.can_delete === true);
       } catch {
         // Existing draft listing remains visible; manual Refresh reports errors.
       }
     }, 5000);
     return () => window.clearInterval(id);
   }, [running]);
+
+  async function deleteSavedDraft(job) {
+    if (job.status !== "draft" || !mayDeleteDraft || busy) return;
+    if (!window.confirm("Delete the saved slicing draft for " +
+      (job.input_asset?.name || "this model") +
+      "? This removes its slicing configuration, but keeps the original STL and any separately saved files.")) return;
+    setError(""); setNotice(""); setBusy(true);
+    try {
+      await apiFetch("/api/printing/slicer/jobs/" + job.id + "/", { method: "DELETE" });
+      setJobs(current => current.filter(item => item.id !== job.id));
+      setNotice("Slicing draft deleted. The source model was preserved.");
+    } catch (err) {
+      setError(err.message || "Could not delete the slicing draft.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function cancelPending(job) {
     if (!["draft", "queued"].includes(job.status)) return;
@@ -1134,6 +1154,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
     </Modal>}
     {showDrafts && <Modal title="Saved slicing drafts" onClose={() => setShowDrafts(false)} wide>
+      {error && <p className="integrationError" role="alert">{error}</p>}
+      {notice && <p role="status">{notice}</p>}
       <button type="button" disabled={loading} onClick={refresh}>Refresh drafts</button>
       <h3>Saved slicing drafts</h3>
       {jobs.length ? <div className="printingStack">{jobs.map(job =>
@@ -1153,6 +1175,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           <div className="cameraSourceActions">
             {job.status === "draft" && <button type="button" disabled={busy}
               onClick={() => loadSavedDraft(job)}>Edit draft</button>}
+            {job.status === "draft" && mayDeleteDraft &&
+              <button type="button" disabled={busy} onClick={() => deleteSavedDraft(job)}>
+                Delete draft
+              </button>}
             {job.can_slice && canPrepare && <button type="button" disabled={busy} onClick={() => startSlice(job)}>Slice now</button>}
             {mayCancel && (job.status === "draft" || job.status === "queued") && <button type="button" disabled={busy} onClick={() => cancelPending(job)}>Cancel {job.status === "queued" ? "queued slice" : "draft"}</button>}
             {job.status === "completed" && job.output_asset?.id && job.gcode_in_library && canPrint && <button type="button" className="primary" disabled={busy} onClick={() => requestPrint(job)}>Print from slicer</button>}
