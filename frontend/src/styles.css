@@ -3674,3 +3674,25 @@ a:focus-visible,
 .slicerPlateToolbar label{flex:1 1 260px;min-width:0}
 .slicerPlateToolbar button{flex:0 1 auto}
 @media(max-width:620px){.slicerPlateToolbar button{flex:1 1 100%}}
+
+/* Keep the visual slicer controls compact rather than stretching every field
+   to fill a wide desktop panel. */
+.slicerPlatePanel{padding:22px!important}
+.slicerPlatePanel>p{max-width:900px}
+.slicerPlatePanel>.formGrid{grid-template-columns:minmax(180px,360px) minmax(150px,250px);align-items:end;justify-content:start;column-gap:16px;row-gap:10px;margin:12px 0}
+.slicerPlatePanel>.formGrid>.full{grid-column:1/-1;max-width:650px}
+.slicerPlatePanel>.formGrid>.checkRow{margin:0}
+.slicerPlatePanel .formGrid:has(input[type="number"]){grid-template-columns:repeat(3,minmax(130px,220px));justify-content:start;align-items:end;gap:10px 14px}
+.slicerPlatePanel input[type="number"],.slicerPlatePanel input[type="color"]{max-width:220px}
+.slicerPlatePanel input[type="file"]{max-width:100%}
+.slicerPlatePanel .slicerPlateHint{font-size:12px;color:var(--muted,#92a1b6);margin:10px 0}
+.slicerPlatePanel .slicerPlateToolbar{margin:10px 0}
+.slicerPlatePanel .slicerPlateToolbar label{flex:0 1 360px}
+@media(max-width:720px){
+  .slicerPlatePanel>.formGrid,.slicerPlatePanel .formGrid:has(input[type="number"]){grid-template-columns:repeat(2,minmax(0,1fr))}
+  .slicerPlatePanel>.formGrid>.full{grid-column:1/-1}
+}
+@media(max-width:480px){
+  .slicerPlatePanel>.formGrid,.slicerPlatePanel .formGrid:has(input[type="number"]){grid-template-columns:minmax(0,1fr)}
+  .slicerPlatePanel>.formGrid>.full{grid-column:auto}
+}
