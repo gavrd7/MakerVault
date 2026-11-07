@@ -3734,3 +3734,11 @@ a:focus-visible,
 /* Spool colour hints are informational; native slicing profiles remain separate. */
 .slicerSpoolColour{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:#98a9bf}
 .slicerSpoolSwatch{display:inline-block;width:22px;height:16px;flex:0 0 22px;border:1px solid #657486;border-radius:4px}
+
+/* Slicer defaults and physical-spool suggestions are compact, supplementary
+   content inside the right-hand profile rail. */
+.slicerMaterialMatch{min-width:0;border:1px solid var(--border,#344052);border-radius:10px;padding:12px;display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+.slicerMaterialMatch strong{font-size:13px}
+.slicerMaterialMatch p{margin:0;color:var(--muted,#99a6b8);font-size:12px;line-height:1.5}
+.slicerMaterialMatch button{max-width:100%;white-space:normal;text-align:center}
+.slicerProfileHint{font-size:12px;line-height:1.5;color:var(--muted,#99a6b8);margin:8px 0 12px}
