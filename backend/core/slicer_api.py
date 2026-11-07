@@ -404,10 +404,21 @@ def official_profiles(request):
         chain = official_profile_chain(engine, kind, name, subpath, vendor)
         prepared = []
         for native_name, native_subpath, raw in chain:
-            if SlicerProfile.objects.filter(
+            existing = SlicerProfile.objects.filter(
                 owner=request.user, engine=engine,
                 engine_version=version, kind=kind, name=native_name,
-            ).exists():
+            ).first()
+            if existing:
+                # Different manufacturer catalogues can reuse a native parent
+                # name with different contents. Never splice one vendor's
+                # settings into another vendor's inheritance chain.
+                import hashlib
+                if existing.content_sha256 != hashlib.sha256(raw).hexdigest():
+                    raise ValueError(
+                        "Native preset name conflicts with a different imported profile: "
+                        + native_name[:120] + ". Preserve both upstream profiles; "
+                        "this engine/version needs separately scoped parent identities."
+                    )
                 continue
             asset = FileAsset(
                 owner=request.user, name=native_name + ".json", category="source",
