@@ -73,6 +73,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [officialImportNotice, setOfficialImportNotice] = useState("");
   const [officialModels, setOfficialModels] = useState([]);
   const [officialModel, setOfficialModel] = useState("");
+  const [officialManualModel, setOfficialManualModel] = useState("");
   const [officialModelsBusy, setOfficialModelsBusy] = useState(false);
   const [importName, setImportName] = useState("");
   const [importSource, setImportSource] = useState("");
@@ -472,10 +473,12 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     event.preventDefault();
     setOfficialError(""); setOfficialResults(null); setOfficialBusy(true);
     try {
-      const q = officialQuery.trim();
-      if (q.length < 2) throw new Error("Enter at least two characters to search official presets.");
+      // A typed model search bypasses the catalogue model selection and
+      // matches tokens anywhere in native preset names, in any order.
+      const q = [officialManualModel.trim(), officialQuery.trim()].filter(Boolean).join(" ").trim();
+      if (q.length < 2 || q.length > 80) throw new Error("Enter 2–80 characters across the manual model and preset searches.");
       const params = new URLSearchParams({ q, kind: importKind, vendor: officialVendor, engine: form.engine });
-      if (officialModel) params.set("model", officialModel);
+      if (!officialManualModel.trim() && officialModel) params.set("model", officialModel);
       const result = await apiFetch("/api/printing/slicer/official-profiles/?" + params.toString());
       setOfficialResults(result);
     } catch (err) {
@@ -653,6 +656,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     setImportKind(kind);
     setOfficialVendor("");
     setOfficialModel("");
+    setOfficialManualModel("");
     setOfficialModels([]);
     setOfficialVendors([]);
     setOfficialSourceInfo(null);
@@ -998,11 +1002,17 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               <option value="process">Process</option>
             </select>
           </label>
-          <label className="full">Search official presets
-            <input value={officialQuery} maxLength="80" onChange={e => setOfficialQuery(e.target.value)} placeholder="e.g. K1 PLA or 0.20mm Standard" />
+          <label className="full">Manual printer/model search (optional)
+            <input value={officialManualModel} maxLength="80"
+              onChange={e => { setOfficialManualModel(e.target.value); setOfficialResults(null); }}
+              placeholder="Type a model, e.g. K1, instead of selecting it above" />
+            <small>Typing here overrides the printer-model dropdown. Search terms match anywhere in the official profile name.</small>
+          </label>
+          <label className="full">Search official presets (optional)
+            <input value={officialQuery} maxLength="80" onChange={e => setOfficialQuery(e.target.value)} placeholder="e.g. PLA or 0.20mm Standard" />
           </label>
           <div className="full settingsActions">
-            <button type="submit" disabled={officialBusy || !officialVendor || !officialVendors.length || officialQuery.trim().length < 2}>
+            <button type="submit" disabled={officialBusy || !officialVendor || !officialVendors.length || [officialManualModel.trim(), officialQuery.trim()].filter(Boolean).join(" ").length < 2}>
               {officialBusy ? "Searching…" : "Search official profiles"}
             </button>
           </div>
@@ -1026,7 +1036,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               </button>
             </div>
           </div>)}
-          {!officialResults.profiles.length && <p>No matching presets. Try another search or select All models to browse the complete manufacturer catalogue.</p>}
+          {!officialResults.profiles.length && <p>No matching presets. Try fewer manual search terms or select All models to browse the complete manufacturer catalogue.</p>}
         </div>}
       </div>
 
