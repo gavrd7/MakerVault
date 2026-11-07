@@ -90,7 +90,8 @@ def compound_preview(path, target):
                 for name in ("v1", "v2", "v3")
             })
     build = ET.SubElement(merged, ns + "build")
-    ET.SubElement(build, ns + "item", {"objectid": "1"})
+    ET.SubElement(build, ns + "item", {"objectid": "1",
+        "transform": "1 0 0 0 1 0 0 0 1 0 0 0"})
     target = Path(target)
     if target.exists() or target.is_symlink():
         raise ValueError("Composite output already exists.")
