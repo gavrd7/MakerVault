@@ -390,8 +390,12 @@ def official_profiles(request):
             printer_id = request.GET.get("printer_id")
             printer_model = None
             if printer_id:
+                try:
+                    printer_pk = _uuid(printer_id)
+                except ValueError:
+                    return _error("Invalid selected printer.")
                 printer = Printer.objects.filter(
-                    pk=_uuid(printer_id), owner=request.user, is_active=True
+                    pk=printer_pk, owner=request.user, is_active=True
                 ).first()
                 if not printer:
                     return _error("Selected printer is not available to this account.", 404)
