@@ -7,6 +7,6 @@ export function isDashboardPrinterOffline(printer) {
   if (printer.stale === true || printer.online === false || printer.connected === false) return true;
   const connection = String(printer.connection_status || "").trim().toLowerCase();
   const state = String(printer.state || "").trim().toLowerCase();
-  return ["disconnected", "offline", "unavailable", "unreachable"].includes(connection)
+  return ["disconnected", "offline", "unavailable", "unreachable", "error", "failed"].includes(connection)
     || ["disconnected", "offline", "unavailable", "unreachable"].includes(state);
 }
