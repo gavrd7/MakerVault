@@ -318,12 +318,14 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
   async function saveDraft(event) {
     event.preventDefault();
+    const sliceNow = event.nativeEvent?.submitter?.value === "slice";
     setError(""); setNotice("");
     if (plateObjects.some(item => String(item.asset_id).startsWith("local:"))) {
       setError("This plate contains temporary models. To save a persistent draft, first import those STL files with ‘Also save imported models to MakerVault Files’ selected.");
       return;
     }
     setBusy(true);
+    let savedJob = null;
     try {
       const { job } = await apiFetch("/api/printing/slicer/jobs/", {
         method: "POST",
@@ -333,10 +335,22 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           settings: plateObjects.length ? { plate_objects: plateObjects } : {},
         },
       });
+      savedJob = job;
       setJobs(current => [job, ...current]);
-      setNotice("Slicing configuration saved as a private draft. No slicer or printer command was run.");
+      if (!sliceNow) {
+        setNotice("Slicing configuration saved as a private draft. No slicer or printer command was run.");
+      } else {
+        const queued = await apiFetch("/api/printing/slicer/jobs/" + job.id + "/start/", {
+          method: "POST", body: {},
+        });
+        setJobs(current => current.map(item => item.id === job.id ? queued.job : item));
+        setNotice("Slicing queued on the approved worker. No print was started or filament deducted.");
+        setShowDrafts(true);
+      }
     } catch (err) {
-      setError(err.message || "Could not save the slicing draft.");
+      setError((savedJob ? "Draft saved, but slicing could not start: " : "") +
+        (err.message || "Could not prepare this slicing job."));
+      if (savedJob) setShowDrafts(true);
     } finally {
       setBusy(false);
     }
@@ -674,7 +688,13 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           </select>
         </label>
         <div className="full settingsActions">
-          <button type="submit" className="primary" disabled={!canPrepare || busy || loading || !stlFiles.length || !printers.length}>{busy ? "Saving…" : "Save slicing draft"}</button>
+          <button type="submit" value="draft" disabled={!canPrepare || busy || loading || !stlFiles.length || !printers.length}>{busy ? "Saving…" : "Save slicing draft"}</button>
+          {workerConfigured && engines.some(engine => engine.key === form.engine && engine.available) &&
+            <button type="submit" value="slice" className="primary"
+              disabled={!canPrepare || busy || loading || !stlFiles.length || !printers.length ||
+                !form.printer_profile_id || !form.filament_profile_id || !form.process_profile_id}>
+              {busy ? "Preparing…" : "Save and slice"}
+            </button>}
         </div>
       </form>
       {["orcaslicer", "crealityprint"].includes(form.engine) && nativePlate?.id === form.printer_profile_id && <div className="cameraSourceRow" aria-label="Native slicer build plate information">
