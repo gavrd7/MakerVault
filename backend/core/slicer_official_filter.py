@@ -40,7 +40,13 @@ def profile_matches_printer(name, kind, model):
 
     if "@" in raw:
         qualifier = _words(raw.rsplit("@", 1)[1])
-        return all(w in qualifier for w in expected)
+        if not all(w in qualifier for w in expected):
+            return False
+        # Preserve exact model variants: K1 is not K1 SE/Max/Plus or
+        # K1_CFS-C. The selected model may itself include those variants.
+        first = qualifier.index(expected[0])
+        tail = qualifier[first + 1:first + 4]
+        return not any(w in _VARIANTS | {"cfs", "c"} and w not in expected for w in tail)
 
     # Model-coded presets without an @ suffix may be machine-specific.
     # These conventional identifiers should not leak into a different
