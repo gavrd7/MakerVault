@@ -15,6 +15,7 @@ from django.views.decorators.http import require_http_methods
 from .models import FileAsset, Printer, SliceJob, Spool, SlicerProfile
 from .slicer_engines import engine_catalogue, get_engine
 from .slicer_profiles import SlicerProfileError, inspect_native_profile
+from .slicer_profile_edit import SETTINGS as EDITABLE_PROFILE_SETTINGS, customise_native_json
 from .slicer_profile_lineage import inspect_orca_lineage
 from .slicer_mesh import inspect_stl, MeshInspectionError, MAX_INSPECTION_BYTES
 from .slicer_bed import inspect_orca_plate
@@ -410,6 +411,67 @@ def profiles(request):
     except IntegrityError:
         return _error("A profile with this engine, version, kind and name already exists.", 409)
     return JsonResponse({"profile": _profile_summary(profile), "execution_available": False}, status=201)
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def customise_profile(request, profile_id):
+    """Clone a native JSON preset, applying only bounded GUI-supported changes."""
+    profile = SlicerProfile.objects.filter(
+        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint"]
+    ).select_related("file_asset").first()
+    if not profile:
+        return _error("An owned Orca or Creality native profile is required.", 404)
+    if profile.kind not in EDITABLE_PROFILE_SETTINGS:
+        return _error("Unsupported native profile type.")
+    if request.method == "GET":
+        return JsonResponse({
+            "profile": _profile_summary(profile),
+            "settings": {name: {"min": limits[0], "max": limits[1]}
+                         for name, limits in EDITABLE_PROFILE_SETTINGS[profile.kind].items()},
+            "warning": "Custom presets are unverified; original native preset is preserved.",
+        })
+    if not request.user.has_perm("core.add_fileasset"):
+        return _error("You do not have permission to create custom profiles.", 403)
+    if len(request.body) > 4096:
+        return _error("Profile update exceeds the allowed size.", 413)
+    try:
+        data = json.loads(request.body.decode("utf-8"))
+        if not isinstance(data, dict) or set(data) != {"name", "settings"}:
+            raise ValueError("A custom profile name and supported settings are required.")
+        name = _preset(data, "name")
+        if SlicerProfile.objects.filter(
+            owner=request.user, engine=profile.engine,
+            engine_version=profile.engine_version, kind=profile.kind, name=name
+        ).exists():
+            return _error("Choose a unique name for the custom profile.", 409)
+        with profile.file_asset.file.open("rb") as source:
+            original = source.read(1024 * 1024 + 1)
+        edited = customise_native_json(original, profile.kind, name, data["settings"])
+        asset = FileAsset(
+            owner=request.user, name=name + ".json", category="source",
+            metadata={"original_name": name + ".json", "extension": ".json",
+                      "slicer_custom_source_profile_id": str(profile.id)},
+        )
+        asset.file = ContentFile(edited, name="custom-native-slicer-profile.json")
+        inspected = inspect_native_profile(asset, profile.engine)
+        with transaction.atomic():
+            asset.save()
+            custom = SlicerProfile.objects.create(
+                owner=request.user, file_asset=asset, engine=profile.engine,
+                engine_version=profile.engine_version, kind=profile.kind,
+                name=name, provenance=("Custom copy of " + str(profile.id))[:200],
+                content_sha256=inspected["sha256"], status="candidate",
+            )
+    except (ValueError, TypeError, UnicodeDecodeError, SlicerProfileError) as exc:
+        return _error(str(exc))
+    except (OSError, IntegrityError):
+        return _error("Custom profile could not be saved. Check source and unique name.", 409)
+    return JsonResponse({
+        "profile": _profile_summary(custom),
+        "execution_available": False,
+        "warning": "Custom profile saved as an unverified candidate. Original preserved.",
+    }, status=201)
 
 
 @login_required
