@@ -1,6 +1,9 @@
-# Build only with a reviewed, SHA-256 digest-pinned engine image that
-# contains Python 3 and a verified PrusaSlicer CLI binary.
-# No binary is installed by the MakerVault application or this Dockerfile.
+# Experimental shared OrcaSlicer / Creality Print worker wrapper.
+# Build only FROM a reviewed image pinned to an exact SHA-256 digest,
+# containing Python 3 and individually verified engine executables.
+# A verified Creality-only image is valid; Orca is not a dependency.
+# This Dockerfile does not fetch or install any slicer binaries.
+# Identity checking alone is not proof that a real CLI slice works.
 ARG SLICER_ENGINE_IMAGE
 FROM ${SLICER_ENGINE_IMAGE}
 WORKDIR /opt/makervault-slicer
