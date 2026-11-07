@@ -50,6 +50,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [importKind, setImportKind] = useState("printer");
   const [officialQuery, setOfficialQuery] = useState("Creality K2");
   const [officialResults, setOfficialResults] = useState(null);
+  const [materialProfileMatches, setMaterialProfileMatches] = useState(null);
   const [officialBusy, setOfficialBusy] = useState(false);
   const [officialError, setOfficialError] = useState("");
   const [importName, setImportName] = useState("");
@@ -130,6 +131,26 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       form.nozzle_mm, form.spool_id, materialHint, selectedPrinter?.id]);
 
 
+  useEffect(() => {
+    if (!materialHint || !["orcaslicer", "crealityprint"].includes(form.engine)) {
+      setMaterialProfileMatches(null);
+      return undefined;
+    }
+    let active = true;
+    setMaterialProfileMatches({ material: materialHint, loading: true });
+    const params = new URLSearchParams({
+      engine: form.engine, kind: "filament", vendor: "Creality", q: materialHint,
+    });
+    apiFetch("/api/printing/slicer/official-profiles/?" + params)
+      .then(result => {
+        if (active) setMaterialProfileMatches({ material: materialHint, results: result });
+      })
+      .catch(() => {
+        if (active) setMaterialProfileMatches({ material: materialHint, unavailable: true });
+      });
+    return () => { active = false; };
+  }, [form.engine, materialHint]);
+
   function chooseSpool(id) {
     const spool = spools.find(item => String(item.id) === String(id));
     const hex = slicerSpoolHex(spool);
@@ -190,6 +211,14 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       setWorkerConfigured(existing.worker_configured === true);
       setMayCancel(existing.can_cancel === true);
       setProfiles(native.profiles || []);
+      setForm(current => {
+        if (current.printer_id || !printers.length) return current;
+        const last = (existing.jobs || []).find(job => printers.some(p => String(p.id) === String(job.printer?.id)));
+        const found = printers.find(p => String(p.id) === String(last?.printer?.id))
+          || (printers.filter(p => p.is_active !== false).length === 1 ? printers.find(p => p.is_active !== false) : null);
+        if (!found) return current;
+        return { ...current, printer_id: String(found.id), nozzle_mm: String(found.nozzle_mm || "0.4") };
+      });
       setForm(current => {
         if (current.engine_version) return current;
         const engine = (catalogue.engines || []).find(item => item.key === current.engine);
@@ -489,7 +518,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   function openOfficialSearch(kind = materialHint ? "filament" : form.printer_id ? "printer" : "process") {
     setImportKind(kind);
     setOfficialQuery(defaultOfficialSearch(kind, { printer: selectedPrinter, spool: selectedSpool, nozzle: form.nozzle_mm }));
-    setOfficialResults(null);
+    setOfficialResults(kind === "filament" && materialProfileMatches?.material === materialHint
+      ? materialProfileMatches.results || null : null);
     setOfficialError("");
     setProfileModal("search");
   }
@@ -664,6 +694,17 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         <button type="button" onClick={() => setProfileModal("import")}>Import profile</button>
         <button type="button" onClick={() => setProfileModal("saved")}>Saved profiles ({profiles.filter(item => item.engine === form.engine).length})</button>
       </div>
+      {materialHint && <div className="slicerMaterialMatch">
+        <strong>Filament match: {materialHint}</strong>
+        <p>The selected spool is {materialHint}. Matching native filament presets are preferred; other materials won't be auto-selected.</p>
+        {materialProfileMatches?.results && <p>
+          {materialProfileMatches.results.total_matches} official {materialHint} candidates found for {form.engine === "crealityprint" ? "Creality Print" : "OrcaSlicer"}.
+        </p>}
+        <button type="button" disabled={materialProfileMatches?.loading}
+          onClick={() => openOfficialSearch("filament")}>
+          {materialProfileMatches?.loading ? "Finding matching profiles…" : "Review matching filament profiles"}
+        </button>
+      </div>}
       <h4>Selected profiles</h4>
       <div className="slicerSelectedProfiles formGrid">
         {forKind("printer").length > 0 && <label>Native printer profile (unverified)
@@ -695,6 +736,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         </label>
 
       </div>
+      {Object.keys(profileSuggestions).length > 0 && <p className="slicerProfileHint">
+        Suggested from {Object.values(profileSuggestions).join(", ")}. You can change any selection or set a different default.
+      </p>}
       {canVerifyProfiles && <div className="slicerProfileVerification">
         <h4>Verify selected profiles</h4>
         <p>An administrator can test the exact native profile trio on an installed engine before enabling real slicing. This runs a controlled fixture, not a printer.</p>
