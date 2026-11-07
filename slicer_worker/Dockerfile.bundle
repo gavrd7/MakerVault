@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libxrandr2 libxkbcommon0 libxkbcommon-x11-0 libwayland-client0 \
       libasound2t64 libgtk-3-0t64 \
       libwebkit2gtk-4.1-0 libjavascriptcoregtk-4.1-0 \
+      libsm6 libice6 libxss1 libxtst6 libxcb-xinerama0 libxcb-cursor0 \
     && rm -rf /var/lib/apt/lists/*
 RUN groupadd --gid 10001 slicer && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin slicer
 WORKDIR /opt/makervault-slicer
