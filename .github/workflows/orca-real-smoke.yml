@@ -26,6 +26,7 @@ jobs:
           python3 -m compileall -q scripts/build_orca_reference_fixture.py scripts/probe_slicer_staging.py
           python3 scripts/build_orca_reference_fixture.py --printer k1 --output /tmp/makervault-orca-k1
           python3 scripts/build_orca_reference_fixture.py --printer k2 --output /tmp/makervault-orca-k2
+          python3 scripts/build_orca_reference_fixture.py --printer prusa-mk4 --output /tmp/makervault-orca-prusa
       - name: Download SHA-256 verified official Orca 2.4.2 and build isolated image
         run: python3 scripts/install_slicer_staging.py prepare-orca
       - name: Check restricted worker loads real executable
@@ -69,6 +70,12 @@ jobs:
             --printer /tmp/makervault-orca-k2/printer.json \
             --filament /tmp/makervault-orca-k2/filament.json \
             --process /tmp/makervault-orca-k2/process.json
+      - name: Verify real Prusa MK4 native-profile tetrahedron slice
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-prusa/printer.json \
+            --filament /tmp/makervault-orca-prusa/filament.json \
+            --process /tmp/makervault-orca-prusa/process.json
       - name: Diagnose failed native K2 slice without changing runtime admission policy
         if: failure() && steps.k2.outcome == 'failure'
         run: |
