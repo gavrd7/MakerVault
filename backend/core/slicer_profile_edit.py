@@ -18,7 +18,9 @@ SETTINGS = {
     },
     "filament": {
         "nozzle_temperature": (100, 350),
-        "bed_temperature": (0, 150),
+        "hot_plate_temp": (0, 150),
+        "cool_plate_temp": (0, 150),
+        "textured_plate_temp": (0, 150),
         "filament_flow_ratio": (0.5, 1.5),
     },
     "process": {
@@ -58,7 +60,11 @@ def customise_native_json(raw: bytes, kind: str, name: str, edits: dict) -> byte
         if key in {"wall_loops"} and not float(value).is_integer():
             raise SlicerProfileError("Wall count must be an integer.")
         formatted = str(int(value)) if float(value).is_integer() else str(round(value, 4))
-        existing = data.get(key)
+        if key not in data:
+            raise SlicerProfileError("This native profile does not define the selected setting.")
+        existing = data[key]
+        if key == "sparse_infill_density":
+            formatted += "%"
         # Both slicers have native JSON presets containing scalar and array values.
         # Retain the type shape where known; the engine-specific verifier must
         # still validate the complete resolved profile before use.
