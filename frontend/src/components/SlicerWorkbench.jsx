@@ -4,6 +4,7 @@ import { Modal } from "./Common";
 import { FileModelViewerModal, ModelThumbnail } from "./ModelViewer";
 import PrinterStartGcodeModal from "./PrinterStartGcodeModal";
 import SlicerPlateEditor from "./SlicerPlateEditor";
+import SlicerEngineChoices from "./SlicerEngineChoices";
 import { slicerSpoolHex, recolorUnmodifiedPlate } from "./slicerSpoolColour";
 import { spoolMaterial, chooseSuggestedProfile, defaultOfficialSearch } from "./slicerProfileSuggestions";
 import { availableSlicerPrintConnections, preferredSlicerPrintConnection } from "./slicerPrintRouting";
@@ -607,23 +608,25 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       {error && <p className="integrationError" role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
       <form className="formGrid" onSubmit={saveDraft}>
-        <label>Engine
-          <select required disabled={!canPrepare || busy || loading} value={form.engine} onChange={e => {
-            manuallyChosenProfiles.current.clear();
-            const chosenEngine = engines.find(item => item.key === e.target.value);
-            setForm(current => ({
-              ...current, engine: e.target.value,
-              engine_version: chosenEngine?.installed_version || profiles.find(profile => profile.engine === e.target.value)?.engine_version || "",
-              printer_profile_id: "", filament_profile_id: "", process_profile_id: "",
-            }));
-          }}>
-            {engines.length ? engines.map(engine =>
-              <option key={engine.key} value={engine.key}>
-                {engine.label} · {engine.available ? "verified " + (engine.installed_version || "worker") : "not installed / not verified"}
-              </option>
-            ) : <option value="orcaslicer">OrcaSlicer · status unknown</option>}
-          </select>
-        </label>
+        <div className="full slicerEngineSelection">
+          <strong className="slicerEngineSelectionLabel">Slicing engine</strong>
+          <SlicerEngineChoices engines={engines.length ? engines :
+            [{ key: "orcaslicer", label: "OrcaSlicer", available: false },
+             { key: "crealityprint", label: "Creality Print", available: false }]}
+            selected={form.engine} disabled={!canPrepare || busy || loading}
+            onSelect={key => {
+              manuallyChosenProfiles.current.clear();
+              const selectedEngine = engines.find(item => item.key === key);
+              setForm(current => ({
+                ...current, engine: key,
+                engine_version: selectedEngine?.installed_version ||
+                  profiles.find(profile => profile.engine === key)?.engine_version || "",
+                printer_profile_id: "", filament_profile_id: "", process_profile_id: "",
+              }));
+            }} />
+          <button type="button" className="slicerEngineManageLink"
+            onClick={() => setProfileModal("engines")}>View engine installations</button>
+        </div>
         <p className="full slicerEngineStatus" role="status">
           {engines.find(engine => engine.key === form.engine)?.available
             ? "The selected engine has passed worker identity checks. Compatible native profiles are still required for slicing."
@@ -822,6 +825,17 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           </button>
         </div>
       </form>
+    </Modal>}
+    {profileModal === "engines" && <Modal title="Slicer engine installations"
+      subtitle="Optional self-hosted engines" onClose={() => setProfileModal("")} wide>
+      <p>OrcaSlicer and Creality Print run independently in the optional isolated worker.
+        Engine installation from MakerVault is not available yet. A configured worker must pass
+        verification before an engine can execute slicing jobs.</p>
+      <SlicerEngineChoices engines={engines.length ? engines :
+        [{ key: "orcaslicer", label: "OrcaSlicer", available: false },
+         { key: "crealityprint", label: "Creality Print", available: false }]}
+        mode="install" />
+      <p>You can continue preparing slicing drafts without installing either engine.</p>
     </Modal>}
     {profileModal === "search" && <Modal title="Search official profiles" onClose={() => setProfileModal("")} wide>
       <div className="printingActionGroup" aria-labelledby="slicer-official-profiles-heading">
