@@ -93,7 +93,7 @@ class RealEngineProbeTests(TestCase):
             return {"status": "completed"}
 
         with patch("slicer_worker.probe.ENGINES", {"crealityprint": incomplete}):
-            with self.assertRaisesRegex(WorkerError, "separated extrusion"):
+            with self.assertRaisesRegex(WorkerError, "extrusion coverage insufficient"):
                 run_probe(**self.kwargs(), model=str(fixture), expected_objects=2)
 
     def test_no_unapproved_or_symlink_binary(self):
