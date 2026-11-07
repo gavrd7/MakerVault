@@ -34,6 +34,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [customBed, setCustomBed] = useState({ enabled: false, x: "220", y: "220" });
   const [profileLineages, setProfileLineages] = useState({});
   const [workerConfigured, setWorkerConfigured] = useState(false);
+  const [canVerifyProfiles, setCanVerifyProfiles] = useState(false);
+  const [verifyingProfiles, setVerifyingProfiles] = useState(false);
   const [mayCancel, setMayCancel] = useState(false);
   const [printSelection, setPrintSelection] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
@@ -140,6 +142,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         apiFetch("/api/printing/slicer/profiles/"),
       ]);
       setEngines(catalogue.engines || []);
+      setCanVerifyProfiles(catalogue.can_verify_profiles === true);
       setJobs(existing.jobs || []);
       setWorkerConfigured(existing.worker_configured === true);
       setMayCancel(existing.can_cancel === true);
@@ -357,6 +360,39 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     }
   }
 
+  async function verifySelectedProfiles() {
+    if (!canVerifyProfiles || !workerConfigured || verifyingProfiles) return;
+    const ids = {
+      printer: form.printer_profile_id,
+      filament: form.filament_profile_id,
+      process: form.process_profile_id,
+    };
+    if (Object.values(ids).some(value => !value)) {
+      setError("Select a native printer, filament and process profile to run a verification slice.");
+      return;
+    }
+    if (!window.confirm("Run a real isolated test slice with these three profiles? No printer is started and no filament is deducted. Verification can take up to 95 seconds.")) return;
+    setError("");
+    setNotice("");
+    setVerifyingProfiles(true);
+    try {
+      const result = await apiFetch("/api/printing/slicer/profiles/approve/", {
+        method: "POST",
+        body: { engine: form.engine, engine_version: form.engine_version, profiles: ids },
+      });
+      setProfiles(current => current.map(profile =>
+        Object.values(ids).includes(profile.id) ? { ...profile, status: "verified" } : profile
+      ));
+      setNotice("Real worker fixture passed for the selected profile trio. Receipt: " + result.receipt_sha256.slice(0, 12) + "… You may now prepare a draft for slicing.");
+      await refresh();
+    } catch (err) {
+      setError("Fixture verification failed: " + (err.message || "The worker rejected the profile trio.") +
+        " No profiles were approved.");
+    } finally {
+      setVerifyingProfiles(false);
+    }
+  }
+
   async function removeProfile(profile) {
     if (!window.confirm("Remove saved " + profile.kind + " profile \"" + profile.name + "\"? Existing source files remain in MakerVault Files. Profiles referenced by slicing jobs cannot be removed.")) return;
     setError(""); setBusy(true);
@@ -553,6 +589,15 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         </label>
 
       </div>
+      {canVerifyProfiles && <div className="slicerProfileVerification">
+        <h4>Verify selected profiles</h4>
+        <p>An administrator can test the exact native profile trio on an installed engine before enabling real slicing. This runs a controlled fixture, not a printer.</p>
+        <button type="button" disabled={!workerConfigured || verifyingProfiles ||
+          !form.printer_profile_id || !form.filament_profile_id || !form.process_profile_id}
+          onClick={verifySelectedProfiles}>
+          {verifyingProfiles ? "Running test slice…" : "Test slice and approve"}
+        </button>
+      </div>}
       <h4>Build plate</h4>
       <label className="checkRow"><input type="checkbox" checked={customBed.enabled} onChange={e => setCustomBed(current => ({ ...current, enabled: e.target.checked }))} /><span>Custom preview bed size</span></label>
       {customBed.enabled && <div className="formGrid">
