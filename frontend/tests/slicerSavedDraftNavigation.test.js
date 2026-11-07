@@ -32,3 +32,16 @@ test("the slicer offers opt-in save at slicing time or from a completed job", ()
   assert.match(history, /Add G-code to library/);
   assert.match(history, /save-gcode\//);
 });
+
+test("a model-linked draft opens its specific workbench configuration in preview or ready mode", () => {
+  const app = fs.readFileSync(path.join(root, "src/App.jsx"), "utf8");
+  const page = read("PrintingPage.jsx");
+  const history = read("SavedSlicerJobsModal.jsx");
+  const workbench = read("SlicerWorkbench.jsx");
+  assert.match(app, /\["ready", "preview"\]\.includes\(slicerStatus\.state\)/);
+  assert.match(app, /type: "slicer_job", id: jobId/);
+  assert.match(page, /initialDraftId=\{searchTarget\?\.type === "slicer_job" \? searchTarget\.id : null\}/);
+  assert.match(history, /onOpenSlicer\?\.\(job\.id\)/);
+  assert.match(workbench, /function loadSavedDraft\(job\)/);
+  assert.match(workbench, /jobs\.find\(item => item\.id === initialDraftId\)/);
+});
