@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 import { apiFetch } from "../api";
 import { plateExtentWarning, plateFootprintsOverlap, autoArrangePlate } from "./slicerPlateGeometry";
 
@@ -43,17 +44,19 @@ function pretty(value) {
 export default function SlicerPlateEditor({
   files = [], objects = [], onChange, onPrimaryChange, plate = null,
   canEdit = false, onFilesUploaded, defaultColor = null, onManualColorChange, footer = null,
-  selectedInstanceId = null, onSelectedInstanceChange,
+  selectedInstanceId = null, onSelectedInstanceChange, toolMode = "select",
 }) {
   const hostRef = useRef(null);
   const sceneRef = useRef(null);
   const latestObjectsRef = useRef(objects);
   const latestOnChangeRef = useRef(onChange);
+  const latestToolModeRef = useRef(toolMode);
   const dimensionsRef = useRef({});
   const pendingArrangeRef = useRef(false);
   const pendingAddIdsRef = useRef(new Set());
   latestObjectsRef.current = objects;
   latestOnChangeRef.current = onChange;
+  latestToolModeRef.current = toolMode;
   const [localSelected, setLocalSelected] = useState("");
   const selected = selectedInstanceId === null ? localSelected : selectedInstanceId;
   const setSelected = next => {
@@ -304,6 +307,15 @@ export default function SlicerPlateEditor({
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
+    const transform = new TransformControls(camera, renderer.domElement);
+    transform.setSpace("world");
+    transform.setTranslationSnap(0.5);
+    transform.setRotationSnap(THREE.MathUtils.degToRad(5));
+    transform.showZ = false;
+    scene.add(transform.getHelper());
+    transform.addEventListener("dragging-changed", event => {
+      controls.enabled = !event.value;
+    });
 
     const meshes = new Map();
     const raycaster = new THREE.Raycaster();
@@ -321,7 +333,7 @@ export default function SlicerPlateEditor({
     }
 
     function pointerDown(event) {
-      if (!canEdit || event.button > 0) return;
+      if (!canEdit || event.button > 0 || transform.dragging) return;
       rayFromPointer(event);
       const hits = raycaster.intersectObjects([...meshes.values()], false);
       if (!hits.length) return;
@@ -330,6 +342,7 @@ export default function SlicerPlateEditor({
       if (!raycaster.ray.intersectPlane(bedPlane, location)) return;
       const id = target.userData.instanceId;
       setSelected(id);
+      if (latestToolModeRef.current !== "select") return;
       dragging = {
         id, pointerId: event.pointerId,
         deltaX: target.position.x - location.x,
@@ -363,6 +376,27 @@ export default function SlicerPlateEditor({
         renderer.domElement.releasePointerCapture(event.pointerId);
       }
     }
+    transform.addEventListener("mouseUp", () => {
+      const mesh = transform.object;
+      if (!mesh) return;
+      const current = latestObjectsRef.current;
+      const selectedItem = current.find(item => item.instance_id === mesh.userData.instanceId);
+      if (!selectedItem) return;
+      const candidate = { ...selectedItem,
+        x_mm: Math.round(mesh.position.x * 2) / 2,
+        y_mm: Math.round(mesh.position.y * 2) / 2,
+        rotation_deg: Math.round(THREE.MathUtils.radToDeg(mesh.rotation.z) / 5) * 5,
+      };
+      if (!validPlacement(candidate, current)) {
+        mesh.position.set(selectedItem.x_mm, selectedItem.y_mm, 0);
+        mesh.rotation.z = THREE.MathUtils.degToRad(selectedItem.rotation_deg);
+        setError("Model handle transform exceeds the plate or overlaps another object.");
+        return;
+      }
+      setError("");
+      latestOnChangeRef.current(current.map(item =>
+        item.instance_id === selectedItem.instance_id ? candidate : item));
+    });
     renderer.domElement.addEventListener("pointerdown", pointerDown);
     renderer.domElement.addEventListener("pointermove", pointerMove);
     renderer.domElement.addEventListener("pointerup", pointerUp);
@@ -380,7 +414,7 @@ export default function SlicerPlateEditor({
       controls.update();
       renderer.render(scene, camera);
     });
-    sceneRef.current = { scene, meshes };
+    sceneRef.current = { scene, meshes, transform };
     return () => {
       disposed = true;
       sceneRef.current = null;
@@ -391,6 +425,9 @@ export default function SlicerPlateEditor({
       renderer.domElement.removeEventListener("pointercancel", pointerUp);
       renderer.setAnimationLoop(null);
       controls.dispose();
+      transform.detach();
+      scene.remove(transform.getHelper());
+      transform.dispose();
       for (const mesh of meshes.values()) {
         scene.remove(mesh);
         mesh.geometry.dispose();
@@ -459,6 +496,10 @@ export default function SlicerPlateEditor({
           mesh.scale.set(xyz[0] / 100, xyz[1] / 100, xyz[2] / 100);
           state.meshes.set(item.instance_id, mesh);
           state.scene.add(mesh);
+          if (latestToolModeRef.current !== "select" && item.instance_id === selectedInstanceId) {
+            state.transform.setMode(latestToolModeRef.current === "move" ? "translate" : "rotate");
+            state.transform.attach(mesh);
+          }
         })
         .catch(err => { if (live && err.name !== "AbortError") setError(err.message || "STL preview failed."); });
     }
@@ -480,7 +521,17 @@ export default function SlicerPlateEditor({
       mesh.material.emissive.set(item.instance_id === selected ? "#164051" : "#000000");
       mesh.material.emissiveIntensity = item.instance_id === selected ? 0.18 : 0;
     }
-  }, [objects, selected]);
+    const selectedMesh = state.meshes.get(selected);
+    if (canEdit && selectedMesh && (toolMode === "move" || toolMode === "rotate")) {
+      state.transform.setMode(toolMode === "move" ? "translate" : "rotate");
+      state.transform.showX = toolMode === "move";
+      state.transform.showY = toolMode === "move";
+      state.transform.showZ = toolMode === "rotate";
+      state.transform.attach(selectedMesh);
+    } else {
+      state.transform.detach();
+    }
+  }, [objects, selected, toolMode, canEdit]);
 
   return <section className="panel printingSection slicerPlatePanel" aria-labelledby="slicer-plate-heading">
     <div className="slicerPlateHeading">
