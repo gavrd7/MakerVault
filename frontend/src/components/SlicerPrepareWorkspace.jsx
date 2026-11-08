@@ -53,6 +53,25 @@ export default function SlicerPrepareWorkspace({
   const [group, setGroup] = useState("Quality");
   const [toolMode, setToolMode] = useState("select");
   const [liveMaterials, setLiveMaterials] = useState([]);
+  const [filamentPickerId, setFilamentPickerId] = useState("");
+  const [filamentNotice, setFilamentNotice] = useState("");
+  const validSlotColor = slot => /^#[0-9a-f]{6}$/i.test(slot?.color_hex || "")
+    ? slot.color_hex.toUpperCase() : null;
+  const slotName = slot => (slot.product_name || slot.material || "Unknown filament") +
+    " · " + (slot.system_label || "Printer") + " slot " + ((slot.slot_index ?? 0) + 1);
+  const changeModelPreviewFilament = (instanceId, slot) => {
+    const hex = validSlotColor(slot);
+    if (!hex) {
+      setFilamentNotice("This loaded slot has no valid recorded colour. No change was made.");
+      return;
+    }
+    updatePlate(latest.current.map(item => item.instance_id === instanceId
+      ? { ...item, color: hex } : item));
+    onManualColorChange?.(instanceId);
+    setFilamentPickerId("");
+    setFilamentNotice("Preview colour set from " + slotName(slot) +
+      ". The actual sliced material still comes from the global native filament profile.");
+  };
   const [materialRefreshing, setMaterialRefreshing] = useState(false);
   const [materialMessage, setMaterialMessage] = useState("Select Refresh to read current printer filament slots.");
   const requestRef = useRef(0);
@@ -229,14 +248,37 @@ export default function SlicerPrepareWorkspace({
         <aside className="slicerPrepareTree" aria-label="Build plate object tree">
         <h4>Plate 1 · Models ({objects.length})</h4>
         {objects.length === 0 && <p>Add an STL to start editing.</p>}
-        {objects.map((object, index) => <button key={object.instance_id} type="button"
-          className={active?.instance_id === object.instance_id ? "selected" : ""}
-          onClick={() => setSelectedId(object.instance_id)}
-          aria-pressed={active?.instance_id === object.instance_id}>
-          <span style={{ background: object.color }} aria-hidden="true" />
-          <span>{index + 1}. {itemName(object)}</span>
-        </button>)}
-        <small>All instances are editable. Multi-plate output and modifier trees are not implemented yet.</small>
+        {objects.map((object, index) => <div className="slicerPrepareModelEntry" key={object.instance_id}>
+          <button type="button"
+            className={active?.instance_id === object.instance_id ? "selected" : ""}
+            onClick={() => setSelectedId(object.instance_id)}
+            aria-pressed={active?.instance_id === object.instance_id}>
+            <span className="slicerPrepareModelSwatch"
+              style={{ background: object.color }} aria-hidden="true" />
+            <span>{index + 1}. {itemName(object)}</span>
+          </button>
+          <button type="button" className="slicerModelChangeFilament"
+            disabled={!canEdit || busy || !liveMaterials.length}
+            aria-expanded={filamentPickerId === object.instance_id}
+            onClick={() => {
+              setSelectedId(object.instance_id);
+              setFilamentPickerId(current => current === object.instance_id ? "" : object.instance_id);
+              setFilamentNotice("");
+            }}>Change filament</button>
+          {filamentPickerId === object.instance_id && <div className="slicerModelFilamentChoices">
+            <strong>Loaded filaments · preview colour only</strong>
+            {liveMaterials.map(slot => <button type="button" key={slot.id}
+              disabled={!canEdit || busy || !validSlotColor(slot)}
+              onClick={() => changeModelPreviewFilament(object.instance_id, slot)}>
+              <span className="slicerLiveMaterialSwatch"
+                style={{ backgroundColor: validSlotColor(slot) || "#697b91" }} aria-hidden="true" />
+              <span>{slotName(slot)}</span>
+            </button>)}
+            <small>Changing this swatch does not assign an extruder, modify G-code or change the slicer filament preset.</small>
+          </div>}
+        </div>)}
+        {filamentNotice && <p className="slicerModelFilamentNotice" role="status">{filamentNotice}</p>}
+        <small>Model colours are previews only until native multi-material mapping is supported. Multi-plate output and modifier trees are not implemented yet.</small>
         </aside>
       </div>
       <div className="slicerPrepareScene" ref={editorRef}>
