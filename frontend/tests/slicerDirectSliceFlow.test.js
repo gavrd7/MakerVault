@@ -93,7 +93,7 @@ test("saved drafts can be deleted without touching model files", () => {
 
 test("three distinct plate actions control draft creation, quick slice and interactive editing", () => {
   assert.match(source, /onClick=\{\(\) => saveDraft\("draft"\)\}/);
-  assert.match(source, /onClick=\{\(\) => saveDraft\("slice"\)\}/);
+  assert.match(source, /onClick=\{\(\) => saveDraft\("quick"\)\}/);
   assert.match(source, /Slice → Interactive slicer/);
   assert.match(source, /const saveOutput = mode === "save-and-slice"/);
   assert.match(source, /save_gcode_to_library: saveOutput, workflow/);
