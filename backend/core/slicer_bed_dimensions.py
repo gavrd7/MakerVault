@@ -49,6 +49,17 @@ def trusted_plate_dimensions(profile):
         raise SlicerProfileError("Non-origin rectangular plates need a verified mapping.")
     # Bed cut-outs and excluded regions require their own checker.
     exclusion = record.get("bed_exclude_area") or record.get("printable_area_exclude")
-    if exclusion and exclusion not in ("0x0", "0", []):
-        raise SlicerProfileError("Native bed exclusions are not yet supported for multi-object slicing.")
+    # Orca native parents commonly encode an empty exclusion as ["0x0"],
+    # while printer children can encode the identical sentinel as "0x0".
+    # Accept these exact empty sentinels, not arbitrary excluded areas.
+    empty_exclusion = (
+        exclusion is None or exclusion == "" or exclusion == "0" or
+        exclusion == "0x0" or exclusion == [] or exclusion == ["0x0"] or
+        exclusion == ["0"] or exclusion == ["0", "0"] or exclusion == "0x0,0x0"
+    )
+    if not empty_exclusion:
+        raise SlicerProfileError(
+            "Native printable-area exclusion is non-empty; mapped exclusion zones "
+            "are not yet supported for multi-object slicing."
+        )
     return float(xmax), float(ymax)
