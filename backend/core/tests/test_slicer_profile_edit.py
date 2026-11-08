@@ -99,6 +99,30 @@ class NativeSlicerProfileEditorTests(SimpleTestCase):
         self.assertEqual(candidate["bed_exclude_area"], ["0x0"])
         self.assertEqual(candidate["retraction_distances_when_cut"], "18")
 
+    def test_dependency_profiles_are_identified_for_hidden_selectors(self):
+        from io import BytesIO
+        from types import SimpleNamespace
+        import hashlib
+        from core.slicer_api import _native_parent_ids
+
+        def row(pk, name, parent=None):
+            payload = {"name": name}
+            if parent:
+                payload["inherits"] = parent
+            raw = json.dumps(payload).encode()
+            return SimpleNamespace(
+                pk=pk, name=name, kind="printer", engine="orcaslicer",
+                engine_version="2.4.2", owner_id=7,
+                content_sha256=hashlib.sha256(raw).hexdigest(),
+                file_asset=SimpleNamespace(file=SimpleNamespace(
+                    open=lambda mode: BytesIO(raw)
+                )),
+            )
+        parent = row("base", "fdm_creality_common")
+        k2 = row("k2", "Creality K2 0.4 nozzle", "fdm_creality_common")
+        standalone = row("custom", "K2 self-contained copy")
+        self.assertEqual(_native_parent_ids([parent, k2, standalone]), {"base"})
+
     def test_unsafe_keys_numeric_ranges_and_postprocessors_are_rejected(self):
         original = b'{"name":"Original","layer_height":"0.2"}'
         for edits in (
