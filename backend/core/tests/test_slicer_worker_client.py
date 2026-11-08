@@ -46,3 +46,23 @@ class SlicerWorkerClientTests(SimpleTestCase):
             run_remote_job(uuid.uuid4(), "/bin/sh", "1", b"stl", b"p", b"f", b"process")
         with self.assertRaises(SlicerWorkerError):
             run_remote_job("not-uuid", "prusaslicer", "2.9.7", b"stl", b"p", b"f", b"process")
+
+    @patch("core.slicer_worker_client._session")
+    @patch("core.slicer_worker_client.worker_settings",
+           return_value=("http://slicer-worker:8088", "x" * 40))
+    def test_worker_rejection_exposes_only_allowlisted_stage_and_reason(self, settings, session):
+        response = Mock()
+        response.status_code = 422
+        response.headers = {"Content-Length": "120"}
+        response.json.return_value = {
+            "stage": "running slicer engine", "reason": "engine-exited",
+            "error": "untrusted private data should never appear",
+        }
+        session.return_value.post.return_value = response
+        with self.assertRaises(SlicerWorkerError) as caught:
+            run_remote_job(uuid.uuid4(), "orcaslicer", "2.4.2",
+                           b"model", b"printer", b"filament", b"process")
+        self.assertIn("HTTP 422", str(caught.exception))
+        self.assertIn("running slicer engine", str(caught.exception))
+        self.assertIn("engine-exited", str(caught.exception))
+        self.assertNotIn("untrusted private data", str(caught.exception))
