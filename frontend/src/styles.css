@@ -4127,3 +4127,24 @@ a:focus-visible,
 .slicerPrepareActions .slicerActionStatus strong{color:inherit}
 .slicerPrepareActions .slicerActionStatus button{display:inline-flex;align-items:center;min-height:30px;
   padding:5px 9px;margin:5px 0 0 9px;font-size:.8rem;white-space:normal}
+
+/* Per-model material preview selector, shared with provider-neutral live slots.
+   Keeps the object tree compact and avoids a clipped floating dropdown. */
+.slicerPrepareModelEntry{display:flex;flex-direction:column;gap:6px;min-width:0}
+.slicerPrepareModelEntry>button:first-child{display:flex;align-items:center;text-align:left;gap:8px;width:100%;
+  min-width:0;overflow-wrap:anywhere;padding:10px;margin:0}
+.slicerPrepareModelEntry>button:first-child span:last-child{min-width:0;overflow-wrap:anywhere}
+.slicerPrepareModelSwatch{width:14px;height:14px;flex:0 0 14px;border-radius:4px;border:1px solid #465668}
+.slicerPrepareTree .slicerModelChangeFilament{width:100%;min-height:32px;padding:6px 9px;margin:0 0 9px;
+  font-size:.76rem;text-align:center;white-space:normal;color:#c6d6ea}
+.slicerModelFilamentChoices{display:flex;flex-direction:column;gap:5px;padding:9px;
+  background:#0c1219;border:1px solid #435365;border-radius:9px;margin-bottom:10px;min-width:0}
+.slicerModelFilamentChoices>strong{font-size:.75rem;color:#b4c2d4;line-height:1.4}
+.slicerPrepareTree .slicerModelFilamentChoices>button{display:flex;align-items:center;gap:8px;min-width:0;
+  width:100%;padding:7px 5px;margin:0;text-align:left;border:0;background:transparent;
+  font-size:.76rem;font-weight:450;line-height:1.35;white-space:normal;overflow-wrap:anywhere}
+.slicerPrepareTree .slicerModelFilamentChoices>button:hover:not(:disabled){background:#243144}
+.slicerModelFilamentChoices .slicerLiveMaterialSwatch{width:16px;height:16px;flex:0 0 16px}
+.slicerModelFilamentChoices small,.slicerModelFilamentNotice{font-size:.73rem;line-height:1.5;
+  color:var(--muted,#9aafc3);overflow-wrap:anywhere}
+.slicerModelFilamentNotice{margin:2px 0 10px}
