@@ -129,14 +129,23 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
                        "unexpected-output-layout", "output-too-large", "engine-version-mismatch",
                        "missing-gcode", "validation-error"}
             try:
-                if int(response.headers.get("Content-Length", "0")) <= 1024:
-                    result = response.json()
-                    if isinstance(result, dict):
-                        if result.get("stage") in allowed:
-                            stage = result["stage"]
-                        if result.get("reason") in reasons:
-                            reason = result["reason"]
-            except (ValueError, requests.RequestException):
+                declared_error_length = response.headers.get("Content-Length")
+                if (declared_error_length is None or (
+                    declared_error_length.isdecimal() and int(declared_error_length) <= 1024
+                )):
+                    bounded = bytearray()
+                    for chunk in response.iter_content(chunk_size=256):
+                        bounded.extend(chunk)
+                        if len(bounded) > 1024:
+                            break
+                    if len(bounded) <= 1024:
+                        result = json.loads(bounded)
+                        if isinstance(result, dict):
+                            if result.get("stage") in allowed:
+                                stage = result["stage"]
+                            if result.get("reason") in reasons:
+                                reason = result["reason"]
+            except (ValueError, requests.RequestException, UnicodeDecodeError):
                 pass
             message = "Isolated worker rejected the slicing job (HTTP " + str(response.status_code) + ")"
             if stage:
