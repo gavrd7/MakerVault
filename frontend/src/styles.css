@@ -3997,3 +3997,20 @@ a:focus-visible,
   .slicerPrepareHeader .slicerChangeProfiles{width:100%;justify-content:center}
   .slicerResultVisibility{grid-template-columns:minmax(0,1fr)}
 }
+
+
+/* Provider-neutral live CFS/AMS/RFID slot inventory; read-only until engine
+   native multi-material mapping and painting round-trip are verified. */
+.slicerLiveMaterialSlots{min-width:0;display:flex;flex-direction:column;gap:9px;
+  border:1px solid var(--border,#394958);border-radius:10px;padding:12px;margin-top:4px}
+.slicerLiveMaterialHeader{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.slicerLiveMaterialHeader strong{font-size:.83rem}
+.slicerLiveMaterialHeader button{padding:6px 10px;min-height:34px}
+.slicerLiveMaterialSlot{display:flex;align-items:flex-start;gap:9px;padding:8px 0;
+  border-top:1px solid var(--border,#394958);min-width:0}
+.slicerLiveMaterialSwatch{width:18px;height:18px;border-radius:4px;flex:0 0 18px;
+  border:1px solid #718195}
+.slicerLiveMaterialSlot>div{min-width:0;display:flex;flex-direction:column;gap:4px}
+.slicerLiveMaterialSlot strong{font-size:.8rem;overflow-wrap:anywhere;line-height:1.4}
+.slicerLiveMaterialSlot small{color:var(--muted,#9aafc3);font-size:.76rem;overflow-wrap:anywhere;line-height:1.4}
+.slicerLiveMaterialSlots>p{margin:4px 0 0;font-size:.76rem}
