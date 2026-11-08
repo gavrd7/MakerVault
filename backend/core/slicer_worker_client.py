@@ -119,7 +119,22 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
             stream=True, timeout=(3, timeout_seconds), allow_redirects=False,
         )
         if response.status_code != 200:
-            raise SlicerWorkerError("Isolated worker refused the slicing job.")
+            # The worker returns bounded, structured stage names. Never
+            # include arbitrary response text in job messages or logs.
+            allowed = {"validating request", "validating model and profile payloads",
+                       "running slicer engine", "validating generated G-code"}
+            stage = None
+            try:
+                if int(response.headers.get("Content-Length", "0")) <= 1024:
+                    result = response.json()
+                    if isinstance(result, dict) and result.get("stage") in allowed:
+                        stage = result["stage"]
+            except (ValueError, requests.RequestException):
+                pass
+            message = "Isolated worker rejected the slicing job (HTTP " + str(response.status_code) + ")"
+            if stage:
+                message += " during " + stage
+            raise SlicerWorkerError(message + ".")
         declared = response.headers.get("Content-Length")
         if declared and (not declared.isdecimal() or int(declared) > MAX_RESPONSE):
             raise SlicerWorkerError("Worker response exceeds the allowed size.")
