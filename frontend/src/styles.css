@@ -4232,3 +4232,33 @@ a:focus-visible,
   .slicerSavedProfileToolbar>button{width:100%;justify-content:center}
   .slicerSavedProfileToolbar>.slicerDependencyToggle{width:100%}
 }
+
+/* Saved slicer profile catalogue filters. Deliberately separate from action
+   toolbar; aligned fields wrap before they become cramped on smaller screens. */
+.slicerSavedProfileFilters{
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:14px;margin:14px 0 10px;align-items:end;
+}
+.slicerSavedProfileFilters>label{
+  display:flex;flex-direction:column;gap:7px;min-width:0;
+  font-size:.86rem;line-height:1.4;
+}
+.slicerSavedProfileFilters select,.slicerSavedProfileFilters input{
+  display:block;width:100%;max-width:100%;min-width:0;
+  box-sizing:border-box;
+}
+.slicerSavedProfileFilters>.slicerSavedProfileSearch{grid-column:1/-1}
+.slicerSavedProfileCount{
+  margin:0 0 16px;color:var(--muted,#9faec2);
+  font-size:.81rem;line-height:1.5;
+}
+.slicerSavedProfileEmpty{
+  margin:0;padding:20px 16px;border:1px dashed var(--border-color,#3a4659);
+  border-radius:10px;color:var(--muted,#9faec2);
+}
+@media(max-width:880px){
+  .slicerSavedProfileFilters{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:520px){
+  .slicerSavedProfileFilters{grid-template-columns:minmax(0,1fr);gap:12px}
+}
