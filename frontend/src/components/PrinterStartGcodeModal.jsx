@@ -51,18 +51,42 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
 
   async function load(refreshStatus = false) {
     // A broken printer-side file API must not hide perfectly valid MakerVault files.
-    const [local, remote] = await Promise.allSettled([
-      // Query G-code specifically: the general Files API returns only its
-      // first 5000 mixed-category records and can omit older stored G-code.
+    const [local, privateSlices, remote] = await Promise.allSettled([
+      // Library G-code is independent of the selected printer adapter.
       apiFetch("/api/files/?category=gcode"),
+      // Completed private slice outputs remain selectable for an explicit
+      // printer transfer without being silently saved into the G-code library.
+      apiFetch("/api/printing/slicer/jobs/"),
       apiFetch(base + (refreshStatus === true ? "/files/?refresh_status=1" : "/files/")),
     ]);
-    if (local.status === "fulfilled") {
-      // Imported/legacy G-code may have an encrypted on-disk filename; use
-      // the database category rather than a filename extension filter.
-      setFiles((local.value.rows || []).filter(f => f.category === "gcode"));
-    } else {
-      setError("MakerVault file list unavailable: " + local.reason.message);
+    const libraryFiles = local.status === "fulfilled"
+      ? (local.value.rows || []).filter(f => f.category === "gcode")
+      : [];
+    const pendingFiles = privateSlices.status === "fulfilled"
+      ? (privateSlices.value.jobs || [])
+        .filter(job => job.status === "completed" && !job.gcode_in_library && job.output_asset?.id)
+        .map(job => ({
+          ...job.output_asset,
+          category: "other",
+          privateSlice: true,
+          project: "Private sliced output",
+        }))
+      : [];
+    const knownIds = new Set(libraryFiles.map(file => String(file.id)));
+    const allFiles = [...libraryFiles];
+    for (const file of pendingFiles) {
+      if (!knownIds.has(String(file.id))) {
+        knownIds.add(String(file.id));
+        allFiles.push(file);
+      }
+    }
+    setFiles(allFiles);
+    if (local.status === "rejected" && privateSlices.status === "rejected") {
+      setError("MakerVault G-code sources unavailable: " + local.reason.message);
+    } else if (local.status === "rejected") {
+      setNotice("Saved G-code library could not be loaded; private slices remain available.");
+    } else if (privateSlices.status === "rejected") {
+      setNotice("Private slicing jobs could not be loaded; saved G-code remains available.");
     }
     if (remote.status === "fulfilled") {
       setRemoteFiles(remote.value.rows || []);
@@ -306,9 +330,9 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
         <label>MakerVault file<select value={assetId} onChange={e => setAssetId(e.target.value)}>
           <option value="">Choose a G-code file…</option>
           {initialAsset && !files.some(f => String(f.id) === String(initialAsset.id)) && <option value={initialAsset.id}>{initialAsset.name} · selected G-code</option>}
-          {files.map(f => <option value={f.id} key={f.id}>{f.name} · {f.project || "Standalone"}</option>)}
+          {files.map(f => <option value={f.id} key={f.id}>{f.name} · {f.privateSlice ? "Private slice (not in library)" : (f.project || "Standalone")}</option>)}
         </select></label>
-        {!files.length && !initialAsset && <p role="status">No saved G-code files were returned from the MakerVault library. Check the G-code Library or upload a new file.</p>}
+        {!files.length && !initialAsset && <p role="status">No library G-code or completed private slices were returned. Check the G-code Library and slicing jobs.</p>}
       </>}
       {source === "printer" && <>
         <label>Printer storage<select value={remotePath} onChange={e => setRemotePath(e.target.value)}>
