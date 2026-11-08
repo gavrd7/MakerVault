@@ -1018,6 +1018,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           {({
   nozzle_diameter: "Nozzle diameter (mm)",
   retract_length: "Retraction length (mm)",
+  retraction_distances_when_cut: "Long retraction when cutting filament (mm)",
   nozzle_temperature: "Nozzle temperature (°C)",
   hot_plate_temp: "Smooth plate temperature (°C)",
   cool_plate_temp: "Cool plate temperature (°C)",
