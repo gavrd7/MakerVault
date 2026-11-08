@@ -160,12 +160,18 @@ export default function SlicerPlateEditor({
       setArrangeNotice("");
       setError(result.error + " Existing models were left unchanged.");
     } else {
-      const previous = objects.filter(item => !pendingAddIdsRef.current.has(item.instance_id));
+      // A failed packing heuristic is not grounds for deleting the imported
+      // mesh. Keep the object selectable and report its measured XY envelope.
+      const sizes = objects.map(item => {
+        const d = dimensions[item.instance_id];
+        const name = sourceFiles.find(f => String(f.id) === String(item.asset_id))?.name || "Model";
+        return d ? name + " (" + pretty(d.width) + " × " + pretty(d.depth) + " mm)" : name;
+      });
       pendingAddIdsRef.current.clear();
-      onChange(previous);
-      if (!previous.length) onPrimaryChange?.("");
-      setSelected(previous[0]?.instance_id || "");
-      setError(result.error + " The newly added models were not placed; adjust the plate or try fewer models.");
+      setArrangeNotice("");
+      setError(result.error + " Models were kept on the plate for inspection. " +
+        "Measured footprints: " + sizes.join("; ") +
+        ". Available plate: " + pretty(bedX) + " × " + pretty(bedY) + " mm.");
     }
   }, [objectKey, dimensions, bedX, bedY]);
 
