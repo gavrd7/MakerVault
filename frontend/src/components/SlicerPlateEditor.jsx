@@ -158,6 +158,20 @@ export default function SlicerPlateEditor({
     setError("");
   }
 
+  function duplicateSelected() {
+    if (!chosen || objects.length >= MAX_OBJECTS) return;
+    // A duplicate must retain orientation, colour and individual XYZ scale.
+    // Assign a new instance identity, then arrange after its mesh is measured.
+    const copy = { ...chosen, instance_id: plateUuid() };
+    if (Array.isArray(chosen.scale_xyz_percent))
+      copy.scale_xyz_percent = [...chosen.scale_xyz_percent];
+    pendingArrangeRef.current = true;
+    pendingAddIdsRef.current.add(copy.instance_id);
+    onChange([...objects, copy]);
+    setSelected(copy.instance_id);
+    setError("");
+  }
+
   function removeSelected() {
     if (!chosen) return;
     const remaining = objects.filter(item => item.instance_id !== chosen.instance_id);
@@ -529,7 +543,7 @@ export default function SlicerPlateEditor({
         </select>
       </label>
       <button data-slicer-action="remove" type="button" disabled={!canEdit || !chosen} onClick={removeSelected}>Remove selected model</button>
-      <button data-slicer-action="duplicate" type="button" disabled={!canEdit || !chosen || objects.length >= MAX_OBJECTS} onClick={() => addAsset(chosen.asset_id)}>Duplicate selected</button>
+      <button data-slicer-action="duplicate" type="button" disabled={!canEdit || !chosen || objects.length >= MAX_OBJECTS} onClick={duplicateSelected}>Duplicate selected</button>
     </div>}
 
     {objects.length > 0 && <div className="formGrid slicerPlateTransformFields">
