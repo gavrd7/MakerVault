@@ -312,6 +312,30 @@ class SliceJobApiTests(TestCase):
         self.assertEqual(job.settings["plate_objects"][0]["scale_xyz_percent"], [150.0, 50.0, 200.0])
         self.assertEqual(job.settings["plate_objects"][0]["scale_percent"], 100.0)
 
+    def test_workflow_mode_persists_and_rejects_invalid_values(self):
+        self.client.force_login(self.owner)
+        for workflow in ("setup", "quick", "interactive"):
+            with self.subTest(workflow=workflow):
+                response = self.post({
+                    **self.payload, "settings": {"workflow": workflow}
+                })
+                self.assertEqual(response.status_code, 201, response.content)
+                job = SliceJob.objects.get(pk=response.json()["job"]["id"])
+                self.assertEqual(job.settings["workflow"], workflow)
+        for workflow in ("background", 10, [], {}, None):
+            with self.subTest(invalid=workflow):
+                response = self.post({
+                    **self.payload, "settings": {"workflow": workflow}
+                })
+                self.assertEqual(response.status_code, 400, response.content)
+        # Existing clients without an explicit workflow remain editable in
+        # the interactive flow, with no automatic library promotion.
+        legacy = self.post()
+        self.assertEqual(legacy.status_code, 201, legacy.content)
+        job = SliceJob.objects.get(pk=legacy.json()["job"]["id"])
+        self.assertEqual(job.settings["workflow"], "interactive")
+        self.assertFalse(job.settings["save_gcode_to_library"])
+
     def test_inert_draft_lifecycle_and_engine_catalogue(self):
         self.client.force_login(self.owner)
         engines = self.client.get("/api/printing/slicer/engines/")
