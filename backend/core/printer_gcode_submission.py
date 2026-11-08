@@ -370,24 +370,41 @@ def _verify_creality_upload(connection, remote_path, expected_size):
     for source in moonraker_sources:
         if _online(source):
             return _verify_moonraker_upload(source, remote_path, expected_size)
-    try:
-        from .creality_gcode import CrealityGcodeError, list_files
-        rows = list_files(connection)
-    except (CrealityGcodeError, OSError, ValueError) as exc:
-        raise GcodeSubmissionError(
-            "Native Creality upload was accepted, but printer storage could not be "
-            "read back to verify it. Inspect printer files before retrying.", 502
-        ) from exc
-    matches = [row for row in rows if row.get("path") == remote_path]
-    if len(matches) != 1 or type(matches[0].get("size_bytes")) is not int or (
-        matches[0]["size_bytes"] != expected_size
-    ):
-        raise GcodeSubmissionError(
-            "Native Creality upload outcome is uncertain: printer storage did not "
-            "confirm exactly one matching filename and byte size. Do not retry "
-            "without inspecting printer storage.", 502
-        )
-    return matches[0]
+    from .creality_gcode import CrealityGcodeError, list_files
+    # Some stock K1 firmware revisions update the native storage index
+    # asynchronously after HTTP acceptance. Allow brief, read-only probes,
+    # but never repeat the upload or issue a print-start command.
+    import time
+    observations = set()
+    last_error = None
+    for attempt in range(3):
+        if attempt:
+            time.sleep(1)
+        try:
+            rows = list_files(connection)
+        except (CrealityGcodeError, OSError, ValueError) as exc:
+            observations.add("unavailable")
+            last_error = exc
+            continue
+        matches = [row for row in rows if row.get("path") == remote_path]
+        if len(matches) == 1 and type(matches[0].get("size_bytes")) is int:
+            if matches[0]["size_bytes"] == expected_size:
+                return matches[0]
+            observations.add("size-mismatch")
+        elif len(matches) > 1:
+            observations.add("ambiguous-duplicate")
+        elif matches:
+            observations.add("size-not-reported")
+        else:
+            observations.add("not-listed")
+    # Do not include file names, URLs, paths or raw firmware responses in
+    # receipts; these are bounded status categories only.
+    reasons = ", ".join(sorted(observations)) or "unknown"
+    raise GcodeSubmissionError(
+        "Native Creality HTTP upload was accepted, but K1 storage verification "
+        "remains uncertain (" + reasons + "). No print-start command was issued. "
+        "Inspect the printer's own files before retrying.", 502
+    ) from last_error
 
 def inspect_printer_file(connection, remote_path):
     """Optional, bounded, read-only G-code inspection over an existing Moonraker API.
