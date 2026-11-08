@@ -35,7 +35,7 @@ const GROUPS = ["Quality", "Strength", "Speed", "Supports", "Multifilament", "Ot
 export default function SlicerPrepareWorkspace({
   objects, onChange, files, plate, onPrimaryChange, onFilesUploaded,
   defaultColor, onManualColorChange, canEdit, busy, error, notice,
-  onBackToSetup, onSaveDraft, onSlice, onSaveAndSlice, engine, printer,
+  onBackToSetup, onSaveDraft, onSlice, engine, printer,
   selectedProfiles, workerConfigured,
 }) {
   const editorRef = useRef(null);
@@ -186,9 +186,8 @@ export default function SlicerPrepareWorkspace({
       </div>
       <div className="settingsActions">
         <button type="button" disabled={!plateReady} onClick={onSaveDraft}>Save draft</button>
-        <button type="button" disabled={!plateReady || !workerConfigured} onClick={onSlice}>Slice</button>
         <button type="button" className="primary" disabled={!plateReady || !workerConfigured}
-          onClick={onSaveAndSlice}>Save and slice</button>
+          onClick={onSlice}>Slice and preview</button>
       </div>
     </div>
   </section>;
