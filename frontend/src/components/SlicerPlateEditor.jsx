@@ -56,6 +56,7 @@ export default function SlicerPlateEditor({
   exitToolModeRef.current = onExitToolMode;
   const dimensionsRef = useRef({});
   const pendingArrangeRef = useRef(false);
+  const pendingManualArrangeRef = useRef(false);
   const pendingAddIdsRef = useRef(new Set());
   latestObjectsRef.current = objects;
   latestOnChangeRef.current = onChange;
@@ -103,6 +104,13 @@ export default function SlicerPlateEditor({
     })));
 
   function arrangeModels(items = objects, announce = true) {
+    if (items.some(item => !dimensionsRef.current[item.instance_id])) {
+      pendingArrangeRef.current = true;
+      pendingManualArrangeRef.current = true;
+      setArrangeNotice("Measuring models before auto-arranging…");
+      setError("");
+      return false;
+    }
     const result = autoArrangePlate(items, dimensionsRef.current, bedX, bedY, 5);
     if (result.error) {
       if (announce) { setError(result.error); setArrangeNotice(""); }
@@ -135,12 +143,21 @@ export default function SlicerPlateEditor({
     if (!pendingArrangeRef.current || !objects.length) return;
     if (objects.some(item => !dimensions[item.instance_id])) return;
     pendingArrangeRef.current = false;
+    const wasManual = pendingManualArrangeRef.current;
+    pendingManualArrangeRef.current = false;
     const result = autoArrangePlate(objects, dimensions, bedX, bedY, 5);
     if (result.objects) {
       pendingAddIdsRef.current.clear();
       onChange(result.objects);
       setSelected("");
       setError("");
+      if (wasManual) setArrangeNotice(objects.length === 1
+        ? "Single model centred on the build plate."
+        : "Models arranged with 5 mm clearance.");
+    } else if (wasManual || pendingAddIdsRef.current.size === 0) {
+      pendingAddIdsRef.current.clear();
+      setArrangeNotice("");
+      setError(result.error + " Existing models were left unchanged.");
     } else {
       const previous = objects.filter(item => !pendingAddIdsRef.current.has(item.instance_id));
       pendingAddIdsRef.current.clear();
