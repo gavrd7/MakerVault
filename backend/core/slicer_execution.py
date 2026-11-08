@@ -252,6 +252,7 @@ def process_queued_job(job_id):
         stage = "resolving native slicing profiles"
         profiles = []
         for kind in ("printer", "filament", "process"):
+            stage = "resolving native " + kind + " profile"
             profile = getattr(job, f"{kind}_profile")
             data = _read_owned_file(profile.file_asset, job.owner_id, MAX_PROFILE, "Native profile")
             if hashlib.sha256(data).hexdigest() != profile.content_sha256:
