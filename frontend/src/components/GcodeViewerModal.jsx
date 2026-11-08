@@ -4,7 +4,7 @@ import { Modal } from "./Common";
 import PrinterStartGcodeModal from "./PrinterStartGcodeModal";
 
 // Read-only analysis is evidence, not proof of safe G-code or firmware compatibility.
-export default function GcodeViewerModal({ file, canEdit = false, onClose, onSaved, onOpenModel }) {
+export default function GcodeViewerModal({ file, canEdit = false, onClose, onSaved, onOpenModel, embedded = false }) {
   const [report, setReport] = useState(null);
   const [text, setText] = useState("");
   const [mode, setMode] = useState("visual");
@@ -86,31 +86,32 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
 
   const analysis = report?.analysis || {};
   const bounds = analysis.bounds_mm || {};
-  if (transfer) return <PrinterStartGcodeModal
+  if (transfer && !embedded) return <PrinterStartGcodeModal
     printer={transfer.printer} connection={transfer.connection} canEdit
     initialAsset={file}
     onClose={() => setTransfer(null)}
   />;
 
-  return <Modal title={`G-code · ${file.name}`} subtitle="Read-only analysis. A matching printer must be verified separately before uploading or printing." onClose={onClose} wide>
+  const content = <>
+    {embedded && <h3>G-code preview · {file.name}</h3>}
     {error && <div className="formError">{error}</div>}
     {loading ? <p>Inspecting G-code…</p> : report && <>
       <div className="formActions" style={{ justifyContent: "flex-start" }}>
         <button type="button" className={mode === "visual" ? "primary" : ""} onClick={() => setMode("visual")}>Visual toolpath</button>
         <button type="button" className={mode === "code" ? "primary" : ""} onClick={() => setMode("code")}>G-code text</button>
-        <a className="assetButton" href={file.url}>Download original</a>
+        {!embedded && file.url && <a className="assetButton" href={file.url}>Download original</a>}
       </div>
       <p><strong>Linked model:</strong> {report.linked_models?.length
         ? report.linked_models.map(link => <button key={link.revision_id} type="button" onClick={() => onOpenModel?.(link.model_id)} disabled={!onOpenModel}>{link.model_name} · revision {link.revision}</button>)
         : "Not linked — attach this file to a model revision in Model Library."}</p>
-      <label>Check against a MakerVault printer
+      {!embedded && <label>Check against a MakerVault printer
         <select value={printerId} onChange={e => choosePrinter(e.target.value)}>
           <option value="">Choose printer for advisory compatibility check</option>
           {(report.printers || []).map(printer => <option value={printer.id} key={printer.id}>{printer.name} · {printer.model}</option>)}
         </select>
-      </label>
-      {checkingPrinter && <p>Checking explicit printer metadata…</p>}
-      {printerCheck && <p role="status"><strong>{printerCheck.status === "mismatch" ? "Printer mismatch — block printing" : printerCheck.status === "metadata_match" ? "Printer metadata matches (not safety-verified)" : "Printer compatibility unknown — do not start"}:</strong> {printerCheck.reason}</p>}
+      </label>}
+      {!embedded && checkingPrinter && <p>Checking explicit printer metadata…</p>}
+      {!embedded && printerCheck && <p role="status"><strong>{printerCheck.status === "mismatch" ? "Printer mismatch — block printing" : printerCheck.status === "metadata_match" ? "Printer metadata matches (not safety-verified)" : "Printer compatibility unknown — do not start"}:</strong> {printerCheck.reason}</p>}
       <p><strong>Intended printer:</strong> {analysis.printer_hints?.join(", ") || "Unknown — no verified printer metadata"}</p>
       {analysis.slicer_hints?.length > 0 && <p><strong>Slicer:</strong> {analysis.slicer_hints.join(", ")}</p>}
       <p><strong>Sliced nozzle:</strong> {analysis.print_setup?.nozzle_diameters_mm?.length
@@ -132,15 +133,18 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
           <small>Original G-code is retained. Always revalidate edited instructions before printing.</small>
         </>}
       </div>}
-      <div className="settingsCallout">
+      {!embedded && <div className="settingsCallout">
         <strong>Send to printer</strong>
         <p>Use the selected printer to upload this original G-code file. Upload only is the default; starting a print requires separate confirmation and available printer capabilities.</p>
         {edited && <p>Unsaved editor changes will not be sent. Save a new file version and inspect it before sending.</p>}
         <button type="button" className="primary" disabled={!printerId || !printerCheck || checkingPrinter || findingConnection || edited || printerCheck.status === "mismatch"} onClick={sendToPrinter}>
           {findingConnection ? "Checking printer connection…" : "Send to printer"}
         </button>
-      </div>
+      </div>}
     </>}
-    <div className="formActions"><button type="button" onClick={onClose}>Close</button></div>
-  </Modal>;
+    {!embedded && <div className="formActions"><button type="button" onClick={onClose}>Close</button></div>}
+  </>;
+  return embedded ? content : <Modal title={`G-code · ${file.name}`}
+    subtitle="Read-only analysis. A matching printer must be verified separately before uploading or printing."
+    onClose={onClose} wide>{content}</Modal>;
 }
