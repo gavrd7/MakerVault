@@ -1158,7 +1158,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             </button>
           </div>
         </form>
-        <div className="full settingsActions"><button type="button" onClick={() => { setProfileModal("import"); setOfficialError(""); }}>Import native profile file instead</button></div>
+        <div className="full settingsActions slicerOfficialImportAlternative"><button type="button" onClick={() => { setProfileModal("import"); setOfficialError(""); }}>Import native profile file instead</button></div>
         {officialError && <p className="integrationError" role="alert">{officialError}</p>}
         {officialImportNotice && <p role="status" className="slicerProfileImportNotice">{officialImportNotice}</p>}
         {officialResults && <div className="printingStack" role="region" aria-label="Official profile search results">
@@ -1218,12 +1218,12 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     </Modal>}
     {profileModal === "saved" && <Modal title="Saved slicer profiles" onClose={() => setProfileModal("")} wide>
       <p>Profiles for the selected engine. Native parent presets are hidden from everyday selection and retained automatically for inherited profiles.</p>
-      <div className="settingsActions">
+      <div className="settingsActions slicerSavedProfileToolbar">
         <button type="button" onClick={() => setManagingSavedProfiles(current => !current)}>
-          <ProfileActionIcon name="settings" />{managingSavedProfiles ? "Done managing" : "Manage"}
+          <ProfileActionIcon name="settings" /><span>{managingSavedProfiles ? "Done managing" : "Manage"}</span>
         </button>
         {managingSavedProfiles && <button type="button" onClick={() => setProfileModal("import")}>
-          <ProfileActionIcon name="upload" />Import profile
+          <ProfileActionIcon name="upload" /><span>Import profile</span>
         </button>}
         {managingSavedProfiles && <label className="checkRow slicerDependencyToggle">
           <input type="checkbox" checked={showProfileDependencies}
