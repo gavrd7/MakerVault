@@ -198,7 +198,7 @@ def prepare_orca():
     _save_env(env)
     print("Candidate OrcaSlicer image staged with pinned image ID and binary digest.")
     print("Run: python3 scripts/install_slicer_staging.py enable")
-    print("Engine health alone does not validate real slicing; use GUI Test slice and approve.")
+    print("Engine health alone does not validate real slicing; select native profiles and run a test slice.")
 
 
 def enable():
@@ -215,8 +215,8 @@ def enable():
     _run(_compose_args() + ["config", "--quiet"])
     _run(_compose_args() + ["up", "-d", "--build"])
     _run(_compose_args() + ["ps", "makervault", "slicer-worker"])
-    print("Worker identity gate enabled; actual slicing remains locked until the")
-    print("administrator selects three compatible native profiles and passes Test slice and approve.")
+    print("Verified worker identity gate enabled; slicing requires compatible native")
+    print("printer, filament and process profiles with intact parent dependencies.")
 
 
 def disable():
@@ -233,7 +233,7 @@ def disable():
 def status():
     text = _read_env()
     enabled = "MAKERVAULT_SLICER_EXECUTION_ENABLED=1" in text
-    print("Slicing execution: " + ("enabled, subject to native profile approval" if enabled else "disabled"))
+    print("Slicing execution: " + ("enabled, subject to native profile integrity checks" if enabled else "disabled"))
     _run(_compose_args() + ["ps", "makervault", "slicer-worker"])
 
 
