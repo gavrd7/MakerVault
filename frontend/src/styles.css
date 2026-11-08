@@ -4193,3 +4193,42 @@ a:focus-visible,
   .slicerWorkbenchTop>.panel{padding:18px}
   .slicerWorkbenchTop .slicerSelectedProfiles label{grid-template-columns:minmax(0,1fr)}
 }
+
+/* Saved slicer profiles: align icon/text as a real button flex row, rather
+   than inheriting global settingsActions button styles and inline SVG baseline. */
+.slicerSavedProfileToolbar{
+  display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;
+  gap:12px;margin:16px 0 22px;
+}
+.slicerSavedProfileToolbar>button{
+  display:inline-flex;flex:0 0 auto;align-items:center;justify-content:center;
+  gap:10px;min-height:44px;max-width:100%;line-height:1.3;
+  white-space:normal;
+}
+.slicerSavedProfileToolbar>button>svg{
+  display:block;flex:0 0 18px;width:18px;height:18px;
+  align-self:center;vertical-align:middle;
+}
+.slicerSavedProfileToolbar>button>span{
+  display:block;line-height:1.3;
+}
+.slicerSavedProfileToolbar>.slicerDependencyToggle{
+  display:inline-flex;align-items:center;gap:10px;min-height:44px;
+  min-width:0;max-width:100%;width:auto;margin:0;padding:0;
+  line-height:1.4;
+}
+.slicerSavedProfileToolbar>.slicerDependencyToggle>input[type="checkbox"]{
+  display:block;flex:0 0 18px;width:18px;height:18px;min-width:18px;
+  max-width:18px;margin:0;align-self:center;
+}
+.slicerSavedProfileToolbar>.slicerDependencyToggle>span{
+  display:block;min-width:0;line-height:1.4;
+}
+/* Keep native profile-file alternative separated from the official search
+   submit button even though these are separate form/action containers. */
+.slicerOfficialImportAlternative{margin:20px 0 22px;gap:12px}
+@media(max-width:700px){
+  .slicerSavedProfileToolbar{display:flex!important;flex-direction:column;align-items:stretch}
+  .slicerSavedProfileToolbar>button{width:100%;justify-content:center}
+  .slicerSavedProfileToolbar>.slicerDependencyToggle{width:100%}
+}
