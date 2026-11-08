@@ -166,6 +166,18 @@ export default function SlicerPrepareWorkspace({
     }
   }
   const plateReady = canEdit && !!objects.length && !busy;
+  const profilesReady = ["printer", "process", "filament"].every(
+    kind => selectedProfiles?.[kind + "_id"]);
+  const draftBlockReason = !canEdit
+    ? "Your account cannot prepare slicing drafts."
+    : busy ? "The slicer is still loading or processing a request."
+    : !objects.length ? "Add a model to the build plate first."
+    : !profilesReady ? "Select native printer, process and filament profiles in Slicer setup."
+    : "";
+  const sliceBlockReason = draftBlockReason ||
+    (!workerConfigured
+      ? "The selected slicing engine is not available in the verified worker. Check engine installations or choose an installed engine."
+      : "");
   return <section className="panel printingSection slicerPrepareWorkspace"
     aria-label="Interactive slicer Prepare workspace">
     <div className="slicerPrepareHeader">
@@ -279,10 +291,22 @@ export default function SlicerPrepareWorkspace({
       <div aria-live="polite">
         {error && <p role="alert" className="integrationError">{error}</p>}
         {notice && <p role="status">{notice}</p>}
+        {!draftBlockReason && !error && <p className="slicerActionStatus">
+          Draft ready to save. Saving a draft does not require a slicing worker.
+        </p>}
+        {draftBlockReason && <p className="slicerActionStatus" role="status">
+          <strong>Draft unavailable:</strong> {draftBlockReason}
+          {!busy && canEdit && !!objects.length && !profilesReady &&
+            <button type="button" onClick={onChangeProfiles}>Choose profiles</button>}
+        </p>}
+        {!draftBlockReason && sliceBlockReason && <p className="slicerActionStatus" role="status">
+          <strong>Slicing unavailable:</strong> {sliceBlockReason}
+          <button type="button" onClick={onChangeProfiles}>Check profiles and engine</button>
+        </p>}
       </div>
       <div className="settingsActions">
-        <button type="button" disabled={!plateReady} onClick={onSaveDraft}>Save draft</button>
-        <button type="button" className="primary" disabled={!plateReady || !workerConfigured}
+        <button type="button" disabled={!plateReady || !profilesReady} onClick={onSaveDraft}>Save draft</button>
+        <button type="button" className="primary" disabled={!plateReady || !profilesReady || !workerConfigured}
           onClick={onSlice}>Slice and preview</button>
       </div>
     </div>
