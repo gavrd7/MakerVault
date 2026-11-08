@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
+import { threeMfGeometryToStl, MAX_3MF_IMPORT_BYTES } from "./slicer3mfGeometry";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 import { apiFetch } from "../api";
@@ -235,16 +236,24 @@ export default function SlicerPlateEditor({
       setError("Maximum twelve models per build plate.");
       return;
     }
-    if (imports.some(file => !/\.stl$/i.test(file.name) || !file.size || file.size > MAX_FILE_BYTES)) {
-      setError("Choose nonempty STL files below 32 MiB each.");
+    if (imports.some(file => !/\.(stl|3mf)$/i.test(file.name) || !file.size ||
+      file.size > (/\.3mf$/i.test(file.name) ? MAX_3MF_IMPORT_BYTES : MAX_FILE_BYTES))) {
+      setError("Choose STL files below 32 MiB or 3MF files below 16 MiB.");
       return;
     }
     setUploadBusy(true);
     setError("");
     const additions = [];
     const previews = [];
+    let imported3mfCount = 0;
     try {
-      for (const file of imports) {
+      for (const original of imports) {
+        // Geometry-only conversion uses the same owner-scoped STL upload
+        // endpoint as normal imports; native project settings are not retained.
+        const converted = /\.3mf$/i.test(original.name)
+          ? await threeMfGeometryToStl(original) : null;
+        const file = converted?.file || original;
+        if (converted) imported3mfCount += 1;
         const form = new FormData();
         form.append("file", file);
         if (saveImports) {
@@ -272,6 +281,12 @@ export default function SlicerPlateEditor({
         onChange([...objects, ...additions]);
         if (!objects.length) onPrimaryChange?.(additions[0].asset_id);
         setSelected(additions[0].instance_id);
+        if (imported3mfCount) {
+          setArrangeNotice(imported3mfCount + " 3MF project" +
+            (imported3mfCount === 1 ? "" : "s") +
+            " imported as flattened STL geometry. Part positions within each project are retained, " +
+            "but native 3MF settings, material painting, and separate part editing are not imported.");
+        }
         if (saveImports) {
           try { await onFilesUploaded?.(); }
           catch { setError("Models were saved but the Files list could not refresh."); }
@@ -602,13 +617,13 @@ export default function SlicerPlateEditor({
       <div className="settingsActions">
         <button type="button" onClick={() => addAsset(assetChoice)} disabled={!canEdit || !assetChoice || uploadBusy || objects.length >= MAX_OBJECTS}>Add STL to plate</button>
       </div>
-      <label className="full">Add STL files from your device
-        <input type="file" accept=".stl" multiple onChange={uploadFiles} disabled={!canEdit || uploadBusy || objects.length >= MAX_OBJECTS} />
+      <label className="full">Add STL or 3MF files from your device
+        <input type="file" accept=".stl,.3mf" multiple onChange={uploadFiles} disabled={!canEdit || uploadBusy || objects.length >= MAX_OBJECTS} />
       </label>
       <label className="full checkRow slicerPlateSaveImports"><input type="checkbox" checked={saveImports} onChange={event => setSaveImports(event.target.checked)} disabled={!canEdit || uploadBusy} />
         <span>Also save imported models to MakerVault Files</span>
       </label>
-      <p className="full slicerPlateHint">Unchecked: source STLs are retained privately for slicing and saved drafts, without appearing in MakerVault Files.</p>
+      <p className="full slicerPlateHint">3MF import loads geometry as one STL object per project (no native materials or editable part tree). Unchecked: imported meshes are retained privately for slicing and saved drafts, without appearing in MakerVault Files.</p>
     </div>
 
         </div>
