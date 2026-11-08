@@ -152,6 +152,7 @@ class PrinterControlApiTests(TestCase):
         from core.printer_controls import control_availability
         for state in ("self-testing", "processing"):
             with self.subTest(state=state):
+                PrinterControlRequest.objects.all().delete()
                 self.snapshot = {**self.snapshot, "state": state}
                 self.connection.last_snapshot = self.snapshot
                 self.connection.save(update_fields=["last_snapshot"])
