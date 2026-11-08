@@ -19,6 +19,7 @@ from .slicer_engines import engine_catalogue, get_engine
 from .slicer_profiles import SlicerProfileError, inspect_native_profile
 from .slicer_profile_edit import SETTINGS as EDITABLE_PROFILE_SETTINGS, customise_native_json
 from .slicer_profile_lineage import inspect_orca_lineage
+from .slicer_native_resolution import resolved_native_profile
 from .slicer_mesh import inspect_stl, MeshInspectionError, MAX_INSPECTION_BYTES
 from .slicer_bed import inspect_orca_plate, inspect_creality_plate
 from .slicer_official_chain import official_profile_chain
@@ -617,14 +618,52 @@ def official_profiles(request):
     }, status=201)
 
 
+def _native_parent_ids(rows):
+    """Find managed dependency presets referenced by another native profile.
+
+    Only a verified source hash can declare a dependency. Malformed sources
+    are left visible for manual inspection, never treated as a valid parent.
+    """
+    by_identity = {(row.owner_id, row.engine, row.engine_version,
+                    row.kind, row.name): row.pk for row in rows}
+    parent_ids = set()
+    for row in rows:
+        if row.engine not in {"orcaslicer", "crealityprint"}:
+            continue
+        try:
+            with row.file_asset.file.open("rb") as stream:
+                raw = stream.read(1024 * 1024 + 1)
+            if not raw or len(raw) > 1024 * 1024:
+                continue
+            if hashlib.sha256(raw).hexdigest() != row.content_sha256:
+                continue
+            source = json.loads(raw.decode("utf-8-sig"))
+            if not isinstance(source, dict):
+                continue
+            parent = source.get("inherits")
+            if isinstance(parent, str):
+                identity = (row.owner_id, row.engine, row.engine_version,
+                            row.kind, parent)
+                found = by_identity.get(identity)
+                if found:
+                    parent_ids.add(found)
+        except (OSError, ValueError, UnicodeError, AttributeError):
+            continue
+    return parent_ids
+
+
 @login_required
 @require_http_methods(["GET", "POST"])
 def profiles(request):
     if request.method == "GET":
-        rows = SlicerProfile.objects.filter(owner=request.user).order_by(
-            "engine", "kind", "name"
-        )[:500]
-        return JsonResponse({"profiles": [_profile_summary(row) for row in rows]})
+        rows = list(SlicerProfile.objects.filter(owner=request.user).select_related(
+            "file_asset"
+        ).order_by("engine", "kind", "name")[:500])
+        parent_ids = _native_parent_ids(rows)
+        return JsonResponse({"profiles": [
+            {**_profile_summary(row), "is_dependency": row.pk in parent_ids}
+            for row in rows
+        ]})
 
     if not request.user.has_perm("core.add_fileasset"):
         return _error("You do not have permission to import slicing profiles.", 403)
@@ -680,8 +719,7 @@ def customise_profile(request, profile_id):
         current = {}
         available = {}
         try:
-            with profile.file_asset.file.open("rb") as source:
-                raw = source.read(1024 * 1024 + 1)
+            raw = resolved_native_profile(profile)
             properties = json.loads(raw.decode("utf-8-sig"))
             if not isinstance(properties, dict):
                 raise ValueError("Unsupported native profile.")
@@ -721,8 +759,10 @@ def customise_profile(request, profile_id):
             engine_version=profile.engine_version, kind=profile.kind, name=name
         ).exists():
             return _error("Choose a unique name for the custom profile.", 409)
-        with profile.file_asset.file.open("rb") as source:
-            original = source.read(1024 * 1024 + 1)
+        # Start from the fully inherited, hash-validated native profile.
+        # The new custom profile is flattened and has no 'inherits' link,
+        # so it remains usable even when imported parent records change.
+        original = resolved_native_profile(profile)
         edited = customise_native_json(original, profile.kind, name, data["settings"])
         asset = FileAsset(
             owner=request.user, name=name + ".json", category="source",
