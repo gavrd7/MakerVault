@@ -141,6 +141,9 @@ export default function SlicerPrepareWorkspace({
     ?.name || "STL model";
   function selectTool(tool) {
     if (tool.target === "x_mm" || tool.target === "rotation_deg") {
+      // Selecting a handle-based tool should show its gizmo immediately,
+      // including for the first model before it has been explicitly clicked.
+      if (!selectedId && objects[0]?.instance_id) setSelectedId(objects[0].instance_id);
       setToolMode(tool.target === "x_mm" ? "move" : "rotate");
       return;
     }
