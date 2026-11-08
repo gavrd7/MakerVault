@@ -10,6 +10,7 @@ import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import BoundedSemaphore, Thread
 import json
+import logging
 import os
 from pathlib import Path
 from functools import lru_cache
@@ -22,6 +23,8 @@ from .creality_runner import run_creality
 from .engine_registry import configured_engines
 from .three_mf_validation import validate_worker_3mf
 
+
+logger = logging.getLogger(__name__)
 
 MAX_REQUEST_BYTES = 48 * 1024 * 1024
 MAX_OUTPUT_BYTES = MAX_GCODE_BYTES
@@ -154,6 +157,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(413, {"error": "Invalid or oversized request."})
         if not SLICE_SLOT.acquire(blocking=False):
             return self._json(429, {"error": "Worker is already processing a slice."})
+        stage = "validating request"
         try:
             self.connection.settimeout(30)
             request = json.loads(self.rfile.read(length))
@@ -162,6 +166,7 @@ class Handler(BaseHTTPRequestHandler):
             current = engines.get(request.get("engine"))
             if not current or request.get("engine_version") != current["version"]:
                 raise WorkerError("Requested engine/version is unavailable.")
+            stage = "validating model and profile payloads"
             files = _decode_payload(request)
             with tempfile.TemporaryDirectory(prefix="makervault-slice-") as tmp:
                 workdir = Path(tmp)
@@ -172,10 +177,12 @@ class Handler(BaseHTTPRequestHandler):
                     ("process_profile", "process" + extension),
                 ):
                     (workdir / name).write_bytes(files[field])
+                stage = "running slicer engine"
                 runner = {"orcaslicer": run_orca,
                           "crealityprint": run_creality,
                           "prusaslicer": run_prusa}[current["engine"]]
                 receipt = runner(current["binary"], workdir)
+                stage = "validating generated G-code"
                 data = (workdir / "output.gcode").read_bytes()
                 if not data or len(data) > MAX_OUTPUT_BYTES:
                     raise WorkerError("Generated G-code exceeded the output size limit.")
@@ -184,10 +191,21 @@ class Handler(BaseHTTPRequestHandler):
                     "sha256": hashlib.sha256(data).hexdigest(),
                     "gcode": base64.b64encode(data).decode("ascii"),
                 })
-        except (ValueError, UnicodeDecodeError, json.JSONDecodeError, WorkerError):
-            return self._json(422, {"error": "Slicing input or output was rejected."})
-        except OSError:
-            return self._json(500, {"error": "Worker failed to process the slicing job."})
+        except (ValueError, UnicodeDecodeError, json.JSONDecodeError, WorkerError) as exc:
+            # Only report a bounded diagnostic category, never command output,
+            # profile JSON, private paths, bearer tokens or source filenames.
+            logger.warning("Isolated slicer rejected job at %s (%s)", stage,
+                           type(exc).__name__)
+            return self._json(422, {
+                "error": "Slicing input or output was rejected.",
+                "stage": stage,
+            })
+        except OSError as exc:
+            logger.exception("Isolated slicer filesystem failure at %s", stage)
+            return self._json(500, {
+                "error": "Worker failed to process the slicing job.",
+                "stage": stage,
+            })
         finally:
             SLICE_SLOT.release()
 
