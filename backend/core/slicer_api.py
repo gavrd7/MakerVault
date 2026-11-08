@@ -783,6 +783,40 @@ def set_default_profile(request, profile_id):
     return JsonResponse({"profile": _profile_summary(profile), "default": profile.is_default})
 
 
+def _profile_children(profile):
+    """Find direct native children before deleting a parent registration.
+
+    Native inheritance is by name, not a database foreign key. Restrict to
+    the same account, engine, version and kind; fail closed on unreadable or
+    modified candidate sources so deletion cannot silently break presets.
+    """
+    candidates = SlicerProfile.objects.filter(
+        owner_id=profile.owner_id, engine=profile.engine,
+        engine_version=profile.engine_version, kind=profile.kind,
+    ).exclude(pk=profile.pk).select_related("file_asset")
+    if candidates.count() > 1000:
+        raise SlicerProfileError("Too many profiles to safely check parent dependencies.")
+    children = []
+    for child in candidates:
+        try:
+            with child.file_asset.file.open("rb") as source:
+                raw = source.read(1024 * 1024 + 1)
+            if not raw or len(raw) > 1024 * 1024:
+                raise ValueError("Profile source length invalid")
+            if hashlib.sha256(raw).hexdigest() != child.content_sha256:
+                raise ValueError("Profile source changed")
+            data = json.loads(raw.decode("utf-8-sig"))
+            if not isinstance(data, dict):
+                raise ValueError("Profile source is not JSON object")
+        except (OSError, ValueError, UnicodeError, AttributeError):
+            raise SlicerProfileError(
+                "Cannot safely inspect all same-engine native profile dependencies."
+            ) from None
+        if data.get("inherits") == profile.name:
+            children.append(child.name)
+    return children
+
+
 @login_required
 @require_http_methods(["DELETE"])
 def delete_profile(request, profile_id):
@@ -796,6 +830,18 @@ def delete_profile(request, profile_id):
     profile = SlicerProfile.objects.filter(pk=profile_id, owner=request.user).first()
     if profile is None:
         return _error("Slicer profile not found.", 404)
+    try:
+        children = _profile_children(profile)
+    except SlicerProfileError as exc:
+        return _error(str(exc) + " Profile was not deleted.", 409)
+    if children:
+        return _error(
+            "This profile is a required native parent of " +
+            ", ".join(children[:3]) +
+            (" and other profiles" if len(children) > 3 else "") +
+            ". Delete or replace its dependent profiles first; the parent was preserved.",
+            409,
+        )
     try:
         profile.delete()
     except ProtectedError:
