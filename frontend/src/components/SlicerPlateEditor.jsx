@@ -45,13 +45,15 @@ export default function SlicerPlateEditor({
   files = [], objects = [], onChange, onPrimaryChange, plate = null,
   canEdit = false, onFilesUploaded, defaultColor = null, onManualColorChange, footer = null,
   selectedInstanceId = null, onSelectedInstanceChange, toolMode = "select",
-  localAssets = [], onLocalAssetsChange,
+  localAssets = [], onLocalAssetsChange, onExitToolMode,
 }) {
   const hostRef = useRef(null);
   const sceneRef = useRef(null);
   const latestObjectsRef = useRef(objects);
   const latestOnChangeRef = useRef(onChange);
   const latestToolModeRef = useRef(toolMode);
+  const exitToolModeRef = useRef(onExitToolMode);
+  exitToolModeRef.current = onExitToolMode;
   const dimensionsRef = useRef({});
   const pendingArrangeRef = useRef(false);
   const pendingAddIdsRef = useRef(new Set());
@@ -69,6 +71,7 @@ export default function SlicerPlateEditor({
   const [saveImports, setSaveImports] = useState(false);
   // Temporary mesh previews belong to the parent workbench, not this view.
   const [error, setError] = useState("");
+  const [arrangeNotice, setArrangeNotice] = useState("");
   const [dimensions, setDimensions] = useState({});
   dimensionsRef.current = dimensions;
   const sourceFiles = useMemo(() => [
@@ -102,13 +105,18 @@ export default function SlicerPlateEditor({
   function arrangeModels(items = objects, announce = true) {
     const result = autoArrangePlate(items, dimensionsRef.current, bedX, bedY, 5);
     if (result.error) {
-      if (announce) setError(result.error);
+      if (announce) { setError(result.error); setArrangeNotice(""); }
       return false;
     }
     onChange(result.objects);
     // Arranging is a plate-wide operation; do not leave the first/last mesh highlighted.
     setSelected("");
-    if (announce) setError("");
+    if (announce) {
+      setError("");
+      setArrangeNotice(items.length === 1
+        ? "Single model centred on the build plate."
+        : "Models arranged with 5 mm clearance. Identical models are kept as separate instances.");
+    }
     return true;
   }
 
@@ -334,7 +342,11 @@ export default function SlicerPlateEditor({
       if (!canEdit || event.button > 0 || transform.dragging) return;
       rayFromPointer(event);
       const hits = raycaster.intersectObjects([...meshes.values()], false);
-      if (!hits.length) return;
+      if (!hits.length) {
+        setSelected("");
+        exitToolModeRef.current?.();
+        return;
+      }
       const target = hits[0].object;
       const location = new THREE.Vector3();
       if (!raycaster.ray.intersectPlane(bedPlane, location)) return;
@@ -542,6 +554,7 @@ export default function SlicerPlateEditor({
     <div ref={hostRef} className="slicerPlateCanvas" aria-label="Interactive three-dimensional model plate preview" />
 
     <p className="slicerPlateHint"><strong>Build plate volume:</strong> {pretty(bedX)} × {pretty(bedY)} mm (X × Y). Drag in 0.5 mm steps or enter coordinates below.</p>
+    {arrangeNotice && <p role="status" className="slicerPlateHint">{arrangeNotice}</p>}
     {extentWarnings.length > 0 && <div role="status" className="integrationError">
       <strong>Preliminary plate-fit warnings</strong>
       <ul>{extentWarnings.map(warning => <li key={warning.id}>{warning.label}: {warning.message}</li>)}</ul>
