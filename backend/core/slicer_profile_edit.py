@@ -15,6 +15,10 @@ SETTINGS = {
     "printer": {
         "nozzle_diameter": (0.1, 2.0),
         "retract_length": (0, 20),
+        # OrcaSlicer 2.4.2 CLI validates this range more narrowly than some
+        # official K2 presets. An explicit custom copy may adjust the value;
+        # never silently mutate the manufacturer preset.
+        "retraction_distances_when_cut": (10, 18),
     },
     "filament": {
         "nozzle_temperature": (100, 350),
