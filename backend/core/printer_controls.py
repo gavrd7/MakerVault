@@ -53,14 +53,20 @@ def control_availability(connection):
     ready = supported and connection.controls_enabled and fresh and bool(job_token(snapshot))
     if (snapshot.get("source_metadata") or {}).get("power_loss_recovery"):
         ready = False
+    # Pre-print checks are part of the active job lifecycle. Stock K2 can
+    # pause awaiting operator confirmation while telemetry still advertises
+    # "self-testing"/"processing" rather than "paused". Allow an explicit
+    # Resume from these states when an identified, fresh job is present.
+    # Do not expose controls for idle, finished or unidentified printer states.
+    preparing = state in {"self-testing", "processing"}
     return {
         "supported": supported,
         "enabled": connection.controls_enabled,
         "job_token": job_token(snapshot) if fresh else "",
         "actions": [action for action in ("pause", "resume", "cancel") if ready and (
-            (action == "pause" and state == "printing")
-            or (action == "resume" and state == "paused")
-            or (action == "cancel" and state in {"printing", "paused"})
+            (action == "pause" and (state == "printing" or preparing))
+            or (action == "resume" and (state == "paused" or preparing))
+            or (action == "cancel" and state in {"printing", "paused", "self-testing", "processing"})
         )],
     }
 
