@@ -43,12 +43,12 @@ test("advanced tools are visibly gated pending safe native transformations", () 
   for (const tool of ["Auto-orient", "Lay on face", "Cut", "Hollow",
                        "Support painting", "Seam painting", "Variable layer height",
                        "Colour painting", "Add plate"]) {
-    assert.match(scene, new RegExp('name: "' + tool + '", pending:'));
+    assert.match(scene, new RegExp('name: "' + tool + '", icon: "[^"]+", pending:'));
   }
   assert.match(scene, /disabled=\{!!tool.pending/);
   for (const group of ["Quality", "Strength", "Speed", "Supports", "Multifilament", "Others"])
     assert.match(scene, new RegExp('"' + group + '"'));
-  assert.match(scene, /Per-object overrides require native engine support/);
+  assert.match(scene, /Object-specific overrides will be available/);
 });
 
 test("independent XYZ scaling updates visual mesh and is selectable from the toolbar", () => {
@@ -88,4 +88,29 @@ test("quick slice remains private and does not expose direct upload/start action
   assert.match(workbench, /save_gcode_to_library: saveOutput, workflow/);
   assert.match(workbench, /previewJob\.settings\?\.workflow !== "quick"/);
   assert.match(workbench, /job\.settings\?\.workflow !== "quick"/);
+});
+
+test("model gizmos and profile switch are accessible without leaving Prepare", () => {
+  const scene = read("SlicerPrepareWorkspace.jsx");
+  const plate = read("SlicerPlateEditor.jsx");
+  const workbench = read("SlicerWorkbench.jsx");
+  assert.match(scene, /toolMode=\{toolMode\}/);
+  assert.match(scene, /onClick=\{onChangeProfiles\}/);
+  assert.match(scene, /Change profiles/);
+  assert.match(scene, /onClick=\{\(\) => setScope\("objects"\)\}>Object</);
+  assert.match(plate, /new TransformControls\(camera, renderer\.domElement\)/);
+  assert.match(plate, /transform\.setTranslationSnap\(0\.5\)/);
+  assert.match(plate, /transform\.setRotationSnap/);
+  assert.match(plate, /validPlacement\(candidate, current\)/);
+  assert.match(workbench, /profileModal === "change"/);
+  assert.match(workbench, /onChangeProfiles=\{\(\) => setProfileModal\("change"\)\}/);
+  assert.match(scene, /SlicerUiIcon name=\{tool\.icon/);
+});
+
+test("live CFS AMS RFID material slots remain read-only until real multi-material slicing", () => {
+  const scene = read("SlicerPrepareWorkspace.jsx");
+  assert.match(scene, /apiFetch\("\/api\/printing\/\?include_filaments=0"\)/);
+  assert.match(scene, /\.filter\(slot => slot\.is_loaded\)/);
+  assert.match(scene, /slot\.spool_code/);
+  assert.match(scene, /native multi-material mapping is implemented/);
 });
