@@ -10,12 +10,14 @@ const read = name => fs.readFileSync(path.join(root, name), "utf8");
 test("setup is retained and a separate interactive Prepare workspace is available", () => {
   const workbench = read("SlicerWorkbench.jsx");
   assert.match(workbench, /Slicer setup/);
-  assert.match(workbench, /Open interactive slicer/);
+  assert.match(workbench, /Slice → Interactive slicer/);
+  assert.match(workbench, /onClick=\{\(\) => saveDraft\("quick"\)\}/);
+  assert.match(workbench, /onClick=\{\(\) => saveDraft\("draft"\)\}/);
   assert.match(workbench, /editorOpen \? <SlicerPrepareWorkspace/);
   assert.match(workbench, /setEditorOpen\(true\)/);
   assert.match(workbench, /onSaveDraft=\{\(\) => saveDraft\("draft"\)\}/);
   assert.match(workbench, /onSlice=\{\(\) => saveDraft\("slice"\)\}/);
-  assert.match(workbench, /onSaveAndSlice=\{\(\) => saveDraft\("save-and-slice"\)\}/);
+  assert.doesNotMatch(workbench, /onSaveAndSlice=/);
 });
 
 test("editor provides actual model tree, undo redo and existing placement operations", () => {
@@ -64,4 +66,26 @@ test("duplicating a selected model preserves every saved transformation", () => 
   assert.match(plate, /copy\.scale_xyz_percent = \[\.\.\.chosen\.scale_xyz_percent\]/);
   assert.match(plate, /pendingArrangeRef\.current = true/);
   assert.match(plate, /onClick=\{duplicateSelected\}>Duplicate selected/);
+});
+
+test("slicer setup offers Save draft / Quick slice / interactive Slice at plate footer", () => {
+  const workbench = read("SlicerWorkbench.jsx");
+  const footer = workbench.indexOf('className="slicerDraftActions settingsActions"');
+  const end = workbench.indexOf('      </>}', footer);
+  const buttons = workbench.slice(footer, end);
+  assert.match(buttons, /Save draft/);
+  assert.match(buttons, /Quick slice/);
+  assert.match(buttons, /Slice → Interactive slicer/);
+  assert.ok(buttons.indexOf("Save draft") < buttons.indexOf("Quick slice"));
+  assert.ok(buttons.indexOf("Quick slice") < buttons.indexOf("Slice → Interactive slicer"));
+  assert.doesNotMatch(workbench.slice(workbench.indexOf('className="slicerSetupHeading"'), workbench.indexOf('className="slicerSetupHeading"') + 250), /Open interactive slicer/);
+  assert.match(buttons, /disabled=\{!canPrepare \|\| busy \|\| loading\}/);
+});
+
+test("quick slice remains private and does not expose direct upload/start actions", () => {
+  const workbench = read("SlicerWorkbench.jsx");
+  assert.match(workbench, /const workflow = mode === "quick" \? "quick"/);
+  assert.match(workbench, /save_gcode_to_library: saveOutput, workflow/);
+  assert.match(workbench, /previewJob\.settings\?\.workflow !== "quick"/);
+  assert.match(workbench, /job\.settings\?\.workflow !== "quick"/);
 });
