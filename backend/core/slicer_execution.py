@@ -276,6 +276,17 @@ def process_queued_job(job_id):
         stage = "validating and storing generated G-code"
         asset = store_generated_gcode(job.pk, output)
         return {"status": "completed", "asset_id": str(asset.pk)}
+    except SlicerWorkerError as exc:
+        # SlicerWorkerError uses fixed, sanitized status/stage/reason values;
+        # unlike arbitrary worker response bodies these are safe in job status.
+        logger.warning("Slicing job %s rejected: %s", job.pk, exc)
+        with transaction.atomic():
+            row = SliceJob.objects.select_for_update().filter(pk=job.pk).first()
+            if row and row.status == "running":
+                row.status = "failed"
+                row.message = str(exc)[:240]
+                row.save(update_fields=["status", "message", "updated_at"])
+        return {"status": "failed"}
     except Exception:
         # Preserve detailed traceback in server logs without exposing raw
         # profile contents, filesystem paths, tokens or worker responses to UI.
