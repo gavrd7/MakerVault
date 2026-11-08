@@ -170,3 +170,19 @@ for review; it does **not** send or start printing or deduct filament stock.
 The visual plate has three separate actions. **Save draft** retains the current configuration and models without running an engine. **Slice** queues slicing and retains the generated G-code with the job until it is explicitly added to the G-code library. **Save and slice** queues slicing and saves its G-code to the library when the job succeeds. None of these actions starts a print.
 
 The checkbox **Also save imported models to MakerVault Files** is optional. If left unchecked, the source STL is stored privately for the slicing job and saved draft, not in the standard Files or model library. Such private inputs remain accessible when editing the draft and are removed when their last referencing draft is deleted. Disk quota and upload limits still apply.
+
+## Interactive slicer — initial Prepare workspace
+
+After choosing an engine, printer and profiles in **Slicer setup**, add an STL to the visual plate and select **Open interactive slicer**. This opens a separate Prepare workspace while retaining the previously configured native profiles.
+
+The initial workspace includes an object tree (instances on the first plate), click-to-select, active **Move**, **Rotate**, **Scale**, **Auto-arrange**, **Duplicate** and **Remove** controls backed by the existing 3D plate editor, and in-session undo/redo (Ctrl+Z / Ctrl+Y outside text inputs). **Save draft**, **Slice**, and **Save and slice** use the same isolated worker submission path as Slicer setup. Reopening an unscheduled draft returns to the interactive editor with the saved build plate.
+
+The categories **Quality**, **Strength**, **Speed**, **Supports**, **Multifilament**, and **Others**, plus the Global/Objects switch, are present to establish the final editor layout. They do not yet change native settings. Continue using the native profile editor in Slicer setup to adjust values; actual scope-aware edits must be validated and round-tripped through each engine. Advanced mesh transformations, multi-plate output, per-axis scaling, painting tools and variable layer heights are shown as **disabled** while their native data paths are developed. Disabled controls are not supported features.
+
+### G-code Preview controls
+
+Completed slicing jobs open an in-modal read-only G-code preview. The first expanded preview provides slicer-declared material/time estimates, a vertically oriented *sampled layer* control, a horizontal *sampled extrusion step* control, a toolhead marker, and feature visibility checkboxes. Colouring by extrusion line type or sample layer height is available. Options requiring actual feed/temperature/flow/acceleration/filament metadata are disabled, rather than fabricated.
+
+**Important:** This first preview still visualises sampled extrusion segments, not the complete 3D printer motion plan. It may omit layers or moves and cannot be used as a substitute for native OrcaSlicer verification. A complete indexed toolpath including travel, retract/wipe and true native metrics is scheduled as a distinct acceptance milestone.
+
+See the implementation phases in `docs/development/interactive-slicer-plan.md`.
