@@ -20,3 +20,11 @@ test("plate movement retains stored preview colours and clears residual emission
   assert.ok(source.includes("mesh.material.color.set(item.color || PALETTE[0])"));
   assert.ok(source.includes("mesh.material.emissiveIntensity = item.instance_id === selected ? 0.18 : 0"));
 });
+
+test("plate height follows the model-control rail instead of fixed viewport height", () => {
+  const css = fs.readFileSync(path.join(path.dirname(file), "../styles.css"), "utf8");
+  assert.match(css, /\.slicerPlateWorkspace\{[^}]*align-items:stretch/);
+  assert.match(css, /\.slicerPlateCanvasColumn\{[^}]*display:flex;flex-direction:column/);
+  assert.match(css, /\.slicerPlateCanvas\{[^}]*flex:1 1 auto;[^}]*height:auto/);
+  assert.match(source, /\{footer && <div className="slicerPlateFooter">/);
+});
