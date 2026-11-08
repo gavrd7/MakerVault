@@ -70,13 +70,26 @@ def _render_mesh(raw, element):
     return len(triangles), maximum[0] - minimum[0], maximum[1] - minimum[1]
 
 
+def _axis_scales(item):
+    xyz = item.get("scale_xyz_percent")
+    if xyz is None:
+        factor = float(item["scale_percent"]) / 100
+        return factor, factor, factor
+    if (not isinstance(xyz, (list, tuple)) or len(xyz) != 3 or any(
+            isinstance(value, bool) or not isinstance(value, (int, float))
+            or not math.isfinite(value) or not 5 <= value <= 400 for value in xyz)):
+        raise SlicerProfileError("Invalid individual model scale.")
+    return tuple(float(value) / 100 for value in xyz)
+
+
 def _transform(item, offset_x, offset_y):
-    scale = float(item["scale_percent"]) / 100
+    sx, sy, sz = _axis_scales(item)
     angle = math.radians(float(item["rotation_deg"]))
-    cos = scale * math.cos(angle)
-    sin = scale * math.sin(angle)
+    cos, sin = math.cos(angle), math.sin(angle)
     # 3MF stores a 4x3 row-vector matrix: translation is the final triple.
-    values = (cos, sin, 0, -sin, cos, 0, 0, 0, scale,
+    # Scale the local axes BEFORE rotation; do not distort a previously rotated
+    # global XY frame when a model has nonuniform scaling.
+    values = (sx * cos, sx * sin, 0, -sy * sin, sy * cos, 0, 0, 0, sz,
               offset_x + float(item["x_mm"]), offset_y + float(item["y_mm"]), 0)
     if any(not math.isfinite(value) or abs(value) > 10000 for value in values):
         raise SlicerProfileError("Invalid 3MF object placement.")
@@ -113,7 +126,7 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth):
         obj = ET.SubElement(resources, f"{{{NS}}}object", {"id": str(index), "type": "model"})
         count, width, depth = _render_mesh(raw, obj)
         total_triangles += count
-        scale = float(item["scale_percent"]) / 100
+        sx, sy, _sz = _axis_scales(item)
         angle = math.radians(float(item["rotation_deg"]))
         cosine, sine = math.cos(angle), math.sin(angle)
         centre_x = bed_width / 2 + float(item["x_mm"])
@@ -121,8 +134,8 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth):
         # Every transformed XY corner must fit inside the declared rectangle.
         for x in (-width / 2, width / 2):
             for y in (-depth / 2, depth / 2):
-                moved_x = centre_x + scale * (x * cosine - y * sine)
-                moved_y = centre_y + scale * (x * sine + y * cosine)
+                moved_x = centre_x + sx * x * cosine - sy * y * sine
+                moved_y = centre_y + sx * x * sine + sy * y * cosine
                 if not (0 <= moved_x <= bed_width and 0 <= moved_y <= bed_depth):
                     raise SlicerProfileError("A model extends outside the verified build plate.")
         if total_triangles > MAX_TRIANGLES:
