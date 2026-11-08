@@ -54,3 +54,48 @@ Retain the existing approved configuration page as **Slicer Setup**. A saved sli
 6. **Multi-material and other engines**: independent spool/model material assignment, CFS mappings and preview, tested native output from each engine; additional optional engine implementations without losing UI semantics.
 
 An item is complete only after automated tests, a real-engine fixture, and (where physically testable) staging acceptance. The existing Slicer Setup UX remains unchanged unless necessary.
+
+
+## Printer-loaded material mapping (CFS, AMS, RFID spools)
+
+Reuse the existing provider-neutral live material slot inventory. MakerVault
+already reconciles the latest observed slot details from supported printer
+adapters (e.g. Creality CFS and other systems) and can link an observed slot
+to an inventory spool when identity is verified. The initial editor's
+**Multifilament** panel now reads this shared inventory and displays loaded
+slots without writing to printer hardware.
+
+**Next acceptance milestone:** expose a single, consistent material
+assignment model, independent of the selected slicing engine:
+
+1. Identify the printer, adapter, system, unit, slot and last-observed state.
+   Differentiate fresh vs stale data. Slots may be empty or lack a reliable
+   RFID identity; never invent spool links based on colour alone.
+2. Treat physical spool, native engine filament preset and tool/extruder
+   mapping as *different objects*. Link explicitly; warn for missing material,
+   diameter/temperature mismatch and unsupported tool counts.
+3. Allow an entire object or an individual printable mesh component to select
+   a loaded slot and preview the corresponding swatch. Preserve mapping when
+   saving/reopening the project.
+4. Use the same mapping for colour/material painting after the selected engine
+   supports the required native painted region/3MF format and CLI round-trip.
+   Map painted regions to an engine tool index, *then* to printer slot identities
+   through the selected printer's adapter.
+5. If a printer has no live material telemetry, allow manual assignment of
+   the physical spool and native filament preset without pretending a
+   particular slot is loaded.
+6. Reconcile again immediately before slicing and before explicit print
+   submission. Changed or stale material identities should prompt a review,
+   not silently change model colours or tool indices.
+7. The preview legend must distinguish intended filament, assigned tool and
+   live printer slot; the chosen colour swatch is not proof of loaded material.
+   Spool inventory is not deducted at slice time.
+
+Cross-engine capability matrix must explicitly identify whether each engine
+and version supports multiple objects/tools, per-object material mapping,
+painting, variable layer height, tool changes and native project round-trips.
+Unsupported features are disabled instead of simulating an incorrect slice.
+
+The current read-only loaded slot panel is a *discovery foundation*, not
+multi-material printing support. Native engine and physical printer test
+fixtures are required before enabling object-level selection or painting.
