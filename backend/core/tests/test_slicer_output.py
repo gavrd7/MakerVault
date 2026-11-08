@@ -39,7 +39,7 @@ class GeneratedSlicerFileTests(TestCase):
         )
 
     def test_generated_filename_uses_source_stl_name(self):
-        output = store_generated_gcode(self.job.pk, b"; generated\\nG1 X1 Y1 E0.5\\n")
+        output = store_generated_gcode(self.job.pk, b"; generated\nG1 X1 Y1 E0.5\n")
         self.assertEqual(output.name, "shape.gcode")
         self.assertEqual(output.metadata["original_name"], "shape.gcode")
         self.assertNotIn(str(self.job.pk), output.name)
