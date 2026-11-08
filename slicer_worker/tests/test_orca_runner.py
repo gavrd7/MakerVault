@@ -172,12 +172,12 @@ class OrcaRunnerTests(TestCase):
         from slicer_worker.orca_runner import _bounded_stderr
         from collections import deque
         first, last = deque(), deque()
-        payload = (b"Param values in 3mf/config error:\\n"
-                   b"new_supported_setting: 0 not in range [1, 20]\\n"
-                   + b"verbose output\\n" * 2000)
+        payload = (b"Param values in 3mf/config error:\n"
+                   b"new_supported_setting: 0 not in range [1, 20]\n"
+                   + b"verbose output\n" * 2000)
         _bounded_stderr(io.BytesIO(payload), last, 8192, first)
         self.assertEqual(_safe_out_of_range_options(
-            b"".join(first) + b"\\n" + b"".join(last)),
+            b"".join(first) + b"\n" + b"".join(last)),
             ("new_supported_setting",))
 
     def test_orca_stdout_project_error_is_categorized_without_leaking_data(self):
