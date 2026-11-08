@@ -210,6 +210,29 @@ def _read_owned_file(asset, owner_id, maximum, label):
     return data
 
 
+def _single_unmodified_stl(plate):
+    """Only bypass 3MF when Orca's native STL arrange preserves user intent.
+
+    Any model repositioning, scaling or rotation remains on the explicit
+    project path, where it can be reproduced faithfully.
+    """
+    if not isinstance(plate, list) or len(plate) != 1 or not isinstance(plate[0], dict):
+        return False
+    item = plate[0]
+    try:
+        if any(float(item[key]) != expected for key, expected in (
+            ("x_mm", 0), ("y_mm", 0), ("rotation_deg", 0),
+            ("scale_percent", 100),
+        )):
+            return False
+        xyz = item.get("scale_xyz_percent", [100, 100, 100])
+        return isinstance(xyz, (list, tuple)) and len(xyz) == 3 and all(
+            float(value) == 100 for value in xyz
+        )
+    except (ValueError, TypeError, KeyError, OverflowError):
+        return False
+
+
 def process_queued_job(job_id):
     """At most one active run; worker loss becomes a failed, never resent job."""
     installed = verified_installation()
@@ -250,11 +273,19 @@ def process_queued_job(job_id):
                 if asset.sha256 and hashlib.sha256(raw).hexdigest() != asset.sha256:
                     raise SlicerExecutionError("A plate STL has changed since import.")
                 source_models.append((item, raw))
-            stage = "resolving native printer bed dimensions"
-            width, depth = trusted_plate_dimensions(job.printer_profile)
-            stage = "assembling the build plate 3MF"
-            model = build_compound_plate_3mf(source_models, bed_width=width, bed_depth=depth)
-            model_format = "3mf"
+            if _single_unmodified_stl(plate):
+                # Avoid an unnecessary 3MF round trip for one untransformed
+                # model. The validated native STL CLI path performs its own
+                # auto-arrangement and uses the same approved profiles.
+                model = source_models[0][1]
+                model_format = "stl"
+                logger.info("Slicing job %s: using direct validated STL path", job.pk)
+            else:
+                stage = "resolving native printer bed dimensions"
+                width, depth = trusted_plate_dimensions(job.printer_profile)
+                stage = "assembling the build plate 3MF"
+                model = build_compound_plate_3mf(source_models, bed_width=width, bed_depth=depth)
+                model_format = "3mf"
         stage = "resolving native slicing profiles"
         profiles = []
         for kind in ("printer", "filament", "process"):
