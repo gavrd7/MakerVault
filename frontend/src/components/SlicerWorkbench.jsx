@@ -59,6 +59,16 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [printSelection, setPrintSelection] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
   const [plateObjects, setPlateObjects] = useState([]);
+  // Keep temporary STL filenames and preview URLs when switching between
+  // the setup plate and the interactive editor.
+  const [plateLocalAssets, setPlateLocalAssets] = useState([]);
+  const localAssetsRef = useRef([]);
+  localAssetsRef.current = plateLocalAssets;
+  useEffect(() => () => {
+    localAssetsRef.current.forEach(asset => {
+      if (asset.url?.startsWith("blob:")) URL.revokeObjectURL(asset.url);
+    });
+  }, []);
   const [editorOpen, setEditorOpen] = useState(false);
   const openedDraftRef = useRef(null);
   const manuallyColouredModels = useRef(new Set());
@@ -88,7 +98,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [notice, setNotice] = useState("");
 
   const stlFiles = useMemo(() => {
-    const visible = files.filter(file => file.category === "mesh" && /\.stl$/i.test(file.filename || ""));
+    const visible = files.filter(file => file.category === "mesh" && /\.stl$/i.test(file.filename || file.name || ""));
     const hidden = jobs.flatMap(job => job.temporary_inputs || []);
     return [...visible, ...hidden.filter(file => !visible.some(item => String(item.id) === String(file.id)))
       .filter((file, index, all) => all.findIndex(item => String(item.id) === String(file.id)) === index)];
@@ -795,6 +805,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
     {editorOpen ? <SlicerPrepareWorkspace
       objects={plateObjects} onChange={setPlateObjects} files={stlFiles}
+      localAssets={plateLocalAssets} onLocalAssetsChange={setPlateLocalAssets}
       onPrimaryChange={id => update("input_asset_id", String(id))}
       onFilesUploaded={onFilesUploaded} defaultColor={selectedSpoolHex}
       onManualColorChange={instanceId => manuallyColouredModels.current.add(instanceId)}
@@ -946,6 +957,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
     <SlicerPlateEditor
       files={stlFiles}
+      localAssets={plateLocalAssets} onLocalAssetsChange={setPlateLocalAssets}
       objects={plateObjects}
       onChange={setPlateObjects}
       defaultColor={selectedSpoolHex}
