@@ -82,9 +82,12 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
-  const stlFiles = useMemo(() => files.filter(file =>
-    file.category === "mesh" && /\.stl$/i.test(file.filename || "")
-  ), [files]);
+  const stlFiles = useMemo(() => {
+    const visible = files.filter(file => file.category === "mesh" && /\.stl$/i.test(file.filename || ""));
+    const hidden = jobs.flatMap(job => job.temporary_inputs || []);
+    return [...visible, ...hidden.filter(file => !visible.some(item => String(item.id) === String(file.id)))
+      .filter((file, index, all) => all.findIndex(item => String(item.id) === String(file.id)) === index)];
+  }, [files, jobs]);
 
   const update = (name, value) => setForm(current => {
     if (name === "engine" || name === "engine_version") return {
