@@ -550,7 +550,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       setNotice("Official " + (imported.engine === "crealityprint" ? "Creality Print" : "OrcaSlicer") +
         " profile imported" + (imported.is_default ? " and saved as your default" : "") +
         ". " + Math.max(0, (result.parent_chain_length || 1) - 1) +
-        " required parent preset(s) were included. All remain unverified until a real engine fixture passes.");
+        " required parent preset(s) were included. The isolated worker will validate the profiles when slicing.");
     } catch (err) {
       setOfficialError(err.message || "Could not import the selected official native profile.");
     } finally {
@@ -743,7 +743,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       setProfiles(current => [profile, ...current]);
       setImportFile(null);
       setImportName("");
-      setNotice("Native profile imported as an unverified candidate. Slicing remains disabled until an approved worker and profiles pass validation.");
+      setNotice("Native profile imported. MakerVault will check its integrity and dependencies when slicing.");
     } catch (err) {
       setError((err.message || "Profile import failed.") + (uploaded ? " The uploaded file remains in Files for review." : ""));
     } finally {
@@ -1115,15 +1115,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           <ProfileActionIcon name="upload" />Import profile
         </button>}
       </div>
-      {managingSavedProfiles && canVerifyProfiles && <div className="slicerProfileVerification">
-        <h4>Approve selected native profiles</h4>
-        <p>Run an isolated test slice before using a profile set for actual slicing.</p>
-        <button type="button" disabled={!workerConfigured || verifyingProfiles ||
-          !form.printer_profile_id || !form.filament_profile_id || !form.process_profile_id}
-          onClick={verifySelectedProfiles}>
-          {verifyingProfiles ? "Running test slice…" : "Test slice and approve"}
-        </button>
-      </div>}
       <div className="printingStack">
         {profiles.filter(item => item.engine === form.engine).map(profile =>
           <div className="cameraSourceRow" key={profile.id}>
