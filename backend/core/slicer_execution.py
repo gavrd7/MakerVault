@@ -195,7 +195,11 @@ def _read_owned_file(asset, owner_id, maximum, label):
     if asset.owner_id != owner_id or not asset.file:
         raise SlicerExecutionError(f"{label} file is unavailable.")
     try:
-        with asset.file.open("rb") as stream:
+        # Open through storage, not FieldFile.open(): the encrypted backend
+        # decrypts into a temporary File which FieldFile can cache after close.
+        # Reopening that cached File may attempt a filesystem path rather than
+        # decrypting the private object afresh.
+        with asset.file.storage.open(asset.file.name, "rb") as stream:
             data = stream.read(maximum + 1)
     except (OSError, ValueError) as exc:
         logger.warning("Slicer source read failed (%s, asset=%s): %s: %s",
