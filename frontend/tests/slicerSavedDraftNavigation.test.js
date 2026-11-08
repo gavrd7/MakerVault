@@ -26,8 +26,8 @@ test("stored slice history is scoped by file asset IDs and remains owner-protect
 test("the slicer offers opt-in save at slicing time or from a completed job", () => {
   const workbench = read("SlicerWorkbench.jsx");
   const history = read("SavedSlicerJobsModal.jsx");
-  assert.match(workbench, /save_gcode_to_library: saveGcodeToLibrary/);
-  assert.match(workbench, /Automatically add generated G-code/);
+  assert.match(workbench, /save_gcode_to_library: saveOutput/);
+  assert.match(workbench, /onClick=\{\(\) => saveDraft\("save-and-slice"\)\}/);
   assert.match(workbench, /save-gcode\//);
   assert.match(history, /Add G-code to library/);
   assert.match(history, /save-gcode\//);
@@ -44,4 +44,16 @@ test("a model-linked draft opens its specific workbench configuration in preview
   assert.match(history, /onOpenSlicer\?\.\(job\.id\)/);
   assert.match(workbench, /function loadSavedDraft\(job\)/);
   assert.match(workbench, /jobs\.find\(item => item\.id === initialDraftId\)/);
+});
+
+test("completed slice opens existing read-only G-code preview within jobs modal", () => {
+  const workbench = read("SlicerWorkbench.jsx");
+  const viewer = read("GcodeViewerModal.jsx");
+  assert.match(workbench, /awaitingSlicePreviewRef\.current = job\.id/);
+  assert.match(workbench, /result\?\.status === "completed"/);
+  assert.match(workbench, /setPreviewJobId\(result\.id\)/);
+  assert.match(workbench, /Preview G-code/);
+  assert.match(workbench, /<GcodeViewerModal key=\{previewJob\.output_asset\.id\} embedded/);
+  assert.match(viewer, /embedded \? content : <Modal/);
+  assert.match(viewer, /apiFetch\(`\/api\/files\/\$\{file\.id\}\/gcode\/inspect\/`\)/);
 });
