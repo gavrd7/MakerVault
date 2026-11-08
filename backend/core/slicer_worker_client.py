@@ -124,16 +124,25 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
             allowed = {"validating request", "validating model and profile payloads",
                        "running slicer engine", "validating generated G-code"}
             stage = None
+            reason = None
+            reasons = {"engine-exited", "unresolved-profile-parent", "no-output-directory",
+                       "unexpected-output-layout", "output-too-large", "engine-version-mismatch",
+                       "missing-gcode", "validation-error"}
             try:
                 if int(response.headers.get("Content-Length", "0")) <= 1024:
                     result = response.json()
-                    if isinstance(result, dict) and result.get("stage") in allowed:
-                        stage = result["stage"]
+                    if isinstance(result, dict):
+                        if result.get("stage") in allowed:
+                            stage = result["stage"]
+                        if result.get("reason") in reasons:
+                            reason = result["reason"]
             except (ValueError, requests.RequestException):
                 pass
             message = "Isolated worker rejected the slicing job (HTTP " + str(response.status_code) + ")"
             if stage:
                 message += " during " + stage
+            if reason:
+                message += " [" + reason + "]"
             raise SlicerWorkerError(message + ".")
         declared = response.headers.get("Content-Length")
         if declared and (not declared.isdecimal() or int(declared) > MAX_RESPONSE):
