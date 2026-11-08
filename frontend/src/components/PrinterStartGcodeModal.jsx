@@ -52,11 +52,15 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   async function load(refreshStatus = false) {
     // A broken printer-side file API must not hide perfectly valid MakerVault files.
     const [local, remote] = await Promise.allSettled([
-      apiFetch("/api/files/"),
+      // Query G-code specifically: the general Files API returns only its
+      // first 5000 mixed-category records and can omit older stored G-code.
+      apiFetch("/api/files/?category=gcode"),
       apiFetch(base + (refreshStatus === true ? "/files/?refresh_status=1" : "/files/")),
     ]);
     if (local.status === "fulfilled") {
-      setFiles((local.value.rows || []).filter(f => (f.filename || "").toLowerCase().endsWith(".gcode")));
+      // Imported/legacy G-code may have an encrypted on-disk filename; use
+      // the database category rather than a filename extension filter.
+      setFiles((local.value.rows || []).filter(f => f.category === "gcode"));
     } else {
       setError("MakerVault file list unavailable: " + local.reason.message);
     }
@@ -298,11 +302,14 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
         <small>This ad-hoc file is saved in MakerVault Files before transfer. It can be linked to a project or model later.</small>
         <button type="button" className="primary" disabled={!newFile || busy || !canEdit} onClick={saveNew}>Save and review</button>
       </div>}
-      {source === "makervault" && <label>MakerVault file<select value={assetId} onChange={e => setAssetId(e.target.value)}>
-        <option value="">Choose a G-code file…</option>
-        {initialAsset && !files.some(f => String(f.id) === String(initialAsset.id)) && <option value={initialAsset.id}>{initialAsset.name} · selected G-code</option>}
-        {files.map(f => <option value={f.id} key={f.id}>{f.name} · {f.project || "Standalone"}</option>)}
-      </select></label>}
+      {source === "makervault" && <>
+        <label>MakerVault file<select value={assetId} onChange={e => setAssetId(e.target.value)}>
+          <option value="">Choose a G-code file…</option>
+          {initialAsset && !files.some(f => String(f.id) === String(initialAsset.id)) && <option value={initialAsset.id}>{initialAsset.name} · selected G-code</option>}
+          {files.map(f => <option value={f.id} key={f.id}>{f.name} · {f.project || "Standalone"}</option>)}
+        </select></label>
+        {!files.length && !initialAsset && <p role="status">No saved G-code files were returned from the MakerVault library. Check the G-code Library or upload a new file.</p>}
+      </>}
       {source === "printer" && <>
         <label>Printer storage<select value={remotePath} onChange={e => setRemotePath(e.target.value)}>
           <option value="">Choose a printer file…</option>
