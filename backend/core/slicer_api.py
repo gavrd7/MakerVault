@@ -555,11 +555,9 @@ def official_profiles(request):
         subpath = selection.get("sub_path")
         if not isinstance(name, str) or len(name) > 200:
             raise ValueError("Invalid native profile name.")
-        if SlicerProfile.objects.filter(
-            owner=request.user, engine=engine,
-            engine_version=version, kind=kind, name=name,
-        ).exists():
-            return _error("This exact official preset has already been imported.", 409)
+        # Re-importing an already registered official preset is allowed to
+        # restore missing parents in its verified upstream inheritance chain.
+        # Existing records are never overwritten or implicitly modified.
         # Fetch and validate the complete bounded parent chain *before*
         # mutating the database. Never install a partial official preset.
         chain = official_profile_chain(engine, kind, name, subpath, vendor)
@@ -605,6 +603,8 @@ def official_profiles(request):
                 owner=request.user, engine=engine,
                 engine_version=version, kind=kind, name=name,
             )
+            if not created_names:
+                return _error("This official preset and its complete parent chain are already imported.", 409)
     except (OfficialProfileError, ValueError, TypeError, UnicodeDecodeError, SlicerProfileError) as exc:
         return _error(str(exc))
     except IntegrityError:
