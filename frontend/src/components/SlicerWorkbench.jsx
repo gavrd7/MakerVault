@@ -128,6 +128,22 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       ...(profile ? { [kind + "_preset"]: profile.name } : {}),
     }));
   };
+  const changeSessionPrinter = printerId => {
+    const printer = printers.find(item => String(item.id) === String(printerId));
+    // A changed physical printer must never silently reuse the previous
+    // machine's verified native presets or nozzle geometry.
+    manuallyChosenProfiles.current.clear();
+    setProfileSuggestions({});
+    setForm(current => ({
+      ...current,
+      printer_id: String(printerId),
+      nozzle_mm: String(printer?.nozzle_mm || "0.40"),
+      printer_profile_id: "", filament_profile_id: "", process_profile_id: "",
+      printer_preset: "", filament_preset: "", process_preset: "",
+    }));
+    setError("");
+    setNotice("Printer selection changed. Choose compatible native profiles for the new printer before saving or slicing.");
+  };
   const selectedPrinter = printers.find(item => String(item.id) === form.printer_id);
   const selectedSpool = spools.find(item => String(item.id) === String(form.spool_id));
   const selectedSpoolHex = slicerSpoolHex(selectedSpool);
@@ -862,15 +878,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           <input required maxLength="80" disabled={!canPrepare || busy} value={form.engine_version} onChange={e => update("engine_version", e.target.value)} placeholder="Exact installed/version-matched engine version" />
         </label>
         <label>Printer
-          <select required disabled={!canPrepare || busy} value={form.printer_id} onChange={e => {
-            const printer = printers.find(item => String(item.id) === e.target.value);
-            manuallyChosenProfiles.current.clear();
-            setForm(current => ({
-              ...current, printer_id: e.target.value, nozzle_mm: String(printer?.nozzle_mm || "0.40"),
-              printer_profile_id: "", filament_profile_id: "", process_profile_id: "",
-              printer_preset: "", filament_preset: "", process_preset: "",
-            }));
-          }}>
+          <select required disabled={!canPrepare || busy} value={form.printer_id}
+            onChange={e => changeSessionPrinter(e.target.value)}>
             <option value="">Choose an owned printer</option>
             {printers.filter(item => item.is_active !== false).map(printer => <option key={printer.id} value={printer.id}>{printer.name}</option>)}
           </select>
@@ -1037,6 +1046,20 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       <p>Choose from installed native printer, filament and process profiles. These changes
         apply to this slicing session and will be recorded with the next saved draft or slice.</p>
       <div className="slicerChangeProfileGrid">
+        <label>Printer
+          <select value={form.printer_id} disabled={!canPrepare || busy}
+            onChange={e => changeSessionPrinter(e.target.value)}>
+            <option value="">Choose an owned printer</option>
+            {printers.filter(item => item.is_active !== false).map(printer =>
+              <option key={printer.id} value={printer.id}>{printer.name}</option>)}
+          </select>
+        </label>
+        <label>Nozzle diameter (mm)
+          <input type="number" step="0.01" min="0.1" max="2"
+            value={form.nozzle_mm} disabled={!canPrepare || busy}
+            onChange={e => update("nozzle_mm", e.target.value)} />
+        </label>
+        <p className="full slicerChangePrinterHint">Changing the printer resets the session's native printer, process and filament profiles to prevent incompatible selections. Select matching presets below before saving or slicing.</p>
         {["printer", "filament", "process"].map(kind => <label key={kind}>
           {kind.charAt(0).toUpperCase() + kind.slice(1)} profile
           <select value={form[kind + "_profile_id"]} disabled={!canPrepare || busy}
