@@ -4032,3 +4032,28 @@ a:focus-visible,
 @media(max-width:550px){
   .slicerPrepareTools .slicerToolTooltip{flex-basis:40px;width:40px;height:40px;min-width:40px}
 }
+
+/* Keep the staging slicer availability notice readable and visually separate
+   from the workbench at desktop and mobile widths. */
+.slicerPreviewNotice{
+  display:grid;
+  gap:10px;
+  padding:20px 24px;
+  margin-bottom:20px;
+  align-content:start;
+}
+.slicerPreviewNotice strong{
+  display:block;
+  margin:0;
+  font-size:16px;
+  line-height:1.4;
+}
+.slicerPreviewNotice p{
+  margin:0;
+  color:var(--muted,#aeb8c7);
+  line-height:1.55;
+  overflow-wrap:anywhere;
+}
+@media(max-width:620px){
+  .slicerPreviewNotice{padding:16px 18px;margin-bottom:16px;gap:8px}
+}
