@@ -3906,3 +3906,10 @@ a:focus-visible,
 .slicerAxisScaling legend{font-size:.86rem;font-weight:600;padding:0 5px}
 .slicerAxisScaling label{min-width:0}
 @media(max-width:500px){.slicerAxisScaling{grid-template-columns:minmax(0,1fr)}}
+
+/* Read-only 3D slicer preview (shared controls with sampled layer/step inspector). */
+.slicerToolpath3D{width:100%;min-width:0}
+.slicerToolpath3DCanvas{width:100%;height:clamp(340px,58vh,720px);background:#111b27;border:1px solid var(--border,#394958);border-radius:12px;overflow:hidden;touch-action:none}
+.slicerToolpath3D>small{display:block;color:var(--muted,#9aafc3);margin-top:7px;text-align:center}
+.slicerToolpath3DCanvas canvas{outline:none}
+@media(max-width:650px){.slicerToolpath3DCanvas{height:380px}}
