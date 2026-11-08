@@ -41,6 +41,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [profiles, setProfiles] = useState([]);
   const [profileModal, setProfileModal] = useState("");
   const [managingSavedProfiles, setManagingSavedProfiles] = useState(false);
+  const [showProfileDependencies, setShowProfileDependencies] = useState(false);
   const [editingProfile, setEditingProfile] = useState(null);
   const [editProfileName, setEditProfileName] = useState("");
   const [editProfileSchema, setEditProfileSchema] = useState({});
@@ -117,7 +118,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     return { ...current, [name]: value };
   });
   const forKind = kind => profiles.filter(profile =>
-    profile.engine === form.engine && profile.engine_version === form.engine_version && profile.kind === kind
+    profile.engine === form.engine && profile.engine_version === form.engine_version &&
+    profile.kind === kind && !profile.is_dependency
   );
   const selectNativeProfile = (kind, id) => {
     manuallyChosenProfiles.current.add(kind);
@@ -158,7 +160,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     const reasons = {};
     for (const kind of ["printer", "filament", "process"]) {
       if (manuallyChosenProfiles.current.has(kind)) continue;
-      const suggestion = chooseSuggestedProfile(profiles, jobs, {
+      const suggestion = chooseSuggestedProfile(profiles.filter(profile => !profile.is_dependency), jobs, {
         engine: form.engine, version: form.engine_version, kind,
         printer: selectedPrinter, nozzle: form.nozzle_mm,
         material: kind === "filament" ? materialHint : "",
@@ -917,7 +919,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       <div className="slicerProfileActions">
         <button type="button" onClick={() => openOfficialSearch()}><ProfileActionIcon name="search" />Search official profiles</button>
         <button type="button" onClick={() => setProfileModal("import")}><ProfileActionIcon name="upload" />Import profile</button>
-        <button type="button" onClick={() => { setManagingSavedProfiles(false); setProfileModal("saved"); }}><ProfileActionIcon name="bookmark" />Saved profiles ({profiles.filter(item => item.engine === form.engine).length})</button>
+        <button type="button" onClick={() => { setManagingSavedProfiles(false); setProfileModal("saved"); }}><ProfileActionIcon name="bookmark" />Saved profiles ({profiles.filter(item => item.engine === form.engine && !item.is_dependency).length})</button>
       </div>
       {materialHint && <div className="slicerMaterialMatch">
         <strong>Filament match: {materialHint}</strong>
@@ -1215,7 +1217,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
     </Modal>}
     {profileModal === "saved" && <Modal title="Saved slicer profiles" onClose={() => setProfileModal("")} wide>
-      <p>Profiles for the selected engine. Management actions include editing, defaults, removal and parent-dependency checks.</p>
+      <p>Profiles for the selected engine. Native parent presets are hidden from everyday selection and retained automatically for inherited profiles.</p>
       <div className="settingsActions">
         <button type="button" onClick={() => setManagingSavedProfiles(current => !current)}>
           <ProfileActionIcon name="settings" />{managingSavedProfiles ? "Done managing" : "Manage"}
@@ -1223,13 +1225,20 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         {managingSavedProfiles && <button type="button" onClick={() => setProfileModal("import")}>
           <ProfileActionIcon name="upload" />Import profile
         </button>}
+        {managingSavedProfiles && <label className="checkRow slicerDependencyToggle">
+          <input type="checkbox" checked={showProfileDependencies}
+            onChange={e => setShowProfileDependencies(e.target.checked)} />
+          <span>Show protected native parent presets</span>
+        </label>}
       </div>
       <div className="printingStack">
-        {profiles.filter(item => item.engine === form.engine).map(profile =>
+        {profiles.filter(item => item.engine === form.engine &&
+          (!item.is_dependency || (managingSavedProfiles && showProfileDependencies))).map(profile =>
           <div className="cameraSourceRow" key={profile.id}>
             <div className="cameraSourceIdentity">
               <strong>{profile.name} · {profile.kind}{profile.is_default ? " · Default" : ""}</strong>
               <small>{profile.engine} {profile.engine_version} · {profile.status} · {profile.provenance || "No source supplied"}</small>
+              {profile.is_dependency && <small role="note">Protected inherited parent — managed automatically, not selectable for slicing</small>}
               {profileLineages[profile.id] && <small role="status">
                 {profileLineages[profile.id].checking ? "Checking native parent presets…" :
                   profileLineages[profile.id].status === "complete" ? "Parent chain present — still unverified for slicing" :
@@ -1244,11 +1253,11 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             </div>
             {managingSavedProfiles && <div className="cameraSourceActions">
               {profile.engine === "orcaslicer" && <button type="button" disabled={profileLineages[profile.id]?.checking} onClick={() => inspectProfile(profile)}>Check parent presets</button>}
-              {["orcaslicer", "crealityprint"].includes(profile.engine) && <button type="button" disabled={busy} onClick={() => openProfileEditor(profile)}>Edit as custom</button>}
-              <button type="button" disabled={busy} onClick={() => toggleProfileDefault(profile)}>
+              {!profile.is_dependency && ["orcaslicer", "crealityprint"].includes(profile.engine) && <button type="button" disabled={busy} onClick={() => openProfileEditor(profile)}>Edit as custom</button>}
+              {!profile.is_dependency && <button type="button" disabled={busy} onClick={() => toggleProfileDefault(profile)}>
                 {profile.is_default ? "Clear default" : "Set as default"}
-              </button>
-              <button type="button" disabled={busy} onClick={() => removeProfile(profile)}>Remove profile</button>
+              </button>}
+              {!profile.is_dependency && <button type="button" disabled={busy} onClick={() => removeProfile(profile)}>Remove profile</button>}
             </div>}
           </div>
         )}
