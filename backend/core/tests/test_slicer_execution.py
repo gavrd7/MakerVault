@@ -107,3 +107,23 @@ class WorkerApprovalTests(SimpleTestCase):
     def test_unready_worker_does_not_enable_slice(self, worker):
         with patch.dict("os.environ", self.approved, clear=True):
             self.assertEqual(verified_installation(), {})
+
+
+class PrivateSlicerSourceReadTests(SimpleTestCase):
+    def test_repeated_reads_open_fresh_storage_streams(self):
+        from io import BytesIO
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock
+        from core.slicer_execution import _read_owned_file
+
+        storage = MagicMock()
+        storage.open.side_effect = lambda path, mode: BytesIO(b'{"type":"machine"}')
+        field = SimpleNamespace(name="private/ab/opaque.blob", storage=storage)
+        asset = SimpleNamespace(pk="asset-id", owner_id=7, file=field)
+
+        self.assertEqual(_read_owned_file(asset, 7, 1024, "Native profile"),
+                         b'{"type":"machine"}')
+        self.assertEqual(_read_owned_file(asset, 7, 1024, "Native profile"),
+                         b'{"type":"machine"}')
+        self.assertEqual(storage.open.call_count, 2)
+        storage.open.assert_called_with("private/ab/opaque.blob", "rb")
