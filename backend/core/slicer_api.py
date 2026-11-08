@@ -55,6 +55,17 @@ def _rows(user):
 
 
 def serialise(job, installed=None):
+    # Private STL inputs are exposed only through this owner-scoped job, so a
+    # saved plate can be edited again without appearing in the Files library.
+    source_ids = {str(job.input_asset_id)}
+    source_ids.update(str(item.get("asset_id")) for item in
+                      (job.settings or {}).get("plate_objects", []) if isinstance(item, dict))
+    temporary_inputs = [{
+        "id": str(asset.pk), "name": asset.name,
+        "filename": str((asset.metadata or {}).get("original_name") or asset.name),
+        "category": "mesh", "url": asset.file.url if asset.file else "",
+    } for asset in FileAsset.objects.filter(owner=job.owner, pk__in=source_ids,
+                                              metadata__slicer_temporary=True)]
     can_slice = False
     if installed:
         try:
@@ -75,6 +86,7 @@ def serialise(job, installed=None):
         "nozzle_mm": str(job.nozzle_mm),
         "plate": job.plate,
         "settings": job.settings,
+        "temporary_inputs": temporary_inputs,
         "printer_profile_id": str(job.printer_profile_id) if job.printer_profile_id else None,
         "filament_profile_id": str(job.filament_profile_id) if job.filament_profile_id else None,
         "process_profile_id": str(job.process_profile_id) if job.process_profile_id else None,
