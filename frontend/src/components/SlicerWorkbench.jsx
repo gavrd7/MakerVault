@@ -23,6 +23,36 @@ function ProfileActionIcon({ name }) {
   </svg>;
 }
 
+// Profile search facets are derived from the registered native preset's
+// identity/provenance. These are navigation hints, not slicer compatibility
+// declarations, and require no changes to native profile files.
+const PROFILE_MATERIALS = ["PETG", "PCTG", "PLA", "ABS", "ASA", "TPU", "PC", "PA", "PET", "PVA", "HIPS", "PS", "PEEK"];
+const PROFILE_VENDORS = [
+  "Creality", "Bambu Lab", "Prusa", "Elegoo", "Anycubic", "Flashforge",
+  "Qidi", "Sovol", "Snapmaker", "Voron", "UltiMaker", "eSUN", "SUNLU",
+];
+function profileFacets(profile) {
+  const label = String(profile.name || "");
+  const provenance = String(profile.provenance || "");
+  const pathVendor = provenance.match(/(?:@[^/]+\/|profiles\/)([^/]+)\/(?:machine|filament|process)\//i)?.[1];
+  const vendor = pathVendor || PROFILE_VENDORS.find(name =>
+    label.toLowerCase().startsWith(name.toLowerCase() + " ") ||
+    label.toLowerCase().startsWith(name.toLowerCase() + "@")
+  ) || "Other / custom";
+  const material = PROFILE_MATERIALS.find(name =>
+    new RegExp("(^|[^A-Z])" + name + "([^A-Z]|$)").test(label.toUpperCase())
+  ) || "Not specified";
+  const printerModel = label.match(/(?:^|[\s@-])((?:K[12](?:\s*(?:Max|Plus|SE|Combo))?|X1(?:C|E)?|P1[SP]?|A1(?:\s*Mini)?|MK[234](?:S)?|CORE\s*ONE|SV\d+))\b/i);
+  const qualified = label.match(/@\s*([^@]+)$/);
+  const model = printerModel?.[1]?.toUpperCase().replace(/\s+/g, " ") ||
+    (qualified ? qualified[1].replace(/\b(?:all|\d+(?:\.\d+)?\s*(?:mm\s*)?nozzle)\b/gi, "").replace(/[-\s]+$/g, "").trim() : "") ||
+    "Not specified";
+  return { vendor, model, material };
+}
+const profileFilterValues = (items, key) =>
+  [...new Set(items.map(item => profileFacets(item)[key]))]
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
 const initialForm = {
   engine: "orcaslicer", engine_version: "", input_asset_id: "", printer_id: "",
   spool_id: "", printer_preset: "", filament_preset: "", process_preset: "",
@@ -42,6 +72,11 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [profileModal, setProfileModal] = useState("");
   const [managingSavedProfiles, setManagingSavedProfiles] = useState(false);
   const [showProfileDependencies, setShowProfileDependencies] = useState(false);
+  const [savedProfileKind, setSavedProfileKind] = useState("all");
+  const [savedProfileVendor, setSavedProfileVendor] = useState("all");
+  const [savedProfileModel, setSavedProfileModel] = useState("all");
+  const [savedProfileMaterial, setSavedProfileMaterial] = useState("all");
+  const [savedProfileSearch, setSavedProfileSearch] = useState("");
   const [editingProfile, setEditingProfile] = useState(null);
   const [editProfileName, setEditProfileName] = useState("");
   const [editProfileSchema, setEditProfileSchema] = useState({});
@@ -116,6 +151,24 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       [name.replace("_preset", "_profile_id")]: "",
     };
     return { ...current, [name]: value };
+  });
+  const visibleSavedProfiles = useMemo(() => profiles.filter(profile =>
+    profile.engine === form.engine &&
+    (!profile.is_dependency || (managingSavedProfiles && showProfileDependencies))
+  ), [profiles, form.engine, managingSavedProfiles, showProfileDependencies]);
+  const kindSavedProfiles = visibleSavedProfiles.filter(profile =>
+    savedProfileKind === "all" || profile.kind === savedProfileKind);
+  const vendorSavedProfiles = kindSavedProfiles.filter(profile =>
+    savedProfileVendor === "all" || profileFacets(profile).vendor === savedProfileVendor);
+  const modelSavedProfiles = vendorSavedProfiles.filter(profile =>
+    savedProfileModel === "all" || profileFacets(profile).model === savedProfileModel);
+  const filteredSavedProfiles = modelSavedProfiles.filter(profile => {
+    if (savedProfileMaterial !== "all" && profileFacets(profile).material !== savedProfileMaterial) return false;
+    const term = savedProfileSearch.trim().toLowerCase();
+    if (!term) return true;
+    const facets = profileFacets(profile);
+    return [profile.name, profile.provenance, profile.kind, facets.vendor, facets.model, facets.material]
+      .some(value => String(value || "").toLowerCase().includes(term));
   });
   const forKind = kind => profiles.filter(profile =>
     profile.engine === form.engine && profile.engine_version === form.engine_version &&
@@ -1231,9 +1284,55 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           <span>Show protected native parent presets</span>
         </label>}
       </div>
+      <div className="slicerSavedProfileFilters" role="group" aria-label="Filter saved profiles">
+        <label>Profile type
+          <select value={savedProfileKind} onChange={e => {
+            setSavedProfileKind(e.target.value);
+            setSavedProfileVendor("all"); setSavedProfileModel("all"); setSavedProfileMaterial("all");
+          }}>
+            <option value="all">All types</option>
+            <option value="printer">Printer</option>
+            <option value="filament">Filament</option>
+            <option value="process">Process</option>
+          </select>
+        </label>
+        <label>Manufacturer
+          <select value={savedProfileVendor} onChange={e => {
+            setSavedProfileVendor(e.target.value);
+            setSavedProfileModel("all"); setSavedProfileMaterial("all");
+          }}>
+            <option value="all">All manufacturers</option>
+            {profileFilterValues(kindSavedProfiles, "vendor").map(value =>
+              <option key={value} value={value}>{value}</option>)}
+          </select>
+        </label>
+        <label>Printer model
+          <select value={savedProfileModel} onChange={e => {
+            setSavedProfileModel(e.target.value); setSavedProfileMaterial("all");
+          }}>
+            <option value="all">All models</option>
+            {profileFilterValues(vendorSavedProfiles, "model").map(value =>
+              <option key={value} value={value}>{value}</option>)}
+          </select>
+        </label>
+        <label>Material
+          <select value={savedProfileMaterial} onChange={e => setSavedProfileMaterial(e.target.value)}>
+            <option value="all">All materials</option>
+            {profileFilterValues(modelSavedProfiles, "material").map(value =>
+              <option key={value} value={value}>{value}</option>)}
+          </select>
+        </label>
+        <label className="slicerSavedProfileSearch">Search profiles
+          <input type="search" value={savedProfileSearch} placeholder="Search name, model, source…"
+            onChange={e => setSavedProfileSearch(e.target.value)} />
+        </label>
+      </div>
+      <p className="slicerSavedProfileCount" role="status">
+        Showing {filteredSavedProfiles.length} of {visibleSavedProfiles.length} saved profiles
+        {savedProfileKind !== "all" ? " · " + savedProfileKind : ""}.
+      </p>
       <div className="printingStack">
-        {profiles.filter(item => item.engine === form.engine &&
-          (!item.is_dependency || (managingSavedProfiles && showProfileDependencies))).map(profile =>
+        {filteredSavedProfiles.map(profile =>
           <div className="cameraSourceRow" key={profile.id}>
             <div className="cameraSourceIdentity">
               <strong>{profile.name} · {profile.kind}{profile.is_default ? " · Default" : ""}</strong>
@@ -1261,6 +1360,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             </div>}
           </div>
         )}
+        {filteredSavedProfiles.length === 0 && <p className="slicerSavedProfileEmpty">No profiles match these filters. Try another type, manufacturer or search term.</p>}
       </div>
 
     </Modal>}
