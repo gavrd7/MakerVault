@@ -439,6 +439,25 @@ class SliceJobApiTests(TestCase):
         self.client.force_login(self.owner)
         self.assertTrue(self.client.get(self.url).json()["can_delete"])
 
+    def test_failed_and_cancelled_jobs_can_be_deleted_but_active_jobs_cannot(self):
+        self.client.force_login(self.owner)
+        self.owner.user_permissions.add(Permission.objects.get(codename="delete_slicejob"))
+        self.client.force_login(self.owner)
+        for status in ("failed", "cancelled", "stale"):
+            with self.subTest(status=status):
+                job_id = self.post().json()["job"]["id"]
+                SliceJob.objects.filter(pk=job_id).update(status=status)
+                response = self.client.delete(f"{self.url}{job_id}/")
+                self.assertEqual(response.status_code, 200, response.content)
+                self.assertFalse(SliceJob.objects.filter(pk=job_id).exists())
+        for status in ("queued", "running", "completed"):
+            with self.subTest(status=status):
+                job_id = self.post().json()["job"]["id"]
+                SliceJob.objects.filter(pk=job_id).update(status=status)
+                response = self.client.delete(f"{self.url}{job_id}/")
+                self.assertEqual(response.status_code, 409, response.content)
+                self.assertTrue(SliceJob.objects.filter(pk=job_id).exists())
+
     def test_unscheduled_draft_delete_requires_permission(self):
         self.client.force_login(self.owner)
         job_id = self.post().json()["job"]["id"]
