@@ -9,6 +9,9 @@ import os
 from pathlib import Path
 import signal
 import subprocess
+import logging
+import threading
+from collections import deque
 
 from .stl_validation import StlValidationError, validate_stl
 from .three_mf_validation import validate_worker_3mf
@@ -32,6 +35,53 @@ NETWORK_KEYS = {
     "printhost_ssl_ignore_revoke",
 }
 FORBIDDEN_KEYS = SCRIPT_KEYS | NETWORK_KEYS
+
+logger = logging.getLogger(__name__)
+
+def _engine_exit_reason(stderr):
+    """Classify diagnostics without exposing private file paths or profile data."""
+    message = stderr.decode("utf-8", errors="replace").lower()
+    if any(term in message for term in (
+        "qt.qpa.plugin", "could not load the qt platform plugin",
+        "could not connect to display", "no qt platform plugin",
+    )):
+        return "qt-platform-failed"
+    if any(term in message for term in (
+        "error while loading shared libraries", "cannot open shared object file",
+        "library not found",
+    )):
+        return "missing-runtime-library"
+    if any(term in message for term in (
+        "appimage", "squashfs", "fuse", "failed to extract",
+    )):
+        return "appimage-runtime-failed"
+    if any(term in message for term in (
+        "unrecognized option", "unknown option", "invalid command line",
+        "unrecognized argument",
+    )):
+        return "unsupported-cli-option"
+    if any(term in message for term in (
+        "invalid config", "invalid configuration", "invalid preset",
+        "invalid profile", "failed to load config", "failed to load settings",
+    )):
+        return "native-profile-load-failed"
+    return "engine-exited"
+
+
+def _bounded_stderr(stream, tail, limit=8192):
+    """Drain the child pipe without allowing output to grow in memory."""
+    try:
+        while chunk := stream.read(4096):
+            tail.append(chunk)
+            total = sum(len(part) for part in tail)
+            while total > limit and tail:
+                first = tail.popleft()
+                total -= len(first)
+                if total < limit:
+                    tail.appendleft(first[-(limit - total):])
+                    break
+    finally:
+        stream.close()
 
 
 def _native_json(path):
@@ -122,16 +172,30 @@ def run_orca(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIME
         proc = subprocess.Popen(
             command, cwd=str(workdir),
             env=slicing_environment(workdir),
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
+            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, start_new_session=True,
         )
+        # Drain stderr in parallel so a chatty CLI cannot deadlock. Retain a
+        # small diagnostic tail but never log the raw text or any private paths.
+        tail = deque()
+        reader = None
+        if proc.stderr is not None:
+            reader = threading.Thread(target=_bounded_stderr, args=(proc.stderr, tail), daemon=True)
+            reader.start()
         try:
-            proc.communicate(timeout=timeout_seconds)
+            proc.communicate(timeout=timeout_seconds) if reader is None else proc.wait(timeout=timeout_seconds)
         except subprocess.TimeoutExpired:
             os.killpg(proc.pid, signal.SIGKILL)
-            proc.communicate()
+            proc.wait()
+            if reader is not None:
+                reader.join(timeout=2)
             raise WorkerError("Slicing timed out.") from None
+        if reader is not None:
+            reader.join(timeout=2)
         if proc.returncode != 0:
-            raise WorkerError("OrcaSlicer failed. Check the engine-native profiles.")
+            reason = _engine_exit_reason(b"".join(tail))
+            # Reason and exit status are bounded diagnostics, not CLI output.
+            logger.warning("OrcaSlicer subprocess ended: exit=%s category=%s", proc.returncode, reason)
+            raise WorkerError("OrcaSlicer CLI exited: " + reason + ".")
         outdir = workdir / "orca-output"
         if outdir.is_symlink() or not outdir.is_dir():
             raise WorkerError("OrcaSlicer produced no safe output directory.")
