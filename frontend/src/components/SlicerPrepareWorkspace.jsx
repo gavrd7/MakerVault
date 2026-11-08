@@ -40,6 +40,7 @@ export default function SlicerPrepareWorkspace({
   defaultColor, onManualColorChange, canEdit, busy, error, notice,
   onChangeProfiles, onSaveDraft, onSlice, engine, printer,
   selectedProfiles, workerConfigured, printerId,
+  printerDetails, nozzleMm,
   localAssets = [], onLocalAssetsChange,
 }) {
   const editorRef = useRef(null);
@@ -201,7 +202,19 @@ export default function SlicerPrepareWorkspace({
       </span>)}
     </div>
     <div className="slicerPrepareStructure">
-      <aside className="slicerPrepareTree" aria-label="Build plate object tree">
+      <div className="slicerPrepareLeftRail">
+        <section className="slicerPreparePrinter" aria-label="Selected printer configuration">
+          <span className="slicerPreparePrinterCaption">Printer</span>
+          <strong>{printerDetails?.name || printer || "No printer selected"}</strong>
+          <div className="slicerPreparePrinterMeta">
+            <span>Nozzle: {nozzleMm ? Number(nozzleMm).toFixed(2) + " mm" : "Not selected"}</span>
+            <span>Build plate: {Array.isArray(plate?.size_mm)
+              ? plate.size_mm.slice(0, 2).join(" × ") + " mm" : "Unknown"}</span>
+          </div>
+          <span className="slicerPreparePrinterProfile">{selectedProfiles?.printer || "Native printer profile not selected"}</span>
+          <button type="button" onClick={onChangeProfiles}>Change printer/profile</button>
+        </section>
+        <aside className="slicerPrepareTree" aria-label="Build plate object tree">
         <h4>Plate 1 · Models ({objects.length})</h4>
         {objects.length === 0 && <p>Add an STL to start editing.</p>}
         {objects.map((object, index) => <button key={object.instance_id} type="button"
@@ -212,7 +225,8 @@ export default function SlicerPrepareWorkspace({
           <span>{index + 1}. {itemName(object)}</span>
         </button>)}
         <small>All instances are editable. Multi-plate output and modifier trees are not implemented yet.</small>
-      </aside>
+        </aside>
+      </div>
       <div className="slicerPrepareScene" ref={editorRef}>
         <SlicerPlateEditor files={files} localAssets={localAssets}
           onLocalAssetsChange={onLocalAssetsChange} objects={objects} onChange={updatePlate}
