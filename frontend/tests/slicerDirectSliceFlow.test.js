@@ -85,7 +85,7 @@ test("plate actions call the shared workflow directly and show local errors", ()
 
 test("saved drafts can be deleted without touching model files", () => {
   assert.match(source, /can_delete === true/);
-  assert.match(source, /job\.status !== "draft" \|\| !mayDeleteDraft/);
+  assert.match(source, /\["draft", "failed", "cancelled", "stale"\]\.includes\(job\.status\)/);
   assert.match(source, /method: "DELETE"/);
   assert.match(source, /Delete draft/);
   assert.match(source, /The source model was preserved/);
@@ -103,4 +103,9 @@ test("three distinct plate actions control draft creation and G-code library ret
 test("temporary models are supported without adding STL to the files library", () => {
   assert.match(source, /A temporary STL has not finished uploading/);
   assert.doesNotMatch(source, /first import those STL files with/);
+});
+
+test("failed jobs expose a delete action while active jobs remain protected", () => {
+  assert.match(source, /mayDeleteDraft && \["draft", "failed", "cancelled", "stale"\]\.includes\(job\.status\)/);
+  assert.match(source, /job\.status === "draft" \? "Delete draft" : "Delete"/);
 });
