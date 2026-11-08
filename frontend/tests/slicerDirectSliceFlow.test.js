@@ -18,7 +18,7 @@ test("main workbench directly submits approved slicing jobs after draft creation
 test("a failed worker queue leaves a visible, retrievable saved draft", () => {
   assert.match(source, /Draft saved, but slicing could not start:/);
   assert.match(source, /if \(savedJob\) setShowDrafts\(true\)/);
-  assert.match(source, /No print was started or filament deducted/);
+  assert.match(source, /Generated G-code will remain private unless you add it to the library/);
 });
 
 test("visual build plate is the only model selector for slicing", () => {
