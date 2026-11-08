@@ -8,6 +8,7 @@ import SlicerPlateEditor from "./SlicerPlateEditor";
 import SlicerPrepareWorkspace from "./SlicerPrepareWorkspace";
 import SlicerEngineChoices from "./SlicerEngineChoices";
 import { slicerSpoolHex, recolorUnmodifiedPlate } from "./slicerSpoolColour";
+import SlicerSpoolPicker from "./SlicerSpoolPicker";
 import { spoolMaterial, chooseSuggestedProfile, defaultOfficialSearch, suggestOfficialVendor } from "./slicerProfileSuggestions";
 import { availableSlicerPrintConnections, preferredSlicerPrintConnection } from "./slicerPrintRouting";
 
@@ -875,16 +876,15 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         <label>Nozzle diameter (mm)
           <input required type="number" step="0.01" min="0.1" max="2" disabled={!canPrepare || busy} value={form.nozzle_mm} onChange={e => update("nozzle_mm", e.target.value)} />
         </label>
-        <label className="full">Physical filament spool (optional; does not replace the slicer's filament preset)
-          <select disabled={!canPrepare || busy} value={form.spool_id} onChange={e => chooseSpool(e.target.value)}>
-            <option value="">No physical spool selected</option>
-            {spools.map(spool => <option key={spool.id} value={spool.id}>{spool.spool_id} · {spool.filament}</option>)}
-          </select>
+        <div className="full slicerSpoolField">
+          <span className="slicerSpoolFieldLabel">Physical filament spool (optional; does not replace the slicer's filament preset)</span>
+          <SlicerSpoolPicker spools={spools} value={form.spool_id}
+            onChange={chooseSpool} disabled={!canPrepare || busy} />
           {selectedSpoolHex && <span className="slicerSpoolColour">
             <span className="slicerSpoolSwatch" style={{ backgroundColor: selectedSpoolHex }} aria-hidden="true" />
             Preview colour: {selectedSpoolHex} · Individual models can override this colour
           </span>}
-        </label>
+        </div>
         <label>Build plate
           <select disabled={!canPrepare || busy} value={form.plate} onChange={e => update("plate", e.target.value)}>
             <option value="default">Stock / default plate</option>
