@@ -27,7 +27,8 @@ test("the slicer offers opt-in save at slicing time or from a completed job", ()
   const workbench = read("SlicerWorkbench.jsx");
   const history = read("SavedSlicerJobsModal.jsx");
   assert.match(workbench, /save_gcode_to_library: saveOutput/);
-  assert.match(workbench, /onClick=\{\(\) => saveDraft\("save-and-slice"\)\}/);
+  assert.match(workbench, /onClick=\{\(\) => saveDraft\("quick"\)\}/);
+  assert.match(workbench, /previewJob\.settings\?\.workflow !== "quick"/);
   assert.match(workbench, /save-gcode\//);
   assert.match(history, /Add G-code to library/);
   assert.match(history, /save-gcode\//);
