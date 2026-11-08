@@ -388,7 +388,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   }
 
 
-  function requestPrint(job) {
+  function requestPrint(job, action = "print") {
     if (job.status !== "completed" || !job.output_asset?.id) return;
     const printer = printers.find(item => String(item.id) === String(job.printer?.id));
     if (!printer) {
@@ -406,6 +406,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       printer,
       connectionId: String(preferredSlicerPrintConnection(printer).id),
       choosing: connections.length > 1,
+      action,
     });
   }
 
@@ -1177,6 +1178,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           {!previewJob.gcode_in_library && <button type="button" disabled={busy}
             onClick={() => saveOutputToLibrary(previewJob)}>Add G-code to library</button>}
           {previewJob.gcode_in_library && <button type="button" onClick={onOpenGcode}>Open G-code library</button>}
+          {canPrint && <button type="button" className="primary"
+            onClick={() => requestPrint(previewJob, "upload")}>Send to printer</button>}
         </div>
         {error && <p className="integrationError" role="alert">{error}</p>}
         {notice && <p role="status">{notice}</p>}
@@ -1223,7 +1226,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       </>}
     </Modal>}
     {previewFile && <FileModelViewerModal file={previewFile} onClose={() => setPreviewFile(null)} />}
-    {printSelection?.choosing && <Modal title="Choose printer connection" subtitle={"Print " + (printSelection.job.output_asset?.filename || "sliced G-code") + " on " + printSelection.printer.name} onClose={() => setPrintSelection(null)}>
+    {printSelection?.choosing && <Modal title="Choose printer connection" subtitle={(printSelection.action === "upload" ? "Send " : "Print ") + (printSelection.job.output_asset?.filename || "sliced G-code") + " on " + printSelection.printer.name} onClose={() => setPrintSelection(null)}>
       <p>This uses MakerVault's existing printer-submission checks and requires a separate confirmation before printing.</p>
       <div className="formGrid">
         <label className="full">Printer connection
@@ -1233,7 +1236,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         </label>
         <div className="full settingsActions">
           <button type="button" onClick={() => setPrintSelection(null)}>Cancel</button>
-          <button type="button" className="primary" onClick={openPrinterReview}>Review print</button>
+          <button type="button" className="primary" onClick={openPrinterReview}>{printSelection.action === "upload" ? "Review upload" : "Review print"}</button>
         </div>
       </div>
     </Modal>}
@@ -1246,7 +1249,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         connection={connection}
         canEdit={canPrint}
         initialAsset={printSelection.job.output_asset}
-        initialAction="print"
+        initialAction={printSelection.action === "upload" ? "upload" : "print"}
         onChanged={refresh}
         onClose={() => setPrintSelection(null)}
       /> : null;
