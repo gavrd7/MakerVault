@@ -92,7 +92,7 @@ KNOWN_RANGE_KEYS = frozenset({
     "top_shell_layers", "bottom_shell_layers",
 })
 _RANGE_ERROR_LINE = re.compile(
-    r"^\\s*([a-z][a-z0-9_]{1,70})\\s*:\\s*[^\\r\\n]{0,100}\\bnot in range\\b", re.I
+    r"^\s*([a-z][a-z0-9_]{1,70})\s*:\s*[^\r\n]{0,120}\bnot in range\b[^\r\n]{0,100}$", re.I
 )
 
 
