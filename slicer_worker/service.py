@@ -222,7 +222,15 @@ class Handler(BaseHTTPRequestHandler):
                 "3MF plate membership does not match mesh objects.": "invalid-3mf",
                 "3MF transform is missing or invalid.": "invalid-3mf",
             }
-            reason = safe_reasons.get(str(exc), "validation-error")
+            if str(exc).startswith("OrcaSlicer CLI exited: "):
+                candidate = str(exc).removeprefix("OrcaSlicer CLI exited: ").removesuffix(".")
+                categories = {
+                    "qt-platform-failed", "missing-runtime-library", "appimage-runtime-failed",
+                    "unsupported-cli-option", "native-profile-load-failed", "engine-exited",
+                }
+                reason = candidate if candidate in categories else "engine-exited"
+            else:
+                reason = safe_reasons.get(str(exc), "validation-error")
             logger.warning("Isolated slicer rejected job at %s (%s, %s)", stage,
                            type(exc).__name__, reason)
             return self._json(422, {
