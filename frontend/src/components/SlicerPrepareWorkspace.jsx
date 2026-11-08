@@ -19,7 +19,7 @@ const TOOLS = [
   { name: "Auto-orient", pending: "Geometry-based safe orientation solver" },
   { name: "Lay on face", pending: "Mesh face selection and normal alignment" },
   { name: "Split", pending: "Connected-component mesh separation" },
-  { name: "Individual XYZ scale", pending: "Nonuniform 3MF transforms and bed clearance" },
+  { name: "Individual XYZ scale", target: "scale_xyz_percent" },
   { name: "Hollow", pending: "Watertight offset geometry and drain holes" },
   { name: "Drill", pending: "Validated boolean subtraction" },
   { name: "Cut", pending: "Robust planar mesh cutting" },
