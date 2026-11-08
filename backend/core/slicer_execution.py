@@ -287,15 +287,22 @@ def process_queued_job(job_id):
                 row.message = str(exc)[:240]
                 row.save(update_fields=["status", "message", "updated_at"])
         return {"status": "failed"}
-    except Exception:
-        # Preserve detailed traceback in server logs without exposing raw
-        # profile contents, filesystem paths, tokens or worker responses to UI.
+    except Exception as exc:
+        # Only expose explicit, known-safe model-validation messages here.
+        # Unrecognised errors still use a generic status; the real traceback
+        # remains in MakerVault's application logs, not worker logs.
+        from .slicer_profiles import SlicerProfileError
+        diagnostic = None
+        if stage == "assembling the build plate 3MF" and isinstance(exc, SlicerProfileError):
+            diagnostic = str(exc)[:180]
         logger.exception("Slicing job %s failed during %s", job.pk, stage)
         with transaction.atomic():
             row = SliceJob.objects.select_for_update().filter(pk=job.pk).first()
             if row and row.status == "running":
                 row.status = "failed"
-                row.message = "Slicing failed during " + stage + ". Check MakerVault worker logs for this job."
+                row.message = ("Build-plate preparation failed: " + diagnostic
+                               if diagnostic else "Slicing failed during " + stage +
+                               ". Check MakerVault application logs for this job.")[:240]
                 row.save(update_fields=["status", "message", "updated_at"])
         return {"status": "failed"}
 
