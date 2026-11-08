@@ -29,17 +29,17 @@ G1 X10 Y20 E2.0
         self.assertEqual(result["feature_counts"]["Outer wall"], 2)
 
     def test_missing_metadata_is_unknown_not_guessed(self):
-        result = generated_preview("G1 X2 Y3 E1\\n")
+        result = generated_preview("G1 X2 Y3 E1\n")
         self.assertIsNone(result["estimated_time_seconds"])
         self.assertIsNone(result["filament_g"])
 
     def test_relative_extrusion_and_g92_reset(self):
         result = generated_preview(
-            "M83\\nG1 Z0.2\\nG1 X10 E1\\nG1 X20 E0.5\\nG92 E0\\nG1 X30 E1\\n"
+            "M83\nG1 Z0.2\nG1 X10 E1\nG1 X20 E0.5\nG92 E0\nG1 X30 E1\n"
         )
         self.assertEqual(result["segment_count"], 3)
 
     def test_truncated_scan_never_claims_complete_layer_count(self):
-        result = generated_preview("G1 X2 Y3 E1\\n", truncated=True)
+        result = generated_preview("G1 X2 Y3 E1\n", truncated=True)
         self.assertIsNone(result["layer_count"])
         self.assertTrue(result["sampled"])
