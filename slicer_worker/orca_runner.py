@@ -125,6 +125,28 @@ def _native_json(path):
                         encoding="utf-8")
 
 
+def _execution_binary(binary: Path):
+    """Use the extracted, image-pinned AppRun instead of AppImage/FUSE.
+
+    The registry verifies the unchanged official AppImage SHA-256. Its extracted
+    AppDir is baked into the same immutable Docker image at build time. Never
+    execute an AppImage from the per-job scratch directory or extract one during
+    a request.
+    """
+    if binary.suffix.lower() != ".appimage":
+        return binary
+    appdir = binary.parent / "squashfs-root"
+    entry = appdir / "AppRun"
+    if appdir.is_symlink() or not appdir.is_dir() or not entry.exists():
+        raise WorkerError("Pinned OrcaSlicer AppImage has no extracted runtime.")
+    resolved_dir = appdir.resolve(strict=True)
+    resolved_entry = entry.resolve(strict=True)
+    if (not resolved_entry.is_relative_to(resolved_dir)
+            or not resolved_entry.is_file() or not os.access(resolved_entry, os.X_OK)):
+        raise WorkerError("Pinned OrcaSlicer extracted runtime is unsafe or unavailable.")
+    return entry
+
+
 def orca_command(binary: Path, workdir: Path):
     """Fixed single-model, single-plate slicing command."""
     if binary.is_symlink() or not binary.is_file() or not os.access(binary, os.X_OK):
@@ -148,8 +170,9 @@ def orca_command(binary: Path, workdir: Path):
     if outdir.exists() or outdir.is_symlink():
         raise WorkerError("Output directory is not empty; fresh scratch is required.")
     _output_path(workdir)
+    executable = _execution_binary(binary)
     return [
-        str(binary), str(model), "--load-settings",
+        str(executable), str(model), "--load-settings",
         str(profiles[2]) + ";" + str(profiles[0]),
         "--load-filaments", str(profiles[1]),
         "--load-defaultfila",
