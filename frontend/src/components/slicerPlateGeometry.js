@@ -4,12 +4,15 @@
 export function plateEnvelope(item, dimensions) {
   const x = Number(item.x_mm), y = Number(item.y_mm);
   const width = Number(dimensions?.width), depth = Number(dimensions?.depth);
-  const scale = Number(item.scale_percent) / 100;
+  const legacyScale = Number(item.scale_percent) / 100;
+  const xyz = item.scale_xyz_percent;
+  const sx = Array.isArray(xyz) ? Number(xyz[0]) / 100 : legacyScale;
+  const sy = Array.isArray(xyz) ? Number(xyz[1]) / 100 : legacyScale;
   const angle = Number(item.rotation_deg) * Math.PI / 180;
-  if (![x,y,width,depth,scale,angle].every(Number.isFinite) ||
-      width <= 0 || depth <= 0 || scale <= 0) return null;
-  const hx = scale * (Math.abs(Math.cos(angle)) * width + Math.abs(Math.sin(angle)) * depth) / 2;
-  const hy = scale * (Math.abs(Math.sin(angle)) * width + Math.abs(Math.cos(angle)) * depth) / 2;
+  if (![x,y,width,depth,sx,sy,angle].every(Number.isFinite) ||
+      width <= 0 || depth <= 0 || sx <= 0 || sy <= 0) return null;
+  const hx = (Math.abs(Math.cos(angle)) * sx * width + Math.abs(Math.sin(angle)) * sy * depth) / 2;
+  const hy = (Math.abs(Math.sin(angle)) * sx * width + Math.abs(Math.cos(angle)) * sy * depth) / 2;
   return { minX: x-hx, maxX: x+hx, minY: y-hy, maxY: y+hy };
 }
 
