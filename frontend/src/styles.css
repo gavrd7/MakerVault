@@ -3828,3 +3828,15 @@ a:focus-visible,
    model controls; slice actions remain a separate, right-aligned footer. */
 .slicerPlateCanvasColumn>.slicerPlateHint:last-child{margin-bottom:0}
 .slicerPlatePanel .slicerPlateFooter{margin-top:18px}
+
+/* Slicer-specific post-slice review: estimates above a scroll-safe layer view. */
+.slicerResultStats{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:10px;margin:14px 0}
+.slicerResultStats>div{border:1px solid var(--border,#394958);border-radius:10px;padding:12px;min-width:0;display:flex;flex-direction:column;gap:6px}
+.slicerResultStats small{color:var(--muted,#96a7b8)}
+.slicerResultStats strong{font-size:1.1rem;overflow-wrap:anywhere}
+.slicerResultToolpath{display:block;width:min(100%,590px);height:auto;max-height:540px;margin:12px auto;background:#101820;border-radius:10px;border:1px solid var(--border,#394958)}
+.slicerResultFeatures{display:flex;flex-wrap:wrap;gap:8px 16px;margin:12px 0}
+.slicerResultFeatures span{display:inline-flex;align-items:center;gap:6px;font-size:.85rem}
+.slicerResultFeatures i{display:inline-block;width:11px;height:11px;border-radius:3px}
+.slicerResultPreview>label{display:block;max-width:650px}
+.slicerResultPreview input[type=range]{display:block;width:100%;margin:9px 0}
