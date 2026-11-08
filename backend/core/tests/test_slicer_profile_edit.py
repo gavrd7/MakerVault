@@ -53,6 +53,52 @@ class NativeSlicerProfileEditorTests(SimpleTestCase):
                 {"retraction_distances_when_cut": 30},
             )
 
+    def test_custom_k2_copy_is_flattened_and_keeps_inherited_bed(self):
+        from io import BytesIO
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock, patch
+        import hashlib
+
+        def record(pk, name, data):
+            raw = json.dumps(data).encode()
+            storage = MagicMock()
+            storage.open.side_effect = lambda _name, _mode: BytesIO(raw)
+            file = SimpleNamespace(name=f"private/{pk}.json", storage=storage)
+            return SimpleNamespace(
+                pk=pk, name=name, owner_id=7, engine="orcaslicer",
+                engine_version="2.4.2", kind="printer",
+                file_asset=SimpleNamespace(file=file, owner_id=7),
+                content_sha256=hashlib.sha256(raw).hexdigest(),
+            )
+
+        parent = record("parent", "fdm_creality_common", {
+            "name": "fdm_creality_common",
+            "printable_height": "260",
+            "bed_exclude_area": ["0x0"],
+        })
+        child = record("child", "Creality K2 0.4 nozzle", {
+            "name": "Creality K2 0.4 nozzle",
+            "inherits": "fdm_creality_common",
+            "printable_area": ["0x0", "260x0", "260x260", "0x260"],
+            "retraction_distances_when_cut": "30",
+        })
+        chain = MagicMock()
+        chain.first.return_value = parent
+        with patch("core.slicer_native_resolution.SlicerProfile.objects.select_related") as source:
+            source.return_value.filter.return_value = chain
+            from core.slicer_native_resolution import resolved_native_profile
+            merged = resolved_native_profile(child)
+        candidate = json.loads(customise_native_json(
+            merged, "printer", "K2 custom standalone", {
+                "retraction_distances_when_cut": 18,
+            }
+        ))
+        self.assertNotIn("inherits", candidate)
+        self.assertEqual(candidate["printable_area"], ["0x0", "260x0", "260x260", "0x260"])
+        self.assertEqual(candidate["printable_height"], "260")
+        self.assertEqual(candidate["bed_exclude_area"], ["0x0"])
+        self.assertEqual(candidate["retraction_distances_when_cut"], "18")
+
     def test_unsafe_keys_numeric_ranges_and_postprocessors_are_rejected(self):
         original = b'{"name":"Original","layer_height":"0.2"}'
         for edits in (
