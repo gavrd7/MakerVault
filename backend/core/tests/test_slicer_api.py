@@ -285,6 +285,11 @@ class SliceJobApiTests(TestCase):
             {**valid, "asset_id": str(foreign.pk)},
             {**valid, "x_mm": float("inf")},
             {**valid, "scale_percent": 0},
+            {**valid, "scale_xyz_percent": [0, 100, 100]},
+            {**valid, "scale_xyz_percent": [100, 401, 100]},
+            {**valid, "scale_xyz_percent": [100, True, 100]},
+            {**valid, "scale_xyz_percent": [100, 100]},
+            {**valid, "scale_xyz_percent": "100,100,100"},
             {**valid, "color": "#red"},
             {**valid, "script": "M112"},
         ):
@@ -292,6 +297,20 @@ class SliceJobApiTests(TestCase):
                 response = self.post({**self.payload, "settings": {"plate_objects": [obj]}})
                 self.assertEqual(response.status_code, 400, response.content)
         self.assertEqual(SliceJob.objects.count(), 0)
+
+    def test_individual_xyz_scale_is_saved_without_changing_legacy_uniform_drafts(self):
+        self.client.force_login(self.owner)
+        source = {
+            "instance_id": str(uuid.uuid4()), "asset_id": str(self.input_asset.pk),
+            "x_mm": 0, "y_mm": 0, "rotation_deg": 90,
+            "scale_percent": 100, "scale_xyz_percent": [150, 50, 200],
+            "color": "#58b5e4",
+        }
+        result = self.post({**self.payload, "settings": {"plate_objects": [source]}})
+        self.assertEqual(result.status_code, 201, result.content)
+        job = SliceJob.objects.get(pk=result.json()["job"]["id"])
+        self.assertEqual(job.settings["plate_objects"][0]["scale_xyz_percent"], [150.0, 50.0, 200.0])
+        self.assertEqual(job.settings["plate_objects"][0]["scale_percent"], 100.0)
 
     def test_inert_draft_lifecycle_and_engine_catalogue(self):
         self.client.force_login(self.owner)
