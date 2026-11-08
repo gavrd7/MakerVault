@@ -34,6 +34,25 @@ class NativeSlicerProfileEditorTests(SimpleTestCase):
         self.assertEqual(edited["nozzle_temperature"], ["250"])
         self.assertEqual(edited["hot_plate_temp"], ["80"])
 
+    def test_k2_long_retraction_must_be_explicitly_adjusted_on_a_copy(self):
+        original = json.dumps({
+            "name": "Official Creality K2 0.4 nozzle",
+            "retraction_distances_when_cut": "30",
+            "nozzle_diameter": ["0.4"],
+        }).encode()
+        candidate = json.loads(customise_native_json(
+            original, "printer", "K2 CLI compatibility candidate",
+            {"retraction_distances_when_cut": 18},
+        ))
+        self.assertEqual(candidate["retraction_distances_when_cut"], "18")
+        self.assertEqual(candidate["nozzle_diameter"], ["0.4"])
+        self.assertEqual(json.loads(original)["retraction_distances_when_cut"], "30")
+        with self.assertRaises(SlicerProfileError):
+            customise_native_json(
+                original, "printer", "Invalid K2 value",
+                {"retraction_distances_when_cut": 30},
+            )
+
     def test_unsafe_keys_numeric_ranges_and_postprocessors_are_rejected(self):
         original = b'{"name":"Original","layer_height":"0.2"}'
         for edits in (
