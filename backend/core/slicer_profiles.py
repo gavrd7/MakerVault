@@ -69,10 +69,21 @@ def inspect_native_profile(asset, engine_key):
     if not asset.file:
         raise SlicerProfileError("Selected profile has no stored file.")
     try:
-        # Always obtain a new decrypted private-storage stream. Reusing a
-        # cached FieldFile stream after it has closed is not reliable.
-        with asset.file.storage.open(asset.file.name, "rb") as stream:
-            raw = stream.read(MAX_PROFILE_BYTES + 1)
+        if getattr(asset.file, "_committed", True) is False:
+            # Newly imported ContentFile has not been persisted yet. Reading
+            # by its provisional name from storage will always fail.
+            pending = asset.file.file
+            offset = pending.tell()
+            try:
+                pending.seek(0)
+                raw = pending.read(MAX_PROFILE_BYTES + 1)
+            finally:
+                pending.seek(offset)
+        else:
+            # Existing encrypted private files must be opened through a fresh
+            # storage stream, not a cached FieldFile that may be closed.
+            with asset.file.storage.open(asset.file.name, "rb") as stream:
+                raw = stream.read(MAX_PROFILE_BYTES + 1)
     except (OSError, ValueError):
         raise SlicerProfileError("Profile contents are unavailable.") from None
     if not raw or len(raw) > MAX_PROFILE_BYTES or b"\x00" in raw:
