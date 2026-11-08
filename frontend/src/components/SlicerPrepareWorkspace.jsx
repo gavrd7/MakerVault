@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import SlicerPlateEditor from "./SlicerPlateEditor";
+import SlicerUiIcon from "./SlicerUiIcon";
 
 /**
  * Interactive Prepare shell. All slicing still goes through the existing
@@ -8,34 +9,35 @@ import SlicerPlateEditor from "./SlicerPlateEditor";
  * native format round-trip have been implemented and tested.
  */
 const TOOLS = [
-  { name: "Add model", target: "import" },
-  { name: "Move", target: "x_mm" },
-  { name: "Rotate", target: "rotation_deg" },
-  { name: "Scale", target: "scale_percent" },
-  { name: "Auto-arrange", target: "arrange" },
-  { name: "Duplicate", target: "duplicate" },
-  { name: "Remove", target: "remove" },
-  { name: "Add plate", pending: "Multi-plate project persistence and native plate export" },
-  { name: "Auto-orient", pending: "Geometry-based safe orientation solver" },
-  { name: "Lay on face", pending: "Mesh face selection and normal alignment" },
-  { name: "Split", pending: "Connected-component mesh separation" },
-  { name: "Individual XYZ scale", target: "scale_xyz_percent" },
-  { name: "Hollow", pending: "Watertight offset geometry and drain holes" },
-  { name: "Drill", pending: "Validated boolean subtraction" },
-  { name: "Cut", pending: "Robust planar mesh cutting" },
-  { name: "Mesh boolean", pending: "Robust union, intersection and difference" },
-  { name: "Measure", pending: "Face, edge and coordinate measurement" },
-  { name: "Support painting", pending: "Native per-face support annotations" },
-  { name: "Seam painting", pending: "Native seam-region annotations" },
-  { name: "Variable layer height", pending: "Native variable layer representation" },
-  { name: "Colour painting", pending: "Native multi-material annotations and tool mapping" },
+  { name: "Add model", target: "import", icon: "add" },
+  { name: "Move", target: "x_mm", icon: "move" },
+  { name: "Rotate", target: "rotation_deg", icon: "rotate" },
+  { name: "Scale", target: "scale_percent", icon: "scale" },
+  { name: "Auto-arrange", target: "arrange", icon: "arrange" },
+  { name: "Duplicate", target: "duplicate", icon: "duplicate" },
+  { name: "Remove", target: "remove", icon: "remove" },
+  { name: "Add plate", icon: "add", pending: "Multi-plate project persistence and native plate export" },
+  { name: "Auto-orient", icon: "orient", pending: "Geometry-based safe orientation solver" },
+  { name: "Lay on face", icon: "face", pending: "Mesh face selection and normal alignment" },
+  { name: "Split", icon: "split", pending: "Connected-component mesh separation" },
+  { name: "Individual XYZ scale", target: "scale_xyz_percent", icon: "scale" },
+  { name: "Hollow", icon: "hollow", pending: "Watertight offset geometry and drain holes" },
+  { name: "Drill", icon: "drill", pending: "Validated boolean subtraction" },
+  { name: "Cut", icon: "cut", pending: "Robust planar mesh cutting" },
+  { name: "Mesh boolean", icon: "boolean", pending: "Robust union, intersection and difference" },
+  { name: "Measure", icon: "measure", pending: "Face, edge and coordinate measurement" },
+  { name: "Support painting", icon: "paint", pending: "Native per-face support annotations" },
+  { name: "Seam painting", icon: "paint", pending: "Native seam-region annotations" },
+  { name: "Variable layer height", icon: "layers", pending: "Native variable layer representation" },
+  { name: "Colour painting", icon: "paint", pending: "Native multi-material annotations and tool mapping" },
 ];
-const GROUPS = ["Quality", "Strength", "Speed", "Supports", "Multifilament", "Others"];
+const GROUPS = [["Quality", "quality"], ["Strength", "strength"], ["Speed", "speed"],
+  ["Supports", "supports"], ["Multifilament", "multifilament"], ["Others", "others"]];
 
 export default function SlicerPrepareWorkspace({
   objects, onChange, files, plate, onPrimaryChange, onFilesUploaded,
   defaultColor, onManualColorChange, canEdit, busy, error, notice,
-  onBackToSetup, onSaveDraft, onSlice, engine, printer,
+  onChangeProfiles, onSaveDraft, onSlice, engine, printer,
   selectedProfiles, workerConfigured,
 }) {
   const editorRef = useRef(null);
@@ -46,6 +48,7 @@ export default function SlicerPrepareWorkspace({
   const [selectedId, setSelectedId] = useState("");
   const [scope, setScope] = useState("global");
   const [group, setGroup] = useState("Quality");
+  const [toolMode, setToolMode] = useState("select");
   latest.current = objects;
 
   const updatePlate = useCallback(next => {
@@ -101,6 +104,10 @@ export default function SlicerPrepareWorkspace({
   const itemName = object => files.find(file => String(file.id) === String(object.asset_id))
     ?.name || "STL model";
   function selectTool(tool) {
+    if (tool.target === "x_mm" || tool.target === "rotation_deg") {
+      setToolMode(tool.target === "x_mm" ? "move" : "rotate");
+      return;
+    }
     const el = editorRef.current?.querySelector(
       tool.target === "import" ? 'input[type="file"][accept=".stl"]' :
         tool.target === "arrange" ? '[data-slicer-action="arrange"]' :
@@ -124,17 +131,24 @@ export default function SlicerPrepareWorkspace({
         <p>Engine: {engine || "Not selected"} · Printer: {printer || "Not selected"} ·
           Native profiles remain engine-specific.</p>
       </div>
-      <button type="button" onClick={onBackToSetup}>← Slicer setup</button>
+      <button type="button" className="slicerChangeProfiles" onClick={onChangeProfiles}>
+        <SlicerUiIcon name="others" /> Change profiles
+      </button>
     </div>
     <div className="slicerPrepareTools" role="toolbar" aria-label="Model editing tools">
       <button type="button" disabled={!undoRef.current.length || busy} onClick={undo}
-        title="Undo model edit (Ctrl+Z)">Undo</button>
+        aria-label="Undo" title="Undo model edit (Ctrl+Z)"><SlicerUiIcon name="undo" /></button>
       <button type="button" disabled={!redoRef.current.length || busy} onClick={redo}
-        title="Redo model edit (Ctrl+Y)">Redo</button>
+        aria-label="Redo" title="Redo model edit (Ctrl+Y)"><SlicerUiIcon name="redo" /></button>
       {TOOLS.map(tool => <button key={tool.name} type="button"
+        className={((tool.target === "x_mm" && toolMode === "move") ||
+          (tool.target === "rotation_deg" && toolMode === "rotate")) ? "isActive" : ""}
+        aria-pressed={tool.target === "x_mm" || tool.target === "rotation_deg"
+          ? (tool.target === "x_mm" ? toolMode === "move" : toolMode === "rotate") : undefined}
+        aria-label={tool.name}
         disabled={!!tool.pending || !canEdit || busy || (tool.target !== "import" && !objects.length)}
         title={tool.pending ? "Not implemented: " + tool.pending : tool.name}
-        onClick={() => selectTool(tool)}>{tool.name}</button>)}
+        onClick={() => selectTool(tool)}><SlicerUiIcon name={tool.icon || "others"} /></button>)}
     </div>
     <div className="slicerPrepareStructure">
       <aside className="slicerPrepareTree" aria-label="Build plate object tree">
@@ -153,7 +167,7 @@ export default function SlicerPrepareWorkspace({
         <SlicerPlateEditor files={files} objects={objects} onChange={updatePlate}
           onPrimaryChange={onPrimaryChange} onFilesUploaded={onFilesUploaded}
           onManualColorChange={onManualColorChange} defaultColor={defaultColor}
-          plate={plate} canEdit={canEdit && !busy} selectedInstanceId={selectedId}
+          plate={plate} canEdit={canEdit && !busy} toolMode={toolMode} selectedInstanceId={selectedId}
           onSelectedInstanceChange={setSelectedId} />
       </div>
       <aside className="slicerPrepareSettings" aria-label="Process settings categories">
@@ -162,17 +176,18 @@ export default function SlicerPrepareWorkspace({
           <button type="button" className={scope === "global" ? "selected" : ""}
             aria-pressed={scope === "global"} onClick={() => setScope("global")}>Global</button>
           <button type="button" className={scope === "objects" ? "selected" : ""}
-            aria-pressed={scope === "objects"} onClick={() => setScope("objects")}>Objects</button>
+            aria-pressed={scope === "objects"} onClick={() => setScope("objects")}>Object</button>
         </div>
         <nav aria-label="Process settings groups">
-          {GROUPS.map(name => <button key={name} type="button"
+          {GROUPS.map(([name, icon]) => <button key={name} type="button"
             className={group === name ? "selected" : ""}
-            onClick={() => setGroup(name)}>{name}</button>)}
+            onClick={() => setGroup(name)}><SlicerUiIcon name={icon} size={16} /><span>{name}</span></button>)}
         </nav>
         <h4>{group}</h4>
         <p>{scope === "global"
           ? "The selected native process profile provides the current global settings."
-          : "Per-object overrides require native engine support and are not editable yet."}</p>
+          : "Object-specific overrides will be available when supported by the selected engine."}</p>
+        <p><strong>Printer:</strong> {selectedProfiles?.printer || "Not selected"}</p>
         <p><strong>Process:</strong> {selectedProfiles?.process || "Not selected"}</p>
         <p><strong>Filament:</strong> {selectedProfiles?.filament || "Not selected"}</p>
         <p className="projectUploadHint">Native setting editors will appear here after their engine-specific
