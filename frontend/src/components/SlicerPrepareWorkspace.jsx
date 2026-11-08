@@ -137,7 +137,7 @@ export default function SlicerPrepareWorkspace({
     return () => window.removeEventListener("keydown", listener);
   }, [undo, redo]);
 
-  const active = objects.find(row => row.instance_id === selectedId) || objects[0];
+  const active = selectedId ? objects.find(row => row.instance_id === selectedId) : null;
   const itemName = object => {
     const file = [...localAssets, ...files].find(row => String(row.id) === String(object.asset_id));
     return file?.name || file?.filename || "STL model";
