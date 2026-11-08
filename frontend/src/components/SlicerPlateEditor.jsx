@@ -333,25 +333,100 @@ export default function SlicerPlateEditor({
     sun.position.set(100, -120, 260);
     scene.add(sun);
 
+    // Draw the selected native printer polygon where available; use a
+    // plainly rectangular, labelled fallback when no inspected profile exists.
+    const nativePoints = Array.isArray(plate?.polygon_mm) &&
+      plate.polygon_mm.length >= 3 && plate.polygon_mm.length <= 24 &&
+      plate.polygon_mm.every(row => Array.isArray(row) && row.length === 2 &&
+        row.every(v => typeof v === "number" && Number.isFinite(v) && Math.abs(v) <= 10000))
+      ? plate.polygon_mm : null;
+    const nativeBounds = plate?.bounds_mm;
+    const centerX = nativePoints && Array.isArray(nativeBounds?.min) && Array.isArray(nativeBounds?.max)
+      ? (nativeBounds.min[0] + nativeBounds.max[0]) / 2 : bedX / 2;
+    const centerY = nativePoints && Array.isArray(nativeBounds?.min) && Array.isArray(nativeBounds?.max)
+      ? (nativeBounds.min[1] + nativeBounds.max[1]) / 2 : bedY / 2;
+    const points = nativePoints
+      ? nativePoints.map(([x, y]) => [x - centerX, y - centerY])
+      : [[-bedX / 2, -bedY / 2], [bedX / 2, -bedY / 2],
+        [bedX / 2, bedY / 2], [-bedX / 2, bedY / 2]];
+    const plateShape = new THREE.Shape();
+    points.forEach(([x, y], index) => {
+      if (index === 0) plateShape.moveTo(x, y);
+      else plateShape.lineTo(x, y);
+    });
+    plateShape.closePath();
     const bed = new THREE.Mesh(
-      new THREE.PlaneGeometry(bedX, bedY),
+      new THREE.ShapeGeometry(plateShape),
       new THREE.MeshStandardMaterial({ color: "#263342", side: THREE.DoubleSide, roughness: 0.94 }),
     );
     scene.add(bed);
-    const grid = new THREE.GridHelper(Math.max(bedX, bedY), 20, 0x66839e, 0x40536b);
-    grid.rotation.x = Math.PI / 2;
-    grid.position.z = 0.25;
-    scene.add(grid);
+    // Millimetre-accurate 10 mm minor / 50 mm major divisions. Clip grid
+    // lines to the native polygon, rather than drawing an oversized square.
+    const inside = (x, y) => {
+      let hit = false;
+      for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+        const [xi, yi] = points[i], [xj, yj] = points[j];
+        if ((yi > y) !== (yj > y) &&
+            x < (xj - xi) * (y - yi) / (yj - yi) + xi) hit = !hit;
+      }
+      return hit;
+    };
+    const minor = [], major = [];
+    const step = 2;
+    for (let x = -bedX / 2; x <= bedX / 2 + 1e-5; x += step) {
+      const isGridLine = Math.abs(x / 10 - Math.round(x / 10)) < 1e-5;
+      if (!isGridLine) continue;
+      const target = Math.abs(x / 50 - Math.round(x / 50)) < 1e-5 ? major : minor;
+      for (let y = -bedY / 2; y < bedY / 2; y += step) {
+        const yy = Math.min(y + step, bedY / 2);
+        if (inside(x, (y + yy) / 2)) target.push(x, y, 0.24, x, yy, 0.24);
+      }
+    }
+    for (let y = -bedY / 2; y <= bedY / 2 + 1e-5; y += step) {
+      const isGridLine = Math.abs(y / 10 - Math.round(y / 10)) < 1e-5;
+      if (!isGridLine) continue;
+      const target = Math.abs(y / 50 - Math.round(y / 50)) < 1e-5 ? major : minor;
+      for (let x = -bedX / 2; x < bedX / 2; x += step) {
+        const xx = Math.min(x + step, bedX / 2);
+        if (inside((x + xx) / 2, y)) target.push(x, y, 0.24, xx, y, 0.24);
+      }
+    }
+    const gridLines = [minor, major].map((coords, index) => {
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.Float32BufferAttribute(coords, 3));
+      const lines = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({
+        color: index ? 0x637d97 : 0x3c536b, transparent: true, opacity: index ? 0.85 : 0.65,
+      }));
+      scene.add(lines);
+      return lines;
+    });
     const boundary = new THREE.LineLoop(
-      new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(-bedX / 2, -bedY / 2, 0.5),
-        new THREE.Vector3(bedX / 2, -bedY / 2, 0.5),
-        new THREE.Vector3(bedX / 2, bedY / 2, 0.5),
-        new THREE.Vector3(-bedX / 2, bedY / 2, 0.5),
-      ]),
+      new THREE.BufferGeometry().setFromPoints(points.map(([x, y]) => new THREE.Vector3(x, y, 0.5))),
       new THREE.LineBasicMaterial({ color: "#7dd3fc" }),
     );
     scene.add(boundary);
+    const markings = [];
+    const makeLabel = (message, x, y, width = 42) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 256; canvas.height = 80;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.font = "bold 39px sans-serif";
+      ctx.fillStyle = "#b3cada";
+      ctx.textAlign = "center";
+      ctx.fillText(message, 128, 53);
+      const texture = new THREE.CanvasTexture(canvas);
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, width * 80 / 256),
+        new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+      mesh.position.set(x, y, 0.7);
+      scene.add(mesh); markings.push(mesh);
+    };
+    // Negative Y is front in the same coordinate system used by the camera.
+    makeLabel("FRONT · −Y", 0, -bedY / 2 + 8, Math.min(bedX * 0.28, 64));
+    makeLabel("REAR · +Y", 0, bedY / 2 - 8, Math.min(bedX * 0.28, 64));
+    makeLabel("X →", bedX / 2 - 19, -bedY / 2 + 16, 28);
+    makeLabel("Y ↑", -bedX / 2 + 18, bedY / 2 - 17, 28);
 
     const camera = new THREE.PerspectiveCamera(45, 1, 0.5, 20000);
     camera.up.set(0, 0, 1);
@@ -499,7 +574,7 @@ export default function SlicerPlateEditor({
       renderer.dispose();
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
     };
-  }, [bedX, bedY]);
+  }, [bedX, bedY, plate?.polygon_mm, plate?.bounds_mm]);
 
   useEffect(() => {
     const state = sceneRef.current;
