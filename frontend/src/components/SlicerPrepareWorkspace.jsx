@@ -40,6 +40,7 @@ export default function SlicerPrepareWorkspace({
   defaultColor, onManualColorChange, canEdit, busy, error, notice,
   onChangeProfiles, onSaveDraft, onSlice, engine, printer,
   selectedProfiles, workerConfigured, printerId,
+  localAssets = [], onLocalAssetsChange,
 }) {
   const editorRef = useRef(null);
   const latest = useRef(objects);
@@ -137,14 +138,17 @@ export default function SlicerPrepareWorkspace({
   }, [undo, redo]);
 
   const active = objects.find(row => row.instance_id === selectedId) || objects[0];
-  const itemName = object => files.find(file => String(file.id) === String(object.asset_id))
-    ?.name || "STL model";
+  const itemName = object => {
+    const file = [...localAssets, ...files].find(row => String(row.id) === String(object.asset_id));
+    return file?.name || file?.filename || "STL model";
+  };
   function selectTool(tool) {
     if (tool.target === "x_mm" || tool.target === "rotation_deg") {
       // Selecting a handle-based tool should show its gizmo immediately,
       // including for the first model before it has been explicitly clicked.
       if (!selectedId && objects[0]?.instance_id) setSelectedId(objects[0].instance_id);
-      setToolMode(tool.target === "x_mm" ? "move" : "rotate");
+      setToolMode(current => current === (tool.target === "x_mm" ? "move" : "rotate")
+        ? "select" : (tool.target === "x_mm" ? "move" : "rotate"));
       return;
     }
     const el = editorRef.current?.querySelector(
@@ -210,11 +214,12 @@ export default function SlicerPrepareWorkspace({
         <small>All instances are editable. Multi-plate output and modifier trees are not implemented yet.</small>
       </aside>
       <div className="slicerPrepareScene" ref={editorRef}>
-        <SlicerPlateEditor files={files} objects={objects} onChange={updatePlate}
+        <SlicerPlateEditor files={files} localAssets={localAssets}
+          onLocalAssetsChange={onLocalAssetsChange} objects={objects} onChange={updatePlate}
           onPrimaryChange={onPrimaryChange} onFilesUploaded={onFilesUploaded}
           onManualColorChange={onManualColorChange} defaultColor={defaultColor}
           plate={plate} canEdit={canEdit && !busy} toolMode={toolMode} selectedInstanceId={selectedId}
-          onSelectedInstanceChange={setSelectedId} />
+          onSelectedInstanceChange={setSelectedId} onExitToolMode={() => setToolMode("select")} />
       </div>
       <aside className="slicerPrepareSettings" aria-label="Process settings categories">
         <h4>Print settings</h4>
@@ -236,7 +241,7 @@ export default function SlicerPrepareWorkspace({
         <p><strong>Printer:</strong> {selectedProfiles?.printer || "Not selected"}</p>
         <p><strong>Process:</strong> {selectedProfiles?.process || "Not selected"}</p>
         <p><strong>Filament:</strong> {selectedProfiles?.filament || "Not selected"}</p>
-        {group === "Multifilament" && <section className="slicerLiveMaterialSlots" aria-label="Loaded printer filament slots">
+        <section className="slicerLiveMaterialSlots" aria-label="Loaded printer filament slots">
           <div className="slicerLiveMaterialHeader"><strong>Loaded printer filaments</strong>
             <button type="button" disabled={materialRefreshing || !printerId} onClick={refreshPrinterMaterials}>
               {materialRefreshing ? "Refreshing…" : "Refresh"}
@@ -251,7 +256,7 @@ export default function SlicerPrepareWorkspace({
             </div>
           </div>)}
           <p role="status">{materialMessage}</p>
-        </section>}
+        </section>
         <p className="projectUploadHint">Native setting editors will appear here after their engine-specific
           schema, inheritance, validation and round-trip tests are ready. Use Slicer setup to edit a profile.</p>
       </aside>
