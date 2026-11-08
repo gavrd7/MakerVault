@@ -3879,3 +3879,24 @@ a:focus-visible,
   .slicerPrepareScene .slicerPlateControls{grid-template-columns:minmax(0,1fr)}
   .slicerPrepareSettings nav{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+
+/* Preview stage: explicit bounded extrusion sample, vertical layers/horizontal steps. */
+.slicerResultModeRow{display:flex;align-items:end;gap:18px;flex-wrap:wrap;margin:12px 0}
+.slicerResultModeRow>label:first-child{display:flex;align-items:center;gap:9px}
+.slicerResultModeRow select{width:auto;max-width:220px}
+.slicerResultLayerLayout{display:grid;grid-template-columns:minmax(0,1fr) minmax(62px,95px);align-items:stretch;gap:16px;max-width:800px;margin:12px auto}
+.slicerResultViewport{min-width:0}
+.slicerResultViewport .slicerResultToolpath{margin:0 auto;width:min(100%,600px)}
+.slicerResultLayerSlider{display:flex;flex-direction:column;align-items:center;justify-content:space-between;gap:10px;min-width:0;padding:12px 4px;border:1px solid var(--border,#394958);border-radius:10px}
+.slicerResultLayerSlider span{writing-mode:initial;text-align:center;line-height:1.2;font-size:.75rem}
+.slicerResultLayerSlider input[type=range]{writing-mode:vertical-lr;direction:rtl;flex:1 1 auto;min-height:240px;width:28px;margin:8px auto}
+.slicerResultSteps{padding:10px 0}
+.slicerResultSteps label{display:block;font-size:.85rem}
+.slicerResultSteps input[type=range]{width:100%;margin:12px 0}
+.slicerResultSteps .settingsActions{justify-content:center}
+.slicerResultVisibility{display:flex;flex-wrap:wrap;gap:8px 15px;border:1px solid var(--border,#394958);border-radius:10px;padding:10px;margin:15px 0}
+.slicerResultVisibility legend{font-weight:600}
+.slicerResultVisibility label{font-size:.82rem;white-space:nowrap}
+.slicerResultVisibility i{width:11px;height:11px;display:inline-block;border-radius:2px}
+@media(max-width:550px){.slicerResultLayerLayout{grid-template-columns:minmax(0,1fr) 58px;gap:7px}.slicerResultLayerSlider input[type=range]{min-height:190px}}
