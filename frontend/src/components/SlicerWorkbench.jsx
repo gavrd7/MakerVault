@@ -1202,8 +1202,12 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           {!previewJob.gcode_in_library && <button type="button" disabled={busy}
             onClick={() => saveOutputToLibrary(previewJob)}>Add G-code to library</button>}
           {previewJob.gcode_in_library && <button type="button" onClick={onOpenGcode}>Open G-code library</button>}
-          {canPrint && <button type="button" className="primary"
-            onClick={() => requestPrint(previewJob, "upload")}>Send to printer</button>}
+          {canPrint && <>
+            <button type="button"
+              onClick={() => requestPrint(previewJob, "upload")}>Upload to printer</button>
+            <button type="button" className="primary"
+              onClick={() => requestPrint(previewJob, "print")}>Upload and start print</button>
+          </>}}
         </div>
         {error && <p className="integrationError" role="alert">{error}</p>}
         {notice && <p role="status">{notice}</p>}
