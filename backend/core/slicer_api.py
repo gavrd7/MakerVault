@@ -142,10 +142,10 @@ def _draft_plate_settings(user, input_asset, settings):
     seen = set()
     saved = []
     for item in objects:
-        if not isinstance(item, dict) or set(item) != {
-            "instance_id", "asset_id", "x_mm", "y_mm", "rotation_deg",
-            "scale_percent", "color",
-        }:
+        required = {"instance_id", "asset_id", "x_mm", "y_mm", "rotation_deg",
+                    "scale_percent", "color"}
+        if (not isinstance(item, dict) or not required.issubset(item)
+                or set(item) - required - {"scale_xyz_percent"}):
             raise ValueError("Invalid plate model instance.")
         instance_id = str(_uuid(item["instance_id"]))
         asset_id = _uuid(item["asset_id"])
@@ -165,6 +165,14 @@ def _draft_plate_settings(user, input_asset, settings):
             if key != "scale_percent" and abs(raw) > bound:
                 raise ValueError("Plate transform exceeds its allowed range.")
             values[key] = round(float(raw), 3)
+        xyz = item.get("scale_xyz_percent")
+        if xyz is not None:
+            if (not isinstance(xyz, list) or len(xyz) != 3 or any(
+                isinstance(v, bool) or not isinstance(v, (int, float)) or
+                not math.isfinite(v) or not 5 <= v <= 400 for v in xyz
+            )):
+                raise ValueError("X, Y and Z scaling must each be between 5% and 400%.")
+            values["scale_xyz_percent"] = [round(float(v), 3) for v in xyz]
         color = item["color"]
         if not isinstance(color, str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
             raise ValueError("Choose a six-digit colour for each model.")
