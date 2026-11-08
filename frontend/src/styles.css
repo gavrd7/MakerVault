@@ -3840,3 +3840,42 @@ a:focus-visible,
 .slicerResultFeatures i{display:inline-block;width:11px;height:11px;border-radius:3px}
 .slicerResultPreview>label{display:block;max-width:650px}
 .slicerResultPreview input[type=range]{display:block;width:100%;margin:9px 0}
+
+
+/* Full interactive slicer Prepare view; setup and engine-native profiles stay separate. */
+.slicerSetupHeading,.slicerPrepareHeader{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+.slicerPrepareWorkspace{min-width:0}
+.slicerPrepareHeader p{color:var(--muted,#9aafc3);margin:6px 0 0}
+.slicerPrepareTools{display:flex;flex-wrap:wrap;gap:6px;padding:12px 0;margin:12px 0;border-top:1px solid var(--border,#3e4c5b);border-bottom:1px solid var(--border,#3e4c5b)}
+.slicerPrepareTools button{font-size:.83rem;white-space:nowrap}
+.slicerPrepareTools button:disabled{opacity:.38;cursor:not-allowed}
+.slicerPrepareStructure{display:grid;grid-template-columns:minmax(150px,220px) minmax(0,1fr) minmax(200px,270px);gap:12px;align-items:start}
+.slicerPrepareTree,.slicerPrepareSettings{min-width:0;padding:12px;border:1px solid var(--border,#3e4c5b);border-radius:12px;background:var(--surface-2,#101924)}
+.slicerPrepareTree h4,.slicerPrepareSettings h4{margin:0 0 12px}
+.slicerPrepareTree>button,.slicerPrepareSettings nav button{display:flex;align-items:center;text-align:left;gap:8px;width:100%;min-width:0;overflow-wrap:anywhere;padding:9px;margin-bottom:4px}
+.slicerPrepareTree>button span:first-child{width:12px;height:12px;flex:0 0 12px;border-radius:3px}
+.slicerPrepareTree button.selected,.slicerPrepareSettings button.selected{outline:1px solid var(--accent,#8c71e6);background:rgba(138,112,229,.12)}
+.slicerPrepareTree small,.slicerPrepareSettings p{display:block;color:var(--muted,#9aafc3);font-size:.82rem}
+.slicerPrepareScopes{display:flex;gap:7px;margin-bottom:12px}
+.slicerPrepareSettings nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px;margin-bottom:16px}
+.slicerPrepareSettings nav button{font-size:.78rem}
+.slicerPrepareScene{min-width:0}
+.slicerPrepareScene>.slicerPlatePanel{margin:0;padding:12px}
+.slicerPrepareScene .slicerPlateWorkspace{grid-template-columns:minmax(0,1fr);gap:12px}
+.slicerPrepareScene .slicerPlateCanvas{height:clamp(350px,58vh,820px);flex:none}
+.slicerPrepareScene .slicerPlateCanvasColumn{min-height:0}
+.slicerPrepareScene .slicerPlateControls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.slicerPrepareScene .slicerPlateControlsGroup{min-width:0}
+.slicerPrepareActions{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:16px}
+@media(max-width:1150px){
+  .slicerPrepareStructure{grid-template-columns:minmax(140px,190px) minmax(0,1fr)}
+  .slicerPrepareSettings{grid-column:1/-1}
+  .slicerPrepareSettings nav{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:760px){
+  .slicerPrepareStructure{grid-template-columns:minmax(0,1fr)}
+  .slicerPrepareScene{grid-row:1}
+  .slicerPrepareTree,.slicerPrepareSettings{grid-column:1}
+  .slicerPrepareScene .slicerPlateControls{grid-template-columns:minmax(0,1fr)}
+  .slicerPrepareSettings nav{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
