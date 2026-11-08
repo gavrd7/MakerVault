@@ -13,7 +13,9 @@ test("post-slice preview exposes vertical layer and horizontal sampled step cont
   assert.match(source, /onChange=\{e => \{ setLayer\(Number\(e\.target\.value\)\); setStep\(null\); \}\}/);
   assert.match(source, /Sampled toolhead step/);
   assert.match(source, /Show entire sampled layer/);
-  assert.match(source, /Current sampled toolhead location/);
+  assert.match(source, /<SlicerToolpath3D segments=\{allSegments\}/);
+  const renderer = fs.readFileSync(path.join(root, "SlicerToolpath3D.jsx"), "utf8");
+  assert.match(renderer, /marker\.position\.set\(\.\.\.lastStep\)/);
 });
 
 test("feature visibility is configurable while unavailable numeric modes remain disabled", () => {
