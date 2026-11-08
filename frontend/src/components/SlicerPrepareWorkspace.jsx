@@ -55,24 +55,27 @@ export default function SlicerPrepareWorkspace({
     redoRef.current = [];
     latest.current = next;
     onChange(next);
+    onPrimaryChange?.(next[0]?.asset_id || "");
     setHistoryVersion(value => value + 1);
-  }, [onChange]);
+  }, [onChange, onPrimaryChange]);
   const undo = useCallback(() => {
     if (!undoRef.current.length) return;
     const previous = undoRef.current.pop();
     redoRef.current.push(latest.current.map(row => ({ ...row })));
     latest.current = previous;
     onChange(previous);
+    onPrimaryChange?.(previous[0]?.asset_id || "");
     setHistoryVersion(value => value + 1);
-  }, [onChange]);
+  }, [onChange, onPrimaryChange]);
   const redo = useCallback(() => {
     if (!redoRef.current.length) return;
     const next = redoRef.current.pop();
     undoRef.current.push(latest.current.map(row => ({ ...row })));
     latest.current = next;
     onChange(next);
+    onPrimaryChange?.(next[0]?.asset_id || "");
     setHistoryVersion(value => value + 1);
-  }, [onChange]);
+  }, [onChange, onPrimaryChange]);
 
   useEffect(() => {
     const listener = event => {
@@ -103,7 +106,7 @@ export default function SlicerPrepareWorkspace({
             tool.target === "remove" ? '[data-slicer-action="remove"]' :
               '[data-slicer-field="' + tool.target + '"]'
     );
-    if (["arrange", "duplicate", "remove"].includes(tool.target)) el?.click();
+    if (["import", "arrange", "duplicate", "remove"].includes(tool.target)) el?.click();
     else {
       el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
       el?.focus();
