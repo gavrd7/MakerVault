@@ -42,7 +42,7 @@ export default function SlicerPrepareWorkspace({
   const latest = useRef(objects);
   const undoRef = useRef([]);
   const redoRef = useRef([]);
-  const [historyVersion, setHistoryVersion] = useState(0);
+  const [, setHistoryVersion] = useState(0);
   const [selectedId, setSelectedId] = useState("");
   const [scope, setScope] = useState("global");
   const [group, setGroup] = useState("Quality");
@@ -55,25 +55,27 @@ export default function SlicerPrepareWorkspace({
     redoRef.current = [];
     latest.current = next;
     onChange(next);
-    onPrimaryChange?.(next[0]?.asset_id || "");
+    if (next[0]?.asset_id !== old[0]?.asset_id) onPrimaryChange?.(next[0]?.asset_id || "");
     setHistoryVersion(value => value + 1);
   }, [onChange, onPrimaryChange]);
   const undo = useCallback(() => {
     if (!undoRef.current.length) return;
     const previous = undoRef.current.pop();
     redoRef.current.push(latest.current.map(row => ({ ...row })));
+    const before = latest.current;
     latest.current = previous;
     onChange(previous);
-    onPrimaryChange?.(previous[0]?.asset_id || "");
+    if (previous[0]?.asset_id !== before[0]?.asset_id) onPrimaryChange?.(previous[0]?.asset_id || "");
     setHistoryVersion(value => value + 1);
   }, [onChange, onPrimaryChange]);
   const redo = useCallback(() => {
     if (!redoRef.current.length) return;
     const next = redoRef.current.pop();
     undoRef.current.push(latest.current.map(row => ({ ...row })));
+    const before = latest.current;
     latest.current = next;
     onChange(next);
-    onPrimaryChange?.(next[0]?.asset_id || "");
+    if (next[0]?.asset_id !== before[0]?.asset_id) onPrimaryChange?.(next[0]?.asset_id || "");
     setHistoryVersion(value => value + 1);
   }, [onChange, onPrimaryChange]);
 
