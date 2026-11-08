@@ -132,7 +132,7 @@ def _draft_plate_settings(user, input_asset, settings):
     if not isinstance(settings, dict) or set(settings) - {"plate_objects", "save_gcode_to_library", "workflow"}:
         raise ValueError("Unsupported slicer plate settings.")
     workflow = settings.get("workflow", "interactive")
-    if workflow not in {"setup", "quick", "interactive"}:
+    if not isinstance(workflow, str) or workflow not in {"setup", "quick", "interactive"}:
         raise ValueError("Unknown slicer workflow.")
     save_to_library = settings.get("save_gcode_to_library", False)
     if not isinstance(save_to_library, bool):
