@@ -54,10 +54,10 @@ class SlicerWorkerClientTests(SimpleTestCase):
         response = Mock()
         response.status_code = 422
         response.headers = {"Content-Length": "120"}
-        response.json.return_value = {
+        response.iter_content.return_value = [__import__("json").dumps({
             "stage": "running slicer engine", "reason": "engine-exited",
             "error": "untrusted private data should never appear",
-        }
+        }).encode()]
         session.return_value.post.return_value = response
         with self.assertRaises(SlicerWorkerError) as caught:
             run_remote_job(uuid.uuid4(), "orcaslicer", "2.4.2",
