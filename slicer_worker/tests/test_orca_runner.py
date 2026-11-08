@@ -4,7 +4,7 @@ from tempfile import TemporaryDirectory
 from unittest import TestCase
 from unittest.mock import patch
 
-from slicer_worker.orca_runner import orca_command, run_orca
+from slicer_worker.orca_runner import orca_command, run_orca, _safe_out_of_range_options
 from slicer_worker.runner import WorkerError
 
 
@@ -156,6 +156,16 @@ class OrcaRunnerTests(TestCase):
         with patch("slicer_worker.orca_runner.subprocess.Popen", return_value=FakeProcess()):
             with self.assertRaisesRegex(WorkerError, "qt-platform-failed"):
                 run_orca(self.binary, self.root)
+
+    def test_out_of_range_diagnostic_only_reports_known_setting_names(self):
+        output = (b"Param values in 3mf/config error:\\n"
+                  b"wall_filament: 0 not in range [1.0,100.0]\\n"
+                  b"tree_support_wall_count: -1 not in range [0.0,2.0]\\n"
+                  b"api_key: 123 not in range [0,999]\\n"
+                  b"/private/path to user file\\n")
+        self.assertEqual(_safe_out_of_range_options(output),
+                         ("wall_filament", "tree_support_wall_count"))
+        self.assertEqual(_safe_out_of_range_options(b"Nothing to report"), ())
 
     def test_orca_stdout_project_error_is_categorized_without_leaking_data(self):
         import io
