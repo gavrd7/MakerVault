@@ -8,8 +8,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const source = fs.readFileSync(path.join(root, "src/components/SlicerWorkbench.jsx"), "utf8");
 
 test("main workbench directly submits approved slicing jobs after draft creation", () => {
-  assert.match(source, /onClick=\{\(\) => saveDraft\("save-and-slice"\)\} className="primary"/);
-  assert.match(source, /Save and slice/);
+  assert.match(source, /onClick=\{\(\) => saveDraft\("quick"\)\}/);
+  assert.match(source, /Quick slice/);
   assert.match(source, /const sliceNow = mode !== "draft"/);
   assert.match(source, /apiFetch\("\/api\/printing\/slicer\/jobs\/" \+ job\.id \+ "\/start\/"/);
   assert.match(source, /workerConfigured && engines\.some/);
@@ -77,7 +77,7 @@ test("manual model search overrides dropdown without requiring a model selection
 
 test("plate actions call the shared workflow directly and show local errors", () => {
   assert.match(source, /onClick=\{\(\) => saveDraft\("draft"\)\}/);
-  assert.match(source, /onClick=\{\(\) => saveDraft\("slice"\)\}/);
+  assert.match(source, /onClick=\{\(\) => saveDraft\("quick"\)\}/);
   assert.match(source, /className="slicerPlateActionFeedback"/);
   assert.match(source, /role="alert">\{error\}/);
   assert.match(source, /Choose an engine version, printer and valid nozzle diameter/);
@@ -91,12 +91,12 @@ test("saved drafts can be deleted without touching model files", () => {
   assert.match(source, /Separately saved files were preserved/);
 });
 
-test("three distinct plate actions control draft creation and G-code library retention", () => {
+test("three distinct plate actions control draft creation, quick slice and interactive editing", () => {
   assert.match(source, /onClick=\{\(\) => saveDraft\("draft"\)\}/);
   assert.match(source, /onClick=\{\(\) => saveDraft\("slice"\)\}/);
-  assert.match(source, /onClick=\{\(\) => saveDraft\("save-and-slice"\)\}/);
+  assert.match(source, /Slice → Interactive slicer/);
   assert.match(source, /const saveOutput = mode === "save-and-slice"/);
-  assert.match(source, /save_gcode_to_library: saveOutput/);
+  assert.match(source, /save_gcode_to_library: saveOutput, workflow/);
   assert.doesNotMatch(source, /All three native profiles require administrator verification/);
 });
 
