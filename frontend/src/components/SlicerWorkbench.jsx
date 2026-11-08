@@ -1205,7 +1205,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               onClick={() => requestPrint(previewJob, "upload")}>Upload to printer</button>
             <button type="button" className="primary"
               onClick={() => requestPrint(previewJob, "print")}>Upload and start print</button>
-          </>}}
+          </>}
         </div>
         {error && <p className="integrationError" role="alert">{error}</p>}
         {notice && <p role="status">{notice}</p>}
