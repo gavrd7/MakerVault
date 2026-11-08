@@ -69,7 +69,9 @@ def inspect_native_profile(asset, engine_key):
     if not asset.file:
         raise SlicerProfileError("Selected profile has no stored file.")
     try:
-        with asset.file.open("rb") as stream:
+        # Always obtain a new decrypted private-storage stream. Reusing a
+        # cached FieldFile stream after it has closed is not reliable.
+        with asset.file.storage.open(asset.file.name, "rb") as stream:
             raw = stream.read(MAX_PROFILE_BYTES + 1)
     except (OSError, ValueError):
         raise SlicerProfileError("Profile contents are unavailable.") from None
