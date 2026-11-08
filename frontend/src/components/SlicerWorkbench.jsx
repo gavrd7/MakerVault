@@ -3,6 +3,7 @@ import { apiFetch } from "../api";
 import { Modal } from "./Common";
 import { FileModelViewerModal, ModelThumbnail } from "./ModelViewer";
 import PrinterStartGcodeModal from "./PrinterStartGcodeModal";
+import GcodeViewerModal from "./GcodeViewerModal";
 import SlicerPlateEditor from "./SlicerPlateEditor";
 import SlicerEngineChoices from "./SlicerEngineChoices";
 import { slicerSpoolHex, recolorUnmodifiedPlate } from "./slicerSpoolColour";
@@ -45,6 +46,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [editProfileBusy, setEditProfileBusy] = useState(false);
   const [editProfileError, setEditProfileError] = useState("");
   const [showDrafts, setShowDrafts] = useState(false);
+  const [previewJobId, setPreviewJobId] = useState(null);
+  const awaitingSlicePreviewRef = useRef(null);
   const [customBed, setCustomBed] = useState({ enabled: false, x: "220", y: "220" });
   const [profileLineages, setProfileLineages] = useState({});
   const [workerConfigured, setWorkerConfigured] = useState(false);
@@ -288,7 +291,20 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
   useEffect(() => { refresh(); }, []);
 
+  const previewJob = jobs.find(job => job.id === previewJobId && job.status === "completed" && job.output_asset?.id);
   const running = jobs.some(job => job.status === "queued" || job.status === "running");
+  useEffect(() => {
+    const pendingId = awaitingSlicePreviewRef.current;
+    if (!pendingId || !showDrafts) return;
+    const result = jobs.find(job => job.id === pendingId);
+    if (result?.status === "completed" && result.output_asset?.id) {
+      awaitingSlicePreviewRef.current = null;
+      setPreviewJobId(result.id);
+      setNotice("Slicing completed. Review the generated G-code before printing.");
+    } else if (result && ["failed", "cancelled", "stale"].includes(result.status)) {
+      awaitingSlicePreviewRef.current = null;
+    }
+  }, [jobs, showDrafts]);
   useEffect(() => {
     if (!running) return undefined;
     const id = window.setInterval(async () => {
@@ -362,6 +378,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         method: "POST", body: {},
       });
       setJobs(current => current.map(item => item.id === job.id ? result.job : item));
+      awaitingSlicePreviewRef.current = job.id;
       setNotice("Slicing requested. This does not upload files to a printer or deduct filament inventory.");
     } catch (err) {
       setError(err.message || "Could not queue slicing.");
@@ -441,6 +458,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           method: "POST", body: {},
         });
         setJobs(current => current.map(item => item.id === job.id ? queued.job : item));
+        awaitingSlicePreviewRef.current = job.id;
+        setPreviewJobId(null);
         setNotice(saveOutput
           ? "Slicing queued. Generated G-code will be saved to your G-code library after completion."
           : "Slicing queued. Generated G-code will remain private unless you add it to the library.");
@@ -1150,7 +1169,20 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       </div>
 
     </Modal>}
-    {showDrafts && <Modal title="Saved slicing drafts" onClose={() => setShowDrafts(false)} wide>
+    {showDrafts && <Modal title={previewJob ? "Sliced G-code preview" : "Saved slicing drafts"}
+      onClose={() => { setShowDrafts(false); setPreviewJobId(null); }} wide>
+      {previewJob ? <>
+        <div className="formActions" style={{ justifyContent: "flex-start" }}>
+          <button type="button" onClick={() => setPreviewJobId(null)}>← Back to slicing jobs</button>
+          {!previewJob.gcode_in_library && <button type="button" disabled={busy}
+            onClick={() => saveOutputToLibrary(previewJob)}>Add G-code to library</button>}
+          {previewJob.gcode_in_library && <button type="button" onClick={onOpenGcode}>Open G-code library</button>}
+        </div>
+        {error && <p className="integrationError" role="alert">{error}</p>}
+        {notice && <p role="status">{notice}</p>}
+        <GcodeViewerModal key={previewJob.output_asset.id} embedded
+          file={previewJob.output_asset} canEdit={false} onClose={() => setPreviewJobId(null)} />
+      </> : <>
       {error && <p className="integrationError" role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
       <button type="button" disabled={loading} onClick={refresh}>Refresh drafts</button>
@@ -1178,6 +1210,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               </button>}
             {job.can_slice && canPrepare && <button type="button" disabled={busy} onClick={() => startSlice(job)}>Slice now</button>}
             {mayCancel && (job.status === "draft" || job.status === "queued") && <button type="button" disabled={busy} onClick={() => cancelPending(job)}>Cancel {job.status === "queued" ? "queued slice" : "draft"}</button>}
+            {job.status === "completed" && job.output_asset?.id &&
+              <button type="button" onClick={() => setPreviewJobId(job.id)}>Preview G-code</button>}
             {job.status === "completed" && job.output_asset?.id && job.gcode_in_library && canPrint && <button type="button" className="primary" disabled={busy} onClick={() => requestPrint(job)}>Print from slicer</button>}
             {job.status === "completed" && job.output_asset_id && !job.gcode_in_library &&
               <button type="button" disabled={busy} onClick={() => saveOutputToLibrary(job)}>Add G-code to library</button>}
@@ -1186,6 +1220,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           </div>
         </div>
       )}</div> : <p>No slicing drafts saved yet.</p>}
+      </>}
     </Modal>}
     {previewFile && <FileModelViewerModal file={previewFile} onClose={() => setPreviewFile(null)} />}
     {printSelection?.choosing && <Modal title="Choose printer connection" subtitle={"Print " + (printSelection.job.output_asset?.filename || "sliced G-code") + " on " + printSelection.printer.name} onClose={() => setPrintSelection(null)}>
