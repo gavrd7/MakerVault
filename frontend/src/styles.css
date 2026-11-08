@@ -4121,3 +4121,9 @@ a:focus-visible,
 .slicerPreparePrinter button{width:100%;min-height:38px;padding:8px;font-size:.8rem;white-space:normal}
 @media(max-width:1300px){.slicerPrepareLeftRail{grid-column:1}}
 @media(max-width:850px){.slicerPrepareLeftRail{grid-column:1;grid-row:auto}}
+
+/* Clear local explanations for unavailable draft/slice actions. */
+.slicerPrepareActions .slicerActionStatus{margin:0 0 10px;line-height:1.5;font-size:.84rem;color:var(--muted,#9aafc3)}
+.slicerPrepareActions .slicerActionStatus strong{color:inherit}
+.slicerPrepareActions .slicerActionStatus button{display:inline-flex;align-items:center;min-height:30px;
+  padding:5px 9px;margin:5px 0 0 9px;font-size:.8rem;white-space:normal}
