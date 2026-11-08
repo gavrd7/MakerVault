@@ -57,3 +57,11 @@ test("independent XYZ scaling updates visual mesh and is selectable from the too
   assert.match(editor, /data-slicer-field=\{index === 0 \? "scale_xyz_percent"/);
   assert.match(editor, /mesh\.scale\.set\(xyz\[0\] \/ 100, xyz\[1\] \/ 100, xyz\[2\] \/ 100\)/);
 });
+
+test("duplicating a selected model preserves every saved transformation", () => {
+  const plate = read("SlicerPlateEditor.jsx");
+  assert.match(plate, /const copy = \{ \.\.\.chosen, instance_id: plateUuid\(\) \}/);
+  assert.match(plate, /copy\.scale_xyz_percent = \[\.\.\.chosen\.scale_xyz_percent\]/);
+  assert.match(plate, /pendingArrangeRef\.current = true/);
+  assert.match(plate, /onClick=\{duplicateSelected\}>Duplicate selected/);
+});
