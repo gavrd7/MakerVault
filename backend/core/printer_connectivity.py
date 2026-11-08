@@ -731,10 +731,6 @@ def _creality_state(payload: dict, *, ignore_error=False) -> str:
     if not ignore_error and errcode not in (None, 0):
         return "error"
 
-    self_test = _finite_number(payload.get("withSelfTest"))
-    if self_test is not None and 1 <= self_test <= 99:
-        return "self-testing"
-
     filename = str(payload.get("printFileName") or "").strip()
     progress = _finite_number(
         payload.get("printProgress")
@@ -744,11 +740,18 @@ def _creality_state(payload: dict, *, ignore_error=False) -> str:
     raw_state = _finite_number(payload.get("state"))
     raw_state = int(raw_state) if raw_state is not None else None
 
+    # A K2 can pause during self-test before G-code extrusion begins. The
+    # explicit paused state must win over the self-test progress marker so
+    # Resume remains available when the operator clears a build-plate warning.
+    if filename and raw_state == 5:
+        return "paused"
+    self_test = _finite_number(payload.get("withSelfTest"))
+    if self_test is not None and 1 <= self_test <= 99:
+        return "self-testing"
+
     if filename:
         if progress is not None and progress >= 100:
             return "complete"
-        if raw_state == 5:
-            return "paused"
         if raw_state == 4:
             return "cancelled"
         if raw_state == 1:
