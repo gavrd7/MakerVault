@@ -67,7 +67,7 @@ sudo python3 scripts/install_slicer_staging.py enable
 sudo python3 scripts/install_slicer_staging.py status
 ```
 
-After installation, choose the Orca engine in MakerVault, import matching native printer/filament/process presets and use **Slice** to generate private G-code or **Save and slice** to add successful output to the G-code library. Imported profiles are validated automatically on each slicing request. This is deliberately a staging experiment: the official OrcaSlicer 2.4.2 image has passed real K1 fixture slicing, with the K2 only passing a clearly identified test-only profile workaround. Engine tests do not guarantee a particular printer/profile combination will produce correct G-code; inspect the result before printing.
+After installation, choose the Orca engine in MakerVault and import matching native printer/filament/process presets. From **Slicer setup**, use **Quick slice** to generate private G-code directly, or **Slice** to open the interactive editor and then generate and preview G-code. Library saving and printer upload/start are explicit actions in the interactive slicing result. Imported profiles are validated automatically on each slicing request. This is deliberately a staging experiment: the official OrcaSlicer 2.4.2 image has passed real K1 fixture slicing, with the K2 only passing a clearly identified test-only profile workaround. Engine tests do not guarantee a particular printer/profile combination will produce correct G-code; inspect the result before printing.
 
 The optional staging configuration is held in a private `.slicer-staging.env`. Existing MakerVault storage is untouched. To turn engine execution back off:
 
@@ -165,17 +165,17 @@ engine- and printer-specific validation. Non-Orca multi-STL slice execution
 remains disabled until separately verified. A successful slice stores G-code
 for review; it does **not** send or start printing or deduct filament stock.
 
-### Save draft, Slice and Save and slice
+### Save draft, Quick slice and Slice
 
-The visual plate has three separate actions. **Save draft** retains the current configuration and models without running an engine. **Slice** queues slicing and retains the generated G-code with the job until it is explicitly added to the G-code library. **Save and slice** queues slicing and saves its G-code to the library when the job succeeds. None of these actions starts a print.
+The actions appear together below the setup build plate. **Save draft** retains the configuration and models without running an engine. **Quick slice** immediately queues a slice using the selected profiles; its output remains private and opens a read-only preview without direct library or printer actions. **Slice** opens the full interactive Prepare workspace, including when no model has yet been imported. There, **Save draft** and **Slice and preview** are available; completed interactive slices provide explicit **Add G-code to library**, **Upload to printer**, and **Upload and start print** actions. No slicing action itself starts a printer or deducts inventory.
 
 The checkbox **Also save imported models to MakerVault Files** is optional. If left unchecked, the source STL is stored privately for the slicing job and saved draft, not in the standard Files or model library. Such private inputs remain accessible when editing the draft and are removed when their last referencing draft is deleted. Disk quota and upload limits still apply.
 
 ## Interactive slicer — initial Prepare workspace
 
-After choosing an engine, printer and profiles in **Slicer setup**, add an STL to the visual plate and select **Open interactive slicer**. This opens a separate Prepare workspace while retaining the previously configured native profiles.
+After choosing an engine, printer and profiles in **Slicer setup**, select **Slice** at the bottom to open the full interactive workspace. You can add STL models before or after entering the editor. This opens a separate Prepare workspace while retaining the previously configured native profiles.
 
-The initial workspace includes an object tree (instances on the first plate), click-to-select, active **Move**, **Rotate**, **Scale**, **Auto-arrange**, **Duplicate** and **Remove** controls backed by the existing 3D plate editor, and in-session undo/redo (Ctrl+Z / Ctrl+Y outside text inputs). **Save draft**, **Slice**, and **Save and slice** use the same isolated worker submission path as Slicer setup. Reopening an unscheduled draft returns to the interactive editor with the saved build plate.
+The initial workspace includes an object tree (instances on the first plate), click-to-select, active **Move**, **Rotate**, **Scale**, **Auto-arrange**, **Duplicate** and **Remove** controls backed by the existing 3D plate editor, and in-session undo/redo (Ctrl+Z / Ctrl+Y outside text inputs). **Save draft** and **Slice and preview** share the existing isolated worker submission path with Quick slice, while explicit G-code saving and printer submission happen from the completed interactive result. Reopening an unscheduled draft returns to the interactive editor with the saved build plate.
 
 The categories **Quality**, **Strength**, **Speed**, **Supports**, **Multifilament**, and **Others**, plus the Global/Objects switch, are present to establish the final editor layout. They do not yet change native settings. Continue using the native profile editor in Slicer setup to adjust values; actual scope-aware edits must be validated and round-tripped through each engine. Independent X, Y and Z scaling is available with preview/3MF persistence; each axis is validated between 5% and 400%, and the old uniform-scale field remains supported for existing drafts. Advanced mesh transformations, multi-plate output, painting tools and variable layer heights are shown as **disabled** while their native data paths are developed. Disabled controls are not supported features.
 
