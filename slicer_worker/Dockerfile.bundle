@@ -20,6 +20,18 @@ RUN groupadd --gid 10001 slicer && useradd --uid 10001 --gid 10001 --no-create-h
 WORKDIR /opt/makervault-slicer
 COPY --chown=10001:10001 slicer_worker/ /opt/makervault-slicer/slicer_worker/
 COPY --chown=10001:10001 slicer-engine-assets/ /opt/engines/
+# AppImages cannot reliably mount their squashfs in a rootless, restricted
+# worker (and runtime extract-and-run is fragile on read-only filesystems).
+# Extract the previously digest-verified official AppImage at image build time,
+# leaving its original bytes untouched for the engine registry's SHA-256 check.
+# The derived AppRun is baked into the same immutable worker image.
+RUN if [ -f /opt/engines/orcaslicer.AppImage ]; then \
+      cd /opt/engines && \
+      ./orcaslicer.AppImage --appimage-extract >/dev/null && \
+      test -e squashfs-root/AppRun && \
+      test -x squashfs-root/AppRun && \
+      test -d squashfs-root/usr; \
+    fi
 RUN python3 -m compileall -q /opt/makervault-slicer/slicer_worker && \
     test -f /opt/engines/manifest.json
 ENV PYTHONPATH=/opt/makervault-slicer PYTHONDONTWRITEBYTECODE=1
