@@ -3706,9 +3706,9 @@ a:focus-visible,
 }
 
 /* Editor workspace: maximise the preview while retaining a compact control rail. */
-.slicerPlateWorkspace{display:grid;grid-template-columns:minmax(0, 2.05fr) minmax(290px, 1fr);gap:18px;align-items:start;margin-top:16px}
-.slicerPlateCanvasColumn{min-width:0}
-.slicerPlateCanvas{width:100%;height:clamp(460px,54vh,740px);border-radius:12px;overflow:hidden;border:1px solid var(--border,#435365);background:#0f1720;touch-action:none}
+.slicerPlateWorkspace{display:grid;grid-template-columns:minmax(0, 2.05fr) minmax(290px, 1fr);gap:18px;align-items:stretch;margin-top:16px}
+.slicerPlateCanvasColumn{min-width:0;min-height:0;display:flex;flex-direction:column;border:1px solid var(--border,#435365);border-radius:12px;background:#0f1720;padding:12px;overflow:hidden}
+.slicerPlateCanvas{width:100%;flex:1 1 auto;min-height:320px;height:auto;border-radius:9px;overflow:hidden;background:#0f1720;touch-action:none}
 .slicerPlateControls{min-width:0;display:flex;flex-direction:column;gap:16px}
 .slicerPlateControlsGroup{border:1px solid #2b3542;border-radius:12px;padding:16px;min-width:0;background:rgba(10,16,22,.35)}
 .slicerPlateControlsGroup h4{margin:0 0 12px}
@@ -3730,13 +3730,13 @@ a:focus-visible,
 }
 @media(max-width:800px){
   .slicerPlateWorkspace{grid-template-columns:1fr}
-  .slicerPlateCanvas{height:clamp(340px,48vh,550px)}
+  .slicerPlateCanvas{height:clamp(340px,48vh,550px);flex:none}
   .slicerPlateControls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
   .slicerPlateControls>.integrationError{grid-column:1/-1}
 }
 @media(max-width:560px){
   .slicerPlateControls{grid-template-columns:1fr}
-  .slicerPlateCanvas{height:360px}
+  .slicerPlateCanvas{height:360px;flex:none}
 }
 
 /* Spool colour hints are informational; native slicing profiles remain separate. */
@@ -3823,3 +3823,8 @@ a:focus-visible,
 .slicerPlateActionFeedback{flex:1 1 260px;min-width:0}
 .slicerPlateActionFeedback p{margin:0}
 .slicerPlateActionFeedback .integrationError{max-width:100%;overflow-wrap:anywhere}
+
+/* Keep the 3D canvas and its caption within the same full-height pane as the
+   model controls; slice actions remain a separate, right-aligned footer. */
+.slicerPlateCanvasColumn>.slicerPlateHint:last-child{margin-bottom:0}
+.slicerPlatePanel .slicerPlateFooter{margin-top:18px}
