@@ -157,6 +157,37 @@ class OrcaRunnerTests(TestCase):
             with self.assertRaisesRegex(WorkerError, "qt-platform-failed"):
                 run_orca(self.binary, self.root)
 
+    def test_orca_stdout_project_error_is_categorized_without_leaking_data(self):
+        import io
+        class FakeProcess:
+            returncode = 238
+            stdout = io.BytesIO(
+                b"Param values in 3mf/config error. /secret/user/print.3mf API_KEY=private"
+            )
+            stderr = io.BytesIO(b"")
+            def wait(self, timeout=None):
+                return self.returncode
+        with patch("slicer_worker.orca_runner.subprocess.Popen", return_value=FakeProcess()):
+            with self.assertRaises(WorkerError) as error:
+                run_orca(self.binary, self.root)
+        self.assertEqual(
+            str(error.exception),
+            "OrcaSlicer CLI exited: native-project-settings-invalid."
+        )
+        self.assertNotIn("private", str(error.exception))
+
+    def test_unclassified_orca_exit_238_has_stable_safe_reason(self):
+        import io
+        class FakeProcess:
+            returncode = 238
+            stdout = io.BytesIO(b"Sensitive unknown crash output from user model")
+            stderr = io.BytesIO(b"")
+            def wait(self, timeout=None):
+                return self.returncode
+        with patch("slicer_worker.orca_runner.subprocess.Popen", return_value=FakeProcess()):
+            with self.assertRaisesRegex(WorkerError, "cli-validation-exit-238"):
+                run_orca(self.binary, self.root)
+
     def test_cli_failure_does_not_echo_private_stderr(self):
         import io
         class FakeProcess:
