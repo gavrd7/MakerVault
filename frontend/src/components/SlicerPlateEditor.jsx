@@ -189,16 +189,16 @@ export default function SlicerPlateEditor({
     const previews = [];
     try {
       for (const file of imports) {
-        let id = "local:" + plateUuid();
+        const form = new FormData();
+        form.append("file", file);
         if (saveImports) {
-          const form = new FormData();
-          form.append("file", file);
           form.append("category", "mesh");
           form.append("name", file.name);
-          const result = await apiFetch("/api/files/", { method: "POST", body: form });
-          if (!result?.file?.id) throw new Error("MakerVault did not return a model file ID.");
-          id = String(result.file.id);
         }
+        const result = await apiFetch(saveImports ? "/api/files/" :
+          "/api/printing/slicer/meshes/temporary/", { method: "POST", body: form });
+        const id = String(saveImports ? (result?.file?.id || "") : (result?.asset_id || ""));
+        if (!id) throw new Error("MakerVault did not return an STL input identifier.");
         previews.push({ id, category: "mesh", name: file.name, filename: file.name,
           url: URL.createObjectURL(file), localOnly: !saveImports });
         const addition = newPlateInstance(id, objects.length + additions.length);
@@ -214,7 +214,7 @@ export default function SlicerPlateEditor({
         pendingArrangeRef.current = true;
         additions.forEach(item => pendingAddIdsRef.current.add(item.instance_id));
         onChange([...objects, ...additions]);
-        if (!objects.length && saveImports) onPrimaryChange?.(additions[0].asset_id);
+        if (!objects.length) onPrimaryChange?.(additions[0].asset_id);
         setSelected(additions[0].instance_id);
         if (saveImports) {
           try { await onFilesUploaded?.(); }
@@ -475,7 +475,7 @@ export default function SlicerPlateEditor({
     </div>}
 
     {objects.length > 0 && <p role="status" className="slicerPlateHint">{objects.length} model{objects.length === 1 ? "" : "s"} on the plate
-      {objects.some(item => String(item.asset_id).startsWith("local:")) ? " · Temporary models will be lost on reload." : " · Plate ready to save as a draft."}</p>}
+      {" · Plate ready to save as a draft or slice."}</p>}
 
       </div>
       <aside className="slicerPlateControls" aria-label="Build plate controls">
@@ -497,7 +497,7 @@ export default function SlicerPlateEditor({
       <label className="full checkRow slicerPlateSaveImports"><input type="checkbox" checked={saveImports} onChange={event => setSaveImports(event.target.checked)} disabled={!canEdit || uploadBusy} />
         <span>Also save imported models to MakerVault Files</span>
       </label>
-      <p className="full slicerPlateHint">Unchecked: models stay in this browser session. Saving a persistent draft requires saved source files.</p>
+      <p className="full slicerPlateHint">Unchecked: source STLs are retained privately for slicing and saved drafts, without appearing in MakerVault Files.</p>
     </div>
 
         </div>
