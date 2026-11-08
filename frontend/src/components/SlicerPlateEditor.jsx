@@ -31,7 +31,8 @@ export function newPlateInstance(assetId, index = 0) {
   return {
     instance_id: plateUuid(), asset_id: String(assetId),
     x_mm: (index % 4) * 25, y_mm: Math.floor(index / 4) * 25,
-    rotation_deg: 0, scale_percent: 100, color: PALETTE[index % PALETTE.length],
+    rotation_deg: 0, scale_percent: 100, scale_xyz_percent: [100, 100, 100],
+    color: PALETTE[index % PALETTE.length],
   };
 }
 
@@ -168,7 +169,9 @@ export default function SlicerPlateEditor({
   function patch(field, value) {
     if (!chosen) return;
     const candidate = { ...chosen, [field]: value };
-    if (["x_mm", "y_mm", "rotation_deg", "scale_percent"].includes(field) &&
+    if (field === "scale_percent") candidate.scale_xyz_percent = [value, value, value];
+    if (field === "scale_xyz_percent") candidate.scale_percent = 100;
+    if (["x_mm", "y_mm", "rotation_deg", "scale_percent", "scale_xyz_percent"].includes(field) &&
         !validPlacement(candidate, objects)) {
       setError("This position or transform overlaps another model, exceeds the build plate, or has dimensions still loading. Try Auto-arrange.");
       return;
@@ -431,7 +434,8 @@ export default function SlicerPlateEditor({
           const latest = latestObjectsRef.current.find(row => row.instance_id === item.instance_id) || item;
           mesh.position.set(latest.x_mm, latest.y_mm, 0);
           mesh.rotation.z = latest.rotation_deg * Math.PI / 180;
-          mesh.scale.setScalar(latest.scale_percent / 100);
+          const xyz = latest.scale_xyz_percent || [latest.scale_percent, latest.scale_percent, latest.scale_percent];
+          mesh.scale.set(xyz[0] / 100, xyz[1] / 100, xyz[2] / 100);
           state.meshes.set(item.instance_id, mesh);
           state.scene.add(mesh);
         })
@@ -448,7 +452,8 @@ export default function SlicerPlateEditor({
       if (!mesh) continue;
       mesh.position.set(item.x_mm, item.y_mm, 0);
       mesh.rotation.z = item.rotation_deg * Math.PI / 180;
-      mesh.scale.setScalar(item.scale_percent / 100);
+      const xyz = item.scale_xyz_percent || [item.scale_percent, item.scale_percent, item.scale_percent];
+      mesh.scale.set(xyz[0] / 100, xyz[1] / 100, xyz[2] / 100);
       // Position-only changes must never alter the displayed filament colour.
       mesh.material.color.set(item.color || PALETTE[0]);
       mesh.material.emissive.set(item.instance_id === selected ? "#164051" : "#000000");
@@ -537,6 +542,23 @@ export default function SlicerPlateEditor({
         <input data-slicer-field="scale_percent" type="number" min={5} max={400} step="5" value={chosen?.scale_percent ?? 100}
           disabled={!canEdit} onChange={event => patch("scale_percent", pretty(event.target.value))} />
       </label>
+      <fieldset className="slicerAxisScaling full">
+        <legend>Independent axis scaling (%)</legend>
+        {["X", "Y", "Z"].map((axis, index) => <label key={axis}>
+          {axis} axis
+          <input type="number" min={5} max={400} step="1"
+            value={chosen?.scale_xyz_percent?.[index] ?? chosen?.scale_percent ?? 100}
+            disabled={!canEdit}
+            onChange={event => {
+              const current = chosen?.scale_xyz_percent || [
+                chosen?.scale_percent || 100, chosen?.scale_percent || 100, chosen?.scale_percent || 100,
+              ];
+              const next = [...current];
+              next[index] = pretty(event.target.value);
+              patch("scale_xyz_percent", next);
+            }} />
+        </label>)}
+      </fieldset>
       <label>Preview/material colour
         <input type="color" value={chosen?.color || PALETTE[0]} disabled={!canEdit}
           onChange={event => { onManualColorChange?.(chosen.instance_id); patch("color", event.target.value); }} />
