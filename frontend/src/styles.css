@@ -4148,3 +4148,10 @@ a:focus-visible,
 .slicerModelFilamentChoices small,.slicerModelFilamentNotice{font-size:.73rem;line-height:1.5;
   color:var(--muted,#9aafc3);overflow-wrap:anywhere}
 .slicerModelFilamentNotice{margin:2px 0 10px}
+
+/* Select printer and nozzle without leaving interactive Prepare; keep native
+   profiles grouped below with room for a clear change-of-machine warning. */
+.slicerChangeProfileGrid .slicerChangePrinterHint{grid-column:1/-1;margin:0;
+  font-size:.81rem;line-height:1.5;color:var(--muted,#aeb9c9)}
+.slicerChangeProfileGrid>label{min-width:0}
+.slicerChangeProfileGrid select,.slicerChangeProfileGrid input{width:100%;max-width:100%}
