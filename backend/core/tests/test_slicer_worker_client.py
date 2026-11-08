@@ -41,6 +41,23 @@ class SlicerWorkerClientTests(SimpleTestCase):
         result = run_remote_job(uuid.uuid4(), "orcaslicer", "2.9.7", b"stl", b"machine", b"filament", b"process")
         self.assertEqual(result, gcode)
 
+    @patch("core.slicer_worker_client._session")
+    @patch("core.slicer_worker_client.worker_settings",
+           return_value=("http://slicer-worker:8088", "x" * 40))
+    def test_worker_profile_rejection_has_specific_allowlisted_category(self, settings, session):
+        import json
+        response = Mock()
+        response.status_code = 422
+        response.headers = {"Content-Length": "115"}
+        response.iter_content.return_value = [json.dumps({
+            "error": "Slicing input or output was rejected.",
+            "stage": "running slicer engine", "reason": "unsafe-profile-settings",
+        }).encode()]
+        session.return_value.post.return_value = response
+        with self.assertRaisesRegex(SlicerWorkerError, "unsafe-profile-settings"):
+            run_remote_job(uuid.uuid4(), "orcaslicer", "2.4.2",
+                           b"model", b"printer", b"filament", b"process")
+
     def test_dangerous_engine_or_invalid_inputs_are_rejected_before_transport(self):
         with self.assertRaises(SlicerWorkerError):
             run_remote_job(uuid.uuid4(), "/bin/sh", "1", b"stl", b"p", b"f", b"process")
