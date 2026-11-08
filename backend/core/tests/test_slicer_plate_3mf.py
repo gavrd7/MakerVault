@@ -68,6 +68,37 @@ class BuildPlate3MFTests(SimpleTestCase):
             build_compound_plate_3mf([(model, shape), (model, b"bad STL")],
                                      bed_width=220, bed_depth=220)
 
+    def test_independent_xyz_scale_is_encoded_in_single_and_compound_plates(self):
+        shape = fixture_stl()
+        item = {
+            "x_mm": 0, "y_mm": 0, "rotation_deg": 90,
+            "scale_percent": 100, "scale_xyz_percent": [150, 50, 200],
+        }
+        data = build_plate_3mf([(item, shape)], bed_width=220, bed_depth=220)
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            root = ET.fromstring(archive.read("3D/3dmodel.model"))
+        build = root.find(".//{%s}build/{%s}item" % (NS, NS))
+        matrix = [float(value) for value in build.attrib["transform"].split()]
+        self.assertAlmostEqual(matrix[1], 1.5, places=5)
+        self.assertAlmostEqual(matrix[3], -0.5, places=5)
+        self.assertAlmostEqual(matrix[8], 2.0, places=5)
+        composite = build_compound_plate_3mf([
+            ({**item, "x_mm": -35}, shape),
+            ({**item, "x_mm": 35}, shape),
+        ], bed_width=220, bed_depth=220)
+        with zipfile.ZipFile(io.BytesIO(composite)) as archive:
+            root = ET.fromstring(archive.read("3D/3dmodel.model"))
+        vertices = root.findall(".//{%s}vertex" % NS)
+        self.assertGreater(len(vertices), 0)
+
+    def test_invalid_individual_scale_fails_at_3mf_boundary(self):
+        item = {"x_mm": 0, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100}
+        for xyz in ([0, 100, 100], [101, 401, 100], [100, float("nan"), 100],
+                    [100, True, 100], [100, 100]):
+            with self.subTest(xyz=xyz), self.assertRaises(SlicerProfileError):
+                build_plate_3mf([({**item, "scale_xyz_percent": xyz}, fixture_stl())],
+                                bed_width=220, bed_depth=220)
+
     def test_missing_bed_and_invalid_mesh_fail_closed(self):
         item = {"x_mm": 0, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100}
         with self.assertRaises(SlicerProfileError):
