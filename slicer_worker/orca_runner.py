@@ -62,15 +62,18 @@ def _engine_exit_reason(stderr):
         return "unsupported-cli-option"
     if any(term in message for term in (
         "param values in 3mf/config error", "not in range",
+        "out of range", "config option value",
     )):
         return "native-project-settings-invalid"
     if any(term in message for term in (
         "failed to load 3mf", "invalid 3mf", "3mf import failed",
+        "3mf load failed", "failed to load project",
     )):
         return "native-project-load-failed"
     if any(term in message for term in (
         "invalid config", "invalid configuration", "invalid preset",
         "invalid profile", "failed to load config", "failed to load settings",
+        "failed to load preset", "configuration error",
     )):
         return "native-profile-load-failed"
     return "engine-exited"
@@ -203,27 +206,31 @@ def run_orca(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIME
         proc = subprocess.Popen(
             command, cwd=str(workdir),
             env=slicing_environment(workdir),
-            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, start_new_session=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True,
         )
-        # Drain stderr in parallel so a chatty CLI cannot deadlock. Retain a
-        # small diagnostic tail but never log the raw text or any private paths.
-        tail = deque()
-        reader = None
-        if getattr(proc, "stderr", None) is not None:
-            reader = threading.Thread(target=_bounded_stderr, args=(proc.stderr, tail), daemon=True)
-            reader.start()
+        # Orca can report CLI/config failures to stdout rather than stderr.
+        # Drain *both* streams with bounded tails to avoid pipe deadlocks.
+        # Never log or return raw content; only whitelisted reason categories.
+        stderr_tail, stdout_tail = deque(), deque()
+        readers = []
+        for name, tail in (("stderr", stderr_tail), ("stdout", stdout_tail)):
+            stream = getattr(proc, name, None)
+            if stream is not None:
+                reader = threading.Thread(target=_bounded_stderr, args=(stream, tail), daemon=True)
+                reader.start()
+                readers.append(reader)
         try:
-            proc.communicate(timeout=timeout_seconds) if reader is None else proc.wait(timeout=timeout_seconds)
+            proc.communicate(timeout=timeout_seconds) if not readers else proc.wait(timeout=timeout_seconds)
         except subprocess.TimeoutExpired:
             os.killpg(proc.pid, signal.SIGKILL)
             proc.wait()
-            if reader is not None:
+            for reader in readers:
                 reader.join(timeout=2)
             raise WorkerError("Slicing timed out.") from None
-        if reader is not None:
+        for reader in readers:
             reader.join(timeout=2)
         if proc.returncode != 0:
-            reason = _engine_exit_reason(b"".join(tail))
+            reason = _engine_exit_reason(b"".join(stderr_tail) + b"\n" + b"".join(stdout_tail))
             # Orca's CLI uses 238 for some project/config validation exits.
             # Preserve this as a diagnostic class, not a claim about the cause.
             if reason == "engine-exited" and proc.returncode == 238:
