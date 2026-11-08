@@ -60,6 +60,7 @@ def generated_preview(text, *, truncated=False):
     x = y = z = e = 0.0
     feature = "Other"
     segments = []
+    stride = 1
     heights = set()
     counts = Counter()
     for raw in text.splitlines():
@@ -110,19 +111,23 @@ def generated_preview(text, *, truncated=False):
                 counts[feature] += 1
                 if len(heights) < MAX_LAYERS:
                     heights.add(round(nz, 3))
-                if len(segments) < MAX_SEGMENTS:
+                # Maintain a bounded sample across the entire print rather
+                # than displaying only the first layers of a large job.
+                total = sum(counts.values())
+                if total % stride == 0:
                     segments.append([round(x, 3), round(y, 3), round(nx, 3),
                                      round(ny, 3), round(nz, 3), feature])
-                else:
+                if len(segments) > MAX_SEGMENTS:
+                    stride *= 2
+                    segments = segments[::2]
                     stats["sampled"] = True
             x, y, z, e = nx, ny, nz, ne
     stats["segments"] = segments
     stats["segment_count"] = sum(counts.values())
     stats["feature_counts"] = dict(counts.most_common(12))
-    if not stats["sampled"] and len(heights) < MAX_LAYERS and not truncated:
-        stats["layers"] = sorted(heights)
+    stats["layers"] = sorted(heights)
+    if len(heights) < MAX_LAYERS and not truncated:
         stats["layer_count"] = len(heights)
     else:
-        stats["layers"] = sorted(heights)
         stats["sampled"] = True
     return stats
