@@ -127,7 +127,10 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
             reason = None
             reasons = {"engine-exited", "unresolved-profile-parent", "no-output-directory",
                        "unexpected-output-layout", "output-too-large", "engine-version-mismatch",
-                       "missing-gcode", "validation-error"}
+                       "missing-gcode", "validation-error", "invalid-profile-json",
+                       "invalid-profile-structure", "unsafe-profile-settings",
+                       "engine-unavailable", "invalid-stl", "engine-timeout",
+                       "invalid-gcode", "engine-launch-failed", "invalid-3mf"}
             try:
                 declared_error_length = response.headers.get("Content-Length")
                 if (declared_error_length is None or (
