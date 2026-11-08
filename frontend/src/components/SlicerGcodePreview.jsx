@@ -48,7 +48,7 @@ export default function SlicerGcodePreview({ preview }) {
 
   return <div className="slicerResultPreview">
     <div className="slicerResultStats">
-      <div><small>Estimated print time</small><strong>{formatTime(preview?.estimated_time_seconds)}</strong></div>
+      <div><small>Estimated print time · slicer</small><strong>{formatTime(preview?.estimated_time_seconds)}</strong></div>
       <div><small>Filament length</small><strong>{metric(preview?.filament_mm, "mm")}</strong></div>
       <div><small>Filament weight</small><strong>{metric(preview?.filament_g, "g")}</strong></div>
       <div><small>Filament volume</small><strong>{metric(preview?.filament_cm3, "cm³")}</strong></div>
@@ -104,7 +104,7 @@ export default function SlicerGcodePreview({ preview }) {
       <p className="projectUploadHint">Travel, retract, wipe, speed, flow, filament mapping and other
         native preview modes require a complete indexed toolpath. They are not represented by this extrusion-only sample.</p>
     </> : <p>No extrusion paths were available for the preview.</p>}
-    <small>Times and material are slicer-declared estimates. Layer selection and horizontal steps
+    <small>Print time comes from the generated G-code and depends on the selected printer and native profiles; it is not a manually editable value. Times and material are slicer-declared estimates. Layer selection and horizontal steps
       operate on sampled extrusion moves only; paths can be omitted. This is not a complete
       OrcaSlicer simulation or printer-safety check.</small>
     {preview?.sampled && <p className="projectUploadHint">Preview is partial; the G-code contains
