@@ -413,17 +413,23 @@ def jobs(request):
 @login_required
 @require_http_methods(["GET", "DELETE"])
 def job_detail(request, job_id):
+    if request.method == "DELETE":
+        if not request.user.has_perm("core.delete_slicejob"):
+            return _error("You do not have permission to delete slicing jobs.", 403)
+        # The status check must happen under the row lock. A worker must not
+        # claim a queued job while its source is being deleted.
+        with transaction.atomic():
+            job = _rows(request.user).select_for_update(of=("self",)).filter(pk=job_id).first()
+            if not job:
+                return _error("Slice job not found.", 404)
+            if job.status not in {"draft", "failed", "cancelled", "stale"}:
+                return _error("Only drafts and inactive failed/cancelled jobs can be deleted.", 409)
+            job.delete()
+            _cleanup_temporary_job_sources(job)
+        return JsonResponse({"deleted": True})
     job = _rows(request.user).filter(pk=job_id).first()
     if not job:
         return _error("Slice job not found.", 404)
-    if request.method == "DELETE":
-        if not request.user.has_perm("core.delete_slicejob"):
-            return _error("You do not have permission to delete slicing drafts.", 403)
-        if job.status != "draft":
-            return _error("Only unscheduled slicing drafts can be deleted.", 409)
-        job.delete()
-        _cleanup_temporary_job_sources(job)
-        return JsonResponse({"deleted": True})
     installed = verified_installation()
     return JsonResponse({"job": serialise(job, installed), "execution_available": bool(installed)})
 
