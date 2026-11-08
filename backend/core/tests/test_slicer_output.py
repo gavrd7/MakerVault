@@ -19,7 +19,7 @@ class SlicerOutputTests(SimpleTestCase):
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from core.models import FileAsset, Printer, SliceJob
-from core.slicer_output import store_generated_gcode
+from core.slicer_output import store_generated_gcode, generated_slice_name
 
 
 class GeneratedSlicerFileTests(TestCase):
@@ -37,6 +37,38 @@ class GeneratedSlicerFileTests(TestCase):
             printer_preset="Generic", filament_preset="PLA", process_preset="Normal",
             nozzle_mm="0.40", status="running",
         )
+
+    def test_generated_filename_uses_source_stl_name(self):
+        output = store_generated_gcode(self.job.pk, b"; generated\\nG1 X1 Y1 E0.5\\n")
+        self.assertEqual(output.name, "shape.gcode")
+        self.assertEqual(output.metadata["original_name"], "shape.gcode")
+        self.assertNotIn(str(self.job.pk), output.name)
+
+    def test_multi_object_plate_uses_both_source_names(self):
+        second = FileAsset.objects.create(
+            owner=self.owner, name="Lid.stl", category="mesh",
+            metadata={"extension": ".stl", "original_name": "Lid.stl"},
+        )
+        self.job.settings = {"plate_objects": [
+            {"asset_id": str(self.input_asset.pk)},
+            {"asset_id": str(second.pk)},
+        ]}
+        self.job.save(update_fields=["settings"])
+        self.assertEqual(generated_slice_name(self.job), "shape + Lid.gcode")
+
+    def test_source_filenames_are_sanitized_and_bounded(self):
+        self.input_asset.name = "example.stl"
+        self.input_asset.metadata = {
+            "extension": ".stl",
+            "original_name": "../" + "A" * 300 + ":model?.stl",
+        }
+        self.input_asset.save(update_fields=["name", "metadata"])
+        filename = generated_slice_name(self.job)
+        self.assertLessEqual(len(filename), 186)
+        self.assertTrue(filename.endswith(".gcode"))
+        self.assertNotIn("/", filename)
+        self.assertNotIn("?", filename)
+        self.assertNotIn(":", filename)
 
     def test_generated_output_is_private_until_explicitly_saved(self):
         from core.models import PrinterGcodeSubmission
