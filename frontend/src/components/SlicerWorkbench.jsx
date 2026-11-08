@@ -818,7 +818,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       engine={form.engine + " " + form.engine_version} printer={selectedPrinter?.name}
       printerDetails={selectedPrinter} nozzleMm={form.nozzle_mm}
       printerId={form.printer_id}
-      selectedProfiles={{ printer: form.printer_preset, process: form.process_preset, filament: form.filament_preset }}
+      selectedProfiles={{ printer: form.printer_preset, process: form.process_preset, filament: form.filament_preset,
+        printer_id: form.printer_profile_id, process_id: form.process_profile_id, filament_id: form.filament_profile_id }}
       onChangeProfiles={() => setProfileModal("change")}
       workerConfigured={workerConfigured && engines.some(engine => engine.key === form.engine && engine.available)}
       onBackToSetup={() => setEditorOpen(false)} onSaveDraft={() => saveDraft("draft")}
