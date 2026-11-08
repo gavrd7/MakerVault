@@ -21,7 +21,7 @@ class PinnedCrealityProfileTests(SimpleTestCase):
     @patch("core.slicer_creality_official_profiles._manifest")
     def test_k1_k2_are_available_from_creality_not_orca_catalogue(self, manifest):
         manifest.return_value = self.manifest
-        found = search_creality_profiles("Creality K", "printer")
+        found = search_creality_profiles("Creality", "printer")
         self.assertEqual(found["engine"], "crealityprint")
         self.assertEqual(found["engine_version"], "7.3.0")
         self.assertEqual(found["total_matches"], 2)
