@@ -421,6 +421,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     if (busy || loading || !canPrepare) return;
     const sliceNow = mode !== "draft";
     const saveOutput = mode === "save-and-slice";
+    const workflow = mode === "quick" ? "quick" : mode === "draft" && !editorOpen ? "setup" : "interactive";
     setError(""); setNotice("");
     if (!plateObjects.length) {
       setError("Add at least one STL to the visual build plate before saving or slicing.");
@@ -449,7 +450,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           input_asset_id: plateObjects[0].asset_id,
           spool_id: form.spool_id || null,
           settings: { ...(plateObjects.length ? { plate_objects: plateObjects } : {}),
-            save_gcode_to_library: saveOutput },
+            save_gcode_to_library: saveOutput, workflow },
         },
       });
       savedJob = job;
@@ -806,14 +807,11 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       selectedProfiles={{ process: form.process_preset, filament: form.filament_preset }}
       workerConfigured={workerConfigured && engines.some(engine => engine.key === form.engine && engine.available)}
       onBackToSetup={() => setEditorOpen(false)} onSaveDraft={() => saveDraft("draft")}
-      onSlice={() => saveDraft("slice")} onSaveAndSlice={() => saveDraft("save-and-slice")}
+      onSlice={() => saveDraft("slice")}
     /> : <>
     <div className="slicerWorkbenchTop">
     <section className="panel printingSection" aria-labelledby="slicer-preparation-heading">
-      <div className="slicerSetupHeading"><h3 id="slicer-preparation-heading">Slicer setup</h3>
-        <button type="button" disabled={!plateObjects.length || !canPrepare || busy}
-          onClick={() => setEditorOpen(true)}>Open interactive slicer →</button>
-      </div>
+      <div className="slicerSetupHeading"><h3 id="slicer-preparation-heading">Slicer setup</h3></div>
       <p role="status">{workerConfigured
         ? "An isolated slicing worker is configured. Selected native profiles are checked for integrity before execution. Slicing never starts a print."
         : "Preparation mode — no isolated slicing worker is available. Saving a draft does not run a slicer, send a printer command or change spool inventory."}</p>
@@ -967,18 +965,18 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         <div className="slicerDraftActions settingsActions">
           <button type="button" onClick={() => saveDraft("draft")}
             disabled={!canPrepare || busy || loading || !plateObjects.length || !printers.length}>
-            {busy ? "Saving…" : "Save slicing draft"}
+            {busy ? "Saving…" : "Save draft"}
           </button>
-          {workerConfigured && engines.some(engine => engine.key === form.engine && engine.available) && <>
-            <button type="button" onClick={() => saveDraft("slice")}
-              disabled={!canPrepare || busy || loading || !plateObjects.length || !printers.length}>
-              {busy ? "Preparing…" : "Slice"}
-            </button>
-            <button type="button" onClick={() => saveDraft("save-and-slice")} className="primary"
-              disabled={!canPrepare || busy || loading || !plateObjects.length || !printers.length}>
-              {busy ? "Preparing…" : "Save and slice"}
-            </button>
-          </>}
+          <button type="button" onClick={() => saveDraft("quick")}
+            disabled={!canPrepare || busy || loading || !workerConfigured ||
+              !engines.some(engine => engine.key === form.engine && engine.available) ||
+              !plateObjects.length || !printers.length}>
+            {busy ? "Preparing…" : "Quick slice"}
+          </button>
+          <button type="button" className="primary" onClick={() => { setError(""); setNotice(""); setEditorOpen(true); }}
+            disabled={!canPrepare || busy || loading || !plateObjects.length || !printers.length}>
+            Slice → Interactive slicer
+          </button>
         </div>
       </>}
     />
@@ -1199,10 +1197,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       {previewJob ? <>
         <div className="formActions" style={{ justifyContent: "flex-start" }}>
           <button type="button" onClick={() => setPreviewJobId(null)}>← Back to slicing jobs</button>
-          {!previewJob.gcode_in_library && <button type="button" disabled={busy}
+          {previewJob.settings?.workflow !== "quick" && !previewJob.gcode_in_library && <button type="button" disabled={busy}
             onClick={() => saveOutputToLibrary(previewJob)}>Add G-code to library</button>}
-          {previewJob.gcode_in_library && <button type="button" onClick={onOpenGcode}>Open G-code library</button>}
-          {canPrint && <>
+          {previewJob.settings?.workflow !== "quick" && previewJob.gcode_in_library && <button type="button" onClick={onOpenGcode}>Open G-code library</button>}
+          {canPrint && previewJob.settings?.workflow !== "quick" && <>
             <button type="button"
               onClick={() => requestPrint(previewJob, "upload")}>Upload to printer</button>
             <button type="button" className="primary"
@@ -1243,10 +1241,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             {mayCancel && (job.status === "draft" || job.status === "queued") && <button type="button" disabled={busy} onClick={() => cancelPending(job)}>Cancel {job.status === "queued" ? "queued slice" : "draft"}</button>}
             {job.status === "completed" && job.output_asset?.id &&
               <button type="button" onClick={() => setPreviewJobId(job.id)}>Preview G-code</button>}
-            {job.status === "completed" && job.output_asset?.id && job.gcode_in_library && canPrint && <button type="button" className="primary" disabled={busy} onClick={() => requestPrint(job)}>Print from slicer</button>}
-            {job.status === "completed" && job.output_asset_id && !job.gcode_in_library &&
+            {job.settings?.workflow !== "quick" && job.status === "completed" && job.output_asset?.id && job.gcode_in_library && canPrint && <button type="button" className="primary" disabled={busy} onClick={() => requestPrint(job)}>Print from slicer</button>}
+            {job.settings?.workflow !== "quick" && job.status === "completed" && job.output_asset_id && !job.gcode_in_library &&
               <button type="button" disabled={busy} onClick={() => saveOutputToLibrary(job)}>Add G-code to library</button>}
-            {job.status === "completed" && job.output_asset_id && job.gcode_in_library &&
+            {job.settings?.workflow !== "quick" && job.status === "completed" && job.output_asset_id && job.gcode_in_library &&
               <button type="button" onClick={onOpenGcode}>Open G-code library</button>}
           </div>
         </div>
