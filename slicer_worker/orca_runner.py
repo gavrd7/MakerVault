@@ -80,43 +80,47 @@ def _engine_exit_reason(stderr):
     return "engine-exited"
 
 
-# Orca's CLI emits invalid option names on separate lines following
-# "Param values in 3mf/config error:". Only emit a small allowlist of
-# known settings identifiers, never their values or untrusted CLI text.
-KNOWN_RANGE_KEYS = frozenset({
-    "wall_filament", "solid_infill_filament", "sparse_infill_filament",
-    "support_filament", "support_interface_filament", "tree_support_wall_count",
-    "prime_tower_brim_width", "prime_tower_width",
-    "initial_layer_print_height", "layer_height", "first_layer_height",
-    "nozzle_diameter", "filament_diameter", "wall_loops",
-    "top_shell_layers", "bottom_shell_layers",
-})
-_RANGE_ERROR_LINE = re.compile(
-    r"^\s*([a-z][a-z0-9_]{1,70})\s*:\s*[^\r\n]{0,120}\bnot in range\b[^\r\n]{0,100}$", re.I
-)
+# Orca emits a bounded set of option identifiers after its CLI settings
+# validation heading. Never log values, arbitrary strings, paths or secrets.
+_CONFIG_LINE = re.compile(r"^\\s*([a-z][a-z0-9_]{1,63})\\s*:\\s*\\S", re.I)
+_SENSITIVE_WORDS = ("secret", "password", "token", "apikey", "api_key",
+                    "authorization", "credential", "private", "access_key")
 
 
 def _safe_out_of_range_options(output):
-    """Report only known option IDs, not values or user-provided CLI output."""
-    message = output.decode("utf-8", errors="replace")[:16384]
-    if "param values in 3mf/config error" not in message.lower():
-        return ()
+    """Only report syntactically safe setting identifiers in validation block."""
+    message = output.decode("utf-8", errors="replace")[:32768]
+    lines = message.splitlines()
     found = []
-    for line in message.splitlines():
-        match = _RANGE_ERROR_LINE.fullmatch(line.strip())
-        if match:
-            key = match.group(1).lower()
-            if key in KNOWN_RANGE_KEYS and key not in found:
-                found.append(key)
+    in_block = False
+    for line in lines:
+        if "param values in 3mf/config error" in line.lower():
+            in_block = True
+            continue
+        if not in_block:
+            continue
+        match = _CONFIG_LINE.match(line)
+        if not match:
+            if found:
+                break
+            continue
+        key = match.group(1).lower()
+        if not any(word in key for word in _SENSITIVE_WORDS) and key not in found:
+            found.append(key)
         if len(found) >= 8:
             break
     return tuple(found)
 
 
-def _bounded_stderr(stream, tail, limit=8192):
-    """Drain the child pipe without allowing output to grow in memory."""
+def _bounded_stderr(stream, tail, limit=8192, head=None):
+    """Drain a process stream retaining bounded first and final diagnostic bytes."""
+    head_bytes = 0
     try:
         while chunk := stream.read(4096):
+            if head is not None and head_bytes < limit:
+                first = chunk[:limit - head_bytes]
+                head.append(first)
+                head_bytes += len(first)
             tail.append(chunk)
             total = sum(len(part) for part in tail)
             while total > limit and tail:
@@ -246,11 +250,13 @@ def run_orca(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIME
         # Drain *both* streams with bounded tails to avoid pipe deadlocks.
         # Never log or return raw content; only whitelisted reason categories.
         stderr_tail, stdout_tail = deque(), deque()
+        stderr_head, stdout_head = deque(), deque()
         readers = []
-        for name, tail in (("stderr", stderr_tail), ("stdout", stdout_tail)):
+        for name, tail, head in (("stderr", stderr_tail, stderr_head),
+                                 ("stdout", stdout_tail, stdout_head)):
             stream = getattr(proc, name, None)
             if stream is not None:
-                reader = threading.Thread(target=_bounded_stderr, args=(stream, tail), daemon=True)
+                reader = threading.Thread(target=_bounded_stderr, args=(stream, tail, 8192, head), daemon=True)
                 reader.start()
                 readers.append(reader)
         try:
@@ -264,7 +270,8 @@ def run_orca(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIME
         for reader in readers:
             reader.join(timeout=2)
         if proc.returncode != 0:
-            output = b"".join(stderr_tail) + b"\n" + b"".join(stdout_tail)
+            output = (b"".join(stderr_head) + b"\n" + b"".join(stderr_tail) +
+                      b"\n" + b"".join(stdout_head) + b"\n" + b"".join(stdout_tail))
             reason = _engine_exit_reason(output)
             if reason == "native-project-settings-invalid":
                 keys = _safe_out_of_range_options(output)
