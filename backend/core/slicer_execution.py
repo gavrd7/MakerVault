@@ -197,8 +197,10 @@ def _read_owned_file(asset, owner_id, maximum, label):
     try:
         with asset.file.open("rb") as stream:
             data = stream.read(maximum + 1)
-    except (OSError, ValueError):
-        raise SlicerExecutionError(f"{label} file cannot be read.") from None
+    except (OSError, ValueError) as exc:
+        logger.warning("Slicer source read failed (%s, asset=%s): %s: %s",
+                       label, asset.pk, type(exc).__name__, exc)
+        raise SlicerExecutionError(f"{label} file cannot be read.") from exc
     if not data or len(data) > maximum:
         raise SlicerExecutionError(f"{label} exceeds the size limit.")
     return data
