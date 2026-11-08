@@ -130,7 +130,10 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
                        "missing-gcode", "validation-error", "invalid-profile-json",
                        "invalid-profile-structure", "unsafe-profile-settings",
                        "engine-unavailable", "invalid-stl", "engine-timeout",
-                       "invalid-gcode", "engine-launch-failed", "invalid-3mf"}
+                       "invalid-gcode", "engine-launch-failed", "invalid-3mf",
+                       "qt-platform-failed", "missing-runtime-library",
+                       "appimage-runtime-failed", "unsupported-cli-option",
+                       "native-profile-load-failed"}
             try:
                 declared_error_length = response.headers.get("Content-Length")
                 if (declared_error_length is None or (
