@@ -73,7 +73,9 @@ def generated_slice_name(job):
     label = names[0] if len(names) == 1 else (
         " + ".join(names[:2]) + (f" + {len(names) - 2} more" if len(names) > 2 else "")
     )
-    label = label[:180].rstrip(" ._") or "Model"
+    # A concise filename works better in modal buttons, printer screens
+    # and on removable media. The blob's storage key remains independent.
+    label = label[:72].rstrip(" ._") or "Model"
     return label + ".gcode"
 
 def store_generated_gcode(job_id, raw: bytes):
