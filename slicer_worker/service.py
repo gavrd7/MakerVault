@@ -194,11 +194,21 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, UnicodeDecodeError, json.JSONDecodeError, WorkerError) as exc:
             # Only report a bounded diagnostic category, never command output,
             # profile JSON, private paths, bearer tokens or source filenames.
-            logger.warning("Isolated slicer rejected job at %s (%s)", stage,
-                           type(exc).__name__)
+            safe_reasons = {
+                "OrcaSlicer failed. Check the engine-native profiles.": "engine-exited",
+                "Orca profile requires an unbundled parent preset; use a verified complete native profile bundle.": "unresolved-profile-parent",
+                "OrcaSlicer produced no safe output directory.": "no-output-directory",
+                "OrcaSlicer must produce exactly one G-code plate and only expected metadata.": "unexpected-output-layout",
+                "Generated G-code exceeded the output size limit.": "output-too-large",
+                "Requested engine/version is unavailable.": "engine-version-mismatch",
+                "OrcaSlicer output is missing or exceeds its limit.": "missing-gcode",
+            }
+            reason = safe_reasons.get(str(exc), "validation-error")
+            logger.warning("Isolated slicer rejected job at %s (%s, %s)", stage,
+                           type(exc).__name__, reason)
             return self._json(422, {
                 "error": "Slicing input or output was rejected.",
-                "stage": stage,
+                "stage": stage, "reason": reason,
             })
         except OSError as exc:
             logger.exception("Isolated slicer filesystem failure at %s", stage)
