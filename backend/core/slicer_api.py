@@ -293,8 +293,10 @@ def _cleanup_temporary_job_sources(job):
                                            metadata__slicer_temporary=True):
         if SliceJob.objects.filter(owner=job.owner, input_asset=asset).exists():
             continue
-        if SliceJob.objects.filter(owner=job.owner,
-                                   settings__plate_objects__contains=[{"asset_id": str(asset.pk)}]).exists():
+        if any(str(item.get("asset_id")) == str(asset.pk)
+               for settings in SliceJob.objects.filter(owner=job.owner).values_list("settings", flat=True)
+               for item in (settings or {}).get("plate_objects", [])
+               if isinstance(item, dict)):
             continue
         stored = asset.file
         asset.delete()
