@@ -34,6 +34,36 @@ class OrcaRunnerTests(TestCase):
         self.assertEqual(cmd[cmd.index("--load-filaments") + 1], str(self.root / "filament.json"))
         self.assertIn(str(self.root / "process.json") + ";" + str(self.root / "printer.json"), cmd)
 
+    def test_verified_appimage_uses_pre_extracted_entrypoint(self):
+        original = self.root / "orcaslicer.AppImage"
+        original.write_bytes(b"official pinned AppImage fixture")
+        original.chmod(0o700)
+        appdir = self.root / "squashfs-root"
+        appdir.mkdir()
+        entry = appdir / "AppRun"
+        entry.write_text("#!/bin/sh\\nexit 0\\n")
+        entry.chmod(0o700)
+        command = orca_command(original, self.root)
+        self.assertEqual(command[0], str(entry))
+        self.assertEqual(command[1], str(self.root / "input.stl"))
+
+    def test_unextracted_appimage_fails_without_ever_invoking_fuse(self):
+        original = self.root / "orcaslicer.AppImage"
+        original.write_bytes(b"official pinned AppImage fixture")
+        original.chmod(0o700)
+        with self.assertRaisesRegex(WorkerError, "no extracted runtime"):
+            orca_command(original, self.root)
+
+    def test_extracted_entrypoint_cannot_escape_pinned_directory(self):
+        original = self.root / "orcaslicer.AppImage"
+        original.write_bytes(b"official pinned AppImage fixture")
+        original.chmod(0o700)
+        appdir = self.root / "squashfs-root"
+        appdir.mkdir()
+        (appdir / "AppRun").symlink_to(self.binary)
+        with self.assertRaisesRegex(WorkerError, "unsafe"):
+            orca_command(original, self.root)
+
     def test_rejects_fake_stl_before_launching_orca(self):
         (self.root / "input.stl").write_bytes(b"not a real STL")
         with self.assertRaisesRegex(WorkerError, "STL"):
