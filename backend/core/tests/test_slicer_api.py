@@ -240,7 +240,7 @@ class SliceJobApiTests(TestCase):
         self.assertEqual(len(row.settings["plate_objects"]), 2)
         self.assertEqual(row.settings["plate_objects"][1]["rotation_deg"], 90.0)
         self.assertFalse(result.json()["job"]["can_slice"])
-        with self.assertRaisesRegex(SlicerExecutionError, "multi-object slicing"):
+        with self.assertRaisesRegex(SlicerExecutionError, "Multi-model plate execution"):
             validate_scheduling(row, {"prusaslicer": {"enabled": True, "verified": True}})
         self.assertEqual(self.client.post(f"{self.url}{row.pk}/start/").status_code, 409)
 
