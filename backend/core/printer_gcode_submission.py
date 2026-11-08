@@ -1,8 +1,11 @@
-"""Opt-in Moonraker G-code browsing and one-shot upload/print submission.
+"""Adapter-aware G-code browsing and one-shot upload/print submission.
 
-No raw G-code execution via MakerVault. Each printer operation has a durable
-receipt before I/O and is never automatically retried after an uncertain send.
-Other printer adapters must implement and validate their own transfer protocol.
+Slicer engines generate printer-neutral G-code artifacts; submission uses the
+selected printer connection's supported native, Moonraker, or other adapter
+protocol independently. A second read-only adapter may verify an upload only
+when it addresses the exact same physical printer and has fresh telemetry.
+Every printer operation has a durable receipt before I/O and is never
+automatically retried after an uncertain send.
 """
 import re
 import logging
