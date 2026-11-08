@@ -5,6 +5,7 @@ import { FileModelViewerModal, ModelThumbnail } from "./ModelViewer";
 import PrinterStartGcodeModal from "./PrinterStartGcodeModal";
 import GcodeViewerModal from "./GcodeViewerModal";
 import SlicerPlateEditor from "./SlicerPlateEditor";
+import SlicerPrepareWorkspace from "./SlicerPrepareWorkspace";
 import SlicerEngineChoices from "./SlicerEngineChoices";
 import { slicerSpoolHex, recolorUnmodifiedPlate } from "./slicerSpoolColour";
 import { spoolMaterial, chooseSuggestedProfile, defaultOfficialSearch, suggestOfficialVendor } from "./slicerProfileSuggestions";
@@ -58,6 +59,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [printSelection, setPrintSelection] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
   const [plateObjects, setPlateObjects] = useState([]);
+  const [editorOpen, setEditorOpen] = useState(false);
   const openedDraftRef = useRef(null);
   const manuallyColouredModels = useRef(new Set());
   const manuallyChosenProfiles = useRef(new Set());
@@ -261,6 +263,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     manuallyColouredModels.current = new Set(savedObjects.map(item => item.instance_id));
     manuallyChosenProfiles.current = new Set(["printer", "filament", "process"]);
     setPlateObjects(savedObjects);
+    setEditorOpen(true);
     setForm(current => ({
       ...current,
       engine: job.engine, engine_version: job.engine_version,
@@ -783,14 +786,34 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         <p>Choose the model, physical printer and spool, then keep each slicing engine's printer, filament and process presets separate. Slicing execution is not enabled until a verified self-hosted worker is installed.</p>
       </div>
       <div className="printingHeroActions">
+        {editorOpen && <button type="button" onClick={() => setEditorOpen(false)}>← Slicer setup</button>}
         <button type="button" onClick={onBack}>← Printing overview</button>
         <button type="button" onClick={() => setShowDrafts(true)}>Saved drafts ({jobs.length})</button>
       </div>
     </section>
 
+    {editorOpen ? <SlicerPrepareWorkspace
+      objects={plateObjects} onChange={setPlateObjects} files={stlFiles}
+      onPrimaryChange={id => update("input_asset_id", String(id))}
+      onFilesUploaded={onFilesUploaded} defaultColor={selectedSpoolHex}
+      onManualColorChange={instanceId => manuallyColouredModels.current.add(instanceId)}
+      plate={customBed.enabled ? { size_mm: [Number(customBed.x), Number(customBed.y)] }
+        : (nativePlate?.plate && ["available", "partial"].includes(nativePlate.plate.status) ? nativePlate.plate
+          : (Number(selectedPrinter?.build_volume?.x) > 0 && Number(selectedPrinter?.build_volume?.y) > 0
+            ? { size_mm: [Number(selectedPrinter.build_volume.x), Number(selectedPrinter.build_volume.y)] } : null))}
+      canEdit={canPrepare} busy={busy || loading} error={error} notice={notice}
+      engine={form.engine + " " + form.engine_version} printer={selectedPrinter?.name}
+      selectedProfiles={{ process: form.process_preset, filament: form.filament_preset }}
+      workerConfigured={workerConfigured && engines.some(engine => engine.key === form.engine && engine.available)}
+      onBackToSetup={() => setEditorOpen(false)} onSaveDraft={() => saveDraft("draft")}
+      onSlice={() => saveDraft("slice")} onSaveAndSlice={() => saveDraft("save-and-slice")}
+    /> : <>
     <div className="slicerWorkbenchTop">
     <section className="panel printingSection" aria-labelledby="slicer-preparation-heading">
-      <h3 id="slicer-preparation-heading">Slicing configuration</h3>
+      <div className="slicerSetupHeading"><h3 id="slicer-preparation-heading">Slicer setup</h3>
+        <button type="button" disabled={!plateObjects.length || !canPrepare || busy}
+          onClick={() => setEditorOpen(true)}>Open interactive slicer →</button>
+      </div>
       <p role="status">{workerConfigured
         ? "An isolated slicing worker is configured. Selected native profiles are checked for integrity before execution. Slicing never starts a print."
         : "Preparation mode — no isolated slicing worker is available. Saving a draft does not run a slicer, send a printer command or change spool inventory."}</p>
@@ -960,6 +983,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       </>}
     />
 
+    </>}
     {profileModal === "edit" && editingProfile && <Modal title={"Customise " + editingProfile.kind + " profile"} subtitle={editingProfile.engine + " · " + editingProfile.engine_version} onClose={() => setProfileModal("")} wide>
       <p>The original native preset remains unchanged. This creates a new, unverified copy with supported settings; inherited profiles still need their parent presets before slicing.</p>
       {editProfileError && <p role="alert" className="integrationError">{editProfileError}</p>}
