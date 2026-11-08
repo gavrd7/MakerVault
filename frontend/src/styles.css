@@ -3913,3 +3913,87 @@ a:focus-visible,
 .slicerToolpath3D>small{display:block;color:var(--muted,#9aafc3);margin-top:7px;text-align:center}
 .slicerToolpath3DCanvas canvas{outline:none}
 @media(max-width:650px){.slicerToolpath3DCanvas{height:380px}}
+
+
+/* Slicer UI consistency: prevent nested panels, buttons, labels and long
+   profile names from overflowing their responsive grid tracks. */
+.slicerPrepareWorkspace{box-sizing:border-box;min-width:0;padding:clamp(16px,2vw,26px)!important}
+.slicerPrepareWorkspace *, .slicerPrepareWorkspace *::before,.slicerPrepareWorkspace *::after{box-sizing:border-box}
+.slicerPrepareHeader{align-items:center;margin-bottom:18px}
+.slicerPrepareHeader>div{flex:1 1 320px;min-width:0}
+.slicerPrepareHeader h3{margin:7px 0 9px;line-height:1.3}
+.slicerPrepareHeader p{line-height:1.55;overflow-wrap:anywhere}
+.slicerChangeProfiles{display:inline-flex;align-items:center;gap:8px;min-height:42px;flex:0 0 auto}
+.slicerPrepareTools{display:flex;align-items:center;gap:8px;padding:14px 0;margin:0 0 18px;flex-wrap:wrap}
+.slicerPrepareTools button{display:inline-flex;align-items:center;justify-content:center;
+  flex:0 0 42px;width:42px;height:42px;min-width:42px;min-height:42px;padding:8px;
+  line-height:1;white-space:nowrap}
+.slicerPrepareTools button.isActive{background:rgba(138,112,229,.22);border-color:#ad9dfb;color:#ded6ff}
+.slicerUiIcon{display:block;flex-shrink:0}
+.slicerPrepareStructure{grid-template-columns:minmax(165px,210px) minmax(0,1fr) minmax(220px,285px);
+  gap:16px;align-items:start;min-width:0}
+.slicerPrepareStructure > *{min-width:0;max-width:100%}
+.slicerPrepareTree,.slicerPrepareSettings{padding:16px;overflow:hidden}
+.slicerPrepareTree h4,.slicerPrepareSettings h4{line-height:1.4;margin:0 0 16px}
+.slicerPrepareTree>button{font-size:.85rem;line-height:1.4;padding:10px}
+.slicerPrepareTree>button span:last-child{min-width:0;overflow-wrap:anywhere}
+.slicerPrepareTree small{line-height:1.55;margin-top:14px}
+.slicerPrepareSettings{display:flex;flex-direction:column;gap:13px}
+.slicerPrepareSettings p{margin:0;line-height:1.55;overflow-wrap:anywhere;min-width:0}
+.slicerPrepareSettings nav{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0 0 10px}
+.slicerPrepareSettings nav button{display:inline-flex;align-items:center;gap:7px;
+  padding:9px 7px;min-height:40px;margin:0;line-height:1.35;font-size:.77rem}
+.slicerPrepareSettings nav button span{min-width:0;overflow-wrap:anywhere}
+.slicerPrepareScopes{gap:8px;margin-bottom:2px}
+.slicerPrepareScopes button{flex:1 1 0;min-width:0;padding:9px 5px}
+.slicerPrepareSettings .projectUploadHint{padding:12px;background:rgba(120,140,160,.06);
+  border:1px solid var(--border,#394958);border-radius:9px}
+.slicerPrepareScene>.slicerPlatePanel{min-width:0;max-width:100%;padding:16px;overflow:hidden}
+.slicerPrepareScene .slicerPlateHeading{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.slicerPrepareScene .slicerPlateHeading h3{margin:0;flex:1 1 150px}
+.slicerPrepareScene .slicerPlatePanel>p{line-height:1.55;margin:12px 0}
+.slicerPrepareScene .slicerPlateWorkspace{margin-top:14px;min-width:0}
+.slicerPrepareScene .slicerPlateCanvasColumn{min-width:0}
+.slicerPrepareScene .slicerPlateControls{display:flex;flex-direction:column;gap:14px}
+.slicerPrepareScene .slicerPlateControlsGroup{min-width:0;max-width:100%}
+.slicerPrepareScene .slicerPlateControls .formGrid,
+.slicerPrepareScene .slicerPlateControls .formGrid:has(input[type="number"]){grid-template-columns:repeat(2,minmax(0,1fr))}
+.slicerPrepareScene .slicerPlateControls .slicerPlateImportFields{grid-template-columns:minmax(0,1fr)}
+.slicerPrepareScene .slicerPlateControls .formGrid>label{min-width:0;max-width:100%;overflow-wrap:anywhere}
+.slicerPrepareScene .slicerPlateControls input,
+.slicerPrepareScene .slicerPlateControls select{max-width:100%}
+.slicerPrepareActions{padding:16px 0 0;margin-top:18px;border-top:1px solid var(--border,#394958)}
+.slicerPrepareActions .settingsActions{display:flex;flex-wrap:wrap;gap:10px}
+.slicerChangeProfileGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:20px 0}
+.slicerChangeProfileGrid>label{min-width:0;display:flex;flex-direction:column;gap:7px}
+.slicerChangeProfileGrid select{min-width:0;width:100%;max-width:100%}
+.slicerChangeProfileActions{justify-content:flex-end;margin-top:16px}
+.slicerEngineChoiceInfo{align-content:start;margin:0}
+.slicerEngineChoices:has(.slicerEngineChoiceInfo){row-gap:18px;column-gap:12px;margin:18px 0 26px}
+.slicerEngineChoices:has(.slicerEngineChoiceInfo)+.printingActionGroup{margin-top:24px}
+.slicerEngineInstallHint{padding-left:0;margin-top:6px}
+.slicerResultVisibility{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));
+  align-items:center;gap:10px 14px;min-width:0;padding:16px;margin:18px 0}
+.slicerResultVisibility legend{padding:0 7px;line-height:1.4}
+.slicerResultVisibility label{display:grid;grid-template-columns:18px 13px minmax(0,1fr);
+  gap:10px;align-items:center;min-width:0;white-space:normal;line-height:1.35;cursor:pointer}
+.slicerResultVisibility input[type="checkbox"]{margin:0;width:16px;height:16px}
+.slicerResultVisibility i{width:12px;height:12px}
+@media(max-width:1300px){
+  .slicerPrepareStructure{grid-template-columns:minmax(165px,195px) minmax(0,1fr)}
+  .slicerPrepareSettings{grid-column:1/-1}
+  .slicerPrepareSettings nav{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:850px){
+  .slicerPrepareStructure{grid-template-columns:minmax(0,1fr)}
+  .slicerPrepareScene{grid-row:1}
+  .slicerPrepareTree,.slicerPrepareSettings{grid-column:1}
+  .slicerPrepareSettings nav{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .slicerChangeProfileGrid{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-width:550px){
+  .slicerPrepareWorkspace{padding:14px!important}
+  .slicerPrepareTools button{flex-basis:40px;width:40px;min-width:40px;height:40px;min-height:40px}
+  .slicerPrepareHeader .slicerChangeProfiles{width:100%;justify-content:center}
+  .slicerResultVisibility{grid-template-columns:minmax(0,1fr)}
+}
