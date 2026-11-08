@@ -5,6 +5,7 @@ Execution requires a digest-pinned, healthy isolated worker and owner-scoped
 native profiles with validated content and intact inheritance chains.
 """
 import hashlib
+import logging
 import os
 from datetime import timedelta
 from django.db import transaction
@@ -18,6 +19,8 @@ from .slicer_bed_dimensions import trusted_plate_dimensions
 from .slicer_plate_3mf import build_plate_3mf, build_compound_plate_3mf
 from .slicer_worker_client import SlicerWorkerError, health, run_remote_job
 
+
+logger = logging.getLogger(__name__)
 
 MAX_INPUT = 32 * 1024 * 1024
 MAX_PROFILE = 1024 * 1024
@@ -222,6 +225,7 @@ def process_queued_job(job_id):
         job.progress = 5
         job.message = "Preparing isolated slicing input."
         job.save(update_fields=["status", "progress", "message", "updated_at"])
+    stage = "reading the source STL"
     try:
         model = _read_owned_file(job.input_asset, job.owner_id, MAX_INPUT, "Model")
         model_format = "stl"
@@ -240,9 +244,12 @@ def process_queued_job(job_id):
                 if asset.sha256 and hashlib.sha256(raw).hexdigest() != asset.sha256:
                     raise SlicerExecutionError("A plate STL has changed since import.")
                 source_models.append((item, raw))
+            stage = "resolving native printer bed dimensions"
             width, depth = trusted_plate_dimensions(job.printer_profile)
+            stage = "assembling the build plate 3MF"
             model = build_compound_plate_3mf(source_models, bed_width=width, bed_depth=depth)
             model_format = "3mf"
+        stage = "resolving native slicing profiles"
         profiles = []
         for kind in ("printer", "filament", "process"):
             profile = getattr(job, f"{kind}_profile")
@@ -253,19 +260,24 @@ def process_queued_job(job_id):
                             if job.engine in {"orcaslicer", "crealityprint"} else data)
         if model_format == "stl" and job.input_asset.sha256 and hashlib.sha256(model).hexdigest() != job.input_asset.sha256:
             raise SlicerExecutionError("Model contents changed since the job was prepared.")
+        stage = "executing the isolated slicer worker"
         output = run_remote_job(
             job.pk, job.engine, job.engine_version, model,
             profiles[0], profiles[1], profiles[2],
             model_format=model_format,
         )
+        stage = "validating and storing generated G-code"
         asset = store_generated_gcode(job.pk, output)
         return {"status": "completed", "asset_id": str(asset.pk)}
     except Exception:
+        # Preserve detailed traceback in server logs without exposing raw
+        # profile contents, filesystem paths, tokens or worker responses to UI.
+        logger.exception("Slicing job %s failed during %s", job.pk, stage)
         with transaction.atomic():
             row = SliceJob.objects.select_for_update().filter(pk=job.pk).first()
             if row and row.status == "running":
                 row.status = "failed"
-                row.message = "Slicing failed or worker response could not be verified."
+                row.message = "Slicing failed during " + stage + ". Check MakerVault worker logs for this job."
                 row.save(update_fields=["status", "message", "updated_at"])
         return {"status": "failed"}
 
