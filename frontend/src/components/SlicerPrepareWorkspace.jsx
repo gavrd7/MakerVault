@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import SlicerPlateEditor from "./SlicerPlateEditor";
 import SlicerUiIcon from "./SlicerUiIcon";
+import { apiFetch } from "../api";
 
 /**
  * Interactive Prepare shell. All slicing still goes through the existing
@@ -38,7 +39,7 @@ export default function SlicerPrepareWorkspace({
   objects, onChange, files, plate, onPrimaryChange, onFilesUploaded,
   defaultColor, onManualColorChange, canEdit, busy, error, notice,
   onChangeProfiles, onSaveDraft, onSlice, engine, printer,
-  selectedProfiles, workerConfigured,
+  selectedProfiles, workerConfigured, printerId,
 }) {
   const editorRef = useRef(null);
   const latest = useRef(objects);
@@ -49,6 +50,41 @@ export default function SlicerPrepareWorkspace({
   const [scope, setScope] = useState("global");
   const [group, setGroup] = useState("Quality");
   const [toolMode, setToolMode] = useState("select");
+  const [liveMaterials, setLiveMaterials] = useState([]);
+  const [materialRefreshing, setMaterialRefreshing] = useState(false);
+  const [materialMessage, setMaterialMessage] = useState("Select Refresh to read current printer filament slots.");
+  const requestRef = useRef(0);
+  const refreshPrinterMaterials = useCallback(async () => {
+    const requestId = ++requestRef.current;
+    if (!printerId) {
+      setLiveMaterials([]);
+      setMaterialMessage("Choose a printer to view loaded filament slots.");
+      return;
+    }
+    setMaterialRefreshing(true);
+    try {
+      // Reuse MakerVault's provider-neutral live slot inventory. No printer
+      // commands or RFID writes are issued by this operation.
+      const data = await apiFetch("/api/printing/?include_filaments=0");
+      if (requestId !== requestRef.current) return;
+      const selectedPrinter = (data.printers || []).find(p => String(p.id) === String(printerId));
+      const loaded = (selectedPrinter?.slots || []).filter(slot => slot.is_loaded);
+      setLiveMaterials(loaded);
+      setMaterialMessage(loaded.length
+        ? "Live slots are informational until native multi-material mapping is implemented."
+        : "No loaded slots reported for this printer.");
+    } catch (err) {
+      if (requestId !== requestRef.current) return;
+      setLiveMaterials([]);
+      setMaterialMessage(err?.message || "Live printer filament information is unavailable.");
+    } finally {
+      if (requestId === requestRef.current) setMaterialRefreshing(false);
+    }
+  }, [printerId]);
+  useEffect(() => {
+    refreshPrinterMaterials();
+    return () => { requestRef.current += 1; };
+  }, [refreshPrinterMaterials]);
   latest.current = objects;
 
   const updatePlate = useCallback(next => {
@@ -190,6 +226,22 @@ export default function SlicerPrepareWorkspace({
         <p><strong>Printer:</strong> {selectedProfiles?.printer || "Not selected"}</p>
         <p><strong>Process:</strong> {selectedProfiles?.process || "Not selected"}</p>
         <p><strong>Filament:</strong> {selectedProfiles?.filament || "Not selected"}</p>
+        {group === "Multifilament" && <section className="slicerLiveMaterialSlots" aria-label="Loaded printer filament slots">
+          <div className="slicerLiveMaterialHeader"><strong>Loaded printer filaments</strong>
+            <button type="button" disabled={materialRefreshing || !printerId} onClick={refreshPrinterMaterials}>
+              {materialRefreshing ? "Refreshing…" : "Refresh"}
+            </button>
+          </div>
+          {liveMaterials.map(slot => <div className="slicerLiveMaterialSlot" key={slot.id}>
+            <span className="slicerLiveMaterialSwatch" style={{ backgroundColor: /^#[0-9a-f]{6}$/i.test(slot.color_hex || "") ? slot.color_hex : "#697b91" }} aria-hidden="true" />
+            <div><strong>{slot.product_name || slot.material || "Unknown filament"}</strong>
+              <small>{slot.system_label || "Printer material"} · Slot {(slot.slot_index ?? 0) + 1}
+                {slot.spool_code ? " · " + slot.spool_code : " · Unlinked spool"}</small>
+              <small>{slot.material || "Unknown type"}{slot.remaining_percent != null ? " · " + Math.round(slot.remaining_percent) + "% remaining" : ""}</small>
+            </div>
+          </div>)}
+          <p role="status">{materialMessage}</p>
+        </section>}
         <p className="projectUploadHint">Native setting editors will appear here after their engine-specific
           schema, inheritance, validation and round-trip tests are ready. Use Slicer setup to edit a profile.</p>
       </aside>
