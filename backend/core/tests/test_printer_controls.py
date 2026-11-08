@@ -148,6 +148,47 @@ class PrinterControlApiTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.send_mock.assert_not_called()
 
+    def test_k2_preparation_states_offer_explicit_controls(self):
+        from core.printer_controls import control_availability
+        for state in ("self-testing", "processing"):
+            with self.subTest(state=state):
+                self.snapshot = {**self.snapshot, "state": state}
+                self.connection.last_snapshot = self.snapshot
+                self.connection.save(update_fields=["last_snapshot"])
+                available = control_availability(self.connection)
+                self.assertEqual(available["actions"], ["pause", "resume", "cancel"])
+                response = self.post(
+                    action="resume", request_id=str(uuid.uuid4()),
+                    job_token=job_token(self.snapshot)
+                )
+                self.assertEqual(response.status_code, 202, response.content)
+        self.assertEqual(self.send_mock.call_count, 2)
+
+    def test_preparation_controls_stay_disabled_without_identified_job(self):
+        from core.printer_controls import control_availability
+        for state in ("self-testing", "processing"):
+            snapshot = {**self.snapshot, "state": state, "job": {"file_name": ""}}
+            self.connection.last_snapshot = snapshot
+            self.connection.save(update_fields=["last_snapshot"])
+            self.assertEqual(control_availability(self.connection)["actions"], [])
+
+    def test_idle_state_never_exposes_job_controls(self):
+        from core.printer_controls import control_availability
+        self.connection.last_snapshot = {**self.snapshot, "state": "idle"}
+        self.connection.save(update_fields=["last_snapshot"])
+        self.assertEqual(control_availability(self.connection)["actions"], [])
+
+    def test_creality_explicit_pause_overrides_active_self_test_marker(self):
+        from core.printer_connectivity import _creality_state
+        self.assertEqual(_creality_state({
+            "printFileName": "test.gcode", "withSelfTest": 37, "state": 5,
+            "printProgress": 0,
+        }), "paused")
+        self.assertEqual(_creality_state({
+            "printFileName": "test.gcode", "withSelfTest": 37, "state": 0,
+            "printProgress": 0,
+        }), "self-testing")
+
     def test_fresh_paused_job_can_resume(self):
         self.snapshot = {**self.snapshot, "state": "paused"}
         self.connection.last_snapshot = self.snapshot
