@@ -88,7 +88,7 @@ test("saved drafts can be deleted without touching model files", () => {
   assert.match(source, /\["draft", "failed", "cancelled", "stale"\]\.includes\(job\.status\)/);
   assert.match(source, /method: "DELETE"/);
   assert.match(source, /Delete draft/);
-  assert.match(source, /The source model was preserved/);
+  assert.match(source, /Separately saved files were preserved/);
 });
 
 test("three distinct plate actions control draft creation and G-code library retention", () => {
