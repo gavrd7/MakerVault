@@ -3900,3 +3900,9 @@ a:focus-visible,
 .slicerResultVisibility label{font-size:.82rem;white-space:nowrap}
 .slicerResultVisibility i{width:11px;height:11px;display:inline-block;border-radius:2px}
 @media(max-width:550px){.slicerResultLayerLayout{grid-template-columns:minmax(0,1fr) 58px;gap:7px}.slicerResultLayerSlider input[type=range]{min-height:190px}}
+
+
+.slicerAxisScaling{border:1px solid var(--border,#394958);border-radius:9px;padding:10px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.slicerAxisScaling legend{font-size:.86rem;font-weight:600;padding:0 5px}
+.slicerAxisScaling label{min-width:0}
+@media(max-width:500px){.slicerAxisScaling{grid-template-columns:minmax(0,1fr)}}
