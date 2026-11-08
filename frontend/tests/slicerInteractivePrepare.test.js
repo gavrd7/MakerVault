@@ -114,3 +114,14 @@ test("live CFS AMS RFID material slots remain read-only until real multi-materia
   assert.match(scene, /slot\.spool_code/);
   assert.match(scene, /native multi-material mapping is implemented/);
 });
+
+test("icon toolbar tooltips show names and unavailable reasons on hover and focus", () => {
+  const scene = read("SlicerPrepareWorkspace.jsx");
+  const styles = fs.readFileSync(path.resolve(root, "../styles.css"), "utf8");
+  assert.match(scene, /className="slicerToolTooltip"/);
+  assert.match(scene, /data-tooltip=\{tool\.pending \? tool\.name/);
+  assert.match(scene, /Not yet available:/);
+  assert.match(scene, /aria-label=\{tool\.name\}/);
+  assert.match(styles, /\.slicerToolTooltip:hover::after/);
+  assert.match(styles, /\.slicerToolTooltip:focus-within::after/);
+});
