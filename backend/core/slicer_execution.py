@@ -135,11 +135,19 @@ def _validate_plate_execution(job):
     if not isinstance(objects, list) or not 1 <= len(objects) <= 12:
         raise SlicerExecutionError("Plate model list is invalid.")
     if not job.printer_profile_id:
-        raise SlicerExecutionError("Select a native printer profile for the 3MF plate.")
+        raise SlicerExecutionError("Select a native printer profile for slicing.")
+    # The single unchanged STL execution path uses Orca's native arrange
+    # rather than producing a 3MF plate. It must not be gated by the stricter
+    # geometry validation reserved for generated 3MF placement.
+    if _single_unmodified_stl(objects):
+        return True
     try:
         trusted_plate_dimensions(job.printer_profile)
     except ValueError as exc:
-        raise SlicerExecutionError("3MF plate requires supported native rectangular build dimensions.") from exc
+        raise SlicerExecutionError(
+            "Edited or multi-model 3MF plate requires supported native rectangular "
+            "build dimensions; review the selected printer profile."
+        ) from exc
     return True
 
 
