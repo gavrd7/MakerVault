@@ -65,3 +65,10 @@ test("slicer result preview restores upload-only send-to-printer route", () => {
   assert.match(workbench, /initialAction=\{printSelection\.action === "upload" \? "upload" : "print"\}/);
   assert.match(workbench, /Review upload/);
 });
+
+test("printer send modal lists all saved G-code by category, not encrypted filename", () => {
+  const modal = read("PrinterStartGcodeModal.jsx");
+  assert.match(modal, /apiFetch\("\/api\/files\/\?category=gcode"\)/);
+  assert.match(modal, /\.filter\(f => f\.category === "gcode"\)/);
+  assert.doesNotMatch(modal, /\.filter\(f => \(f\.filename \|\| ""\)\.toLowerCase\(\)\.endsWith\("\.gcode"\)\)/);
+});
