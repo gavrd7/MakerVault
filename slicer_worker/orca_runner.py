@@ -6,6 +6,7 @@ version and produced G-code still needs independent real fixture validation.
 """
 import json
 import os
+import re
 from pathlib import Path
 import signal
 import subprocess
@@ -77,6 +78,39 @@ def _engine_exit_reason(stderr):
     )):
         return "native-profile-load-failed"
     return "engine-exited"
+
+
+# Orca's CLI emits invalid option names on separate lines following
+# "Param values in 3mf/config error:". Only emit a small allowlist of
+# known settings identifiers, never their values or untrusted CLI text.
+KNOWN_RANGE_KEYS = frozenset({
+    "wall_filament", "solid_infill_filament", "sparse_infill_filament",
+    "support_filament", "support_interface_filament", "tree_support_wall_count",
+    "prime_tower_brim_width", "prime_tower_width",
+    "initial_layer_print_height", "layer_height", "first_layer_height",
+    "nozzle_diameter", "filament_diameter", "wall_loops",
+    "top_shell_layers", "bottom_shell_layers",
+})
+_RANGE_ERROR_LINE = re.compile(
+    r"^\\s*([a-z][a-z0-9_]{1,70})\\s*:\\s*[^\\r\\n]{0,100}\\bnot in range\\b", re.I
+)
+
+
+def _safe_out_of_range_options(output):
+    """Report only known option IDs, not values or user-provided CLI output."""
+    message = output.decode("utf-8", errors="replace")[:16384]
+    if "param values in 3mf/config error" not in message.lower():
+        return ()
+    found = []
+    for line in message.splitlines():
+        match = _RANGE_ERROR_LINE.fullmatch(line.strip())
+        if match:
+            key = match.group(1).lower()
+            if key in KNOWN_RANGE_KEYS and key not in found:
+                found.append(key)
+        if len(found) >= 8:
+            break
+    return tuple(found)
 
 
 def _bounded_stderr(stream, tail, limit=8192):
@@ -230,7 +264,12 @@ def run_orca(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIME
         for reader in readers:
             reader.join(timeout=2)
         if proc.returncode != 0:
-            reason = _engine_exit_reason(b"".join(stderr_tail) + b"\n" + b"".join(stdout_tail))
+            output = b"".join(stderr_tail) + b"\n" + b"".join(stdout_tail)
+            reason = _engine_exit_reason(output)
+            if reason == "native-project-settings-invalid":
+                keys = _safe_out_of_range_options(output)
+                logger.warning("OrcaSlicer rejected native config ranges; known keys=%s; "
+                               "unrecognised keys omitted", ",".join(keys) if keys else "none")
             # Orca's CLI uses 238 for some project/config validation exits.
             # Preserve this as a diagnostic class, not a claim about the cause.
             if reason == "engine-exited" and proc.returncode == 238:
