@@ -61,7 +61,9 @@ test("completed slice opens existing read-only G-code preview within jobs modal"
 test("slicer result preview restores upload-only send-to-printer route", () => {
   const workbench = read("SlicerWorkbench.jsx");
   assert.match(workbench, /requestPrint\(previewJob, "upload"\)/);
-  assert.match(workbench, /Send to printer/);
+  assert.match(workbench, /Upload to printer/);
+  assert.match(workbench, /Upload and start print/);
+  assert.match(workbench, /requestPrint\(previewJob, "print"\)/);
   assert.match(workbench, /initialAction=\{printSelection\.action === "upload" \? "upload" : "print"\}/);
   assert.match(workbench, /Review upload/);
 });
