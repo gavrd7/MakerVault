@@ -13,6 +13,10 @@ from .runner import WorkerError
 CORE_NS = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
 ALLOWED = {"3D/3dmodel.model", "_rels/.rels", "[Content_Types].xml"}
 PLATE_MANIFEST = "Metadata/model_settings.config"
+# Keep the worker aligned with the validated STL and server-side 3MF builder.
+# Expanded XML, compressed archive and model upload bounds remain separate.
+MAX_TRIANGLES = 500_000
+MAX_VERTICES_PER_OBJECT = 1_500_000
 
 
 def validate_worker_3mf(data):
@@ -54,9 +58,9 @@ def validate_worker_3mf(data):
         if not vertices or not triangles:
             raise WorkerError("3MF build contains empty objects.")
         count += len(triangles)
-        if count > 150000:
+        if count > MAX_TRIANGLES:
             raise WorkerError("3MF triangle count exceeds worker limit.")
-        if len(vertices) > 450000:
+        if len(vertices) > MAX_VERTICES_PER_OBJECT:
             raise WorkerError("3MF vertex count exceeds worker limit.")
         for vertex in vertices:
             try:
