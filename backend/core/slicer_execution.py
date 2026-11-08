@@ -1,8 +1,8 @@
 """Explicitly gated queue/execution lifecycle for one isolated engine.
 
 Nothing in this module starts a printer, changes spool stock or installs engines.
-All execution is blocked unless an administrator configures a digest-pinned
-and verified worker and explicitly approves all three engine-native profiles.
+Execution requires a digest-pinned, healthy isolated worker and owner-scoped
+native profiles with validated content and intact inheritance chains.
 """
 import hashlib
 import os
@@ -99,18 +99,27 @@ def verified_installation():
     return installed
 
 
-def _check_profile_evidence(profile, installation):
-    evidence = profile.verification_evidence or {}
-    if (
-        evidence.get("engine_version") != installation["version"]
-        or evidence.get("image_digest") != installation["image_digest"]
-        or evidence.get("engine_binary_sha256") != installation.get("binary_sha256")
-        or not isinstance(evidence.get("receipt_sha256"), str)
-        or len(evidence["receipt_sha256"]) != 64
-        or not isinstance(evidence.get("gcode_sha256"), str)
-        or len(evidence["gcode_sha256"]) != 64
-    ):
-        raise SlicerExecutionError("Native profile approval no longer matches this pinned worker.")
+def _check_profile_integrity(profile, job, kind):
+    """Native profiles need no manual administrator approval.
+
+    Refuse changed, missing or unsupported profile data at queue admission,
+    while preserving the pinned worker and explicit user-selected identity.
+    """
+    from .slicer_profiles import inspect_native_profile, SlicerProfileError
+    from .slicer_native_resolution import resolved_native_profile
+    if (not profile or profile.owner_id != job.owner_id
+            or profile.engine != job.engine or profile.engine_version != job.engine_version
+            or profile.kind != kind or profile.name != getattr(job, f"{kind}_preset")):
+        raise SlicerExecutionError("Selected native profiles no longer match this slicing job.")
+    try:
+        inspection = inspect_native_profile(profile.file_asset, profile.engine)
+        if inspection["sha256"] != profile.content_sha256:
+            raise SlicerExecutionError("Native profile contents changed after import.")
+        if profile.engine in {"orcaslicer", "crealityprint"}:
+            resolved_native_profile(profile)
+    except (SlicerProfileError, ValueError, OSError) as exc:
+        raise SlicerExecutionError("Native profile is invalid or its parent presets are incomplete: " +
+                                   str(exc)) from exc
 
 
 def _validate_plate_execution(job):
@@ -123,7 +132,7 @@ def _validate_plate_execution(job):
     if not isinstance(objects, list) or not 1 <= len(objects) <= 12:
         raise SlicerExecutionError("Plate model list is invalid.")
     if not job.printer_profile_id:
-        raise SlicerExecutionError("Select a verified native printer profile for the 3MF plate.")
+        raise SlicerExecutionError("Select a native printer profile for the 3MF plate.")
     try:
         trusted_plate_dimensions(job.printer_profile)
     except ValueError as exc:
@@ -137,7 +146,7 @@ def validate_scheduling(job, installed=None):
     if job.status != "draft" or job.output_asset_id:
         raise SlicerExecutionError("Only unscheduled slice drafts can be queued.")
     if not installed:
-        raise SlicerExecutionError("No administrator-verified slicing worker is enabled.")
+        raise SlicerExecutionError("No verified isolated slicing worker is enabled.")
     installation = validate_engine_selection(job.engine, job.engine_version, installed)
     installation["binary_sha256"] = installed[job.engine].get("binary_sha256")
     if not job.printer.is_active or job.printer.owner_id != job.owner_id:
@@ -146,15 +155,7 @@ def validate_scheduling(job, installed=None):
         raise SlicerExecutionError("Input model no longer belongs to this job.")
     for kind in ("printer", "filament", "process"):
         profile = getattr(job, f"{kind}_profile", None)
-        if not profile or profile.status != "verified":
-            raise SlicerExecutionError("All three native profiles require administrator verification.")
-        if (
-            profile.owner_id != job.owner_id or profile.engine != job.engine
-            or profile.engine_version != job.engine_version or profile.kind != kind
-            or profile.name != getattr(job, f"{kind}_preset")
-        ):
-            raise SlicerExecutionError("Slicing profile identity changed; prepare a new draft.")
-        _check_profile_evidence(profile, installation)
+        _check_profile_integrity(profile, job, kind)
     return True
 
 
@@ -282,13 +283,7 @@ def validate_scheduling_for_worker(job, installed):
         raise SlicerExecutionError("Job ownership changed.")
     for kind in ("printer", "filament", "process"):
         profile = getattr(job, f"{kind}_profile")
-        if (
-            not profile or profile.status != "verified" or profile.owner_id != job.owner_id
-            or profile.engine != job.engine or profile.engine_version != job.engine_version
-            or profile.kind != kind or profile.name != getattr(job, f"{kind}_preset")
-        ):
-            raise SlicerExecutionError("Native slicer profiles are no longer verified.")
-        _check_profile_evidence(profile, installation)
+        _check_profile_integrity(profile, job, kind)
 
 
 def reconcile_stale_jobs(*, now=None, limit=250):
