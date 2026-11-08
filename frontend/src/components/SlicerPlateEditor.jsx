@@ -170,7 +170,14 @@ export default function SlicerPlateEditor({
     if (!chosen) return;
     const candidate = { ...chosen, [field]: value };
     if (field === "scale_percent") candidate.scale_xyz_percent = [value, value, value];
-    if (field === "scale_xyz_percent") candidate.scale_percent = 100;
+    if (field === "scale_xyz_percent") {
+      if (!Array.isArray(value) || value.length !== 3 ||
+          value.some(axis => !Number.isFinite(axis) || axis < 5 || axis > 400)) {
+        setError("Each axis scale must be between 5% and 400%.");
+        return;
+      }
+      candidate.scale_percent = 100;
+    }
     if (["x_mm", "y_mm", "rotation_deg", "scale_percent", "scale_xyz_percent"].includes(field) &&
         !validPlacement(candidate, objects)) {
       setError("This position or transform overlaps another model, exceeds the build plate, or has dimensions still loading. Try Auto-arrange.");
@@ -546,7 +553,7 @@ export default function SlicerPlateEditor({
         <legend>Independent axis scaling (%)</legend>
         {["X", "Y", "Z"].map((axis, index) => <label key={axis}>
           {axis} axis
-          <input type="number" min={5} max={400} step="1"
+          <input data-slicer-field={index === 0 ? "scale_xyz_percent" : undefined} type="number" min={5} max={400} step="1"
             value={chosen?.scale_xyz_percent?.[index] ?? chosen?.scale_percent ?? 100}
             disabled={!canEdit}
             onChange={event => {
