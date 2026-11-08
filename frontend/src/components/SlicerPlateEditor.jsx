@@ -45,6 +45,7 @@ export default function SlicerPlateEditor({
   files = [], objects = [], onChange, onPrimaryChange, plate = null,
   canEdit = false, onFilesUploaded, defaultColor = null, onManualColorChange, footer = null,
   selectedInstanceId = null, onSelectedInstanceChange, toolMode = "select",
+  localAssets = [], onLocalAssetsChange,
 }) {
   const hostRef = useRef(null);
   const sceneRef = useRef(null);
@@ -66,10 +67,7 @@ export default function SlicerPlateEditor({
   const [assetChoice, setAssetChoice] = useState("");
   const [uploadBusy, setUploadBusy] = useState(false);
   const [saveImports, setSaveImports] = useState(false);
-  const [localAssets, setLocalAssets] = useState([]);
-  const localAssetsRef = useRef([]);
-  localAssetsRef.current = localAssets;
-  useEffect(() => () => { localAssetsRef.current.forEach(asset => URL.revokeObjectURL(asset.url)); }, []);
+  // Temporary mesh previews belong to the parent workbench, not this view.
   const [error, setError] = useState("");
   const [dimensions, setDimensions] = useState({});
   dimensionsRef.current = dimensions;
@@ -243,7 +241,7 @@ export default function SlicerPlateEditor({
         (additions.length ? " Earlier models in this batch remain on the plate." : ""));
     } finally {
       if (previews.length) {
-        setLocalAssets(current => [...current, ...previews]);
+        onLocalAssetsChange?.(current => [...current, ...previews]);
         pendingArrangeRef.current = true;
         additions.forEach(item => pendingAddIdsRef.current.add(item.instance_id));
         onChange([...objects, ...additions]);
