@@ -2,7 +2,7 @@
 from unittest.mock import patch
 from django.test import SimpleTestCase
 
-from core.slicer_execution import verified_installation
+from core.slicer_execution import verified_installation, _single_unmodified_stl
 
 
 class WorkerApprovalTests(SimpleTestCase):
@@ -127,3 +127,24 @@ class PrivateSlicerSourceReadTests(SimpleTestCase):
                          b'{"type":"machine"}')
         self.assertEqual(storage.open.call_count, 2)
         storage.open.assert_called_with("private/ab/opaque.blob", "rb")
+
+
+class DirectSingleModelSliceTests(SimpleTestCase):
+    def test_unmodified_single_instance_can_use_native_stl_path(self):
+        item = {"asset_id": "source", "x_mm": 0, "y_mm": 0,
+                "rotation_deg": 0, "scale_percent": 100, "color": "#ffffff"}
+        self.assertTrue(_single_unmodified_stl([item]))
+        self.assertTrue(_single_unmodified_stl([
+            {**item, "scale_xyz_percent": [100, 100, 100]}
+        ]))
+
+    def test_transforms_or_multiple_instances_require_project_path(self):
+        item = {"asset_id": "source", "x_mm": 0, "y_mm": 0,
+                "rotation_deg": 0, "scale_percent": 100}
+        self.assertFalse(_single_unmodified_stl([item, item]))
+        for changed in (
+            {"x_mm": 5}, {"y_mm": -2}, {"rotation_deg": 90},
+            {"scale_percent": 120}, {"scale_xyz_percent": [110, 100, 100]},
+        ):
+            with self.subTest(changed=changed):
+                self.assertFalse(_single_unmodified_stl([{**item, **changed}]))
