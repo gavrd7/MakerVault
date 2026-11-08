@@ -328,7 +328,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
 
   if (workspaceView === "slicer") {
     return <>
-      {slicerStatus.state === "preview" && <section className="panel printingSection" role="status">
+      {slicerStatus.state === "preview" && <section className="panel printingSection slicerPreviewNotice" role="status" aria-label="Slicer workbench preview">
         <strong>Workbench preview — no slicer engine installed</strong>
         <p>Staging-only preparation mode. You can explore the visual plate, import models, search native profiles and save drafts, but slicing execution and printing generated G-code are unavailable until a verified worker is installed.</p>
       </section>}
