@@ -61,6 +61,14 @@ def _engine_exit_reason(stderr):
     )):
         return "unsupported-cli-option"
     if any(term in message for term in (
+        "param values in 3mf/config error", "not in range",
+    )):
+        return "native-project-settings-invalid"
+    if any(term in message for term in (
+        "failed to load 3mf", "invalid 3mf", "3mf import failed",
+    )):
+        return "native-project-load-failed"
+    if any(term in message for term in (
         "invalid config", "invalid configuration", "invalid preset",
         "invalid profile", "failed to load config", "failed to load settings",
     )):
@@ -216,6 +224,10 @@ def run_orca(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIME
             reader.join(timeout=2)
         if proc.returncode != 0:
             reason = _engine_exit_reason(b"".join(tail))
+            # Orca's CLI uses 238 for some project/config validation exits.
+            # Preserve this as a diagnostic class, not a claim about the cause.
+            if reason == "engine-exited" and proc.returncode == 238:
+                reason = "cli-validation-exit-238"
             # Reason and exit status are bounded diagnostics, not CLI output.
             logger.warning("OrcaSlicer subprocess ended: exit=%s category=%s", proc.returncode, reason)
             raise WorkerError("OrcaSlicer CLI exited: " + reason + ".")
