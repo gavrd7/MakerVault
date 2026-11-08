@@ -175,19 +175,26 @@ export default function SlicerPrepareWorkspace({
       </button>
     </div>
     <div className="slicerPrepareTools" role="toolbar" aria-label="Model editing tools">
-      <button type="button" disabled={!undoRef.current.length || busy} onClick={undo}
-        aria-label="Undo" title="Undo model edit (Ctrl+Z)"><SlicerUiIcon name="undo" /></button>
-      <button type="button" disabled={!redoRef.current.length || busy} onClick={redo}
-        aria-label="Redo" title="Redo model edit (Ctrl+Y)"><SlicerUiIcon name="redo" /></button>
-      {TOOLS.map(tool => <button key={tool.name} type="button"
-        className={((tool.target === "x_mm" && toolMode === "move") ||
-          (tool.target === "rotation_deg" && toolMode === "rotate")) ? "isActive" : ""}
-        aria-pressed={tool.target === "x_mm" || tool.target === "rotation_deg"
-          ? (tool.target === "x_mm" ? toolMode === "move" : toolMode === "rotate") : undefined}
-        aria-label={tool.name}
-        disabled={!!tool.pending || !canEdit || busy || (tool.target !== "import" && !objects.length)}
-        title={tool.pending ? "Not implemented: " + tool.pending : tool.name}
-        onClick={() => selectTool(tool)}><SlicerUiIcon name={tool.icon || "others"} /></button>)}
+      <span className="slicerToolTooltip" data-tooltip="Undo · Ctrl+Z">
+        <button type="button" disabled={!undoRef.current.length || busy} onClick={undo}
+          aria-label="Undo"><SlicerUiIcon name="undo" /></button>
+      </span>
+      <span className="slicerToolTooltip" data-tooltip="Redo · Ctrl+Y">
+        <button type="button" disabled={!redoRef.current.length || busy} onClick={redo}
+          aria-label="Redo"><SlicerUiIcon name="redo" /></button>
+      </span>
+      {TOOLS.map(tool => <span className="slicerToolTooltip" key={tool.name}
+        data-tooltip={tool.pending ? tool.name + " · Not yet available: " + tool.pending
+          : tool.name}>
+        <button type="button"
+          className={((tool.target === "x_mm" && toolMode === "move") ||
+            (tool.target === "rotation_deg" && toolMode === "rotate")) ? "isActive" : ""}
+          aria-pressed={tool.target === "x_mm" || tool.target === "rotation_deg"
+            ? (tool.target === "x_mm" ? toolMode === "move" : toolMode === "rotate") : undefined}
+          aria-label={tool.name}
+          disabled={!!tool.pending || !canEdit || busy || (tool.target !== "import" && !objects.length)}
+          onClick={() => selectTool(tool)}><SlicerUiIcon name={tool.icon || "others"} /></button>
+      </span>)}
     </div>
     <div className="slicerPrepareStructure">
       <aside className="slicerPrepareTree" aria-label="Build plate object tree">
