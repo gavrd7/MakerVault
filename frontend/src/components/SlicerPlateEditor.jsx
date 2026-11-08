@@ -246,6 +246,7 @@ export default function SlicerPlateEditor({
     const additions = [];
     const previews = [];
     let imported3mfCount = 0;
+    let oversizedForSlice = 0;
     try {
       for (const original of imports) {
         // Geometry-only conversion uses the same owner-scoped STL upload
@@ -253,7 +254,10 @@ export default function SlicerPlateEditor({
         const converted = /\.3mf$/i.test(original.name)
           ? await threeMfGeometryToStl(original) : null;
         const file = converted?.file || original;
-        if (converted) imported3mfCount += 1;
+        if (converted) {
+          imported3mfCount += 1;
+          if (converted.exceedsPackagedSliceLimit) oversizedForSlice += 1;
+        }
         const form = new FormData();
         form.append("file", file);
         if (saveImports) {
@@ -285,7 +289,12 @@ export default function SlicerPlateEditor({
           setArrangeNotice(imported3mfCount + " 3MF project" +
             (imported3mfCount === 1 ? "" : "s") +
             " imported as flattened STL geometry. Part positions within each project are retained, " +
-            "but native 3MF settings, material painting, and separate part editing are not imported.");
+            "but native 3MF settings, material painting, and separate part editing are not imported." +
+            (oversizedForSlice
+              ? " " + oversizedForSlice + " imported model(s) exceed the current 150,000-triangle " +
+                "3MF slice-packaging limit. Geometry preview and drafts are available, but slicing " +
+                "these models needs a later packaging upgrade."
+              : ""));
         }
         if (saveImports) {
           try { await onFilesUploaded?.(); }
