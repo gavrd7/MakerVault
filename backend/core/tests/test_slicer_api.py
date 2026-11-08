@@ -39,6 +39,30 @@ class SliceJobApiTests(TestCase):
             content_type="application/json",
         )
 
+    def test_private_slicer_input_does_not_appear_in_files_and_can_be_drafted(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        import struct
+        self.client.force_login(self.owner)
+        # One non-degenerate binary STL triangle with a valid 80-byte header.
+        triangle = struct.pack("<12fH", 0, 0, 1, 0, 0, 0, 10, 0, 0, 0, 10, 0, 0)
+        stl = b" " * 80 + struct.pack("<I", 1) + triangle
+        uploaded = self.client.post(
+            "/api/printing/slicer/meshes/temporary/",
+            {"file": SimpleUploadedFile("Temporary.stl", stl, content_type="model/stl")},
+        )
+        self.assertEqual(uploaded.status_code, 201, uploaded.content)
+        asset = FileAsset.objects.get(pk=uploaded.json()["asset_id"])
+        self.assertTrue(asset.metadata["slicer_temporary"])
+        listed = self.client.get("/api/files/")
+        self.assertNotIn(str(asset.pk), str(listed.json()))
+        job = self.post({**self.payload, "input_asset_id": str(asset.pk)})
+        self.assertEqual(job.status_code, 201, job.content)
+        self.owner.user_permissions.add(Permission.objects.get(codename="delete_slicejob"))
+        self.client.force_login(self.owner)
+        deleted = self.client.delete(self.url + job.json()["job"]["id"] + "/")
+        self.assertEqual(deleted.status_code, 200, deleted.content)
+        self.assertFalse(FileAsset.objects.filter(pk=asset.pk).exists())
+
     def test_gcode_library_preference_is_explicit_and_private(self):
         self.client.force_login(self.owner)
         response = self.post()
