@@ -64,7 +64,7 @@ class GeneratedSlicerFileTests(TestCase):
         }
         self.input_asset.save(update_fields=["name", "metadata"])
         filename = generated_slice_name(self.job)
-        self.assertLessEqual(len(filename), 78)
+        self.assertLessEqual(len(filename), 62)
         self.assertTrue(filename.endswith(".gcode"))
         self.assertNotIn("/", filename)
         self.assertNotIn("?", filename)
