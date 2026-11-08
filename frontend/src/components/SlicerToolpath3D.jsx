@@ -70,6 +70,12 @@ export default function SlicerToolpath3D({
     }
     const centre = valid ? bounds.getCenter(new THREE.Vector3()) : new THREE.Vector3(110, 0, 110);
     const size = valid ? bounds.getSize(new THREE.Vector3()) : new THREE.Vector3(120, 40, 120);
+    // The visual bed is a reference plane centred on the path sample.
+    // Its extent is not a claim about the actual native printer dimensions.
+    grid.position.x = centre.x;
+    grid.position.z = centre.z;
+    bed.position.x = centre.x;
+    bed.position.z = centre.z;
     const distance = Math.max(60, size.length() * 1.8);
     controls.target.copy(centre);
     camera.position.copy(centre).add(new THREE.Vector3(distance * 0.7, distance * 0.9, distance));
