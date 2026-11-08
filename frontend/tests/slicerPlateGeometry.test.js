@@ -86,3 +86,14 @@ test("auto-arrange keeps every model's preview colour and identity unchanged", (
   ]);
   assert.deepEqual(objects.map(model => [model.x_mm, model.y_mm]), [[0, 0], [0, 0]]);
 });
+
+test("independent XY scale is applied before rotation and keeps conservative clearance", () => {
+  const transformed = { ...item, rotation_deg: 90, scale_xyz_percent: [150, 50, 200] };
+  const bounds = plateEnvelope(transformed, box);
+  assert.ok(Math.abs(bounds.minX + 5) < 1e-8);
+  assert.ok(Math.abs(bounds.maxX - 5) < 1e-8);
+  assert.ok(Math.abs(bounds.minY + 30) < 1e-8);
+  assert.ok(Math.abs(bounds.maxY - 30) < 1e-8);
+  assert.equal(plateExtentWarning({ ...transformed, x_mm: 106 }, box, 220, 220),
+    "Estimated XY footprint extends beyond the displayed plate");
+});
