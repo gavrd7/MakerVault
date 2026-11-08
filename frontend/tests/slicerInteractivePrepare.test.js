@@ -40,11 +40,20 @@ test("advanced tools are visibly gated pending safe native transformations", () 
   const scene = read("SlicerPrepareWorkspace.jsx");
   for (const tool of ["Auto-orient", "Lay on face", "Cut", "Hollow",
                        "Support painting", "Seam painting", "Variable layer height",
-                       "Colour painting", "Add plate", "Individual XYZ scale"]) {
+                       "Colour painting", "Add plate"]) {
     assert.match(scene, new RegExp('name: "' + tool + '", pending:'));
   }
   assert.match(scene, /disabled=\{!!tool.pending/);
   for (const group of ["Quality", "Strength", "Speed", "Supports", "Multifilament", "Others"])
     assert.match(scene, new RegExp('"' + group + '"'));
   assert.match(scene, /Per-object overrides require native engine support/);
+});
+
+test("independent XYZ scaling updates visual mesh and is selectable from the toolbar", () => {
+  const scene = read("SlicerPrepareWorkspace.jsx");
+  const editor = read("SlicerPlateEditor.jsx");
+  assert.match(scene, /name: "Individual XYZ scale", target: "scale_xyz_percent"/);
+  assert.match(editor, /Independent axis scaling \(%\)/);
+  assert.match(editor, /data-slicer-field=\{index === 0 \? "scale_xyz_percent"/);
+  assert.match(editor, /mesh\.scale\.set\(xyz\[0\] \/ 100, xyz\[1\] \/ 100, xyz\[2\] \/ 100\)/);
 });
