@@ -115,3 +115,27 @@ class OrcaRunnerTests(TestCase):
         with patch("slicer_worker.orca_runner.subprocess.Popen", return_value=FakeProcess()):
             with self.assertRaises(WorkerError):
                 run_orca(self.binary, self.root)
+
+    def test_orca_cli_failure_category_is_safe_and_specific(self):
+        import io
+        class FakeProcess:
+            returncode = 1
+            stderr = io.BytesIO(b"qt.qpa.plugin: Could not load the Qt platform plugin xcb in /private/path")
+            def wait(self, timeout=None):
+                return self.returncode
+        with patch("slicer_worker.orca_runner.subprocess.Popen", return_value=FakeProcess()):
+            with self.assertRaisesRegex(WorkerError, "qt-platform-failed"):
+                run_orca(self.binary, self.root)
+
+    def test_cli_failure_does_not_echo_private_stderr(self):
+        import io
+        class FakeProcess:
+            returncode = 1
+            stderr = io.BytesIO(b"Sensitive printer configuration: API_KEY=not-for-logs")
+            def wait(self, timeout=None):
+                return self.returncode
+        with patch("slicer_worker.orca_runner.subprocess.Popen", return_value=FakeProcess()):
+            with self.assertRaises(WorkerError) as error:
+                run_orca(self.binary, self.root)
+        self.assertEqual(str(error.exception), "OrcaSlicer CLI exited: engine-exited.")
+        self.assertNotIn("not-for-logs", str(error.exception))
