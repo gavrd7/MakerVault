@@ -178,7 +178,7 @@ def run_orca(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIME
         # small diagnostic tail but never log the raw text or any private paths.
         tail = deque()
         reader = None
-        if proc.stderr is not None:
+        if getattr(proc, "stderr", None) is not None:
             reader = threading.Thread(target=_bounded_stderr, args=(proc.stderr, tail), daemon=True)
             reader.start()
         try:
