@@ -49,6 +49,33 @@ def inspect_generated_gcode(raw: bytes, printer=None) -> dict:
     return report
 
 
+def generated_slice_name(job):
+    """Derive a readable output filename from the models on the build plate."""
+    ids = [item.get("asset_id") for item in (job.settings or {}).get("plate_objects", [])
+           if isinstance(item, dict) and item.get("asset_id")]
+    if not ids:
+        ids = [str(job.input_asset_id)]
+    assets = {str(asset.pk): asset for asset in FileAsset.objects.filter(
+        owner_id=job.owner_id, pk__in=set(ids))}
+    names = []
+    for asset_id in ids:
+        asset = assets.get(str(asset_id))
+        if not asset:
+            continue
+        original = str((asset.metadata or {}).get("original_name") or asset.name or "Model")
+        base = original.replace("\\", "/").rsplit("/", 1)[-1]
+        if base.lower().endswith(".stl"):
+            base = base[:-4]
+        base = re.sub(r'[\x00-\x1f\x7f<>:"/\\|?*]', "_", base).strip(" ._")
+        names.append(base or "Model")
+    if not names:
+        names = ["Model"]
+    label = names[0] if len(names) == 1 else (
+        " + ".join(names[:2]) + (f" + {len(names) - 2} more" if len(names) > 2 else "")
+    )
+    label = label[:180].rstrip(" ._") or "Model"
+    return label + ".gcode"
+
 def store_generated_gcode(job_id, raw: bytes):
     """Called by the approved worker dispatcher after a verified slice result.
 
@@ -67,7 +94,7 @@ def store_generated_gcode(job_id, raw: bytes):
                 raise SlicerOutputError("Slice job ownership changed.")
             report = inspect_generated_gcode(raw, job.printer)
             ensure_storage_capacity(job.owner, len(raw))
-            output_name = f"slice-{job.pk}.gcode"
+            output_name = generated_slice_name(job)
             keep_in_library = (job.settings or {}).get("save_gcode_to_library") is True
             stored = FileAsset(
                 owner=job.owner,
