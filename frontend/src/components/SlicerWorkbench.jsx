@@ -974,7 +974,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             {busy ? "Preparing…" : "Quick slice"}
           </button>
           <button type="button" className="primary" onClick={() => { setError(""); setNotice(""); setEditorOpen(true); }}
-            disabled={!canPrepare || busy || loading || !plateObjects.length || !printers.length}>
+            disabled={!canPrepare || busy || loading}>
             Slice → Interactive slicer
           </button>
         </div>
