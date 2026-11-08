@@ -70,11 +70,14 @@ def generated_slice_name(job):
         names.append(base or "Model")
     if not names:
         names = ["Model"]
-    label = names[0] if len(names) == 1 else (
-        " + ".join(names[:2]) + (f" + {len(names) - 2} more" if len(names) > 2 else "")
-    )
-    # A concise filename works better in modal buttons, printer screens
-    # and on removable media. The blob's storage key remains independent.
+    if len(names) == 1:
+        label = names[0][:56]
+    else:
+        # Give both models space even when the first source filename is long.
+        label = " + ".join(name[:22].rstrip(" ._") for name in names[:2])
+        if len(names) > 2:
+            label += f" +{len(names) - 2} more"
+    # Keep the visible name compact; the encrypted blob key is independent.
     label = label[:56].rstrip(" ._") or "Model"
     return label + ".gcode"
 
