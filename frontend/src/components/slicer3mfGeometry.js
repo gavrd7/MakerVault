@@ -14,7 +14,10 @@ import { STLExporter } from "three/examples/jsm/exporters/STLExporter.js";
 
 export const MAX_3MF_IMPORT_BYTES = 16 * 1024 * 1024;
 const MAX_STL_RESULT_BYTES = 32 * 1024 * 1024;
-const MAX_IMPORTED_TRIANGLES = 150000;
+// Match the validated private STL upload path rather than the more restrictive
+// downstream 3MF packaging limit, which is checked separately at slicing time.
+export const MAX_IMPORTED_TRIANGLES = 500000;
+export const MAX_PACKAGED_TRIANGLES = 150000;
 
 export async function threeMfGeometryToStl(file) {
   if (!/\.3mf$/i.test(file?.name || "") || !file.size || file.size > MAX_3MF_IMPORT_BYTES) {
@@ -44,7 +47,10 @@ export async function threeMfGeometryToStl(file) {
   });
   if (!meshCount || !triangles) throw new Error("This 3MF has no supported printable mesh geometry.");
   if (triangles > MAX_IMPORTED_TRIANGLES) {
-    throw new Error("3MF exceeds the 150,000 triangle preparation limit.");
+    throw new Error("3MF contains " + triangles.toLocaleString("en-GB") +
+      " triangles; geometry import supports up to " +
+      MAX_IMPORTED_TRIANGLES.toLocaleString("en-GB") +
+      " triangles, matching MakerVault's STL validation limit.");
   }
   // STLExporter flattens the loaded scene hierarchy, applying mesh matrices.
   // Relative part positions survive; the whole assembly becomes one STL
@@ -67,5 +73,6 @@ export async function threeMfGeometryToStl(file) {
     file: new File([data], stem + " (3MF geometry).stl", { type: "model/stl" }),
     meshes: meshCount,
     triangles,
+    exceedsPackagedSliceLimit: triangles > MAX_PACKAGED_TRIANGLES,
   };
 }
