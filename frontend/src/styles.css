@@ -4057,3 +4057,23 @@ a:focus-visible,
 @media(max-width:620px){
   .slicerPreviewNotice{padding:16px 18px;margin-bottom:16px;gap:8px}
 }
+
+/* Interactive slicer: keep plate controls and side panels on the same grid,
+   without stray internal dividers or horizontal overflow. */
+.slicerPrepareStructure{align-items:stretch}
+.slicerPrepareStructure>.slicerPrepareScene{align-self:stretch;min-width:0;overflow:visible}
+.slicerPrepareScene>.slicerPlatePanel{width:100%;height:100%;margin:0;border-radius:12px}
+.slicerPrepareScene .slicerPlateWorkspace{width:100%;min-width:0;align-items:stretch}
+.slicerPrepareScene .slicerPlateCanvasColumn,
+.slicerPrepareScene .slicerPlateControls{width:100%;min-width:0}
+.slicerPrepareScene .slicerPlateControls{padding:0;border:0}
+.slicerPrepareScene .slicerPlateControlsGroup{width:100%;box-sizing:border-box}
+.slicerPrepareScene .slicerPlateControls .slicerPlateToolbar button{min-height:44px}
+.slicerPrepareTree,.slicerPrepareSettings{align-self:start}
+.slicerPrepareSettings .slicerLiveMaterialSlots{width:100%;margin-top:8px}
+.slicerPrepareSettings .slicerLiveMaterialHeader{align-items:center}
+.slicerPrepareSettings .slicerLiveMaterialHeader button{flex:0 0 auto}
+@media(max-width:850px){
+  .slicerPrepareStructure{align-items:start}
+  .slicerPrepareScene>.slicerPlatePanel{height:auto}
+}
