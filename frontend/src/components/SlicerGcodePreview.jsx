@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import SlicerToolpath3D from "./SlicerToolpath3D";
 
 /**
  * Incremental read-only preview for generated G-code.
@@ -34,38 +35,10 @@ export default function SlicerGcodePreview({ preview }) {
 
   const features = Object.keys(preview?.feature_counts || {});
   const colours = Object.fromEntries(features.map((feature, index) => [feature, PALETTE[index % PALETTE.length]]));
-  const allBounds = useMemo(() => {
-    if (!allSegments.length) return null;
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const segment of allSegments) {
-      minX = Math.min(minX, segment[0], segment[2]);
-      maxX = Math.max(maxX, segment[0], segment[2]);
-      minY = Math.min(minY, segment[1], segment[3]);
-      maxY = Math.max(maxY, segment[1], segment[3]);
-    }
-    const span = Math.max(maxX - minX, maxY - minY, 1);
-    const point = (x, y) => [
-      20 + (x - minX) * 560 / span,
-      580 - (y - minY) * 560 / span,
-    ];
-    return { point };
-  }, [allSegments]);
   const layerSegments = useMemo(() =>
     z == null ? [] : allSegments.filter(segment => Math.abs(segment[4] - z) < 0.0005),
     [allSegments, z]);
   const finalStep = Math.min(step ?? layerSegments.length, layerSegments.length);
-  const shownSegments = useMemo(() => layerSegments.slice(0, finalStep)
-    .filter(segment => visible[segment[5]] !== false), [layerSegments, finalStep, visible]);
-  // Toolhead follows the actual selected sampled step, even if its feature is hidden.
-  const toolhead = finalStep > 0 && allBounds ? allBounds.point(
-    layerSegments[finalStep - 1][2], layerSegments[finalStep - 1][3]) : null;
-  function lineColour(segment) {
-    if (colourMode === "layer") {
-      const ratio = layers.length > 1 ? currentLayer / (layers.length - 1) : 0;
-      return `hsl(${200 - 160 * ratio} 85% 64%)`;
-    }
-    return colours[segment[5]] || "#b8d4e5";
-  }
   const formatTime = seconds => {
     if (seconds == null) return "Not declared";
     const hours = Math.floor(seconds / 3600), mins = Math.ceil((seconds % 3600) / 60);
@@ -94,24 +67,9 @@ export default function SlicerGcodePreview({ preview }) {
       </div>
       <div className="slicerResultLayerLayout">
         <div className="slicerResultViewport">
-          <svg viewBox="0 0 600 600" role="img"
-            aria-label="Top-down sampled extrusion toolpaths with toolhead position"
-            className="slicerResultToolpath">
-            {allBounds && shownSegments.map((segment, index) => {
-              const [x1, y1] = allBounds.point(segment[0], segment[1]);
-              const [x2, y2] = allBounds.point(segment[2], segment[3]);
-              return <line key={index} x1={x1} y1={y1} x2={x2} y2={y2}
-                stroke={lineColour(segment)} strokeWidth="1.8" strokeLinecap="round" />;
-            })}
-            {showToolhead && toolhead && <>
-              <circle cx={toolhead[0]} cy={toolhead[1]} r="7" fill="#f97316"
-                stroke="#fff" strokeWidth="1.5" aria-label="Current sampled toolhead location" />
-              <line x1={toolhead[0]-12} x2={toolhead[0]+12}
-                y1={toolhead[1]} y2={toolhead[1]} stroke="#f97316" strokeWidth="1" />
-              <line x1={toolhead[0]} x2={toolhead[0]}
-                y1={toolhead[1]-12} y2={toolhead[1]+12} stroke="#f97316" strokeWidth="1" />
-            </>}
-          </svg>
+          <SlicerToolpath3D segments={allSegments} layers={layers}
+            activeLayer={currentLayer} activeStep={finalStep} visible={visible}
+            colourMode={colourMode} colours={colours} showToolhead={showToolhead} />
           <div className="slicerResultSteps">
             <label htmlFor="slice-step-slider">Sampled toolhead step {finalStep} / {layerSegments.length}</label>
             <input id="slice-step-slider" type="range" min="0" max={layerSegments.length}
