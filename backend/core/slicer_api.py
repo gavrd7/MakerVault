@@ -745,6 +745,13 @@ def customise_profile(request, profile_id):
                          for name, limits in available.items()},
             "warning": "Custom presets are unverified; original native preset is preserved.",
         })
+    try:
+        dependent = _profile_children(profile)
+    except SlicerProfileError as exc:
+        return _error(str(exc), 409)
+    if dependent:
+        return _error("This preset is a native dependency for other profiles. "
+                      "Customise a complete printer, filament or process preset instead.", 409)
     if not request.user.has_perm("core.add_fileasset"):
         return _error("You do not have permission to create custom profiles.", 403)
     if len(request.body) > 4096:
@@ -805,6 +812,13 @@ def set_default_profile(request, profile_id):
         data = json.loads(request.body.decode("utf-8"))
         if not isinstance(data, dict) or set(data) != {"default"} or not isinstance(data["default"], bool):
             raise ValueError("Choose whether this profile is the default.")
+        if data["default"]:
+            try:
+                dependent = _profile_children(profile)
+            except SlicerProfileError as exc:
+                return _error(str(exc), 409)
+            if dependent:
+                return _error("An inherited native parent cannot be the active default profile.", 409)
         # Lock the owner row to serialize updates even when two different
         # native profile records are set as default simultaneously.
         from django.contrib.auth import get_user_model
