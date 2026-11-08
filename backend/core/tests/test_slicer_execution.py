@@ -2,7 +2,7 @@
 from unittest.mock import patch
 from django.test import SimpleTestCase
 
-from core.slicer_execution import verified_installation, _single_unmodified_stl
+from core.slicer_execution import verified_installation, _single_unmodified_stl, _validate_plate_execution, SlicerExecutionError
 
 
 class WorkerApprovalTests(SimpleTestCase):
@@ -148,3 +148,29 @@ class DirectSingleModelSliceTests(SimpleTestCase):
         ):
             with self.subTest(changed=changed):
                 self.assertFalse(_single_unmodified_stl([{**item, **changed}]))
+
+
+class NativePlateAdmissionTests(SimpleTestCase):
+    def test_single_unmodified_stl_does_not_need_3mf_bed_geometry(self):
+        from types import SimpleNamespace
+        plate = [{"asset_id": "model", "x_mm": 0, "y_mm": 0,
+                  "rotation_deg": 0, "scale_percent": 100}]
+        job = SimpleNamespace(settings={"plate_objects": plate},
+                              engine="orcaslicer", printer_profile_id="printer",
+                              printer_profile=SimpleNamespace())
+        with patch("core.slicer_execution.trusted_plate_dimensions",
+                   side_effect=ValueError("Missing polygon")) as inspect:
+            self.assertTrue(_validate_plate_execution(job))
+            inspect.assert_not_called()
+
+    def test_edited_3mf_still_requires_native_bed(self):
+        from types import SimpleNamespace
+        plate = [{"asset_id": "model", "x_mm": 2, "y_mm": 0,
+                  "rotation_deg": 0, "scale_percent": 100}]
+        job = SimpleNamespace(settings={"plate_objects": plate},
+                              engine="orcaslicer", printer_profile_id="printer",
+                              printer_profile=SimpleNamespace())
+        with patch("core.slicer_execution.trusted_plate_dimensions",
+                   side_effect=ValueError("Missing polygon")):
+            with self.assertRaisesRegex(SlicerExecutionError, "3MF plate"):
+                _validate_plate_execution(job)
