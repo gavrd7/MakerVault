@@ -306,17 +306,18 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   }, [running]);
 
   async function deleteSavedDraft(job) {
-    if (job.status !== "draft" || !mayDeleteDraft || busy) return;
-    if (!window.confirm("Delete the saved slicing draft for " +
+    if (!["draft", "failed", "cancelled", "stale"].includes(job.status) || !mayDeleteDraft || busy) return;
+    const label = job.status === "draft" ? "saved slicing draft" : "inactive slicing job";
+    if (!window.confirm("Delete this " + label + " for " +
       (job.input_asset?.name || "this model") +
-      "? This removes its slicing configuration, but keeps the original STL and any separately saved files.")) return;
+      "? This removes its job history and configuration, but preserves files saved separately to MakerVault.")) return;
     setError(""); setNotice(""); setBusy(true);
     try {
       await apiFetch("/api/printing/slicer/jobs/" + job.id + "/", { method: "DELETE" });
       setJobs(current => current.filter(item => item.id !== job.id));
-      setNotice("Slicing draft deleted. The source model was preserved.");
+      setNotice("Slicing entry deleted. Separately saved files were preserved.");
     } catch (err) {
-      setError(err.message || "Could not delete the slicing draft.");
+      setError(err.message || "Could not delete this slicing entry.");
     } finally {
       setBusy(false);
     }
@@ -1171,9 +1172,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           <div className="cameraSourceActions">
             {job.status === "draft" && <button type="button" disabled={busy}
               onClick={() => loadSavedDraft(job)}>Edit draft</button>}
-            {job.status === "draft" && mayDeleteDraft &&
+            {mayDeleteDraft && ["draft", "failed", "cancelled", "stale"].includes(job.status) &&
               <button type="button" disabled={busy} onClick={() => deleteSavedDraft(job)}>
-                Delete draft
+                {job.status === "draft" ? "Delete draft" : "Delete"}
               </button>}
             {job.can_slice && canPrepare && <button type="button" disabled={busy} onClick={() => startSlice(job)}>Slice now</button>}
             {mayCancel && (job.status === "draft" || job.status === "queued") && <button type="button" disabled={busy} onClick={() => cancelPending(job)}>Cancel {job.status === "queued" ? "queued slice" : "draft"}</button>}
