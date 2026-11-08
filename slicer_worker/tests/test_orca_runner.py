@@ -158,11 +158,11 @@ class OrcaRunnerTests(TestCase):
                 run_orca(self.binary, self.root)
 
     def test_out_of_range_diagnostic_only_reports_known_setting_names(self):
-        output = (b"Param values in 3mf/config error:\\n"
-                  b"wall_filament: 0 not in range [1.0,100.0]\\n"
-                  b"tree_support_wall_count: -1 not in range [0.0,2.0]\\n"
-                  b"api_key: 123 not in range [0,999]\\n"
-                  b"/private/path to user file\\n")
+        output = (b"Param values in 3mf/config error:\n"
+                  b"wall_filament: 0 not in range [1.0,100.0]\n"
+                  b"tree_support_wall_count: -1 not in range [0.0,2.0]\n"
+                  b"api_key: 123 not in range [0,999]\n"
+                  b"/private/path to user file\n")
         self.assertEqual(_safe_out_of_range_options(output),
                          ("wall_filament", "tree_support_wall_count"))
         self.assertEqual(_safe_out_of_range_options(b"Nothing to report"), ())
