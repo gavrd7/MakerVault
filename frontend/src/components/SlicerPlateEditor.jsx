@@ -42,6 +42,7 @@ function pretty(value) {
 export default function SlicerPlateEditor({
   files = [], objects = [], onChange, onPrimaryChange, plate = null,
   canEdit = false, onFilesUploaded, defaultColor = null, onManualColorChange, footer = null,
+  selectedInstanceId = null, onSelectedInstanceChange,
 }) {
   const hostRef = useRef(null);
   const sceneRef = useRef(null);
@@ -52,7 +53,12 @@ export default function SlicerPlateEditor({
   const pendingAddIdsRef = useRef(new Set());
   latestObjectsRef.current = objects;
   latestOnChangeRef.current = onChange;
-  const [selected, setSelected] = useState("");
+  const [localSelected, setLocalSelected] = useState("");
+  const selected = selectedInstanceId === null ? localSelected : selectedInstanceId;
+  const setSelected = next => {
+    if (selectedInstanceId === null) setLocalSelected(next);
+    else onSelectedInstanceChange?.(next);
+  };
   const [assetChoice, setAssetChoice] = useState("");
   const [uploadBusy, setUploadBusy] = useState(false);
   const [saveImports, setSaveImports] = useState(false);
@@ -510,13 +516,13 @@ export default function SlicerPlateEditor({
           {objects.map((item, index) => <option key={item.instance_id} value={item.instance_id}>{index + 1}. {sourceFiles.find(file => String(file.id) === item.asset_id)?.name || "STL model"}</option>)}
         </select>
       </label>
-      <button type="button" disabled={!canEdit || !chosen} onClick={removeSelected}>Remove selected model</button>
-      <button type="button" disabled={!canEdit || !chosen || objects.length >= MAX_OBJECTS} onClick={() => addAsset(chosen.asset_id)}>Duplicate selected</button>
+      <button data-slicer-action="remove" type="button" disabled={!canEdit || !chosen} onClick={removeSelected}>Remove selected model</button>
+      <button data-slicer-action="duplicate" type="button" disabled={!canEdit || !chosen || objects.length >= MAX_OBJECTS} onClick={() => addAsset(chosen.asset_id)}>Duplicate selected</button>
     </div>}
 
     {objects.length > 0 && <div className="formGrid slicerPlateTransformFields">
       <label>X position (mm)
-        <input type="number" min={-10000} max={10000} step="0.5" value={chosen?.x_mm ?? 0}
+        <input data-slicer-field="x_mm" type="number" min={-10000} max={10000} step="0.5" value={chosen?.x_mm ?? 0}
           disabled={!canEdit} onChange={event => patch("x_mm", pretty(event.target.value))} />
       </label>
       <label>Y position (mm)
@@ -524,11 +530,11 @@ export default function SlicerPlateEditor({
           disabled={!canEdit} onChange={event => patch("y_mm", pretty(event.target.value))} />
       </label>
       <label>Rotation around Z (degrees)
-        <input type="number" min={-360} max={360} step="5" value={chosen?.rotation_deg ?? 0}
+        <input data-slicer-field="rotation_deg" type="number" min={-360} max={360} step="5" value={chosen?.rotation_deg ?? 0}
           disabled={!canEdit} onChange={event => patch("rotation_deg", pretty(event.target.value))} />
       </label>
       <label>Uniform scale (%)
-        <input type="number" min={5} max={400} step="5" value={chosen?.scale_percent ?? 100}
+        <input data-slicer-field="scale_percent" type="number" min={5} max={400} step="5" value={chosen?.scale_percent ?? 100}
           disabled={!canEdit} onChange={event => patch("scale_percent", pretty(event.target.value))} />
       </label>
       <label>Preview/material colour
@@ -537,7 +543,7 @@ export default function SlicerPlateEditor({
       </label>
       <div className="settingsActions">
         <button type="button" disabled={!canEdit} onClick={() => patch("rotation_deg", ((chosen.rotation_deg + 90) % 360))}>Rotate 90°</button>
-        <button type="button" disabled={!canEdit || !objects.length || uploadBusy}
+        <button data-slicer-action="arrange" type="button" disabled={!canEdit || !objects.length || uploadBusy}
           onClick={() => arrangeModels()}>Auto-arrange</button>
       </div>
     </div>}
