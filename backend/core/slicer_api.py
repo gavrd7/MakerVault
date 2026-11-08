@@ -4,6 +4,8 @@ import os
 import math
 import re
 import uuid
+import hashlib
+from pathlib import Path
 from decimal import Decimal, InvalidOperation
 
 from django.contrib.auth.decorators import login_required
@@ -33,6 +35,8 @@ from .slicer_official_profiles import (
     REF as OFFICIAL_ORCA_REF,
 )
 from django.core.files.base import ContentFile
+from django.core.exceptions import ValidationError
+from .storage_usage import ensure_storage_capacity, StorageQuotaExceeded
 from .slicer_approval import approve_profiles_for_worker
 from .slicer_execution import (
     SlicerExecutionError, verified_installation, validate_scheduling, queue_draft,
@@ -235,6 +239,70 @@ def _draft(user, data):
 
 
 @login_required
+@require_http_methods(["POST"])
+def upload_temporary_mesh(request):
+    """Store an owner-private job source, not a user-visible Files entry.
+
+    This remains available for saved drafts and the isolated worker, and is
+    removed when its last draft is deleted. No model-library registration.
+    """
+    if not request.user.has_perm("core.add_fileasset"):
+        return _error("You do not have permission to prepare slicing inputs.", 403)
+    uploaded = request.FILES.get("file")
+    if not uploaded:
+        return _error("Choose an STL to slice.")
+    filename = Path(str(uploaded.name or "")).name
+    size = getattr(uploaded, "size", 0)
+    if not filename.lower().endswith(".stl") or not 0 < size <= MAX_INSPECTION_BYTES:
+        return _error("Choose a nonempty STL no larger than 32 MiB.")
+    try:
+        ensure_storage_capacity(request.user, size)
+        data = uploaded.read(MAX_INSPECTION_BYTES + 1)
+        inspect_stl(data)
+    except StorageQuotaExceeded:
+        return _error("Insufficient private storage for a temporary slicing input.", 413)
+    except (MeshInspectionError, ValueError) as exc:
+        return _error(str(exc))
+    asset = FileAsset(
+        owner=request.user, category="mesh", name=filename,
+        sha256=hashlib.sha256(data).hexdigest(),
+        metadata={
+            "extension": ".stl", "original_name": filename,
+            "size_bytes": len(data), "slicer_temporary": True,
+            "uploaded_from": "slicer",
+        },
+    )
+    try:
+        asset.file.save(filename, ContentFile(data), save=False)
+        asset.full_clean()
+        asset.save()
+    except (ValidationError, OSError, ValueError) as exc:
+        if asset.file:
+            asset.file.delete(save=False)
+        return _error("Could not store private slicing input: " + str(exc))
+    return JsonResponse({"asset_id": str(asset.pk), "name": filename,
+                         "temporary": True}, status=201)
+
+
+def _cleanup_temporary_job_sources(job):
+    """Remove only private slicing inputs no longer referenced by any job."""
+    ids = {str(job.input_asset_id)}
+    ids.update(str(item.get("asset_id")) for item in
+               (job.settings or {}).get("plate_objects", []) if isinstance(item, dict))
+    for asset in FileAsset.objects.filter(pk__in=ids, owner=job.owner,
+                                           metadata__slicer_temporary=True):
+        if SliceJob.objects.filter(owner=job.owner, input_asset=asset).exists():
+            continue
+        if SliceJob.objects.filter(owner=job.owner,
+                                   settings__plate_objects__contains=[{"asset_id": str(asset.pk)}]).exists():
+            continue
+        stored = asset.file
+        asset.delete()
+        if stored:
+            stored.delete(save=False)
+
+
+@login_required
 @require_http_methods(["GET"])
 def inspect_mesh(request, asset_id):
     """Source-file dimensions only; never an implied build-plate compatibility check."""
@@ -340,6 +408,7 @@ def job_detail(request, job_id):
         if job.status != "draft":
             return _error("Only unscheduled slicing drafts can be deleted.", 409)
         job.delete()
+        _cleanup_temporary_job_sources(job)
         return JsonResponse({"deleted": True})
     installed = verified_installation()
     return JsonResponse({"job": serialise(job, installed), "execution_available": bool(installed)})
