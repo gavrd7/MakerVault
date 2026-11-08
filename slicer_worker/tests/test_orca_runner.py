@@ -39,11 +39,39 @@ class OrcaRunnerTests(TestCase):
         with self.assertRaisesRegex(WorkerError, "STL"):
             orca_command(self.binary, self.root)
 
-    def test_forbids_postprocessing_and_network_settings(self):
-        for field in ("post_process_scripts", "printhost_apikey", "print_host"):
+    def test_rejects_postprocessing_commands(self):
+        for field in ("post_process_scripts", "post_process", "post_processing_scripts"):
             (self.root / "printer.json").write_text('{"' + field + '":"unsafe"}')
-            with self.subTest(field=field), self.assertRaises(WorkerError):
+            with self.subTest(field=field), self.assertRaisesRegex(WorkerError, "Unsafe"):
                 orca_command(self.binary, self.root)
+
+    def test_official_print_host_fields_are_removed_only_from_scratch(self):
+        import json
+        incoming = {
+            "name": "Creality K1 (0.4 nozzle)", "nozzle_diameter": ["0.4"],
+            "print_host": "192.0.2.1", "printhost_apikey": "not-sent",
+            "printhost_authorization_type": "key",
+            "settings": {"print_host_webui": "https://example.invalid"},
+        }
+        (self.root / "printer.json").write_text(json.dumps(incoming))
+        cmd = orca_command(self.binary, self.root)
+        self.assertIn("--slice", cmd)
+        cleaned = json.loads((self.root / "printer.json").read_text())
+        self.assertEqual(cleaned["name"], incoming["name"])
+        self.assertEqual(cleaned["nozzle_diameter"], ["0.4"])
+        self.assertNotIn("print_host", cleaned)
+        self.assertNotIn("printhost_apikey", cleaned)
+        self.assertNotIn("printhost_authorization_type", cleaned)
+        self.assertNotIn("print_host_webui", cleaned["settings"])
+        # Another profile without network fields is never rewritten.
+        self.assertEqual((self.root / "filament.json").read_text(), '{"name":"Native preset"}')
+
+    def test_nested_postprocessing_remains_blocked_even_with_host_keys(self):
+        (self.root / "printer.json").write_text(
+            '{"print_host":"192.0.2.1","nested":{"post_process_scripts":["curl bad"]}}'
+        )
+        with self.assertRaisesRegex(WorkerError, "Unsafe"):
+            orca_command(self.binary, self.root)
 
     def test_inherited_profiles_are_not_sliced_without_parent_bundle(self):
         (self.root / "printer.json").write_text('{"name":"Printer child","inherits":"Vendor base"}')
