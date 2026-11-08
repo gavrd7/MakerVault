@@ -297,9 +297,8 @@ export default function SlicerPlateEditor({
             " imported as flattened STL geometry. Part positions within each project are retained, " +
             "but native 3MF settings, material painting, and separate part editing are not imported." +
             (oversizedForSlice
-              ? " " + oversizedForSlice + " imported model(s) exceed the current 150,000-triangle " +
-                "3MF slice-packaging limit. Geometry preview and drafts are available, but slicing " +
-                "these models needs a later packaging upgrade."
+              ? " " + oversizedForSlice + " imported model(s) exceed the validated " +
+                "3MF geometry limit. Slicing may be unavailable until the geometry is simplified."
               : ""));
         }
         if (saveImports) {
