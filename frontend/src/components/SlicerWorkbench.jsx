@@ -55,7 +55,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [printSelection, setPrintSelection] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
   const [plateObjects, setPlateObjects] = useState([]);
-  const [saveGcodeToLibrary, setSaveGcodeToLibrary] = useState(false);
   const openedDraftRef = useRef(null);
   const manuallyColouredModels = useRef(new Set());
   const manuallyChosenProfiles = useRef(new Set());
@@ -270,7 +269,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       process_profile_id: job.process_profile_id || "",
       nozzle_mm: job.nozzle_mm,
     }));
-    setSaveGcodeToLibrary(job.settings?.save_gcode_to_library === true);
     setNotice("Saved slicing draft loaded. Saving edits creates a new draft, preserving the original.");
     window.requestAnimationFrame(() =>
       document.getElementById("slicer-plate-heading")?.scrollIntoView({ behavior: "smooth" })
@@ -396,14 +394,15 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
   async function saveDraft(mode = "draft") {
     if (busy || loading || !canPrepare) return;
-    const sliceNow = mode === "slice";
+    const sliceNow = mode !== "draft";
+    const saveOutput = mode === "save-and-slice";
     setError(""); setNotice("");
     if (!plateObjects.length) {
       setError("Add at least one STL to the visual build plate before saving or slicing.");
       return;
     }
     if (plateObjects.some(item => String(item.asset_id).startsWith("local:"))) {
-      setError("This plate contains temporary models. To save a persistent draft, first import those STL files with ‘Also save imported models to MakerVault Files’ selected.");
+      setError("A temporary STL has not finished uploading to the private slicing workspace. Import it again.");
       return;
     }
     if (!form.engine_version.trim() || !form.printer_id || !Number.isFinite(Number(form.nozzle_mm)) ||
@@ -425,7 +424,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           input_asset_id: plateObjects[0].asset_id,
           spool_id: form.spool_id || null,
           settings: { ...(plateObjects.length ? { plate_objects: plateObjects } : {}),
-            save_gcode_to_library: saveGcodeToLibrary },
+            save_gcode_to_library: saveOutput },
         },
       });
       savedJob = job;
@@ -438,7 +437,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           method: "POST", body: {},
         });
         setJobs(current => current.map(item => item.id === job.id ? queued.job : item));
-        setNotice("Slicing queued on the approved worker. No print was started or filament deducted.");
+        setNotice(saveOutput
+          ? "Slicing queued. Generated G-code will be saved to your G-code library after completion."
+          : "Slicing queued. Generated G-code will remain private unless you add it to the library.");
         setShowDrafts(true);
       }
     } catch (err) {
@@ -767,8 +768,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     <section className="panel printingSection" aria-labelledby="slicer-preparation-heading">
       <h3 id="slicer-preparation-heading">Slicing configuration</h3>
       <p role="status">{workerConfigured
-        ? "A verified isolated worker is configured. Only drafts with administrator-verified native profiles can be sliced. Slicing never starts a print."
-        : "Preparation mode — no administrator-approved slicing worker is available. Saving a draft does not run a slicer, send a printer command or change spool inventory."}</p>
+        ? "An isolated slicing worker is configured. Selected native profiles are checked for integrity before execution. Slicing never starts a print."
+        : "Preparation mode — no isolated slicing worker is available. Saving a draft does not run a slicer, send a printer command or change spool inventory."}</p>
       {error && <p className="integrationError" role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
       <form id="slicer-configuration-form" className="formGrid" onSubmit={event => { event.preventDefault(); saveDraft("draft"); }}>
@@ -830,11 +831,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           <select disabled={!canPrepare || busy} value={form.plate} onChange={e => update("plate", e.target.value)}>
             <option value="default">Stock / default plate</option>
           </select>
-        </label>
-        <label className="full">
-          <input type="checkbox" checked={saveGcodeToLibrary}
-            onChange={event => setSaveGcodeToLibrary(event.target.checked)} />
-          Automatically add generated G-code to MakerVault's G-code library after a successful slice
         </label>
       {["orcaslicer", "crealityprint"].includes(form.engine) && nativePlate?.id === form.printer_profile_id &&
         <div className="slicerNativeVolume" aria-label="Native slicer build volume">
@@ -926,11 +922,16 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             disabled={!canPrepare || busy || loading || !plateObjects.length || !printers.length}>
             {busy ? "Saving…" : "Save slicing draft"}
           </button>
-          {workerConfigured && engines.some(engine => engine.key === form.engine && engine.available) &&
-            <button type="button" onClick={() => saveDraft("slice")} className="primary"
+          {workerConfigured && engines.some(engine => engine.key === form.engine && engine.available) && <>
+            <button type="button" onClick={() => saveDraft("slice")}
+              disabled={!canPrepare || busy || loading || !plateObjects.length || !printers.length}>
+              {busy ? "Preparing…" : "Slice"}
+            </button>
+            <button type="button" onClick={() => saveDraft("save-and-slice")} className="primary"
               disabled={!canPrepare || busy || loading || !plateObjects.length || !printers.length}>
               {busy ? "Preparing…" : "Save and slice"}
-            </button>}
+            </button>
+          </>}
         </div>
       </>}
     />
