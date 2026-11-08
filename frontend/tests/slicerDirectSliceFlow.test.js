@@ -8,9 +8,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const source = fs.readFileSync(path.join(root, "src/components/SlicerWorkbench.jsx"), "utf8");
 
 test("main workbench directly submits approved slicing jobs after draft creation", () => {
-  assert.match(source, /onClick=\{\(\) => saveDraft\("slice"\)\} className="primary"/);
+  assert.match(source, /onClick=\{\(\) => saveDraft\("save-and-slice"\)\} className="primary"/);
   assert.match(source, /Save and slice/);
-  assert.match(source, /const sliceNow = mode === "slice"/);
+  assert.match(source, /const sliceNow = mode !== "draft"/);
   assert.match(source, /apiFetch\("\/api\/printing\/slicer\/jobs\/" \+ job\.id \+ "\/start\/"/);
   assert.match(source, /workerConfigured && engines\.some/);
 });
@@ -89,4 +89,18 @@ test("saved drafts can be deleted without touching model files", () => {
   assert.match(source, /method: "DELETE"/);
   assert.match(source, /Delete draft/);
   assert.match(source, /The source model was preserved/);
+});
+
+test("three distinct plate actions control draft creation and G-code library retention", () => {
+  assert.match(source, /onClick=\{\(\) => saveDraft\("draft"\)\}/);
+  assert.match(source, /onClick=\{\(\) => saveDraft\("slice"\)\}/);
+  assert.match(source, /onClick=\{\(\) => saveDraft\("save-and-slice"\)\}/);
+  assert.match(source, /const saveOutput = mode === "save-and-slice"/);
+  assert.match(source, /save_gcode_to_library: saveOutput/);
+  assert.doesNotMatch(source, /All three native profiles require administrator verification/);
+});
+
+test("temporary models are supported without adding STL to the files library", () => {
+  assert.match(source, /A temporary STL has not finished uploading/);
+  assert.doesNotMatch(source, /first import those STL files with/);
 });
