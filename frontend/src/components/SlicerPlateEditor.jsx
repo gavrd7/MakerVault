@@ -567,8 +567,17 @@ export default function SlicerPlateEditor({
       }
       bed.geometry.dispose();
       bed.material.dispose();
-      grid.geometry.dispose();
-      grid.material.dispose();
+      gridLines.forEach(line => {
+        scene.remove(line);
+        line.geometry.dispose();
+        line.material.dispose();
+      });
+      markings.forEach(mesh => {
+        scene.remove(mesh);
+        mesh.geometry.dispose();
+        mesh.material.map?.dispose();
+        mesh.material.dispose();
+      });
       boundary.geometry.dispose();
       boundary.material.dispose();
       renderer.dispose();
