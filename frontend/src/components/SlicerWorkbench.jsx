@@ -804,7 +804,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             ? { size_mm: [Number(selectedPrinter.build_volume.x), Number(selectedPrinter.build_volume.y)] } : null))}
       canEdit={canPrepare} busy={busy || loading} error={error} notice={notice}
       engine={form.engine + " " + form.engine_version} printer={selectedPrinter?.name}
-      selectedProfiles={{ process: form.process_preset, filament: form.filament_preset }}
+      selectedProfiles={{ printer: form.printer_preset, process: form.process_preset, filament: form.filament_preset }}
+      onChangeProfiles={() => setProfileModal("change")}
       workerConfigured={workerConfigured && engines.some(engine => engine.key === form.engine && engine.available)}
       onBackToSetup={() => setEditorOpen(false)} onSaveDraft={() => saveDraft("draft")}
       onSlice={() => saveDraft("slice")}
@@ -1014,6 +1015,29 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           </button>
         </div>
       </form>
+    </Modal>}
+    {profileModal === "change" && <Modal title="Change slicing profiles"
+      subtitle={"Engine: " + form.engine + " " + form.engine_version + " · Printer: " + (selectedPrinter?.name || "Not selected")}
+      onClose={() => setProfileModal("")} wide>
+      <p>Choose from installed native printer, filament and process profiles. These changes
+        apply to this slicing session and will be recorded with the next saved draft or slice.</p>
+      <div className="slicerChangeProfileGrid">
+        {["printer", "filament", "process"].map(kind => <label key={kind}>
+          {kind.charAt(0).toUpperCase() + kind.slice(1)} profile
+          <select value={form[kind + "_profile_id"]} disabled={!canPrepare || busy}
+            onChange={e => selectNativeProfile(kind, e.target.value)}>
+            <option value="">Choose {kind} profile</option>
+            {forKind(kind).map(profile => <option key={profile.id} value={profile.id}>
+              {profile.name}{profile.status !== "verified" ? " · unverified" : ""}
+            </option>)}
+          </select>
+        </label>)}
+      </div>
+      <p className="projectUploadHint">Material slot assignments are separate from native filament presets.
+        Changing these profiles does not modify printer hardware or loaded CFS/AMS slots.</p>
+      <div className="settingsActions slicerChangeProfileActions">
+        <button type="button" onClick={() => setProfileModal("")}>Done</button>
+      </div>
     </Modal>}
     {profileModal === "engines" && <Modal title="Slicer engine installations"
       subtitle="Optional self-hosted engines" onClose={() => setProfileModal("")} wide>
