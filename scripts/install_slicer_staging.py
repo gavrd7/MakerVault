@@ -7,6 +7,7 @@ A separate real native-profile test slice is still needed in MakerVault GUI.
   python3 scripts/install_slicer_staging.py prepare-orca
   python3 scripts/install_slicer_staging.py enable
   python3 scripts/install_slicer_staging.py status
+  python3 scripts/install_slicer_staging.py refresh-worker
   python3 scripts/install_slicer_staging.py disable
 
 Requires Docker access, internet access for the prepare step, and a valid
@@ -201,6 +202,47 @@ def prepare_orca():
     print("Engine health alone does not validate real slicing; select native profiles and run a test slice.")
 
 
+def refresh_worker():
+    """Rebuild only the wrapper over the same checksum-verified engine bundle.
+
+    Preserve the authentication token and exact official binary hashes.
+    Never start an image until the new immutable image ID is recorded.
+    """
+    envtext = _read_env()
+    _resume_staged_bundle()
+    def installed(key):
+        for line in envtext.splitlines():
+            if line.startswith(key + "="):
+                return line.partition("=")[2]
+        raise ValueError("Missing prepared slicer setting: " + key)
+
+    old_image = installed("MAKERVAULT_SLICER_WORKER_IMAGE")
+    old_digest = installed("MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST")
+    if old_image != old_digest or not old_image.startswith("sha256:"):
+        raise ValueError("Existing worker image identity does not match its digest.")
+    print("Rebuilding isolated worker with existing pinned OrcaSlicer binary…")
+    _run(["docker", "build", "-f", "slicer_worker/Dockerfile.bundle",
+          "-t", "makervault-slicer-worker:staging", "."])
+    new_image = _run(["docker", "image", "inspect", "--format", "{{.Id}}",
+                      "makervault-slicer-worker:staging"], capture=True)
+    if (not new_image.startswith("sha256:") or len(new_image) != 71
+            or any(ch not in "0123456789abcdef" for ch in new_image[7:])):
+        raise ValueError("Rebuilt worker has no valid immutable image ID.")
+    if new_image != old_image:
+        updated = envtext.replace(
+            "MAKERVAULT_SLICER_WORKER_IMAGE=" + old_image,
+            "MAKERVAULT_SLICER_WORKER_IMAGE=" + new_image
+        ).replace(
+            "MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST=" + old_digest,
+            "MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST=" + new_image
+        )
+        _save_env(updated)
+    _run(_compose_args() + ["config", "--quiet"])
+    _run(_compose_args() + ["up", "-d", "--build", "--force-recreate"])
+    _run(_compose_args() + ["ps", "makervault", "slicer-worker"])
+    print("Refreshed staging worker; engine binary hash and token preserved.")
+
+
 def enable():
     envtext = _read_env()
     if not BUNDLE.is_dir():
@@ -239,11 +281,12 @@ def status():
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["prepare-orca", "enable", "disable", "status"])
+    parser.add_argument("action", choices=["prepare-orca", "enable", "disable", "status", "refresh-worker"])
     args = parser.parse_args(argv)
     try:
         {"prepare-orca": prepare_orca, "enable": enable,
-         "disable": disable, "status": status}[args.action]()
+         "disable": disable, "status": status,
+         "refresh-worker": refresh_worker}[args.action]()
     except (ValueError, OSError, subprocess.CalledProcessError) as exc:
         print("Slicer staging installation failed: " + str(exc), file=sys.stderr)
         return 1
