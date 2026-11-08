@@ -422,14 +422,14 @@ def jobs(request):
 @require_http_methods(["GET", "DELETE"])
 def job_detail(request, job_id):
     if request.method == "DELETE":
-        if not request.user.has_perm("core.delete_slicejob"):
-            return _error("You do not have permission to delete slicing jobs.", 403)
-        # The status check must happen under the row lock. A worker must not
-        # claim a queued job while its source is being deleted.
+        # Hide other users' job identities even when the caller has no delete
+        # permission. The definitive state check remains under the row lock.
         with transaction.atomic():
             job = _rows(request.user).select_for_update(of=("self",)).filter(pk=job_id).first()
             if not job:
                 return _error("Slice job not found.", 404)
+            if not request.user.has_perm("core.delete_slicejob"):
+                return _error("You do not have permission to delete slicing jobs.", 403)
             if job.status not in {"draft", "failed", "cancelled", "stale"}:
                 return _error("Only drafts and inactive failed/cancelled jobs can be deleted.", 409)
             job.delete()
