@@ -19,11 +19,19 @@ from .runner import (
 )
 
 
-FORBIDDEN_KEYS = {
+# Never execute post-processing commands from imported profiles.
+SCRIPT_KEYS = {
     "post_process", "post_process_scripts", "post_processing", "post_processing_scripts",
-    "print_host", "printhost_apikey", "printhost_password", "printhost_authorization_type",
-    "printer_agent", "print_host_webui", "printhost_ssl_ignore_revoke",
 }
+# Official printer profiles can include print-host connection preferences.
+# They have no purpose in offline G-code generation. Remove them only from
+# the worker's scratch copy, not the saved upstream profile.
+NETWORK_KEYS = {
+    "print_host", "printhost_apikey", "printhost_password",
+    "printhost_authorization_type", "printer_agent", "print_host_webui",
+    "printhost_ssl_ignore_revoke",
+}
+FORBIDDEN_KEYS = SCRIPT_KEYS | NETWORK_KEYS
 
 
 def _native_json(path):
@@ -39,20 +47,32 @@ def _native_json(path):
     # external parents, so do not silently substitute defaults.
     if value.get("inherits"):
         raise WorkerError("Orca profile requires an unbundled parent preset; use a verified complete native profile bundle.")
+    sanitized = False
     def check(node, depth=0):
+        nonlocal sanitized
         if depth > 12:
             raise WorkerError("Native Orca profile nesting exceeds its limit.")
         if isinstance(node, dict):
-            for key, item in node.items():
-                if str(key).strip().lower() in FORBIDDEN_KEYS:
+            for key in list(node):
+                normalized = str(key).strip().lower()
+                if normalized in SCRIPT_KEYS:
                     raise WorkerError("Unsafe Orca profile command or network setting.")
-                check(item, depth + 1)
+                if normalized in NETWORK_KEYS:
+                    del node[key]
+                    sanitized = True
+                    continue
+                check(node[key], depth + 1)
         elif isinstance(node, list):
             if len(node) > 4096:
                 raise WorkerError("Native Orca profile contains too many entries.")
             for item in node:
                 check(item, depth + 1)
     check(value)
+    if sanitized:
+        # The source exists only in an isolated ephemeral worker directory.
+        # Never alter MakerVault's original encrypted profile.
+        path.write_text(json.dumps(value, ensure_ascii=False, separators=(",", ":")),
+                        encoding="utf-8")
 
 
 def orca_command(binary: Path, workdir: Path):
