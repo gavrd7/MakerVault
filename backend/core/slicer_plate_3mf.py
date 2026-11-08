@@ -15,7 +15,9 @@ from .slicer_mesh import MeshInspectionError
 from .slicer_profiles import SlicerProfileError
 
 NS = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
-MAX_TRIANGLES = 150_000
+# Match the validated source-STL limit. Generated XML/archive limits remain
+# independent safety checks for highly detailed or poorly compressing meshes.
+MAX_TRIANGLES = 500_000
 MAX_SOURCE_TOTAL = 48 * 1024 * 1024
 MAX_PROJECT_BYTES = 32 * 1024 * 1024
 
@@ -43,9 +45,9 @@ def _render_mesh(raw, element):
     triangles = list(_triangles(raw))
     if not triangles or len(triangles) > MAX_TRIANGLES:
         raise SlicerProfileError("STL triangle count exceeds the 3MF plate limit.")
-    points = [point for tri in triangles for point in tri]
-    minimum = [min(p[i] for p in points) for i in range(3)]
-    maximum = [max(p[i] for p in points) for i in range(3)]
+    # Do not allocate a second 3*triangle-count list of vertex tuples.
+    minimum = [min(point[i] for tri in triangles for point in tri) for i in range(3)]
+    maximum = [max(point[i] for tri in triangles for point in tri) for i in range(3)]
     origin = ((minimum[0] + maximum[0]) / 2,
               (minimum[1] + maximum[1]) / 2,
               minimum[2])
