@@ -152,7 +152,7 @@ export default function SlicerPrepareWorkspace({
       return;
     }
     const el = editorRef.current?.querySelector(
-      tool.target === "import" ? 'input[type="file"][accept=".stl"]' :
+      tool.target === "import" ? 'input[type="file"][accept=".stl,.3mf"]' :
         tool.target === "arrange" ? '[data-slicer-action="arrange"]' :
           tool.target === "duplicate" ? '[data-slicer-action="duplicate"]' :
             tool.target === "remove" ? '[data-slicer-action="remove"]' :
