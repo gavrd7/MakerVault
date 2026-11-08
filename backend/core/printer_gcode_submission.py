@@ -354,8 +354,12 @@ def _verify_moonraker_upload(connection, remote_path, expected_size):
 
 
 def _verify_creality_upload(connection, remote_path, expected_size):
-    """Verify native HTTP-upload presence through an enabled Moonraker source
-    on the SAME printer. This never uploads or starts via the alternate source.
+    """Read-only verification of a native Creality upload.
+
+    Use an explicitly configured, fresh Moonraker source when available;
+    otherwise query the *same* printer's existing native file-list protocol.
+    Only exact filename and integer byte-size matches establish success.
+    Never retry an upload or start a print as part of verification.
     """
     moonraker_sources = PrinterConnection.objects.filter(
         printer_id=connection.printer_id, adapter="moonraker", enabled=True,
@@ -363,11 +367,24 @@ def _verify_creality_upload(connection, remote_path, expected_size):
     for source in moonraker_sources:
         if _online(source):
             return _verify_moonraker_upload(source, remote_path, expected_size)
-    raise GcodeSubmissionError(
-        "Native Creality HTTP upload was attempted, but no fresh Moonraker storage "
-        "connection is available to verify the file. Inspect printer storage before retrying.", 502
-    )
-
+    try:
+        from .creality_gcode import CrealityGcodeError, list_files
+        rows = list_files(connection)
+    except (CrealityGcodeError, OSError, ValueError) as exc:
+        raise GcodeSubmissionError(
+            "Native Creality upload was accepted, but printer storage could not be "
+            "read back to verify it. Inspect printer files before retrying.", 502
+        ) from exc
+    matches = [row for row in rows if row.get("path") == remote_path]
+    if len(matches) != 1 or type(matches[0].get("size_bytes")) is not int or (
+        matches[0]["size_bytes"] != expected_size
+    ):
+        raise GcodeSubmissionError(
+            "Native Creality upload outcome is uncertain: printer storage did not "
+            "confirm exactly one matching filename and byte size. Do not retry "
+            "without inspecting printer storage.", 502
+        )
+    return matches[0]
 
 def inspect_printer_file(connection, remote_path):
     """Optional, bounded, read-only G-code inspection over an existing Moonraker API.
