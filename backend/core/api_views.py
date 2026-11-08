@@ -2459,7 +2459,7 @@ def file_gcode_inspect(request, asset_id):
 @require_http_methods(["GET", "POST"])
 def files_lookup(request):
     if request.method == "GET":
-        qs = FileAsset.objects.filter(owner=request.user).exclude(category="image").filter(superseded_by__isnull=True).select_related(
+        qs = FileAsset.objects.filter(owner=request.user).exclude(category="image").exclude(metadata__slicer_temporary=True).filter(superseded_by__isnull=True).select_related(
             "project", "board__manufacturer", "component__category"
         )
         query = request.GET.get("q", "").strip()
@@ -4710,7 +4710,7 @@ def printing_overview(request):
         ],
         "model_files": [
             _serialise_file_asset(asset)
-            for asset in FileAsset.objects.filter(owner=request.user).filter(
+            for asset in FileAsset.objects.filter(owner=request.user).exclude(metadata__slicer_temporary=True).filter(
                 Q(category__in=["mesh", "slicer", "cad", "gcode"]) | Q(metadata__extension=".gcode"),
                 superseded_by__isnull=True,
             )
