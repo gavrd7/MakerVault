@@ -16,7 +16,11 @@ class FakeFile:
         self.value = value
         self.name = "files/profile.ini"
 
-    def open(self, mode="rb"):
+    @property
+    def storage(self):
+        return self
+
+    def open(self, name="rb", mode=None):
         return BytesIO(self.value)
 
 
