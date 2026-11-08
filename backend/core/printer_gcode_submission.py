@@ -1079,6 +1079,7 @@ def submit(connection, user, payload):
     mapping_entries = None
     stage = "Preparing submission"
     dispatch_attempted = False
+    confirmed_native_upload_path = None
 
     def progress(message):
         nonlocal stage
@@ -1184,7 +1185,8 @@ def submit(connection, user, payload):
                 _verify_moonraker_upload(connection, remote_path, asset.file.size)
             elif connection.adapter == "creality_local":
                 progress("Native Creality HTTP accepted the transfer. Checking printer storage.")
-                _verify_creality_upload(connection, remote_path, asset.file.size)
+                verified = _verify_creality_upload(connection, remote_path, asset.file.size)
+                confirmed_native_upload_path = verified["path"]
         if action == "print":
             progress("Upload checked. Confirming printer idle before print-start.")
             # Verify state a second time after file transfer, particularly when
@@ -1241,9 +1243,14 @@ def submit(connection, user, payload):
                     )
                 elif connection.adapter == "creality_local":
                     from .creality_gcode import start_single_spool
-                    # Reconfirm the exact file exists on printer before a fire-and-forget start.
-                    if remote_path not in {item["path"] for item in list_printer_gcodes(connection)}:
-                        raise GcodeSubmissionError("Creality did not confirm the expected printer file; no start sent.")
+                    # A newly uploaded file has already been confirmed by
+                    # an exact native path/byte-size readback above. Do not
+                    # require a second volatile K1 listing: legacy stock
+                    # firmware may omit the file on a subsequent probe.
+                    # Existing printer files still need a fresh listing.
+                    if confirmed_native_upload_path != remote_path:
+                        if remote_path not in {item["path"] for item in list_printer_gcodes(connection)}:
+                            raise GcodeSubmissionError("Creality did not confirm the expected printer file; no start sent.")
                     start_single_spool(connection, remote_path)
                     response = None
                 elif connection.adapter == "flashforge":
