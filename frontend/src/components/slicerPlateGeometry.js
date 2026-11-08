@@ -29,10 +29,15 @@ export function plateExtentWarning(item, dimensions, sizeX, sizeY) {
 export function plateFootprintsOverlap(a, aDims, b, bDims, clearance = 0) {
   const left = plateEnvelope(a, aDims), right = plateEnvelope(b, bDims);
   if (!left || !right) return null;
-  return left.minX < right.maxX + clearance &&
-    left.maxX + clearance > right.minX &&
-    left.minY < right.maxY + clearance &&
-    left.maxY + clearance > right.minY;
+  // Packed coordinates are rounded to hundredths and trig operations
+  // introduce floating-point error at 90/180 degrees. Treat distances
+  // equal to requested clearance as non-overlapping, rather than flagging
+  // them as a collision due to sub-micron numeric noise.
+  const epsilon = 1e-7;
+  return left.minX < right.maxX + clearance - epsilon &&
+    left.maxX + clearance > right.minX + epsilon &&
+    left.minY < right.maxY + clearance - epsilon &&
+    left.maxY + clearance > right.minY + epsilon;
 }
 
 /** Deterministic shelf-like packing by footprint. No geometry or profile data is modified.
