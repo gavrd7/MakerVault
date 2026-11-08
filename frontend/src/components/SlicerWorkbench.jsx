@@ -938,7 +938,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             onChange={event => selectNativeProfile(kind, event.target.value)}>
             <option value="">Select {kind} profile</option>
             {forKind(kind).map(profile => <option key={profile.id} value={profile.id}>
-              {profile.name}{profile.is_default ? " · default" : ""}{profile.status !== "verified" ? " · unverified" : ""}
+              {profile.name}{profile.is_default ? " · default" : ""}
             </option>)}
           </select>
         </label>)}
@@ -1067,7 +1067,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             onChange={e => selectNativeProfile(kind, e.target.value)}>
             <option value="">Choose {kind} profile</option>
             {forKind(kind).map(profile => <option key={profile.id} value={profile.id}>
-              {profile.name}{profile.status !== "verified" ? " · unverified" : ""}
+              {profile.name}
             </option>)}
           </select>
         </label>)}
