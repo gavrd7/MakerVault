@@ -29,9 +29,11 @@ function makeMakerVaultPlateTexture(type, bedX, bedY) {
   // Geometry is supplied by the printer's native polygon, and UVs span that
   // polygon's bounding rectangle: no assumptions about brand or plate size.
   const canvas = document.createElement("canvas");
-  canvas.width = 1024;
-  canvas.height = 1024;
+  canvas.width = 2048;
+  canvas.height = 2048;
   const ctx = canvas.getContext("2d");
+  // Paint in logical 1024-unit coordinates onto a sharper 2048px texture.
+  ctx?.scale(2, 2);
   if (!ctx) return makeRepresentativePlateTexture(type);
   const surface = PLATE_SURFACE[type] || PLATE_SURFACE.default;
   ctx.fillStyle = surface.base;
@@ -61,7 +63,10 @@ function makeMakerVaultPlateTexture(type, bedX, bedY) {
   // Image loading is asynchronous, so refresh the canvas texture when it arrives.
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 4;
+  texture.anisotropy = 8;
+  texture.generateMipmaps = true;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
   texture.userData = { makerVaultBed: true, width: bedX, depth: bedY };
   const logo = new Image();
   logo.onload = () => {
@@ -673,7 +678,9 @@ export default function SlicerPlateEditor({
       const target = Math.abs(x / 50 - Math.round(x / 50)) < 1e-5 ? major : minor;
       for (let y = -bedY / 2; y < bedY / 2; y += step) {
         const yy = Math.min(y + step, bedY / 2);
-        if (inside(x, (y + yy) / 2)) target.push(x, y, 0.24, x, yy, 0.24);
+        if (inside(x, (y + yy) / 2) && !(useMakerVaultBed &&
+            (x + bedX / 2) / bedX > 0.34 && (x + bedX / 2) / bedX < 0.66 &&
+            (y + bedY / 2) / bedY < 0.16)) target.push(x, y, 0.24, x, yy, 0.24);
       }
     }
     for (let y = -bedY / 2; y <= bedY / 2 + 1e-5; y += step) {
@@ -682,14 +689,18 @@ export default function SlicerPlateEditor({
       const target = Math.abs(y / 50 - Math.round(y / 50)) < 1e-5 ? major : minor;
       for (let x = -bedX / 2; x < bedX / 2; x += step) {
         const xx = Math.min(x + step, bedX / 2);
-        if (inside((x + xx) / 2, y)) target.push(x, y, 0.24, xx, y, 0.24);
+        if (inside((x + xx) / 2, y) && !(useMakerVaultBed &&
+            (y + bedY / 2) / bedY < 0.16 &&
+            ((x + xx) / 2 + bedX / 2) / bedX > 0.34 &&
+            ((x + xx) / 2 + bedX / 2) / bedX < 0.66)) target.push(x, y, 0.24, xx, y, 0.24);
       }
     }
     const gridLines = [minor, major].map((coords, index) => {
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute("position", new THREE.Float32BufferAttribute(coords, 3));
       const lines = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({
-        color: index ? 0x637d97 : 0x3c536b, transparent: true, opacity: index ? 0.85 : 0.65,
+        color: index ? 0x637d97 : 0x3c536b, transparent: true, opacity: index ? 0.22 : 0.10,
+        depthWrite: false,
       }));
       scene.add(lines);
       return lines;
@@ -1264,7 +1275,7 @@ export default function SlicerPlateEditor({
         <input type="color" value={chosen?.color || PALETTE[0]} disabled={!canEdit}
           onChange={event => { onManualColorChange?.(chosen.instance_id); patch("color", event.target.value); }} />
       </label>
-      <div className="settingsActions">
+      <div className="settingsActions slicerModelActions">
         <button type="button" disabled={!canEdit} onClick={() => patch("rotation_deg", ((chosen.rotation_deg + 90) % 360))}>Rotate 90°</button>
         <button type="button" disabled={!canEdit || !chosen}
           onClick={() => applySelectedTransform({ x_mm: 0, y_mm: 0 },
