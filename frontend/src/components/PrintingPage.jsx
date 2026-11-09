@@ -700,9 +700,9 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       onClose={() => setClaimSlot(null)}
       onSaved={async () => { setClaimSlot(null); await load(); }}
     />}
-    {savedSlicerOpen && <Suspense fallback={<LoadingBlock label="Loading saved slices…" /></Suspense>}><SavedSlicerJobsModal
+    {savedSlicerOpen && <Suspense fallback={<LoadingBlock label="Loading saved slices…" />}><SavedSlicerJobsModal
       onClose={() => setSavedSlicerOpen(false)}
-      onOpenSlicer={jobId => onOpenSlicer ? onOpenSlicer(jobId) : setWorkspaceView("slicer")} />}
+      onOpenSlicer={jobId => onOpenSlicer ? onOpenSlicer(jobId) : setWorkspaceView("slicer")} /></Suspense>}
     {modal === "gcode" && <GcodeLibraryModal files={data?.gcode_files || []} projects={projects || []} canUpload={Boolean(config?.permissions?.add_file)} onClose={() => setModal("")} onSaved={load} />}
     {modal === "model" && <ModelModal projects={projects || []} canUpload={Boolean(config?.permissions?.add_file)} onClose={() => setModal("")} onSaved={saved} />}
     {modal === "print" && <PrintJobModal
@@ -1208,12 +1208,12 @@ function ModelLibraryPage({ models, files, gcodeFiles = [], printers, projects, 
       </div>
     </section>
 
-    {sliceDraftModel && <Suspense fallback={<LoadingBlock label="Loading saved slices…" /></Suspense>}><SavedSlicerJobsModal
+    {sliceDraftModel && <Suspense fallback={<LoadingBlock label="Loading saved slices…" />}><SavedSlicerJobsModal
       title={"Saved slices · " + sliceDraftModel.name}
       assetIds={sliceDraftModel.revisions.flatMap(rev => rev.assets)
         .map(asset => asset.file?.id).filter(Boolean)}
       onOpenSlicer={onOpenSlicer}
-      onClose={() => setSliceDraftModel(null)} />}
+      onClose={() => setSliceDraftModel(null)} /></Suspense>}
     {gcodeViewerFile && <GcodeViewerModal file={gcodeViewerFile} onClose={() => setGcodeViewerFile(null)} />}
     {gcodeOpen && <GcodeLibraryModal files={gcodeFiles} projects={projects} canUpload={canUpload} onClose={() => setGcodeOpen(false)} onSaved={onChanged} />}
     {addOpen && <ModelModal projects={projects} canUpload={canUpload} onClose={() => setAddOpen(false)} onSaved={async () => { setAddOpen(false); await onChanged(); }} />}
