@@ -168,7 +168,7 @@ test("native process options remain searchable and gated behind Basic/Advanced",
 test("slicer lazy-load failures display recovery UI instead of blanking MakerVault", () => {
   const printing = read("PrintingPage.jsx");
   const boundary = read("SlicerErrorBoundary.jsx");
-  const vite = read("../vite.config.js");
+  const vite = fs.readFileSync(path.resolve(root, "../../vite.config.js"), "utf8");
   assert.match(printing, /<SlicerErrorBoundary onBack=/);
   assert.match(printing, /<Suspense fallback=/);
   assert.match(boundary, /getDerivedStateFromError/);
