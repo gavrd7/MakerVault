@@ -113,6 +113,44 @@ class NativeProcessSettingsTests(SimpleTestCase):
         self.assertEqual(changed["zaa_enabled"], "1")
         self.assertEqual(changed["zaa_min_z"], "0.12")
 
+
+    def test_full_native_modes_cover_expert_and_multimaterial_sections(self):
+        source = json.dumps({
+            "name": "Orca process", "zaa_enabled": "0",
+            "make_overhang_printable": "0", "fuzzy_skin": "none",
+            "fuzzy_skin_thickness": "0.3", "enable_prime_tower": "0",
+            "prime_tower_width": "35", "enable_support": "0",
+            "support_type": "tree(auto)", "tree_support_tip_diameter": "0.8",
+        }).encode()
+        fields = process_schema(source)
+        self.assertEqual(fields["zaa_enabled"]["level"], "expert")
+        self.assertEqual(fields["fuzzy_skin"]["section"], "Fuzzy skin")
+        self.assertEqual(fields["prime_tower_width"]["category"], "Multifilament")
+        self.assertEqual(fields["prime_tower_width"]["enabled_when"],
+                         {"key": "enable_prime_tower", "not": "0"})
+        self.assertEqual(fields["tree_support_tip_diameter"]["enabled_when"],
+                         {"key": "support_type",
+                          "in": ["tree(auto)", "tree(manual)"]})
+        edited = json.loads(apply_process_overrides(source, {
+            "enable_prime_tower": "1", "prime_tower_width": 40,
+            "fuzzy_skin": "external", "fuzzy_skin_thickness": 0.35,
+        }))
+        self.assertEqual(edited["prime_tower_width"], "40")
+        self.assertEqual(edited["fuzzy_skin"], "external")
+        self.assertEqual(edited["fuzzy_skin_thickness"], "0.35")
+
+    def test_native_support_ironing_key_and_unsupported_key_rejection(self):
+        source = json.dumps({"name": "Orca process", "support_ironing": "0",
+                             "support_ironing_flow": "12%"}).encode()
+        fields = process_schema(source)
+        self.assertEqual(fields["support_ironing"]["kind"], "toggle")
+        self.assertEqual(fields["support_ironing_flow"]["enabled_when"],
+                         {"key": "support_ironing", "not": "0"})
+        with self.assertRaises(ValueError):
+            apply_process_overrides(source, {"enable_prime_tower": "1"})
+        with self.assertRaises(ValueError):
+            apply_process_overrides(source, {"machine_start_gcode": "M109"})
+
     def test_native_enum_and_toggle_settings_round_trip_without_touching_startup(self):
         source = json.dumps({
             "name": "Official sample", "sparse_infill_pattern": "grid",
