@@ -12,6 +12,7 @@ const PALETTE = ["#6ddfc7", "#be9aff", "#fbbf75", "#7eb6ff", "#ef9ab1", "#e1d781
 const COLOUR_MODES = [
   { value: "feature", label: "Line type", supported: true },
   { value: "layer", label: "Layer height / Z", supported: true },
+  { value: "solid", label: "Solid print (single preview colour)", supported: true },
   { value: "filament", label: "Filament", supported: false },
   { value: "speed", label: "Speed", supported: false },
   { value: "line-width", label: "Line width", supported: false },
@@ -115,6 +116,11 @@ export default function SlicerGcodePreview({ preview, bedSize = null }) {
     <small>Print time comes from the generated G-code and depends on the selected printer and native profiles; it is not a manually editable value. Times and material are slicer-declared estimates. Layer selection and horizontal steps
       operate on sampled extrusion moves only; paths can be omitted. This is not a complete
       OrcaSlicer simulation or printer-safety check.</small>
+    <p className="slicerPreviewCoverage" role="status">
+      Displaying {allSegments.length.toLocaleString()} of {(preview?.segment_count ?? allSegments.length).toLocaleString()} detected deposited moves
+      {preview?.sampled ? " · partial toolpath sample" : " · all indexed extrusion moves"}.
+      Solid preview draws bead-width geometry; it does not simulate the complete native slicer.
+    </p>
     {preview?.sampled && <p className="projectUploadHint">Preview is partial; the G-code contains
       additional paths beyond this bounded sample.</p>}
   </div>;
