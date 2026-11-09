@@ -24,7 +24,8 @@ from .slicer_native_resolution import resolved_native_profile
 from .slicer_native_overrides import ORCA_PLATES
 from .slicer_mesh import inspect_stl, MeshInspectionError, MAX_INSPECTION_BYTES
 from .slicer_bed import inspect_orca_plate, inspect_creality_plate
-from .slicer_bed_artwork import official_artwork_source, cached_official_artwork
+from .slicer_bed_artwork import (official_artwork_source, cached_official_artwork,
+    official_bed_model_source, cached_official_bed_model)
 from .slicer_official_chain import official_profile_chain
 from .slicer_creality_official_profiles import (
     search_creality_profiles, fetch_creality_profile, available_creality_vendors,
@@ -928,6 +929,10 @@ def profile_plate(request, profile_id):
             "api-slicer-profile-artwork", kwargs={"profile_id": profile.pk}
         )
         geometry["artwork_source"] = "Imported official OrcaSlicer profile"
+    if geometry.get("status") in ("available", "partial") and official_bed_model_source(profile):
+        geometry["bed_model_url"] = reverse(
+            "api-slicer-profile-bed-model", kwargs={"profile_id": profile.pk}
+        )
     return JsonResponse({"profile_id": str(profile.pk), "plate": geometry})
 
 
@@ -936,7 +941,7 @@ def profile_plate(request, profile_id):
 def profile_artwork(request, profile_id):
     """Serve only vetted same-origin artwork associated with an owned profile."""
     profile = SlicerProfile.objects.filter(
-        pk=profile_id, owner=request.user, engine="orcaslicer", kind="printer",
+        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint"], kind="printer",
     ).select_related("file_asset").first()
     if not profile:
         return _error("Owned native printer profile not found.", 404)
@@ -946,6 +951,25 @@ def profile_artwork(request, profile_id):
     response = HttpResponse(raw, content_type="image/svg+xml")
     response["X-Content-Type-Options"] = "nosniff"
     response["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+    response["Cache-Control"] = "private, max-age=3600"
+    return response
+
+
+@login_required
+@require_http_methods(["GET"])
+def profile_bed_model(request, profile_id):
+    """Serve a bounded, validated native STL underneath the interactive bed."""
+    profile = SlicerProfile.objects.filter(
+        pk=profile_id, owner=request.user,
+        engine__in=["orcaslicer", "crealityprint"], kind="printer",
+    ).select_related("file_asset").first()
+    if not profile:
+        return _error("Owned native printer profile not found.", 404)
+    raw = cached_official_bed_model(profile)
+    if raw is None:
+        return _error("Native bed geometry unavailable; use the MakerVault plate.", 404)
+    response = HttpResponse(raw, content_type="model/stl")
+    response["X-Content-Type-Options"] = "nosniff"
     response["Cache-Control"] = "private, max-age=3600"
     return response
 
