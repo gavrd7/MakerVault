@@ -56,6 +56,7 @@ export default function SlicerPrepareWorkspace({
   localAssets = [], onLocalAssetsChange,
 }) {
   const editorRef = useRef(null);
+  const [sceneHeight, setSceneHeight] = useState(0);
   const latest = useRef(objects);
   const undoRef = useRef([]);
   const redoRef = useRef([]);
@@ -336,8 +337,29 @@ export default function SlicerPrepareWorkspace({
     return () => document.removeEventListener("keydown", closeOnEscape);
   }, [settingsExpanded]);
 
+  // Match the scroll limit to the actual adjacent visual build-plate panel.
+  // Responsive changes and expandable model controls can alter its height.
+  useEffect(() => {
+    const scene = editorRef.current;
+    if (!scene) return undefined;
+    const updateHeight = () => {
+      const measured = Math.round(scene.getBoundingClientRect().height);
+      if (measured > 0) setSceneHeight(previous => previous === measured ? previous : measured);
+    };
+    updateHeight();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", updateHeight);
+      return () => window.removeEventListener("resize", updateHeight);
+    }
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(scene);
+    return () => observer.disconnect();
+  }, []);
+
   const settingsPanel = (
-      <aside className={"slicerPrepareSettings" + (settingsExpanded ? " slicerPrepareSettingsExpanded" : "")} aria-label="Process settings categories">
+      <aside className={"slicerPrepareSettings" + (settingsExpanded ? " slicerPrepareSettingsExpanded" : "")}
+        style={!settingsExpanded && sceneHeight ? { maxHeight: sceneHeight + "px" } : undefined}
+        aria-label="Process settings categories">
         <div className="slicerSettingsPanelHeader">
           <div><h4>Print settings</h4><small>{selectedProfiles?.process || "Choose a process profile"}</small></div>
         </div>
@@ -494,22 +516,6 @@ export default function SlicerPrepareWorkspace({
         <p><strong>Printer:</strong> {selectedProfiles?.printer || "Not selected"}</p>
         <p><strong>Process:</strong> {selectedProfiles?.process || "Not selected"}</p>
         <p><strong>Filament:</strong> {selectedProfiles?.filament || "Not selected"}</p>
-        <section className="slicerLiveMaterialSlots" aria-label="Loaded printer filament slots">
-          <div className="slicerLiveMaterialHeader"><strong>Loaded printer filaments</strong>
-            <button type="button" disabled={materialRefreshing || !printerId} onClick={refreshPrinterMaterials}>
-              {materialRefreshing ? "Refreshing…" : "Refresh"}
-            </button>
-          </div>
-          {liveMaterials.map(slot => <div className="slicerLiveMaterialSlot" key={slot.id}>
-            <span className="slicerLiveMaterialSwatch" style={{ backgroundColor: /^#[0-9a-f]{6}$/i.test(slot.color_hex || "") ? slot.color_hex : "#697b91" }} aria-hidden="true" />
-            <div><strong>{slot.product_name || slot.material || "Unknown filament"}</strong>
-              <small>{slot.system_label || "Printer material"} · Slot {(slot.slot_index ?? 0) + 1}
-                {slot.spool_code ? " · " + slot.spool_code : " · Unlinked spool"}</small>
-              <small>{slot.material || "Unknown type"}{slot.remaining_percent != null ? " · " + Math.round(slot.remaining_percent) + "% remaining" : ""}</small>
-            </div>
-          </div>)}
-          <p role="status">{materialMessage}</p>
-        </section>
         <p className="projectUploadHint">Settings change only this draft and are validated by the native slicer.
           Other native process options remain available through custom profiles in Slicer setup.
           Printer startup and purge G-code are never changed here.</p>
@@ -617,6 +623,23 @@ export default function SlicerPrepareWorkspace({
         {filamentNotice && <p className="slicerModelFilamentNotice" role="status">{filamentNotice}</p>}
         <small>One consistent model colour is now passed to OrcaSlicer as a single-filament colour. Different colours across models still need native multi-material mapping, and are preview-only. Multi-plate output and modifier trees are not implemented yet.</small>
         </aside>
+        <section className="slicerLiveMaterialSlots" aria-label="Loaded printer filament slots">
+          <div className="slicerLiveMaterialHeader"><strong>Loaded printer filaments</strong>
+            <button type="button" disabled={materialRefreshing || !printerId} onClick={refreshPrinterMaterials}>
+              {materialRefreshing ? "Refreshing…" : "Refresh"}
+            </button>
+          </div>
+          {liveMaterials.map(slot => <div className="slicerLiveMaterialSlot" key={slot.id}>
+            <span className="slicerLiveMaterialSwatch" style={{ backgroundColor: /^#[0-9a-f]{6}$/i.test(slot.color_hex || "") ? slot.color_hex : "#697b91" }} aria-hidden="true" />
+            <div><strong>{slot.product_name || slot.material || "Unknown filament"}</strong>
+              <small>{slot.system_label || "Printer material"} · Slot {(slot.slot_index ?? 0) + 1}
+                {slot.spool_code ? " · " + slot.spool_code : " · Unlinked spool"}</small>
+              <small>{slot.material || "Unknown type"}{slot.remaining_percent != null ? " · " + Math.round(slot.remaining_percent) + "% remaining" : ""}</small>
+            </div>
+          </div>)}
+          <p role="status">{materialMessage}</p>
+        </section>
+
       </div>
       <div className="slicerPrepareScene" ref={editorRef}>
         <SlicerPlateEditor files={files} localAssets={localAssets}
