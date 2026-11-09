@@ -55,6 +55,8 @@ export default function SlicerPrepareWorkspace({
   const [group, setGroup] = useState("Quality");
   const [toolMode, setToolMode] = useState("select");
   const [nativeProcessFields, setNativeProcessFields] = useState({});
+  const [settingsSearch, setSettingsSearch] = useState("");
+  const [settingsLevel, setSettingsLevel] = useState("basic");
   const [nativeFieldDrafts, setNativeFieldDrafts] = useState({});
   const [nativeProcessError, setNativeProcessError] = useState("");
   const [nativeProcessLoading, setNativeProcessLoading] = useState(false);
@@ -100,6 +102,11 @@ export default function SlicerPrepareWorkspace({
       .finally(() => { if (live) setNativeProcessLoading(false); });
     return () => { live = false; };
   }, [engine, selectedProfiles?.process_id]);
+  const updateNativeChoice = (key, value) => {
+    const spec = nativeProcessFields[key];
+    if (!spec?.options?.some(option => option.value === value)) return;
+    onProcessOverridesChange?.(current => ({ ...current, [key]: value }));
+  };
   const updateNativeField = (key, raw) => {
     const spec = nativeProcessFields[key];
     setNativeFieldDrafts(current => ({ ...current, [key]: raw }));
@@ -382,34 +389,70 @@ export default function SlicerPrepareWorkspace({
             onClick={() => setGroup(name)}><SlicerUiIcon name={icon} size={16} /><span>{name}</span></button>)}
         </nav>
         <h4>{group}</h4>
+        <div className="slicerSettingsSearchRow">
+          <label className="slicerSettingsSearchLabel">
+            <span>Find a setting</span>
+            <input type="search" value={settingsSearch}
+              placeholder="Search native process settings"
+              onChange={event => setSettingsSearch(event.target.value)} />
+          </label>
+          <label className="slicerSettingsLevelLabel">
+            <span>Detail</span>
+            <select value={settingsLevel} onChange={event => setSettingsLevel(event.target.value)}>
+              <option value="basic">Basic</option>
+              <option value="advanced">Advanced</option>
+            </select>
+          </label>
+        </div>
         {scope === "objects" ? (
           <p>Per-object settings are not yet available. Change Global settings to edit the native process profile for this draft.</p>
         ) : (
           <section aria-label={group + " native process controls"} className="slicerNativeSettingsFields">
             {nativeProcessLoading && <p role="status">Reading native process settings…</p>}
             {nativeProcessError && <p role="alert" className="integrationError">{nativeProcessError}</p>}
-            {Object.entries(nativeProcessFields).filter(([, spec]) => spec.category === group)
+            {Object.entries(nativeProcessFields)
+              .filter(([key, spec]) => (
+                (settingsSearch.trim()
+                  ? (key + " " + spec.label + " " + spec.category).toLowerCase().includes(settingsSearch.trim().toLowerCase())
+                  : spec.category === group) &&
+                (settingsLevel === "advanced" || ["layer_height", "initial_layer_print_height",
+                  "wall_loops", "top_shell_layers", "bottom_shell_layers", "sparse_infill_density",
+                  "sparse_infill_pattern", "outer_wall_speed", "inner_wall_speed", "travel_speed",
+                  "enable_support", "support_threshold_angle", "brim_width", "seam_position"].includes(key))
+              ))
               .map(([key, spec]) => (
                 <label key={key} className="slicerNativeSettingField">
-                  <span>{spec.label} {spec.unit ? "(" + spec.unit + ")" : ""}</span>
-                  <input type="number" min={spec.minimum} max={spec.maximum}
-                    step={spec.integer ? 1 : 0.01}
-                    disabled={!canEdit || busy}
-                    value={nativeFieldDrafts[key] ?? processOverrides[key] ?? spec.current}
-                    onChange={event => updateNativeField(key, event.target.value)}
-                    onBlur={() => setNativeFieldDrafts(current => {
-                      const next = { ...current };
-                      delete next[key];
-                      return next;
-                    })}
-                    aria-label={spec.label} />
+                  <span>{spec.label} {spec.unit ? "(" + spec.unit + ")" : ""}
+                    {settingsSearch.trim() && <small> · {spec.category}</small>}
+                  </span>
+                  {spec.options ? (
+                    <select aria-label={spec.label}
+                      disabled={!canEdit || busy}
+                      value={processOverrides[key] ?? spec.current}
+                      onChange={event => updateNativeChoice(key, event.target.value)}>
+                      {spec.options.map(option =>
+                        <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                  ) : (
+                    <input type="number" min={spec.minimum} max={spec.maximum}
+                      step={spec.integer ? 1 : 0.01}
+                      disabled={!canEdit || busy}
+                      value={nativeFieldDrafts[key] ?? processOverrides[key] ?? spec.current}
+                      onChange={event => updateNativeField(key, event.target.value)}
+                      onBlur={() => setNativeFieldDrafts(current => {
+                        const next = { ...current };
+                        delete next[key];
+                        return next;
+                      })}
+                      aria-label={spec.label} />
+                  )}
                 </label>
               ))}
             {Object.entries(nativeProcessFields).filter(([, spec]) => spec.category === group).length === 0 &&
               !nativeProcessLoading && !nativeProcessError && <p>
                 {group === "Multifilament"
                   ? "Multicolour tool mappings and flushing volumes require engine-native multi-material support."
-                  : "This profile does not expose supported " + group.toLowerCase() + " controls yet."}
+                  : "No matching supported native settings are available. Try Advanced or another search."}
               </p>}
             {Object.keys(processOverrides).length > 0 && <div className="slicerNativeSettingsActions">
               <span>{Object.keys(processOverrides).length} draft override(s) · Original profile unchanged</span>
