@@ -290,7 +290,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   }
 
   useEffect(() => {
-    const id = ["orcaslicer", "crealityprint"].includes(form.engine) ? form.printer_profile_id : "";
+    const id = ["orcaslicer", "crealityprint", "bambustudio", "prusaslicer"].includes(form.engine) ? form.printer_profile_id : "";
     if (!id) {
       setNativePlate(null);
       return undefined;
@@ -905,7 +905,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       plate={customBed.enabled ? { size_mm: [Number(customBed.x), Number(customBed.y)] }
         : (nativePlate?.plate && ["available", "partial"].includes(nativePlate.plate.status) ? nativePlate.plate
           : (Number(selectedPrinter?.build_volume?.x) > 0 && Number(selectedPrinter?.build_volume?.y) > 0
-            ? { size_mm: [Number(selectedPrinter.build_volume.x), Number(selectedPrinter.build_volume.y)] } : null))}
+            ? { size_mm: [Number(selectedPrinter.build_volume.x), Number(selectedPrinter.build_volume.y)],
+                artwork_url: nativePlate?.plate?.artwork_url || null,
+                bed_model_url: nativePlate?.plate?.bed_model_url || null } : null))}
       canEdit={canPrepare} busy={busy || loading} error={error} notice={notice}
       engine={form.engine + " " + form.engine_version} printer={selectedPrinter?.name}
       printerDetails={selectedPrinter} nozzleMm={form.nozzle_mm} plateType={form.plate}
@@ -1057,7 +1059,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       plate={customBed.enabled ? { size_mm: [Number(customBed.x), Number(customBed.y)] }
         : (nativePlate?.plate && ["available", "partial"].includes(nativePlate.plate.status) ? nativePlate.plate
         : (Number(selectedPrinter?.build_volume?.x) > 0 && Number(selectedPrinter?.build_volume?.y) > 0
-          ? { size_mm: [Number(selectedPrinter.build_volume.x), Number(selectedPrinter.build_volume.y)] } : null))}
+          ? { size_mm: [Number(selectedPrinter.build_volume.x), Number(selectedPrinter.build_volume.y)],
+                artwork_url: nativePlate?.plate?.artwork_url || null,
+                bed_model_url: nativePlate?.plate?.bed_model_url || null } : null))}
       canEdit={canPrepare}
       onFilesUploaded={onFilesUploaded}
       footer={<>
