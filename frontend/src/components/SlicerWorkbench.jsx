@@ -76,7 +76,7 @@ const initialForm = {
  * Safe preparation-only entry point. A verified slicing worker, real engine-native
  * profile IDs and isolated execution are required before enabling a Slice action.
  */
-export default function SlicerWorkbench({ files = [], printers = [], spools = [], canPrepare = false, canPrint = false, onBack, onOpenGcode, onFilesUploaded, initialDraftId = null }) {
+export default function SlicerWorkbench({ files = [], printers = [], spools = [], canPrepare = false, canPrint = false, onBack, onOpenGcode, onFilesUploaded, onOpenDevice = null, initialDraftId = null }) {
   const [form, setForm] = useState(initialForm);
   const [engines, setEngines] = useState([]);
   const [jobs, setJobs] = useState([]);
@@ -982,6 +982,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       engine={form.engine + " " + form.engine_version} printer={selectedPrinter?.name}
       printerDetails={selectedPrinter} nozzleMm={form.nozzle_mm} plateType={form.plate}
       printerId={form.printer_id}
+      onOpenDevice={onOpenDevice}
       processProfiles={forKind("process")}
       onSelectProcessProfile={id => {
         if (id === form.process_profile_id) return;
