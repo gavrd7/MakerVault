@@ -550,7 +550,7 @@ export default function SlicerPlateEditor({
     }
     // The native STL is strictly decorative: never add it to the editable
     // model collection or include it in slicing, collision or auto-arrange.
-    const nativeBedModelUrl = /^\\/api\\/printing\\/slicer\\/profiles\\/[0-9a-f-]{36}\\/bed-model\\/$/i.test(
+    const nativeBedModelUrl = /^\/api\/printing\/slicer\/profiles\/[0-9a-f-]{36}\/bed-model\/$/i.test(
       String(plate?.bed_model_url || "")
     ) ? plate.bed_model_url : null;
     let nativeBedMesh = null;
