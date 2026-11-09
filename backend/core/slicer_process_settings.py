@@ -611,7 +611,11 @@ def process_schema(raw):
                          "ironing_angle_fixed"),
         "zaa_enabled": ("zaa_minimize_perimeter_height", "zaa_min_z",
                         "zaa_dont_alternate_fill_direction"),
-        "enable_support": ("support_threshold_angle", "support_threshold_overlap",
+        "enable_support": ("tree_support_wall_count", "tree_support_tip_diameter",
+                           "tree_support_top_rate", "tree_support_branch_diameter_angle",
+                           "tree_support_angle_slow", "tree_support_auto_brim",
+                           "tree_support_brim_width",
+                           "support_threshold_angle", "support_threshold_overlap",
                            "support_style", "support_on_build_plate_only",
                            "support_remove_small_overhang", "support_type",
                            "support_critical_regions_only", "support_top_z_distance",
@@ -640,15 +644,26 @@ def process_schema(raw):
         "support_ironing": ("support_ironing_pattern", "support_ironing_flow",
                             "support_ironing_spacing"),
         "accel_to_decel_enable": ("accel_to_decel_factor",),
+        "wall_generator": ("wall_transition_angle", "wall_transition_filter_deviation",
+                           "wall_transition_length", "wall_distribution_count",
+                           "min_bead_width", "initial_layer_min_bead_width",
+                           "min_feature_size", "wall_maximum_resolution",
+                           "wall_maximum_deviation"),
     }
     for master, dependents in dependencies.items():
         if master not in result:
             continue
         for dependent in dependents:
             if dependent in result:
-                disabled = ("no ironing" if master == "ironing_type" else
-                            "none" if master == "fuzzy_skin" else "0")
-                result[dependent]["enabled_when"] = {"key": master, "not": disabled}
+                if master == "wall_generator":
+                    condition = {"key": master, "in": ["arachne"]}
+                elif master == "fuzzy_skin":
+                    condition = {"key": master, "in": ["external", "hole", "all", "allwalls"]}
+                else:
+                    disabled = "no ironing" if master == "ironing_type" else "0"
+                    condition = {"key": master, "not": disabled}
+                previous = result[dependent].get("enabled_when")
+                result[dependent]["enabled_when"] = [previous, condition] if previous else condition
     # Nested dependencies use an array to preserve every enabling condition.
     nested = {
         "ironing_pattern": ("ironing_angle", "ironing_angle_fixed"),
