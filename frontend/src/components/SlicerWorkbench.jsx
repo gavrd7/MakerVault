@@ -473,6 +473,11 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         method: "POST", body: {},
       });
       setJobs(current => current.map(item => item.id === job.id ? result.job : item));
+      // Once the server confirms the file was saved, return to the slicer
+      // workspace rather than leaving the preview and draft modals stacked.
+      setPrintSelection(null);
+      setPreviewJobId(null);
+      setShowDrafts(false);
       setNotice("Generated G-code added to your MakerVault G-code library.");
     } catch (err) {
       setError(err.message || "Could not add G-code to the library.");
@@ -1591,6 +1596,16 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         initialAsset={printSelection.job.output_asset}
         initialAction={printSelection.action === "upload" ? "upload" : "print"}
         onChanged={refresh}
+        onSubmissionConfirmed={receipt => {
+          // The child only reports a confirmed upload or verified print start.
+          // A dispatched-but-unverified Creality command must remain visible.
+          setPrintSelection(null);
+          setPreviewJobId(null);
+          setShowDrafts(false);
+          setNotice(receipt.status === "uploaded"
+            ? "Sliced G-code uploaded and confirmed on the printer."
+            : "Print start confirmed. Returned to the slicer workspace.");
+        }}
         onClose={() => setPrintSelection(null)}
       /> : null;
     })()}
