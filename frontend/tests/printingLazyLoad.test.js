@@ -11,7 +11,9 @@ const source = fs.readFileSync(path.resolve(
 test("3D Printing does not eagerly import the slicer editor", () => {
   assert.ok(!source.includes('import SlicerWorkbench from'));
   assert.ok(!source.includes('import SavedSlicerJobsModal from'));
-  assert.ok(source.includes('lazy(() => import("./SlicerWorkbench"))'));
+  assert.ok(source.includes('const SlicerWorkbench = lazy(fetchSlicerWorkbench)'));
+  assert.ok(source.includes('const fetchSlicerWorkbench = () => import("./SlicerWorkbench")'));
+  assert.ok(source.includes("export function preloadSlicerWorkbench()"));
   assert.ok(source.includes('lazy(() => import("./SavedSlicerJobsModal"))'));
   assert.ok(source.includes('<Suspense fallback='));
 });
