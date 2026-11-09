@@ -1125,6 +1125,11 @@ export default function SlicerPlateEditor({
       </div>
     </fieldset>
     {showNativeArtwork && nativeArtworkError && <p role="status" className="integrationError">{nativeArtworkError}</p>}
+    {showNativeArtwork && (plate?.artwork_url || nativeBedArtwork(printerLabel, bedX, bedY)) &&
+      !plate?.bed_model_url && <p className="slicerPlateHint">
+        Official vector surface artwork on a 3D plate. This printer profile does not provide
+        a manufacturer 3D bed model, so MakerVault generates the underlying plate geometry.
+      </p>}
     <p className="slicerPlateHint"><strong>Selected surface:</strong> {PLATE_SURFACE[plateType]?.label || "Native default"} · Physical plate not detected. {!showNativeArtwork || !(plate?.artwork_url || plate?.bed_model_url || nativeBedArtwork(printerLabel, bedX, bedY)) ? "MakerVault 3D build plate." : ""} {showNativeArtwork && (plate?.artwork_url || nativeBedArtwork(printerLabel, bedX, bedY)) &&
       <small>Native artwork: {plate?.artwork_url ? "Imported official OrcaSlicer profile" : "OrcaSlicer v2.4.2"} (AGPL-3.0)</small>}</p>
     <p className="slicerPlateHint"><strong>Build plate volume:</strong> {pretty(bedX)} × {pretty(bedY)} mm (X × Y). Drag in 0.5 mm steps or enter coordinates below.</p>
