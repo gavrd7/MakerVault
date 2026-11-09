@@ -4538,3 +4538,21 @@ a:focus-visible,
   }
   .slicerSettingsModal .slicerPrepareSettings nav{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+/* Independent reset buttons sit beside the associated transform values.
+   The input shrinks but the reset action never escapes the selected-model panel. */
+.slicerPlateTransformFields .slicerTransformFieldWithReset{min-width:0;max-width:100%}
+.slicerTransformFieldWithReset>label{display:block;margin-bottom:7px;font-size:inherit}
+.slicerTransformInputRow{display:flex;gap:7px;align-items:stretch;min-width:0;width:100%}
+.slicerPlatePanel .slicerPlateControls .slicerTransformInputRow>input{
+  flex:1 1 auto;width:0;min-width:0;max-width:100%
+}
+.slicerTransformInputRow>button{
+  flex:0 0 auto;min-width:0;max-width:43%;padding:7px 9px;white-space:normal;
+  font-size:.76rem;line-height:1.25
+}
+@media(max-width:520px){
+  .slicerTransformInputRow{flex-wrap:wrap}
+  .slicerPlatePanel .slicerPlateControls .slicerTransformInputRow>input{flex:1 1 100%;width:100%}
+  .slicerTransformInputRow>button{flex:1 1 auto;max-width:100%}
+}
