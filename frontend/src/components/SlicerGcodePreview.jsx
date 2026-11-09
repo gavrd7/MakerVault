@@ -22,7 +22,7 @@ const COLOUR_MODES = [
   { value: "acceleration", label: "Acceleration", supported: false },
 ];
 
-export default function SlicerGcodePreview({ preview }) {
+export default function SlicerGcodePreview({ preview, bedSize = null }) {
   const [layer, setLayer] = useState(null);
   const [step, setStep] = useState(null);
   const [colourMode, setColourMode] = useState("feature");
@@ -69,7 +69,7 @@ export default function SlicerGcodePreview({ preview }) {
         <div className="slicerResultViewport">
           <SlicerToolpath3D segments={allSegments} layers={layers}
             activeLayer={currentLayer} activeStep={finalStep} visible={visible}
-            colourMode={colourMode} colours={colours} showToolhead={showToolhead} />
+            colourMode={colourMode} colours={colours} showToolhead={showToolhead} bedSize={bedSize} />
           <div className="slicerResultSteps">
             <label htmlFor="slice-step-slider">Sampled toolhead step {finalStep} / {layerSegments.length}</label>
             <input id="slice-step-slider" type="range" min="0" max={layerSegments.length}
