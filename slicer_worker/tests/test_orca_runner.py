@@ -211,6 +211,20 @@ class OrcaRunnerTests(TestCase):
             with self.assertRaisesRegex(WorkerError, "cli-validation-exit-238"):
                 run_orca(self.binary, self.root)
 
+    def test_exit_239_keeps_safe_validation_classification(self):
+        import io
+
+        class FakeProcess:
+            returncode = 239
+            stderr = io.BytesIO(b"Private printer file location")
+            stdout = io.BytesIO(b"")
+            def wait(self, timeout=None):
+                return self.returncode
+
+        with patch("slicer_worker.orca_runner.subprocess.Popen", return_value=FakeProcess()):
+            with self.assertRaisesRegex(WorkerError, "cli-validation-exit-239"):
+                run_orca(self.binary, self.root)
+
     def test_cli_failure_does_not_echo_private_stderr(self):
         import io
         class FakeProcess:
