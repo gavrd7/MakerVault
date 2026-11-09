@@ -209,7 +209,7 @@ export default function SlicerToolpath3D({
       const hex = colourMode === "layer"
         ? new THREE.Color().setHSL(0.56 - 0.44 * (layers.length > 1
           ? Math.max(0, (layerIndexByHeight.get(z.toFixed(3)) ?? -1)) / (layers.length - 1) : 0), 0.85, 0.64)
-        : new THREE.Color(colours[feature] || "#b8d4e5");
+        : new THREE.Color(colourMode === "solid" ? "#f09a4b" : (colours[feature] || "#b8d4e5"));
       // Dim completed layers while keeping current-layer paths vivid.
       if (!isCurrent) hex.multiplyScalar(0.35);
       if (renderMode === "lines") {
@@ -264,7 +264,8 @@ export default function SlicerToolpath3D({
     }
     marker.visible = Boolean(showToolhead && lastStep);
     if (lastStep) marker.position.set(...lastStep);
-  }, [segments, layers, activeLayer, activeStep, visible, colourMode, colours, showToolhead, renderMode, nozzleDiameter]);
+  }, [segments, layers, activeLayer, activeStep, visible, colourMode, colours, showToolhead,
+    renderMode, nozzleDiameter, bedSize?.[0], bedSize?.[1]]);
 
   return <div className="slicerToolpath3D">
     {unavailable ? <div role="status" className="projectUploadHint">
