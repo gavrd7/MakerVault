@@ -4444,3 +4444,23 @@ a:focus-visible,
 .slicerNativeSettingField select{width:100%;min-width:0;max-width:100%;box-sizing:border-box;padding:7px 8px}
 .slicerNativeSettingField select{font-size:.82rem}
 @media(max-width:420px){.slicerSettingsLevelLabel{flex:1 1 95px}}
+
+/* Native process selection and expert panels — keep the settings rail legible
+   without stretching controls beyond its available width. */
+.slicerProcessQuickSelect{display:flex;flex-direction:column;min-width:0;gap:7px;margin:12px 0 16px}
+.slicerProcessQuickSelect>label{font-weight:600;font-size:.85rem}
+.slicerProcessQuickSelectRow{display:flex;align-items:center;gap:8px;min-width:0}
+.slicerProcessQuickSelectRow>select{min-width:0;flex:1 1 auto;width:0;max-width:100%;
+  padding:9px 8px;box-sizing:border-box}
+.slicerProcessQuickSelectRow>button{flex:0 0 auto;white-space:nowrap}
+.slicerProcessQuickSelect>small{font-size:.76rem;color:var(--muted,#9aafc3);overflow-wrap:anywhere}
+.slicerNativeSettingSection{min-width:0;display:flex;flex-direction:column;gap:10px;
+  padding-bottom:12px;margin-bottom:8px;border-bottom:1px solid var(--border,#394958)}
+.slicerNativeSettingSection>h5{margin:0 0 2px;font-size:.83rem;font-weight:700;
+  padding-bottom:5px;color:var(--text,#e6edf3)}
+.slicerSettingModified{display:block;color:var(--accent,#2bbab1);font-size:.71rem;margin-top:3px}
+.slicerNativeSettingSection .slicerNativeSettingField{width:100%;box-sizing:border-box}
+@media(max-width:440px){
+  .slicerProcessQuickSelectRow{flex-wrap:wrap}
+  .slicerProcessQuickSelectRow>select{flex:1 1 190px;width:auto}
+}
