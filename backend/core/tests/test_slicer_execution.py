@@ -174,3 +174,20 @@ class NativePlateAdmissionTests(SimpleTestCase):
                    side_effect=ValueError("Missing polygon")):
             with self.assertRaisesRegex(SlicerExecutionError, "3MF plate"):
                 _validate_plate_execution(job)
+
+
+class TemporarySlicerInputRetentionTests(SimpleTestCase):
+    def test_removed_failed_job_does_not_delete_unsaved_plate_inputs(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from core.slicer_api import _cleanup_temporary_job_sources
+
+        job = SimpleNamespace(
+            input_asset_id="temporary-stl", owner_id=1,
+            settings={"plate_objects": [{"asset_id": "temporary-stl"}]},
+        )
+        # A browser plate may still reference the STL after deleting this job.
+        # Temporary files must not be removed on job deletion alone.
+        with patch("core.slicer_api.FileAsset.objects") as files:
+            self.assertIsNone(_cleanup_temporary_job_sources(job))
+            files.filter.assert_not_called()
