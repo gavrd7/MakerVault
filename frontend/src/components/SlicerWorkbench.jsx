@@ -735,6 +735,40 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     }
   }
 
+  async function saveInteractiveProcessProfile(name) {
+    if (!canPrepare || busy || loading || form.engine !== "orcaslicer" ||
+        !form.process_profile_id || !Object.keys(processOverrides).length) {
+      throw new Error("Choose an Orca process profile and change a supported setting first.");
+    }
+    const trimmed = String(name || "").trim();
+    if (!trimmed || trimmed.length > 200) throw new Error("Enter a custom profile name (1–200 characters).");
+    setBusy(true);
+    setError("");
+    try {
+      const result = await apiFetch(
+        "/api/printing/slicer/profiles/" + form.process_profile_id + "/save-process/", {
+          method: "POST", body: { name: trimmed, settings: processOverrides },
+        },
+      );
+      const saved = result.profile;
+      setProfiles(current => [saved, ...current]);
+      manuallyChosenProfiles.current.add("process");
+      setForm(current => ({
+        ...current, process_profile_id: saved.id, process_preset: saved.name,
+      }));
+      // These values now live inside the custom native process profile, so
+      // reapplying them as temporary overrides would be redundant.
+      setProcessOverrides({});
+      setNotice('Custom process profile "' + saved.name +
+        '" saved and selected. It must pass native profile verification before slicing.');
+      return saved;
+    } catch (err) {
+      throw new Error(err?.message || "Could not save the custom process profile.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function saveCustomProfile(event) {
     event.preventDefault();
     if (!editingProfile || editProfileBusy) return;
@@ -946,6 +980,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       selectedPlateType={plateOptions(form.engine).find(([id]) => id === form.plate)?.[1] || "Native / profile default"}
       workerConfigured={workerConfigured && engines.some(engine => engine.key === form.engine && engine.available)}
       processOverrides={processOverrides} onProcessOverridesChange={setProcessOverrides}
+      onSaveCustomProcessProfile={saveInteractiveProcessProfile}
       onBackToSetup={() => setEditorOpen(false)} onSaveDraft={() => saveDraft("draft")}
       onSlice={() => saveDraft("slice")}
     /> : <>
