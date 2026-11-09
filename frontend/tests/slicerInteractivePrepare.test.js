@@ -258,3 +258,17 @@ test("expand settings lives next to Detail and conditional native fields use sch
   assert.match(scene, /processOverrides\[condition\.key\]/);
   assert.match(css, /\.slicerSettingsSearchRow \.slicerExpandSettingsAction/);
 });
+
+
+test("native conditional editor distinguishes Simple Advanced and Expert settings", () => {
+  const scene = read("SlicerPrepareWorkspace.jsx");
+  assert.match(scene, /<option value="basic">Simple<\/option>/);
+  assert.match(scene, /<option value="advanced">Advanced<\/option>/);
+  assert.match(scene, /<option value="expert">Expert<\/option>/);
+  assert.match(scene, /settingsLevel === "expert"/);
+  assert.match(scene, /Array\.isArray\(spec\.enabled_when\)/);
+  assert.match(scene, /condition\.in\.includes\(value\)/);
+  assert.match(scene, /conditions\.every\(/);
+  assert.match(scene, /"Tree support"/);
+  assert.match(scene, /"Prime tower"/);
+});
