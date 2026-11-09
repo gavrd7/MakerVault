@@ -32,6 +32,13 @@ const TOOLS = [
   { name: "Variable layer height", icon: "layers", pending: "Native variable layer representation" },
   { name: "Colour painting", icon: "paint", pending: "Native multi-material annotations and tool mapping" },
 ];
+const SECTION_ORDER = {
+  Quality: ["Layer height", "Line width", "Seam", "Precision", "Walls and surfaces", "Bridging", "Fuzzy skin"],
+  Strength: ["Walls", "Top/bottom shells", "Infill"],
+  Speed: ["First layer speed", "Other layers speed", "Travel speed", "Acceleration"],
+  Supports: ["Support", "Raft", "Support ironing", "Advanced"],
+  Others: ["Skirt", "Brim", "Special mode", "G-code output"],
+};
 const GROUPS = [["Quality", "quality"], ["Strength", "strength"], ["Speed", "speed"],
   ["Supports", "supports"], ["Multifilament", "multifilament"], ["Others", "others"]];
 
@@ -140,7 +147,12 @@ export default function SlicerPrepareWorkspace({
         ? (key + " " + spec.label + " " + spec.category + " " + (spec.section || ""))
           .toLowerCase().includes(settingsSearch.trim().toLowerCase())
         : spec.category === group));
-  const nativeSections = [...new Set(visibleNativeFields.map(([, spec]) => spec.section || "Other"))];
+  const nativeSections = [...new Set(visibleNativeFields.map(([, spec]) => spec.section || "Other"))]
+    .sort((a, b) => {
+      const order = SECTION_ORDER[group] || [];
+      const rank = section => order.includes(section) ? order.indexOf(section) : order.length;
+      return rank(a) - rank(b) || a.localeCompare(b);
+    });
   const [liveMaterials, setLiveMaterials] = useState([]);
   const [filamentPickerId, setFilamentPickerId] = useState("");
   const [filamentNotice, setFilamentNotice] = useState("");
