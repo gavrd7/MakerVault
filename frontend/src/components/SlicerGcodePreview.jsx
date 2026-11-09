@@ -26,6 +26,7 @@ export default function SlicerGcodePreview({ preview, bedSize = null }) {
   const [layer, setLayer] = useState(null);
   const [step, setStep] = useState(null);
   const [colourMode, setColourMode] = useState("feature");
+  const [renderMode, setRenderMode] = useState("solid");
   const [visible, setVisible] = useState({});
   const [showToolhead, setShowToolhead] = useState(true);
   const layers = preview?.layers || [];
@@ -56,6 +57,12 @@ export default function SlicerGcodePreview({ preview, bedSize = null }) {
     </div>
     {layers.length > 0 ? <>
       <div className="slicerResultModeRow">
+        <label>Preview style
+          <select value={renderMode} onChange={e => setRenderMode(e.target.value)}>
+            <option value="solid">Solid filament paths</option>
+            <option value="lines">Tool movement lines</option>
+          </select>
+        </label>
         <label>Colour by
           <select value={colourMode} onChange={e => setColourMode(e.target.value)}>
             {COLOUR_MODES.map(mode => <option key={mode.value} value={mode.value}
@@ -69,7 +76,8 @@ export default function SlicerGcodePreview({ preview, bedSize = null }) {
         <div className="slicerResultViewport">
           <SlicerToolpath3D segments={allSegments} layers={layers}
             activeLayer={currentLayer} activeStep={finalStep} visible={visible}
-            colourMode={colourMode} colours={colours} showToolhead={showToolhead} bedSize={bedSize} />
+            colourMode={colourMode} colours={colours} showToolhead={showToolhead} bedSize={bedSize}
+            renderMode={renderMode} />
           <div className="slicerResultSteps">
             <label htmlFor="slice-step-slider">Sampled toolhead step {finalStep} / {layerSegments.length}</label>
             <input id="slice-step-slider" type="range" min="0" max={layerSegments.length}
@@ -101,7 +109,7 @@ export default function SlicerGcodePreview({ preview, bedSize = null }) {
           {feature} ({preview.feature_counts[feature]?.toLocaleString() || 0})
         </label>)}
       </fieldset>
-      <p className="projectUploadHint">Travel, retract, wipe, speed, flow, filament mapping and other
+      <p className="projectUploadHint">Travel, retract, wipe, speed, flow, per-tool colour mapping and other
         native preview modes require a complete indexed toolpath. They are not represented by this extrusion-only sample.</p>
     </> : <p>No extrusion paths were available for the preview.</p>}
     <small>Print time comes from the generated G-code and depends on the selected printer and native profiles; it is not a manually editable value. Times and material are slicer-declared estimates. Layer selection and horizontal steps
