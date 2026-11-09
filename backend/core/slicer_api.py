@@ -151,8 +151,8 @@ def _preset(data, key, max_length=200):
 
 def _draft_plate_settings(user, input_asset, settings):
     """Persist preview-only plate geometry; never compile it into slicer flags."""
-    if settings in ({}, None):
-        return {}
+    if settings is None:
+        settings = {}
     if not isinstance(settings, dict) or set(settings) - {"plate_objects", "plate_label", "save_gcode_to_library", "workflow", "process_overrides"}:
         raise ValueError("Unsupported slicer plate settings.")
     process_overrides = validate_process_overrides(settings.get("process_overrides"))
