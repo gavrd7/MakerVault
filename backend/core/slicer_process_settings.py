@@ -290,7 +290,11 @@ def apply_process_overrides(raw, overrides):
         raise ValueError("A selected native process setting is unavailable in this profile.")
     for key, number in validated.items():
         previous = profile[key]
-        formatted = (number if isinstance(number, str) else (str(int(number)) if float(number).is_integer() else str(number)) + ("%" if PROCESS_FIELDS[key][2] == "%" and str(previous).strip().endswith("%") else ""))
+        previous_scalar = previous[0] if isinstance(previous, list) else previous
+        suffix = "%" if key in PROCESS_FIELDS and PROCESS_FIELDS[key][2] == "%" and str(previous_scalar).strip().endswith("%") else ""
+        formatted = number if isinstance(number, str) else (
+            (str(int(number)) if float(number).is_integer() else str(number)) + suffix
+        )
         profile[key] = [formatted for _ in previous] if isinstance(previous, list) else formatted
     output = json.dumps(profile, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     if len(output) > 1024 * 1024:
