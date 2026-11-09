@@ -1,17 +1,35 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { nativeBedArtwork } from "../src/components/slicerNativePlateArt.js";
+import { nativeBedArtwork, normalizePrinterArtworkName } from "../src/components/slicerNativePlateArt.js";
 
-test("native K1 and K2 artwork requires exact base models and build areas", () => {
-  assert.equal(nativeBedArtwork("Creality K1 (0.4 nozzle)", 220, 220),
-    "/slicer-bed-art/creality-k1.svg");
-  assert.equal(nativeBedArtwork("Creality K2 0.4 nozzle - Custom", 260, 260),
-    "/slicer-bed-art/creality-k2.svg");
-  for (const machine of ["Creality K1 Max", "Creality K1C", "Creality K2 Plus",
-    "Creality K2 Pro", "Creality K2 Combo", "Other K2 0.4 nozzle"]) {
-    assert.equal(nativeBedArtwork(machine, 260, 260), null, machine);
+test("Combo is a removable whole-word descriptor in any position", () => {
+  assert.equal(normalizePrinterArtworkName("Creality K2 COMBO 0.4 nozzle - Custom"), "creality k2 0 4 nozzle custom");
+  assert.equal(normalizePrinterArtworkName("Creality Combo K2"), "creality k2");
+  assert.equal(normalizePrinterArtworkName("Creality K2 Combobox"), "creality k2 combobox");
+});
+
+test("base K1 and K2 artwork applies to Combo and nozzle/profile variants", () => {
+  for (const name of ["Creality K2", "Creality K2 Combo", "Creality K2 COMBO 0.4 nozzle - Custom", "Creality Combo K2"]) {
+    assert.equal(nativeBedArtwork(name, 260, 260), "/slicer-bed-art/creality-k2.svg", name);
   }
-  assert.equal(nativeBedArtwork("Creality K2 0.4 nozzle", 220, 220), null);
-  assert.equal(nativeBedArtwork("Creality K1 (0.4 nozzle)", 260, 260), null);
-  assert.equal(nativeBedArtwork("Creality K2 0.4 nozzle", NaN, 260), null);
+  assert.equal(nativeBedArtwork("Creality K1 (0.4 nozzle)", 220, 220), "/slicer-bed-art/creality-k1.svg");
+  assert.equal(nativeBedArtwork("Creality K1 Combo", 220, 220), "/slicer-bed-art/creality-k1.svg");
+});
+
+test("distinct model variants never inherit base model artwork", () => {
+  for (const name of ["Creality K2 Pro", "Creality K2 Plus", "Creality K2 Max",
+    "Creality K2 SE", "Creality K2 Pro Combo", "Creality K2 Combo Plus"]) {
+    assert.equal(nativeBedArtwork(name, 260, 260), null, name);
+  }
+  for (const name of ["Creality K1 Max", "Creality K1C", "Creality K1 SE", "Creality K1 Pro"]) {
+    assert.equal(nativeBedArtwork(name, 220, 220), null, name);
+  }
+});
+
+test("manufacturer and build volume still have to match validated assets", () => {
+  assert.equal(nativeBedArtwork("Creality K2 Combo", 300, 300), null);
+  assert.equal(nativeBedArtwork("Creality K2 Combo", 260, 260.8), null);
+  assert.equal(nativeBedArtwork("Other K2 Combo", 260, 260), null);
+  assert.equal(nativeBedArtwork("Creality K2 Combo", NaN, 260), null);
+  assert.equal(nativeBedArtwork("Creality K1", 260, 260), null);
 });
