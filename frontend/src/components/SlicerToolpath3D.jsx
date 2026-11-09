@@ -15,6 +15,8 @@ export default function SlicerToolpath3D({
   const mount = useRef(null);
   const sceneRef = useRef(null);
   const [unavailable, setUnavailable] = useState(false);
+  const [showBedGrid, setShowBedGrid] = useState(true);
+  const [showBedSurface, setShowBedSurface] = useState(true);
   useEffect(() => {
     const mountPoint = mount.current;
     if (!mountPoint) return undefined;
@@ -96,7 +98,9 @@ export default function SlicerToolpath3D({
     camera.position.copy(target).add(new THREE.Vector3(distance * 0.7, distance * 0.9, distance));
     camera.lookAt(target);
     controls.update();
-    sceneRef.current = { scene, paths, marker, camera, controls, renderer };
+    sceneRef.current = { scene, paths, marker, camera, controls, renderer,
+      grid, bed, bedCentre, modelCentre: centre, modelSize: size,
+      bedWidth: width, bedDepth: depth, nativeBed };
     const resize = () => {
       const width = Math.max(mountPoint.clientWidth, 1);
       const height = Math.max(mountPoint.clientHeight, 1);
@@ -141,6 +145,37 @@ export default function SlicerToolpath3D({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bedSize?.[0], bedSize?.[1]]);
 
+  const setCameraView = (viewName) => {
+    const view = sceneRef.current;
+    if (!view) return;
+    const { camera, controls, bedCentre, modelCentre, modelSize,
+      bedWidth, bedDepth } = view;
+    const focusModel = viewName === "model";
+    const target = focusModel ? modelCentre : bedCentre;
+    const span = focusModel
+      ? Math.max(30, modelSize.length() * 1.8)
+      : Math.max(80, Math.hypot(bedWidth, bedDepth) * 1.45);
+    controls.target.copy(target);
+    camera.up.set(0, 1, 0);
+    if (viewName === "top") {
+      camera.position.copy(target).add(new THREE.Vector3(0, span, 0.0001));
+    } else if (viewName === "front") {
+      camera.position.copy(target).add(new THREE.Vector3(0, span * 0.25, span));
+    } else {
+      camera.position.copy(target).add(new THREE.Vector3(span * 0.7, span * 0.85, span));
+    }
+    camera.lookAt(target);
+    controls.update();
+  };
+
+  useEffect(() => {
+    const view = sceneRef.current;
+    if (view) {
+      view.grid.visible = showBedGrid;
+      view.bed.visible = showBedSurface;
+    }
+  }, [showBedGrid, showBedSurface]);
+
   useEffect(() => {
     const view = sceneRef.current;
     if (!view) return;
@@ -158,7 +193,7 @@ export default function SlicerToolpath3D({
     let lastStep = null;
     const selectedZ = Number.isFinite(activeZ) ? activeZ : Infinity;
     const maxStep = Math.max(0, Number(activeStep) || 0);
-    const chosenLayer = Math.max(0, activeLayer);
+    const layerIndexByHeight = new Map(layers.map((height, index) => [Number(height).toFixed(3), index]));
     for (const segment of segments) {
       if (!Array.isArray(segment) || segment.length < 6 ||
           !segment.slice(0, 5).every(Number.isFinite)) continue;
@@ -173,7 +208,7 @@ export default function SlicerToolpath3D({
       if (visible[feature] === false) continue;
       const hex = colourMode === "layer"
         ? new THREE.Color().setHSL(0.56 - 0.44 * (layers.length > 1
-          ? Math.max(0, layers.findIndex(height => Math.abs(height - z) < 0.0005)) / (layers.length - 1) : 0), 0.85, 0.64)
+          ? Math.max(0, (layerIndexByHeight.get(z.toFixed(3)) ?? -1)) / (layers.length - 1) : 0), 0.85, 0.64)
         : new THREE.Color(colours[feature] || "#b8d4e5");
       // Dim completed layers while keeping current-layer paths vivid.
       if (!isCurrent) hex.multiplyScalar(0.35);
@@ -236,6 +271,16 @@ export default function SlicerToolpath3D({
       3D preview requires WebGL. The generated G-code is still available for text inspection.
     </div> : <div className="slicerToolpath3DCanvas" ref={mount} role="img"
       aria-label="3D G-code toolpath preview. Drag to orbit, scroll to zoom and right-drag to pan." />}
+    <div className="slicerToolpathViewBar" role="toolbar" aria-label="G-code preview camera and bed">
+      <button type="button" onClick={() => setCameraView("iso")} title="Reset to isometric bed view">Isometric</button>
+      <button type="button" onClick={() => setCameraView("top")} title="View build plate from above">Top</button>
+      <button type="button" onClick={() => setCameraView("front")} title="View build plate from front">Front</button>
+      <button type="button" onClick={() => setCameraView("model")} title="Zoom and centre on printed model">Fit model</button>
+      <label><input type="checkbox" checked={showBedGrid}
+        onChange={event => setShowBedGrid(event.target.checked)} /> Grid</label>
+      <label><input type="checkbox" checked={showBedSurface}
+        onChange={event => setShowBedSurface(event.target.checked)} /> Bed</label>
+    </div>
     <small>Drag to orbit · Scroll to zoom · Right-drag to pan · Z is vertical ·
       {bedSize && Number(bedSize[0]) > 0 && Number(bedSize[1]) > 0
         ? " Bed is shown at its printer-coordinate origin (0, 0)."
