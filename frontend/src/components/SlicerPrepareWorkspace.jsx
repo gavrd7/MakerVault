@@ -41,6 +41,7 @@ export default function SlicerPrepareWorkspace({
   defaultColor, onManualColorChange, canEdit, busy, error, notice,
   onChangeProfiles, onSaveDraft, onSlice, engine, printer,
   selectedProfiles, workerConfigured, printerId,
+  processOverrides = {}, onProcessOverridesChange,
   printerDetails, nozzleMm, selectedPlateType = "Native / profile default",
   localAssets = [], onLocalAssetsChange,
 }) {
@@ -53,6 +54,38 @@ export default function SlicerPrepareWorkspace({
   const [scope, setScope] = useState("global");
   const [group, setGroup] = useState("Quality");
   const [toolMode, setToolMode] = useState("select");
+  const [nativeProcessFields, setNativeProcessFields] = useState({});
+  const [nativeProcessError, setNativeProcessError] = useState("");
+  const [nativeProcessLoading, setNativeProcessLoading] = useState(false);
+  useEffect(() => {
+    const id = selectedProfiles?.process_id;
+    if (!id || !String(engine || "").startsWith("orcaslicer ")) {
+      setNativeProcessFields({});
+      setNativeProcessError("");
+      return undefined;
+    }
+    let live = true;
+    setNativeProcessLoading(true);
+    setNativeProcessError("");
+    apiFetch("/api/printing/slicer/profiles/" + id + "/settings/")
+      .then(result => { if (live) setNativeProcessFields(result.fields || {}); })
+      .catch(err => {
+        if (live) {
+          setNativeProcessFields({});
+          setNativeProcessError(err?.message || "Native process settings could not be inspected.");
+        }
+      })
+      .finally(() => { if (live) setNativeProcessLoading(false); });
+    return () => { live = false; };
+  }, [engine, selectedProfiles?.process_id]);
+  const updateNativeField = (key, raw) => {
+    const spec = nativeProcessFields[key];
+    const value = Number(raw);
+    if (!spec || raw === "" || !Number.isFinite(value) ||
+        value < spec.minimum || value > spec.maximum ||
+        (spec.integer && !Number.isInteger(value))) return;
+    onProcessOverridesChange?.(current => ({ ...current, [key]: value }));
+  };
   const [liveMaterials, setLiveMaterials] = useState([]);
   const [filamentPickerId, setFilamentPickerId] = useState("");
   const [filamentNotice, setFilamentNotice] = useState("");
@@ -326,9 +359,37 @@ export default function SlicerPrepareWorkspace({
             onClick={() => setGroup(name)}><SlicerUiIcon name={icon} size={16} /><span>{name}</span></button>)}
         </nav>
         <h4>{group}</h4>
-        <p>{scope === "global"
-          ? "The selected native process profile provides the current global settings."
-          : "Object-specific overrides will be available when supported by the selected engine."}</p>
+        {scope === "objects" ? (
+          <p>Per-object settings are not yet available. Change Global settings to edit the native process profile for this draft.</p>
+        ) : (
+          <section aria-label={group + " native process controls"} className="slicerNativeSettingsFields">
+            {nativeProcessLoading && <p role="status">Reading native process settings…</p>}
+            {nativeProcessError && <p role="alert" className="integrationError">{nativeProcessError}</p>}
+            {Object.entries(nativeProcessFields).filter(([, spec]) => spec.category === group)
+              .map(([key, spec]) => (
+                <label key={key} className="slicerNativeSettingField">
+                  <span>{spec.label} {spec.unit ? "(" + spec.unit + ")" : ""}</span>
+                  <input type="number" min={spec.minimum} max={spec.maximum}
+                    step={spec.integer ? 1 : 0.01}
+                    disabled={!canEdit || busy}
+                    value={processOverrides[key] ?? spec.current}
+                    onChange={event => updateNativeField(key, event.target.value)}
+                    aria-label={spec.label} />
+                </label>
+              ))}
+            {Object.entries(nativeProcessFields).filter(([, spec]) => spec.category === group).length === 0 &&
+              !nativeProcessLoading && !nativeProcessError && <p>
+                {group === "Multifilament"
+                  ? "Multicolour tool mappings and flushing volumes require engine-native multi-material support."
+                  : "This profile does not expose supported " + group.toLowerCase() + " controls yet."}
+              </p>}
+            {Object.keys(processOverrides).length > 0 && <div className="slicerNativeSettingsActions">
+              <span>{Object.keys(processOverrides).length} draft override(s) · Original profile unchanged</span>
+              <button type="button" disabled={!canEdit || busy}
+                onClick={() => onProcessOverridesChange?.({})}>Restore profile defaults</button>
+            </div>}
+          </section>
+        )}
         <p><strong>Printer:</strong> {selectedProfiles?.printer || "Not selected"}</p>
         <p><strong>Process:</strong> {selectedProfiles?.process || "Not selected"}</p>
         <p><strong>Filament:</strong> {selectedProfiles?.filament || "Not selected"}</p>
@@ -348,8 +409,9 @@ export default function SlicerPrepareWorkspace({
           </div>)}
           <p role="status">{materialMessage}</p>
         </section>
-        <p className="projectUploadHint">Native setting editors will appear here after their engine-specific
-          schema, inheritance, validation and round-trip tests are ready. Use Slicer setup to edit a profile.</p>
+        <p className="projectUploadHint">Settings change only this draft and are validated by the native slicer.
+          Other native process options remain available through custom profiles in Slicer setup.
+          Printer startup and purge G-code are never changed here.</p>
       </aside>
     </div>
     <div className="slicerPrepareActions">
