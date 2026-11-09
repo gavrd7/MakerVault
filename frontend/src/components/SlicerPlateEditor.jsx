@@ -531,7 +531,10 @@ export default function SlicerPlateEditor({
       const material = new THREE.MeshBasicMaterial({
         transparent: true, depthWrite: false, side: THREE.DoubleSide,
       });
-      const loadedTexture = new THREE.TextureLoader().load(artworkPath);
+      const loadedTexture = new THREE.TextureLoader().load(
+        artworkPath, undefined, undefined,
+        () => { if (!disposed) setShowNativeArtwork(false); },
+      );
       loadedTexture.colorSpace = THREE.SRGBColorSpace;
       material.map = loadedTexture;
       bedArtwork = new THREE.Mesh(geometry, material);
