@@ -244,6 +244,29 @@ class SliceJobApiTests(TestCase):
             validate_scheduling(row, {"prusaslicer": {"enabled": True, "verified": True}})
         self.assertEqual(self.client.post(f"{self.url}{row.pk}/start/").status_code, 409)
 
+    def test_plate_label_is_saved_without_affecting_native_slicing_settings(self):
+        self.client.force_login(self.owner)
+        instance = {
+            "instance_id": str(uuid.uuid4()), "asset_id": str(self.input_asset.pk),
+            "x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+            "scale_percent": 100, "color": "#ffffff",
+        }
+        payload = {**self.payload, "settings": {
+            "plate_objects": [instance], "plate_label": "Prototype A",
+        }}
+        response = self.post(payload)
+        self.assertEqual(response.status_code, 201, response.content)
+        row = SliceJob.objects.get(pk=response.json()["job"]["id"])
+        self.assertEqual(row.settings["plate_label"], "Prototype A")
+        self.assertEqual(response.json()["job"]["settings"]["plate_label"], "Prototype A")
+
+        for invalid in ("", "a" * 65, "Bad\\nPlate", 42):
+            with self.subTest(invalid=invalid):
+                payload["settings"]["plate_label"] = invalid
+                self.assertEqual(self.post(payload).status_code, 400)
+        payload["settings"]["plate_label"] = "Safe · Plate 1"
+        self.assertEqual(self.post(payload).status_code, 201)
+
     def test_plate_only_draft_uses_first_model_without_separate_stl_selection(self):
         self.client.force_login(self.owner)
         uploaded = FileAsset.objects.create(
