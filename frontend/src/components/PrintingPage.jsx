@@ -1,5 +1,5 @@
 import { filamentFamily, filamentFamilyKey, filamentVariantLabel, buildFilamentFamilyIndex } from "./filamentFamilies";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../api";
 import PrintedPartsSection from "./PrintedPartsSection";
 import WeightHistory from "./WeightHistory";
@@ -11,8 +11,8 @@ import ModelViewerModal, { isViewableModelFile } from "./ModelViewer";
 import { suggestNextVersion } from "./FileVersionModal";
 import GcodeViewerModal from "./GcodeViewerModal";
 import GcodeLibraryModal from "./GcodeLibraryModal";
-import SlicerWorkbench from "./SlicerWorkbench";
-import SavedSlicerJobsModal from "./SavedSlicerJobsModal";
+const SlicerWorkbench = lazy(() => import("./SlicerWorkbench"));
+const SavedSlicerJobsModal = lazy(() => import("./SavedSlicerJobsModal"));
 import PrinterStartGcodeModal from "./PrinterStartGcodeModal";
 
 function grams(value) {
@@ -160,6 +160,9 @@ function newestGeometryAnalysis(model) {
 
 export default function PrintingPage({ config, projects, searchTarget = null, onOpenConsumed, onOpenMakerTags = () => {}, onModelLibraryBack = null, initialWorkspaceView = "overview", onOpenSlicer = null, slicerStatus = { state: "checking" } }) {
   const [data, setData] = useState(null);
+  const [filamentsLoaded, setFilamentsLoaded] = useState(false);
+  const [filamentsLoading, setFilamentsLoading] = useState(false);
+  const filamentFetchRef = useRef(false);
   const [error, setError] = useState("");
   const [sourceNotice, setSourceNotice] = useState("");
   const [partJob, setPartJob] = useState(null);
@@ -187,6 +190,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
         ...fresh,
         filaments: previous?.filaments || [],
       });
+      if (includeFilaments) setFilamentsLoaded(true);
       return fresh;
     } catch (err) {
       setError(err.message);
@@ -194,7 +198,21 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
     }
   }
 
-  useEffect(() => { load(); }, []);
+  // The overview needs printers and models, not the entire filament catalogue.
+  useEffect(() => { load({ includeFilaments: false }); }, []);
+
+  useEffect(() => {
+    const needsFilaments = ["spools", "filaments", "reusableSpools"].includes(workspaceView)
+      || modal === "spool" || Boolean(claimSlot);
+    if (!needsFilaments || filamentsLoaded || filamentFetchRef.current) return;
+    filamentFetchRef.current = true;
+    setFilamentsLoading(true);
+    load({ includeFilaments: true })
+      .finally(() => {
+        filamentFetchRef.current = false;
+        setFilamentsLoading(false);
+      });
+  }, [workspaceView, modal, claimSlot, filamentsLoaded]);
 
   useEffect(() => {
     if (workspaceView !== "overview") return undefined;
@@ -262,6 +280,12 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
   const canAddLocation = Boolean(config?.permissions?.add_printing_location);
   const recentSpools = newestFirst(data?.spools).slice(0, 5);
   const recentModels = newestFirst(data?.models).slice(0, 5);
+
+  if ((["spools", "filaments", "reusableSpools"].includes(workspaceView)
+      || modal === "spool" || claimSlot) && !filamentsLoaded) {
+    return <LoadingBlock label={filamentsLoading
+      ? "Loading filament catalogue…" : "Preparing filament catalogue…"} />;
+  }
 
   if (workspaceView === "reusableSpools") {
     return <ReusableSpoolsPage
@@ -332,6 +356,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
         <strong>Workbench preview — no slicer engine installed</strong>
         <p>Staging-only preparation mode. You can explore the visual plate, import models, search native profiles and save drafts, but slicing execution and printing generated G-code are unavailable until a verified worker is installed.</p>
       </section>}
+      <Suspense fallback={<LoadingBlock label="Loading MakerVault Slicer…" />}>
       <SlicerWorkbench
       initialDraftId={searchTarget?.type === "slicer_job" ? searchTarget.id : null}
       files={data?.model_files || []}
@@ -342,11 +367,12 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       onBack={() => initialWorkspaceView === "slicer" && onModelLibraryBack ? onModelLibraryBack() : setWorkspaceView("overview")}
       onFilesUploaded={load}
       onOpenGcode={async () => {
-        await load();
+        await load({ includeFilaments: false });
         setWorkspaceView("overview");
         setModal("gcode");
       }}
     />
+      </Suspense>
     </>;
   }
 
@@ -674,7 +700,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       onClose={() => setClaimSlot(null)}
       onSaved={async () => { setClaimSlot(null); await load(); }}
     />}
-    {savedSlicerOpen && <SavedSlicerJobsModal
+    {savedSlicerOpen && <Suspense fallback={<LoadingBlock label="Loading saved slices…" /></Suspense>}><SavedSlicerJobsModal
       onClose={() => setSavedSlicerOpen(false)}
       onOpenSlicer={jobId => onOpenSlicer ? onOpenSlicer(jobId) : setWorkspaceView("slicer")} />}
     {modal === "gcode" && <GcodeLibraryModal files={data?.gcode_files || []} projects={projects || []} canUpload={Boolean(config?.permissions?.add_file)} onClose={() => setModal("")} onSaved={load} />}
@@ -1182,7 +1208,7 @@ function ModelLibraryPage({ models, files, gcodeFiles = [], printers, projects, 
       </div>
     </section>
 
-    {sliceDraftModel && <SavedSlicerJobsModal
+    {sliceDraftModel && <Suspense fallback={<LoadingBlock label="Loading saved slices…" /></Suspense>}><SavedSlicerJobsModal
       title={"Saved slices · " + sliceDraftModel.name}
       assetIds={sliceDraftModel.revisions.flatMap(rev => rev.assets)
         .map(asset => asset.file?.id).filter(Boolean)}
