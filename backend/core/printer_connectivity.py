@@ -527,14 +527,24 @@ def poll_moonraker(endpoint_url: str, config: dict | None = None) -> dict:
 
     server = _get(base + "/server/info", headers=headers)
     objects = _get(
-        base + "/printer/objects/query?print_stats&pause_resume&display_status&virtual_sdcard&extruder&heater_bed&heaters&toolhead",
+        base + "/printer/objects/query?print_stats&display_status&virtual_sdcard&extruder&heater_bed&heaters&toolhead",
         headers=headers,
     )
     result = objects.get("result") or {}
     status = result.get("status") or {}
     print_stats = status.get("print_stats") or {}
     print_info = print_stats.get("info") or {}
-    pause_resume = status.get("pause_resume") or {}
+    pause_resume = {}
+    # pause_resume is a Klipper optional object. Query it separately only
+    # when print_stats indicates an active job, so a printer without the
+    # module never loses its whole telemetry snapshot.
+    if (str(print_stats.get("state") or "").strip().lower() == "printing"
+            and print_stats.get("filename")):
+        try:
+            optional = _get(base + "/printer/objects/query?pause_resume", headers=headers)
+            pause_resume = ((optional.get("result") or {}).get("status") or {}).get("pause_resume") or {}
+        except PrinterConnectionError:
+            pause_resume = {}
     display = status.get("display_status") or {}
     virtual_sd = status.get("virtual_sdcard") or {}
     extruder = status.get("extruder") or {}
