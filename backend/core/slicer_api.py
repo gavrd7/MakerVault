@@ -9,7 +9,8 @@ from pathlib import Path
 from decimal import Decimal, InvalidOperation
 
 from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
+from django.urls import reverse
 from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
 from django.views.decorators.http import require_http_methods
@@ -23,6 +24,7 @@ from .slicer_native_resolution import resolved_native_profile
 from .slicer_native_overrides import ORCA_PLATES
 from .slicer_mesh import inspect_stl, MeshInspectionError, MAX_INSPECTION_BYTES
 from .slicer_bed import inspect_orca_plate, inspect_creality_plate
+from .slicer_bed_artwork import official_artwork_source, cached_official_artwork
 from .slicer_official_chain import official_profile_chain
 from .slicer_creality_official_profiles import (
     search_creality_profiles, fetch_creality_profile, available_creality_vendors,
@@ -921,7 +923,31 @@ def profile_plate(request, profile_id):
                     else inspect_orca_plate(profile))
     except SlicerProfileError:
         return _error("Native printer geometry could not be safely inspected.", 422)
+    if geometry.get("status") in ("available", "partial") and official_artwork_source(profile):
+        geometry["artwork_url"] = reverse(
+            "api-slicer-profile-artwork", kwargs={"profile_id": profile.pk}
+        )
+        geometry["artwork_source"] = "Imported official OrcaSlicer profile"
     return JsonResponse({"profile_id": str(profile.pk), "plate": geometry})
+
+
+@login_required
+@require_http_methods(["GET"])
+def profile_artwork(request, profile_id):
+    """Serve only vetted same-origin artwork associated with an owned profile."""
+    profile = SlicerProfile.objects.filter(
+        pk=profile_id, owner=request.user, engine="orcaslicer", kind="printer",
+    ).select_related("file_asset").first()
+    if not profile:
+        return _error("Owned native printer profile not found.", 404)
+    raw = cached_official_artwork(profile)
+    if raw is None:
+        return _error("Native artwork unavailable; use the MakerVault plate.", 404)
+    response = HttpResponse(raw, content_type="image/svg+xml")
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+    response["Cache-Control"] = "private, max-age=3600"
+    return response
 
 
 @login_required
