@@ -10,7 +10,7 @@ import json
 import re
 from configparser import ConfigParser, Error as ConfigError
 from functools import lru_cache
-from xml.etree import ElementTree
+from defusedxml import ElementTree
 
 import requests
 from django.core.files.base import ContentFile
