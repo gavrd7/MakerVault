@@ -178,7 +178,7 @@ def _draft_plate_settings(user, input_asset, settings):
         required = {"instance_id", "asset_id", "x_mm", "y_mm", "rotation_deg",
                     "scale_percent", "color"}
         if (not isinstance(item, dict) or not required.issubset(item)
-                or set(item) - required - {"scale_xyz_percent"}):
+                or set(item) - required - {"scale_xyz_percent", "process_overrides"}):
             raise ValueError("Invalid plate model instance.")
         instance_id = str(_uuid(item["instance_id"]))
         asset_id = _uuid(item["asset_id"])
@@ -209,8 +209,10 @@ def _draft_plate_settings(user, input_asset, settings):
         color = item["color"]
         if not isinstance(color, str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
             raise ValueError("Choose a six-digit colour for each model.")
+        instance_overrides = validate_process_overrides(item.get("process_overrides"))
         saved.append({"instance_id": instance_id, "asset_id": str(asset_id),
-                      **values, "color": color.lower()})
+                      **values, "color": color.lower(),
+                      **({"process_overrides": instance_overrides} if instance_overrides else {})})
     if saved[0]["asset_id"] != str(input_asset.pk):
         raise ValueError("The first plate model must match the selected primary STL.")
     return {"plate_objects": saved, "plate_label": label, "save_gcode_to_library": save_to_library, "workflow": workflow, "process_overrides": process_overrides}
