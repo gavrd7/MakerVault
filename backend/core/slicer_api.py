@@ -915,21 +915,27 @@ def delete_profile(request, profile_id):
 @require_http_methods(["GET"])
 def profile_plate(request, profile_id):
     profile = SlicerProfile.objects.filter(
-        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint"], kind="printer"
+        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint", "bambustudio", "prusaslicer"], kind="printer"
     ).select_related("file_asset").first()
     if not profile:
         return _error("Owned Orca or Creality machine profile not found.", 404)
-    try:
-        geometry = (inspect_creality_plate(profile) if profile.engine == "crealityprint"
-                    else inspect_orca_plate(profile))
-    except SlicerProfileError:
-        return _error("Native printer geometry could not be safely inspected.", 422)
-    if geometry.get("status") in ("available", "partial") and official_artwork_source(profile):
+    if profile.engine in ("orcaslicer", "crealityprint"):
+        try:
+            geometry = (inspect_creality_plate(profile) if profile.engine == "crealityprint"
+                        else inspect_orca_plate(profile))
+        except SlicerProfileError:
+            return _error("Native printer geometry could not be safely inspected.", 422)
+    else:
+        # Model/vendor metadata is not a validated printable-area polygon.
+        # The frontend may display approved artwork against the configured
+        # printer dimensions, but this never changes slice-fit validation.
+        geometry = {"status": "unavailable", "reason": "Use printer build dimensions."}
+    if official_artwork_source(profile):
         geometry["artwork_url"] = reverse(
             "api-slicer-profile-artwork", kwargs={"profile_id": profile.pk}
         )
         geometry["artwork_source"] = "Imported official OrcaSlicer profile"
-    if geometry.get("status") in ("available", "partial") and official_bed_model_source(profile):
+    if official_bed_model_source(profile):
         geometry["bed_model_url"] = reverse(
             "api-slicer-profile-bed-model", kwargs={"profile_id": profile.pk}
         )
@@ -941,7 +947,7 @@ def profile_plate(request, profile_id):
 def profile_artwork(request, profile_id):
     """Serve only vetted same-origin artwork associated with an owned profile."""
     profile = SlicerProfile.objects.filter(
-        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint"], kind="printer",
+        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint", "bambustudio", "prusaslicer"], kind="printer",
     ).select_related("file_asset").first()
     if not profile:
         return _error("Owned native printer profile not found.", 404)
@@ -961,7 +967,7 @@ def profile_bed_model(request, profile_id):
     """Serve a bounded, validated native STL underneath the interactive bed."""
     profile = SlicerProfile.objects.filter(
         pk=profile_id, owner=request.user,
-        engine__in=["orcaslicer", "crealityprint"], kind="printer",
+        engine__in=["orcaslicer", "crealityprint", "bambustudio", "prusaslicer"], kind="printer",
     ).select_related("file_asset").first()
     if not profile:
         return _error("Owned native printer profile not found.", 404)
