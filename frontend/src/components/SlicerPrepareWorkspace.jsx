@@ -41,7 +41,7 @@ export default function SlicerPrepareWorkspace({
   defaultColor, onManualColorChange, canEdit, busy, error, notice,
   onChangeProfiles, onSaveDraft, onSlice, engine, printer,
   selectedProfiles, workerConfigured, printerId,
-  processOverrides = {}, onProcessOverridesChange,
+  processOverrides = {}, onProcessOverridesChange, onSaveCustomProcessProfile,
   printerDetails, nozzleMm, selectedPlateType = "Native / profile default",
   localAssets = [], onLocalAssetsChange,
 }) {
@@ -58,6 +58,26 @@ export default function SlicerPrepareWorkspace({
   const [nativeFieldDrafts, setNativeFieldDrafts] = useState({});
   const [nativeProcessError, setNativeProcessError] = useState("");
   const [nativeProcessLoading, setNativeProcessLoading] = useState(false);
+  const [showCustomProfileSave, setShowCustomProfileSave] = useState(false);
+  const [customProfileName, setCustomProfileName] = useState("");
+  const [customProfileError, setCustomProfileError] = useState("");
+  const [savingCustomProfile, setSavingCustomProfile] = useState(false);
+  const saveCustomProfile = async event => {
+    event.preventDefault();
+    if (!onSaveCustomProcessProfile || savingCustomProfile) return;
+    setCustomProfileError("");
+    setSavingCustomProfile(true);
+    try {
+      await onSaveCustomProcessProfile(customProfileName);
+      setShowCustomProfileSave(false);
+      setCustomProfileName("");
+      setNativeFieldDrafts({});
+    } catch (err) {
+      setCustomProfileError(err?.message || "Could not save the custom profile.");
+    } finally {
+      setSavingCustomProfile(false);
+    }
+  };
   useEffect(() => {
     const id = selectedProfiles?.process_id;
     if (!id || !String(engine || "").startsWith("orcaslicer ")) {
@@ -393,9 +413,40 @@ export default function SlicerPrepareWorkspace({
               </p>}
             {Object.keys(processOverrides).length > 0 && <div className="slicerNativeSettingsActions">
               <span>{Object.keys(processOverrides).length} draft override(s) · Original profile unchanged</span>
-              <button type="button" disabled={!canEdit || busy}
-                onClick={() => { onProcessOverridesChange?.({}); setNativeFieldDrafts({}); }}>Restore profile defaults</button>
+              <div className="slicerNativeSettingsButtons">
+                <button type="button" disabled={!canEdit || busy || savingCustomProfile || !onSaveCustomProcessProfile}
+                  onClick={() => {
+                    setCustomProfileName((selectedProfiles?.process || "Custom process") + " - Custom");
+                    setCustomProfileError("");
+                    setShowCustomProfileSave(true);
+                  }}>Save as custom profile</button>
+                <button type="button" disabled={!canEdit || busy || savingCustomProfile}
+                  onClick={() => { onProcessOverridesChange?.({}); setNativeFieldDrafts({}); setShowCustomProfileSave(false); }}>
+                  Restore profile defaults
+                </button>
+              </div>
             </div>}
+            {showCustomProfileSave && Object.keys(processOverrides).length > 0 && <form
+              className="slicerCustomProcessForm" onSubmit={saveCustomProfile}
+              aria-label="Save custom process profile">
+              <label htmlFor="slicer-custom-process-name">Custom profile name</label>
+              <input id="slicer-custom-process-name" type="text"
+                maxLength={200} required value={customProfileName}
+                disabled={savingCustomProfile || busy}
+                onChange={event => setCustomProfileName(event.target.value)}
+                placeholder="e.g. 0.16mm Quality - PLA" />
+              <small>The original profile will remain unchanged. The new profile is saved under this slicer engine and version.</small>
+              {customProfileError && <p className="integrationError" role="alert">{customProfileError}</p>}
+              <div className="slicerNativeSettingsButtons">
+                <button type="submit" disabled={!canEdit || busy || savingCustomProfile ||
+                  !customProfileName.trim()}>
+                  {savingCustomProfile ? "Saving…" : "Save and select profile"}
+                </button>
+                <button type="button" disabled={savingCustomProfile} onClick={() => setShowCustomProfileSave(false)}>
+                  Cancel
+                </button>
+              </div>
+            </form>}
           </section>
         )}
         <p><strong>Printer:</strong> {selectedProfiles?.printer || "Not selected"}</p>
