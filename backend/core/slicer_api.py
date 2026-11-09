@@ -34,6 +34,12 @@ from .slicer_creality_official_profiles import (
     ENGINE_VERSION as OFFICIAL_CRE_VERSION, SOURCE as OFFICIAL_CRE_SOURCE,
     REF as OFFICIAL_CRE_REF,
 )
+from .slicer_bambu_official_profiles import (
+    search_bambu_profiles, fetch_bambu_model, available_bambu_vendors,
+    official_catalogue_models as bambu_catalogue_models,
+    ENGINE_VERSION as OFFICIAL_BAMBU_VERSION, SOURCE as OFFICIAL_BAMBU_SOURCE,
+    REF as OFFICIAL_BAMBU_REF,
+)
 from .slicer_official_profiles import (
     OfficialProfileError, search_official_profiles, fetch_official_profile, available_official_vendors,
     official_catalogue_models as orca_catalogue_models,
@@ -480,6 +486,7 @@ def official_profiles(request):
             sources = {
                 "orcaslicer": (available_official_vendors, OFFICIAL_ORCA_REF),
                 "crealityprint": (available_creality_vendors, OFFICIAL_CRE_REF),
+                "bambustudio": (available_bambu_vendors, OFFICIAL_BAMBU_REF),
             }
             provider = sources.get(selected)
             return JsonResponse({
@@ -493,7 +500,8 @@ def official_profiles(request):
             })
         if request.GET.get("models") == "1":
             model_catalogues = {"orcaslicer": orca_catalogue_models,
-                                "crealityprint": creality_catalogue_models}
+                                "crealityprint": creality_catalogue_models,
+                                "bambustudio": bambu_catalogue_models}
             provider = model_catalogues.get(selected)
             if not provider:
                 return _error("This slicer has no official printer catalogue.")
@@ -505,6 +513,7 @@ def official_profiles(request):
         searcher = {
             "orcaslicer": search_official_profiles,
             "crealityprint": search_creality_profiles,
+            "bambustudio": search_bambu_profiles,
         }.get(selected)
         if searcher is None:
             return _error("Official profile search is not available for this engine.")
@@ -529,7 +538,8 @@ def official_profiles(request):
             chosen_model = request.GET.get("model")
             if chosen_model:
                 model_catalogues = {"orcaslicer": orca_catalogue_models,
-                                    "crealityprint": creality_catalogue_models}
+                                    "crealityprint": creality_catalogue_models,
+                                "bambustudio": bambu_catalogue_models}
                 if chosen_model not in model_catalogues[selected](request.GET.get("vendor", "Creality")):
                     return _error("Choose a printer model listed in the official catalogue.")
                 printer_model = chosen_model
@@ -555,6 +565,7 @@ def official_profiles(request):
         providers = {
             "orcaslicer": (OFFICIAL_ORCA_VERSION, OFFICIAL_ORCA_SOURCE, OFFICIAL_ORCA_REF, fetch_official_profile),
             "crealityprint": (OFFICIAL_CRE_VERSION, OFFICIAL_CRE_SOURCE, OFFICIAL_CRE_REF, fetch_creality_profile),
+            "bambustudio": (OFFICIAL_BAMBU_VERSION, OFFICIAL_BAMBU_SOURCE, OFFICIAL_BAMBU_REF, fetch_bambu_model),
         }
         if engine not in providers:
             return _error("Official import is not available for this engine.")
@@ -570,7 +581,9 @@ def official_profiles(request):
         # Existing records are never overwritten or implicitly modified.
         # Fetch and validate the complete bounded parent chain *before*
         # mutating the database. Never install a partial official preset.
-        chain = official_profile_chain(engine, kind, name, subpath, vendor)
+        chain = ([(name, subpath, fetch_bambu_model(kind, name, subpath, vendor))]
+                 if engine == "bambustudio" else
+                 official_profile_chain(engine, kind, name, subpath, vendor))
         prepared = []
         for native_name, native_subpath, raw in chain:
             existing = SlicerProfile.objects.filter(
