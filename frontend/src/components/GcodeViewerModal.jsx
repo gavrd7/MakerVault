@@ -5,7 +5,7 @@ import PrinterStartGcodeModal from "./PrinterStartGcodeModal";
 import SlicerGcodePreview from "./SlicerGcodePreview";
 
 // Read-only analysis is evidence, not proof of safe G-code or firmware compatibility.
-export default function GcodeViewerModal({ file, canEdit = false, onClose, onSaved, onOpenModel, embedded = false }) {
+export default function GcodeViewerModal({ file, canEdit = false, onClose, onSaved, onOpenModel, embedded = false, bedSize = null }) {
   const [report, setReport] = useState(null);
   const [text, setText] = useState("");
   const [mode, setMode] = useState("visual");
@@ -121,7 +121,7 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
       <p><strong>XY moves:</strong> {analysis.xy_moves?.toLocaleString() || 0} · <strong>Coordinates:</strong> {["X", "Y", "Z"].map(axis => bounds[axis]?.[0] == null ? `${axis} unknown` : `${axis} ${bounds[axis][0].toFixed(1)}–${bounds[axis][1].toFixed(1)} mm`).join(" · ")}</p>
       {(analysis.warnings || []).map((warning, i) => <div className="projectUploadHint" key={i}>{warning}</div>)}
       {mode === "visual" && embedded && analysis.slicer_preview
-        ? <SlicerGcodePreview preview={analysis.slicer_preview} />
+        ? <SlicerGcodePreview preview={analysis.slicer_preview} bedSize={bedSize} />
         : mode === "visual" ? <div style={{ maxWidth: 600, margin: "12px auto" }}>
         {preview ? <svg viewBox="0 0 590 590" role="img" aria-label="Top-down XY toolpath preview; non-authoritative" style={{ width: "100%", background: "#101820", borderRadius: 10 }}>
           <polyline points={preview} fill="none" stroke="#b0a2ff" strokeWidth="1" vectorEffect="non-scaling-stroke" />
