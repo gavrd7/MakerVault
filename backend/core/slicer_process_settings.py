@@ -109,7 +109,6 @@ PROCESS_FIELDS = {
     "raft_first_layer_expansion": ("Supports", "Raft first layer expansion", "mm", 0, 15, False),
     "raft_first_layer_density": ("Supports", "Raft first layer density", "%", 0, 100, False),
     "max_bridge_length": ("Quality", "Maximum bridge length", "mm", 0, 100, False),
-    "fuzzy_skin_first_layer": ("Quality", "Apply fuzzy skin to first layer", "", 0, 1, True),
     "brim_ears_detection_length": ("Others", "Brim ears detection length", "mm", 0, 30, False),
     "brim_ears_max_angle": ("Others", "Brim ears maximum angle", "°", 0, 180, False),
     "ironing_flow": ("Quality", "Ironing flow", "%", 0, 100, False),
@@ -197,6 +196,13 @@ CHOICE_FIELDS = {
         ("grid", "Grid"), ("gyroid", "Gyroid"), ("rectilinear", "Rectilinear"),
         ("crosshatch", "Crosshatch"), ("triangles", "Triangles"),
         ("honeycomb", "Honeycomb"), ("cubic", "Cubic"),
+        ("alignedrectilinear", "Aligned rectilinear"), ("zigzag", "Zigzag"),
+        ("line", "Line"), ("tri-hexagon", "Tri-hexagon"),
+        ("adaptivecubic", "Adaptive cubic"), ("quartercubic", "Quarter cubic"),
+        ("supportcubic", "Support cubic"), ("lightning", "Lightning"),
+        ("3dhoneycomb", "3D honeycomb"), ("concentric", "Concentric"),
+        ("hilbertcurve", "Hilbert curve"), ("archimedeanchords", "Archimedean chords"),
+        ("octagramspiral", "Octagram spiral"),
     )),
     "seam_position": ("Quality", "Seam position", (
         ("aligned", "Aligned"), ("nearest", "Nearest"), ("rear", "Rear"),
@@ -224,6 +230,69 @@ CHOICE_FIELDS = {
     "ironing_pattern": ("Quality", "Ironing pattern", (
         ("rectilinear", "Rectilinear"), ("concentric", "Concentric"),
     )),
+    "wall_sequence": ("Quality", "Wall printing order", (
+        ("inner wall/outer wall", "Inner/outer"), ("outer wall/inner wall", "Outer/inner"),
+        ("inner-outer-inner wall", "Inner/outer/inner"),
+    )),
+    "wall_direction": ("Quality", "Wall direction", (
+        ("ccw", "Counter-clockwise"), ("cw", "Clockwise"),
+    )),
+    "gap_fill_target": ("Strength", "Gap fill target", (
+        ("everywhere", "Everywhere"), ("topbottom", "Top/bottom"), ("nowhere", "Nowhere"),
+    )),
+    "support_style": ("Supports", "Support style", (
+        ("default", "Default"), ("grid", "Grid"), ("snug", "Snug"),
+        ("organic", "Organic"), ("tree_slim", "Tree slim"),
+        ("tree_strong", "Tree strong"), ("tree_hybrid", "Tree hybrid"),
+    )),
+    "support_base_pattern": ("Supports", "Base support pattern", (
+        ("default", "Default"), ("rectilinear", "Rectilinear"),
+        ("rectilinear-grid", "Rectilinear grid"), ("honeycomb", "Honeycomb"),
+        ("lightning", "Lightning"), ("hollow", "Hollow"),
+    )),
+    "support_interface_pattern": ("Supports", "Support interface pattern", (
+        ("auto", "Auto"), ("rectilinear", "Rectilinear"),
+        ("concentric", "Concentric"), ("spiralinset", "Spiral inset"),
+        ("rectilinear_interlaced", "Interlaced"), ("grid", "Grid"),
+    )),
+    "support_ironing_pattern": ("Supports", "Support ironing pattern", (
+        ("rectilinear", "Rectilinear"), ("concentric", "Concentric"),
+    )),
+    "fuzzy_skin": ("Others", "Fuzzy skin", (
+        ("none", "Off"), ("external", "External"), ("hole", "Holes"),
+        ("all", "All"), ("allwalls", "All walls"), ("disabled_fuzzy", "Disabled fuzzy"),
+    )),
+    "fuzzy_skin_mode": ("Others", "Fuzzy skin mode", (
+        ("displacement", "Displacement"), ("extrusion", "Extrusion"),
+        ("combined", "Combined"),
+    )),
+    "fuzzy_skin_noise_type": ("Others", "Fuzzy skin noise type", (
+        ("classic", "Classic"), ("perlin", "Perlin"), ("billow", "Billow"),
+        ("ridgedmulti", "Ridged multifractal"), ("voronoi", "Voronoi"),
+        ("ripple", "Ripple"),
+    )),
+    "brim_type": ("Others", "Brim type", (
+        ("auto_brim", "Auto"), ("brim_ears", "Brim ears"),
+        ("painted", "Painted"), ("outer_only", "Outer only"),
+        ("inner_only", "Inner only"), ("outer_and_inner", "Outer and inner"),
+        ("no_brim", "No brim"), ("leading_edge_only", "Leading edge only"),
+    )),
+    "skirt_type": ("Others", "Skirt type", (
+        ("combined", "Combined"), ("perobject", "Per object"),
+    )),
+    "draft_shield": ("Others", "Draft shield", (
+        ("disabled", "Disabled"), ("enabled", "Enabled"),
+    )),
+    "slicing_mode": ("Others", "Slicing mode", (
+        ("regular", "Regular"), ("even_odd", "Even-odd"), ("close_holes", "Close holes"),
+    )),
+    "print_sequence": ("Others", "Print sequence", (
+        ("by layer", "By layer"), ("by object", "By object"),
+    )),
+    "print_order": ("Others", "Intra-layer order", (
+        ("default", "Default"), ("as_obj_list", "Object list"),
+        ("best_of", "Best of"), ("snake", "Snake"),
+    )),
     "support_type": ("Supports", "Support type", (
         ("normal(auto)", "Normal (auto)"), ("normal(manual)", "Normal (manual)"),
         ("tree(auto)", "Tree (auto)"), ("tree(manual)", "Tree (manual)"),
@@ -231,6 +300,7 @@ CHOICE_FIELDS = {
 
 }
 TOGGLE_FIELDS = {
+    "ironing_angle_fixed": ("Quality", "Fixed ironing angle"),
     "zaa_enabled": ("Quality", "Enable Z contouring"),
     "zaa_dont_alternate_fill_direction": ("Quality", "Keep contour fill direction"),
     "enable_support": ("Supports", "Generate supports"),
@@ -240,7 +310,26 @@ TOGGLE_FIELDS = {
     "alternate_extra_wall": ("Strength", "Alternate extra wall"),
     "infill_combination": ("Strength", "Infill combination"),
     "spiral_mode": ("Others", "Spiral vase"),
-    "ironing_support": ("Supports", "Ironing support interface"),
+    "support_ironing": ("Supports", "Ironing support interface"),
+    "make_overhang_printable": ("Quality", "Make overhang printable"),
+    "unsupported_wall_last": ("Quality", "Print unsupported walls last"),
+    "overhang_reverse": ("Quality", "Reverse overhang direction"),
+    "separated_infills": ("Strength", "Separated infills"),
+    "independent_support_layer_height": ("Supports", "Independent support layer height"),
+    "tree_support_auto_brim": ("Supports", "Automatic tree support brim"),
+    "enable_prime_tower": ("Multifilament", "Enable prime tower"),
+    "enable_tower_interface_features": ("Multifilament", "Tower interface features"),
+    "prime_tower_enable_framework": ("Multifilament", "Prime tower internal ribs"),
+    "flush_into_infill": ("Multifilament", "Flush into infill"),
+    "flush_into_objects": ("Multifilament", "Flush into objects"),
+    "flush_into_support": ("Multifilament", "Flush into support"),
+    "ooze_prevention": ("Multifilament", "Ooze prevention"),
+    "brim_ears_outer_only": ("Others", "Brim ears outer only"),
+    "combine_brims": ("Others", "Combine brims"),
+    "single_loop_draft_shield": ("Others", "Single loop draft shield"),
+    "spiral_mode_smooth": ("Others", "Smooth spiral mode"),
+    "enable_wrapping_detection": ("Others", "Clumping detection"),
+    "fuzzy_skin_first_layer": ("Others", "Fuzzy skin on first layer"),
     "reduce_infill_retraction": ("Others", "Reduce infill retraction"),
     "enable_arc_fitting": ("Quality", "Arc fitting"),
     "staggered_inner_seams": ("Quality", "Staggered inner seams"),
@@ -304,7 +393,7 @@ SECTIONS = {
                      "extra_perimeters_on_overhangs"},
         "Fuzzy skin": {"fuzzy_skin_point_distance", "fuzzy_skin_thickness", "fuzzy_skin_first_layer"},
         "Ironing": {"ironing_type", "ironing_pattern", "ironing_flow", "ironing_spacing",
-                    "ironing_speed", "ironing_inset", "ironing_angle"},
+                    "ironing_speed", "ironing_inset", "ironing_angle", "ironing_angle_fixed"},
         "Z contouring": {"zaa_enabled", "zaa_minimize_perimeter_height", "zaa_min_z",
                          "zaa_dont_alternate_fill_direction"},
     },
@@ -341,7 +430,8 @@ SECTIONS = {
                     "support_on_build_plate_only", "support_remove_small_overhang",
                     "support_type", "support_critical_regions_only"},
         "Raft": {"raft_layers", "raft_first_layer_density", "raft_first_layer_expansion"},
-        "Support ironing": {"ironing_support"},
+        "Support ironing": {"support_ironing", "support_ironing_pattern",
+                            "support_ironing_flow", "support_ironing_spacing"},
         "Advanced": {"support_top_z_distance", "support_bottom_z_distance",
                      "support_wall_loops", "support_base_pattern_spacing",
                      "support_interface_top_layers", "support_interface_bottom_layers",
