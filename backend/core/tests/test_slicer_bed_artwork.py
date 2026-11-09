@@ -37,6 +37,23 @@ class SlicerBedArtworkTests(SimpleTestCase):
         self.profile.engine = "prusaslicer"
         self.assertIsNone(official_artwork_source(self.profile))
 
+    @patch("core.slicer_bed_artwork.resolved_native_profile")
+    @patch("core.slicer_bed_artwork._inspect_source")
+    def test_inherited_texture_uses_hash_checked_same_owner_chain(self, inspect, resolve):
+        inspect.return_value = {"inherits": "Base printer"}
+        resolve.return_value = b'{"bed_texture":"inherited_texture.svg"}'
+        result = official_artwork_source(self.profile)
+        self.assertEqual(result[0].split("/")[-1], "inherited_texture.svg")
+        resolve.assert_called_once_with(self.profile)
+
+    @patch("core.slicer_bed_artwork.resolved_native_profile")
+    @patch("core.slicer_bed_artwork._inspect_source")
+    def test_missing_parent_does_not_invent_artwork(self, inspect, resolve):
+        from core.slicer_profiles import SlicerProfileError
+        inspect.return_value = {"inherits": "Missing parent"}
+        resolve.side_effect = SlicerProfileError("Missing parent")
+        self.assertIsNone(official_artwork_source(self.profile))
+
     def test_svg_validation_rejects_active_content_and_external_resources(self):
         good = b'<svg xmlns="http://www.w3.org/2000/svg"><path d="M1 2" style="fill:#abc"/></svg>'
         self.assertEqual(_verify_svg(good), good)
