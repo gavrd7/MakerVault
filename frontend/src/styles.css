@@ -4556,3 +4556,42 @@ a:focus-visible,
   .slicerPlatePanel .slicerPlateControls .slicerTransformInputRow>input{flex:1 1 100%;width:100%}
   .slicerTransformInputRow>button{flex:1 1 auto;max-width:100%}
 }
+
+
+/* Selected-model actions occupy their own full-width grid row, never
+   squeezing alongside the material colour field or escaping the sidebar. */
+.slicerPlatePanel .slicerPlateControls .slicerPlateTransformFields > .slicerModelActions{
+  grid-column:1/-1;
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  margin:4px 0 0;
+  align-items:stretch;
+  box-sizing:border-box;
+}
+.slicerPlatePanel .slicerPlateControls .slicerModelActions > button{
+  display:block;
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  height:auto;
+  min-height:48px;
+  padding:10px 12px;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  line-height:1.35;
+  text-align:center;
+  box-sizing:border-box;
+}
+.slicerPlatePanel .slicerPlateControls .slicerPlateTransformFields > label:has(input[type="color"]){
+  min-width:0;
+  grid-column:1/-1;
+}
+@media(max-width:480px){
+  .slicerPlatePanel .slicerPlateControls .slicerPlateTransformFields > .slicerModelActions{
+    grid-template-columns:minmax(0,1fr);
+  }
+}
