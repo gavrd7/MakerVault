@@ -191,3 +191,79 @@ class TemporarySlicerInputRetentionTests(SimpleTestCase):
         with patch("core.slicer_api.FileAsset.objects") as files:
             self.assertIsNone(_cleanup_temporary_job_sources(job))
             files.filter.assert_not_called()
+
+
+class NativeOrcaCustomPrinterCompatibilityTests(SimpleTestCase):
+    def setUp(self):
+        import json
+        from types import SimpleNamespace
+        self.source = SimpleNamespace(
+            pk="original", name="Creality K2 0.4 nozzle", owner_id=1,
+            engine="orcaslicer", engine_version="2.4.2", kind="printer",
+        )
+        self.custom = SimpleNamespace(
+            owner_id=1, engine="orcaslicer", engine_version="2.4.2",
+            file_asset=SimpleNamespace(metadata={
+                "slicer_custom_source_profile_id": "d22683d1-36da-42dd-812e-6222808ca909",
+            }),
+        )
+        self.native = {
+            "name": "Creality K2 0.4 nozzle",
+            "printer_model": "Creality K2",
+            "printer_variant": "0.4",
+            "nozzle_diameter": ["0.4"],
+            "printable_area": ["0x0", "260x0", "260x260", "0x260"],
+            "printable_height": "260",
+            "bed_exclude_area": ["0x0"],
+            "retraction_distances_when_cut": "30",
+        }
+        self.custom_json = {**self.native,
+            "name": "K2 18mm custom",
+            "retraction_distances_when_cut": "18",
+        }
+        self.process = json.dumps({
+            "name": "0.20mm Standard @Creality K2 0.4 nozzle",
+            "compatible_printers": ["Creality K2 0.4 nozzle"],
+        }).encode()
+
+    def test_custom_copy_uses_original_machine_identity_only_in_worker_payload(self):
+        import json
+        from core.slicer_execution import _execution_printer_profile
+        with patch("core.slicer_execution.SlicerProfile.objects") as manager, patch(
+            "core.slicer_execution.resolved_native_profile",
+            return_value=json.dumps(self.native).encode(),
+        ):
+            manager.filter.return_value.select_related.return_value.first.return_value = self.source
+            submitted = _execution_printer_profile(
+                self.custom, json.dumps(self.custom_json).encode(), self.process
+            )
+        resolved = json.loads(submitted)
+        self.assertEqual(resolved["name"], "Creality K2 0.4 nozzle")
+        self.assertEqual(resolved["retraction_distances_when_cut"], "18")
+        self.assertEqual(self.custom_json["name"], "K2 18mm custom")
+
+    def test_changed_nozzle_fails_closed(self):
+        import json
+        from core.slicer_execution import _execution_printer_profile
+        changed = {**self.custom_json, "nozzle_diameter": ["0.6"]}
+        with patch("core.slicer_execution.SlicerProfile.objects") as manager, patch(
+            "core.slicer_execution.resolved_native_profile",
+            return_value=json.dumps(self.native).encode(),
+        ):
+            manager.filter.return_value.select_related.return_value.first.return_value = self.source
+            with self.assertRaisesRegex(SlicerExecutionError, "nozzle or build geometry"):
+                _execution_printer_profile(self.custom, json.dumps(changed).encode(), self.process)
+
+    def test_unrelated_process_profile_is_rejected(self):
+        import json
+        from core.slicer_execution import _execution_printer_profile
+        unrelated = json.dumps({
+            "compatible_printers": ["Other Machine"],
+        }).encode()
+        with patch("core.slicer_execution.SlicerProfile.objects") as manager, patch(
+            "core.slicer_execution.resolved_native_profile",
+            return_value=json.dumps(self.native).encode(),
+        ):
+            manager.filter.return_value.select_related.return_value.first.return_value = self.source
+            with self.assertRaises(SlicerExecutionError):
+                _execution_printer_profile(self.custom, json.dumps(self.custom_json).encode(), unrelated)
