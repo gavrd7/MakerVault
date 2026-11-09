@@ -79,7 +79,52 @@ class SlicerWorkerClientTests(SimpleTestCase):
         with self.assertRaises(SlicerWorkerError) as caught:
             run_remote_job(uuid.uuid4(), "orcaslicer", "2.4.2",
                            b"model", b"printer", b"filament", b"process")
-        self.assertIn("HTTP 422", str(caught.exception))
-        self.assertIn("running slicer engine", str(caught.exception))
+        self.assertIn("without a recognised diagnostic", str(caught.exception))
         self.assertIn("engine-exited", str(caught.exception))
         self.assertNotIn("untrusted private data", str(caught.exception))
+
+    @patch("core.slicer_worker_client._session")
+    @patch("core.slicer_worker_client.worker_settings",
+           return_value=("http://slicer-worker:8088", "x" * 40))
+    def test_orca_exit_codes_are_translated_not_lost(self, settings, session):
+        import json
+        for reason, expected in (
+            ("cli-validation-exit-238", "settings"),
+            ("cli-validation-exit-239", "process preset"),
+            ("native-project-settings-invalid", "out-of-range"),
+            ("native-profile-load-failed", "native printer"),
+        ):
+            with self.subTest(reason=reason):
+                response = Mock()
+                response.status_code = 422
+                payload = json.dumps({
+                    "stage": "running slicer engine", "reason": reason,
+                    "error": "secret/private/model/path",
+                }).encode()
+                response.headers = {"Content-Length": str(len(payload))}
+                response.iter_content.return_value = [payload]
+                session.return_value.post.return_value = response
+                with self.assertRaises(SlicerWorkerError) as caught:
+                    run_remote_job(uuid.uuid4(), "orcaslicer", "2.4.2",
+                                   b"model", b"printer", b"filament", b"process")
+                self.assertIn(expected, str(caught.exception))
+                self.assertIn("[" + reason + "]", str(caught.exception))
+                self.assertNotIn("secret/private", str(caught.exception))
+
+    @patch("core.slicer_worker_client._session")
+    @patch("core.slicer_worker_client.worker_settings",
+           return_value=("http://slicer-worker:8088", "x" * 40))
+    def test_unknown_reason_does_not_leak_raw_diagnostics(self, settings, session):
+        import json
+        response = Mock()
+        response.status_code = 422
+        payload = json.dumps({"reason": "secret/private/path", "error": "password=secret"}).encode()
+        response.headers = {"Content-Length": str(len(payload))}
+        response.iter_content.return_value = [payload]
+        session.return_value.post.return_value = response
+        with self.assertRaises(SlicerWorkerError) as caught:
+            run_remote_job(uuid.uuid4(), "orcaslicer", "2.4.2",
+                           b"model", b"printer", b"filament", b"process")
+        self.assertIn("rejected the job", str(caught.exception))
+        self.assertNotIn("password", str(caught.exception))
+        self.assertNotIn("secret/private", str(caught.exception))
