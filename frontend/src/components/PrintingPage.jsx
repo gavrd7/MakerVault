@@ -11,6 +11,7 @@ import ModelViewerModal, { isViewableModelFile } from "./ModelViewer";
 import { suggestNextVersion } from "./FileVersionModal";
 import GcodeViewerModal from "./GcodeViewerModal";
 import GcodeLibraryModal from "./GcodeLibraryModal";
+import SlicerErrorBoundary from "./SlicerErrorBoundary";
 const SlicerWorkbench = lazy(() => import("./SlicerWorkbench"));
 const SavedSlicerJobsModal = lazy(() => import("./SavedSlicerJobsModal"));
 import PrinterStartGcodeModal from "./PrinterStartGcodeModal";
@@ -415,6 +416,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
         <strong>Workbench preview — no slicer engine installed</strong>
         <p>Staging-only preparation mode. You can explore the visual plate, import models, search native profiles and save drafts, but slicing execution and printing generated G-code are unavailable until a verified worker is installed.</p>
       </section>}
+      <SlicerErrorBoundary onBack={() => initialWorkspaceView === "slicer" && onModelLibraryBack ? onModelLibraryBack() : setWorkspaceView("overview")}>
       <Suspense fallback={<LoadingBlock label="Loading MakerVault Slicer…" />}>
       <SlicerWorkbench
       initialDraftId={searchTarget?.type === "slicer_job" ? searchTarget.id : null}
@@ -432,6 +434,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       }}
     />
       </Suspense>
+      </SlicerErrorBoundary>
     </>;
   }
 
