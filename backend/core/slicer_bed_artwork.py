@@ -8,6 +8,7 @@ No external URLs from imported profiles are followed.
 import hashlib
 import json
 import re
+from configparser import ConfigParser, Error as ConfigError
 from xml.etree import ElementTree
 
 import requests
@@ -19,7 +20,7 @@ from .slicer_creality_official_profiles import VENDORS as CREALITY_VENDORS
 from .slicer_mesh import inspect_stl, MeshInspectionError
 from .slicer_profile_lineage import _inspect_source
 from .slicer_native_resolution import resolved_native_profile
-from .slicer_profiles import SlicerProfileError
+from .slicer_profiles import SlicerProfileError, _check_orca_json
 
 
 MAX_ARTWORK_BYTES = 256 * 1024
@@ -29,10 +30,48 @@ MAX_BED_MODEL_BYTES = 4 * 1024 * 1024
 SOURCES = {
     "orcaslicer": ("OrcaSlicer/OrcaSlicer", ORCA_VENDORS),
     "crealityprint": ("CrealityOfficial/CrealityPrint", CREALITY_VENDORS),
+    "bambustudio": ("bambulab/BambuStudio", ("BBL",)),
+    "prusaslicer": ("prusa3d/PrusaSlicer", ("PrusaResearch",)),
 }
-_VERSION = re.compile(r"^v?([0-9]+\.[0-9]+(?:\.[0-9]+)?)$")
+_VERSION = re.compile(r"^v?([0-9]+(?:\.[0-9]+){1,3})$")
 _BASENAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,119}$")
 _XML_SVG = "{http://www.w3.org/2000/svg}"
+
+
+def _owned_profile_data(profile):
+    """Read the selected user's registered and hash-checked native source."""
+    if (not profile.file_asset.file or
+            profile.file_asset.owner_id != profile.owner_id):
+        raise SlicerProfileError("Native source file is not owned.")
+    with profile.file_asset.file.open("rb") as stream:
+        raw = stream.read(1024 * 1024 + 1)
+    if not raw or len(raw) > 1024 * 1024 or hashlib.sha256(raw).hexdigest() != profile.content_sha256:
+        raise SlicerProfileError("Native source does not match its registration.")
+    if profile.engine == "prusaslicer":
+        parser = ConfigParser(interpolation=None, strict=False, delimiters=("=",))
+        parser.optionxform = str.lower
+        try:
+            parser.read_string(raw.decode("utf-8-sig"))
+        except (UnicodeDecodeError, ConfigError):
+            raise SlicerProfileError("Prusa vendor bundle cannot be inspected.") from None
+        matches = []
+        for section in parser.sections():
+            if not section.startswith("printer_model:"):
+                continue
+            model = section.split(":", 1)[1]
+            label = parser.get(section, "name", fallback=model)
+            if profile.name.casefold() in (model.casefold(), label.casefold()):
+                matches.append(dict(parser.items(section)))
+        if len(matches) != 1:
+            raise SlicerProfileError("Choose an unambiguous printer model in the Prusa vendor bundle.")
+        return matches[0]
+    try:
+        data = _check_orca_json(raw.decode("utf-8-sig"))
+    except UnicodeDecodeError:
+        raise SlicerProfileError("Native JSON is not UTF-8.") from None
+    if profile.engine == "bambustudio" and data.get("type") != "machine_model":
+        raise SlicerProfileError("A Bambu vendor machine-model record is required.")
+    return data
 
 
 def official_asset_source(profile, kind="texture"):
@@ -52,20 +91,28 @@ def official_asset_source(profile, kind="texture"):
     if not match:
         return None
     version = match.group(1)
-    ref = "v" + version
-    provenance = re.fullmatch(
-        re.escape(source) + "@" + re.escape(ref) +
-        r"/([A-Za-z0-9_-]+)/machine/([A-Za-z0-9_.-]+\.json)",
-        str(profile.provenance or ""),
-    )
+    ref = ("version_" if profile.engine == "prusaslicer" else "v") + version
+    if profile.engine == "prusaslicer":
+        provenance = re.fullmatch(
+            re.escape(source) + "@" + re.escape(ref) +
+            r"/([A-Za-z0-9_-]+)/([A-Za-z0-9_.-]+\\.ini)",
+            str(profile.provenance or ""),
+        )
+    else:
+        provenance = re.fullmatch(
+            re.escape(source) + "@" + re.escape(ref) +
+            r"/([A-Za-z0-9_-]+)/machine/([A-Za-z0-9_. -]+\\.json)",
+            str(profile.provenance or ""),
+        )
     if not provenance or provenance.group(1) not in vendors:
         return None
     try:
         if profile.engine == "orcaslicer":
             data = _inspect_source(profile)
-        else:
-            # Creality JSON is also hash-validated through native resolution.
+        elif profile.engine == "crealityprint":
             data = json.loads(resolved_native_profile(profile))
+        else:
+            data = _owned_profile_data(profile)
     except (SlicerProfileError, ValueError, UnicodeDecodeError, OSError, AttributeError):
         return None
     key = "bed_texture" if kind == "texture" else "bed_model"
