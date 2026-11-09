@@ -90,6 +90,7 @@ function pretty(value) {
 
 export default function SlicerPlateEditor({
   files = [], objects = [], onChange, onPrimaryChange, plate = null, plateType = "default",
+  plateLabel = "Plate 1", onPlateLabelChange,
   canEdit = false, onFilesUploaded, defaultColor = null, onManualColorChange, footer = null,
   selectedInstanceId = null, onSelectedInstanceChange, toolMode = "select",
   localAssets = [], onLocalAssetsChange, onExitToolMode,
@@ -760,6 +761,16 @@ export default function SlicerPlateEditor({
     <div className="slicerPlateHeading">
       <h3 id="slicer-plate-heading">Visual build plate</h3>
       <button type="button" onClick={() => arrangeModels()} disabled={!canEdit || !objects.length || uploadBusy}>Auto-arrange models</button>
+    </div>
+    <div className="slicerPlateIdentity">
+      <label htmlFor="slicer-plate-name">Plate name
+        <input id="slicer-plate-name" type="text" value={plateLabel}
+          maxLength={64} disabled={!canEdit}
+          onChange={event => onPlateLabelChange?.(event.target.value)}
+          onBlur={() => { if (!plateLabel.trim()) onPlateLabelChange?.("Plate 1"); }}
+          placeholder="Plate 1" />
+      </label>
+      <span>Plate 1 of 1 · {PLATE_SURFACE[plateType]?.label || "Native default"} · {pretty(bedX)} × {pretty(bedY)} mm</span>
     </div>
     <p>Arrange models, change their size and position, and preview the build plate. Multiple models can be sliced together with an approved OrcaSlicer worker using one filament profile. Individual preview colours do not assign separate print materials.</p>
     <div className="slicerPlateWorkspace">
