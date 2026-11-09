@@ -1,3 +1,8 @@
+import k1Svg from "../assets/slicer-bed-art/creality-k1.svg?raw";
+import k2Svg from "../assets/slicer-bed-art/creality-k2.svg?raw";
+
+const bundledSvg = svg => "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+
 /** Reviewed, local-only native build-plate artwork.
  * Reuse artwork only for the same base printer and validated bed size.
  * New artwork must have its source, licence and orientation reviewed.
@@ -7,14 +12,14 @@ const ARTWORK = [
     manufacturer: "creality", model: "k1",
     excludedVariants: ["max", "c", "se", "pro", "plus"],
     x: 220, y: 220,
-    asset: "/slicer-bed-art/creality-k1.svg",
+    asset: bundledSvg(k1Svg),
     source: "OrcaSlicer 2.4.2 / Creality K1",
   },
   {
     manufacturer: "creality", model: "k2",
     excludedVariants: ["plus", "pro", "max", "se", "c"],
     x: 260, y: 260,
-    asset: "/slicer-bed-art/creality-k2.svg",
+    asset: bundledSvg(k2Svg),
     source: "OrcaSlicer 2.4.2 / Creality K2",
   },
 ];
