@@ -113,6 +113,66 @@ class SliceJobApiTests(TestCase):
             "name": "Unsafe", "settings": {"post_process": 1},
         }), content_type="application/json").status_code, 400)
 
+    def test_save_interactive_process_settings_creates_separate_reusable_profile(self):
+        from django.core.files.base import ContentFile
+        import hashlib
+
+        original = json.dumps({
+            "type": "process", "name": "0.20mm Quality",
+            "layer_height": "0.2", "wall_loops": "2",
+            "sparse_infill_density": "15%",
+            "machine_start_gcode": "START_PRINT EXTRUDER_TEMP=220",
+        }).encode()
+        asset = FileAsset(owner=self.owner, name="0.20mm Quality.json", category="source",
+                          metadata={"extension": ".json", "original_name": "0.20mm Quality.json"})
+        asset.file = ContentFile(original, name="slicer-original-process.json")
+        asset.save()
+        source = SlicerProfile.objects.create(
+            owner=self.owner, file_asset=asset, engine="orcaslicer",
+            engine_version="2.4.2", kind="process", name="0.20mm Quality",
+            content_sha256=hashlib.sha256(original).hexdigest(), status="verified",
+        )
+        url = f"/api/printing/slicer/profiles/{source.pk}/save-process/"
+        payload = {"name": "Benchy Quality Custom",
+                   "settings": {"layer_height": 0.16, "wall_loops": 3,
+                                "sparse_infill_density": 20}}
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.post(url, data=json.dumps(payload),
+                                          content_type="application/json").status_code, 404)
+        self.client.force_login(self.owner)
+        response = self.client.post(url, data=json.dumps(payload),
+                                    content_type="application/json")
+        self.assertEqual(response.status_code, 201, response.content)
+        custom = SlicerProfile.objects.get(pk=response.json()["profile"]["id"])
+        self.assertEqual(custom.status, "candidate")
+        self.assertEqual(custom.engine_version, source.engine_version)
+        self.assertEqual(custom.kind, "process")
+        self.assertNotEqual(custom.file_asset_id, source.file_asset_id)
+        with custom.file_asset.file.open("rb") as stream:
+            edited = json.load(stream)
+        self.assertEqual(edited["name"], "Benchy Quality Custom")
+        self.assertEqual(edited["layer_height"], "0.16")
+        self.assertEqual(edited["wall_loops"], "3")
+        self.assertEqual(edited["sparse_infill_density"], "20%")
+        self.assertEqual(edited["machine_start_gcode"], "START_PRINT EXTRUDER_TEMP=220")
+        with asset.file.open("rb") as stream:
+            self.assertEqual(stream.read(), original)
+        self.assertTrue(SlicerProfile.objects.filter(
+            owner=self.owner, kind="process", name="Benchy Quality Custom"
+        ).exists())
+        duplicate = self.client.post(url, data=json.dumps(payload), content_type="application/json")
+        self.assertEqual(duplicate.status_code, 409)
+        for key, value in (
+            ("machine_start_gcode", "G28"),
+            ("wall_loops", 2.5),
+            ("layer_height", -1),
+        ):
+            with self.subTest(key=key):
+                result = self.client.post(url, data=json.dumps({
+                    "name": "Unsafe setting " + key, "settings": {key: value},
+                }), content_type="application/json")
+                self.assertEqual(result.status_code, 400, result.content)
+
     def test_native_defaults_are_owned_engine_version_and_kind_scoped(self):
         from django.core.files.base import ContentFile
         from django.db import IntegrityError
