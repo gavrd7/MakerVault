@@ -63,12 +63,15 @@ services:
       retries: 3
       start_period: 45s
 
-  # OPTIONAL SLICER WORKER — DEVELOPMENT SCAFFOLD ONLY; DO NOT UNCOMMENT YET.
+  # OPTIONAL SLICER WORKER — NOT INSTALLED BY DEFAULT.
   #
-  # Once an approved image and engine installer are available, remove the comment
-  # markers from the service below, the app settings and the dedicated network.
-  # A single container hosts independently selected OrcaSlicer / Creality Print
-  # engines; no Compose profiles or second overlay are required.
+  # Staging: scripts/install_slicer_staging.py prepare-orca / enable
+  # Then use scripts/install_slicer_staging.py update for app rebuilds:
+  # this includes compose.slicer.staging.yaml + .slicer-staging.env automatically.
+  # Production: inspect compose.slicer.yaml and supply an independently approved
+  # immutable worker image and engine identity. The commented service below is
+  # architectural reference only; do not enable it alongside either overlay.
+  # No Docker socket, host media mounts or extra privileges are required.
   # slicer-worker:
   #   image: ${MAKERVAULT_SLICER_WORKER_IMAGE:?Set an approved image@sha256:...}
   #   restart: unless-stopped
