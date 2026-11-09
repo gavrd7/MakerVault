@@ -73,6 +73,7 @@ class PrinterConnectivityAdapterTests(TestCase):
 
     @patch("core.printer_connectivity.requests.get")
     def test_moonraker_normalises_live_snapshot(self, get_mock):
+        paused = [False]
         def side_effect(url, **kwargs):
             if url.endswith("/server/info"):
                 return self.response({
@@ -86,6 +87,7 @@ class PrinterConnectivityAdapterTests(TestCase):
                 return self.response({
                     "result": {
                         "status": {
+                            "pause_resume": {"is_paused": paused[0]},
                             "print_stats": {
                                 "state": "printing",
                                 "filename": "Benchy.gcode",
@@ -117,6 +119,11 @@ class PrinterConnectivityAdapterTests(TestCase):
         self.assertEqual(snapshot["warnings"], ["Test warning"])
         self.assertEqual(snapshot["source_metadata"]["klippy_state"], "ready")
         self.assertTrue(all(call.kwargs["headers"]["X-Api-Key"] == "secret" for call in get_mock.call_args_list))
+        self.assertTrue(any("pause_resume" in call.args[0] for call in get_mock.call_args_list))
+        paused[0] = True
+        snapshot = poll_moonraker("http://moonraker.local:7125", {"api_key": "secret"})
+        self.assertEqual(snapshot["state"], "paused")
+        self.assertEqual(snapshot["job"]["file_name"], "Benchy.gcode")
 
     def test_native_creality_idle_reconciliation_requires_clear_independent_signals(self):
         from types import SimpleNamespace
