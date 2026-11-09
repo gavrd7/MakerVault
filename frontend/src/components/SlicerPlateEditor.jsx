@@ -12,6 +12,21 @@ const PALETTE = ["#58b5e4", "#f59e0b", "#a78bfa", "#10b981", "#ef4444", "#f472b6
 const MAX_OBJECTS = 12;
 const MAX_FILE_BYTES = 32 * 1024 * 1024;
 
+// Local, attributed OrcaSlicer assets. Exact model/bed matches only:
+// never guess an image based solely on the connected printer's manufacturer.
+function nativeBedArtwork(printerName, width, depth) {
+  const name = String(printerName || "").trim();
+  if (Math.abs(width - 260) < 0.5 && Math.abs(depth - 260) < 0.5 &&
+      /^creality\s+k2\b(?!\s*(?:plus|pro|max|se|combo)\b)/i.test(name)) {
+    return "/slicer-bed-art/creality-k2.svg";
+  }
+  if (Math.abs(width - 220) < 0.5 && Math.abs(depth - 220) < 0.5 &&
+      /^creality\s+k1\b(?!\s*(?:max|c|se)\b)/i.test(name)) {
+    return "/slicer-bed-art/creality-k1.svg";
+  }
+  return null;
+}
+
 const PLATE_SURFACE = {
   default: { base: "#263342", speckled: false, label: "Native default" },
   cool: { base: "#37465a", speckled: false, label: "Smooth Cool Plate" },
@@ -111,6 +126,7 @@ export default function SlicerPlateEditor({
   latestOnChangeRef.current = onChange;
   latestToolModeRef.current = toolMode;
   const [localSelected, setLocalSelected] = useState("");
+  const [showNativeArtwork, setShowNativeArtwork] = useState(true);
   const selected = selectedInstanceId === null ? localSelected : selectedInstanceId;
   const setSelected = next => {
     if (selectedInstanceId === null) setLocalSelected(next);
@@ -411,6 +427,31 @@ export default function SlicerPlateEditor({
       }),
     );
     scene.add(bed);
+    const artworkPath = showNativeArtwork ? nativeBedArtwork(printerLabel, bedX, bedY) : null;
+    let bedArtwork = null;
+    if (artworkPath) {
+      // ShapeGeometry uses world XY as UV; remap to 0..1 for the actual bed.
+      // This transparent SVG overlay adds original native markings without
+      // changing the physical plate selection or base surface texture.
+      const geometry = new THREE.ShapeGeometry(plateShape);
+      const positions = geometry.getAttribute("position");
+      const uv = geometry.getAttribute("uv");
+      for (let i = 0; i < positions.count; i++) {
+        uv.setXY(i, (positions.getX(i) + bedX / 2) / bedX,
+          (positions.getY(i) + bedY / 2) / bedY);
+      }
+      uv.needsUpdate = true;
+      const material = new THREE.MeshBasicMaterial({
+        transparent: true, depthWrite: false, side: THREE.DoubleSide,
+      });
+      const loadedTexture = new THREE.TextureLoader().load(artworkPath);
+      loadedTexture.colorSpace = THREE.SRGBColorSpace;
+      material.map = loadedTexture;
+      bedArtwork = new THREE.Mesh(geometry, material);
+      bedArtwork.position.z = 0.13;
+      bedArtwork.renderOrder = 1;
+      scene.add(bedArtwork);
+    }
     // Millimetre-accurate 10 mm minor / 50 mm major divisions. Clip grid
     // lines to the native polygon, rather than drawing an oversized square.
     const inside = (x, y) => {
@@ -673,6 +714,12 @@ export default function SlicerPlateEditor({
       bed.geometry.dispose();
       bed.material.map?.dispose();
       bed.material.dispose();
+      if (bedArtwork) {
+        scene.remove(bedArtwork);
+        bedArtwork.geometry.dispose();
+        bedArtwork.material.map?.dispose();
+        bedArtwork.material.dispose();
+      }
       gridLines.forEach(line => {
         scene.remove(line);
         line.geometry.dispose();
@@ -689,7 +736,7 @@ export default function SlicerPlateEditor({
       renderer.dispose();
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
     };
-  }, [bedX, bedY, plate?.polygon_mm, plate?.bounds_mm, plateType, printerLabel]);
+  }, [bedX, bedY, plate?.polygon_mm, plate?.bounds_mm, plateType, printerLabel, showNativeArtwork]);
 
   useEffect(() => {
     const state = sceneRef.current;
@@ -841,7 +888,13 @@ export default function SlicerPlateEditor({
     </div>
     <div ref={hostRef} className="slicerPlateCanvas" aria-label="Interactive three-dimensional model plate preview with clickable X, Y, Z orientation control in the top right" />
 
-    <p className="slicerPlateHint"><strong>Selected surface:</strong> {PLATE_SURFACE[plateType]?.label || "Native default"} · Representative finish only; physical plate not detected.</p>
+    {nativeBedArtwork(printerLabel, bedX, bedY) && <label className="slicerPlateArtToggle">
+      <input type="checkbox" checked={showNativeArtwork}
+        onChange={event => setShowNativeArtwork(event.target.checked)} />
+      <span>Show native printer build-plate markings</span>
+    </label>}
+    <p className="slicerPlateHint"><strong>Selected surface:</strong> {PLATE_SURFACE[plateType]?.label || "Native default"} · Physical plate not detected. {showNativeArtwork && nativeBedArtwork(printerLabel, bedX, bedY) &&
+      <small>Native artwork: OrcaSlicer v2.4.2 (AGPL-3.0)</small>}</p>
     <p className="slicerPlateHint"><strong>Build plate volume:</strong> {pretty(bedX)} × {pretty(bedY)} mm (X × Y). Drag in 0.5 mm steps or enter coordinates below.</p>
     {arrangeNotice && <p role="status" className="slicerPlateHint">{arrangeNotice}</p>}
     {extentWarnings.length > 0 && <div role="status" className="integrationError">
