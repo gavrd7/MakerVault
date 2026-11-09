@@ -177,7 +177,7 @@ After choosing an engine, printer and profiles in **Slicer setup**, select **Sli
 
 The initial workspace includes an object tree (instances on the first plate), click-to-select, active **Move**, **Rotate**, **Scale**, **Auto-arrange**, **Duplicate** and **Remove** controls backed by the existing 3D plate editor, and in-session undo/redo (Ctrl+Z / Ctrl+Y outside text inputs). **Save draft** and **Slice and preview** share the existing isolated worker submission path with Quick slice, while explicit G-code saving and printer submission happen from the completed interactive result. Reopening an unscheduled draft returns to the interactive editor with the saved build plate.
 
-The categories **Quality**, **Strength**, **Speed**, **Supports**, **Multifilament**, and **Others**, plus the Global/Objects switch, are present to establish the final editor layout. They do not yet change native settings. Continue using the native profile editor in Slicer setup to adjust values; actual scope-aware edits must be validated and round-tripped through each engine. Independent X, Y and Z scaling is available with preview/3MF persistence; each axis is validated between 5% and 400%, and the old uniform-scale field remains supported for existing drafts. Advanced mesh transformations, multi-plate output, painting tools and variable layer heights are shown as **disabled** while their native data paths are developed. Disabled controls are not supported features.
+The categories **Quality**, **Strength**, **Speed**, **Supports**, **Multifilament**, and **Others** organise the Prepare settings. With an imported OrcaSlicer native process preset selected, **Global** exposes the recognised numeric process fields actually present in the resolved native profile. Edits are validated, saved with the draft, and applied only to the worker's temporary copy of the native process profile. **Restore profile defaults** discards those per-draft overrides. Printer start G-code, filament-change commands, printer settings and the original official profile are never altered. The **Object** scope and **Multifilament** settings remain informational until native per-model materials and tool changes can be validated. Other engines can still use their native profile editors while per-draft setting schemas are expanded. Independent X, Y and Z scaling is available with preview/3MF persistence; each axis is validated between 5% and 400%. Advanced transformations, multi-plate output and painting tools remain disabled.
 
 ### G-code Preview controls
 
@@ -186,3 +186,19 @@ Completed slicing jobs open an in-modal read-only G-code preview. The first expa
 **Important:** This first preview still visualises sampled extrusion segments, not the complete 3D printer motion plan. It may omit layers or moves and cannot be used as a substitute for native OrcaSlicer verification. A complete indexed toolpath including travel, retract/wipe and true native metrics is scheduled as a distinct acceptance milestone.
 
 See the implementation phases in `docs/development/interactive-slicer-plan.md`.
+
+
+### Automatic official printer artwork
+
+After importing an official printer-model candidate, MakerVault attempts to
+resolve and cache vetted native `bed_texture` (SVG) and `bed_model` (STL)
+resources via the authenticated application API. Artwork is decorative and
+does not alter printing, purging, slicing or printer compatibility. A missing,
+unsupported or unsafe asset uses the procedural MakerVault plate. The official
+catalogue browser currently covers release-pinned OrcaSlicer, Creality Print
+and Snapmaker Orca native presets. Bambu Studio and PrusaSlicer expose
+**printer-model artwork metadata only** at this stage; these records are not
+sufficient to slice a print. Installation-specific worker profile discovery,
+additional engine-version adapters and actual printer-specific artwork
+validation are separate milestones. Users may keep using manually imported
+profiles and the generic 3D build plate offline.
