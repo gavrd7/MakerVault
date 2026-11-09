@@ -34,7 +34,7 @@ const TOOLS = [
   { name: "Colour painting", icon: "paint", pending: "Native multi-material annotations and tool mapping" },
 ];
 const SECTION_ORDER = {
-  Quality: ["Layer height", "Line width", "Seam", "Precision", "Walls and surfaces", "Bridging", "Fuzzy skin"],
+  Quality: ["Layer height", "Line width", "Seam", "Precision", "Ironing", "Z contouring", "Walls and surfaces", "Bridging", "Fuzzy skin"],
   Strength: ["Walls", "Top/bottom shells", "Infill"],
   Speed: ["First layer speed", "Other layers speed", "Travel speed", "Acceleration"],
   Supports: ["Support", "Raft", "Support ironing", "Advanced"],
