@@ -337,8 +337,9 @@ test("confirmed completed slice actions return to slicer without hiding uncertai
   assert.match(saved, /setShowDrafts\(false\)/);
   assert.match(workbench, /onSubmissionConfirmed=\{receipt =>/);
   assert.match(workbench, /setPrintSelection\(null\)/);
-  assert.match(printer, /isConfirmedSubmission\(result\.submission\)/);
+  assert.match(printer, /isConfirmedSubmission\(result\.submission, operation\)/);
   assert.match(printer, /onSubmissionConfirmed\?\.\(updated\)/);
   assert.match(printer, /submission\?\.status !== "started"/);
+  assert.match(printer, /submittedAction === "upload"/);
   assert.match(printer, /submission\?\.status === "uploaded"/);
 });
