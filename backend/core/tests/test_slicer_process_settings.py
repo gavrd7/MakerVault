@@ -129,8 +129,9 @@ class NativeProcessSettingsTests(SimpleTestCase):
         self.assertEqual(fields["prime_tower_width"]["enabled_when"],
                          {"key": "enable_prime_tower", "not": "0"})
         self.assertEqual(fields["tree_support_tip_diameter"]["enabled_when"],
-                         {"key": "support_type",
-                          "in": ["tree(auto)", "tree(manual)"]})
+                         [{"key": "enable_support", "not": "0"},
+                          {"key": "support_type",
+                           "in": ["tree(auto)", "tree(manual)"]}])
         edited = json.loads(apply_process_overrides(source, {
             "enable_prime_tower": "1", "prime_tower_width": 40,
             "fuzzy_skin": "external", "fuzzy_skin_thickness": 0.35,
