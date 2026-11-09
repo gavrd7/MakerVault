@@ -12,6 +12,48 @@ sudo python3 scripts/install_slicer_staging.py enable
 sudo python3 scripts/install_slicer_staging.py status
 ```
 
+### Build files and Compose overlays
+
+All worker packaging files are maintained on this development branch:
+
+| File | Purpose |
+| --- | --- |
+| `slicer_worker/Dockerfile.bundle` | Build the rootless, isolated worker with separately verified official slicer binaries |
+| `slicer_worker/Dockerfile.bundle.dockerignore` | Only copy worker code and explicitly staged binary assets into the worker build |
+| `slicer_worker/stage_engines.py` | Validate official AppImage digests and create a local engine manifest |
+| `scripts/install_slicer_staging.py` | Prepare, build, enable, update, inspect or disable the staging worker |
+| `compose.slicer.staging.yaml` | Connect the pinned worker to MakerVault without exposed ports or extra app privileges |
+| `compose.slicer.yaml` | Explicit optional production-style overlay; requires an independently approved image |
+
+The regular `compose.yaml` intentionally has no enabled slicer service.
+The optional staging overlay is **required** alongside the ordinary app
+Compose files. The standard three-file app rebuild alone cannot preserve
+the slicer worker's environment and internal network connection.
+
+**After the slicer has already been installed and enabled**, use the
+following command for ordinary MakerVault updates (not `prepare-orca`
+or `refresh-worker`):
+
+```bash
+cd ~/MakerVault-Staging
+git pull --ff-only origin feature/self-hosted-slicer-foundation
+sudo python3 scripts/install_slicer_staging.py update
+sudo python3 scripts/install_slicer_staging.py status
+```
+
+The `update` action validates the full Compose configuration, rebuilds
+the MakerVault application and keeps the existing pinned worker image,
+binary approval hashes and private token unchanged. Use
+`sudo python3 scripts/install_slicer_staging.py refresh-worker` only when
+the worker code itself needs rebuilding. It checks the staged binary
+digest, builds a new immutable worker image and updates the private image
+ID before recreating the service.
+
+**For a first-time installation**, the exact three commands shown above
+under 'Enable OrcaSlicer' (`prepare-orca`, `enable`, `status`) are
+still required. App updates do not automatically download or install
+third-party slicing engines.
+
 The `enable` command uses the regular `compose.yaml`, `compose.build.yaml` and (when present) `compose.staging.yaml` plus the isolated `compose.slicer.staging.yaml` overlay. It updates the staging app and brings up the optional worker together. **Subsequent staging rebuilds must use this same overlay and environment file** or the worker settings will be omitted from the application container:
 
 ```bash
