@@ -660,7 +660,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       const payload = await apiFetch("/api/printing/slicer/profiles/" + profile.id + "/plate/");
       const plate = payload.plate || {};
       const URLs = [plate.artwork_url, plate.bed_model_url].filter(url =>
-        /^\\/api\\/printing\\/slicer\\/profiles\\/[0-9a-f-]{36}\\/(artwork|bed-model)\\/$/i.test(String(url || "")));
+        /^\/api\/printing\/slicer\/profiles\/[0-9a-f-]{36}\/(artwork|bed-model)\/$/i.test(String(url || "")));
       await Promise.allSettled(URLs.map(url =>
         fetch(url, { credentials: "same-origin" }).then(response => {
           if (!response.ok) throw new Error("Native artwork is unavailable.");
