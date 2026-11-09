@@ -164,12 +164,13 @@ export default function SlicerPrepareWorkspace({
     return file?.name || file?.filename || "STL model";
   };
   function selectTool(tool) {
-    if (tool.target === "x_mm" || tool.target === "rotation_deg") {
+    if (["x_mm", "rotation_deg", "scale_percent", "scale_xyz_percent"].includes(tool.target)) {
       // Selecting a handle-based tool should show its gizmo immediately,
       // including for the first model before it has been explicitly clicked.
       if (!selectedId && objects[0]?.instance_id) setSelectedId(objects[0].instance_id);
-      setToolMode(current => current === (tool.target === "x_mm" ? "move" : "rotate")
-        ? "select" : (tool.target === "x_mm" ? "move" : "rotate"));
+      const next = tool.target === "x_mm" ? "move" :
+        tool.target === "rotation_deg" ? "rotate" : "scale";
+      setToolMode(current => current === next ? "select" : next);
       return;
     }
     const el = editorRef.current?.querySelector(
@@ -225,9 +226,11 @@ export default function SlicerPrepareWorkspace({
           : tool.name}>
         <button type="button"
           className={((tool.target === "x_mm" && toolMode === "move") ||
-            (tool.target === "rotation_deg" && toolMode === "rotate")) ? "isActive" : ""}
-          aria-pressed={tool.target === "x_mm" || tool.target === "rotation_deg"
-            ? (tool.target === "x_mm" ? toolMode === "move" : toolMode === "rotate") : undefined}
+            (tool.target === "rotation_deg" && toolMode === "rotate") ||
+            ((tool.target === "scale_percent" || tool.target === "scale_xyz_percent") && toolMode === "scale")) ? "isActive" : ""}
+          aria-pressed={["x_mm", "rotation_deg", "scale_percent", "scale_xyz_percent"].includes(tool.target)
+            ? (tool.target === "x_mm" ? toolMode === "move"
+              : tool.target === "rotation_deg" ? toolMode === "rotate" : toolMode === "scale") : undefined}
           aria-label={tool.name}
           disabled={!!tool.pending || !canEdit || busy || (tool.target !== "import" && !objects.length)}
           onClick={() => selectTool(tool)}><SlicerUiIcon name={tool.icon || "others"} /></button>
