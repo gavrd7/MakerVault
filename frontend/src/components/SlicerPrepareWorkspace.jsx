@@ -114,12 +114,29 @@ export default function SlicerPrepareWorkspace({
       .finally(() => { if (live) setNativeProcessLoading(false); });
     return () => { live = false; };
   }, [engine, selectedProfiles?.process_id]);
+  const selectedObject = objects.find(row => row.instance_id === selectedId) || null;
+  const objectOverrides = selectedObject?.process_overrides || {};
+  const editingObject = scope === "objects";
+  const editingOverrides = editingObject ? objectOverrides : processOverrides;
+  const inheritedValue = (key, spec) => processOverrides[key] ?? spec.current;
+  const changeEditingOverrides = updater => {
+    if (editingObject) {
+      if (!selectedObject) return;
+      updatePlate(latest.current.map(item => {
+        if (item.instance_id !== selectedObject.instance_id) return item;
+        const changed = updater(item.process_overrides || {});
+        const { process_overrides: _old, ...rest } = item;
+        return Object.keys(changed).length ? { ...rest, process_overrides: changed } : rest;
+      }));
+    } else onProcessOverridesChange?.(updater);
+  };
+  useEffect(() => { setNativeFieldDrafts({}); }, [scope, selectedId]);
   const updateNativeChoice = (key, value) => {
     const spec = nativeProcessFields[key];
     if (!spec?.options?.some(option => option.value === value)) return;
-    onProcessOverridesChange?.(current => {
+    changeEditingOverrides(current => {
       const next = { ...current };
-      if (value === String(spec.current)) delete next[key];
+      if (value === String(editingObject ? inheritedValue(key, spec) : spec.current)) delete next[key];
       else next[key] = value;
       return next;
     });
@@ -131,15 +148,17 @@ export default function SlicerPrepareWorkspace({
     if (!spec || raw === "" || !Number.isFinite(value) ||
         value < spec.minimum || value > spec.maximum ||
         (spec.integer && !Number.isInteger(value))) return;
-    onProcessOverridesChange?.(current => {
+    changeEditingOverrides(current => {
       const next = { ...current };
-      if (value === Number(spec.current)) delete next[key];
+      if (value === Number(editingObject ? inheritedValue(key, spec) : spec.current)) delete next[key];
       else next[key] = value;
       return next;
     });
   };
   const resetSettings = () => {
-    onResetProcessSettings?.();
+    if (editingObject) {
+      changeEditingOverrides(() => ({}));
+    } else onResetProcessSettings?.();
     setNativeFieldDrafts({});
     setShowCustomProfileSave(false);
     setCustomProfileError("");
@@ -152,7 +171,7 @@ export default function SlicerPrepareWorkspace({
       const enabled = conditions.every(condition => {
         const master = nativeProcessFields[condition.key];
         if (!master) return true; // A missing native control must never be fabricated.
-        const value = String(processOverrides[condition.key] ?? master.current);
+        const value = String(editingOverrides[condition.key] ?? (editingObject ? inheritedValue(condition.key, master) : master.current));
         if (condition.not !== undefined && value === condition.not) return false;
         if (Array.isArray(condition.in) && !condition.in.includes(value)) return false;
         return true;
@@ -381,7 +400,7 @@ export default function SlicerPrepareWorkspace({
               </option>)}
             </select>
             <button type="button" disabled={!canEdit || busy ||
-              !Object.keys(processOverrides).length} onClick={resetSettings}
+              !Object.keys(editingOverrides).length} onClick={resetSettings}
               title="Discard this draft's changes and restore values from the selected process profile">
               Reset edits
             </button>
@@ -423,10 +442,19 @@ export default function SlicerPrepareWorkspace({
             {settingsExpanded ? "Close expanded settings" : "Expand settings"}
           </button>
         </div>
-        {scope === "objects" ? (
-          <p>Per-object settings are not yet available. Change Global settings to edit the native process profile for this draft.</p>
-        ) : (
-          <section aria-label={group + " native process controls"} className="slicerNativeSettingsFields">
+        {editingObject && <div className="slicerObjectSettingsInfo">
+          <label htmlFor="slicer-object-settings-instance">Selected object</label>
+          <select id="slicer-object-settings-instance" value={selectedObject?.instance_id || ""}
+            onChange={event => setSelectedId(event.target.value)}>
+            {!selectedObject && <option value="">Select a model</option>}
+            {objects.map(item => <option key={item.instance_id} value={item.instance_id}>
+              {itemName(item)}
+            </option>)}
+          </select>
+          <small>Object changes are saved with this draft and inherit Global settings unless overridden.
+            Slicing with object overrides remains disabled until native Orca object configuration is verified.</small>
+        </div>}
+        <section aria-label={group + " native process controls"} className="slicerNativeSettingsFields">
             {nativeProcessLoading && <p role="status">Reading native process settings…</p>}
             {nativeProcessError && <p role="alert" className="integrationError">{nativeProcessError}</p>}
             {nativeSections.map(section => (
@@ -437,17 +465,17 @@ export default function SlicerPrepareWorkspace({
                   <label key={key} className="slicerNativeSettingField">
                     <span>{spec.label} {spec.unit ? "(" + spec.unit + ")" : ""}
                       {settingsSearch.trim() && <small> · {spec.category}</small>}
-                      {processOverrides[key] !== undefined && <small className="slicerSettingModified">Modified</small>}
+                      {editingOverrides[key] !== undefined && <small className="slicerSettingModified">Modified</small>}
                     </span>
                     {spec.kind === "toggle" ? (
                       <input type="checkbox" aria-label={spec.label}
-                        disabled={!canEdit || busy}
-                        checked={(processOverrides[key] ?? spec.current) === "1"}
+                        disabled={!canEdit || busy || (editingObject && !selectedObject)}
+                        checked={String(editingOverrides[key] ?? (editingObject ? inheritedValue(key, spec) : spec.current)) === "1"}
                         onChange={event => updateNativeChoice(key, event.target.checked ? "1" : "0")} />
                     ) : spec.options ? (
                       <select aria-label={spec.label}
-                        disabled={!canEdit || busy}
-                        value={processOverrides[key] ?? spec.current}
+                        disabled={!canEdit || busy || (editingObject && !selectedObject)}
+                        value={editingOverrides[key] ?? (editingObject ? inheritedValue(key, spec) : spec.current)}
                         onChange={event => updateNativeChoice(key, event.target.value)}>
                         {spec.options.map(option =>
                           <option key={option.value} value={option.value}>{option.label}</option>)}
@@ -455,8 +483,8 @@ export default function SlicerPrepareWorkspace({
                     ) : (
                       <input type="number" min={spec.minimum} max={spec.maximum}
                         step={spec.integer ? 1 : 0.01}
-                        disabled={!canEdit || busy}
-                        value={nativeFieldDrafts[key] ?? processOverrides[key] ?? spec.current}
+                        disabled={!canEdit || busy || (editingObject && !selectedObject)}
+                        value={nativeFieldDrafts[key] ?? editingOverrides[key] ?? (editingObject ? inheritedValue(key, spec) : spec.current)}
                         onChange={event => updateNativeField(key, event.target.value)}
                         onBlur={() => setNativeFieldDrafts(current => {
                           const next = { ...current };
@@ -475,22 +503,22 @@ export default function SlicerPrepareWorkspace({
                   ? "Multicolour tool mappings and flushing volumes require engine-native multi-material support."
                   : "No matching supported native settings are available. Try Advanced or another search."}
               </p>}
-            {Object.keys(processOverrides).length > 0 && <div className="slicerNativeSettingsActions">
-              <span>{Object.keys(processOverrides).length} draft override(s) · Original profile unchanged</span>
+            {Object.keys(editingOverrides).length > 0 && <div className="slicerNativeSettingsActions">
+              <span>{Object.keys(editingOverrides).length} {editingObject ? "object" : "global"} draft override(s) · Original profile unchanged</span>
               <div className="slicerNativeSettingsButtons">
-                <button type="button" disabled={!canEdit || busy || savingCustomProfile || !onSaveCustomProcessProfile}
+                {!editingObject && <button type="button" disabled={!canEdit || busy || savingCustomProfile || !onSaveCustomProcessProfile}
                   onClick={() => {
                     setCustomProfileName((selectedProfiles?.process || "Custom process") + " - Custom");
                     setCustomProfileError("");
                     setShowCustomProfileSave(true);
-                  }}>Save as custom profile</button>
+                  }}>Save as custom profile</button>}
                 <button type="button" disabled={!canEdit || busy || savingCustomProfile}
                   onClick={resetSettings}>
-                  Restore profile defaults
+                  {editingObject ? "Clear object overrides" : "Restore profile defaults"}
                 </button>
               </div>
             </div>}
-            {showCustomProfileSave && Object.keys(processOverrides).length > 0 && <form
+            {!editingObject && showCustomProfileSave && Object.keys(processOverrides).length > 0 && <form
               className="slicerCustomProcessForm" onSubmit={saveCustomProfile}
               aria-label="Save custom process profile">
               <label htmlFor="slicer-custom-process-name">Custom profile name</label>
@@ -512,7 +540,6 @@ export default function SlicerPrepareWorkspace({
               </div>
             </form>}
           </section>
-        )}
         <p><strong>Printer:</strong> {selectedProfiles?.printer || "Not selected"}</p>
         <p><strong>Process:</strong> {selectedProfiles?.process || "Not selected"}</p>
         <p><strong>Filament:</strong> {selectedProfiles?.filament || "Not selected"}</p>
