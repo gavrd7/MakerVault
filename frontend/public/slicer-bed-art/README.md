@@ -17,8 +17,9 @@ the previous generic placeholder symbol on the procedural 3D fallback plate.
 ## Profile-driven native artwork
 
 The authenticated profile plate API can return a same-origin `artwork_url`
-for an owned, hash-verified, official OrcaSlicer machine preset that directly
-declares a safe `bed_texture` filename. This is not a general arbitrary-URL
+for an owned, hash-verified, official OrcaSlicer machine preset that
+declares a safe `bed_texture` filename, either directly or through a
+validated, same-owner/engine/version parent chain. This is not a general arbitrary-URL
 download feature.
 
 On first viewing the profile, the associated artwork endpoint fetches the
@@ -35,9 +36,8 @@ Native artwork can be disabled in the visual editor.
 
 ## Current limitations / next adapters
 
-- This first imported-art adapter supports explicit `bed_texture` on official
-  OrcaSlicer **v2.4.2** printer presets only; it does not yet resolve inherited
-  texture declarations.
+- This first imported-art adapter supports `bed_texture` on official
+  OrcaSlicer **v2.4.2** printer presets and their validated parent chains.
 - It does not ingest native 3D `bed_model` geometry.
 - Additional installed versions, Creality Print, Bambu Studio, PrusaSlicer,
   Snapmaker Orca and Cura require separately validated metadata readers and
