@@ -164,7 +164,7 @@ function newestGeometryAnalysis(model) {
   return null;
 }
 
-export default function PrintingPage({ config, projects, searchTarget = null, onOpenConsumed, onOpenMakerTags = () => {}, onModelLibraryBack = null, initialWorkspaceView = "overview", onOpenSlicer = null, slicerStatus = { state: "checking" } }) {
+export default function PrintingPage({ config, projects, searchTarget = null, onOpenConsumed, onOpenMakerTags = () => {}, onModelLibraryBack = null, initialWorkspaceView = "overview", onOpenSlicer = null, onOpenSlicerDevice = null, slicerStatus = { state: "checking" } }) {
   const [data, setData] = useState(null);
   const [filamentsLoaded, setFilamentsLoaded] = useState(false);
   const [filesLoaded, setFilesLoaded] = useState(false);
@@ -432,6 +432,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       canPrint={Boolean(config?.permissions?.change_printer)}
       onBack={() => initialWorkspaceView === "slicer" && onModelLibraryBack ? onModelLibraryBack() : setWorkspaceView("overview")}
       onFilesUploaded={load}
+      onOpenDevice={onOpenSlicerDevice}
       onOpenGcode={async () => {
         await load({ includeFilaments: false });
         setWorkspaceView("overview");
@@ -1631,6 +1632,13 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
   >
     {error && <div className="formError" role="alert">{error}</div>}
     {notice && <div className="notice">{notice}</div>}
+
+    {/* Use the same authenticated camera playback as the printer overview.
+        When monitoring is open, the overview preview is suspended so only
+        one stream runs for this printer. No camera means no empty placeholder. */}
+    <PrinterCameraPreview
+      printer={{ ...printer, live_connections: (data.rows || []).length ? data.rows : (printer.live_connections || []) }}
+    />
 
     <div className="printingIntegrationGrid printerLiveSources">
       {(data.rows || []).map(connection => {
