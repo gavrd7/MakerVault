@@ -94,6 +94,7 @@ class ConfigurationTests(unittest.TestCase):
             installer._resume_staged_bundle()
 
     def test_update_retains_slicer_worker_compose_and_existing_private_config(self):
+        (self.root / "compose.slicer.staging.yaml").touch()
         calls = []
         before = self.env.read_bytes()
         with patch.object(installer, "_run", side_effect=lambda args, **kwargs: calls.append(args)):
