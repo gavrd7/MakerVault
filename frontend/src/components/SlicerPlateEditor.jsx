@@ -56,28 +56,24 @@ function makeMakerVaultPlateTexture(type, bedX, bedY) {
   ctx.strokeStyle = "rgba(82,115,144,.62)";
   ctx.lineWidth = 2;
   ctx.strokeRect(margin + 11, margin + 11, 1024 - 2 * (margin + 11), 1024 - 2 * (margin + 11));
-  // Compact logo at the front edge, scaled to the same fraction of any bed.
-  ctx.save();
-  ctx.translate(512, 916);
-  ctx.strokeStyle = "rgba(171,200,225,.78)";
-  ctx.lineWidth = 5;
-  ctx.beginPath();
-  for (let n = 0; n <= 6; n++) {
-    const angle = n * Math.PI / 3 - Math.PI / 6;
-    const x = Math.cos(angle) * 27, y = Math.sin(angle) * 27;
-    if (n === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.stroke();
-  ctx.fillStyle = "#c3d8eb";
-  ctx.font = "700 25px system-ui, sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillText("MAKERVAULT", 0, 65);
-  ctx.restore();
+  // Brand from the official uploaded MakerVault logo rather than a drawn placeholder.
+  // Image loading is asynchronous, so refresh the canvas texture when it arrives.
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 4;
   texture.userData = { makerVaultBed: true, width: bedX, depth: bedY };
+  const logo = new Image();
+  logo.onload = () => {
+    ctx.save();
+    // The provided dark-lettered logo needs a light, unobtrusive backing
+    // to preserve legibility on the dark build-plate surface.
+    ctx.fillStyle = "rgba(228,238,246,.9)";
+    ctx.fillRect(361, 875, 302, 109);
+    ctx.drawImage(logo, 371, 883, 282, 97);
+    ctx.restore();
+    texture.needsUpdate = true;
+  };
+  logo.src = "/slicer-bed-art/makervault-official-logo.svg";
   return texture;
 }
 
