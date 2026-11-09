@@ -118,6 +118,59 @@ class NativeProcessSettingsTests(SimpleTestCase):
             with self.subTest(edits=edits), self.assertRaises(ValueError):
                 validate_process_overrides(edits)
 
+    def test_expert_metadata_matches_orca_grouping_and_basic_is_subset(self):
+        profile = json.dumps({
+            "layer_height": "0.2", "line_width": "0.42",
+            "resolution": "0.012", "xy_hole_compensation": "0",
+            "wall_loops": "2", "top_shell_thickness": "0.8",
+            "sparse_infill_density": "15%", "sparse_infill_pattern": "grid",
+            "default_acceleration": "12000", "outer_wall_speed": "200",
+            "enable_support": "0", "support_top_z_distance": "0.2",
+            "brim_width": "5", "brim_object_gap": "0.1",
+        }).encode()
+        fields = process_schema(profile)
+        self.assertEqual(fields["layer_height"]["section"], "Layer height")
+        self.assertEqual(fields["layer_height"]["level"], "basic")
+        self.assertEqual(fields["resolution"]["section"], "Precision")
+        self.assertEqual(fields["resolution"]["level"], "advanced")
+        self.assertEqual(fields["top_shell_thickness"]["section"], "Top/bottom shells")
+        self.assertEqual(fields["default_acceleration"]["section"], "Acceleration")
+        self.assertEqual(fields["enable_support"]["section"], "Support")
+        self.assertEqual(fields["brim_object_gap"]["section"], "Brim")
+        self.assertEqual(fields["enable_support"]["level"], "basic")
+        self.assertEqual(fields["brim_object_gap"]["level"], "advanced")
+        self.assertEqual(fields["sparse_infill_pattern"]["section"], "Infill")
+
+    def test_numeric_expert_settings_apply_to_temp_profile_only(self):
+        source = json.dumps({
+            "resolution": "0.012", "xy_hole_compensation": "0",
+            "support_top_z_distance": "0.2", "brim_object_gap": "0.1",
+            "machine_start_gcode": "START_PRINT",
+        }).encode()
+        updated = json.loads(apply_process_overrides(source, {
+            "resolution": 0.025, "support_top_z_distance": 0.3,
+            "brim_object_gap": 0.15,
+        }))
+        self.assertEqual(updated["resolution"], "0.025")
+        self.assertEqual(updated["support_top_z_distance"], "0.3")
+        self.assertEqual(updated["brim_object_gap"], "0.15")
+        self.assertEqual(updated["xy_hole_compensation"], "0")
+        self.assertEqual(updated["machine_start_gcode"], "START_PRINT")
+
+    def test_mixed_unit_percentages_are_not_interpreted_as_distances(self):
+        source = json.dumps({
+            "line_width": "100%", "support_top_z_distance": "50%",
+            "sparse_infill_density": "15%",
+        }).encode()
+        schema = process_schema(source)
+        self.assertNotIn("line_width", schema)
+        self.assertNotIn("support_top_z_distance", schema)
+        self.assertEqual(schema["sparse_infill_density"]["current"], 15)
+        edited = json.loads(apply_process_overrides(source, {
+            "sparse_infill_density": 20,
+        }))
+        self.assertEqual(edited["sparse_infill_density"], "20%")
+
     def test_empty_overrides_leave_exact_original_bytes(self):
         source = self.sample()
         self.assertIs(apply_process_overrides(source, {}), source)
