@@ -177,3 +177,26 @@ test("slicer lazy-load failures display recovery UI instead of blanking MakerVau
   assert.match(boundary, /dynamically imported module/);
   assert.match(vite, /chunk-\[name\]-\[hash\]\.js/);
 });
+
+test("native process selector and reset are available above scoped print settings", () => {
+  const scene = read("SlicerPrepareWorkspace.jsx");
+  const workbench = read("SlicerWorkbench.jsx");
+  assert.match(scene, /Process profile/);
+  assert.match(scene, /id="slicer-process-quick-select"/);
+  assert.match(scene, /processProfiles\.map/);
+  assert.match(scene, /onSelectProcessProfile\?\./);
+  assert.match(scene, /onResetProcessSettings\?\./);
+  assert.match(workbench, /processProfiles=\{forKind\("process"\)\}/);
+  assert.match(workbench, /onSelectProcessProfile=\{id =>/);
+  assert.match(workbench, /Discard unsaved print settings/);
+});
+
+test("Basic and Advanced are defined by native profile schema rather than a frontend key list", () => {
+  const scene = read("SlicerPrepareWorkspace.jsx");
+  assert.match(scene, /spec\.level === "basic"/);
+  assert.match(scene, /spec\.section/);
+  assert.match(scene, /nativeSections\.map/);
+  assert.match(scene, /visibleNativeFields\.filter/);
+  assert.match(scene, /spec\.kind === "toggle"/);
+  assert.match(scene, /type="checkbox" aria-label=\{spec\.label\}/);
+});
