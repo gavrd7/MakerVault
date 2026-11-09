@@ -106,7 +106,12 @@ export default function SlicerPrepareWorkspace({
   const updateNativeChoice = (key, value) => {
     const spec = nativeProcessFields[key];
     if (!spec?.options?.some(option => option.value === value)) return;
-    onProcessOverridesChange?.(current => ({ ...current, [key]: value }));
+    onProcessOverridesChange?.(current => {
+      const next = { ...current };
+      if (value === String(spec.current)) delete next[key];
+      else next[key] = value;
+      return next;
+    });
   };
   const updateNativeField = (key, raw) => {
     const spec = nativeProcessFields[key];
@@ -115,7 +120,12 @@ export default function SlicerPrepareWorkspace({
     if (!spec || raw === "" || !Number.isFinite(value) ||
         value < spec.minimum || value > spec.maximum ||
         (spec.integer && !Number.isInteger(value))) return;
-    onProcessOverridesChange?.(current => ({ ...current, [key]: value }));
+    onProcessOverridesChange?.(current => {
+      const next = { ...current };
+      if (value === Number(spec.current)) delete next[key];
+      else next[key] = value;
+      return next;
+    });
   };
   const resetSettings = () => {
     onResetProcessSettings?.();
@@ -462,7 +472,12 @@ export default function SlicerPrepareWorkspace({
                       {settingsSearch.trim() && <small> · {spec.category}</small>}
                       {processOverrides[key] !== undefined && <small className="slicerSettingModified">Modified</small>}
                     </span>
-                    {spec.options ? (
+                    {spec.kind === "toggle" ? (
+                      <input type="checkbox" aria-label={spec.label}
+                        disabled={!canEdit || busy}
+                        checked={(processOverrides[key] ?? spec.current) === "1"}
+                        onChange={event => updateNativeChoice(key, event.target.checked ? "1" : "0")} />
+                    ) : spec.options ? (
                       <select aria-label={spec.label}
                         disabled={!canEdit || busy}
                         value={processOverrides[key] ?? spec.current}
