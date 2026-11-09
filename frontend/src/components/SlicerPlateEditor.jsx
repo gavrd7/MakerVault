@@ -11,6 +11,52 @@ const PALETTE = ["#58b5e4", "#f59e0b", "#a78bfa", "#10b981", "#ef4444", "#f472b6
 const MAX_OBJECTS = 12;
 const MAX_FILE_BYTES = 32 * 1024 * 1024;
 
+const PLATE_SURFACE = {
+  default: { base: "#263342", speckled: false, label: "Native default" },
+  cool: { base: "#37465a", speckled: false, label: "Smooth Cool Plate" },
+  engineering: { base: "#303c4d", speckled: false, label: "Engineering Plate" },
+  high_temp: { base: "#344451", speckled: false, label: "Smooth High Temp Plate" },
+  textured_pei: { base: "#2c3338", speckled: true, label: "Textured PEI Plate" },
+  textured_cool: { base: "#303f4b", speckled: true, label: "Textured Cool Plate" },
+  supertack: { base: "#3b3c45", speckled: false, label: "SuperTack Plate" },
+};
+
+function makeRepresentativePlateTexture(type) {
+  const surface = PLATE_SURFACE[type] || PLATE_SURFACE.default;
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 128;
+  const context = canvas.getContext("2d");
+  if (!context) return null;
+  context.fillStyle = surface.base;
+  context.fillRect(0, 0, 128, 128);
+  // Subtle, deterministic physical texture hint, not manufacturer artwork.
+  // Keep actual printer polygon and exclusion geometry from the native profile.
+  if (surface.speckled) {
+    for (let index = 0; index < 900; index++) {
+      const x = (index * 67 + 29) % 128;
+      const y = (index * 97 + 13 + Math.floor(index / 127)) % 128;
+      context.fillStyle = index % 3 === 0 ? "rgba(225,235,240,.12)" : "rgba(0,0,0,.12)";
+      context.fillRect(x, y, 1, 1);
+    }
+  } else {
+    const sheen = context.createLinearGradient(0, 0, 128, 128);
+    sheen.addColorStop(0, "rgba(255,255,255,.07)");
+    sheen.addColorStop(.5, "rgba(255,255,255,0)");
+    sheen.addColorStop(1, "rgba(0,0,0,.06)");
+    context.fillStyle = sheen;
+    context.fillRect(0, 0, 128, 128);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(1 / 35, 1 / 35);
+  texture.anisotropy = 4;
+  return texture;
+}
+
+
 function plateUuid() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
@@ -43,7 +89,7 @@ function pretty(value) {
 }
 
 export default function SlicerPlateEditor({
-  files = [], objects = [], onChange, onPrimaryChange, plate = null,
+  files = [], objects = [], onChange, onPrimaryChange, plate = null, plateType = "default",
   canEdit = false, onFilesUploaded, defaultColor = null, onManualColorChange, footer = null,
   selectedInstanceId = null, onSelectedInstanceChange, toolMode = "select",
   localAssets = [], onLocalAssetsChange, onExitToolMode,
@@ -354,9 +400,13 @@ export default function SlicerPlateEditor({
       else plateShape.lineTo(x, y);
     });
     plateShape.closePath();
+    const bedTexture = makeRepresentativePlateTexture(plateType);
     const bed = new THREE.Mesh(
       new THREE.ShapeGeometry(plateShape),
-      new THREE.MeshStandardMaterial({ color: "#263342", side: THREE.DoubleSide, roughness: 0.94 }),
+      new THREE.MeshStandardMaterial({
+        color: bedTexture ? "#ffffff" : (PLATE_SURFACE[plateType]?.base || "#263342"),
+        map: bedTexture, side: THREE.DoubleSide, roughness: 0.94,
+      }),
     );
     scene.add(bed);
     // Millimetre-accurate 10 mm minor / 50 mm major divisions. Clip grid
@@ -565,6 +615,7 @@ export default function SlicerPlateEditor({
         mesh.material.dispose();
       }
       bed.geometry.dispose();
+      bed.material.map?.dispose();
       bed.material.dispose();
       gridLines.forEach(line => {
         scene.remove(line);
@@ -582,7 +633,7 @@ export default function SlicerPlateEditor({
       renderer.dispose();
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
     };
-  }, [bedX, bedY, plate?.polygon_mm, plate?.bounds_mm]);
+  }, [bedX, bedY, plate?.polygon_mm, plate?.bounds_mm, plateType]);
 
   useEffect(() => {
     const state = sceneRef.current;
@@ -723,6 +774,7 @@ export default function SlicerPlateEditor({
     </div>
     <div ref={hostRef} className="slicerPlateCanvas" aria-label="Interactive three-dimensional model plate preview" />
 
+    <p className="slicerPlateHint"><strong>Selected surface:</strong> {PLATE_SURFACE[plateType]?.label || "Native default"} · Representative finish only; physical plate not detected.</p>
     <p className="slicerPlateHint"><strong>Build plate volume:</strong> {pretty(bedX)} × {pretty(bedY)} mm (X × Y). Drag in 0.5 mm steps or enter coordinates below.</p>
     {arrangeNotice && <p role="status" className="slicerPlateHint">{arrangeNotice}</p>}
     {extentWarnings.length > 0 && <div role="status" className="integrationError">
