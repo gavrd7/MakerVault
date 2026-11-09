@@ -164,3 +164,16 @@ test("native process options remain searchable and gated behind Basic/Advanced",
   assert.match(scene, /updateNativeChoice/);
   assert.match(scene, /processOverrides\[key\] \?\? spec\.current/);
 });
+
+test("slicer lazy-load failures display recovery UI instead of blanking MakerVault", () => {
+  const printing = read("PrintingPage.jsx");
+  const boundary = read("SlicerErrorBoundary.jsx");
+  const vite = read("../vite.config.js");
+  assert.match(printing, /<SlicerErrorBoundary onBack=/);
+  assert.match(printing, /<Suspense fallback=/);
+  assert.match(boundary, /getDerivedStateFromError/);
+  assert.match(boundary, /Reload MakerVault/);
+  assert.match(boundary, /Back to 3D Printing/);
+  assert.match(boundary, /dynamically imported module/);
+  assert.match(vite, /chunk-\[name\]-\[hash\]\.js/);
+});
