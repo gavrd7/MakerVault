@@ -3,7 +3,7 @@ import { apiFetch } from "../api";
 import { findSlicedRequirement } from "../utils/gcodeMapping";
 import { Modal } from "./Common";
 
-export default function PrinterStartGcodeModal({ printer, connection, canEdit, onConfigureMoonraker, onClose, onChanged, initialAsset = null, initialAction = "upload" }) {
+export default function PrinterStartGcodeModal({ printer, connection, canEdit, onConfigureMoonraker, onClose, onChanged, onSubmissionConfirmed, initialAsset = null, initialAction = "upload" }) {
   const [source, setSource] = useState("makervault");
   const [action, setAction] = useState(initialAction === "print" ? "print" : "upload");
   const [files, setFiles] = useState([]);
@@ -30,6 +30,14 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   const [mappingMode, setMappingMode] = useState("mapped");
 
 
+  // Do not treat a transport acknowledgement or uncertain CFS dispatch as
+  // proof that a print actually started. Only surface confirmed outcomes.
+  const isConfirmedSubmission = submission => {
+    if (submission?.status === "uploaded") return true;
+    if (submission?.status !== "started") return false;
+    const message = String(submission.message || "").toLowerCase();
+    return !(/awaiting .*verif|without acknowledgement|awaiting live job|commands dispatched|not acknowledge|unknown outcome|check the k2 display|verify on printer/.test(message));
+  };
   const base = "/api/printing/printers/" + printer.id + "/connections/" + connection.id + "/gcode";
   const cfs = capabilities?.cfs || null;
   const cfsSlicedAvailable = Boolean(capabilities?.can_start_sliced_mapping);
@@ -128,6 +136,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
             setError("");
             setNotice("Print start verified using the printer's live job status.");
             onChanged?.();
+            onSubmissionConfirmed?.(updated);
           }
         }
       } catch (_err) {
@@ -280,6 +289,9 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
         }
       }
       await onChanged?.();
+      if (isConfirmedSubmission(result.submission)) {
+        onSubmissionConfirmed?.(result.submission);
+      }
     } catch (err) { setError(err.message); setTransferStage("Submission failed or could not be verified."); }
     finally { window.clearInterval(statusTimer); setBusy(false); }
   }
