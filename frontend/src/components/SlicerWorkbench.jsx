@@ -350,9 +350,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   function loadSavedDraft(job) {
     if (!job) return;
     setShowDrafts(false);
-    if (job.status !== "draft") {
+    if (!["draft", "failed", "cancelled", "stale"].includes(job.status)) {
       setShowDrafts(true);
-      setNotice("This slicing job is " + job.status + ". Select a saved draft to edit, or review its output.");
+      setNotice("This slicing job is " + job.status + ". It cannot be edited while active or completed.");
       return;
     }
     const savedObjects = job.settings?.plate_objects || [];
@@ -376,7 +376,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       nozzle_mm: job.nozzle_mm,
       plate: job.plate || "default",
     }));
-    setNotice("Saved slicing draft loaded. Saving edits creates a new draft, preserving the original.");
+    setNotice(job.status === "draft"
+      ? "Saved slicing draft loaded. Saving edits creates a new draft, preserving the original."
+      : "Failed or interrupted job loaded for repair. Change profiles or settings, then create a new draft. The original is preserved.");
     window.requestAnimationFrame(() =>
       document.getElementById("slicer-plate-heading")?.scrollIntoView({ behavior: "smooth" })
     );
@@ -1086,7 +1088,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
     </>}
     {profileModal === "edit" && editingProfile && <Modal title={"Customise " + editingProfile.kind + " profile"} subtitle={editingProfile.engine + " · " + editingProfile.engine_version} onClose={() => setProfileModal("")} wide>
-      <p>The original native preset remains unchanged. This creates a new, unverified copy with supported settings; inherited profiles still need their parent presets before slicing.</p>
+      <p>The original native preset remains unchanged. This creates a self-contained custom copy with resolved inherited settings. The copy still needs testing against the engine and physical printer.</p>
       {editProfileError && <p role="alert" className="integrationError">{editProfileError}</p>}
       <form className="formGrid" onSubmit={saveCustomProfile}>
         <label className="full">Custom profile name
@@ -1111,6 +1113,14 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           <input type="number" min={spec.min} max={spec.max} step="any" value={editProfileValues[key] ?? ""}
             disabled={editProfileBusy} onChange={e => setEditProfileValues(current => ({ ...current, [key]: e.target.value }))} />
         </label>)}
+        {editingProfile.kind === "printer" && "retraction_distances_when_cut" in editProfileSchema &&
+          <p className="full slicerSettingHelp">
+            <strong>Retraction when cutting filament</strong> is separate from ordinary travel retraction.
+            It affects some filament-change and cutting workflows, including multi-material systems.
+            An official profile may contain a value accepted by its desktop slicer but rejected
+            by a particular CLI build. Only edit a custom copy after checking the printer's
+            requirements: reducing the value may affect CFS unloading and filament changes.
+          </p>}
         <div className="full settingsActions">
           <button type="button" disabled={editProfileBusy} onClick={() => setProfileModal("saved")}>Cancel</button>
           <button type="submit" className="primary" disabled={editProfileBusy || !Object.keys(editProfileSchema).length}>
@@ -1437,11 +1447,30 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               {job.status === "completed" ? "G-code saved privately; inspect before printing" :
                 job.status === "draft" ? "Configuration saved; not sliced" :
                 job.message || "Waiting for job update"}</small>
+            {job.status === "failed" && <details className="slicerSlicingHelp">
+              <summary>Understand this slicing failure and how to fix it</summary>
+              {/238|native-project-settings-invalid|out.of.range/i.test(job.message || "") ? <>
+                <p>OrcaSlicer rejected a native setting. Even official presets can contain values that the installed command-line engine does not accept.</p>
+                <p><strong>Next steps:</strong> Review the printer, filament and process profiles. Create a custom copy of the affected preset and change only the setting identified by the engine, if known. Normal nozzle retraction and <strong>retraction when cutting filament</strong> are separate controls. Do not guess a replacement value or change a manufacturer original.</p>
+              </> : /239|compatib|native machine identity/i.test(job.message || "") ? <>
+                <p>The native printer and process identities may not match. The exit code alone cannot establish the exact cause.</p>
+                <p><strong>Next steps:</strong> Select the matching official printer and process profiles, or a compatible self-contained custom printer profile with unchanged machine geometry and nozzle.</p>
+              </> : /parent|missing native/i.test(job.message || "") ? <>
+                <p>A profile may depend on a missing native parent. Re-import the official preset to restore its verified parent chain.</p>
+              </> : <>
+                <p>Check matching printer, filament and process engine versions. An unchanged STL can help separate a profile problem from project geometry. Review the isolated worker logs if this still fails.</p>
+              </>}
+              <button type="button" disabled={busy} onClick={() => loadSavedDraft(job)}>
+                Open setup to repair and retry
+              </button>
+            </details>}
             {(job.status === "queued" || job.status === "running") && <progress value={job.progress || 0} max="100" aria-label="Slicing progress" />}
           </div>
           <div className="cameraSourceActions">
-            {job.status === "draft" && <button type="button" disabled={busy}
-              onClick={() => loadSavedDraft(job)}>Edit draft</button>}
+            {["draft", "failed", "cancelled", "stale"].includes(job.status) &&
+              <button type="button" disabled={busy} onClick={() => loadSavedDraft(job)}>
+                {job.status === "draft" ? "Edit draft" : "Repair / retry setup"}
+              </button>}
             {mayDeleteDraft && ["draft", "failed", "cancelled", "stale"].includes(job.status) &&
               <button type="button" disabled={busy} onClick={() => deleteSavedDraft(job)}>
                 {job.status === "draft" ? "Delete draft" : "Delete"}
