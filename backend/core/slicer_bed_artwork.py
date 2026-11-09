@@ -34,6 +34,7 @@ SOURCES = {
     "crealityprint": ("CrealityOfficial/CrealityPrint", CREALITY_VENDORS),
     "bambustudio": ("bambulab/BambuStudio", ("BBL",)),
     "prusaslicer": ("prusa3d/PrusaSlicer", ("PrusaResearch",)),
+    "snapmakerorca": ("Snapmaker/OrcaSlicer", ("Snapmaker",)),
 }
 _VERSION = re.compile(r"^v?([0-9]+(?:\.[0-9]+){1,3})$")
 _BASENAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,119}$")
