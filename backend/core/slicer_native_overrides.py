@@ -8,7 +8,6 @@ This is not multi-material painting or a CFS/AMS tool-to-slot assignment.
 import json
 import re
 
-from .slicer_execution import SlicerExecutionError
 
 ORCA_PLATES = {
     "default": None,
@@ -30,14 +29,14 @@ def apply_orca_job_overrides(process_bytes, filament_bytes, plate_type, plate_ob
     physical printer state.
     """
     if plate_type not in ORCA_PLATES:
-        raise SlicerExecutionError("Unsupported Orca build plate type.")
+        raise ValueError("Unsupported Orca build plate type.")
     try:
         process = json.loads(process_bytes)
         filament = json.loads(filament_bytes)
     except (UnicodeDecodeError, ValueError, TypeError) as exc:
-        raise SlicerExecutionError("Invalid native process or filament profile.") from exc
+        raise ValueError("Invalid native process or filament profile.") from exc
     if not isinstance(process, dict) or not isinstance(filament, dict):
-        raise SlicerExecutionError("Native process and filament profiles must be objects.")
+        raise ValueError("Native process and filament profiles must be objects.")
 
     if ORCA_PLATES[plate_type] is not None:
         process["curr_bed_type"] = ORCA_PLATES[plate_type]
@@ -53,5 +52,5 @@ def apply_orca_job_overrides(process_bytes, filament_bytes, plate_type, plate_ob
     result_process = json.dumps(process, ensure_ascii=False, separators=(",", ":")).encode()
     result_filament = json.dumps(filament, ensure_ascii=False, separators=(",", ":")).encode()
     if max(len(result_process), len(result_filament)) > 1024 * 1024:
-        raise SlicerExecutionError("Slicing settings exceed the supported native profile size.")
+        raise ValueError("Slicing settings exceed the supported native profile size.")
     return result_process, result_filament
