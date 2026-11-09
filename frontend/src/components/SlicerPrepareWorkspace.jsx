@@ -36,7 +36,7 @@ const GROUPS = [["Quality", "quality"], ["Strength", "strength"], ["Speed", "spe
   ["Supports", "supports"], ["Multifilament", "multifilament"], ["Others", "others"]];
 
 export default function SlicerPrepareWorkspace({
-  objects, onChange, files, plate, onPrimaryChange, onFilesUploaded,
+  objects, onChange, files, plate, plateType = "default", onPrimaryChange, onFilesUploaded,
   defaultColor, onManualColorChange, canEdit, busy, error, notice,
   onChangeProfiles, onSaveDraft, onSlice, engine, printer,
   selectedProfiles, workerConfigured, printerId,
@@ -287,7 +287,7 @@ export default function SlicerPrepareWorkspace({
           onLocalAssetsChange={onLocalAssetsChange} objects={objects} onChange={updatePlate}
           onPrimaryChange={onPrimaryChange} onFilesUploaded={onFilesUploaded}
           onManualColorChange={onManualColorChange} defaultColor={defaultColor}
-          plate={plate} canEdit={canEdit && !busy} toolMode={toolMode} selectedInstanceId={selectedId}
+          plate={plate} plateType={plateType} canEdit={canEdit && !busy} toolMode={toolMode} selectedInstanceId={selectedId}
           onSelectedInstanceChange={setSelectedId} onExitToolMode={() => setToolMode("select")} />
       </div>
       <aside className="slicerPrepareSettings" aria-label="Process settings categories">
