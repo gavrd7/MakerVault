@@ -93,6 +93,26 @@ class ConfigurationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "SHA-256"):
             installer._resume_staged_bundle()
 
+    def test_update_retains_slicer_worker_compose_and_existing_private_config(self):
+        calls = []
+        before = self.env.read_bytes()
+        with patch.object(installer, "_run", side_effect=lambda args, **kwargs: calls.append(args)):
+            installer.update()
+        self.assertEqual(before, self.env.read_bytes())
+        self.assertTrue(any(cmd[-2:] == ["config", "--quiet"] for cmd in calls))
+        updater = next(cmd for cmd in calls if "up" in cmd)
+        self.assertEqual(updater[-4:], ["up", "-d", "--build", "makervault"])
+        self.assertIn("compose.slicer.staging.yaml", updater)
+        self.assertIn(".slicer-staging.env", updater)
+        self.assertNotIn("slicer-worker", updater[-4:])
+
+    def test_update_requires_private_slicer_config(self):
+        self.env.unlink()
+        with patch.object(installer, "_run") as run:
+            with self.assertRaisesRegex(ValueError, "No prepared"):
+                installer.update()
+        run.assert_not_called()
+
     def test_enable_and_disable_are_explicit_and_reversible(self):
         (self.root / "slicer-engine-assets").mkdir()
         calls = []
