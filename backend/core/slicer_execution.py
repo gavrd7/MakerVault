@@ -414,14 +414,22 @@ def process_queued_job(job_id):
         diagnostic = None
         if stage == "assembling the build plate 3MF" and isinstance(exc, SlicerProfileError):
             diagnostic = str(exc)[:180]
+        elif stage == "checking native printer/process compatibility" and isinstance(exc, SlicerExecutionError):
+            # All messages in this branch are fixed, server-authored
+            # compatibility guidance; no native preset contents are echoed.
+            diagnostic = str(exc)[:180]
         logger.exception("Slicing job %s failed during %s", job.pk, stage)
         with transaction.atomic():
             row = SliceJob.objects.select_for_update().filter(pk=job.pk).first()
             if row and row.status == "running":
                 row.status = "failed"
-                row.message = ("Build-plate preparation failed: " + diagnostic
-                               if diagnostic else "Slicing failed during " + stage +
-                               ". Check MakerVault application logs for this job.")[:240]
+                row.message = (
+                    ("Build-plate preparation failed: " + diagnostic)
+                    if diagnostic and stage == "assembling the build plate 3MF"
+                    else ("Native profile compatibility: " + diagnostic)
+                    if diagnostic else "Slicing failed during " + stage +
+                    ". Check MakerVault application logs for this job."
+                )[:240]
                 row.save(update_fields=["status", "message", "updated_at"])
         return {"status": "failed"}
 
