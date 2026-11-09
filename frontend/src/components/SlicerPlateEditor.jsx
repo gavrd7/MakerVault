@@ -136,7 +136,7 @@ export default function SlicerPlateEditor({
   latestOnChangeRef.current = onChange;
   latestToolModeRef.current = toolMode;
   const [localSelected, setLocalSelected] = useState("");
-  const [showNativeArtwork, setShowNativeArtwork] = useState(false);
+  const [showNativeArtwork, setShowNativeArtwork] = useState(true);
   const [nativeArtworkError, setNativeArtworkError] = useState("");
   const [showOrientationLabels, setShowOrientationLabels] = useState(false);
   const [showMachineLabel, setShowMachineLabel] = useState(false);
@@ -487,39 +487,55 @@ export default function SlicerPlateEditor({
       bedGeometry,
       new THREE.MeshStandardMaterial({
         color: bedTexture ? "#ffffff" : (PLATE_SURFACE[plateType]?.base || "#263342"),
-        map: bedTexture, side: THREE.DoubleSide, roughness: 0.94,
+        map: bedTexture, side: THREE.FrontSide, roughness: 0.97,
+        metalness: 0.0,
+        polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
       }),
     );
     scene.add(bed);
-    // Make the fallback an actual thin three-dimensional build plate, not
-    // a flat coloured reference grid. The geometry follows the full native
-    // polygon, including unusual bed shapes, rather than a fixed 220mm STL.
-    const plateDepth = Math.max(3, Math.min(6, Math.min(bedX, bedY) * 0.018));
+    // Separate the printable sheet (Z=0) from the *underlying* machine bed.
+    // The supporting chassis extends beyond the print surface and has a
+    // recessed top: no nearly-coplanar faces or interpenetrating rims.
+    const plateDepth = Math.max(5, Math.min(9, Math.min(bedX, bedY) * 0.028));
     const plateBodyGeometry = new THREE.ExtrudeGeometry(plateShape, {
-      depth: plateDepth - 0.5, bevelEnabled: true, bevelSegments: 2,
-      bevelSize: Math.min(0.55, plateDepth * 0.12),
-      bevelThickness: 0.25, curveSegments: 8,
+      depth: plateDepth - 2.5,
+      bevelEnabled: true, bevelSegments: 3,
+      bevelSize: 0.7, bevelThickness: 0.35, curveSegments: 8,
     });
-    const plateBody = new THREE.Mesh(plateBodyGeometry,
+    const plateBody = new THREE.Mesh(plateBodyGeometry, [
       new THREE.MeshStandardMaterial({
-        color: useMakerVaultBed ? "#253544" : "#212831",
-        metalness: 0.28, roughness: 0.68, side: THREE.DoubleSide,
-      }));
-    // Keep the extrusion's top slightly below the painted printable surface,
-    // avoiding depth fighting with the branded texture and native art.
-    plateBody.position.z = -plateDepth + 0.25;
-    plateBody.renderOrder = -1;
+        color: "#25313d", metalness: 0.18, roughness: 0.8,
+        side: THREE.FrontSide,
+      }),
+      new THREE.MeshStandardMaterial({
+        color: "#18212b", metalness: 0.24, roughness: 0.73,
+        side: THREE.FrontSide,
+      }),
+    ]);
+    plateBody.scale.set(1.035, 1.035, 1);
+    plateBody.position.z = -plateDepth;
+    plateBody.renderOrder = -2;
     scene.add(plateBody);
-    // A narrow illuminated edge strip gives the universal plate a visible
-    // physical thickness in isometric views without altering build geometry.
+
+    // Thin removable print sheet, narrower than its supporting chassis.
+    // Its upper face stops 0.6 mm below the textured printable surface.
     const rimGeometry = new THREE.ExtrudeGeometry(plateShape, {
-      depth: 0.9, bevelEnabled: false, curveSegments: 8,
+      depth: 1.15,
+      bevelEnabled: true,
+      bevelSegments: 2, bevelSize: 0.16, bevelThickness: 0.15,
+      curveSegments: 8,
     });
-    const plateRim = new THREE.Mesh(rimGeometry, new THREE.MeshStandardMaterial({
-      color: useMakerVaultBed ? "#33aacf" : "#62798a",
-      metalness: 0.38, roughness: 0.43, side: THREE.DoubleSide,
-    }));
-    plateRim.position.z = -1.5;
+    const plateRim = new THREE.Mesh(rimGeometry, [
+      new THREE.MeshStandardMaterial({
+        color: useMakerVaultBed ? "#3a5365" : "#424b52",
+        metalness: 0.3, roughness: 0.77,
+      }),
+      new THREE.MeshStandardMaterial({
+        color: useMakerVaultBed ? "#2b4555" : "#333a42",
+        metalness: 0.25, roughness: 0.74,
+      }),
+    ]);
+    plateRim.position.z = -2.1;
     plateRim.renderOrder = -1;
     scene.add(plateRim);
     let artworkTextureController = null;
@@ -882,9 +898,9 @@ export default function SlicerPlateEditor({
         nativeBedMesh.material.dispose();
       }
       plateRim.geometry.dispose();
-      plateRim.material.dispose();
+      plateRim.material.forEach(material => material.dispose());
       plateBody.geometry.dispose();
-      plateBody.material.dispose();
+      plateBody.material.forEach(material => material.dispose());
       bed.geometry.dispose();
       bed.material.map?.dispose();
       bed.material.dispose();
