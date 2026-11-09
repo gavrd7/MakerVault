@@ -226,3 +226,18 @@ test("selected model tool row wraps within its panel and never exceeds available
   assert.match(css, /max-width:100%/);
   assert.match(css, /overflow-wrap:anywhere/);
 });
+
+test("rotation and scale have separate safe resets without moving the object", () => {
+  const editor = read("SlicerPlateEditor.jsx");
+  const css = fs.readFileSync(path.resolve(root, "../styles.css"), "utf8");
+  assert.match(editor, /id="slicer-model-rotation"/);
+  assert.match(editor, /id="slicer-model-uniform-scale"/);
+  assert.match(editor, /Reset rotation to the model's imported orientation/);
+  assert.match(editor, /applySelectedTransform\(\{ rotation_deg: 0 \}/);
+  assert.match(editor, /Restore 100% scale for all three axes/);
+  assert.match(editor, /scale_percent: 100, scale_xyz_percent: \[100, 100, 100\]/);
+  assert.match(editor, /Resetting the rotation would overlap/);
+  assert.match(editor, /Resetting the scale would overlap/);
+  assert.match(css, /\.slicerTransformInputRow\{/);
+  assert.match(css, /\.slicerTransformInputRow>button\{/);
+});
