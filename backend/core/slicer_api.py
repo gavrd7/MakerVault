@@ -22,6 +22,7 @@ from .slicer_profile_edit import SETTINGS as EDITABLE_PROFILE_SETTINGS, customis
 from .slicer_profile_lineage import inspect_orca_lineage
 from .slicer_native_resolution import resolved_native_profile
 from .slicer_native_overrides import ORCA_PLATES
+from .slicer_process_settings import process_schema, validate_process_overrides
 from .slicer_mesh import inspect_stl, MeshInspectionError, MAX_INSPECTION_BYTES
 from .slicer_bed import inspect_orca_plate, inspect_creality_plate
 from .slicer_bed_artwork import (official_artwork_source, cached_official_artwork,
@@ -134,8 +135,9 @@ def _draft_plate_settings(user, input_asset, settings):
     """Persist preview-only plate geometry; never compile it into slicer flags."""
     if settings in ({}, None):
         return {}
-    if not isinstance(settings, dict) or set(settings) - {"plate_objects", "plate_label", "save_gcode_to_library", "workflow"}:
+    if not isinstance(settings, dict) or set(settings) - {"plate_objects", "plate_label", "save_gcode_to_library", "workflow", "process_overrides"}:
         raise ValueError("Unsupported slicer plate settings.")
+    process_overrides = validate_process_overrides(settings.get("process_overrides"))
     workflow = settings.get("workflow", "interactive")
     if not isinstance(workflow, str) or workflow not in {"setup", "quick", "interactive"}:
         raise ValueError("Unknown slicer workflow.")
@@ -148,7 +150,7 @@ def _draft_plate_settings(user, input_asset, settings):
         raise ValueError("Build plate label must be 1–64 printable characters.")
     label = label.strip()
     if "plate_objects" not in settings:
-        return {"plate_label": label, "save_gcode_to_library": save_to_library, "workflow": workflow}
+        return {"plate_label": label, "save_gcode_to_library": save_to_library, "workflow": workflow, "process_overrides": process_overrides}
     objects = settings["plate_objects"]
     if not isinstance(objects, list) or not 1 <= len(objects) <= 12:
         raise ValueError("The visual build plate supports one to twelve model instances.")
@@ -909,6 +911,24 @@ def delete_profile(request, profile_id):
         return _error("This profile is referenced by saved slicing jobs and cannot be removed.", 409)
     return JsonResponse({"removed": True, "profile_id": str(profile_id),
                          "source_file_preserved": True})
+
+
+@login_required
+@require_http_methods(["GET"])
+def profile_process_settings(request, profile_id):
+    """Read editable native process settings from the user's resolved preset."""
+    profile = SlicerProfile.objects.filter(
+        pk=profile_id, owner=request.user, engine="orcaslicer", kind="process"
+    ).select_related("file_asset").first()
+    if not profile:
+        return _error("Owned Orca process profile not found.", 404)
+    try:
+        resolved = resolved_native_profile(profile)
+        fields = process_schema(resolved)
+    except (SlicerProfileError, ValueError, OSError):
+        return _error("Native process settings could not be inspected.", 422)
+    return JsonResponse({"profile_id": str(profile.pk), "engine": profile.engine,
+                         "fields": fields, "scope": "global", "native_profile_unchanged": True})
 
 
 @login_required
