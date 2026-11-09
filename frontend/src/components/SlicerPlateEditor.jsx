@@ -545,7 +545,7 @@ export default function SlicerPlateEditor({
       controls.update();
       renderer.render(scene, camera);
     });
-    sceneRef.current = { scene, meshes, transform };
+    sceneRef.current = { scene, meshes, transform, camera, controls, bedX, bedY };
     return () => {
       disposed = true;
       sceneRef.current = null;
@@ -673,6 +673,38 @@ export default function SlicerPlateEditor({
     }
   }, [objects, selected, toolMode, canEdit]);
 
+  function setPlateCamera(view) {
+    const state = sceneRef.current;
+    if (!state) return;
+    const { camera, controls, meshes } = state;
+    const focus = new THREE.Vector3(0, 0, 0);
+    let span = Math.max(80, Math.hypot(bedX, bedY) * 1.35);
+    if (view === "selection") {
+      const target = meshes.get(selected || chosen?.instance_id);
+      if (target) {
+        const box = new THREE.Box3().setFromObject(target);
+        if (!box.isEmpty()) {
+          box.getCenter(focus);
+          const size = box.getSize(new THREE.Vector3());
+          span = Math.max(35, size.length() * 2.3);
+        }
+      }
+    }
+    controls.target.copy(focus);
+    camera.up.set(0, 0, 1);
+    if (view === "top") {
+      camera.position.copy(focus).add(new THREE.Vector3(0, -0.0001, span));
+    } else if (view === "front") {
+      camera.position.copy(focus).add(new THREE.Vector3(0, -span, span * 0.15));
+    } else if (view === "right") {
+      camera.position.copy(focus).add(new THREE.Vector3(span, 0, span * 0.15));
+    } else {
+      camera.position.copy(focus).add(new THREE.Vector3(span * 0.7, -span, span * 0.85));
+    }
+    camera.lookAt(focus);
+    controls.update();
+  }
+
   return <section className="panel printingSection slicerPlatePanel" aria-labelledby="slicer-plate-heading">
     <div className="slicerPlateHeading">
       <h3 id="slicer-plate-heading">Visual build plate</h3>
@@ -681,6 +713,14 @@ export default function SlicerPlateEditor({
     <p>Arrange models, change their size and position, and preview the build plate. Multiple models can be sliced together with an approved OrcaSlicer worker using one filament profile. Individual preview colours do not assign separate print materials.</p>
     <div className="slicerPlateWorkspace">
       <div className="slicerPlateCanvasColumn">
+    <div className="slicerPlateCameraToolbar" role="toolbar" aria-label="Build-plate camera views">
+      <button type="button" onClick={() => setPlateCamera("iso")} title="Isometric build-plate view">Isometric</button>
+      <button type="button" onClick={() => setPlateCamera("top")} title="Top-down build-plate view">Top</button>
+      <button type="button" onClick={() => setPlateCamera("front")} title="View the front of the printer build plate">Front</button>
+      <button type="button" onClick={() => setPlateCamera("right")} title="View the right side of the printer build plate">Right</button>
+      <button type="button" onClick={() => setPlateCamera("selection")} disabled={!chosen}
+        title="Centre and zoom onto the currently selected model">Fit selected model</button>
+    </div>
     <div ref={hostRef} className="slicerPlateCanvas" aria-label="Interactive three-dimensional model plate preview" />
 
     <p className="slicerPlateHint"><strong>Build plate volume:</strong> {pretty(bedX)} × {pretty(bedY)} mm (X × Y). Drag in 0.5 mm steps or enter coordinates below.</p>
