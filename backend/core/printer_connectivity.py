@@ -764,6 +764,8 @@ def _creality_state(payload: dict, *, ignore_error=False) -> str:
     # Resume remains available when the operator clears a build-plate warning.
     if filename and raw_state == 5:
         return "paused"
+    if filename and raw_state == 4:
+        return "cancelled"
     self_test = _finite_number(payload.get("withSelfTest"))
     if self_test is not None and 1 <= self_test <= 99:
         return "self-testing"
@@ -771,8 +773,6 @@ def _creality_state(payload: dict, *, ignore_error=False) -> str:
     if filename:
         if progress is not None and progress >= 100:
             return "complete"
-        if raw_state == 4:
-            return "cancelled"
         if raw_state == 1:
             return "printing"
         if raw_state == 0:
@@ -861,15 +861,19 @@ def normalise_creality_snapshot(payload: dict) -> dict:
 
     state = _creality_state(payload)
     activity_state = _creality_state(payload, ignore_error=True)
-    # Creality firmware may retain a previous errcode after the operator
-    # resumes a job. An explicit live printing state is stronger evidence
-    # of resumed activity than that latched warning. Preserve the warning
-    # so an actual unresolved alert is still inspectable.
-    if state == "error" and activity_state == "printing" and (
-        str(payload.get("printFileName") or "").strip()
-        and _finite_number(payload.get("state")) == 1
-    ):
-        state = "printing"
+    # K-series firmware may keep an old errcode latched after the user
+    # dismisses a warning. Trust *unambiguous* job telemetry over that
+    # historical error while retaining the raw warning for diagnostics.
+    # Do not let 100% alone override an explicit pause/cancel/failure state:
+    # those signals may remain after an interrupted print.
+    raw_state = _finite_number(payload.get("state"))
+    raw_state = int(raw_state) if raw_state is not None else None
+    filename_present = bool(str(payload.get("printFileName") or "").strip())
+    if state == "error" and filename_present:
+        if activity_state == "printing" and raw_state == 1:
+            state = "printing"
+        elif activity_state == "complete" and raw_state in (0, 1):
+            state = "complete"
     progress = _finite_number(
         payload.get("printProgress")
         if payload.get("printProgress") is not None
