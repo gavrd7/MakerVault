@@ -42,6 +42,7 @@ export default function SlicerPrepareWorkspace({
   onChangeProfiles, onSaveDraft, onSlice, engine, printer,
   selectedProfiles, workerConfigured, printerId,
   processOverrides = {}, onProcessOverridesChange, onSaveCustomProcessProfile,
+  processProfiles = [], onSelectProcessProfile, onResetProcessSettings,
   printerDetails, nozzleMm, selectedPlateType = "Native / profile default",
   localAssets = [], onLocalAssetsChange,
 }) {
@@ -116,6 +117,20 @@ export default function SlicerPrepareWorkspace({
         (spec.integer && !Number.isInteger(value))) return;
     onProcessOverridesChange?.(current => ({ ...current, [key]: value }));
   };
+  const resetSettings = () => {
+    onResetProcessSettings?.();
+    setNativeFieldDrafts({});
+    setShowCustomProfileSave(false);
+    setCustomProfileError("");
+  };
+  const visibleNativeFields = Object.entries(nativeProcessFields)
+    .filter(([key, spec]) =>
+      (settingsLevel === "advanced" || spec.level === "basic") &&
+      (settingsSearch.trim()
+        ? (key + " " + spec.label + " " + spec.category + " " + (spec.section || ""))
+          .toLowerCase().includes(settingsSearch.trim().toLowerCase())
+        : spec.category === group));
+  const nativeSections = [...new Set(visibleNativeFields.map(([, spec]) => spec.section || "Other"))];
   const [liveMaterials, setLiveMaterials] = useState([]);
   const [filamentPickerId, setFilamentPickerId] = useState("");
   const [filamentNotice, setFilamentNotice] = useState("");
@@ -377,6 +392,33 @@ export default function SlicerPrepareWorkspace({
       </div>
       <aside className="slicerPrepareSettings" aria-label="Process settings categories">
         <h4>Print settings</h4>
+        <div className="slicerProcessQuickSelect">
+          <label htmlFor="slicer-process-quick-select">Process profile</label>
+          <div className="slicerProcessQuickSelectRow">
+            <select id="slicer-process-quick-select"
+              value={selectedProfiles?.process_id || ""}
+              disabled={!canEdit || busy || savingCustomProfile || !processProfiles.length}
+              onChange={event => {
+                setNativeFieldDrafts({});
+                setShowCustomProfileSave(false);
+                onSelectProcessProfile?.(event.target.value);
+              }}>
+              {!processProfiles.some(profile => profile.id === selectedProfiles?.process_id) &&
+                <option value="">Choose a process profile</option>}
+              {processProfiles.map(profile => <option key={profile.id} value={profile.id}>
+                {profile.name}{profile.status === "candidate" ? " · Unverified" : ""}
+              </option>)}
+            </select>
+            <button type="button" disabled={!canEdit || busy ||
+              !Object.keys(processOverrides).length} onClick={resetSettings}
+              title="Discard this draft's changes and restore values from the selected process profile">
+              Reset
+            </button>
+          </div>
+          <small>{Object.keys(processOverrides).length
+            ? Object.keys(processOverrides).length + " unsaved setting change(s) from " + (selectedProfiles?.process || "selected profile")
+            : "Showing the selected native process preset without overrides."}</small>
+        </div>
         <div className="slicerPrepareScopes" role="group" aria-label="Setting scope">
           <button type="button" className={scope === "global" ? "selected" : ""}
             aria-pressed={scope === "global"} onClick={() => setScope("global")}>Global</button>
@@ -410,45 +452,42 @@ export default function SlicerPrepareWorkspace({
           <section aria-label={group + " native process controls"} className="slicerNativeSettingsFields">
             {nativeProcessLoading && <p role="status">Reading native process settings…</p>}
             {nativeProcessError && <p role="alert" className="integrationError">{nativeProcessError}</p>}
-            {Object.entries(nativeProcessFields)
-              .filter(([key, spec]) => (
-                (settingsSearch.trim()
-                  ? (key + " " + spec.label + " " + spec.category).toLowerCase().includes(settingsSearch.trim().toLowerCase())
-                  : spec.category === group) &&
-                (settingsLevel === "advanced" || ["layer_height", "initial_layer_print_height",
-                  "wall_loops", "top_shell_layers", "bottom_shell_layers", "sparse_infill_density",
-                  "sparse_infill_pattern", "outer_wall_speed", "inner_wall_speed", "travel_speed",
-                  "enable_support", "support_threshold_angle", "brim_width", "seam_position"].includes(key))
-              ))
-              .map(([key, spec]) => (
-                <label key={key} className="slicerNativeSettingField">
-                  <span>{spec.label} {spec.unit ? "(" + spec.unit + ")" : ""}
-                    {settingsSearch.trim() && <small> · {spec.category}</small>}
-                  </span>
-                  {spec.options ? (
-                    <select aria-label={spec.label}
-                      disabled={!canEdit || busy}
-                      value={processOverrides[key] ?? spec.current}
-                      onChange={event => updateNativeChoice(key, event.target.value)}>
-                      {spec.options.map(option =>
-                        <option key={option.value} value={option.value}>{option.label}</option>)}
-                    </select>
-                  ) : (
-                    <input type="number" min={spec.minimum} max={spec.maximum}
-                      step={spec.integer ? 1 : 0.01}
-                      disabled={!canEdit || busy}
-                      value={nativeFieldDrafts[key] ?? processOverrides[key] ?? spec.current}
-                      onChange={event => updateNativeField(key, event.target.value)}
-                      onBlur={() => setNativeFieldDrafts(current => {
-                        const next = { ...current };
-                        delete next[key];
-                        return next;
-                      })}
-                      aria-label={spec.label} />
-                  )}
-                </label>
-              ))}
-            {Object.entries(nativeProcessFields).filter(([, spec]) => spec.category === group).length === 0 &&
+            {nativeSections.map(section => (
+              <div key={section} className="slicerNativeSettingSection">
+                <h5>{section}</h5>
+                {visibleNativeFields.filter(([, spec]) => (spec.section || "Other") === section)
+                  .map(([key, spec]) => (
+                  <label key={key} className="slicerNativeSettingField">
+                    <span>{spec.label} {spec.unit ? "(" + spec.unit + ")" : ""}
+                      {settingsSearch.trim() && <small> · {spec.category}</small>}
+                      {processOverrides[key] !== undefined && <small className="slicerSettingModified">Modified</small>}
+                    </span>
+                    {spec.options ? (
+                      <select aria-label={spec.label}
+                        disabled={!canEdit || busy}
+                        value={processOverrides[key] ?? spec.current}
+                        onChange={event => updateNativeChoice(key, event.target.value)}>
+                        {spec.options.map(option =>
+                          <option key={option.value} value={option.value}>{option.label}</option>)}
+                      </select>
+                    ) : (
+                      <input type="number" min={spec.minimum} max={spec.maximum}
+                        step={spec.integer ? 1 : 0.01}
+                        disabled={!canEdit || busy}
+                        value={nativeFieldDrafts[key] ?? processOverrides[key] ?? spec.current}
+                        onChange={event => updateNativeField(key, event.target.value)}
+                        onBlur={() => setNativeFieldDrafts(current => {
+                          const next = { ...current };
+                          delete next[key];
+                          return next;
+                        })}
+                        aria-label={spec.label} />
+                    )}
+                  </label>
+                ))}
+              </div>
+            ))}
+            {visibleNativeFields.length === 0 &&
               !nativeProcessLoading && !nativeProcessError && <p>
                 {group === "Multifilament"
                   ? "Multicolour tool mappings and flushing volumes require engine-native multi-material support."
@@ -464,7 +503,7 @@ export default function SlicerPrepareWorkspace({
                     setShowCustomProfileSave(true);
                   }}>Save as custom profile</button>
                 <button type="button" disabled={!canEdit || busy || savingCustomProfile}
-                  onClick={() => { onProcessOverridesChange?.({}); setNativeFieldDrafts({}); setShowCustomProfileSave(false); }}>
+                  onClick={resetSettings}>
                   Restore profile defaults
                 </button>
               </div>
