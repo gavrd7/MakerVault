@@ -108,6 +108,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [printSelection, setPrintSelection] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
   const [plateObjects, setPlateObjects] = useState([]);
+  const [plateLabel, setPlateLabel] = useState("Plate 1");
   // Keep temporary STL filenames and preview URLs when switching between
   // the setup plate and the interactive editor.
   const [plateLocalAssets, setPlateLocalAssets] = useState([]);
@@ -358,6 +359,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     manuallyColouredModels.current = new Set(savedObjects.map(item => item.instance_id));
     manuallyChosenProfiles.current = new Set(["printer", "filament", "process"]);
     setPlateObjects(savedObjects);
+    setPlateLabel(job.settings?.plate_label || "Plate 1");
     setEditorOpen(true);
     setForm(current => ({
       ...current,
@@ -546,6 +548,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           input_asset_id: plateObjects[0].asset_id,
           spool_id: form.spool_id || null,
           settings: { ...(plateObjects.length ? { plate_objects: plateObjects } : {}),
+            plate_label: plateLabel.trim() || "Plate 1",
             save_gcode_to_library: saveOutput, workflow },
         },
       });
@@ -890,6 +893,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     </section>
 
     {editorOpen ? <SlicerPrepareWorkspace
+      plateLabel={plateLabel} onPlateLabelChange={setPlateLabel}
       objects={plateObjects} onChange={setPlateObjects} files={stlFiles}
       localAssets={plateLocalAssets} onLocalAssetsChange={setPlateLocalAssets}
       onPrimaryChange={id => update("input_asset_id", String(id))}
@@ -1039,6 +1043,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
 
     <SlicerPlateEditor plateType={form.plate}
+      plateLabel={plateLabel} onPlateLabelChange={setPlateLabel}
       files={stlFiles}
       localAssets={plateLocalAssets} onLocalAssetsChange={setPlateLocalAssets}
       objects={plateObjects}
