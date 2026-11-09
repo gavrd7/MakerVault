@@ -1212,14 +1212,37 @@ export default function SlicerPlateEditor({
         <input type="number" min={-10000} max={10000} step="0.5" value={chosen?.y_mm ?? 0}
           disabled={!canEdit} onChange={event => patch("y_mm", pretty(event.target.value))} />
       </label>
-      <label>Rotation around Z (degrees)
-        <input data-slicer-field="rotation_deg" type="number" min={-360} max={360} step="5" value={chosen?.rotation_deg ?? 0}
-          disabled={!canEdit} onChange={event => patch("rotation_deg", pretty(event.target.value))} />
-      </label>
-      <label>Uniform scale (%)
-        <input data-slicer-field="scale_percent" type="number" min={5} max={400} step="5" value={chosen?.scale_percent ?? 100}
-          disabled={!canEdit} onChange={event => patch("scale_percent", pretty(event.target.value))} />
-      </label>
+      <div className="slicerTransformFieldWithReset">
+        <label htmlFor="slicer-model-rotation">Rotation around Z (degrees)</label>
+        <div className="slicerTransformInputRow">
+          <input id="slicer-model-rotation" data-slicer-field="rotation_deg" type="number"
+            min={-360} max={360} step="5" value={chosen?.rotation_deg ?? 0}
+            disabled={!canEdit} onChange={event => patch("rotation_deg", pretty(event.target.value))} />
+          <button type="button" title="Reset rotation to the model's imported orientation"
+            disabled={!canEdit || !chosen || Number(chosen.rotation_deg || 0) === 0}
+            onClick={() => applySelectedTransform({ rotation_deg: 0 },
+              "Resetting the rotation would overlap another model or leave the build plate.")}>
+            Reset
+          </button>
+        </div>
+      </div>
+      <div className="slicerTransformFieldWithReset">
+        <label htmlFor="slicer-model-uniform-scale">Uniform scale (%)</label>
+        <div className="slicerTransformInputRow">
+          <input id="slicer-model-uniform-scale" data-slicer-field="scale_percent" type="number"
+            min={5} max={400} step="5" value={chosen?.scale_percent ?? 100}
+            disabled={!canEdit} onChange={event => patch("scale_percent", pretty(event.target.value))} />
+          <button type="button" title="Restore 100% scale for all three axes"
+            disabled={!canEdit || !chosen ||
+              (Number(chosen.scale_percent ?? 100) === 100 &&
+               (chosen.scale_xyz_percent || [100, 100, 100]).every(axis => Number(axis) === 100))}
+            onClick={() => applySelectedTransform({
+              scale_percent: 100, scale_xyz_percent: [100, 100, 100],
+            }, "Resetting the scale would overlap another model or leave the build plate.")}>
+            Reset
+          </button>
+        </div>
+      </div>
       <fieldset className="slicerAxisScaling full">
         <legend>Independent axis scaling (%)</legend>
         {["X", "Y", "Z"].map((axis, index) => <label key={axis}>
