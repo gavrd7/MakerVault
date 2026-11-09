@@ -78,3 +78,15 @@ test("fallback 3D plate includes authentic bundled MakerVault logo without a bro
   assert.ok(logo.includes("<svg"));
   assert.ok(logo.includes("data:image/png;base64,"));
 });
+
+
+test("official art is default and the print sheet sits over a separate wider machine bed", () => {
+  const editor = fs.readFileSync(new URL("../src/components/SlicerPlateEditor.jsx", import.meta.url), "utf8");
+  assert.match(editor, /useState\(true\)/);
+  assert.match(editor, /const artworkPath = showNativeArtwork/);
+  assert.match(editor, /plateBody\.scale\.set\(1\.035, 1\.035, 1\)/);
+  assert.match(editor, /plateRim\.position\.z = -2\.1/);
+  assert.match(editor, /plateBody\.position\.z = -plateDepth/);
+  assert.match(editor, /polygonOffset: true/);
+  assert.match(editor, /plateBody\.material\.forEach\(material => material\.dispose\(\)\)/);
+});
