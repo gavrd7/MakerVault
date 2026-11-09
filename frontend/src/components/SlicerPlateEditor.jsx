@@ -113,6 +113,10 @@ export default function SlicerPlateEditor({
   latestToolModeRef.current = toolMode;
   const [localSelected, setLocalSelected] = useState("");
   const [showNativeArtwork, setShowNativeArtwork] = useState(true);
+  const [showOrientationLabels, setShowOrientationLabels] = useState(true);
+  const [showMachineLabel, setShowMachineLabel] = useState(true);
+  const [showDimensionsLabel, setShowDimensionsLabel] = useState(true);
+  const [showAxisLabels, setShowAxisLabels] = useState(true);
   const selected = selectedInstanceId === null ? localSelected : selectedInstanceId;
   const setSelected = next => {
     if (selectedInstanceId === null) setLocalSelected(next);
@@ -415,7 +419,11 @@ export default function SlicerPlateEditor({
       else plateShape.lineTo(x, y);
     });
     plateShape.closePath();
-    const bedTexture = makeRepresentativePlateTexture(plateType);
+    const artworkPath = showNativeArtwork ? nativeBedArtwork(printerLabel, bedX, bedY) : null;
+    const useMakerVaultBed = !artworkPath;
+    const bedTexture = useMakerVaultBed
+      ? makeMakerVaultPlateTexture(plateType, bedX, bedY)
+      : makeRepresentativePlateTexture(plateType);
     const bed = new THREE.Mesh(
       new THREE.ShapeGeometry(plateShape),
       new THREE.MeshStandardMaterial({
@@ -424,7 +432,22 @@ export default function SlicerPlateEditor({
       }),
     );
     scene.add(bed);
-    const artworkPath = showNativeArtwork ? nativeBedArtwork(printerLabel, bedX, bedY) : null;
+    // Make the fallback an actual thin three-dimensional build plate, not
+    // a flat coloured reference grid. The geometry follows the full native
+    // polygon, including unusual bed shapes, rather than a fixed 220mm STL.
+    const plateBodyGeometry = new THREE.ExtrudeGeometry(plateShape, {
+      depth: Math.max(2, Math.min(5, Math.min(bedX, bedY) * 0.012)),
+      bevelEnabled: false, curveSegments: 8,
+    });
+    const plateBody = new THREE.Mesh(plateBodyGeometry,
+      new THREE.MeshStandardMaterial({
+        color: useMakerVaultBed ? "#253544" : "#212831",
+        metalness: 0.28, roughness: 0.68, side: THREE.DoubleSide,
+      }));
+    const plateDepth = Math.max(2, Math.min(5, Math.min(bedX, bedY) * 0.012));
+    plateBody.position.z = -plateDepth;
+    plateBody.renderOrder = -1;
+    scene.add(plateBody);
     let bedArtwork = null;
     if (artworkPath) {
       // ShapeGeometry uses world XY as UV; remap to 0..1 for the actual bed.
@@ -519,15 +542,19 @@ export default function SlicerPlateEditor({
       scene.add(mesh); markings.push(mesh);
     };
     // Negative Y is front in the same coordinate system used by the camera.
-    makeLabel("FRONT · −Y", 0, -bedY / 2 + 8, Math.min(bedX * 0.28, 64));
-    makeLabel("REAR · +Y", 0, bedY / 2 - 8, Math.min(bedX * 0.28, 64));
-    makeLabel("X →", bedX / 2 - 19, -bedY / 2 + 16, 28);
-    makeLabel("Y ↑", -bedX / 2 + 18, bedY / 2 - 17, 28);
+    if (showOrientationLabels) {
+      makeLabel("FRONT · −Y", 0, -bedY / 2 + 8, Math.min(bedX * 0.28, 64));
+      makeLabel("REAR · +Y", 0, bedY / 2 - 8, Math.min(bedX * 0.28, 64));
+    }
+    if (showAxisLabels) {
+      makeLabel("X →", bedX / 2 - 19, -bedY / 2 + 16, 28);
+      makeLabel("Y ↑", -bedX / 2 + 18, bedY / 2 - 17, 28);
+    }
     // Label the native printer identity, not a guessed manufacturer logo.
     // A generic bed remains visibly distinct without impersonating OEM art.
     const machineName = String(printerLabel || "").trim().slice(0, 38);
-    if (machineName) makeLabel(machineName, 0, bedY / 2 - 21, Math.min(bedX * 0.58, 125));
-    makeLabel(pretty(bedX) + " × " + pretty(bedY) + " mm", 0, -bedY / 2 + 23,
+    if (showMachineLabel && machineName) makeLabel(machineName, 0, bedY / 2 - 21, Math.min(bedX * 0.58, 125));
+    if (showDimensionsLabel) makeLabel(pretty(bedX) + " × " + pretty(bedY) + " mm", 0, -bedY / 2 + 23,
       Math.min(bedX * 0.35, 82));
 
     const camera = new THREE.PerspectiveCamera(45, 1, 0.5, 20000);
@@ -699,6 +726,8 @@ export default function SlicerPlateEditor({
         mesh.geometry.dispose();
         mesh.material.dispose();
       }
+      plateBody.geometry.dispose();
+      plateBody.material.dispose();
       bed.geometry.dispose();
       bed.material.map?.dispose();
       bed.material.dispose();
@@ -724,7 +753,8 @@ export default function SlicerPlateEditor({
       renderer.dispose();
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
     };
-  }, [bedX, bedY, plate?.polygon_mm, plate?.bounds_mm, plateType, printerLabel, showNativeArtwork]);
+  }, [bedX, bedY, plate?.polygon_mm, plate?.bounds_mm, plateType, printerLabel,
+    showNativeArtwork, showOrientationLabels, showMachineLabel, showDimensionsLabel, showAxisLabels]);
 
   useEffect(() => {
     const state = sceneRef.current;
@@ -882,12 +912,40 @@ export default function SlicerPlateEditor({
     </div>
     <div ref={hostRef} className="slicerPlateCanvas" aria-label="Interactive three-dimensional model plate preview with a clickable six-face orientation cube in the top right" />
 
-    {nativeBedArtwork(printerLabel, bedX, bedY) && <label className="slicerPlateArtToggle">
-      <input type="checkbox" checked={showNativeArtwork}
-        onChange={event => setShowNativeArtwork(event.target.checked)} />
-      <span>Show native printer build-plate markings</span>
-    </label>}
-    <p className="slicerPlateHint"><strong>Selected surface:</strong> {PLATE_SURFACE[plateType]?.label || "Native default"} · Physical plate not detected. {showNativeArtwork && nativeBedArtwork(printerLabel, bedX, bedY) &&
+    <fieldset className="slicerPlateDisplayOptions">
+      <legend>Build plate display</legend>
+      <div className="slicerPlateDisplayOptionsRow">
+        {nativeBedArtwork(printerLabel, bedX, bedY) && <label>
+          <input type="checkbox" checked={showNativeArtwork}
+            onChange={event => setShowNativeArtwork(event.target.checked)} />
+          <span>Official bed artwork</span>
+        </label>}
+        <label><input type="checkbox" checked={showOrientationLabels}
+          onChange={event => setShowOrientationLabels(event.target.checked)} />
+          <span>Front / rear</span></label>
+        <label><input type="checkbox" checked={showMachineLabel}
+          onChange={event => setShowMachineLabel(event.target.checked)} />
+          <span>Printer name</span></label>
+        <label><input type="checkbox" checked={showDimensionsLabel}
+          onChange={event => setShowDimensionsLabel(event.target.checked)} />
+          <span>Dimensions</span></label>
+        <label><input type="checkbox" checked={showAxisLabels}
+          onChange={event => setShowAxisLabels(event.target.checked)} />
+          <span>X / Y axes</span></label>
+        <button type="button" onClick={() => {
+          const anyVisible = showOrientationLabels || showMachineLabel ||
+            showDimensionsLabel || showAxisLabels;
+          setShowOrientationLabels(!anyVisible);
+          setShowMachineLabel(!anyVisible);
+          setShowDimensionsLabel(!anyVisible);
+          setShowAxisLabels(!anyVisible);
+        }}>
+          {showOrientationLabels || showMachineLabel || showDimensionsLabel || showAxisLabels
+            ? "Hide all labels" : "Show all labels"}
+        </button>
+      </div>
+    </fieldset>
+    <p className="slicerPlateHint"><strong>Selected surface:</strong> {PLATE_SURFACE[plateType]?.label || "Native default"} · Physical plate not detected. {!showNativeArtwork || !nativeBedArtwork(printerLabel, bedX, bedY) ? "MakerVault 3D build plate." : ""} {showNativeArtwork && nativeBedArtwork(printerLabel, bedX, bedY) &&
       <small>Native artwork: OrcaSlicer v2.4.2 (AGPL-3.0)</small>}</p>
     <p className="slicerPlateHint"><strong>Build plate volume:</strong> {pretty(bedX)} × {pretty(bedY)} mm (X × Y). Drag in 0.5 mm steps or enter coordinates below.</p>
     {arrangeNotice && <p role="status" className="slicerPlateHint">{arrangeNotice}</p>}
