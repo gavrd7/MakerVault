@@ -91,7 +91,7 @@ def _official_machine_model(source, ref, vendor, model):
         row["sub_path"] for row in records
         if isinstance(row, dict) and row.get("name") == model
         and isinstance(row.get("sub_path"), str)
-        and re.fullmatch(r"machine/[A-Za-z0-9_. -]+\\.json", row["sub_path"])
+        and re.fullmatch(r"machine/[A-Za-z0-9_. -]+\.json", row["sub_path"])
     ]
     if len(matches) != 1:
         return None
