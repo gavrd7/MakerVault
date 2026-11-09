@@ -10,7 +10,7 @@ import ProjectsPage from "./components/ProjectsPage";
 import FilesPage from "./components/FilesPage";
 import AboutPage from "./components/AboutPage";
 import SettingsPage from "./components/SettingsPage";
-import PrintingPage from "./components/PrintingPage";
+import PrintingPage, { preloadSlicerWorkbench } from "./components/PrintingPage";
 import GlobalSearch from "./components/GlobalSearch";
 import SearchPage from "./components/SearchPage";
 import MakerTagsPage from "./components/MakerTagsPage";
@@ -116,6 +116,16 @@ export default function App() {
     const timer = window.setInterval(checkSlicer, 60000);
     return () => { active = false; window.clearInterval(timer); };
   }, []);
+
+  useEffect(() => {
+    if (!["ready", "preview"].includes(slicerStatus.state)) return;
+    // Prefetch the lazy slicer once availability is known, avoiding a cold
+    // module request on the user's first sidebar navigation.
+    void preloadSlicerWorkbench().catch(() => {
+      // Lazy import still has a dedicated error boundary if staging assets
+      // change after this prefetch.
+    });
+  }, [slicerStatus.state]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
