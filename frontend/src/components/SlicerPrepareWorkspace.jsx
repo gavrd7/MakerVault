@@ -36,7 +36,8 @@ const GROUPS = [["Quality", "quality"], ["Strength", "strength"], ["Speed", "spe
   ["Supports", "supports"], ["Multifilament", "multifilament"], ["Others", "others"]];
 
 export default function SlicerPrepareWorkspace({
-  objects, onChange, files, plate, plateType = "default", onPrimaryChange, onFilesUploaded,
+  objects, onChange, files, plate, plateType = "default", plateLabel = "Plate 1",
+  onPlateLabelChange, onPrimaryChange, onFilesUploaded,
   defaultColor, onManualColorChange, canEdit, busy, error, notice,
   onChangeProfiles, onSaveDraft, onSlice, engine, printer,
   selectedProfiles, workerConfigured, printerId,
@@ -247,7 +248,7 @@ export default function SlicerPrepareWorkspace({
           <button type="button" onClick={onChangeProfiles}>Change printer/profile</button>
         </section>
         <aside className="slicerPrepareTree" aria-label="Build plate object tree">
-        <h4>Plate 1 · Models ({objects.length})</h4>
+        <h4>{plateLabel || "Plate 1"} · Models ({objects.length})</h4>
         {objects.length === 0 && <p>Add an STL to start editing.</p>}
         {objects.map((object, index) => <div className="slicerPrepareModelEntry" key={object.instance_id}>
           <button type="button"
@@ -287,7 +288,8 @@ export default function SlicerPrepareWorkspace({
           onLocalAssetsChange={onLocalAssetsChange} objects={objects} onChange={updatePlate}
           onPrimaryChange={onPrimaryChange} onFilesUploaded={onFilesUploaded}
           onManualColorChange={onManualColorChange} defaultColor={defaultColor}
-          plate={plate} plateType={plateType} canEdit={canEdit && !busy} toolMode={toolMode} selectedInstanceId={selectedId}
+          plate={plate} plateType={plateType} plateLabel={plateLabel}
+          onPlateLabelChange={onPlateLabelChange} canEdit={canEdit && !busy} toolMode={toolMode} selectedInstanceId={selectedId}
           onSelectedInstanceChange={setSelectedId} onExitToolMode={() => setToolMode("select")} />
       </div>
       <aside className="slicerPrepareSettings" aria-label="Process settings categories">
