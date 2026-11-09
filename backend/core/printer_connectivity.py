@@ -527,13 +527,14 @@ def poll_moonraker(endpoint_url: str, config: dict | None = None) -> dict:
 
     server = _get(base + "/server/info", headers=headers)
     objects = _get(
-        base + "/printer/objects/query?print_stats&display_status&virtual_sdcard&extruder&heater_bed&heaters&toolhead",
+        base + "/printer/objects/query?print_stats&pause_resume&display_status&virtual_sdcard&extruder&heater_bed&heaters&toolhead",
         headers=headers,
     )
     result = objects.get("result") or {}
     status = result.get("status") or {}
     print_stats = status.get("print_stats") or {}
     print_info = print_stats.get("info") or {}
+    pause_resume = status.get("pause_resume") or {}
     display = status.get("display_status") or {}
     virtual_sd = status.get("virtual_sdcard") or {}
     extruder = status.get("extruder") or {}
@@ -579,6 +580,14 @@ def poll_moonraker(endpoint_url: str, config: dict | None = None) -> dict:
         "error": "error",
     }
     normalised_state = state_map.get(state, state)
+    # Klipper can signal a paused macro through pause_resume while print_stats
+    # still reflects the last reported 'printing' status. Trust the explicit
+    # flag only for a currently identified, nonterminal print.
+    if (normalised_state in {"printing", "paused"}
+            and print_stats.get("filename")
+            and isinstance(pause_resume, dict)
+            and pause_resume.get("is_paused") is True):
+        normalised_state = "paused"
     progress = _number(virtual_sd.get("progress"))
     if progress is None:
         progress = _number(display.get("progress"))
