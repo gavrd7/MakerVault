@@ -82,7 +82,7 @@ def _engine_exit_reason(stderr):
 
 # Orca emits a bounded set of option identifiers after its CLI settings
 # validation heading. Never log values, arbitrary strings, paths or secrets.
-_CONFIG_LINE = re.compile(r"^\\s*([a-z][a-z0-9_]{1,63})\\s*:\\s*\\S", re.I)
+_CONFIG_LINE = re.compile(r"^\s*([a-z][a-z0-9_]{1,63})\s*:\s*\S", re.I)
 _SENSITIVE_WORDS = ("secret", "password", "token", "apikey", "api_key",
                     "authorization", "credential", "private", "access_key")
 
