@@ -53,6 +53,18 @@ const profileFilterValues = (items, key) =>
   [...new Set(items.map(item => profileFacets(item)[key]))]
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
+const ORCA_PLATE_TYPES = [
+  ["default", "Native / profile default"],
+  ["cool", "Smooth Cool Plate"],
+  ["engineering", "Engineering Plate"],
+  ["high_temp", "Smooth High Temp Plate"],
+  ["textured_pei", "Textured PEI Plate"],
+  ["textured_cool", "Textured Cool Plate"],
+  ["supertack", "SuperTack Plate"],
+];
+const plateOptions = engine => engine === "orcaslicer"
+  ? ORCA_PLATE_TYPES : ORCA_PLATE_TYPES.slice(0, 1);
+
 const initialForm = {
   engine: "orcaslicer", engine_version: "", input_asset_id: "", printer_id: "",
   spool_id: "", printer_preset: "", filament_preset: "", process_preset: "",
@@ -359,6 +371,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       filament_profile_id: job.filament_profile_id || "",
       process_profile_id: job.process_profile_id || "",
       nozzle_mm: job.nozzle_mm,
+      plate: job.plate || "default",
     }));
     setNotice("Saved slicing draft loaded. Saving edits creates a new draft, preserving the original.");
     window.requestAnimationFrame(() =>
@@ -892,6 +905,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       selectedProfiles={{ printer: form.printer_preset, process: form.process_preset, filament: form.filament_preset,
         printer_id: form.printer_profile_id, process_id: form.process_profile_id, filament_id: form.filament_profile_id }}
       onChangeProfiles={() => setProfileModal("change")}
+      selectedPlateType={plateOptions(form.engine).find(([id]) => id === form.plate)?.[1] || "Native / profile default"}
       workerConfigured={workerConfigured && engines.some(engine => engine.key === form.engine && engine.available)}
       onBackToSetup={() => setEditorOpen(false)} onSaveDraft={() => saveDraft("draft")}
       onSlice={() => saveDraft("slice")}
@@ -953,7 +967,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         </div>
         <label>Build plate
           <select disabled={!canPrepare || busy} value={form.plate} onChange={e => update("plate", e.target.value)}>
-            <option value="default">Stock / default plate</option>
+            {plateOptions(form.engine).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
           </select>
         </label>
       {["orcaslicer", "crealityprint"].includes(form.engine) && nativePlate?.id === form.printer_profile_id &&
@@ -1115,6 +1129,13 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             value={form.nozzle_mm} disabled={!canPrepare || busy}
             onChange={e => update("nozzle_mm", e.target.value)} />
         </label>
+        <label>Build plate type
+          <select value={form.plate} disabled={!canPrepare || busy}
+            onChange={e => update("plate", e.target.value)}>
+            {plateOptions(form.engine).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+          </select>
+        </label>
+        <p className="full slicerChangePrinterHint">The plate type selects the matching native filament bed-temperature settings when slicing. It does not detect or change the physical build plate.</p>
         <p className="full slicerChangePrinterHint">Changing the printer resets the session's native printer, process and filament profiles to prevent incompatible selections. Select matching presets below before saving or slicing.</p>
         {["printer", "filament", "process"].map(kind => <label key={kind}>
           {kind.charAt(0).toUpperCase() + kind.slice(1)} profile
