@@ -32,8 +32,8 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
 
   // Do not treat a transport acknowledgement or uncertain CFS dispatch as
   // proof that a print actually started. Only surface confirmed outcomes.
-  const isConfirmedSubmission = submission => {
-    if (submission?.status === "uploaded") return true;
+  const isConfirmedSubmission = (submission, submittedAction) => {
+    if (submittedAction === "upload") return submission?.status === "uploaded";
     if (submission?.status !== "started") return false;
     const message = String(submission.message || "").toLowerCase();
     return !(/awaiting .*verif|without acknowledgement|awaiting live job|commands dispatched|not acknowledge|unknown outcome|check the k2 display|verify on printer/.test(message));
@@ -291,7 +291,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
       // A temporary UI refresh failure must not turn a confirmed submission
       // into an apparent printer error or tempt a second submission.
       try { await onChanged?.(); } catch (_refreshError) { /* Submission receipt is authoritative. */ }
-      if (isConfirmedSubmission(result.submission)) {
+      if (isConfirmedSubmission(result.submission, operation)) {
         onSubmissionConfirmed?.(result.submission);
       }
     } catch (err) { setError(err.message); setTransferStage("Submission failed or could not be verified."); }
