@@ -86,6 +86,35 @@ PROCESS_FIELDS = {
     "skirt_speed": ("Others", "Skirt speed", "mm/s", 5, 500, False),
     "brim_object_gap": ("Others", "Brim/object gap", "mm", 0, 10, False),
     "brim_flow_ratio": ("Others", "Brim flow ratio", "", 0.5, 2, False),
+    # Verified against OrcaSlicer 2.4.2's official Creality K2 process preset.
+    "infill_direction": ("Strength", "Sparse infill direction", "°", -360, 360, False),
+    "top_solid_infill_flow_ratio": ("Quality", "Top surface flow ratio", "", 0.5, 2, False),
+    "bottom_solid_infill_flow_ratio": ("Quality", "Bottom surface flow ratio", "", 0.5, 2, False),
+    "print_flow_ratio": ("Quality", "Print flow ratio", "", 0.5, 2, False),
+    "bridge_angle": ("Quality", "External bridge angle", "°", -360, 360, False),
+    "bridge_density": ("Quality", "External bridge density", "%", 0, 100, False),
+    "bridge_speed": ("Speed", "External bridge speed", "mm/s", 0, 500, False),
+    "overhang_totally_speed": ("Speed", "Fully unsupported overhang speed", "mm/s", 0, 500, False),
+    "small_perimeter_threshold": ("Speed", "Small perimeter threshold", "mm", 0, 100, False),
+    "outer_wall_jerk": ("Speed", "Outer wall jerk", "mm/s", 0, 100, False),
+    "inner_wall_jerk": ("Speed", "Inner wall jerk", "mm/s", 0, 100, False),
+    "infill_jerk": ("Speed", "Infill jerk", "mm/s", 0, 100, False),
+    "top_surface_jerk": ("Speed", "Top surface jerk", "mm/s", 0, 100, False),
+    "initial_layer_jerk": ("Speed", "First layer jerk", "mm/s", 0, 100, False),
+    "travel_jerk": ("Speed", "Travel jerk", "mm/s", 0, 100, False),
+    "default_jerk": ("Speed", "Default jerk", "mm/s", 0, 100, False),
+    "accel_to_decel_factor": ("Speed", "Acceleration-to-deceleration ratio", "%", 0, 100, False),
+    "slow_down_layers": ("Speed", "Number of slow first layers", "layers", 0, 20, True),
+    "support_expansion": ("Supports", "Support expansion", "mm", 0, 15, False),
+    "raft_first_layer_expansion": ("Supports", "Raft first layer expansion", "mm", 0, 15, False),
+    "raft_first_layer_density": ("Supports", "Raft first layer density", "%", 0, 100, False),
+    "max_bridge_length": ("Quality", "Maximum bridge length", "mm", 0, 100, False),
+    "fuzzy_skin_first_layer": ("Quality", "Apply fuzzy skin to first layer", "", 0, 1, True),
+    "brim_ears_detection_length": ("Others", "Brim ears detection length", "mm", 0, 30, False),
+    "brim_ears_max_angle": ("Others", "Brim ears maximum angle", "°", 0, 180, False),
+    "ironing_flow": ("Quality", "Ironing flow", "%", 0, 100, False),
+    "ironing_spacing": ("Quality", "Ironing spacing", "mm", 0.01, 5, False),
+    "ironing_speed": ("Quality", "Ironing speed", "mm/s", 0, 200, False),
 }
 
 
@@ -99,6 +128,29 @@ CHOICE_FIELDS = {
         ("aligned", "Aligned"), ("nearest", "Nearest"), ("rear", "Rear"),
         ("random", "Random"),
     )),
+    "wall_generator": ("Quality", "Wall generator", (
+        ("classic", "Classic"), ("arachne", "Arachne"),
+    )),
+    "top_surface_pattern": ("Strength", "Top surface pattern", (
+        ("monotonicline", "Monotonic lines"), ("monotonic", "Monotonic"),
+        ("rectilinear", "Rectilinear"), ("concentric", "Concentric"),
+    )),
+    "bottom_surface_pattern": ("Strength", "Bottom surface pattern", (
+        ("monotonicline", "Monotonic lines"), ("monotonic", "Monotonic"),
+        ("rectilinear", "Rectilinear"), ("concentric", "Concentric"),
+    )),
+    "internal_solid_infill_pattern": ("Strength", "Internal solid infill pattern", (
+        ("monotonic", "Monotonic"), ("rectilinear", "Rectilinear"),
+        ("concentric", "Concentric"), ("monotonicline", "Monotonic lines"),
+    )),
+    "support_type": ("Supports", "Support type", (
+        ("normal(auto)", "Normal (auto)"), ("normal(manual)", "Normal (manual)"),
+        ("tree(auto)", "Tree (auto)"), ("tree(manual)", "Tree (manual)"),
+    )),
+    "print_sequence": ("Others", "Print sequence", (
+        ("by layer", "By layer"), ("by object", "By object"),
+    )),
+
 }
 TOGGLE_FIELDS = {
     "enable_support": ("Supports", "Generate supports"),
@@ -110,6 +162,31 @@ TOGGLE_FIELDS = {
     "spiral_mode": ("Others", "Spiral vase"),
     "ironing_support": ("Supports", "Ironing support interface"),
     "reduce_infill_retraction": ("Others", "Reduce infill retraction"),
+    "enable_arc_fitting": ("Quality", "Arc fitting"),
+    "staggered_inner_seams": ("Quality", "Staggered inner seams"),
+    "only_one_wall_first_layer": ("Quality", "Only one wall on first layer"),
+    "only_one_wall_top": ("Quality", "Only one wall on top surfaces"),
+    "is_infill_first": ("Quality", "Print infill first"),
+    "precise_outer_wall": ("Quality", "Precise wall"),
+    "detect_overhang_wall": ("Quality", "Detect overhang walls"),
+    "extra_perimeters_on_overhangs": ("Quality", "Extra perimeters on overhangs"),
+    "thick_bridges": ("Quality", "Thick external bridges"),
+    "thick_internal_bridges": ("Quality", "Thick internal bridges"),
+    "reduce_crossing_wall": ("Quality", "Avoid crossing walls"),
+    "wipe_on_loops": ("Quality", "Wipe on loops"),
+    "wipe_before_external_loop": ("Quality", "Wipe before external loop"),
+    "role_based_wipe_speed": ("Quality", "Role-based wipe speed"),
+    "detect_narrow_internal_solid_infill": ("Strength", "Detect narrow internal solid infills"),
+    "bridge_no_support": ("Supports", "Don't support bridges"),
+    "support_critical_regions_only": ("Supports", "Critical support regions only"),
+    "support_interface_not_for_body": ("Supports", "Interface only near supported features"),
+    "enable_overhang_speed": ("Speed", "Slow down for overhangs"),
+    "slowdown_for_curled_perimeters": ("Speed", "Slow down for curled perimeters"),
+    "accel_to_decel_enable": ("Speed", "Enable acceleration to deceleration"),
+    "gcode_comments": ("Others", "Verbose G-code"),
+    "gcode_label_objects": ("Others", "Label objects"),
+    "exclude_object": ("Others", "Exclude objects"),
+
 }
 ALL_FIELDS = set(PROCESS_FIELDS) | set(CHOICE_FIELDS) | set(TOGGLE_FIELDS)
 
