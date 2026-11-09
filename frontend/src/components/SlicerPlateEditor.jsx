@@ -704,9 +704,7 @@ export default function SlicerPlateEditor({
       const target = Math.abs(x / 50 - Math.round(x / 50)) < 1e-5 ? major : minor;
       for (let y = -bedY / 2; y < bedY / 2; y += step) {
         const yy = Math.min(y + step, bedY / 2);
-        if (inside(x, (y + yy) / 2) && !(useMakerVaultBed &&
-            (x + bedX / 2) / bedX > 0.34 && (x + bedX / 2) / bedX < 0.66 &&
-            (y + bedY / 2) / bedY < 0.16)) target.push(x, y, 0.24, x, yy, 0.24);
+        if (inside(x, (y + yy) / 2)) target.push(x, y, 0.24, x, yy, 0.24);
       }
     }
     for (let y = -bedY / 2; y <= bedY / 2 + 1e-5; y += step) {
@@ -715,10 +713,7 @@ export default function SlicerPlateEditor({
       const target = Math.abs(y / 50 - Math.round(y / 50)) < 1e-5 ? major : minor;
       for (let x = -bedX / 2; x < bedX / 2; x += step) {
         const xx = Math.min(x + step, bedX / 2);
-        if (inside((x + xx) / 2, y) && !(useMakerVaultBed &&
-            (y + bedY / 2) / bedY < 0.16 &&
-            ((x + xx) / 2 + bedX / 2) / bedX > 0.34 &&
-            ((x + xx) / 2 + bedX / 2) / bedX < 0.66)) target.push(x, y, 0.24, xx, y, 0.24);
+        if (inside((x + xx) / 2, y)) target.push(x, y, 0.24, xx, y, 0.24);
       }
     }
     const gridLines = [minor, major].map((coords, index) => {
