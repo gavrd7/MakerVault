@@ -115,6 +115,10 @@ PROCESS_FIELDS = {
     "ironing_flow": ("Quality", "Ironing flow", "%", 0, 100, False),
     "ironing_spacing": ("Quality", "Ironing spacing", "mm", 0.01, 5, False),
     "ironing_speed": ("Quality", "Ironing speed", "mm/s", 0, 200, False),
+    "ironing_inset": ("Quality", "Ironing inset", "mm", 0, 10, False),
+    "ironing_angle": ("Quality", "Ironing angle offset", "°", -360, 360, False),
+    "zaa_minimize_perimeter_height": ("Quality", "Minimize wall height angle", "°", 0, 90, False),
+    "zaa_min_z": ("Quality", "Minimum Z height", "mm", 0, 2, False),
 }
 
 
@@ -144,6 +148,13 @@ CHOICE_FIELDS = {
         ("monotonic", "Monotonic"), ("rectilinear", "Rectilinear"),
         ("concentric", "Concentric"), ("monotonicline", "Monotonic lines"),
     )),
+    "ironing_type": ("Quality", "Ironing type", (
+        ("no ironing", "No ironing"), ("top", "All top surfaces"),
+        ("topmost", "Topmost surface only"), ("solid", "All solid layers"),
+    )),
+    "ironing_pattern": ("Quality", "Ironing pattern", (
+        ("rectilinear", "Rectilinear"), ("concentric", "Concentric"),
+    )),
     "support_type": ("Supports", "Support type", (
         ("normal(auto)", "Normal (auto)"), ("normal(manual)", "Normal (manual)"),
         ("tree(auto)", "Tree (auto)"), ("tree(manual)", "Tree (manual)"),
@@ -151,6 +162,8 @@ CHOICE_FIELDS = {
 
 }
 TOGGLE_FIELDS = {
+    "zaa_enabled": ("Quality", "Enable Z contouring"),
+    "zaa_dont_alternate_fill_direction": ("Quality", "Keep contour fill direction"),
     "enable_support": ("Supports", "Generate supports"),
     "support_on_build_plate_only": ("Supports", "On build plate only"),
     "support_remove_small_overhang": ("Supports", "Ignore small overhangs"),
@@ -221,7 +234,10 @@ SECTIONS = {
                      "thick_internal_bridges", "detect_overhang_wall",
                      "extra_perimeters_on_overhangs"},
         "Fuzzy skin": {"fuzzy_skin_point_distance", "fuzzy_skin_thickness", "fuzzy_skin_first_layer"},
-        "Ironing": {"ironing_flow", "ironing_spacing", "ironing_speed"},
+        "Ironing": {"ironing_type", "ironing_pattern", "ironing_flow", "ironing_spacing",
+                    "ironing_speed", "ironing_inset", "ironing_angle"},
+        "Z contouring": {"zaa_enabled", "zaa_minimize_perimeter_height", "zaa_min_z",
+                         "zaa_dont_alternate_fill_direction"},
     },
     "Strength": {
         "Walls": {"wall_loops", "detect_thin_wall", "alternate_extra_wall"},
@@ -340,6 +356,30 @@ def process_schema(raw):
                        "options": [{"value": "0", "label": "Off"}, {"value": "1", "label": "On"}],
                        "current": current, "level": "basic" if key in BASIC_FIELDS else "advanced",
                        "section": SECTION_FOR.get(key, "Advanced")}
+    # Conditional visibility is driven by actual native controls. Never expose a
+    # synthetic enable switch when the resolved profile has no matching key.
+    dependencies = {
+        "ironing_type": ("ironing_pattern", "ironing_flow", "ironing_spacing",
+                         "ironing_speed", "ironing_inset", "ironing_angle"),
+        "zaa_enabled": ("zaa_minimize_perimeter_height", "zaa_min_z",
+                        "zaa_dont_alternate_fill_direction"),
+        "enable_support": ("support_threshold_angle", "support_on_build_plate_only",
+                           "support_remove_small_overhang", "support_type",
+                           "support_critical_regions_only", "support_top_z_distance",
+                           "support_bottom_z_distance", "support_interface_top_layers",
+                           "support_interface_bottom_layers", "support_interface_spacing",
+                           "support_bottom_interface_spacing", "support_object_xy_distance",
+                           "support_speed", "support_interface_speed", "support_expansion"),
+    }
+    for master, dependents in dependencies.items():
+        if master not in result:
+            continue
+        for dependent in dependents:
+            if dependent in result:
+                result[dependent]["enabled_when"] = {
+                    "key": master,
+                    "not": "no ironing" if master == "ironing_type" else "0",
+                }
     return result
 
 
