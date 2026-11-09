@@ -7,6 +7,7 @@ A separate real native-profile test slice is still needed in MakerVault GUI.
   python3 scripts/install_slicer_staging.py prepare-orca
   python3 scripts/install_slicer_staging.py enable
   python3 scripts/install_slicer_staging.py status
+  python3 scripts/install_slicer_staging.py update
   python3 scripts/install_slicer_staging.py refresh-worker
   python3 scripts/install_slicer_staging.py disable
 
@@ -243,6 +244,26 @@ def refresh_worker():
     print("Refreshed staging worker; engine binary hash and token preserved.")
 
 
+def update():
+    """Update the application with the already-installed slicer worker attached.
+
+    Unlike refresh-worker, this only rebuilds the main app; the worker's
+    immutable image ID, approved engine binary digests and token stay intact.
+    Using the standard three-file Compose command after slicer installation
+    would omit the optional worker link, so use this action for staging.
+    """
+    _read_env()  # Enforce an existing private installer configuration.
+    if not OVERLAY.is_file():
+        raise ValueError("Slicer staging Compose overlay is missing.")
+    args = _compose_args()
+    print("Checking the full MakerVault + slicer staging Compose configuration…")
+    _run(args + ["config", "--quiet"])
+    print("Rebuilding MakerVault while retaining the pinned slicer worker…")
+    _run(args + ["up", "-d", "--build", "makervault"])
+    _run(args + ["ps", "makervault", "slicer-worker"])
+    print("MakerVault updated. The isolated slicer image and approved engine hashes were not changed.")
+
+
 def enable():
     envtext = _read_env()
     if not BUNDLE.is_dir():
@@ -281,12 +302,12 @@ def status():
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["prepare-orca", "enable", "disable", "status", "refresh-worker"])
+    parser.add_argument("action", choices=["prepare-orca", "enable", "disable", "status", "refresh-worker", "update"])
     args = parser.parse_args(argv)
     try:
         {"prepare-orca": prepare_orca, "enable": enable,
          "disable": disable, "status": status,
-         "refresh-worker": refresh_worker}[args.action]()
+         "refresh-worker": refresh_worker, "update": update}[args.action]()
     except (ValueError, OSError, subprocess.CalledProcessError) as exc:
         print("Slicer staging installation failed: " + str(exc), file=sys.stderr)
         return 1
