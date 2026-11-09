@@ -249,8 +249,9 @@ test("expand settings lives next to Detail and conditional native fields use sch
   const header = scene.slice(scene.indexOf('className="slicerSettingsPanelHeader"'),
     scene.indexOf('className="slicerProcessQuickSelect"'));
   assert.doesNotMatch(header, /Expand settings/);
-  const searchRow = scene.slice(scene.indexOf('className="slicerSettingsSearchRow"'),
-    scene.indexOf('{scope === "objects"'));
+  const searchStart = scene.indexOf('className="slicerSettingsSearchRow"');
+  assert.ok(searchStart >= 0);
+  const searchRow = scene.slice(searchStart, scene.indexOf('{scope === "objects"', searchStart));
   assert.match(searchRow, /slicerExpandSettingsAction/);
   assert.match(searchRow, /Expand settings/);
   assert.match(scene, /spec\.enabled_when/);
