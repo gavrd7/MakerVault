@@ -290,7 +290,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   }
 
   useEffect(() => {
-    const id = ["orcaslicer", "crealityprint", "bambustudio", "prusaslicer"].includes(form.engine) ? form.printer_profile_id : "";
+    const id = ["orcaslicer", "crealityprint", "bambustudio", "prusaslicer", "snapmakerorca"].includes(form.engine) ? form.printer_profile_id : "";
     if (!id) {
       setNativePlate(null);
       return undefined;
