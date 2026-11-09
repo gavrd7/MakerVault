@@ -1,47 +1,70 @@
-# Native and MakerVault build-plate artwork
+# Printer-native and MakerVault build-plate assets
 
-The Creality K1 and K2 SVGs bundled here are unmodified build-plate
-textures sourced from **OrcaSlicer v2.4.2**:
+MakerVault's 3D plate preview uses two independent asset types:
 
-- [Creality K1 SVG](https://github.com/OrcaSlicer/OrcaSlicer/blob/v2.4.2/resources/profiles/Creality/creality_k1_buildplate_texture.svg)
-- [Creality K2 SVG](https://github.com/OrcaSlicer/OrcaSlicer/blob/v2.4.2/resources/profiles/Creality/creality_k2_buildplate_texture.svg)
+- Native **bed_texture**: a validated, same-origin, cached SVG overlay.
+- Native **bed_model**: a bounded, validated STL rendered **below** the editable
+  print surface as non-interactive machine-space geometry.
 
-Source: https://github.com/OrcaSlicer/OrcaSlicer
-Licence: **AGPL-3.0** (subject to any separately stated upstream artwork terms).
-MakerVault does not claim ownership of the manufacturer artwork.
+Neither affects slicing, G-code, nozzle movement, firmware purge routines, bed
+dimensions or the printer compatibility matrix. An unavailable asset always
+falls back to the procedural MakerVault plate.
 
-`makervault-official-logo.svg` contains a compact, transparency-adjusted
-rendering of the MakerVault logo supplied by the project owner. It replaces
-the previous generic placeholder symbol on the procedural 3D fallback plate.
+## Bundled starter assets
 
-## Profile-driven native artwork
+The Creality K1/K2 SVGs are attributed to OrcaSlicer 2.4.2 contributors and
+upstream asset authors, distributed under the source project's AGPL-3.0 terms:
 
-The authenticated profile plate API can return a same-origin `artwork_url`
-for an owned, hash-verified, official OrcaSlicer machine preset that
-declares a safe `bed_texture` filename, either directly or through a
-validated, same-owner/engine/version parent chain. This is not a general arbitrary-URL
-download feature.
+- https://github.com/OrcaSlicer/OrcaSlicer/blob/v2.4.2/resources/profiles/Creality/creality_k1_buildplate_texture.svg
+- https://github.com/OrcaSlicer/OrcaSlicer/blob/v2.4.2/resources/profiles/Creality/creality_k2_buildplate_texture.svg
 
-On first viewing the profile, the associated artwork endpoint fetches the
-asset from the **pinned OrcaSlicer v2.4.2 source**, checks a size limit and
-rejects SVG scripts, external links, foreign elements and other active content,
-then caches the approved content locally. Later requests work offline when
-the local cache exists. Missing, unsupported and unsafe artwork falls back to
-MakerVault's generic 3D plate. Artwork never changes G-code or printer support.
+`makervault-official-logo.svg` uses the official MakerVault logo provided by
+the project owner, rather than the previous placeholder icon.
 
-The built-in K1/K2 assets remain as offline starter artwork even without an
-imported printer profile. Normalisation ignores the descriptor `Combo`, but
-not distinct hardware variants such as `Plus`, `Pro`, `Max` or `SE`.
-Native artwork can be disabled in the visual editor.
+## Version-aware imported source adapters
 
-## Current limitations / next adapters
+| Profile source | Upstream metadata | Behaviour |
+| --- | --- | --- |
+| OrcaSlicer | Machine JSON and indexed `machine_model` JSON | Imported official machine profiles, inherited parent chain, 3D model and texture |
+| Creality Print | Machine JSON and indexed `machine_model` JSON | Registered official machine profiles, model and texture |
+| Bambu Studio | `machine_model` JSON and indexed vendor models | Registered, verified model records; associated native assets |
+| Snapmaker Orca | Orca-compatible JSON and indexed vendor models | Registered official source metadata |
+| PrusaSlicer | Vendor INI `[printer_model:...]` | Exact registered model/bundle mapping to bed model and texture |
 
-- This first imported-art adapter supports `bed_texture` on official
-  OrcaSlicer **v2.4.2** printer presets and their validated parent chains.
-- It does not ingest native 3D `bed_model` geometry.
-- Additional installed versions, Creality Print, Bambu Studio, PrusaSlicer,
-  Snapmaker Orca and Cura require separately validated metadata readers and
-  source/format handling.
-- The server downloads on **first artwork request**, not automatically when
-  importing a large batch of profiles. Downloads should remain bounded and
-  must never grant enhanced Docker privileges or arbitrary network access.
+Registration does **not** mean every engine is installed, supports slicing,
+or has an official-search/import provider in the MakerVault UI. Currently the
+search/import experience is integrated for OrcaSlicer and Creality Print.
+Bambu, Prusa and Snapmaker source metadata readers are implemented but need
+their own full import/discovery UX and end-to-end validation.
+
+Source identity is constrained to a fixed list of upstream repositories and
+vendor names. Imported records must have a matching registered engine version,
+upstream release tag, source label and hash-verified owner-scoped file. A profile
+can never supply a network host, arbitrary URL or local filesystem path for
+the artwork fetcher. When an engine lacks a validated upstream tag or metadata
+format, no network fetch occurs.
+
+Orca, Bambu, Snapmaker and Creality machine variants often reference a
+separate `machine_model` record for `bed_model` and `bed_texture`. MakerVault
+checks the official version-tagged vendor index for an **exact** model name;
+a non-unique or missing identity is not replaced with a guessed match.
+
+The original SVG and STL are bounded and validated before being cached by
+source URL digest in private storage. The preview only serves those assets
+to the profile owner. Network failures result in the MakerVault fallback, and
+already-cached valid files remain usable offline.
+
+Assets from other upstream licences need their original attribution and
+distribution terms reviewed before inclusion in bundled releases. The
+cached source artifacts are not MakerVault-owned artwork.
+
+## Remaining improvements
+
+- Add first-party official profile import/search support to Bambu Studio,
+  PrusaSlicer and Snapmaker Orca, including vendor model records.
+- Discover profiles and artwork from *installed* engine versions in the
+  isolated worker, rather than from source-labelled imports alone.
+- Validate renderer orientation, native STL offsets and asset availability
+  on real machines for each vendor and unusual bed polygon.
+- Expand support to other engine asset formats and explicit asset-directory
+  layouts without permitting arbitrary external URLs or host filesystem access.
