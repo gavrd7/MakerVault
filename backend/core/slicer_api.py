@@ -34,6 +34,12 @@ from .slicer_creality_official_profiles import (
     ENGINE_VERSION as OFFICIAL_CRE_VERSION, SOURCE as OFFICIAL_CRE_SOURCE,
     REF as OFFICIAL_CRE_REF,
 )
+from .slicer_snapmaker_official_profiles import (
+    search_snapmaker_profiles, fetch_snapmaker_profile, available_snapmaker_vendors,
+    official_catalogue_models as snapmaker_catalogue_models,
+    ENGINE_VERSION as OFFICIAL_SNAP_VERSION, SOURCE as OFFICIAL_SNAP_SOURCE,
+    REF as OFFICIAL_SNAP_REF,
+)
 from .slicer_prusa_official_profiles import (
     search_prusa_profiles, fetch_prusa_model, available_prusa_vendors,
     official_catalogue_models as prusa_catalogue_models,
@@ -494,6 +500,7 @@ def official_profiles(request):
                 "crealityprint": (available_creality_vendors, OFFICIAL_CRE_REF),
                 "bambustudio": (available_bambu_vendors, OFFICIAL_BAMBU_REF),
                 "prusaslicer": (available_prusa_vendors, OFFICIAL_PRUSA_REF),
+                "snapmakerorca": (available_snapmaker_vendors, OFFICIAL_SNAP_REF),
             }
             provider = sources.get(selected)
             return JsonResponse({
@@ -509,7 +516,8 @@ def official_profiles(request):
             model_catalogues = {"orcaslicer": orca_catalogue_models,
                                 "crealityprint": creality_catalogue_models,
                                 "bambustudio": bambu_catalogue_models,
-                                "prusaslicer": prusa_catalogue_models}
+                                "prusaslicer": prusa_catalogue_models,
+                                "snapmakerorca": snapmaker_catalogue_models}
             provider = model_catalogues.get(selected)
             if not provider:
                 return _error("This slicer has no official printer catalogue.")
@@ -523,6 +531,7 @@ def official_profiles(request):
             "crealityprint": search_creality_profiles,
             "bambustudio": search_bambu_profiles,
             "prusaslicer": search_prusa_profiles,
+            "snapmakerorca": search_snapmaker_profiles,
         }.get(selected)
         if searcher is None:
             return _error("Official profile search is not available for this engine.")
@@ -549,7 +558,8 @@ def official_profiles(request):
                 model_catalogues = {"orcaslicer": orca_catalogue_models,
                                     "crealityprint": creality_catalogue_models,
                                 "bambustudio": bambu_catalogue_models,
-                                "prusaslicer": prusa_catalogue_models}
+                                "prusaslicer": prusa_catalogue_models,
+                                "snapmakerorca": snapmaker_catalogue_models}
                 if chosen_model not in model_catalogues[selected](request.GET.get("vendor", "Creality")):
                     return _error("Choose a printer model listed in the official catalogue.")
                 printer_model = chosen_model
@@ -577,6 +587,7 @@ def official_profiles(request):
             "crealityprint": (OFFICIAL_CRE_VERSION, OFFICIAL_CRE_SOURCE, OFFICIAL_CRE_REF, fetch_creality_profile),
             "bambustudio": (OFFICIAL_BAMBU_VERSION, OFFICIAL_BAMBU_SOURCE, OFFICIAL_BAMBU_REF, fetch_bambu_model),
             "prusaslicer": (OFFICIAL_PRUSA_VERSION, OFFICIAL_PRUSA_SOURCE, OFFICIAL_PRUSA_REF, fetch_prusa_model),
+            "snapmakerorca": (OFFICIAL_SNAP_VERSION, OFFICIAL_SNAP_SOURCE, OFFICIAL_SNAP_REF, fetch_snapmaker_profile),
         }
         if engine not in providers:
             return _error("Official import is not available for this engine.")
