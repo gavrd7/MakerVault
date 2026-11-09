@@ -155,7 +155,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       .filter((file, index, all) => all.findIndex(item => String(item.id) === String(file.id)) === index)];
   }, [files, jobs]);
 
-  const update = (name, value) => setForm(current => {
+  const update = (name, value) => {
+    if (["engine", "engine_version", "process_preset", "process_profile_id"].includes(name))
+      setProcessOverrides({});
+    setForm(current => {
     if (name === "engine" || name === "engine_version") return {
       ...current, [name]: value,
       plate: name === "engine" && value !== current.engine ? "default" : current.plate,
@@ -166,7 +169,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       [name.replace("_preset", "_profile_id")]: "",
     };
     return { ...current, [name]: value };
-  });
+    });
+  };
   const visibleSavedProfiles = useMemo(() => profiles.filter(profile =>
     profile.engine === form.engine &&
     (!profile.is_dependency || (managingSavedProfiles && showProfileDependencies))
