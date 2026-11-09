@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { nativeBedArtwork, normalizePrinterArtworkName } from "../src/components/slicerNativePlateArt.js";
+import { nativeBedArtworkId, normalizePrinterArtworkName } from "../src/components/slicerNativePlateMatcher.js";
+import fs from "node:fs";
 
 test("Combo is a removable whole-word descriptor in any position", () => {
   assert.equal(normalizePrinterArtworkName("Creality K2 COMBO 0.4 nozzle - Custom"), "creality k2 0 4 nozzle custom");
@@ -10,26 +11,34 @@ test("Combo is a removable whole-word descriptor in any position", () => {
 
 test("base K1 and K2 artwork applies to Combo and nozzle/profile variants", () => {
   for (const name of ["Creality K2", "Creality K2 Combo", "Creality K2 COMBO 0.4 nozzle - Custom", "Creality Combo K2"]) {
-    assert.equal(nativeBedArtwork(name, 260, 260), "/slicer-bed-art/creality-k2.svg", name);
+    assert.equal(nativeBedArtworkId(name, 260, 260), "creality-k2", name);
   }
-  assert.equal(nativeBedArtwork("Creality K1 (0.4 nozzle)", 220, 220), "/slicer-bed-art/creality-k1.svg");
-  assert.equal(nativeBedArtwork("Creality K1 Combo", 220, 220), "/slicer-bed-art/creality-k1.svg");
+  assert.equal(nativeBedArtworkId("Creality K1 (0.4 nozzle)", 220, 220), "creality-k1");
+  assert.equal(nativeBedArtworkId("Creality K1 Combo", 220, 220), "creality-k1");
 });
 
 test("distinct model variants never inherit base model artwork", () => {
   for (const name of ["Creality K2 Pro", "Creality K2 Plus", "Creality K2 Max",
     "Creality K2 SE", "Creality K2 Pro Combo", "Creality K2 Combo Plus"]) {
-    assert.equal(nativeBedArtwork(name, 260, 260), null, name);
+    assert.equal(nativeBedArtworkId(name, 260, 260), null, name);
   }
   for (const name of ["Creality K1 Max", "Creality K1C", "Creality K1 SE", "Creality K1 Pro"]) {
-    assert.equal(nativeBedArtwork(name, 220, 220), null, name);
+    assert.equal(nativeBedArtworkId(name, 220, 220), null, name);
   }
 });
 
 test("manufacturer and build volume still have to match validated assets", () => {
-  assert.equal(nativeBedArtwork("Creality K2 Combo", 300, 300), null);
-  assert.equal(nativeBedArtwork("Creality K2 Combo", 260, 260.8), null);
-  assert.equal(nativeBedArtwork("Other K2 Combo", 260, 260), null);
-  assert.equal(nativeBedArtwork("Creality K2 Combo", NaN, 260), null);
-  assert.equal(nativeBedArtwork("Creality K1", 260, 260), null);
+  assert.equal(nativeBedArtworkId("Creality K2 Combo", 300, 300), null);
+  assert.equal(nativeBedArtworkId("Creality K2 Combo", 260, 260.8), null);
+  assert.equal(nativeBedArtworkId("Other K2 Combo", 260, 260), null);
+  assert.equal(nativeBedArtworkId("Creality K2 Combo", NaN, 260), null);
+  assert.equal(nativeBedArtworkId("Creality K1", 260, 260), null);
+});
+
+test("native plate texture assets are bundled in the Vite module, never loaded from root-relative paths", () => {
+  const src = fs.readFileSync(new URL("../src/components/slicerNativePlateArt.js", import.meta.url), "utf8");
+  assert.match(src, /creality-k1\\.svg\\?raw/);
+  assert.match(src, /creality-k2\\.svg\\?raw/);
+  assert.match(src, /data:image\\/svg\\+xml/);
+  assert.doesNotMatch(src, /asset: "\\/slicer-bed-art\\//);
 });
