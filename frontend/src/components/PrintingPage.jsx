@@ -12,7 +12,12 @@ import { suggestNextVersion } from "./FileVersionModal";
 import GcodeViewerModal from "./GcodeViewerModal";
 import GcodeLibraryModal from "./GcodeLibraryModal";
 import SlicerErrorBoundary from "./SlicerErrorBoundary";
-const SlicerWorkbench = lazy(() => import("./SlicerWorkbench"));
+// Start fetching the sizeable interactive slicer before its first navigation.
+const fetchSlicerWorkbench = () => import("./SlicerWorkbench");
+const SlicerWorkbench = lazy(fetchSlicerWorkbench);
+export function preloadSlicerWorkbench() {
+  return fetchSlicerWorkbench();
+}
 const SavedSlicerJobsModal = lazy(() => import("./SavedSlicerJobsModal"));
 import PrinterStartGcodeModal from "./PrinterStartGcodeModal";
 
