@@ -15,23 +15,33 @@ from .slicer_creality_official_profiles import (
     fetch_creality_profile, VENDORS as CREALITY_VENDORS,
 )
 
+from .slicer_snapmaker_official_profiles import (
+    _entries as snapmaker_entries, fetch_snapmaker_profile,
+    VENDORS as SNAPMAKER_VENDORS,
+)
+
 MAX_CHAIN = 12
 MAX_CHAIN_BYTES = 4 * 1024 * 1024
 
 
 def official_profile_chain(engine, kind, name, subpath, vendor="Creality"):
     """Return [(native_name, pinned_subpath, bytes)] ordered parent-first."""
-    if engine not in {"orcaslicer", "crealityprint"}:
+    if engine not in {"orcaslicer", "crealityprint", "snapmakerorca"}:
         raise OfficialProfileError("Unknown official slicer profile engine.")
     if kind not in {"printer", "filament", "process"}:
         raise OfficialProfileError("Unsupported official profile family.")
-    if (engine == "orcaslicer" and vendor not in ORCA_VENDORS) or (engine == "crealityprint" and vendor not in CREALITY_VENDORS):
+    if ((engine == "orcaslicer" and vendor not in ORCA_VENDORS) or
+        (engine == "crealityprint" and vendor not in CREALITY_VENDORS) or
+        (engine == "snapmakerorca" and vendor not in SNAPMAKER_VENDORS)):
         raise OfficialProfileError("Unsupported official profile vendor for this engine.")
     index = (
         dict(orca_entries(vendor, kind)) if engine == "orcaslicer"
-        else dict(creality_entries(kind, vendor))
+        else dict(creality_entries(kind, vendor)) if engine == "crealityprint"
+        else dict(snapmaker_entries(kind, vendor))
     )
-    fetch = fetch_official_profile if engine == "orcaslicer" else fetch_creality_profile
+    fetch = (fetch_official_profile if engine == "orcaslicer"
+             else fetch_creality_profile if engine == "crealityprint"
+             else fetch_snapmaker_profile)
     if index.get(name) != subpath:
         raise OfficialProfileError("Requested native profile is not in the pinned catalogue.")
     visiting = set()
