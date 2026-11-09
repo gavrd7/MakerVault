@@ -200,3 +200,29 @@ test("Basic and Advanced are defined by native profile schema rather than a fron
   assert.match(scene, /spec\.kind === "toggle"/);
   assert.match(scene, /type="checkbox" aria-label=\{spec\.label\}/);
 });
+
+test("print settings scroll inside their own rail and expand into the same shared editor modal", () => {
+  const scene = read("SlicerPrepareWorkspace.jsx");
+  const css = fs.readFileSync(path.resolve(root, "../styles.css"), "utf8");
+  assert.match(scene, /createPortal/);
+  assert.match(scene, /const settingsPanel =/);
+  assert.match(scene, /settingsExpanded \? createPortal/);
+  assert.match(scene, /: settingsPanel/);
+  assert.match(scene, /aria-modal="true"/);
+  assert.match(scene, /Expand settings/);
+  assert.match(scene, /Close expanded settings/);
+  assert.match(scene, /event.key === "Escape"/);
+  assert.match(css, /\.slicerPrepareSettings\{\s*max-height:/);
+  assert.match(css, /overflow-y:auto/);
+  assert.match(css, /\.slicerSettingsModalBackdrop\{/);
+  assert.match(css, /\.slicerSettingsModal\{/);
+});
+
+test("selected model tool row wraps within its panel and never exceeds available width", () => {
+  const css = fs.readFileSync(path.resolve(root, "../styles.css"), "utf8");
+  assert.match(css, /\.slicerPrepareScene \.slicerPlateTransformFields > \.settingsActions\{/);
+  assert.match(css, /flex-wrap:wrap/);
+  assert.match(css, /\.slicerPrepareScene \.slicerPlateTransformFields > \.settingsActions > button\{/);
+  assert.match(css, /max-width:100%/);
+  assert.match(css, /overflow-wrap:anywhere/);
+});
