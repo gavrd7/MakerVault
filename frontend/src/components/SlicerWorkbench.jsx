@@ -1431,7 +1431,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             <strong>{job.input_asset?.name || "Model"} · {job.printer?.name || "Printer"}</strong>
             <small>{job.engine} {job.engine_version} · {job.status} · {job.process_preset}</small>
             {job.settings?.plate_objects?.length > 0 && <small>
-              Saved visual plate: {job.settings.plate_objects.length} model instance{job.settings.plate_objects.length === 1 ? "" : "s"} · preparation-only
+              {job.settings.plate_label || "Plate 1"}: {job.settings.plate_objects.length} model instance{job.settings.plate_objects.length === 1 ? "" : "s"} · preparation-only
             </small>}
             <small>{job.spool?.name ? "Spool " + job.spool.name + " · " : ""}
               {job.status === "completed" ? "G-code saved privately; inspect before printing" :
