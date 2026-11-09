@@ -182,7 +182,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
   const [workspaceView, setWorkspaceView] = useState(initialWorkspaceView);
 
   async function load(options = {}) {
-    const includeFilaments = options?.includeFilaments !== false;
+    const includeFilaments = options?.includeFilaments ?? filamentsLoaded;
     setError("");
     try {
       const fresh = await apiFetch("/api/printing/" + (includeFilaments ? "" : "?include_filaments=0"));
@@ -283,6 +283,21 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
 
   if ((["spools", "filaments", "reusableSpools"].includes(workspaceView)
       || modal === "spool" || claimSlot) && !filamentsLoaded) {
+    if (error && !filamentsLoading) return <section className="panel printingSection">
+      <p role="alert">{error}</p>
+      <button type="button" onClick={() => {
+        setError("");
+        setFilamentsLoading(true);
+        filamentFetchRef.current = true;
+        load({ includeFilaments: true }).finally(() => {
+          filamentFetchRef.current = false;
+          setFilamentsLoading(false);
+        });
+      }}>Retry loading filament catalogue</button>
+      <button type="button" onClick={() => { setModal(""); setClaimSlot(null); setWorkspaceView("overview"); }}>
+        Back to 3D Printing
+      </button>
+    </section>;
     return <LoadingBlock label={filamentsLoading
       ? "Loading filament catalogue…" : "Preparing filament catalogue…"} />;
   }
