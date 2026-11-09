@@ -962,7 +962,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             onChange={chooseSpool} disabled={!canPrepare || busy} />
           {selectedSpoolHex && <span className="slicerSpoolColour">
             <span className="slicerSpoolSwatch" style={{ backgroundColor: selectedSpoolHex }} aria-hidden="true" />
-            Preview colour: {selectedSpoolHex} · Individual models can override this colour
+            Selected spool colour: {selectedSpoolHex} · A uniform build-plate colour is written into single-material Orca G-code; multicolour painting is not yet mapped
           </span>}
         </div>
         <label>Build plate
