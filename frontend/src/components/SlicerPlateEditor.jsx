@@ -506,22 +506,24 @@ export default function SlicerPlateEditor({
     // Make the fallback an actual thin three-dimensional build plate, not
     // a flat coloured reference grid. The geometry follows the full native
     // polygon, including unusual bed shapes, rather than a fixed 220mm STL.
+    const plateDepth = Math.max(3, Math.min(6, Math.min(bedX, bedY) * 0.018));
     const plateBodyGeometry = new THREE.ExtrudeGeometry(plateShape, {
-      depth: Math.max(2, Math.min(5, Math.min(bedX, bedY) * 0.012)),
-      bevelEnabled: false, curveSegments: 8,
+      depth: plateDepth - 0.5, bevelEnabled: true, bevelSegments: 2,
+      bevelSize: Math.min(0.55, plateDepth * 0.12),
+      bevelThickness: 0.25, curveSegments: 8,
     });
     const plateBody = new THREE.Mesh(plateBodyGeometry,
       new THREE.MeshStandardMaterial({
         color: useMakerVaultBed ? "#253544" : "#212831",
         metalness: 0.28, roughness: 0.68, side: THREE.DoubleSide,
       }));
-    const plateDepth = Math.max(2, Math.min(5, Math.min(bedX, bedY) * 0.012));
     // Keep the extrusion's top slightly below the painted printable surface,
     // avoiding depth fighting with the branded texture and native art.
-    plateBody.position.z = -plateDepth - 0.35;
+    plateBody.position.z = -plateDepth + 0.25;
     plateBody.renderOrder = -1;
     scene.add(plateBody);
     let bedArtwork = null;
+    let artworkTextureController = null;
     if (artworkPath) {
       // ShapeGeometry uses world XY as UV; remap to 0..1 for the actual bed.
       // This transparent SVG overlay adds original native markings without
@@ -534,40 +536,64 @@ export default function SlicerPlateEditor({
           (positions.getY(i) + bedY / 2) / bedY);
       }
       uv.needsUpdate = true;
-      const material = new THREE.MeshBasicMaterial({
-        transparent: true, depthWrite: false, side: THREE.DoubleSide,
+      const material = new THREE.MeshStandardMaterial({
+        color: "#ffffff", transparent: true, depthWrite: false,
+        side: THREE.DoubleSide, roughness: 0.9, metalness: 0.04,
       });
-      const loader = new THREE.TextureLoader();
-      const loadedTexture = loader.load(
-        artworkPath,
-        () => { if (!disposed) setNativeArtworkError(""); },
-        undefined,
-        () => {
-          if (disposed) return;
-          // Keep the option selected. Never silently override a user's
-          // display preference because an artwork file is unavailable.
-          if (profileArtwork && bundledArtwork && profileArtwork !== bundledArtwork) {
-            setNativeArtworkError("Profile artwork could not be loaded; using bundled printer artwork.");
-            const fallback = loader.load(
-              bundledArtwork, undefined, undefined,
-              () => {
-                if (!disposed) setNativeArtworkError("Official artwork is unavailable for this printer. The generic plate remains usable.");
-              },
-            );
-            fallback.colorSpace = THREE.SRGBColorSpace;
-            material.map = fallback;
-            material.needsUpdate = true;
-          } else {
-            setNativeArtworkError("Official artwork could not be loaded. The generic build plate remains usable.");
-          }
-        },
-      );
-      loadedTexture.colorSpace = THREE.SRGBColorSpace;
-      material.map = loadedTexture;
+      // A vector with a 260px intrinsic viewport must be rasterised at
+      // display resolution before uploading it as a WebGL texture.
+      const controller = new AbortController();
+      artworkTextureController = controller;
+      const loadArtwork = async (url, fallback = false) => {
+        const response = await fetch(url, {
+          credentials: "same-origin", signal: controller.signal,
+        });
+        if (!response.ok || Number(response.headers.get("Content-Length") || 0) > 512 * 1024)
+          throw new Error("Official bed artwork unavailable.");
+        const svgText = await response.text();
+        if (svgText.length > 512 * 1024 ||
+            !/^\s*(?:<\?xml[^>]*>\s*)?<svg\b/i.test(svgText))
+          throw new Error("Official bed artwork must be an SVG.");
+        const svg = svgText.replace(/<svg\b/i, '<svg width="2048" height="2048"');
+        const blobUrl = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+        try {
+          const artworkImage = new Image();
+          await new Promise((resolve, reject) => {
+            artworkImage.onload = resolve;
+            artworkImage.onerror = () => reject(new Error("SVG image failed to decode."));
+            artworkImage.src = blobUrl;
+          });
+          if (disposed || controller.signal.aborted) return;
+          const canvas = document.createElement("canvas");
+          canvas.width = 2048; canvas.height = 2048;
+          const context = canvas.getContext("2d");
+          if (!context) throw new Error("Artwork canvas is unavailable.");
+          context.drawImage(artworkImage, 0, 0, canvas.width, canvas.height);
+          const texture = new THREE.CanvasTexture(canvas);
+          texture.colorSpace = THREE.SRGBColorSpace;
+          texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+          texture.minFilter = THREE.LinearMipmapLinearFilter;
+          material.map?.dispose();
+          material.map = texture;
+          material.needsUpdate = true;
+          setNativeArtworkError(fallback
+            ? "Profile artwork was unavailable; displaying bundled printer artwork." : "");
+        } finally {
+          URL.revokeObjectURL(blobUrl);
+        }
+      };
+      void loadArtwork(artworkPath).catch(() => {
+        if (disposed || controller.signal.aborted) return;
+        if (profileArtwork && bundledArtwork && profileArtwork !== bundledArtwork) {
+          void loadArtwork(bundledArtwork, true).catch(() => {
+            if (!disposed) setNativeArtworkError("Official artwork is unavailable; the 3D plate remains usable.");
+          });
+        } else setNativeArtworkError("Official artwork is unavailable; the 3D plate remains usable.");
+      });
       bedArtwork = new THREE.Mesh(geometry, material);
       // Artwork belongs above the 0.24 mm preview grid, not underneath it.
       // Leave label overlays and printed models above the artwork.
-      bedArtwork.position.z = 0.36;
+      bedArtwork.position.z = 0.28;
       bedArtwork.renderOrder = 1;
       scene.add(bedArtwork);
     }
@@ -608,6 +634,7 @@ export default function SlicerPlateEditor({
           }));
           nativeBedMesh.position.set(-centerX, -centerY, -bounds.max.z - 0.55);
           nativeBedMesh.userData.decorativeBed = true;
+          plateBody.visible = false;
           scene.add(nativeBedMesh);
         })
         .catch(() => { /* Missing/unavailable native bed mesh uses generated fallback geometry. */ });
@@ -624,10 +651,11 @@ export default function SlicerPlateEditor({
       return hit;
     };
     const minor = [], major = [];
+    const drawReferenceGrid = !showNativeArtwork;
     const step = 2;
     for (let x = -bedX / 2; x <= bedX / 2 + 1e-5; x += step) {
       const isGridLine = Math.abs(x / 10 - Math.round(x / 10)) < 1e-5;
-      if (!isGridLine) continue;
+      if (!isGridLine || !drawReferenceGrid) continue;
       const target = Math.abs(x / 50 - Math.round(x / 50)) < 1e-5 ? major : minor;
       for (let y = -bedY / 2; y < bedY / 2; y += step) {
         const yy = Math.min(y + step, bedY / 2);
@@ -636,7 +664,7 @@ export default function SlicerPlateEditor({
     }
     for (let y = -bedY / 2; y <= bedY / 2 + 1e-5; y += step) {
       const isGridLine = Math.abs(y / 10 - Math.round(y / 10)) < 1e-5;
-      if (!isGridLine) continue;
+      if (!isGridLine || !drawReferenceGrid) continue;
       const target = Math.abs(y / 50 - Math.round(y / 50)) < 1e-5 ? major : minor;
       for (let x = -bedX / 2; x < bedX / 2; x += step) {
         const xx = Math.min(x + step, bedX / 2);
@@ -867,6 +895,7 @@ export default function SlicerPlateEditor({
         mesh.material.dispose();
       }
       nativeBedController.abort();
+      artworkTextureController?.abort();
       if (nativeBedMesh) {
         scene.remove(nativeBedMesh);
         nativeBedMesh.geometry.dispose();
