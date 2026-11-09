@@ -140,3 +140,16 @@ test("native process controls are read from the selected process profile and rou
   assert.match(workbench, /job\.settings\?\.process_overrides/);
   assert.match(workbench, /process_overrides: processOverrides/);
 });
+
+test("interactive settings can be saved as a selected reusable native process profile", () => {
+  const scene = read("SlicerPrepareWorkspace.jsx");
+  const workbench = read("SlicerWorkbench.jsx");
+  assert.match(scene, /Save as custom profile/);
+  assert.match(scene, /Save and select profile/);
+  assert.match(scene, /onSaveCustomProcessProfile\(customProfileName\)/);
+  assert.match(scene, /customProfileError/);
+  assert.match(workbench, /async function saveInteractiveProcessProfile/);
+  assert.match(workbench, /\/save-process\//);
+  assert.match(workbench, /process_profile_id: saved.id/);
+  assert.match(workbench, /setProcessOverrides\(\{\}\)/);
+});
