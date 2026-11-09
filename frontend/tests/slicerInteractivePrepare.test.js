@@ -283,3 +283,31 @@ test("official and fallback build plates avoid coplanar shimmer and repeating te
   assert.doesNotMatch(plate, /makeRepresentativePlateTexture/);
   assert.match(plate, /Math\.max\(2, Math\.min\(bedX, bedY\) \* 0\.015\)/);
 });
+
+
+test("loaded live filaments follow the model tree in the left rail", () => {
+  const scene = read("SlicerPrepareWorkspace.jsx");
+  const left = scene.indexOf('className="slicerPrepareLeftRail"');
+  const tree = scene.indexOf('className="slicerPrepareTree"', left);
+  const live = scene.indexOf('className="slicerLiveMaterialSlots"', tree);
+  const closeLeft = scene.indexOf('className="slicerPrepareScene"', left);
+  assert.ok(left >= 0 && tree > left && live > tree && closeLeft > live);
+  const settings = scene.indexOf('const settingsPanel =');
+  const settingsEnd = scene.indexOf('return <section className="panel printingSection', settings);
+  assert.ok(settings >= 0 && settingsEnd > settings);
+  assert.doesNotMatch(scene.slice(settings, settingsEnd), /className="slicerLiveMaterialSlots"/);
+  assert.match(scene, /liveMaterials\.map\(slot => <div className="slicerLiveMaterialSlot"/);
+  assert.match(scene, /onClick=\{refreshPrinterMaterials\}/);
+});
+
+test("print settings can reach build-plate bottom before scrolling, with equal-height expand action", () => {
+  const scene = read("SlicerPrepareWorkspace.jsx");
+  const css = fs.readFileSync(path.resolve(root, "../styles.css"), "utf8");
+  assert.match(scene, /new ResizeObserver\(updateHeight\)/);
+  assert.match(scene, /observer\.observe\(scene\)/);
+  assert.match(scene, /maxHeight: sceneHeight \+ "px"/);
+  assert.match(css, /\.slicerPrepareStructure > \.slicerPrepareSettings\{/);
+  assert.match(css, /\.slicerPrepareSettings \.slicerSettingsLevelLabel select,\s*\.slicerPrepareSettings \.slicerSettingsSearchRow \.slicerExpandSettingsAction\{/);
+  assert.match(css, /height:38px;\s*min-height:38px;/);
+  assert.match(css, /\.slicerSettingsModal \.slicerPrepareSettings\{/);
+});
