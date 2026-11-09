@@ -15,6 +15,12 @@ SETTINGS = {
     "printer": {
         "nozzle_diameter": (0.1, 2.0),
         "retract_length": (0, 20),
+        "retraction_length": (0, 20),
+        "retract_restart_extra": (-5, 5),
+        "retraction_speed": (0, 200),
+        "deretraction_speed": (0, 200),
+        "retraction_minimum_travel": (0, 100),
+        "wipe_distance": (0, 100),
         # OrcaSlicer 2.4.2 CLI validates this range more narrowly than some
         # official K2 presets. An explicit custom copy may adjust the value;
         # never silently mutate the manufacturer preset.
@@ -26,6 +32,26 @@ SETTINGS = {
         "cool_plate_temp": (0, 150),
         "textured_plate_temp": (0, 150),
         "filament_flow_ratio": (0.5, 1.5),
+        "nozzle_temperature_initial_layer": (100, 350),
+        "hot_plate_temp_initial_layer": (0, 150),
+        "cool_plate_temp_initial_layer": (0, 150),
+        "textured_plate_temp_initial_layer": (0, 150),
+        "textured_cool_plate_temp": (0, 150),
+        "textured_cool_plate_temp_initial_layer": (0, 150),
+        "supertack_plate_temp": (0, 150),
+        "supertack_plate_temp_initial_layer": (0, 150),
+        "eng_plate_temp": (0, 150),
+        "eng_plate_temp_initial_layer": (0, 150),
+        "filament_max_volumetric_speed": (0, 100),
+        "filament_diameter": (1, 3.5),
+        "filament_density": (0.1, 5),
+        "filament_cost": (0, 1000),
+        "close_fan_the_first_x_layers": (0, 50),
+        "initial_layer_fan_speed": (0, 100),
+        "full_fan_speed_layer": (0, 50),
+        "slow_down_min_speed": (0, 300),
+        "overhang_fan_speed": (0, 100),
+        "additional_cooling_fan_speed": (0, 100),
     },
     "process": {
         "layer_height": (0.05, 1.0),
@@ -42,7 +68,7 @@ def customise_native_json(raw: bytes, kind: str, name: str, edits: dict) -> byte
         raise SlicerProfileError("Invalid native profile category.")
     if not isinstance(name, str) or not 1 <= len(name.strip()) <= 200:
         raise SlicerProfileError("A custom profile name is required.")
-    if not isinstance(edits, dict) or not edits or len(edits) > 12:
+    if not isinstance(edits, dict) or not edits or len(edits) > len(SETTINGS[kind]):
         raise SlicerProfileError("Choose at least one supported setting.")
     if set(edits) - set(SETTINGS[kind]):
         raise SlicerProfileError("A native setting is not supported by the GUI editor.")
@@ -67,6 +93,10 @@ def customise_native_json(raw: bytes, kind: str, name: str, edits: dict) -> byte
         if key not in data:
             raise SlicerProfileError("This native profile does not define the selected setting.")
         existing = data[key]
+        if isinstance(existing, list) and len(existing) > 1:
+            # Do not silently overwrite multiple extruders/material channels
+            # with one scalar value. They require their own per-channel editor.
+            raise SlicerProfileError("This setting has multiple native values; edit it per extruder in the native slicer.")
         if key == "sparse_infill_density":
             formatted += "%"
         # Both slicers have native JSON presets containing scalar and array values.
