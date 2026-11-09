@@ -193,13 +193,15 @@ def _native_scalar(value):
     return value if isinstance(value, str) else None
 
 
-def _scalar(value):
+def _scalar(value, unit=""):
     if isinstance(value, list):
         if not value or len(value) > 8 or any(item != value[0] for item in value):
             return None
         value = value[0]
     if isinstance(value, bool) or not isinstance(value, (int, float, str)):
         return None
+    if isinstance(value, str) and value.strip().endswith("%") and unit != "%":
+        return None  # Do not treat percentages as dimensional measurements.
     try:
         result = float(str(value).strip().removesuffix("%"))
     except ValueError:
@@ -217,7 +219,7 @@ def process_schema(raw):
     for key, (category, label, unit, lo, hi, integer) in PROCESS_FIELDS.items():
         if key not in profile:
             continue
-        current = _scalar(profile[key])
+        current = _scalar(profile[key], unit)
         if current is None or not lo <= current <= hi:
             continue
         result[key] = {
@@ -240,7 +242,8 @@ def process_schema(raw):
             continue
         result[key] = {"category": category, "label": label, "kind": "toggle",
                        "options": [{"value": "0", "label": "Off"}, {"value": "1", "label": "On"}],
-                       "current": current}
+                       "current": current, "level": "basic" if key in BASIC_FIELDS else "advanced",
+                       "section": SECTION_FOR.get(key, "Advanced")}
     return result
 
 
@@ -287,7 +290,7 @@ def apply_process_overrides(raw, overrides):
         raise ValueError("A selected native process setting is unavailable in this profile.")
     for key, number in validated.items():
         previous = profile[key]
-        formatted = (number if isinstance(number, str) else (str(int(number)) if float(number).is_integer() else str(number)) + ("%" if key == "sparse_infill_density" else ""))
+        formatted = (number if isinstance(number, str) else (str(int(number)) if float(number).is_integer() else str(number)) + ("%" if PROCESS_FIELDS[key][2] == "%" and str(previous).strip().endswith("%") else ""))
         profile[key] = [formatted for _ in previous] if isinstance(previous, list) else formatted
     output = json.dumps(profile, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     if len(output) > 1024 * 1024:
