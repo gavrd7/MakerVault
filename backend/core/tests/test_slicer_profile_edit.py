@@ -34,6 +34,32 @@ class NativeSlicerProfileEditorTests(SimpleTestCase):
         self.assertEqual(edited["nozzle_temperature"], ["250"])
         self.assertEqual(edited["hot_plate_temp"], ["80"])
 
+
+    def test_custom_profile_editor_handles_native_filament_basics(self):
+        source = json.dumps({
+            "name": "PLA", "filament_max_volumetric_speed": ["18"],
+            "nozzle_temperature_initial_layer": ["220"],
+            "filament_diameter": ["1.75"],
+        }).encode()
+        edited = json.loads(customise_native_json(source, "filament", "PLA faster", {
+            "filament_max_volumetric_speed": 20,
+            "nozzle_temperature_initial_layer": 215,
+        }))
+        self.assertEqual(edited["filament_max_volumetric_speed"], ["20"])
+        self.assertEqual(edited["nozzle_temperature_initial_layer"], ["215"])
+        self.assertEqual(edited["filament_diameter"], ["1.75"])
+
+    def test_single_value_profile_editor_rejects_multi_extruder_overwrite(self):
+        source = json.dumps({
+            "name": "Dual extruder machine",
+            "retraction_speed": ["30", "45"],
+            "nozzle_diameter": ["0.4", "0.6"],
+        }).encode()
+        with self.assertRaisesRegex(SlicerProfileError, "multiple native values"):
+            customise_native_json(source, "printer", "Unsafe edit", {
+                "retraction_speed": 50,
+            })
+
     def test_k2_long_retraction_must_be_explicitly_adjusted_on_a_copy(self):
         original = json.dumps({
             "name": "Official Creality K2 0.4 nozzle",
