@@ -61,7 +61,9 @@ class SliceJobApiTests(TestCase):
         self.client.force_login(self.owner)
         deleted = self.client.delete(self.url + job.json()["job"]["id"] + "/")
         self.assertEqual(deleted.status_code, 200, deleted.content)
-        self.assertFalse(FileAsset.objects.filter(pk=asset.pk).exists())
+        self.assertTrue(FileAsset.objects.filter(pk=asset.pk).exists())
+        # The temporary source remains private for any live unsaved editor session.
+        self.assertNotIn(str(asset.pk), str(self.client.get("/api/files/").json()))
 
     def test_gcode_library_preference_is_explicit_and_private(self):
         self.client.force_login(self.owner)
@@ -138,7 +140,7 @@ class SliceJobApiTests(TestCase):
                                 "sparse_infill_density": 20}}
         self.client.force_login(self.other)
         self.assertEqual(self.client.post(url, data=json.dumps(payload),
-                                          content_type="application/json").status_code, 404)
+                                          content_type="application/json").status_code, 403)
         self.client.force_login(self.owner)
         response = self.client.post(url, data=json.dumps(payload),
                                     content_type="application/json")
