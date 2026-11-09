@@ -171,6 +171,42 @@ class NativeProcessSettingsTests(SimpleTestCase):
         }))
         self.assertEqual(edited["sparse_infill_density"], "20%")
 
+    def test_official_k2_style_profile_exposes_verified_expert_controls(self):
+        # Representative native keys/values from OrcaSlicer v2.4.2:
+        # resources/profiles/Creality/process/
+        # 0.20mm Standard @Creality K2 0.4 nozzle.json
+        source = json.dumps({
+            "layer_height": "0.2", "wall_generator": "classic",
+            "wall_loops": "2", "top_surface_pattern": "monotonicline",
+            "bottom_surface_pattern": "monotonic",
+            "sparse_infill_pattern": "grid", "infill_direction": "45",
+            "infill_wall_overlap": "30%",
+            "outer_wall_jerk": "8", "default_acceleration": "12000",
+            "support_type": "normal(auto)", "enable_support": "0",
+            "brim_object_gap": "0.1", "spiral_mode": "0",
+            "top_solid_infill_flow_ratio": "1",
+            "bottom_solid_infill_flow_ratio": "1",
+            "print_sequence": "by layer",
+            "filename_format": "{input_filename_base}.gcode",
+        }).encode()
+        schema = process_schema(source)
+        for key in ("wall_generator", "top_surface_pattern", "bottom_surface_pattern",
+                    "infill_direction", "outer_wall_jerk", "support_type",
+                    "brim_object_gap", "spiral_mode", "top_solid_infill_flow_ratio"):
+            self.assertIn(key, schema, key)
+        for key in ("print_sequence", "filename_format"):
+            self.assertNotIn(key, schema)
+        edited = json.loads(apply_process_overrides(source, {
+            "wall_generator": "arachne", "infill_direction": 30,
+            "outer_wall_jerk": 9, "enable_support": "1",
+        }))
+        self.assertEqual(edited["wall_generator"], "arachne")
+        self.assertEqual(edited["infill_direction"], "30")
+        self.assertEqual(edited["outer_wall_jerk"], "9")
+        self.assertEqual(edited["enable_support"], "1")
+        self.assertEqual(edited["print_sequence"], "by layer")
+        self.assertEqual(edited["filename_format"], "{input_filename_base}.gcode")
+
     def test_empty_overrides_leave_exact_original_bytes(self):
         source = self.sample()
         self.assertIs(apply_process_overrides(source, {}), source)
