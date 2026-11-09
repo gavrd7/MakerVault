@@ -63,6 +63,20 @@ class NativeProcessSettingsTests(SimpleTestCase):
         categories = {spec[0] for spec in PROCESS_FIELDS.values()}
         self.assertTrue({"Quality", "Strength", "Speed", "Supports", "Others"} <= categories)
 
+    def test_native_changes_persist_as_draft_metadata(self):
+        from core.slicer_api import _draft_plate_settings
+        settings = _draft_plate_settings(None, None, {
+            "workflow": "interactive", "process_overrides": {
+                "layer_height": 0.16, "wall_loops": 3
+            },
+        })
+        self.assertEqual(settings["process_overrides"],
+                         {"layer_height": 0.16, "wall_loops": 3})
+        with self.assertRaises(ValueError):
+            _draft_plate_settings(None, None, {
+                "process_overrides": {"machine_start_gcode": "M600"},
+            })
+
     def test_empty_overrides_leave_exact_original_bytes(self):
         source = self.sample()
         self.assertIs(apply_process_overrides(source, {}), source)
