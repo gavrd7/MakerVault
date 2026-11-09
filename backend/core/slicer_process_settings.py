@@ -40,6 +40,52 @@ PROCESS_FIELDS = {
     "sparse_infill_line_width": ("Strength", "Sparse infill line width", "mm", 0.1, 2.0, False),
     "support_speed": ("Supports", "Support speed", "mm/s", 5, 500, False),
     "support_interface_speed": ("Supports", "Support interface speed", "mm/s", 5, 500, False),
+    # Quality: exact native numeric values (no expression / mixed-unit coercion).
+    "internal_solid_infill_line_width": ("Quality", "Internal solid infill line width", "mm", 0.1, 2, False),
+    "support_line_width": ("Quality", "Support line width", "mm", 0.1, 2, False),
+    "slice_closing_radius": ("Quality", "Slice gap closing radius", "mm", 0, 1, False),
+    "resolution": ("Quality", "Resolution", "mm", 0.001, 1, False),
+    "xy_hole_compensation": ("Quality", "X-Y hole compensation", "mm", -2, 2, False),
+    "xy_contour_compensation": ("Quality", "X-Y contour compensation", "mm", -2, 2, False),
+    "elefant_foot_compensation": ("Quality", "Elephant foot compensation", "mm", 0, 2, False),
+    "elefant_foot_compensation_layers": ("Quality", "Elephant foot compensation layers", "", 1, 10, True),
+    "top_surface_flow_ratio": ("Quality", "Top surface flow ratio", "", 0.5, 2, False),
+    "bottom_surface_flow_ratio": ("Quality", "Bottom surface flow ratio", "", 0.5, 2, False),
+    "bridge_flow": ("Quality", "Bridge flow ratio", "", 0.5, 2, False),
+    "internal_bridge_flow": ("Quality", "Internal bridge flow ratio", "", 0.5, 2, False),
+    "fuzzy_skin_point_distance": ("Quality", "Fuzzy skin point distance", "mm", 0.05, 5, False),
+    "fuzzy_skin_thickness": ("Quality", "Fuzzy skin thickness", "mm", 0.01, 3, False),
+    # Strength and infill.
+    "top_shell_thickness": ("Strength", "Top shell thickness", "mm", 0, 10, False),
+    "bottom_shell_thickness": ("Strength", "Bottom shell thickness", "mm", 0, 10, False),
+    "sparse_infill_direction": ("Strength", "Sparse infill direction", "°", -360, 360, False),
+    "solid_infill_direction": ("Strength", "Solid infill direction", "°", -360, 360, False),
+    "infill_wall_overlap": ("Strength", "Infill/wall overlap", "%", 0, 100, False),
+    "top_surface_density": ("Strength", "Top surface density", "%", 0, 100, False),
+    "bottom_surface_density": ("Strength", "Bottom surface density", "%", 0, 100, False),
+    "minimum_sparse_infill_area": ("Strength", "Minimum sparse infill threshold", "mm²", 0, 1000, False),
+    # Speed and acceleration.
+    "internal_solid_infill_speed": ("Speed", "Internal solid infill speed", "mm/s", 5, 500, False),
+    "gap_infill_speed": ("Speed", "Gap infill speed", "mm/s", 5, 500, False),
+    "default_acceleration": ("Speed", "Normal printing acceleration", "mm/s²", 50, 30000, False),
+    "initial_layer_acceleration": ("Speed", "First layer acceleration", "mm/s²", 50, 30000, False),
+    "top_surface_acceleration": ("Speed", "Top surface acceleration", "mm/s²", 50, 30000, False),
+    # Supports: generated only from existing, resolved native profile keys.
+    "support_bottom_z_distance": ("Supports", "Bottom Z distance", "mm", 0, 5, False),
+    "support_top_z_distance": ("Supports", "Top Z distance", "mm", 0, 5, False),
+    "support_base_pattern_spacing": ("Supports", "Base pattern spacing", "mm", 0.1, 15, False),
+    "support_interface_spacing": ("Supports", "Interface pattern spacing", "mm", 0, 15, False),
+    "support_bottom_interface_spacing": ("Supports", "Bottom interface spacing", "mm", 0, 15, False),
+    "support_interface_bottom_layers": ("Supports", "Bottom interface layers", "", 0, 10, True),
+    "raft_layers": ("Supports", "Raft layers", "", 0, 10, True),
+    "support_wall_loops": ("Supports", "Support wall loops", "", 0, 10, True),
+    "support_object_xy_distance": ("Supports", "Support/object XY distance", "mm", 0, 10, False),
+    # Skirt / brim; G-code output templates remain intentionally unavailable.
+    "skirt_distance": ("Others", "Skirt distance", "mm", 0, 50, False),
+    "skirt_height": ("Others", "Skirt height", "layers", 1, 25, True),
+    "skirt_speed": ("Others", "Skirt speed", "mm/s", 5, 500, False),
+    "brim_object_gap": ("Others", "Brim/object gap", "mm", 0, 10, False),
+    "brim_flow_ratio": ("Others", "Brim flow ratio", "", 0.5, 2, False),
 }
 
 
@@ -54,8 +100,89 @@ CHOICE_FIELDS = {
         ("random", "Random"),
     )),
 }
-TOGGLE_FIELDS = {"enable_support": ("Supports", "Generate supports")}
+TOGGLE_FIELDS = {
+    "enable_support": ("Supports", "Generate supports"),
+    "support_on_build_plate_only": ("Supports", "On build plate only"),
+    "support_remove_small_overhang": ("Supports", "Ignore small overhangs"),
+    "detect_thin_wall": ("Strength", "Detect thin walls"),
+    "alternate_extra_wall": ("Strength", "Alternate extra wall"),
+    "infill_combination": ("Strength", "Infill combination"),
+    "spiral_mode": ("Others", "Spiral vase"),
+    "ironing_support": ("Supports", "Ironing support interface"),
+    "reduce_infill_retraction": ("Others", "Reduce infill retraction"),
+}
 ALL_FIELDS = set(PROCESS_FIELDS) | set(CHOICE_FIELDS) | set(TOGGLE_FIELDS)
+
+# Curated from OrcaSlicer process panels. Basic contains ordinary, frequently
+# adjusted print outcomes. All other supported fields appear in Advanced.
+BASIC_FIELDS = frozenset({
+    "layer_height", "initial_layer_print_height", "line_width",
+    "wall_loops", "top_shell_layers", "bottom_shell_layers",
+    "sparse_infill_density", "sparse_infill_pattern", "seam_position",
+    "outer_wall_speed", "inner_wall_speed", "sparse_infill_speed",
+    "travel_speed", "initial_layer_speed", "enable_support",
+    "support_threshold_angle", "support_on_build_plate_only",
+    "brim_width", "skirt_loops",
+})
+SECTIONS = {
+    "Quality": {
+        "Layer height": {"layer_height", "initial_layer_print_height"},
+        "Line width": {"line_width", "outer_wall_line_width", "inner_wall_line_width",
+                       "top_surface_line_width", "initial_layer_line_width",
+                       "sparse_infill_line_width", "internal_solid_infill_line_width",
+                       "support_line_width"},
+        "Seam": {"seam_position"},
+        "Precision": {"slice_closing_radius", "resolution", "xy_hole_compensation",
+                       "xy_contour_compensation", "elefant_foot_compensation",
+                       "elefant_foot_compensation_layers"},
+        "Walls and surfaces": {"top_surface_flow_ratio", "bottom_surface_flow_ratio"},
+        "Bridging": {"bridge_flow", "internal_bridge_flow"},
+        "Fuzzy skin": {"fuzzy_skin_point_distance", "fuzzy_skin_thickness"},
+    },
+    "Strength": {
+        "Walls": {"wall_loops", "detect_thin_wall", "alternate_extra_wall"},
+        "Top/bottom shells": {"top_shell_layers", "bottom_shell_layers",
+                              "top_shell_thickness", "bottom_shell_thickness",
+                              "top_surface_density", "bottom_surface_density"},
+        "Infill": {"sparse_infill_density", "sparse_infill_pattern",
+                   "sparse_infill_direction", "solid_infill_direction",
+                   "infill_wall_overlap", "infill_combination",
+                   "minimum_sparse_infill_area", "sparse_infill_line_width"},
+    },
+    "Speed": {
+        "First layer speed": {"initial_layer_speed", "initial_layer_infill_speed"},
+        "Other layers speed": {"outer_wall_speed", "inner_wall_speed",
+                               "sparse_infill_speed", "internal_solid_infill_speed",
+                               "top_surface_speed", "gap_infill_speed"},
+        "Travel speed": {"travel_speed"},
+        "Acceleration": {"default_acceleration", "outer_wall_acceleration",
+                         "inner_wall_acceleration", "initial_layer_acceleration",
+                         "top_surface_acceleration", "travel_acceleration"},
+    },
+    "Supports": {
+        "Support": {"enable_support", "support_threshold_angle",
+                    "support_on_build_plate_only", "support_remove_small_overhang"},
+        "Raft": {"raft_layers"},
+        "Support ironing": {"ironing_support"},
+        "Advanced": {"support_top_z_distance", "support_bottom_z_distance",
+                     "support_wall_loops", "support_base_pattern_spacing",
+                     "support_interface_top_layers", "support_interface_bottom_layers",
+                     "support_interface_spacing", "support_bottom_interface_spacing",
+                     "support_object_xy_distance", "support_speed",
+                     "support_interface_speed"},
+    },
+    "Others": {
+        "Skirt": {"skirt_loops", "skirt_distance", "skirt_height", "skirt_speed"},
+        "Brim": {"brim_width", "brim_object_gap", "brim_flow_ratio"},
+        "Special mode": {"spiral_mode"},
+        "G-code output": {"reduce_infill_retraction"},
+    },
+}
+SECTION_FOR = {
+    key: section for group in SECTIONS.values()
+    for section, keys in group.items() for key in keys
+}
+
 
 
 def _native_scalar(value):
@@ -96,7 +223,8 @@ def process_schema(raw):
         result[key] = {
             "category": category, "label": label, "unit": unit,
             "minimum": lo, "maximum": hi, "integer": integer,
-            "current": current,
+            "current": current, "level": "basic" if key in BASIC_FIELDS else "advanced",
+            "section": SECTION_FOR.get(key, "Advanced"),
         }
     for key, (category, label, options) in CHOICE_FIELDS.items():
         current = _native_scalar(profile.get(key))
@@ -104,7 +232,8 @@ def process_schema(raw):
             continue
         result[key] = {"category": category, "label": label, "kind": "choice",
                        "options": [{"value": value, "label": text} for value, text in options],
-                       "current": current}
+                       "current": current, "level": "basic" if key in BASIC_FIELDS else "advanced",
+                       "section": SECTION_FOR.get(key, "Advanced")}
     for key, (category, label) in TOGGLE_FIELDS.items():
         current = _native_scalar(profile.get(key))
         if current not in ("0", "1"):
