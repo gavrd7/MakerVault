@@ -343,10 +343,13 @@ export default function SlicerPrepareWorkspace({
     : !objects.length ? "Add a model to the build plate first."
     : !profilesReady ? "Select native printer, process and filament profiles in Slicer setup."
     : "";
+  const objectSettingsPending = objects.some(item => Object.keys(item.process_overrides || {}).length > 0);
   const sliceBlockReason = draftBlockReason ||
-    (!workerConfigured
-      ? "The selected slicing engine is not available in the verified worker. Check engine installations or choose an installed engine."
-      : "");
+    (objectSettingsPending
+      ? "Per-object edits are saved in the draft, but slicing is disabled until the Orca worker preserves separate objects and applies each override."
+      : !workerConfigured
+        ? "The selected slicing engine is not available in the verified worker. Check engine installations or choose an installed engine."
+        : "");
   useEffect(() => {
     if (!settingsExpanded) return undefined;
     const closeOnEscape = event => {
