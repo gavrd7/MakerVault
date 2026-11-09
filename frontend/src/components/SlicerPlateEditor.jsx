@@ -23,6 +23,64 @@ const PLATE_SURFACE = {
   supertack: { base: "#3b3c45", speckled: false, label: "SuperTack Plate" },
 };
 
+function makeMakerVaultPlateTexture(type, bedX, bedY) {
+  // A resolution-independent, locally generated MakerVault bed surface.
+  // Geometry is supplied by the printer's native polygon, and UVs span that
+  // polygon's bounding rectangle: no assumptions about brand or plate size.
+  const canvas = document.createElement("canvas");
+  canvas.width = 1024;
+  canvas.height = 1024;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return makeRepresentativePlateTexture(type);
+  const surface = PLATE_SURFACE[type] || PLATE_SURFACE.default;
+  ctx.fillStyle = surface.base;
+  ctx.fillRect(0, 0, 1024, 1024);
+  const light = ctx.createLinearGradient(0, 0, 1024, 1024);
+  light.addColorStop(0, "rgba(145,177,204,.19)");
+  light.addColorStop(.4, "rgba(80,120,150,.025)");
+  light.addColorStop(1, "rgba(0,0,0,.2)");
+  ctx.fillStyle = light;
+  ctx.fillRect(0, 0, 1024, 1024);
+  if (surface.speckled) {
+    for (let i = 0; i < 6500; i++) {
+      ctx.fillStyle = i % 3 ? "rgba(205,218,228,.09)" : "rgba(0,0,0,.12)";
+      ctx.fillRect((i * 73 + 17) % 1024, (i * 137 + 43) % 1024, 2, 2);
+    }
+  }
+  // The edge stripe and MakerVault signature are part of the physical
+  // surface, behind models and independent of the optional user labels.
+  const margin = 18;
+  ctx.strokeStyle = "rgba(135,173,206,.72)";
+  ctx.lineWidth = 5;
+  ctx.strokeRect(margin, margin, 1024 - 2 * margin, 1024 - 2 * margin);
+  ctx.strokeStyle = "rgba(82,115,144,.62)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(margin + 11, margin + 11, 1024 - 2 * (margin + 11), 1024 - 2 * (margin + 11));
+  // Compact logo at the front edge, scaled to the same fraction of any bed.
+  ctx.save();
+  ctx.translate(512, 916);
+  ctx.strokeStyle = "rgba(171,200,225,.78)";
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  for (let n = 0; n <= 6; n++) {
+    const angle = n * Math.PI / 3 - Math.PI / 6;
+    const x = Math.cos(angle) * 27, y = Math.sin(angle) * 27;
+    if (n === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+  ctx.fillStyle = "#c3d8eb";
+  ctx.font = "700 25px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("MAKERVAULT", 0, 65);
+  ctx.restore();
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  texture.userData = { makerVaultBed: true, width: bedX, depth: bedY };
+  return texture;
+}
+
 function makeRepresentativePlateTexture(type) {
   const surface = PLATE_SURFACE[type] || PLATE_SURFACE.default;
   const canvas = document.createElement("canvas");
@@ -424,8 +482,19 @@ export default function SlicerPlateEditor({
     const bedTexture = useMakerVaultBed
       ? makeMakerVaultPlateTexture(plateType, bedX, bedY)
       : makeRepresentativePlateTexture(plateType);
+    const bedGeometry = new THREE.ShapeGeometry(plateShape);
+    if (useMakerVaultBed) {
+      const positions = bedGeometry.getAttribute("position");
+      const uv = bedGeometry.getAttribute("uv");
+      for (let i = 0; i < positions.count; i++) {
+        uv.setXY(i,
+          (positions.getX(i) + bedX / 2) / bedX,
+          (positions.getY(i) + bedY / 2) / bedY);
+      }
+      uv.needsUpdate = true;
+    }
     const bed = new THREE.Mesh(
-      new THREE.ShapeGeometry(plateShape),
+      bedGeometry,
       new THREE.MeshStandardMaterial({
         color: bedTexture ? "#ffffff" : (PLATE_SURFACE[plateType]?.base || "#263342"),
         map: bedTexture, side: THREE.DoubleSide, roughness: 0.94,
