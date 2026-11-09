@@ -70,31 +70,67 @@ function makeMakerVaultPlateTexture(type, bedX, bedY) {
   texture.userData = { makerVaultBed: true, width: bedX, depth: bedY };
   const logo = new Image();
   logo.onload = () => {
-    // Print the logo directly on the bed: remove the old white sticker,
-    // preserve blue branding, and brighten dark lettering for legibility.
-    const stamp = document.createElement("canvas");
-    stamp.width = 564;
-    stamp.height = 194;
-    const stampContext = stamp.getContext("2d", { willReadFrequently: true });
-    if (!stampContext) return;
-    stampContext.drawImage(logo, 0, 0, stamp.width, stamp.height);
-    const pixels = stampContext.getImageData(0, 0, stamp.width, stamp.height);
-    for (let i = 0; i < pixels.data.length; i += 4) {
-      const r = pixels.data[i], g = pixels.data[i + 1], b = pixels.data[i + 2];
-      // An embedded white image background must not become a printed label.
-      if (r > 235 && g > 235 && b > 235) {
-        pixels.data[i + 3] = 0;
-      } else if (Math.max(r, g, b) < 155 && b < r * 1.15) {
-        // Lift only neutral/dark letter pixels. Keep the brand-blue pixels.
-        pixels.data[i] = 190;
-        pixels.data[i + 1] = 203;
-        pixels.data[i + 2] = 214;
-      }
+    // The supplied SVG embeds a small raster image including its light-grey
+    // backing. Only the icon is reused. Erase the icon's edge-connected
+    // backdrop, then typeset the lettering at native canvas resolution so
+    // neither an opaque patch nor rasterised text fringes cover the bed.
+    const iconCanvas = document.createElement("canvas");
+    iconCanvas.width = 140;
+    iconCanvas.height = 156;
+    const iconCtx = iconCanvas.getContext("2d", { willReadFrequently: true });
+    if (!iconCtx) return;
+    iconCtx.drawImage(logo, 0, 0, 70, 78, 0, 0, 140, 156);
+    const bitmap = iconCtx.getImageData(0, 0, 140, 156);
+    const w = bitmap.width, h = bitmap.height, pixels = bitmap.data;
+    const sample = (x, y) => Array.from(pixels.slice((y * w + x) * 4, (y * w + x) * 4 + 3));
+    // Use the corners to derive the image's actual background colour.
+    const corners = [sample(0, 0), sample(w - 1, 0),
+      sample(0, h - 1), sample(w - 1, h - 1)];
+    const background = [0, 1, 2].map(channel =>
+      corners.reduce((sum, rgb) => sum + rgb[channel], 0) / corners.length);
+    const colourDistance = index => Math.sqrt(
+      (pixels[index] - background[0]) ** 2 +
+      (pixels[index + 1] - background[1]) ** 2 +
+      (pixels[index + 2] - background[2]) ** 2);
+    const seen = new Uint8Array(w * h);
+    const queue = [];
+    const enqueue = (x, y) => {
+      if (x < 0 || y < 0 || x >= w || y >= h) return;
+      const index = y * w + x;
+      if (seen[index] || colourDistance(index * 4) > 72) return;
+      seen[index] = 1;
+      queue.push(index);
+    };
+    for (let x = 0; x < w; x++) { enqueue(x, 0); enqueue(x, h - 1); }
+    for (let y = 0; y < h; y++) { enqueue(0, y); enqueue(w - 1, y); }
+    for (let pointer = 0; pointer < queue.length; pointer++) {
+      const index = queue[pointer];
+      const x = index % w, y = Math.floor(index / w);
+      pixels[index * 4 + 3] = 0;
+      enqueue(x - 1, y); enqueue(x + 1, y);
+      enqueue(x, y - 1); enqueue(x, y + 1);
     }
-    stampContext.putImageData(pixels, 0, 0);
+    iconCtx.putImageData(bitmap, 0, 0);
     ctx.save();
-    ctx.globalAlpha = 0.9;
-    ctx.drawImage(stamp, 371, 883, 282, 97);
+    ctx.globalAlpha = 0.94;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(iconCanvas, 371, 890, 78, 87);
+    // Canvas text is resolution-independent and sits directly on the bed.
+    // Keep the colour split from the official wordmark without its raster
+    // anti-aliasing/background artefacts.
+    const labelStart = 451, labelTop = 933, availableWidth = 199;
+    let font = 39;
+    ctx.font = "700 " + font + "px system-ui, sans-serif";
+    while (font > 20 && ctx.measureText("MakerVault").width > availableWidth) {
+      font -= 1;
+      ctx.font = "700 " + font + "px system-ui, sans-serif";
+    }
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#d4e2ed";
+    ctx.fillText("Maker", labelStart, labelTop);
+    ctx.fillStyle = "#49b9e8";
+    ctx.fillText("Vault", labelStart + ctx.measureText("Maker").width, labelTop);
     ctx.restore();
     texture.needsUpdate = true;
   };
