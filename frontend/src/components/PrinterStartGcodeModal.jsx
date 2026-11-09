@@ -288,7 +288,9 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
           setError("Printer outcome is uncertain. Inspect the printer before trying anything else.");
         }
       }
-      await onChanged?.();
+      // A temporary UI refresh failure must not turn a confirmed submission
+      // into an apparent printer error or tempt a second submission.
+      try { await onChanged?.(); } catch (_refreshError) { /* Submission receipt is authoritative. */ }
       if (isConfirmedSubmission(result.submission)) {
         onSubmissionConfirmed?.(result.submission);
       }
