@@ -15,6 +15,7 @@ urlpatterns = [
     path("printing/slicer/profiles/<uuid:profile_id>/default/", slicer_api.set_default_profile, name="api-slicer-default-profile"),
     path("printing/slicer/official-profiles/", slicer_api.official_profiles, name="api-slicer-official-profiles"),
     path("printing/slicer/profiles/<uuid:profile_id>/dependencies/", slicer_api.profile_dependencies, name="api-slicer-profile-dependencies"),
+    path("printing/slicer/profiles/<uuid:profile_id>/settings/", slicer_api.profile_process_settings, name="api-slicer-profile-process-settings"),
     path("printing/slicer/profiles/<uuid:profile_id>/plate/", slicer_api.profile_plate, name="api-slicer-profile-plate"),
     path("printing/slicer/profiles/<uuid:profile_id>/artwork/", slicer_api.profile_artwork, name="api-slicer-profile-artwork"),
     path("printing/slicer/profiles/<uuid:profile_id>/bed-model/", slicer_api.profile_bed_model, name="api-slicer-profile-bed-model"),
