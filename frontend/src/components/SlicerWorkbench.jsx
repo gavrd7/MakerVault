@@ -895,13 +895,14 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       onPrimaryChange={id => update("input_asset_id", String(id))}
       onFilesUploaded={onFilesUploaded} defaultColor={selectedSpoolHex}
       onManualColorChange={instanceId => manuallyColouredModels.current.add(instanceId)}
+      plateType={form.plate}
       plate={customBed.enabled ? { size_mm: [Number(customBed.x), Number(customBed.y)] }
         : (nativePlate?.plate && ["available", "partial"].includes(nativePlate.plate.status) ? nativePlate.plate
           : (Number(selectedPrinter?.build_volume?.x) > 0 && Number(selectedPrinter?.build_volume?.y) > 0
             ? { size_mm: [Number(selectedPrinter.build_volume.x), Number(selectedPrinter.build_volume.y)] } : null))}
       canEdit={canPrepare} busy={busy || loading} error={error} notice={notice}
       engine={form.engine + " " + form.engine_version} printer={selectedPrinter?.name}
-      printerDetails={selectedPrinter} nozzleMm={form.nozzle_mm}
+      printerDetails={selectedPrinter} nozzleMm={form.nozzle_mm} plateType={form.plate}
       printerId={form.printer_id}
       selectedProfiles={{ printer: form.printer_preset, process: form.process_preset, filament: form.filament_preset,
         printer_id: form.printer_profile_id, process_id: form.process_profile_id, filament_id: form.filament_profile_id }}
@@ -1037,7 +1038,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     </div>
 
 
-    <SlicerPlateEditor
+    <SlicerPlateEditor plateType={form.plate}
       files={stlFiles}
       localAssets={plateLocalAssets} onLocalAssetsChange={setPlateLocalAssets}
       objects={plateObjects}
