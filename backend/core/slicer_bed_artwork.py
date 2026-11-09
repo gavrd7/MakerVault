@@ -9,6 +9,7 @@ import hashlib
 import json
 import re
 from configparser import ConfigParser, Error as ConfigError
+from functools import lru_cache
 from xml.etree import ElementTree
 
 import requests
@@ -21,6 +22,7 @@ from .slicer_mesh import inspect_stl, MeshInspectionError
 from .slicer_profile_lineage import _inspect_source
 from .slicer_native_resolution import resolved_native_profile
 from .slicer_profiles import SlicerProfileError, _check_orca_json
+from .slicer_official_profiles import _get_json, OfficialProfileError
 
 
 MAX_ARTWORK_BYTES = 256 * 1024
@@ -74,6 +76,34 @@ def _owned_profile_data(profile):
     return data
 
 
+@lru_cache(maxsize=64)
+def _official_machine_model(source, ref, vendor, model):
+    """Inspect the exact upstream model entry indexed by a versioned vendor manifest."""
+    root = f"https://raw.githubusercontent.com/{source}/{ref}/resources/profiles"
+    try:
+        index, _ = _get_json(f"{root}/{vendor}.json", 1024 * 1024)
+    except OfficialProfileError:
+        return None
+    records = index.get("machine_model_list")
+    if not isinstance(records, list) or len(records) > 5000:
+        return None
+    matches = [
+        row["sub_path"] for row in records
+        if isinstance(row, dict) and row.get("name") == model
+        and isinstance(row.get("sub_path"), str)
+        and re.fullmatch(r"machine/[A-Za-z0-9_. -]+\\.json", row["sub_path"])
+    ]
+    if len(matches) != 1:
+        return None
+    try:
+        data, _ = _get_json(f"{root}/{vendor}/{matches[0]}", 1024 * 1024)
+    except OfficialProfileError:
+        return None
+    if data.get("type") != "machine_model" or data.get("name") != model:
+        return None
+    return data
+
+
 def official_asset_source(profile, kind="texture"):
     """Resolve version-aware, owner-checked profile metadata to a fixed host.
 
@@ -122,6 +152,12 @@ def official_asset_source(profile, kind="texture"):
             filename = json.loads(resolved_native_profile(profile)).get(key)
         except (SlicerProfileError, ValueError, UnicodeDecodeError, OSError):
             return None
+    if not filename and profile.engine in ("orcaslicer", "crealityprint", "bambustudio"):
+        model = data.get("printer_model")
+        if isinstance(model, str) and 0 < len(model) <= 200:
+            model_data = _official_machine_model(source, ref, provenance.group(1), model)
+            if model_data is not None:
+                filename = model_data.get(key)
     extension = ".svg" if kind == "texture" else ".stl"
     if not isinstance(filename, str) or not _BASENAME.fullmatch(filename) or not filename.lower().endswith(extension):
         return None
