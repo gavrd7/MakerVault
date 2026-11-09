@@ -156,6 +156,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const update = (name, value) => setForm(current => {
     if (name === "engine" || name === "engine_version") return {
       ...current, [name]: value,
+      plate: name === "engine" && value !== current.engine ? "default" : current.plate,
       printer_profile_id: "", filament_profile_id: "", process_profile_id: "",
     };
     if (name.endsWith("_preset")) return {
@@ -930,6 +931,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               const selectedEngine = engines.find(item => item.key === key);
               setForm(current => ({
                 ...current, engine: key,
+                plate: key !== current.engine ? "default" : current.plate,
                 engine_version: selectedEngine?.installed_version ||
                   profiles.find(profile => profile.engine === key)?.engine_version || "",
                 printer_profile_id: "", filament_profile_id: "", process_profile_id: "",
