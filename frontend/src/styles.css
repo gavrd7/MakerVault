@@ -4434,3 +4434,13 @@ a:focus-visible,
 .slicerCustomProcessForm>small{font-size:.76rem;line-height:1.4;color:var(--muted,#9aafc3)}
 .slicerNativeSettingsButtons{display:flex;flex-wrap:wrap;gap:8px;min-width:0}
 .slicerNativeSettingsButtons>button{max-width:100%;white-space:normal;min-width:0}
+
+/* Responsive, searchable native process controls. */
+.slicerSettingsSearchRow{display:flex;align-items:end;flex-wrap:wrap;gap:10px;min-width:0;margin:10px 0 14px}
+.slicerSettingsSearchLabel,.slicerSettingsLevelLabel{display:flex;flex-direction:column;gap:5px;min-width:0;font-size:.78rem}
+.slicerSettingsSearchLabel{flex:1 1 160px}
+.slicerSettingsLevelLabel{flex:0 1 110px}
+.slicerSettingsSearchLabel input,.slicerSettingsLevelLabel select,
+.slicerNativeSettingField select{width:100%;min-width:0;max-width:100%;box-sizing:border-box;padding:7px 8px}
+.slicerNativeSettingField select{font-size:.82rem}
+@media(max-width:420px){.slicerSettingsLevelLabel{flex:1 1 95px}}
