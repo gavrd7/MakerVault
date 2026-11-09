@@ -43,3 +43,17 @@ test("engine installation view links to instructions for existing MakerVault dep
   assert.match(workbench, /rel="noopener noreferrer"/);
   assert.match(workbench, /Docker socket access/);
 });
+
+test("mobile slicer engine cards keep native radio indicator compact and card tappable", () => {
+  const css = fs.readFileSync(path.join(frontend, "src/styles.css"), "utf8");
+  const widget = fs.readFileSync(path.join(frontend, "src/components/SlicerEngineChoices.jsx"), "utf8");
+  const radio = css.match(/\.slicerEngineChoice input\[type="radio"\]\{([\s\S]*?)\}/);
+  assert.ok(radio);
+  assert.match(radio[1], /width:18px/);
+  assert.match(radio[1], /height:18px/);
+  assert.match(radio[1], /min-height:18px/);
+  assert.match(css, /@media\(max-width:600px\)\{[\s\S]*?\.slicerEngineChoice\{display:flex;flex-direction:row/);
+  assert.match(css, /\.slicerEngineChoice\{display:flex;flex-direction:row[^}]*min-height:64px/);
+  assert.match(widget, /<label key=\{engine\.key\} className=/);
+  assert.match(widget, /<input type="radio"/);
+});
