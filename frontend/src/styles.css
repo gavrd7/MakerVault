@@ -4401,3 +4401,13 @@ a:focus-visible,
 @media(max-width:450px){
   .slicerNativeSettingField{grid-template-columns:minmax(0,1fr) minmax(75px,100px)}
 }
+
+/* Saving per-draft edits to a reusable custom native process profile. */
+.slicerCustomProcessForm{display:flex;flex-direction:column;gap:9px;min-width:0;
+  margin:8px 0 12px;padding:12px;border:1px solid var(--border,#394958);
+  border-radius:10px;background:var(--surface-2,#101924)}
+.slicerCustomProcessForm>label{font-size:.83rem;font-weight:600;overflow-wrap:anywhere}
+.slicerCustomProcessForm>input{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+.slicerCustomProcessForm>small{font-size:.76rem;line-height:1.4;color:var(--muted,#9aafc3)}
+.slicerNativeSettingsButtons{display:flex;flex-wrap:wrap;gap:8px;min-width:0}
+.slicerNativeSettingsButtons>button{max-width:100%;white-space:normal;min-width:0}
