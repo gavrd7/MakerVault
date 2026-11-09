@@ -514,7 +514,9 @@ export default function SlicerPlateEditor({
         metalness: 0.28, roughness: 0.68, side: THREE.DoubleSide,
       }));
     const plateDepth = Math.max(2, Math.min(5, Math.min(bedX, bedY) * 0.012));
-    plateBody.position.z = -plateDepth;
+    // Keep the extrusion's top slightly below the painted printable surface,
+    // avoiding depth fighting with the branded texture and native art.
+    plateBody.position.z = -plateDepth - 0.35;
     plateBody.renderOrder = -1;
     scene.add(plateBody);
     let bedArtwork = null;
