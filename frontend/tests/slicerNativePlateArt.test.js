@@ -95,7 +95,9 @@ test("official art is default and the print sheet sits over a separate wider mac
 test("MakerVault fallback logo is composited without a white rectangular badge", () => {
   const editor = fs.readFileSync(new URL("../src/components/SlicerPlateEditor.jsx", import.meta.url), "utf8");
   assert.doesNotMatch(editor, /ctx\.fillRect\(361, 875, 302, 109\)/);
-  assert.match(editor, /stampContext\.getImageData/);
-  assert.match(editor, /pixels\.data\[i \+ 3\] = 0/);
-  assert.match(editor, /ctx\.drawImage\(stamp, 371, 883, 282, 97\)/);
+  assert.match(editor, /iconCtx\.getImageData/);
+  assert.match(editor, /pixels\[index \* 4 \+ 3\] = 0/);
+  assert.match(editor, /ctx\.drawImage\(iconCanvas, 371, 890, 78, 87\)/);
+  assert.match(editor, /ctx\.fillText\("Maker", labelStart, labelTop\)/);
+  assert.match(editor, /ctx\.fillText\("Vault", labelStart \+ ctx\.measureText\("Maker"\)\.width, labelTop\)/);
 });
