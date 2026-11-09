@@ -63,3 +63,15 @@ test("native official artwork uses high-resolution SVG rasterisation and shows a
   assert.match(editor, /artworkTextureController\?\.abort\(\)/);
   assert.match(editor, /nativeBedMesh\.userData\.decorativeBed = true/);
 });
+
+test("fallback 3D plate includes authentic bundled MakerVault logo without a broken URL", () => {
+  const editor = fs.readFileSync(new URL("../src/components/SlicerPlateEditor.jsx", import.meta.url), "utf8");
+  const logo = fs.readFileSync(new URL("../src/assets/slicer-bed-art/makervault-official-logo.svg", import.meta.url), "utf8");
+  assert.match(editor, /makervault-official-logo\.svg\?raw/);
+  assert.match(editor, /encodeURIComponent\(makerVaultLogoSvg\)/);
+  assert.doesNotMatch(editor, /logo\.src = "\/slicer-bed-art\//);
+  assert.match(editor, /new THREE\.ExtrudeGeometry\(plateShape/);
+  assert.match(editor, /bevelEnabled: true/);
+  assert.ok(logo.includes("<svg"));
+  assert.ok(logo.includes("data:image/png;base64,"));
+});
