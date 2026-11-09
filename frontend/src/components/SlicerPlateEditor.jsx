@@ -34,7 +34,7 @@ function makeMakerVaultPlateTexture(type, bedX, bedY) {
   const ctx = canvas.getContext("2d");
   // Paint in logical 1024-unit coordinates onto a sharper 2048px texture.
   ctx?.scale(2, 2);
-  if (!ctx) return makeRepresentativePlateTexture(type);
+  if (!ctx) return null;
   const surface = PLATE_SURFACE[type] || PLATE_SURFACE.default;
   ctx.fillStyle = surface.base;
   ctx.fillRect(0, 0, 1024, 1024);
@@ -534,11 +534,10 @@ export default function SlicerPlateEditor({
           throw new Error("Official bed artwork unavailable.");
         const svgText = await response.text();
         if (svgText.length > 512 * 1024 ||
-            !/^\\s*(?:<\\?xml[^>]*>\\s*)?<svg\\b/i.test(svgText))
+            !/^\s*(?:<\?xml[^>]*>\s*)?<svg\b/i.test(svgText))
           throw new Error("Official bed artwork must be an SVG.");
-        // Keep the upstream vector markings, rasterised once onto the same
-        // texture as the bed surface. Never render a second coplanar plate.
-        const svg = svgText.replace(/<svg\\b/i, '<svg width="2048" height="2048"');
+        // Keep the upstream vector markings rasterised once onto the same bed.
+        const svg = svgText.replace(/<svg\b/i, '<svg width="2048" height="2048"');
         const blobUrl = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
         try {
           const artworkImage = new Image();
