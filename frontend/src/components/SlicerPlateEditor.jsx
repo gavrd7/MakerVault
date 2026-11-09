@@ -70,12 +70,31 @@ function makeMakerVaultPlateTexture(type, bedX, bedY) {
   texture.userData = { makerVaultBed: true, width: bedX, depth: bedY };
   const logo = new Image();
   logo.onload = () => {
+    // Print the logo directly on the bed: remove the old white sticker,
+    // preserve blue branding, and brighten dark lettering for legibility.
+    const stamp = document.createElement("canvas");
+    stamp.width = 564;
+    stamp.height = 194;
+    const stampContext = stamp.getContext("2d", { willReadFrequently: true });
+    if (!stampContext) return;
+    stampContext.drawImage(logo, 0, 0, stamp.width, stamp.height);
+    const pixels = stampContext.getImageData(0, 0, stamp.width, stamp.height);
+    for (let i = 0; i < pixels.data.length; i += 4) {
+      const r = pixels.data[i], g = pixels.data[i + 1], b = pixels.data[i + 2];
+      // An embedded white image background must not become a printed label.
+      if (r > 235 && g > 235 && b > 235) {
+        pixels.data[i + 3] = 0;
+      } else if (Math.max(r, g, b) < 155 && b < r * 1.15) {
+        // Lift only neutral/dark letter pixels. Keep the brand-blue pixels.
+        pixels.data[i] = 190;
+        pixels.data[i + 1] = 203;
+        pixels.data[i + 2] = 214;
+      }
+    }
+    stampContext.putImageData(pixels, 0, 0);
     ctx.save();
-    // The provided dark-lettered logo needs a light, unobtrusive backing
-    // to preserve legibility on the dark build-plate surface.
-    ctx.fillStyle = "rgba(228,238,246,.9)";
-    ctx.fillRect(361, 875, 302, 109);
-    ctx.drawImage(logo, 371, 883, 282, 97);
+    ctx.globalAlpha = 0.9;
+    ctx.drawImage(stamp, 371, 883, 282, 97);
     ctx.restore();
     texture.needsUpdate = true;
   };
