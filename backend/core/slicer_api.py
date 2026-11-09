@@ -205,7 +205,7 @@ def _draft(user, data):
         raise ValueError("The first plate model must match the selected primary STL.")
     input_asset = FileAsset.objects.filter(pk=_uuid(primary_id), owner=user).first()
     if not input_asset or input_asset.category not in {"mesh", "slicer"}:
-        raise ValueError("Choose a model asset you own.")
+        raise ValueError("The selected STL is no longer available in your private slicing workspace. Re-import the model to continue; no slicing job was started.")
     # Initial preparation accepts STL only; 3MF parsing requires a verified worker.
     metadata = input_asset.metadata or {}
     original_filename = str(metadata.get("original_name") or "")
