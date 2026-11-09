@@ -177,7 +177,28 @@ After choosing an engine, printer and profiles in **Slicer setup**, select **Sli
 
 The initial workspace includes an object tree (instances on the first plate), click-to-select, active **Move**, **Rotate**, **Scale**, **Auto-arrange**, **Duplicate** and **Remove** controls backed by the existing 3D plate editor, and in-session undo/redo (Ctrl+Z / Ctrl+Y outside text inputs). **Save draft** and **Slice and preview** share the existing isolated worker submission path with Quick slice, while explicit G-code saving and printer submission happen from the completed interactive result. Reopening an unscheduled draft returns to the interactive editor with the saved build plate.
 
-The categories **Quality**, **Strength**, **Speed**, **Supports**, **Multifilament**, and **Others** organise the Prepare settings. With an imported OrcaSlicer native process preset selected, **Global** exposes the recognised numeric process fields actually present in the resolved native profile. Edits are validated, saved with the draft, and applied only to the worker's temporary copy of the native process profile. **Restore profile defaults** discards those per-draft overrides. Printer start G-code, filament-change commands, printer settings and the original official profile are never altered. After adjusting global process settings, select **Save as custom profile**,
+The categories **Quality**, **Strength**, **Speed**, **Supports**, **Multifilament**, and **Others** organise the Prepare settings. With an imported OrcaSlicer native process preset selected, **Global** exposes the recognised numeric process fields actually present in the resolved native profile. Edits are validated, saved with the draft, and applied only to the worker's temporary copy of the native process profile. **Restore profile defaults** discards those per-draft overrides. Printer start G-code, filament-change commands, printer settings and the original official profile are never altered. The interactive **Print settings** panel now has a process-profile dropdown above
+the Global/Object controls. It lists registered process presets for the selected
+slicer engine **and exact engine version**. Switching presets discards this
+draft's temporary edits only after confirmation; **Reset edits** restores the
+currently selected preset's values without changing the selected profile.
+Manufacturer profiles are never overwritten.
+
+**Basic** is the concise set of everyday settings: layer height, default line
+width, wall/shell counts, infill density and pattern, seam position, primary
+wall/infill/travel speeds, support enable/angle/build-plate-only and brim/skirt.
+**Advanced** includes everything in Basic plus less frequently adjusted
+parameters, grouped under their native Orca process headings such as Layer
+height, Line width, Seam, Precision, Top/bottom shells, Infill, Acceleration,
+Support, Raft, Skirt and Brim. Search works across those headings and categories
+at the selected detail level. Only settings which exist in the selected resolved
+native profile, have an explicitly supported native data type and pass strict
+value validation are editable. Some Orca Expert options (mixed mm/percent
+expressions, G-code templates, multi-material purge settings and engine-specific
+nested structures) remain intentionally unavailable in this pass. Their current
+values remain in the native preset and are not discarded.
+
+After adjusting global process settings, select **Save as custom profile**,
 enter a unique name, then **Save and select profile**. MakerVault creates an
 independent, flattened OrcaSlicer process preset using the current native
 process configuration plus your changed fields. The original manufacturer
