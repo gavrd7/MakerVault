@@ -48,7 +48,10 @@ test("advanced tools are visibly gated pending safe native transformations", () 
   assert.match(scene, /disabled=\{!!tool.pending/);
   for (const group of ["Quality", "Strength", "Speed", "Supports", "Multifilament", "Others"])
     assert.match(scene, new RegExp('"' + group + '"'));
-  assert.match(scene, /Object-specific overrides will be available/);
+  assert.match(scene, /Per-object settings are not yet available/);
+  assert.match(scene, /nativeProcessFields/);
+  assert.match(scene, /processOverrides/);
+  assert.match(scene, /Restore profile defaults/);
 });
 
 test("independent XYZ scaling updates visual mesh and is selectable from the toolbar", () => {
@@ -124,4 +127,16 @@ test("icon toolbar tooltips show names and unavailable reasons on hover and focu
   assert.match(scene, /aria-label=\{tool\.name\}/);
   assert.match(styles, /\.slicerToolTooltip:hover::after/);
   assert.match(styles, /\.slicerToolTooltip:focus-within::after/);
+});
+
+
+test("native process controls are read from the selected process profile and round-trip with drafts", () => {
+  const scene = read("SlicerPrepareWorkspace.jsx");
+  const workbench = read("SlicerWorkbench.jsx");
+  assert.match(scene, /\/settings\//);
+  assert.match(scene, /spec\.minimum/);
+  assert.match(scene, /spec\.maximum/);
+  assert.match(scene, /onProcessOverridesChange/);
+  assert.match(workbench, /job\.settings\?\.process_overrides/);
+  assert.match(workbench, /process_overrides: processOverrides/);
 });
