@@ -109,6 +109,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [previewFile, setPreviewFile] = useState(null);
   const [plateObjects, setPlateObjects] = useState([]);
   const [plateLabel, setPlateLabel] = useState("Plate 1");
+  const [processOverrides, setProcessOverrides] = useState({});
   // Keep temporary STL filenames and preview URLs when switching between
   // the setup plate and the interactive editor.
   const [plateLocalAssets, setPlateLocalAssets] = useState([]);
@@ -189,6 +190,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     profile.kind === kind && !profile.is_dependency
   );
   const selectNativeProfile = (kind, id) => {
+    if (kind === "process") setProcessOverrides({});
     manuallyChosenProfiles.current.add(kind);
     const profile = profiles.find(item => item.id === id);
     setForm(current => ({
@@ -360,6 +362,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     manuallyChosenProfiles.current = new Set(["printer", "filament", "process"]);
     setPlateObjects(savedObjects);
     setPlateLabel(job.settings?.plate_label || "Plate 1");
+    setProcessOverrides(job.settings?.process_overrides || {});
     setEditorOpen(true);
     setForm(current => ({
       ...current,
@@ -551,7 +554,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           spool_id: form.spool_id || null,
           settings: { ...(plateObjects.length ? { plate_objects: plateObjects } : {}),
             plate_label: plateLabel.trim() || "Plate 1",
-            save_gcode_to_library: saveOutput, workflow },
+            save_gcode_to_library: saveOutput, workflow,
+            ...(form.engine === "orcaslicer" ? { process_overrides: processOverrides } : {}) },
         },
       });
       savedJob = job;
@@ -917,6 +921,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       onChangeProfiles={() => setProfileModal("change")}
       selectedPlateType={plateOptions(form.engine).find(([id]) => id === form.plate)?.[1] || "Native / profile default"}
       workerConfigured={workerConfigured && engines.some(engine => engine.key === form.engine && engine.available)}
+      processOverrides={processOverrides} onProcessOverridesChange={setProcessOverrides}
       onBackToSetup={() => setEditorOpen(false)} onSaveDraft={() => saveDraft("draft")}
       onSlice={() => saveDraft("slice")}
     /> : <>
