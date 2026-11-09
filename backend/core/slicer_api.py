@@ -915,7 +915,7 @@ def delete_profile(request, profile_id):
 @require_http_methods(["GET"])
 def profile_plate(request, profile_id):
     profile = SlicerProfile.objects.filter(
-        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint", "bambustudio", "prusaslicer"], kind="printer"
+        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint", "bambustudio", "prusaslicer", "snapmakerorca"], kind="printer"
     ).select_related("file_asset").first()
     if not profile:
         return _error("Owned Orca or Creality machine profile not found.", 404)
@@ -947,7 +947,7 @@ def profile_plate(request, profile_id):
 def profile_artwork(request, profile_id):
     """Serve only vetted same-origin artwork associated with an owned profile."""
     profile = SlicerProfile.objects.filter(
-        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint", "bambustudio", "prusaslicer"], kind="printer",
+        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint", "bambustudio", "prusaslicer", "snapmakerorca"], kind="printer",
     ).select_related("file_asset").first()
     if not profile:
         return _error("Owned native printer profile not found.", 404)
@@ -967,7 +967,7 @@ def profile_bed_model(request, profile_id):
     """Serve a bounded, validated native STL underneath the interactive bed."""
     profile = SlicerProfile.objects.filter(
         pk=profile_id, owner=request.user,
-        engine__in=["orcaslicer", "crealityprint", "bambustudio", "prusaslicer"], kind="printer",
+        engine__in=["orcaslicer", "crealityprint", "bambustudio", "prusaslicer", "snapmakerorca"], kind="printer",
     ).select_related("file_asset").first()
     if not profile:
         return _error("Owned native printer profile not found.", 404)
