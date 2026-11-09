@@ -472,6 +472,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       const result = await apiFetch("/api/printing/slicer/jobs/" + job.id + "/save-gcode/", {
         method: "POST", body: {},
       });
+      if (!result.job?.gcode_in_library) {
+        throw new Error("The G-code library has not confirmed that the sliced file was saved.");
+      }
       setJobs(current => current.map(item => item.id === job.id ? result.job : item));
       // Once the server confirms the file was saved, return to the slicer
       // workspace rather than leaving the preview and draft modals stacked.
