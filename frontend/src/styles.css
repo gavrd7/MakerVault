@@ -4286,3 +4286,18 @@ a:focus-visible,
   .slicerToolpathViewBar{justify-content:flex-start;gap:7px}
   .slicerToolpathViewBar button{flex:1 1 auto}
 }
+
+/* The interactive plate and sliced G-code share predictable, accessible view
+   controls without overlapping the canvas or model-editing toolbar. */
+.slicerPlateCameraToolbar{
+  display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+  justify-content:flex-end;padding:6px 0 12px;
+}
+.slicerPlateCameraToolbar button{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-height:35px;line-height:1.25;padding:6px 11px;border-radius:8px;
+}
+@media(max-width:620px){
+  .slicerPlateCameraToolbar{justify-content:flex-start}
+  .slicerPlateCameraToolbar button{flex:1 1 auto}
+}
