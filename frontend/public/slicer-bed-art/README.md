@@ -31,11 +31,13 @@ the project owner, rather than the previous placeholder icon.
 | Snapmaker Orca | Orca-compatible JSON and indexed vendor models | Registered official source metadata |
 | PrusaSlicer | Vendor INI `[printer_model:...]` | Exact registered model/bundle mapping to bed model and texture |
 
-Registration does **not** mean every engine is installed, supports slicing,
-or has an official-search/import provider in the MakerVault UI. Currently the
-search/import experience is integrated for OrcaSlicer and Creality Print.
-Bambu, Prusa and Snapmaker source metadata readers are implemented but need
-their own full import/discovery UX and end-to-end validation.
+Registration does **not** mean every engine is installed or supports
+slicing. The official-search/import interface now provides release-pinned
+catalogue selection for OrcaSlicer, Creality Print and Snapmaker Orca, plus
+**model/artwork-only** candidate imports from Bambu Studio and PrusaSlicer.
+These new adapters need end-to-end validation against real assets and printers.
+Only a verified worker and compatible native *printer, filament and process*
+presets can enable slicing; metadata-only model records are never sufficient.
 
 Source identity is constrained to a fixed list of upstream repositories and
 vendor names. Imported records must have a matching registered engine version,
@@ -60,8 +62,9 @@ cached source artifacts are not MakerVault-owned artwork.
 
 ## Remaining improvements
 
-- Add first-party official profile import/search support to Bambu Studio,
-  PrusaSlicer and Snapmaker Orca, including vendor model records.
+- Expand Bambu Studio and PrusaSlicer metadata-only model browsing to
+  complete validated native printer/filament/process profile import workflows,
+  without turning vendor model records into executable presets.
 - Discover profiles and artwork from *installed* engine versions in the
   isolated worker, rather than from source-labelled imports alone.
 - Validate renderer orientation, native STL offsets and asset availability
