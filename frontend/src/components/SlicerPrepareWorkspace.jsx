@@ -425,137 +425,6 @@ export default function SlicerPrepareWorkspace({
                   ? "Multicolour tool mappings and flushing volumes require engine-native multi-material support."
                   : "No matching supported native settings are available. Try Advanced or another search."}
               </p>}
-            {Object.keys(processOverrides).length > 0 && <div className="slicerN      {settingsExpanded ? createPortal(
-        <div className="slicerSettingsModalBackdrop" role="presentation"
-          onMouseDown={event => {
-            if (event.target === event.currentTarget) setSettingsExpanded(false);
-          }}>
-          <div className="slicerSettingsModal" role="dialog" aria-modal="true"
-            aria-label="Expanded print settings">
-            {settingsPanel}
-          </div>
-        </div>, document.body
-      ) : settingsPanel}/small>
-        </aside>
-      </div>
-      <div className="slicerPrepareScene" ref={editorRef}>
-        <SlicerPlateEditor files={files} localAssets={localAssets}
-          onLocalAssetsChange={onLocalAssetsChange} objects={objects} onChange={updatePlate}
-          onPrimaryChange={onPrimaryChange} onFilesUploaded={onFilesUploaded}
-          onManualColorChange={onManualColorChange} defaultColor={defaultColor}
-          plate={plate} plateType={plateType} plateLabel={plateLabel}
-          printerLabel={selectedProfiles?.printer || printerDetails?.model || printerDetails?.name || ""}
-          onPlateLabelChange={onPlateLabelChange} canEdit={canEdit && !busy} toolMode={toolMode} selectedInstanceId={selectedId}
-          onSelectedInstanceChange={setSelectedId} onExitToolMode={() => setToolMode("select")} />
-      </div>
-      <aside className="slicerPrepareSettings" aria-label="Process settings categories">
-        <h4>Print settings</h4>
-        <div className="slicerProcessQuickSelect">
-          <label htmlFor="slicer-process-quick-select">Process profile</label>
-          <div className="slicerProcessQuickSelectRow">
-            <select id="slicer-process-quick-select"
-              value={selectedProfiles?.process_id || ""}
-              disabled={!canEdit || busy || savingCustomProfile || !processProfiles.length}
-              onChange={event => {
-                setNativeFieldDrafts({});
-                setShowCustomProfileSave(false);
-                onSelectProcessProfile?.(event.target.value);
-              }}>
-              {!processProfiles.some(profile => profile.id === selectedProfiles?.process_id) &&
-                <option value="">Choose a process profile</option>}
-              {processProfiles.map(profile => <option key={profile.id} value={profile.id}>
-                {profile.name}{profile.status === "candidate" ? " · Unverified" : ""}
-              </option>)}
-            </select>
-            <button type="button" disabled={!canEdit || busy ||
-              !Object.keys(processOverrides).length} onClick={resetSettings}
-              title="Discard this draft's changes and restore values from the selected process profile">
-              Reset edits
-            </button>
-          </div>
-          <small>{Object.keys(processOverrides).length
-            ? Object.keys(processOverrides).length + " unsaved setting change(s) from " + (selectedProfiles?.process || "selected profile")
-            : "Showing the selected native process preset without overrides."}</small>
-        </div>
-        <div className="slicerPrepareScopes" role="group" aria-label="Setting scope">
-          <button type="button" className={scope === "global" ? "selected" : ""}
-            aria-pressed={scope === "global"} onClick={() => setScope("global")}>Global</button>
-          <button type="button" className={scope === "objects" ? "selected" : ""}
-            aria-pressed={scope === "objects"} onClick={() => setScope("objects")}>Object</button>
-        </div>
-        <nav aria-label="Process settings groups">
-          {GROUPS.map(([name, icon]) => <button key={name} type="button"
-            className={group === name ? "selected" : ""}
-            onClick={() => setGroup(name)}><SlicerUiIcon name={icon} size={16} /><span>{name}</span></button>)}
-        </nav>
-        <h4>{settingsSearch.trim() ? "Search results" : group}</h4>
-        <div className="slicerSettingsSearchRow">
-          <label className="slicerSettingsSearchLabel">
-            <span>Find a setting</span>
-            <input type="search" value={settingsSearch}
-              placeholder="Search native process settings"
-              onChange={event => setSettingsSearch(event.target.value)} />
-          </label>
-          <label className="slicerSettingsLevelLabel">
-            <span>Detail</span>
-            <select value={settingsLevel} onChange={event => setSettingsLevel(event.target.value)}>
-              <option value="basic">Basic</option>
-              <option value="advanced">Advanced</option>
-            </select>
-          </label>
-        </div>
-        {scope === "objects" ? (
-          <p>Per-object settings are not yet available. Change Global settings to edit the native process profile for this draft.</p>
-        ) : (
-          <section aria-label={group + " native process controls"} className="slicerNativeSettingsFields">
-            {nativeProcessLoading && <p role="status">Reading native process settings…</p>}
-            {nativeProcessError && <p role="alert" className="integrationError">{nativeProcessError}</p>}
-            {nativeSections.map(section => (
-              <div key={section} className="slicerNativeSettingSection">
-                <h5>{section}</h5>
-                {visibleNativeFields.filter(([, spec]) => (spec.section || "Other") === section)
-                  .map(([key, spec]) => (
-                  <label key={key} className="slicerNativeSettingField">
-                    <span>{spec.label} {spec.unit ? "(" + spec.unit + ")" : ""}
-                      {settingsSearch.trim() && <small> · {spec.category}</small>}
-                      {processOverrides[key] !== undefined && <small className="slicerSettingModified">Modified</small>}
-                    </span>
-                    {spec.kind === "toggle" ? (
-                      <input type="checkbox" aria-label={spec.label}
-                        disabled={!canEdit || busy}
-                        checked={(processOverrides[key] ?? spec.current) === "1"}
-                        onChange={event => updateNativeChoice(key, event.target.checked ? "1" : "0")} />
-                    ) : spec.options ? (
-                      <select aria-label={spec.label}
-                        disabled={!canEdit || busy}
-                        value={processOverrides[key] ?? spec.current}
-                        onChange={event => updateNativeChoice(key, event.target.value)}>
-                        {spec.options.map(option =>
-                          <option key={option.value} value={option.value}>{option.label}</option>)}
-                      </select>
-                    ) : (
-                      <input type="number" min={spec.minimum} max={spec.maximum}
-                        step={spec.integer ? 1 : 0.01}
-                        disabled={!canEdit || busy}
-                        value={nativeFieldDrafts[key] ?? processOverrides[key] ?? spec.current}
-                        onChange={event => updateNativeField(key, event.target.value)}
-                        onBlur={() => setNativeFieldDrafts(current => {
-                          const next = { ...current };
-                          delete next[key];
-                          return next;
-                        })}
-                        aria-label={spec.label} />
-                    )}
-                  </label>
-                ))}
-              </div>
-            ))}
-            {visibleNativeFields.length === 0 &&
-              !nativeProcessLoading && !nativeProcessError && <p>
-                {group === "Multifilament"
-                  ? "Multicolour tool mappings and flushing volumes require engine-native multi-material support."
-                  : "No matching supported native settings are available. Try Advanced or another search."}
-              </p>}
             {Object.keys(processOverrides).length > 0 && <div className="slicerNativeSettingsActions">
               <span>{Object.keys(processOverrides).length} draft override(s) · Original profile unchanged</span>
               <div className="slicerNativeSettingsButtons">
@@ -617,6 +486,131 @@ export default function SlicerPrepareWorkspace({
           Other native process options remain available through custom profiles in Slicer setup.
           Printer startup and purge G-code are never changed here.</p>
       </aside>
+  );
+  return <section className="panel printingSection slicerPrepareWorkspace"
+    aria-label="Interactive slicer Prepare workspace">
+    <div className="slicerPrepareHeader">
+      <div>
+        <span className="settingsEyebrow">MakerVault Slicer · Prepare</span>
+        <h3>Interactive model editor</h3>
+        <p>Engine: {engine || "Not selected"} · Printer: {printer || "Not selected"} ·
+          Native profiles remain engine-specific.</p>
+      </div>
+      <button type="button" className="slicerChangeProfiles" onClick={onChangeProfiles}>
+        <SlicerUiIcon name="others" /> Change profiles
+      </button>
+    </div>
+    <div className="slicerPrepareTools" role="toolbar" aria-label="Model editing tools">
+      <span className="slicerToolTooltip" data-tooltip="Undo · Ctrl+Z">
+        <button type="button" disabled={!undoRef.current.length || busy} onClick={undo}
+          aria-label="Undo"><SlicerUiIcon name="undo" /></button>
+      </span>
+      <span className="slicerToolTooltip" data-tooltip="Redo · Ctrl+Y">
+        <button type="button" disabled={!redoRef.current.length || busy} onClick={redo}
+          aria-label="Redo"><SlicerUiIcon name="redo" /></button>
+      </span>
+      {TOOLS.map(tool => <span className="slicerToolTooltip" key={tool.name}
+        data-tooltip={tool.pending ? tool.name + " · Not yet available: " + tool.pending
+          : tool.name}>
+        <button type="button"
+          className={((tool.target === "x_mm" && toolMode === "move") ||
+            (tool.target === "rotation_deg" && toolMode === "rotate") ||
+            ((tool.target === "scale_percent" || tool.target === "scale_xyz_percent") && toolMode === "scale")) ? "isActive" : ""}
+          aria-pressed={["x_mm", "rotation_deg", "scale_percent", "scale_xyz_percent"].includes(tool.target)
+            ? (tool.target === "x_mm" ? toolMode === "move"
+              : tool.target === "rotation_deg" ? toolMode === "rotate" : toolMode === "scale") : undefined}
+          aria-label={tool.name}
+          disabled={!!tool.pending || !canEdit || busy || (tool.target !== "import" && !objects.length)}
+          onClick={() => selectTool(tool)}><SlicerUiIcon name={tool.icon || "others"} /></button>
+      </span>)}
+    </div>
+    <div className="slicerPrepareStructure">
+      <div className="slicerPrepareLeftRail">
+        <section className="slicerPreparePrinter" aria-label="Selected printer configuration">
+          <span className="slicerPreparePrinterCaption">Printer</span>
+          <div className="slicerPreparePrinterIdentity">
+            {((printerDetails?.multi_material_installed && printerDetails?.catalogue?.image_multi_material)
+              || printerDetails?.catalogue?.image) ? (
+              <img src={(printerDetails.multi_material_installed && printerDetails.catalogue.image_multi_material)
+                || printerDetails.catalogue.image}
+                alt={printerDetails?.catalogue?.display_name || printerDetails?.model || "Selected printer"}
+                loading="lazy" />
+            ) : (
+              <span className="slicerPreparePrinterFallback" aria-hidden="true">
+                <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.4">
+                  <path d="M11 13h42v40H11zM19 22h26M16 45h32M32 22v20M21 45l6-7h10l6 7" />
+                  <path d="M32 27l-5 7h10zM7 56h50" />
+                </svg>
+              </span>
+            )}
+            <strong>{printerDetails?.name || printer || "No printer selected"}</strong>
+          </div>
+          <div className="slicerPreparePrinterMeta">
+            <span>Nozzle: {nozzleMm ? Number(nozzleMm).toFixed(2) + " mm" : "Not selected"}</span>
+            <span>Build plate: {selectedPlateType}</span>
+            <span>Build area: {Array.isArray(plate?.size_mm)
+              ? plate.size_mm.slice(0, 2).join(" × ") + " mm" : "Unknown"}</span>
+          </div>
+          <span className="slicerPreparePrinterProfile">{selectedProfiles?.printer || "Native printer profile not selected"}</span>
+          <button type="button" onClick={onChangeProfiles}>Change printer/profile</button>
+        </section>
+        <aside className="slicerPrepareTree" aria-label="Build plate object tree">
+        <h4>{plateLabel || "Plate 1"} · Models ({objects.length})</h4>
+        {objects.length === 0 && <p>Add an STL to start editing.</p>}
+        {objects.map((object, index) => <div className="slicerPrepareModelEntry" key={object.instance_id}>
+          <button type="button"
+            className={active?.instance_id === object.instance_id ? "selected" : ""}
+            onClick={() => setSelectedId(object.instance_id)}
+            aria-pressed={active?.instance_id === object.instance_id}>
+            <span className="slicerPrepareModelSwatch"
+              style={{ background: object.color }} aria-hidden="true" />
+            <span>{index + 1}. {itemName(object)}</span>
+          </button>
+          <button type="button" className="slicerModelChangeFilament"
+            disabled={!canEdit || busy || !liveMaterials.length}
+            aria-expanded={filamentPickerId === object.instance_id}
+            onClick={() => {
+              setSelectedId(object.instance_id);
+              setFilamentPickerId(current => current === object.instance_id ? "" : object.instance_id);
+              setFilamentNotice("");
+            }}>Change filament</button>
+          {filamentPickerId === object.instance_id && <div className="slicerModelFilamentChoices">
+            <strong>Loaded filaments · preview colour only</strong>
+            {liveMaterials.map(slot => <button type="button" key={slot.id}
+              disabled={!canEdit || busy || !validSlotColor(slot)}
+              onClick={() => changeModelPreviewFilament(object.instance_id, slot)}>
+              <span className="slicerLiveMaterialSwatch"
+                style={{ backgroundColor: validSlotColor(slot) || "#697b91" }} aria-hidden="true" />
+              <span>{slotName(slot)}</span>
+            </button>)}
+            <small>Changing this swatch does not assign an extruder, modify G-code or change the slicer filament preset.</small>
+          </div>}
+        </div>)}
+        {filamentNotice && <p className="slicerModelFilamentNotice" role="status">{filamentNotice}</p>}
+        <small>One consistent model colour is now passed to OrcaSlicer as a single-filament colour. Different colours across models still need native multi-material mapping, and are preview-only. Multi-plate output and modifier trees are not implemented yet.</small>
+        </aside>
+      </div>
+      <div className="slicerPrepareScene" ref={editorRef}>
+        <SlicerPlateEditor files={files} localAssets={localAssets}
+          onLocalAssetsChange={onLocalAssetsChange} objects={objects} onChange={updatePlate}
+          onPrimaryChange={onPrimaryChange} onFilesUploaded={onFilesUploaded}
+          onManualColorChange={onManualColorChange} defaultColor={defaultColor}
+          plate={plate} plateType={plateType} plateLabel={plateLabel}
+          printerLabel={selectedProfiles?.printer || printerDetails?.model || printerDetails?.name || ""}
+          onPlateLabelChange={onPlateLabelChange} canEdit={canEdit && !busy} toolMode={toolMode} selectedInstanceId={selectedId}
+          onSelectedInstanceChange={setSelectedId} onExitToolMode={() => setToolMode("select")} />
+      </div>
+      {settingsExpanded ? createPortal(
+        <div className="slicerSettingsModalBackdrop" role="presentation"
+          onMouseDown={event => {
+            if (event.target === event.currentTarget) setSettingsExpanded(false);
+          }}>
+          <div className="slicerSettingsModal" role="dialog" aria-modal="true"
+            aria-label="Expanded print settings">
+            {settingsPanel}
+          </div>
+        </div>, document.body
+      ) : settingsPanel}
     </div>
     <div className="slicerPrepareActions">
       <div aria-live="polite">
