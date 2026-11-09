@@ -211,6 +211,12 @@ def _validate_plate_execution(job):
         raise SlicerExecutionError("Multi-model plate execution is currently verified only for the single-material OrcaSlicer worker.")
     if not isinstance(objects, list) or not 1 <= len(objects) <= 12:
         raise SlicerExecutionError("Plate model list is invalid.")
+    if any(isinstance(item, dict) and item.get("process_overrides") for item in objects):
+        raise SlicerExecutionError(
+            "This draft contains per-object settings, but the verified Orca worker still merges "
+            "plate objects. Save the draft; slicing will be available after native object "
+            "configuration and independent-object G-code have passed verification."
+        )
     if not job.printer_profile_id:
         raise SlicerExecutionError("Select a native printer profile for slicing.")
     # The single unchanged STL execution path uses Orca's native arrange
