@@ -195,7 +195,7 @@ def _draft_plate_settings(user, input_asset, settings):
                       **values, "color": color.lower()})
     if saved[0]["asset_id"] != str(input_asset.pk):
         raise ValueError("The first plate model must match the selected primary STL.")
-    return {"plate_objects": saved, "plate_label": label, "save_gcode_to_library": save_to_library, "workflow": workflow}
+    return {"plate_objects": saved, "plate_label": label, "save_gcode_to_library": save_to_library, "workflow": workflow, "process_overrides": process_overrides}
 
 
 def _draft(user, data):
