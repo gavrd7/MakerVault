@@ -27,7 +27,7 @@ class SlicerBedArtworkTests(SimpleTestCase):
     @patch("core.slicer_bed_artwork._inspect_source")
     def test_rejects_unpinned_urls_and_path_traversal(self, inspect):
         for filename in ("../../bad.svg", "https://example.com/bad.svg",
-                         "javascript:bad.svg", "bad.png", "/tmp/bad.svg"):
+                         "javascript:bad.svg", "bad.png", "/var/unsafe/bad.svg"):
             inspect.return_value = {"bed_texture": filename}
             self.assertIsNone(official_artwork_source(self.profile), filename)
         inspect.return_value = {"bed_texture": "valid.svg"}
