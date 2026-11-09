@@ -1043,6 +1043,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
 
     <SlicerPlateEditor plateType={form.plate}
+      printerLabel={form.printer_preset || selectedPrinter?.model || selectedPrinter?.name || ""}
       plateLabel={plateLabel} onPlateLabelChange={setPlateLabel}
       files={stlFiles}
       localAssets={plateLocalAssets} onLocalAssetsChange={setPlateLocalAssets}
