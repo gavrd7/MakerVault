@@ -14,6 +14,10 @@
   <a href="https://github.com/gavrd7/MakerVault-Hardware">Hardware</a>
 </p>
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/gavrd7/MakerVault/docs/guide/assets/makervault-cover.png" alt="MakerVault cover" width="100%">
+</p>
+
 ## Why MakerVault?
 
 Maker projects rarely live in one place. Components end up in boxes and spreadsheets, model revisions in folders, filament in a separate tracker and build notes scattered across apps. **MakerVault connects your physical workshop with its digital records** so you can find what you own, see what a project needs, and keep track of what you made.
