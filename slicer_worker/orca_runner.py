@@ -281,6 +281,10 @@ def run_orca(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIME
             # Preserve this as a diagnostic class, not a claim about the cause.
             if reason == "engine-exited" and proc.returncode == 238:
                 reason = "cli-validation-exit-238"
+            elif reason == "engine-exited" and proc.returncode == 239:
+                # Preserve the CLI status without assuming the precise cause:
+                # version-dependent native preset compatibility is one source.
+                reason = "cli-validation-exit-239"
             # Reason and exit status are bounded diagnostics, not CLI output.
             logger.warning("OrcaSlicer subprocess ended: exit=%s category=%s", proc.returncode, reason)
             raise WorkerError("OrcaSlicer CLI exited: " + reason + ".")
