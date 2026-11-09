@@ -34,6 +34,12 @@ from .slicer_creality_official_profiles import (
     ENGINE_VERSION as OFFICIAL_CRE_VERSION, SOURCE as OFFICIAL_CRE_SOURCE,
     REF as OFFICIAL_CRE_REF,
 )
+from .slicer_prusa_official_profiles import (
+    search_prusa_profiles, fetch_prusa_model, available_prusa_vendors,
+    official_catalogue_models as prusa_catalogue_models,
+    ENGINE_VERSION as OFFICIAL_PRUSA_VERSION, SOURCE as OFFICIAL_PRUSA_SOURCE,
+    REF as OFFICIAL_PRUSA_REF,
+)
 from .slicer_bambu_official_profiles import (
     search_bambu_profiles, fetch_bambu_model, available_bambu_vendors,
     official_catalogue_models as bambu_catalogue_models,
@@ -487,6 +493,7 @@ def official_profiles(request):
                 "orcaslicer": (available_official_vendors, OFFICIAL_ORCA_REF),
                 "crealityprint": (available_creality_vendors, OFFICIAL_CRE_REF),
                 "bambustudio": (available_bambu_vendors, OFFICIAL_BAMBU_REF),
+                "prusaslicer": (available_prusa_vendors, OFFICIAL_PRUSA_REF),
             }
             provider = sources.get(selected)
             return JsonResponse({
@@ -501,7 +508,8 @@ def official_profiles(request):
         if request.GET.get("models") == "1":
             model_catalogues = {"orcaslicer": orca_catalogue_models,
                                 "crealityprint": creality_catalogue_models,
-                                "bambustudio": bambu_catalogue_models}
+                                "bambustudio": bambu_catalogue_models,
+                                "prusaslicer": prusa_catalogue_models}
             provider = model_catalogues.get(selected)
             if not provider:
                 return _error("This slicer has no official printer catalogue.")
@@ -514,6 +522,7 @@ def official_profiles(request):
             "orcaslicer": search_official_profiles,
             "crealityprint": search_creality_profiles,
             "bambustudio": search_bambu_profiles,
+            "prusaslicer": search_prusa_profiles,
         }.get(selected)
         if searcher is None:
             return _error("Official profile search is not available for this engine.")
@@ -539,7 +548,8 @@ def official_profiles(request):
             if chosen_model:
                 model_catalogues = {"orcaslicer": orca_catalogue_models,
                                     "crealityprint": creality_catalogue_models,
-                                "bambustudio": bambu_catalogue_models}
+                                "bambustudio": bambu_catalogue_models,
+                                "prusaslicer": prusa_catalogue_models}
                 if chosen_model not in model_catalogues[selected](request.GET.get("vendor", "Creality")):
                     return _error("Choose a printer model listed in the official catalogue.")
                 printer_model = chosen_model
@@ -566,6 +576,7 @@ def official_profiles(request):
             "orcaslicer": (OFFICIAL_ORCA_VERSION, OFFICIAL_ORCA_SOURCE, OFFICIAL_ORCA_REF, fetch_official_profile),
             "crealityprint": (OFFICIAL_CRE_VERSION, OFFICIAL_CRE_SOURCE, OFFICIAL_CRE_REF, fetch_creality_profile),
             "bambustudio": (OFFICIAL_BAMBU_VERSION, OFFICIAL_BAMBU_SOURCE, OFFICIAL_BAMBU_REF, fetch_bambu_model),
+            "prusaslicer": (OFFICIAL_PRUSA_VERSION, OFFICIAL_PRUSA_SOURCE, OFFICIAL_PRUSA_REF, fetch_prusa_model),
         }
         if engine not in providers:
             return _error("Official import is not available for this engine.")
@@ -583,6 +594,8 @@ def official_profiles(request):
         # mutating the database. Never install a partial official preset.
         chain = ([(name, subpath, fetch_bambu_model(kind, name, subpath, vendor))]
                  if engine == "bambustudio" else
+                 [(name, subpath, fetch_prusa_model(kind, name, subpath, vendor))]
+                 if engine == "prusaslicer" else
                  official_profile_chain(engine, kind, name, subpath, vendor))
         prepared = []
         for native_name, native_subpath, raw in chain:
@@ -603,10 +616,11 @@ def official_profiles(request):
                     )
                 continue
             asset = FileAsset(
-                owner=request.user, name=native_name + ".json", category="source",
-                metadata={"original_name": native_name + ".json", "extension": ".json"},
+                owner=request.user, name=native_name + (".ini" if engine == "prusaslicer" else ".json"), category="source",
+                metadata={"original_name": native_name + (".ini" if engine == "prusaslicer" else ".json"),
+                          "extension": ".ini" if engine == "prusaslicer" else ".json"},
             )
-            asset.file = ContentFile(raw, name="official-" + engine + "-profile.json")
+            asset.file = ContentFile(raw, name="official-" + engine + ("-model.ini" if engine == "prusaslicer" else "-profile.json"))
             inspected = inspect_native_profile(asset, engine)
             provenance = f"{source}@{ref}/{vendor}/{native_subpath}"
             if len(provenance) > 200:
