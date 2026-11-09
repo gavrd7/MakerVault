@@ -30,7 +30,7 @@ SOURCES = {
     "orcaslicer": ("OrcaSlicer/OrcaSlicer", ORCA_VENDORS),
     "crealityprint": ("CrealityOfficial/CrealityPrint", CREALITY_VENDORS),
 }
-_VERSION = re.compile(r"^v?([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)$")
+_VERSION = re.compile(r"^v?([0-9]+\.[0-9]+(?:\.[0-9]+)?)$")
 _BASENAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,119}$")
 _XML_SVG = "{http://www.w3.org/2000/svg}"
 
@@ -55,7 +55,7 @@ def official_asset_source(profile, kind="texture"):
     ref = "v" + version
     provenance = re.fullmatch(
         re.escape(source) + "@" + re.escape(ref) +
-        r"/([A-Za-z0-9_-]+)/machine/([A-Za-z0-9_.-]+\\.json)",
+        r"/([A-Za-z0-9_-]+)/machine/([A-Za-z0-9_.-]+\.json)",
         str(profile.provenance or ""),
     )
     if not provenance or provenance.group(1) not in vendors:
