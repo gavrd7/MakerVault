@@ -284,6 +284,17 @@ export default function SlicerPlateEditor({
     onChange(objects.map(item => item.instance_id === chosen.instance_id ? candidate : item));
   }
 
+  function applySelectedTransform(fields, message) {
+    if (!chosen || !canEdit) return;
+    const candidate = { ...chosen, ...fields };
+    if (!validPlacement(candidate, objects)) {
+      setError(message || "The selected transformation would overlap another model or leave the build plate.");
+      return;
+    }
+    setError("");
+    onChange(objects.map(item => item.instance_id === chosen.instance_id ? candidate : item));
+  }
+
   async function uploadFiles(event) {
     const imports = Array.from(event.target.files || []);
     event.target.value = "";
@@ -976,6 +987,18 @@ export default function SlicerPlateEditor({
       </label>
       <div className="settingsActions">
         <button type="button" disabled={!canEdit} onClick={() => patch("rotation_deg", ((chosen.rotation_deg + 90) % 360))}>Rotate 90°</button>
+        <button type="button" disabled={!canEdit || !chosen}
+          onClick={() => applySelectedTransform({ x_mm: 0, y_mm: 0 },
+            "Cannot centre this model without overlapping another model or leaving the build plate.")}>
+          Centre selected
+        </button>
+        <button type="button" disabled={!canEdit || !chosen}
+          onClick={() => applySelectedTransform({
+            rotation_deg: 0, scale_percent: 100,
+            scale_xyz_percent: [100, 100, 100],
+          }, "Resetting the model would overlap another object or leave the plate.")}>
+          Reset orientation / scale
+        </button>
         <button data-slicer-action="arrange" type="button" disabled={!canEdit || !objects.length || uploadBusy}
           onClick={() => arrangeModels()}>Auto-arrange</button>
       </div>
