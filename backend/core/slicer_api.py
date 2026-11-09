@@ -309,23 +309,16 @@ def upload_temporary_mesh(request):
 
 
 def _cleanup_temporary_job_sources(job):
-    """Remove only private slicing inputs no longer referenced by any job."""
-    ids = {str(job.input_asset_id)}
-    ids.update(str(item.get("asset_id")) for item in
-               (job.settings or {}).get("plate_objects", []) if isinstance(item, dict))
-    for asset in FileAsset.objects.filter(pk__in=ids, owner=job.owner,
-                                           metadata__slicer_temporary=True):
-        if SliceJob.objects.filter(owner=job.owner, input_asset=asset).exists():
-            continue
-        if any(str(item.get("asset_id")) == str(asset.pk)
-               for settings in SliceJob.objects.filter(owner=job.owner).values_list("settings", flat=True)
-               for item in (settings or {}).get("plate_objects", [])
-               if isinstance(item, dict)):
-            continue
-        stored = asset.file
-        asset.delete()
-        if stored:
-            stored.delete(save=False)
+    """Retain private STL imports after a draft/job is removed.
+
+    The same temporary STL can still be on a browser's live visual plate,
+    even though no surviving SliceJob references it. There is no reliable
+    server-side reference count for unsaved browser plate sessions, so
+    removing an inactive slice job must not delete the input asset.
+    Explicit file deletion or a future session-aware expiry policy can
+    reclaim temporary storage without breaking the active editor.
+    """
+    return None
 
 
 @login_required
