@@ -237,7 +237,23 @@ export default function SlicerPrepareWorkspace({
       <div className="slicerPrepareLeftRail">
         <section className="slicerPreparePrinter" aria-label="Selected printer configuration">
           <span className="slicerPreparePrinterCaption">Printer</span>
-          <strong>{printerDetails?.name || printer || "No printer selected"}</strong>
+          <div className="slicerPreparePrinterIdentity">
+            {((printerDetails?.multi_material_installed && printerDetails?.catalogue?.image_multi_material)
+              || printerDetails?.catalogue?.image) ? (
+              <img src={(printerDetails.multi_material_installed && printerDetails.catalogue.image_multi_material)
+                || printerDetails.catalogue.image}
+                alt={printerDetails?.catalogue?.display_name || printerDetails?.model || "Selected printer"}
+                loading="lazy" />
+            ) : (
+              <span className="slicerPreparePrinterFallback" aria-hidden="true">
+                <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.4">
+                  <path d="M11 13h42v40H11zM19 22h26M16 45h32M32 22v20M21 45l6-7h10l6 7" />
+                  <path d="M32 27l-5 7h10zM7 56h50" />
+                </svg>
+              </span>
+            )}
+            <strong>{printerDetails?.name || printer || "No printer selected"}</strong>
+          </div>
           <div className="slicerPreparePrinterMeta">
             <span>Nozzle: {nozzleMm ? Number(nozzleMm).toFixed(2) + " mm" : "Not selected"}</span>
             <span>Build plate: {selectedPlateType}</span>
