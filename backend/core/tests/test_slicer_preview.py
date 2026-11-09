@@ -28,6 +28,22 @@ G1 X10 Y20 E2.0
         self.assertEqual(result["segment_count"], 3)
         self.assertEqual(result["feature_counts"]["Outer wall"], 2)
 
+    def test_native_line_width_is_preserved_for_3d_filament_geometry(self):
+        result = generated_preview(
+            "G90\\nM83\\nG1 Z0.2 X10 Y10\\n"
+            ";WIDTH:0.46\\n;TYPE:Outer wall\\nG1 X20 E1.0\\n"
+            ";WIDTH:999\\nG1 X30 E1.0\\n"
+        )
+        self.assertEqual(len(result["segments"]), 2)
+        self.assertEqual(result["segments"][0][6], 0.46)
+        self.assertEqual(result["segments"][1][6], 0.46)
+        self.assertEqual(result["feature_counts"]["Outer wall"], 2)
+
+    def test_dense_preview_budget_is_bounded(self):
+        from core.slicer_preview import MAX_SEGMENTS
+        self.assertGreater(MAX_SEGMENTS, 6000)
+        self.assertLessEqual(MAX_SEGMENTS, 100000)
+
     def test_missing_metadata_is_unknown_not_guessed(self):
         result = generated_preview("G1 X2 Y3 E1\n")
         self.assertIsNone(result["estimated_time_seconds"])
