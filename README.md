@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/gavrd7/MakerVault/docs/guide/assets/makervault-cover.png" alt="MakerVault cover" width="100%">
+  <img src="docs/guide/assets/makervault-cover.png" alt="MakerVault cover" width="100%">
 </p>
 
 ## Why MakerVault?
