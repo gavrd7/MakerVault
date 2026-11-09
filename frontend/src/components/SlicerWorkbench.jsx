@@ -684,7 +684,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         [imported.kind + "_preset"]: imported.name,
       }));
       setOfficialImportNotice(imported.name + " imported as a " + imported.kind + " profile. You can select another profile type or return to your selected profiles.");
-      setNotice("Official " + (imported.engine === "crealityprint" ? "Creality Print" : "OrcaSlicer") +
+      setNotice("Official " + ({ crealityprint: "Creality Print", bambustudio: "Bambu Studio", orcaslicer: "OrcaSlicer" }[imported.engine] || imported.engine) +
         " profile imported" + (imported.is_default ? " and saved as your default" : "") +
         ". " + Math.max(0, (result.parent_chain_length || 1) - 1) +
         " required parent preset(s) were included. The isolated worker will validate the profiles when slicing.");
@@ -817,7 +817,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   }
 
   function openOfficialSearch(kind = materialHint ? "filament" : form.printer_id ? "printer" : "process") {
-    setImportKind(kind);
+    setImportKind(form.engine === "bambustudio" ? "printer" : kind);
     setOfficialVendor("");
     setOfficialModel("");
     setOfficialManualModel("");
@@ -1219,7 +1219,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       </div>
       <div className="printingActionGroup" aria-labelledby="slicer-official-profiles-heading">
         <h4 id="slicer-official-profiles-heading">Search official slicer profiles</h4>
-        <p>Search the selected engine's pinned official manufacturer catalogues for printer, filament and process presets. An engine may not provide a profile for every printer. Imports remain unverified candidates; profiles cannot be shared between engines.</p>
+        <p>Search available pinned official manufacturer catalogues. Bambu Studio currently offers printer-model artwork records only; other engines may offer printer, filament and process presets. An engine may not provide a profile for every printer. Imports remain unverified candidates; profiles cannot be shared between engines.</p>
         {officialSourceInfo && !officialSourceInfo.official_search_available && <p role="status">This engine does not yet have a verified upstream catalogue browser in MakerVault. You can still import native {officialSourceInfo.native_profile_format} profiles as unverified candidates; slicing requires a separately validated engine and profile combination.</p>}
         <form className="formGrid" onSubmit={searchOfficialProfiles}>
           <label>Official source
