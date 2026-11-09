@@ -861,6 +861,15 @@ def normalise_creality_snapshot(payload: dict) -> dict:
 
     state = _creality_state(payload)
     activity_state = _creality_state(payload, ignore_error=True)
+    # Creality firmware may retain a previous errcode after the operator
+    # resumes a job. An explicit live printing state is stronger evidence
+    # of resumed activity than that latched warning. Preserve the warning
+    # so an actual unresolved alert is still inspectable.
+    if state == "error" and activity_state == "printing" and (
+        str(payload.get("printFileName") or "").strip()
+        and _finite_number(payload.get("state")) == 1
+    ):
+        state = "printing"
     progress = _finite_number(
         payload.get("printProgress")
         if payload.get("printProgress") is not None
