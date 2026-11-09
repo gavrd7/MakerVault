@@ -37,8 +37,9 @@ test("manufacturer and build volume still have to match validated assets", () =>
 
 test("native plate texture assets are bundled in the Vite module, never loaded from root-relative paths", () => {
   const src = fs.readFileSync(new URL("../src/components/slicerNativePlateArt.js", import.meta.url), "utf8");
-  assert.match(src, /creality-k1\\.svg\\?raw/);
-  assert.match(src, /creality-k2\\.svg\\?raw/);
-  assert.match(src, /data:image\\/svg\\+xml/);
-  assert.doesNotMatch(src, /asset: "\\/slicer-bed-art\\//);
+  assert.ok(src.includes('creality-k1.svg?raw'));
+  assert.ok(src.includes('creality-k2.svg?raw'));
+  assert.ok(src.includes('data:image/svg+xml'));
+  assert.ok(!src.includes('asset: "/slicer-bed-art/'));
+
 });
