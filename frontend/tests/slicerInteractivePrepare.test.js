@@ -311,3 +311,17 @@ test("print settings can reach build-plate bottom before scrolling, with equal-h
   assert.match(css, /height:38px;\s*min-height:38px;/);
   assert.match(css, /\.slicerSettingsModal \.slicerPrepareSettings\{/);
 });
+
+
+test("first slicer navigation is queued while engine status is checking", () => {
+  const app = fs.readFileSync(path.resolve(root, "../App.jsx"), "utf8");
+  const printing = read("PrintingPage.jsx");
+  assert.match(app, /pendingSlicerNavigation/);
+  assert.match(app, /if \(next === "MakerVault Slicer" && slicerStatus\.state === "checking"\)/);
+  assert.match(app, /setPendingSlicerNavigation\(true\)/);
+  assert.match(app, /if \(!pendingSlicerNavigation \|\| slicerStatus\.state === "checking"\) return/);
+  assert.match(app, /setSection\("MakerVault Slicer"\)/);
+  assert.match(app, /"ready", "preview", "checking"/);
+  assert.match(app, /preloadSlicerWorkbench\(\)/);
+  assert.match(printing, /export function preloadSlicerWorkbench\(\)/);
+});
