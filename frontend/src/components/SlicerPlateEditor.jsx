@@ -170,11 +170,11 @@ export default function SlicerPlateEditor({
   latestOnChangeRef.current = onChange;
   latestToolModeRef.current = toolMode;
   const [localSelected, setLocalSelected] = useState("");
-  const [showNativeArtwork, setShowNativeArtwork] = useState(true);
-  const [showOrientationLabels, setShowOrientationLabels] = useState(true);
-  const [showMachineLabel, setShowMachineLabel] = useState(true);
-  const [showDimensionsLabel, setShowDimensionsLabel] = useState(true);
-  const [showAxisLabels, setShowAxisLabels] = useState(true);
+  const [showNativeArtwork, setShowNativeArtwork] = useState(false);
+  const [showOrientationLabels, setShowOrientationLabels] = useState(false);
+  const [showMachineLabel, setShowMachineLabel] = useState(false);
+  const [showDimensionsLabel, setShowDimensionsLabel] = useState(false);
+  const [showAxisLabels, setShowAxisLabels] = useState(false);
   const selected = selectedInstanceId === null ? localSelected : selectedInstanceId;
   const setSelected = next => {
     if (selectedInstanceId === null) setLocalSelected(next);
@@ -888,7 +888,8 @@ export default function SlicerPlateEditor({
         .catch(err => { if (live && err.name !== "AbortError") setError(err.message || "STL preview failed."); });
     }
     return () => { live = false; controller.abort(); };
-  }, [objectKey, sourceFiles, bedX, bedY]);
+  }, [objectKey, sourceFiles, bedX, bedY, plate?.polygon_mm, plate?.bounds_mm, plateType, printerLabel,
+    showNativeArtwork, showOrientationLabels, showMachineLabel, showDimensionsLabel, showAxisLabels]);
 
   useEffect(() => {
     const state = sceneRef.current;
