@@ -8,6 +8,7 @@ import { SlicerOrientationCube } from "./slicerOrientationCube";
 import { apiFetch } from "../api";
 import { plateExtentWarning, plateFootprintsOverlap, autoArrangePlate } from "./slicerPlateGeometry";
 import { nativeBedArtwork } from "./slicerNativePlateArt";
+import makerVaultLogoSvg from "../assets/slicer-bed-art/makervault-official-logo.svg?raw";
 
 const PALETTE = ["#58b5e4", "#f59e0b", "#a78bfa", "#10b981", "#ef4444", "#f472b6"];
 const MAX_OBJECTS = 12;
@@ -73,7 +74,7 @@ function makeMakerVaultPlateTexture(type, bedX, bedY) {
     ctx.restore();
     texture.needsUpdate = true;
   };
-  logo.src = "/slicer-bed-art/makervault-official-logo.svg";
+  logo.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(makerVaultLogoSvg);
   return texture;
 }
 
