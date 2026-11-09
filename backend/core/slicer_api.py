@@ -773,7 +773,6 @@ def customise_profile(request, profile_id):
             for key, limits in EDITABLE_PROFILE_SETTINGS[profile.kind].items():
                 if key not in properties:
                     continue
-                available[key] = limits
                 value = properties.get(key)
                 if isinstance(value, list):
                     # This simple editor works on one native value only.
@@ -786,6 +785,7 @@ def customise_profile(request, profile_id):
                 except (ValueError, TypeError):
                     continue
                 if math.isfinite(numeric) and limits[0] <= numeric <= limits[1]:
+                    available[key] = limits
                     current[key] = numeric
         except (OSError, ValueError, UnicodeDecodeError):
             return _error("Cannot inspect original native profile.", 422)
