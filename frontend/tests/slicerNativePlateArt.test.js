@@ -54,7 +54,10 @@ test("failed official artwork keeps the user's toggle selected and reports a use
 
 test("native official artwork uses high-resolution SVG rasterisation and shows a 3D plate", () => {
   const editor = fs.readFileSync(new URL("../src/components/SlicerPlateEditor.jsx", import.meta.url), "utf8");
-  assert.match(editor, /canvas.width = 2048; canvas.height = 2048/);
+  assert.match(editor, /canvas.width = 2048/);
+  assert.match(editor, /canvas.height = 2048/);
+  assert.match(editor, /const canvas = bedTexture\.image/);
+  assert.doesNotMatch(editor, /bedArtwork = new THREE\.Mesh/);
   assert.match(editor, /new THREE.CanvasTexture\(canvas\)/);
   assert.match(editor, /texture.anisotropy/);
   assert.match(editor, /bevelEnabled: true/);
