@@ -305,6 +305,7 @@ export default function SlicerPrepareWorkspace({
           onPrimaryChange={onPrimaryChange} onFilesUploaded={onFilesUploaded}
           onManualColorChange={onManualColorChange} defaultColor={defaultColor}
           plate={plate} plateType={plateType} plateLabel={plateLabel}
+          printerLabel={selectedProfiles?.printer || printerDetails?.model || printerDetails?.name || ""}
           onPlateLabelChange={onPlateLabelChange} canEdit={canEdit && !busy} toolMode={toolMode} selectedInstanceId={selectedId}
           onSelectedInstanceChange={setSelectedId} onExitToolMode={() => setToolMode("select")} />
       </div>
