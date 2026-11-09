@@ -4301,3 +4301,44 @@ a:focus-visible,
   .slicerPlateCameraToolbar{justify-content:flex-start}
   .slicerPlateCameraToolbar button{flex:1 1 auto}
 }
+
+/* Plate identification stays visible before the canvas without obscuring
+   controls; the label is persisted with the private slicing draft. */
+.slicerPlateIdentity{
+  display:flex;flex-wrap:wrap;align-items:end;justify-content:space-between;
+  gap:12px 18px;padding:12px 14px;margin:0 0 14px;
+  border:1px solid var(--border,#344357);border-radius:10px;
+  background:rgba(108,136,165,.055);
+}
+.slicerPlateIdentity label{
+  display:flex;flex-direction:column;gap:6px;min-width:170px;
+  flex:1 1 220px;font-size:.82rem;font-weight:600;
+}
+.slicerPlateIdentity input{width:100%;max-width:420px;min-width:0}
+.slicerPlateIdentity>span{
+  color:#aebed0;font-size:.83rem;line-height:1.5;
+  padding-bottom:8px;overflow-wrap:anywhere;
+}
+.slicerPreparePrinterIdentity{
+  display:flex;flex-direction:column;align-items:flex-start;
+  gap:10px;min-width:0;
+}
+.slicerPreparePrinterIdentity>img,.slicerPreparePrinterFallback{
+  display:block;box-sizing:border-box;width:100%;max-width:210px;
+  height:120px;object-fit:contain;object-position:left center;
+  border:1px solid var(--border,#344357);border-radius:10px;
+  background:#0d1622;padding:8px;
+}
+.slicerPreparePrinterIdentity>strong{
+  font-size:.91rem;line-height:1.45;overflow-wrap:anywhere;
+}
+.slicerPreparePrinterFallback{
+  display:flex;align-items:center;justify-content:center;
+  color:#7590ab;
+}
+.slicerPreparePrinterFallback svg{width:74px;height:74px;max-width:75%}
+@media(max-width:520px){
+  .slicerPlateIdentity{padding:10px;gap:10px}
+  .slicerPlateIdentity>span{padding-bottom:0}
+  .slicerPreparePrinterIdentity>img,.slicerPreparePrinterFallback{max-width:100%;height:100px}
+}
