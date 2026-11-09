@@ -343,3 +343,29 @@ test("confirmed completed slice actions return to slicer without hiding uncertai
   assert.match(printer, /submittedAction === "upload"/);
   assert.match(printer, /submission\?\.status === "uploaded"/);
 });
+
+
+test("slicer Device action opens selected physical printer live monitoring", () => {
+  const app = fs.readFileSync(path.resolve(root, "../App.jsx"), "utf8");
+  const printing = read("PrintingPage.jsx");
+  const workbench = read("SlicerWorkbench.jsx");
+  const prepare = read("SlicerPrepareWorkspace.jsx");
+  assert.match(prepare, /onClick=\{\(\) => onOpenDevice\?\.\(printerId\)\}/);
+  assert.match(prepare, /disabled=\{!printerId \|\| !onOpenDevice\}/);
+  assert.match(prepare, />\s*Device\s*<\/button>/);
+  assert.match(workbench, /onOpenDevice=\{onOpenDevice\}/);
+  assert.match(printing, /onOpenDevice=\{onOpenSlicerDevice\}/);
+  assert.match(app, /onOpenSlicerDevice=\{printerId =>/);
+  assert.match(app, /type: "printers", id: String\(printerId\), openLive: true/);
+  assert.match(printing, /printerIntent\(searchTarget, data\?\.printers, openedLiveTarget\)/);
+});
+
+test("live monitoring modal uses the shared camera preview before telemetry", () => {
+  const printing = read("PrintingPage.jsx");
+  const modalStart = printing.indexOf('title={"Live monitoring · " + printer.name}');
+  const cameraAt = printing.indexOf("<PrinterCameraPreview", modalStart);
+  const telemetryAt = printing.indexOf('className="printingIntegrationGrid printerLiveSources"', modalStart);
+  assert.ok(modalStart > 0 && cameraAt > modalStart && telemetryAt > cameraAt);
+  assert.match(printing.slice(cameraAt, telemetryAt), /live_connections: \(data\.rows \|\| \[\]\)/);
+  assert.match(printing, /suspended=\{Boolean\(cameraSetup \|\| livePrinter \|\| cameraOffer\)\}/);
+});
