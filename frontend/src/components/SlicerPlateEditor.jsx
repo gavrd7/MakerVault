@@ -83,42 +83,6 @@ function makeMakerVaultPlateTexture(type, bedX, bedY) {
   return texture;
 }
 
-function makeRepresentativePlateTexture(type) {
-  const surface = PLATE_SURFACE[type] || PLATE_SURFACE.default;
-  const canvas = document.createElement("canvas");
-  canvas.width = 128;
-  canvas.height = 128;
-  const context = canvas.getContext("2d");
-  if (!context) return null;
-  context.fillStyle = surface.base;
-  context.fillRect(0, 0, 128, 128);
-  // Subtle, deterministic physical texture hint, not manufacturer artwork.
-  // Keep actual printer polygon and exclusion geometry from the native profile.
-  if (surface.speckled) {
-    for (let index = 0; index < 900; index++) {
-      const x = (index * 67 + 29) % 128;
-      const y = (index * 97 + 13 + Math.floor(index / 127)) % 128;
-      context.fillStyle = index % 3 === 0 ? "rgba(225,235,240,.12)" : "rgba(0,0,0,.12)";
-      context.fillRect(x, y, 1, 1);
-    }
-  } else {
-    const sheen = context.createLinearGradient(0, 0, 128, 128);
-    sheen.addColorStop(0, "rgba(255,255,255,.07)");
-    sheen.addColorStop(.5, "rgba(255,255,255,0)");
-    sheen.addColorStop(1, "rgba(0,0,0,.06)");
-    context.fillStyle = sheen;
-    context.fillRect(0, 0, 128, 128);
-  }
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(1 / 35, 1 / 35);
-  texture.anisotropy = 4;
-  return texture;
-}
-
-
 function plateUuid() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
@@ -742,7 +706,7 @@ export default function SlicerPlateEditor({
     if (showDimensionsLabel) makeLabel(pretty(bedX) + " × " + pretty(bedY) + " mm", 0, -bedY / 2 + 23,
       Math.min(bedX * 0.35, 82));
 
-    const camera = new THREE.PerspectiveCamera(45, 1, 0.5, 20000);
+    const camera = new THREE.PerspectiveCamera(45, 1, Math.max(2, Math.min(bedX, bedY) * 0.015), Math.max(4000, Math.max(bedX, bedY) * 12));
     camera.up.set(0, 0, 1);
     camera.position.set(bedX * 1.0, -bedY * 1.3, Math.max(bedX, bedY) * 1.35);
     camera.lookAt(0, 0, 0);
