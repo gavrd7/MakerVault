@@ -40,7 +40,7 @@ export default function SlicerPrepareWorkspace({
   defaultColor, onManualColorChange, canEdit, busy, error, notice,
   onChangeProfiles, onSaveDraft, onSlice, engine, printer,
   selectedProfiles, workerConfigured, printerId,
-  printerDetails, nozzleMm,
+  printerDetails, nozzleMm, selectedPlateType = "Native / profile default",
   localAssets = [], onLocalAssetsChange,
 }) {
   const editorRef = useRef(null);
@@ -239,7 +239,8 @@ export default function SlicerPrepareWorkspace({
           <strong>{printerDetails?.name || printer || "No printer selected"}</strong>
           <div className="slicerPreparePrinterMeta">
             <span>Nozzle: {nozzleMm ? Number(nozzleMm).toFixed(2) + " mm" : "Not selected"}</span>
-            <span>Build plate: {Array.isArray(plate?.size_mm)
+            <span>Build plate: {selectedPlateType}</span>
+            <span>Build area: {Array.isArray(plate?.size_mm)
               ? plate.size_mm.slice(0, 2).join(" × ") + " mm" : "Unknown"}</span>
           </div>
           <span className="slicerPreparePrinterProfile">{selectedProfiles?.printer || "Native printer profile not selected"}</span>
