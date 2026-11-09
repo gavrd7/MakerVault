@@ -48,7 +48,9 @@ test("advanced tools are visibly gated pending safe native transformations", () 
   assert.match(scene, /disabled=\{!!tool.pending/);
   for (const group of ["Quality", "Strength", "Speed", "Supports", "Multifilament", "Others"])
     assert.match(scene, new RegExp('"' + group + '"'));
-  assert.match(scene, /Per-object settings are not yet available/);
+  assert.match(scene, /Slicing with object overrides remains disabled/);
+  assert.match(scene, /process_overrides: changed/);
+  assert.match(scene, /Clear object overrides/);
   assert.match(scene, /nativeProcessFields/);
   assert.match(scene, /processOverrides/);
   assert.match(scene, /Restore profile defaults/);
@@ -368,4 +370,17 @@ test("live monitoring modal uses the shared camera preview before telemetry", ()
   assert.ok(modalStart > 0 && cameraAt > modalStart && telemetryAt > cameraAt);
   assert.match(printing.slice(cameraAt, telemetryAt), /live_connections: \(data\.rows \|\| \[\]\)/);
   assert.match(printing, /suspended=\{Boolean\(cameraSetup \|\| livePrinter \|\| cameraOffer\)\}/);
+});
+
+test("per-object settings inherit global profile values and remain instance scoped", () => {
+  const scene = read("SlicerPrepareWorkspace.jsx");
+  const workbench = read("SlicerWorkbench.jsx");
+  assert.match(scene, /const selectedObject = objects\.find\(row => row\.instance_id === selectedId\)/);
+  assert.match(scene, /editingObject \? objectOverrides : processOverrides/);
+  assert.match(scene, /onChange\(next\)/);
+  assert.match(scene, /item\.instance_id !== selectedObject\.instance_id/);
+  assert.match(scene, /inheritedValue\(key, spec\)/);
+  assert.match(scene, /Clear object overrides/);
+  assert.match(scene, /id="slicer-object-settings-instance"/);
+  assert.match(workbench, /plate_objects: plateObjects/);
 });
