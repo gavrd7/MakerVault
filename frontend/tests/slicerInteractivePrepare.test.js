@@ -241,3 +241,19 @@ test("rotation and scale have separate safe resets without moving the object", (
   assert.match(css, /\.slicerTransformInputRow\{/);
   assert.match(css, /\.slicerTransformInputRow>button\{/);
 });
+
+
+test("expand settings lives next to Detail and conditional native fields use schema dependencies", () => {
+  const scene = read("SlicerPrepareWorkspace.jsx");
+  const css = fs.readFileSync(path.resolve(root, "../styles.css"), "utf8");
+  const header = scene.slice(scene.indexOf('className="slicerSettingsPanelHeader"'),
+    scene.indexOf('className="slicerProcessQuickSelect"'));
+  assert.doesNotMatch(header, /Expand settings/);
+  const searchRow = scene.slice(scene.indexOf('className="slicerSettingsSearchRow"'),
+    scene.indexOf('{scope === "objects"'));
+  assert.match(searchRow, /slicerExpandSettingsAction/);
+  assert.match(searchRow, /Expand settings/);
+  assert.match(scene, /spec\.enabled_when/);
+  assert.match(scene, /processOverrides\[condition\.key\]/);
+  assert.match(css, /\.slicerSettingsSearchRow \.slicerExpandSettingsAction/);
+});
