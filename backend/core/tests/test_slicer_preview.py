@@ -30,9 +30,9 @@ G1 X10 Y20 E2.0
 
     def test_native_line_width_is_preserved_for_3d_filament_geometry(self):
         result = generated_preview(
-            "G90\\nM83\\nG1 Z0.2 X10 Y10\\n"
-            ";WIDTH:0.46\\n;TYPE:Outer wall\\nG1 X20 E1.0\\n"
-            ";WIDTH:999\\nG1 X30 E1.0\\n"
+            "G90\nM83\nG1 Z0.2 X10 Y10\n"
+            ";WIDTH:0.46\n;TYPE:Outer wall\nG1 X20 E1.0\n"
+            ";WIDTH:999\nG1 X30 E1.0\n"
         )
         self.assertEqual(len(result["segments"]), 2)
         self.assertEqual(result["segments"][0][6], 0.46)
