@@ -34,11 +34,12 @@ const TOOLS = [
   { name: "Colour painting", icon: "paint", pending: "Native multi-material annotations and tool mapping" },
 ];
 const SECTION_ORDER = {
-  Quality: ["Layer height", "Line width", "Seam", "Precision", "Ironing", "Z contouring", "Walls and surfaces", "Bridging", "Fuzzy skin"],
+  Quality: ["Layer height", "Line width", "Seam", "Precision", "Ironing", "Z contouring", "Walls and surfaces", "Overhangs", "Bridging"],
   Strength: ["Walls", "Top/bottom shells", "Infill"],
   Speed: ["First layer speed", "Other layers speed", "Travel speed", "Acceleration"],
-  Supports: ["Support", "Raft", "Support ironing", "Advanced"],
-  Others: ["Skirt", "Brim", "Special mode", "G-code output"],
+  Supports: ["Support", "Raft", "Support ironing", "Tree support", "Advanced"],
+  Multifilament: ["Prime tower", "Flush options", "Ooze prevention"],
+  Others: ["Skirt", "Brim", "Special mode", "Fuzzy skin", "G-code output"],
 };
 const GROUPS = [["Quality", "quality"], ["Strength", "strength"], ["Speed", "speed"],
   ["Supports", "supports"], ["Multifilament", "multifilament"], ["Others", "others"]];
@@ -144,13 +145,21 @@ export default function SlicerPrepareWorkspace({
   };
   const visibleNativeFields = Object.entries(nativeProcessFields)
     .filter(([key, spec]) => {
-      const condition = spec.enabled_when;
-      if (condition && nativeProcessFields[condition.key]) {
+      const conditions = spec.enabled_when
+        ? (Array.isArray(spec.enabled_when) ? spec.enabled_when : [spec.enabled_when])
+        : [];
+      const enabled = conditions.every(condition => {
         const master = nativeProcessFields[condition.key];
-        if (String(processOverrides[condition.key] ?? master.current) === condition.not)
-          return false;
-      }
-      return (settingsLevel === "advanced" || spec.level === "basic") &&
+        if (!master) return true; // A missing native control must never be fabricated.
+        const value = String(processOverrides[condition.key] ?? master.current);
+        if (condition.not !== undefined && value === condition.not) return false;
+        if (Array.isArray(condition.in) && !condition.in.includes(value)) return false;
+        return true;
+      });
+      if (!enabled) return false;
+      return (settingsLevel === "expert" ||
+              (settingsLevel === "advanced" && spec.level !== "expert") ||
+              spec.level === "basic") &&
         (settingsSearch.trim()
           ? (key + " " + spec.label + " " + spec.category + " " + (spec.section || ""))
             .toLowerCase().includes(settingsSearch.trim().toLowerCase())
@@ -159,8 +168,11 @@ export default function SlicerPrepareWorkspace({
     // Keep the controlling setting above its dependents regardless of the
     // order in which the backend schema declares numeric and choice fields.
     .sort(([a, sa], [b, sb]) => {
-      if (sb.enabled_when?.key === a) return -1;
-      if (sa.enabled_when?.key === b) return 1;
+      const depKeys = spec => (Array.isArray(spec.enabled_when)
+        ? spec.enabled_when : spec.enabled_when ? [spec.enabled_when] : [])
+        .map(condition => condition.key);
+      if (depKeys(sb).includes(a)) return -1;
+      if (depKeys(sa).includes(b)) return 1;
       return 0;
     });
   const nativeSections = [...new Set(visibleNativeFields.map(([, spec]) => spec.section || "Other"))]
@@ -378,8 +390,9 @@ export default function SlicerPrepareWorkspace({
           <label className="slicerSettingsLevelLabel">
             <span>Detail</span>
             <select value={settingsLevel} onChange={event => setSettingsLevel(event.target.value)}>
-              <option value="basic">Basic</option>
+              <option value="basic">Simple</option>
               <option value="advanced">Advanced</option>
+              <option value="expert">Expert</option>
             </select>
           </label>
           <button className="slicerExpandSettingsAction" type="button"
