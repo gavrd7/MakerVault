@@ -4612,3 +4612,32 @@ a:focus-visible,
 @media(max-width:480px){
   .slicerSettingsSearchRow .slicerExpandSettingsAction{flex:1 1 100%}
 }
+
+
+/* Search occupies the first line. Detail and Expand settings always form
+   the same second-line workflow at normal sidebar widths. */
+.slicerPrepareSettings .slicerSettingsSearchRow{
+  display:grid;
+  grid-template-columns:minmax(0, 1fr) minmax(0, 1fr);
+  gap:10px;
+  align-items:end;
+  min-width:0;
+}
+.slicerPrepareSettings .slicerSettingsSearchLabel{
+  grid-column:1/-1;
+  width:100%;
+  min-width:0;
+}
+.slicerPrepareSettings .slicerSettingsLevelLabel{
+  grid-column:1;
+  width:100%;
+  min-width:0;
+}
+.slicerPrepareSettings .slicerSettingsSearchRow .slicerExpandSettingsAction{
+  grid-column:2;
+  width:100%;
+  min-width:0;
+  min-height:40px;
+  align-self:end;
+  margin:0;
+}
