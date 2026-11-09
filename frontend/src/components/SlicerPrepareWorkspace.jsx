@@ -143,12 +143,26 @@ export default function SlicerPrepareWorkspace({
     setCustomProfileError("");
   };
   const visibleNativeFields = Object.entries(nativeProcessFields)
-    .filter(([key, spec]) =>
-      (settingsLevel === "advanced" || spec.level === "basic") &&
-      (settingsSearch.trim()
-        ? (key + " " + spec.label + " " + spec.category + " " + (spec.section || ""))
-          .toLowerCase().includes(settingsSearch.trim().toLowerCase())
-        : spec.category === group));
+    .filter(([key, spec]) => {
+      const condition = spec.enabled_when;
+      if (condition && nativeProcessFields[condition.key]) {
+        const master = nativeProcessFields[condition.key];
+        if (String(processOverrides[condition.key] ?? master.current) === condition.not)
+          return false;
+      }
+      return (settingsLevel === "advanced" || spec.level === "basic") &&
+        (settingsSearch.trim()
+          ? (key + " " + spec.label + " " + spec.category + " " + (spec.section || ""))
+            .toLowerCase().includes(settingsSearch.trim().toLowerCase())
+          : spec.category === group);
+    })
+    // Keep the controlling setting above its dependents regardless of the
+    // order in which the backend schema declares numeric and choice fields.
+    .sort(([a, sa], [b, sb]) => {
+      if (sb.enabled_when?.key === a) return -1;
+      if (sa.enabled_when?.key === b) return 1;
+      return 0;
+    });
   const nativeSections = [...new Set(visibleNativeFields.map(([, spec]) => spec.section || "Other"))]
     .sort((a, b) => {
       const order = SECTION_ORDER[group] || [];
