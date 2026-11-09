@@ -37,7 +37,7 @@ SOURCES = {
     "snapmakerorca": ("Snapmaker/OrcaSlicer", ("Snapmaker",)),
 }
 _VERSION = re.compile(r"^v?([0-9]+(?:\.[0-9]+){1,3})$")
-_BASENAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,119}$")
+_ASSET_PATH = re.compile(r"^(?:[A-Za-z0-9_-]+/){0,2}[A-Za-z0-9][A-Za-z0-9_.-]{0,119}$")
 _XML_SVG = "{http://www.w3.org/2000/svg}"
 
 
@@ -160,7 +160,7 @@ def official_asset_source(profile, kind="texture"):
             if model_data is not None:
                 filename = model_data.get(key)
     extension = ".svg" if kind == "texture" else ".stl"
-    if not isinstance(filename, str) or not _BASENAME.fullmatch(filename) or not filename.lower().endswith(extension):
+    if not isinstance(filename, str) or not _ASSET_PATH.fullmatch(filename) or not filename.lower().endswith(extension):
         return None
     # No file paths, percent escapes, query strings, or user-provided hosts.
     vendor = provenance.group(1)
