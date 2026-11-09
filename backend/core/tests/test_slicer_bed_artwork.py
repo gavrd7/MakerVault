@@ -79,6 +79,8 @@ class SlicerBedArtworkTests(SimpleTestCase):
         self.assertIsNone(official_bed_model_source(self.profile))
         inspect.return_value = {"bed_model": "safe_bed.stl"}
         self.assertTrue(official_bed_model_source(self.profile)[0].endswith("/safe_bed.stl"))
+        inspect.return_value = {"bed_model": "model/safe_bed.stl"}
+        self.assertTrue(official_bed_model_source(self.profile)[0].endswith("/model/safe_bed.stl"))
 
     def test_invalid_stl_not_accepted(self):
         with self.assertRaises(ValueError):
