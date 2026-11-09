@@ -51,3 +51,15 @@ test("failed official artwork keeps the user's toggle selected and reports a use
   assert.ok(editor.includes("profileArtwork && bundledArtwork"));
   assert.ok(editor.includes('role="status" className="integrationError"'));
 });
+
+test("native official artwork uses high-resolution SVG rasterisation and shows a 3D plate", () => {
+  const editor = fs.readFileSync(new URL("../src/components/SlicerPlateEditor.jsx", import.meta.url), "utf8");
+  assert.match(editor, /canvas.width = 2048; canvas.height = 2048/);
+  assert.match(editor, /new THREE.CanvasTexture\(canvas\)/);
+  assert.match(editor, /texture.anisotropy/);
+  assert.match(editor, /bevelEnabled: true/);
+  assert.match(editor, /const drawReferenceGrid = !showNativeArtwork/);
+  assert.match(editor, /plateBody.visible = false/);
+  assert.match(editor, /artworkTextureController\?\.abort\(\)/);
+  assert.match(editor, /nativeBedMesh\.userData\.decorativeBed = true/);
+});
