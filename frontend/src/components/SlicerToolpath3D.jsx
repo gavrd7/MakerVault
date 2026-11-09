@@ -10,6 +10,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 export default function SlicerToolpath3D({
   segments = [], layers = [], activeLayer, activeStep, visible = {},
   colourMode = "feature", colours = {}, showToolhead = true, bedSize = null,
+  renderMode = "solid", nozzleDiameter = 0.4,
 }) {
   const mount = useRef(null);
   const sceneRef = useRef(null);
@@ -121,7 +122,7 @@ export default function SlicerToolpath3D({
       observer?.disconnect();
       controls.dispose();
       paths.traverse(object => {
-        if (object.isLineSegments) {
+        if (object.isLineSegments || object.isMesh) {
           object.geometry.dispose();
           object.material.dispose();
         }
@@ -176,19 +177,59 @@ export default function SlicerToolpath3D({
         : new THREE.Color(colours[feature] || "#b8d4e5");
       // Dim completed layers while keeping current-layer paths vivid.
       if (!isCurrent) hex.multiplyScalar(0.35);
-      positions.push(x1, z, y1, x2, z, y2);
-      for (let index = 0; index < 2; index++) coloursArray.push(hex.r, hex.g, hex.b);
+      if (renderMode === "lines") {
+        positions.push(x1, z, y1, x2, z, y2);
+        for (let index = 0; index < 2; index++) coloursArray.push(hex.r, hex.g, hex.b);
+        continue;
+      }
+      // Each G-code extrusion move represents a deposited strand with width
+      // and layer height, not a zero-width wire. Draw a rectangular bead's
+      // top and two visible walls; the visual volume is advisory and cannot
+      // account for actual flow, squish or overlapping adjacent extrusions.
+      const suppliedWidth = Number(segment[6]);
+      const width = Number.isFinite(suppliedWidth) && suppliedWidth >= 0.05 && suppliedWidth <= 3
+        ? suppliedWidth : Math.max(0.1, Math.min(2.4, Number(nozzleDiameter) * 1.05 || 0.42));
+      const length = Math.hypot(x2 - x1, y2 - y1);
+      if (length < 0.0001) continue;
+      const half = width / 2;
+      const sideX = -(y2 - y1) / length * half;
+      const sideY = (x2 - x1) / length * half;
+      const layerIndex = layers.findIndex(height => Math.abs(height - z) < 0.0005);
+      const priorHeight = layerIndex > 0 ? layers[layerIndex - 1] : 0;
+      const beadHeight = Math.max(0.07, Math.min(0.45, z - priorHeight || 0.2));
+      const top = z;
+      const bottom = z - beadHeight;
+      const leftA = [x1 + sideX, y1 + sideY], rightA = [x1 - sideX, y1 - sideY];
+      const leftB = [x2 + sideX, y2 + sideY], rightB = [x2 - sideX, y2 - sideY];
+      const pushTri = (a, b, c, topA, topB, topC) => {
+        positions.push(a[0], topA, a[1], b[0], topB, b[1], c[0], topC, c[1]);
+        for (let index = 0; index < 3; index++) coloursArray.push(hex.r, hex.g, hex.b);
+      };
+      // Top surface, outer left side and outer right side.
+      pushTri(leftA, rightA, leftB, top, top, top);
+      pushTri(rightA, rightB, leftB, top, top, top);
+      pushTri(leftA, leftB, leftB, top, top, bottom);
+      pushTri(leftA, leftB, leftA, top, bottom, bottom);
+      pushTri(rightA, rightB, rightB, top, bottom, top);
+      pushTri(rightA, rightB, rightA, top, bottom, bottom);
     }
     if (positions.length) {
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
       geometry.setAttribute("color", new THREE.Float32BufferAttribute(coloursArray, 3));
-      paths.add(new THREE.LineSegments(geometry,
-        new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.98 })));
+      if (renderMode === "lines") {
+        paths.add(new THREE.LineSegments(geometry,
+          new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.98 })));
+      } else {
+        paths.add(new THREE.Mesh(geometry,
+          new THREE.MeshBasicMaterial({
+            vertexColors: true, side: THREE.DoubleSide, transparent: false,
+          })));
+      }
     }
     marker.visible = Boolean(showToolhead && lastStep);
     if (lastStep) marker.position.set(...lastStep);
-  }, [segments, layers, activeLayer, activeStep, visible, colourMode, colours, showToolhead]);
+  }, [segments, layers, activeLayer, activeStep, visible, colourMode, colours, showToolhead, renderMode, nozzleDiameter]);
 
   return <div className="slicerToolpath3D">
     {unavailable ? <div role="status" className="projectUploadHint">
