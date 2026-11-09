@@ -257,7 +257,7 @@ test("expand settings lives next to Detail and conditional native fields use sch
   assert.match(searchRow, /slicerExpandSettingsAction/);
   assert.match(searchRow, /Expand settings/);
   assert.match(scene, /spec\.enabled_when/);
-  assert.match(scene, /processOverrides\[condition\.key\]/);
+  assert.match(scene, /editingOverrides\[condition\.key\]/);
   assert.match(css, /\.slicerSettingsSearchRow \.slicerExpandSettingsAction/);
 });
 
