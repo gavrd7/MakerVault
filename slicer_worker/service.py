@@ -232,7 +232,7 @@ class Handler(BaseHTTPRequestHandler):
                     "qt-platform-failed", "missing-runtime-library", "appimage-runtime-failed",
                     "unsupported-cli-option", "native-profile-load-failed", "engine-exited",
                     "native-project-settings-invalid", "native-project-load-failed",
-                    "cli-validation-exit-238",
+                    "cli-validation-exit-238", "cli-validation-exit-239",
                 }
                 reason = candidate if candidate in categories else "engine-exited"
             else:
