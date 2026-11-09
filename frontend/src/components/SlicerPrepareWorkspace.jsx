@@ -422,7 +422,7 @@ export default function SlicerPrepareWorkspace({
             <button type="button" disabled={!canEdit || busy ||
               !Object.keys(processOverrides).length} onClick={resetSettings}
               title="Discard this draft's changes and restore values from the selected process profile">
-              Reset
+              Reset edits
             </button>
           </div>
           <small>{Object.keys(processOverrides).length
@@ -440,7 +440,7 @@ export default function SlicerPrepareWorkspace({
             className={group === name ? "selected" : ""}
             onClick={() => setGroup(name)}><SlicerUiIcon name={icon} size={16} /><span>{name}</span></button>)}
         </nav>
-        <h4>{group}</h4>
+        <h4>{settingsSearch.trim() ? "Search results" : group}</h4>
         <div className="slicerSettingsSearchRow">
           <label className="slicerSettingsSearchLabel">
             <span>Find a setting</span>
