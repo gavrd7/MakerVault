@@ -48,7 +48,7 @@ export default function SlicerPrepareWorkspace({
   objects, onChange, files, plate, plateType = "default", plateLabel = "Plate 1",
   onPlateLabelChange, onPrimaryChange, onFilesUploaded,
   defaultColor, onManualColorChange, canEdit, busy, error, notice,
-  onChangeProfiles, onSaveDraft, onSlice, engine, printer,
+  onChangeProfiles, onOpenDevice, onSaveDraft, onSlice, engine, printer,
   selectedProfiles, workerConfigured, printerId,
   processOverrides = {}, onProcessOverridesChange, onSaveCustomProcessProfile,
   processProfiles = [], onSelectProcessProfile, onResetProcessSettings,
@@ -587,6 +587,11 @@ export default function SlicerPrepareWorkspace({
           </div>
           <span className="slicerPreparePrinterProfile">{selectedProfiles?.printer || "Native printer profile not selected"}</span>
           <button type="button" onClick={onChangeProfiles}>Change printer/profile</button>
+          <button type="button" onClick={() => onOpenDevice?.(printerId)}
+            disabled={!printerId || !onOpenDevice}
+            title={printerId ? "Open this printer's live monitoring in 3D Printing" : "Select a physical printer first"}>
+            Device
+          </button>
         </section>
         <aside className="slicerPrepareTree" aria-label="Build plate object tree">
         <h4>{plateLabel || "Plate 1"} · Models ({objects.length})</h4>
