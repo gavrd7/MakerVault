@@ -4,7 +4,7 @@ import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { threeMfGeometryToStl, MAX_3MF_IMPORT_BYTES } from "./slicer3mfGeometry";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
-import { ViewHelper } from "three/examples/jsm/helpers/ViewHelper.js";
+import { SlicerOrientationCube } from "./slicerOrientationCube";
 import { apiFetch } from "../api";
 import { plateExtentWarning, plateFootprintsOverlap, autoArrangePlate } from "./slicerPlateGeometry";
 import { nativeBedArtwork } from "./slicerNativePlateArt";
@@ -538,11 +538,7 @@ export default function SlicerPlateEditor({
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     const transform = new TransformControls(camera, renderer.domElement);
-    const axisView = new ViewHelper(camera, renderer.domElement);
-    axisView.setLabels("X", "Y", "Z");
-    axisView.location.top = 8;
-    axisView.location.right = 8;
-    const orientationClock = new THREE.Clock();
+    const orientationCube = new SlicerOrientationCube(camera, renderer);
     transform.setSpace("world");
     transform.setTranslationSnap(0.5);
     transform.setRotationSnap(THREE.MathUtils.degToRad(5));
@@ -655,12 +651,12 @@ export default function SlicerPlateEditor({
         item.instance_id === selectedItem.instance_id ? candidate : item));
     });
     const orientationPointerDown = event => {
-      if (event.button !== 0 || axisView.animating) return;
-      axisView.center.copy(controls.target);
-      if (axisView.handleClick(event)) {
+      if (event.button !== 0) return;
+      const face = orientationCube.pick(event);
+      if (face) {
         event.stopImmediatePropagation();
         event.preventDefault();
-        exitToolModeRef.current?.();
+        setPlateCamera(face);
       }
     };
     renderer.domElement.addEventListener("pointerdown", orientationPointerDown, true);
@@ -678,14 +674,9 @@ export default function SlicerPlateEditor({
     observer.observe(mount);
     resize();
     renderer.setAnimationLoop(() => {
-      const delta = Math.min(0.05, orientationClock.getDelta());
-      if (axisView.animating) {
-        axisView.update(delta);
-        controls.target.copy(axisView.center);
-      }
       controls.update();
       renderer.render(scene, camera);
-      axisView.render(renderer);
+      orientationCube.render();
     });
     sceneRef.current = { scene, meshes, transform, camera, controls, bedX, bedY };
     return () => {
@@ -699,7 +690,7 @@ export default function SlicerPlateEditor({
       renderer.domElement.removeEventListener("pointercancel", pointerUp);
       renderer.setAnimationLoop(null);
       controls.dispose();
-      axisView.dispose();
+      orientationCube.dispose();
       transform.detach();
       scene.remove(transform.getHelper());
       transform.dispose();
@@ -846,10 +837,16 @@ export default function SlicerPlateEditor({
     camera.up.set(0, 0, 1);
     if (view === "top") {
       camera.position.copy(focus).add(new THREE.Vector3(0, -0.0001, span));
+    } else if (view === "bottom") {
+      camera.position.copy(focus).add(new THREE.Vector3(0, -0.0001, -span));
     } else if (view === "front") {
       camera.position.copy(focus).add(new THREE.Vector3(0, -span, span * 0.15));
+    } else if (view === "rear") {
+      camera.position.copy(focus).add(new THREE.Vector3(0, span, span * 0.15));
     } else if (view === "right") {
       camera.position.copy(focus).add(new THREE.Vector3(span, 0, span * 0.15));
+    } else if (view === "left") {
+      camera.position.copy(focus).add(new THREE.Vector3(-span, 0, span * 0.15));
     } else {
       camera.position.copy(focus).add(new THREE.Vector3(span * 0.7, -span, span * 0.85));
     }
@@ -883,7 +880,7 @@ export default function SlicerPlateEditor({
       <button type="button" onClick={() => setPlateCamera("selection")} disabled={!chosen}
         title="Centre and zoom onto the currently selected model">Fit selected model</button>
     </div>
-    <div ref={hostRef} className="slicerPlateCanvas" aria-label="Interactive three-dimensional model plate preview with clickable X, Y, Z orientation control in the top right" />
+    <div ref={hostRef} className="slicerPlateCanvas" aria-label="Interactive three-dimensional model plate preview with a clickable six-face orientation cube in the top right" />
 
     {nativeBedArtwork(printerLabel, bedX, bedY) && <label className="slicerPlateArtToggle">
       <input type="checkbox" checked={showNativeArtwork}
