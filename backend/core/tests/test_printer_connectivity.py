@@ -291,9 +291,24 @@ class PrinterConnectivityAdapterTests(TestCase):
             "state": 1,
             "err": {"errcode": 500, "key": 121},
         })
-        self.assertEqual(errored["state"], "error")
+        self.assertEqual(errored["state"], "printing")
         self.assertEqual(errored["source_metadata"]["activity_state"], "printing")
         self.assertEqual(errored["warnings"], ["Creality error 500 (key 121)"])
+
+    def test_creality_active_error_warning_retained_on_resume_but_paused_error_still_reported(self):
+        common = {
+            "connect": 1, "printFileName": "part.gcode", "printProgress": 5,
+            "err": {"errcode": 500, "key": 121},
+        }
+        resumed = normalise_creality_snapshot({**common, "state": 1})
+        self.assertEqual(resumed["state"], "printing")
+        self.assertEqual(resumed["job"]["progress"], 5)
+        self.assertIn("Creality error 500 (key 121)", resumed["warnings"])
+        paused = normalise_creality_snapshot({**common, "state": 5})
+        self.assertEqual(paused["state"], "error")
+        self.assertEqual(paused["source_metadata"]["activity_state"], "paused")
+        unknown = normalise_creality_snapshot({**common, "state": 9})
+        self.assertEqual(unknown["state"], "error")
 
     def test_manufacturer_mqtt_identity_rejects_topic_wildcards(self):
         self.assertEqual(_mqtt_identifier("01P00TESTSERIAL", "Serial"), "01P00TESTSERIAL")
