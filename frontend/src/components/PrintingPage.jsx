@@ -161,6 +161,9 @@ function newestGeometryAnalysis(model) {
 export default function PrintingPage({ config, projects, searchTarget = null, onOpenConsumed, onOpenMakerTags = () => {}, onModelLibraryBack = null, initialWorkspaceView = "overview", onOpenSlicer = null, slicerStatus = { state: "checking" } }) {
   const [data, setData] = useState(null);
   const [filamentsLoaded, setFilamentsLoaded] = useState(false);
+  const [filesLoaded, setFilesLoaded] = useState(false);
+  const [filesLoading, setFilesLoading] = useState(false);
+  const filesFetchRef = useRef(false);
   const [filamentsLoading, setFilamentsLoading] = useState(false);
   const filamentFetchRef = useRef(false);
   const [error, setError] = useState("");
@@ -183,14 +186,21 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
 
   async function load(options = {}) {
     const includeFilaments = options?.includeFilaments ?? filamentsLoaded;
+    const includeFiles = options?.includeFiles ?? filesLoaded;
     setError("");
     try {
-      const fresh = await apiFetch("/api/printing/" + (includeFilaments ? "" : "?include_filaments=0"));
-      setData(previous => includeFilaments ? fresh : {
+      const query = new URLSearchParams();
+      if (!includeFilaments) query.set("include_filaments", "0");
+      if (!includeFiles) query.set("include_files", "0");
+      const fresh = await apiFetch("/api/printing/" + (query.size ? "?" + query : ""));
+      setData(previous => ({
         ...fresh,
-        filaments: previous?.filaments || [],
-      });
+        filaments: includeFilaments ? fresh.filaments : previous?.filaments || [],
+        gcode_files: includeFiles ? fresh.gcode_files : previous?.gcode_files || [],
+        model_files: includeFiles ? fresh.model_files : previous?.model_files || [],
+      }));
       if (includeFilaments) setFilamentsLoaded(true);
+      if (includeFiles) setFilesLoaded(true);
       return fresh;
     } catch (err) {
       setError(err.message);
@@ -199,7 +209,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
   }
 
   // The overview needs printers and models, not the entire filament catalogue.
-  useEffect(() => { load({ includeFilaments: false }); }, []);
+  useEffect(() => { load({ includeFilaments: false, includeFiles: false }); }, []);
 
   useEffect(() => {
     const needsFilaments = ["spools", "filaments", "reusableSpools"].includes(workspaceView)
@@ -215,10 +225,23 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
   }, [workspaceView, modal, claimSlot, filamentsLoaded]);
 
   useEffect(() => {
+    const needsFiles = ["models", "slicer"].includes(workspaceView)
+      || ["gcode", "print"].includes(modal) || Boolean(manageModel);
+    if (!needsFiles || filesLoaded || filesFetchRef.current) return;
+    filesFetchRef.current = true;
+    setFilesLoading(true);
+    load({ includeFiles: true, includeFilaments: filamentsLoaded })
+      .finally(() => {
+        filesFetchRef.current = false;
+        setFilesLoading(false);
+      });
+  }, [workspaceView, modal, manageModel, filesLoaded, filamentsLoaded]);
+
+  useEffect(() => {
     if (workspaceView !== "overview") return undefined;
     // Keep printer telemetry current without reloading 14k+ immutable catalogue
     // records every 15 seconds.
-    const timer = window.setInterval(() => load({includeFilaments:false}), 15000);
+    const timer = window.setInterval(() => load({includeFilaments:false, includeFiles:false}), 15000);
     return () => window.clearInterval(timer);
   }, [workspaceView]);
 
@@ -300,6 +323,27 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
     </section>;
     return <LoadingBlock label={filamentsLoading
       ? "Loading filament catalogue…" : "Preparing filament catalogue…"} />;
+  }
+
+  if ((["models", "slicer"].includes(workspaceView)
+      || ["gcode", "print"].includes(modal) || manageModel) && !filesLoaded) {
+    if (error && !filesLoading) return <section className="panel printingSection">
+      <p role="alert">{error}</p>
+      <button type="button" onClick={() => {
+        setError("");
+        setFilesLoading(true);
+        filesFetchRef.current = true;
+        load({ includeFiles: true, includeFilaments: filamentsLoaded }).finally(() => {
+          filesFetchRef.current = false;
+          setFilesLoading(false);
+        });
+      }}>Retry loading model and G-code files</button>
+      <button type="button" onClick={() => {
+        setModal(""); setManageModel(null); setWorkspaceView("overview");
+      }}>Back to 3D Printing</button>
+    </section>;
+    return <LoadingBlock label={filesLoading
+      ? "Loading model and G-code files…" : "Preparing model and G-code files…"} />;
   }
 
   if (workspaceView === "reusableSpools") {
