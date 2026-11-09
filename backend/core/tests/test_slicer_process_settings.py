@@ -77,6 +77,47 @@ class NativeProcessSettingsTests(SimpleTestCase):
                 "process_overrides": {"machine_start_gcode": "M600"},
             })
 
+    def test_native_enum_and_toggle_settings_round_trip_without_touching_startup(self):
+        source = json.dumps({
+            "name": "Official sample", "sparse_infill_pattern": "grid",
+            "seam_position": "aligned", "enable_support": "0",
+            "outer_wall_acceleration": "2000",
+            "machine_start_gcode": "START_PRINT EXTRUDER_TEMP=220",
+            "change_filament_gcode": "M600",
+        }).encode()
+        schema = process_schema(source)
+        self.assertEqual(schema["sparse_infill_pattern"]["current"], "grid")
+        self.assertEqual(schema["enable_support"]["kind"], "toggle")
+        edited = json.loads(apply_process_overrides(source, {
+            "sparse_infill_pattern": "gyroid",
+            "seam_position": "rear", "enable_support": "1",
+            "outer_wall_acceleration": 2400,
+        }))
+        self.assertEqual(edited["sparse_infill_pattern"], "gyroid")
+        self.assertEqual(edited["seam_position"], "rear")
+        self.assertEqual(edited["enable_support"], "1")
+        self.assertEqual(edited["outer_wall_acceleration"], "2400")
+        self.assertEqual(edited["machine_start_gcode"], "START_PRINT EXTRUDER_TEMP=220")
+        self.assertEqual(edited["change_filament_gcode"], "M600")
+
+    def test_unrecognised_native_choices_are_not_replaced(self):
+        source = json.dumps({"sparse_infill_pattern": "new-unknown-value"}).encode()
+        self.assertNotIn("sparse_infill_pattern", process_schema(source))
+        with self.assertRaises(ValueError):
+            apply_process_overrides(source, {"sparse_infill_pattern": "gyroid"})
+
+    def test_enum_and_toggle_values_are_strictly_whitelisted(self):
+        for edits in (
+            {"sparse_infill_pattern": "bogus"},
+            {"sparse_infill_pattern": "G28"},
+            {"seam_position": "not-present"},
+            {"enable_support": True},
+            {"enable_support": 1},
+            {"enable_support": "yes"},
+        ):
+            with self.subTest(edits=edits), self.assertRaises(ValueError):
+                validate_process_overrides(edits)
+
     def test_empty_overrides_leave_exact_original_bytes(self):
         source = self.sample()
         self.assertIs(apply_process_overrides(source, {}), source)
