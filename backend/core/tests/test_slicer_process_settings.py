@@ -269,8 +269,10 @@ class NativeProcessSettingsTests(SimpleTestCase):
                     "infill_direction", "outer_wall_jerk", "support_type",
                     "brim_object_gap", "spiral_mode", "top_solid_infill_flow_ratio"):
             self.assertIn(key, schema, key)
-        for key in ("print_sequence", "filename_format"):
-            self.assertNotIn(key, schema)
+        self.assertIn("print_sequence", schema)
+        self.assertEqual(schema["print_sequence"]["kind"], "choice")
+        # User-provided filenames and G-code output templates are still protected.
+        self.assertNotIn("filename_format", schema)
         edited = json.loads(apply_process_overrides(source, {
             "wall_generator": "arachne", "infill_direction": 30,
             "outer_wall_jerk": 9, "enable_support": "1",
