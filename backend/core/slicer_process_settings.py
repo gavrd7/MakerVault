@@ -449,6 +449,85 @@ SECTIONS = {
                           "gcode_label_objects", "exclude_object"},
     },
 }
+
+# Build the workbench's categories from Orca's native process groupings.
+# Unrecognised keys are not made editable; recognised keys lacking a custom
+# subgroup are still grouped under their correct category.
+SECTIONS["Quality"]["Seam"].update({"seam_gap", "scarf_joint_flow_ratio", "wipe_speed"})
+SECTIONS["Quality"]["Line width"].update({"bridge_line_width"})
+SECTIONS["Quality"]["Walls and surfaces"].update({
+    "wall_sequence", "wall_direction", "wall_transition_angle",
+    "wall_transition_filter_deviation", "wall_transition_length",
+    "wall_distribution_count", "min_bead_width", "initial_layer_min_bead_width",
+    "min_feature_size", "wall_maximum_resolution", "wall_maximum_deviation",
+    "max_travel_detour_distance",
+})
+SECTIONS["Quality"]["Overhangs"] = {
+    "detect_overhang_wall", "make_overhang_printable",
+    "make_overhang_printable_angle", "make_overhang_printable_hole_size",
+    "unsupported_wall_last", "extra_perimeters_on_overhangs",
+    "overhang_reverse", "overhang_reverse_threshold",
+}
+SECTIONS["Strength"]["Top/bottom shells"].update({
+    "top_bottom_infill_wall_overlap", "top_surface_expansion",
+    "top_surface_expansion_margin",
+})
+SECTIONS["Strength"]["Infill"].update({
+    "fill_multiline", "sparse_infill_smooth_factor", "gap_fill_target",
+    "separated_infills", "infill_combination_max_layer_height",
+})
+SECTIONS["Speed"]["First layer speed"].update({"initial_layer_travel_speed"})
+SECTIONS["Speed"]["Other layers speed"].update({
+    "small_perimeter_speed", "small_support_perimeter_speed",
+    "small_support_perimeter_threshold",
+})
+SECTIONS["Speed"]["Acceleration"].update({
+    "bridge_acceleration", "sparse_infill_acceleration",
+    "internal_solid_infill_acceleration", "initial_layer_travel_acceleration",
+})
+SECTIONS["Speed"]["Jerk (XY)"].update({"initial_layer_travel_jerk"})
+SECTIONS["Supports"]["Support"].update({
+    "support_style", "support_threshold_overlap", "support_angle",
+})
+SECTIONS["Supports"]["Advanced"].update({
+    "support_base_pattern", "support_interface_pattern",
+    "support_object_first_layer_gap", "independent_support_layer_height",
+})
+SECTIONS["Supports"]["Tree support"] = {
+    "tree_support_wall_count", "tree_support_tip_diameter",
+    "tree_support_top_rate", "tree_support_branch_diameter_angle",
+    "tree_support_angle_slow", "tree_support_auto_brim",
+    "tree_support_brim_width",
+}
+SECTIONS["Multifilament"] = {
+    "Prime tower": {"enable_prime_tower", "prime_tower_width", "prime_volume",
+                    "prime_tower_brim_width", "prime_tower_infill_gap",
+                    "wipe_tower_rotation_angle", "wipe_tower_extra_spacing",
+                    "wipe_tower_extra_flow", "wipe_tower_max_purge_speed",
+                    "enable_tower_interface_features", "prime_tower_enable_framework"},
+    "Flush options": {"flush_into_infill", "flush_into_objects", "flush_into_support"},
+    "Ooze prevention": {"ooze_prevention", "standby_temperature_delta",
+                        "preheat_time", "preheat_steps"},
+}
+SECTIONS["Others"]["Skirt"].update({"skirt_type", "draft_shield",
+                                     "single_loop_draft_shield",
+                                     "skirt_start_angle", "min_skirt_length"})
+SECTIONS["Others"]["Brim"].update({"brim_type", "brim_ears_outer_only",
+                                    "combine_brims", "leading_brim_length",
+                                    "extra_brim_width"})
+SECTIONS["Others"]["Special mode"].update({
+    "slicing_mode", "print_sequence", "print_order", "spiral_mode_smooth",
+    "spiral_mode_max_xy_smoothing", "spiral_starting_flow_ratio",
+    "spiral_finishing_flow_ratio", "enable_wrapping_detection",
+})
+SECTIONS["Others"]["Fuzzy skin"] = {
+    "fuzzy_skin", "fuzzy_skin_mode", "fuzzy_skin_noise_type",
+    "fuzzy_skin_point_distance", "fuzzy_skin_thickness",
+    "fuzzy_skin_scale", "fuzzy_skin_octaves", "fuzzy_skin_persistence",
+    "fuzzy_skin_first_layer",
+}
+SECTIONS["Others"]["G-code output"].update({"exclude_object_tolerance"})
+
 SECTION_FOR = {
     key: section for group in SECTIONS.values()
     for section, keys in group.items() for key in keys
