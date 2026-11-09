@@ -57,14 +57,20 @@ export class SlicerOrientationCube {
     if (rect.width < 130 || rect.height < 130) return;
     this.mesh.quaternion.copy(this.camera.quaternion).invert();
     this.mesh.updateMatrixWorld();
+    const previousAutoClear = renderer.autoClear;
+    renderer.autoClear = false;
     renderer.clearDepth();
     renderer.setViewport(
       rect.width - ORIENTATION_CUBE_SIZE - ORIENTATION_CUBE_MARGIN,
       rect.height - ORIENTATION_CUBE_SIZE - ORIENTATION_CUBE_MARGIN,
       ORIENTATION_CUBE_SIZE, ORIENTATION_CUBE_SIZE,
     );
-    renderer.render(this.scene, this.ortho);
-    renderer.setViewport(previous.x, previous.y, previous.z, previous.w);
+    try {
+      renderer.render(this.scene, this.ortho);
+    } finally {
+      renderer.setViewport(previous.x, previous.y, previous.z, previous.w);
+      renderer.autoClear = previousAutoClear;
+    }
   }
 
   pick(event) {
