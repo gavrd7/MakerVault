@@ -22,7 +22,7 @@ from .slicer_profile_edit import SETTINGS as EDITABLE_PROFILE_SETTINGS, customis
 from .slicer_profile_lineage import inspect_orca_lineage
 from .slicer_native_resolution import resolved_native_profile
 from .slicer_native_overrides import ORCA_PLATES
-from .slicer_process_settings import process_schema, validate_process_overrides
+from .slicer_process_settings import process_schema, validate_process_overrides, apply_process_overrides
 from .slicer_mesh import inspect_stl, MeshInspectionError, MAX_INSPECTION_BYTES
 from .slicer_bed import inspect_orca_plate, inspect_creality_plate
 from .slicer_bed_artwork import (official_artwork_source, cached_official_artwork,
@@ -841,6 +841,69 @@ def customise_profile(request, profile_id):
         "profile": _profile_summary(custom),
         "execution_available": False,
         "warning": "Custom profile saved as an unverified candidate. Original preserved.",
+    }, status=201)
+
+
+@login_required
+@require_http_methods(["POST"])
+def save_process_profile(request, profile_id):
+    """Save an interactive draft's safe Orca process edits as a new native preset.
+
+    The source profile is hash-verified and fully flattened; no active source
+    file or existing SlicerProfile row is modified, and a candidate profile
+    never receives verified execution status by being saved.
+    """
+    if not request.user.has_perm("core.add_fileasset"):
+        return _error("You do not have permission to save custom profiles.", 403)
+    profile = SlicerProfile.objects.filter(
+        pk=profile_id, owner=request.user, engine="orcaslicer", kind="process"
+    ).select_related("file_asset").first()
+    if not profile:
+        return _error("An owned OrcaSlicer process profile is required.", 404)
+    if len(request.body) > 4096:
+        return _error("Custom process profile request is too large.", 413)
+    try:
+        data = json.loads(request.body.decode("utf-8"))
+        if not isinstance(data, dict) or set(data) != {"name", "settings"}:
+            raise ValueError("A unique profile name and changed settings are required.")
+        name = _preset(data, "name")
+        edits = validate_process_overrides(data.get("settings"))
+        if not edits:
+            raise ValueError("Change at least one supported process setting first.")
+        if SlicerProfile.objects.filter(
+            owner=request.user, engine=profile.engine, engine_version=profile.engine_version,
+            kind="process", name=name
+        ).exists():
+            return _error("A process profile with this name already exists.", 409)
+        source = resolved_native_profile(profile)
+        updated = apply_process_overrides(source, edits)
+        native = json.loads(updated.decode("utf-8-sig"))
+        native["name"] = name
+        updated = json.dumps(native, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        if len(updated) > 1024 * 1024:
+            raise ValueError("Custom process profile exceeds the file size limit.")
+        asset = FileAsset(
+            owner=request.user, name=name + ".json", category="source",
+            metadata={"original_name": name + ".json", "extension": ".json",
+                      "slicer_custom_source_profile_id": str(profile.pk)},
+        )
+        asset.file = ContentFile(updated, name="custom-native-process-profile.json")
+        inspected = inspect_native_profile(asset, profile.engine)
+        with transaction.atomic():
+            asset.save()
+            custom = SlicerProfile.objects.create(
+                owner=request.user, file_asset=asset, engine=profile.engine,
+                engine_version=profile.engine_version, kind="process", name=name,
+                provenance=("Custom copy of " + str(profile.pk))[:200],
+                content_sha256=inspected["sha256"], status="candidate",
+            )
+    except (ValueError, TypeError, UnicodeDecodeError, SlicerProfileError) as exc:
+        return _error(str(exc))
+    except (OSError, IntegrityError):
+        return _error("Could not save custom process profile. Check its name and settings.", 409)
+    return JsonResponse({
+        "profile": _profile_summary(custom), "execution_available": False,
+        "warning": "Custom native process profile saved as an unverified candidate. Original preserved.",
     }, status=201)
 
 
