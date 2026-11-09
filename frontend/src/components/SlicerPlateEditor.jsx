@@ -539,7 +539,9 @@ export default function SlicerPlateEditor({
       loadedTexture.colorSpace = THREE.SRGBColorSpace;
       material.map = loadedTexture;
       bedArtwork = new THREE.Mesh(geometry, material);
-      bedArtwork.position.z = 0.13;
+      // Artwork belongs above the 0.24 mm preview grid, not underneath it.
+      // Leave label overlays and printed models above the artwork.
+      bedArtwork.position.z = 0.36;
       bedArtwork.renderOrder = 1;
       scene.add(bedArtwork);
     }
