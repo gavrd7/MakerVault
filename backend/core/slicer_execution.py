@@ -19,6 +19,7 @@ from .slicer_output import store_generated_gcode
 from .slicer_native_resolution import resolved_native_profile
 from .slicer_bed_dimensions import trusted_plate_dimensions
 from .slicer_native_overrides import apply_orca_job_overrides
+from .slicer_process_settings import apply_process_overrides
 from .slicer_plate_3mf import build_plate_3mf, build_compound_plate_3mf
 from .slicer_worker_client import SlicerWorkerError, health, run_remote_job
 
@@ -389,6 +390,9 @@ def process_queued_job(job_id):
             profiles[2], profiles[1] = apply_orca_job_overrides(
                 profiles[2], profiles[1], job.plate,
                 (job.settings or {}).get("plate_objects") or [],
+            )
+            profiles[2] = apply_process_overrides(
+                profiles[2], (job.settings or {}).get("process_overrides") or {},
             )
         if model_format == "stl" and job.input_asset.sha256 and hashlib.sha256(model).hexdigest() != job.input_asset.sha256:
             raise SlicerExecutionError("Model contents changed since the job was prepared.")
