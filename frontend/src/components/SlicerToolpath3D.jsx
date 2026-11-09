@@ -9,7 +9,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
  */
 export default function SlicerToolpath3D({
   segments = [], layers = [], activeLayer, activeStep, visible = {},
-  colourMode = "feature", colours = {}, showToolhead = true,
+  colourMode = "feature", colours = {}, showToolhead = true, bedSize = null,
 }) {
   const mount = useRef(null);
   const sceneRef = useRef(null);
@@ -43,11 +43,17 @@ export default function SlicerToolpath3D({
     controls.maxDistance = 3000;
     const paths = new THREE.Group();
     scene.add(paths);
-    const grid = new THREE.GridHelper(220, 22, 0x5c728b, 0x304154);
+    const bedWidth = Number(bedSize?.[0]);
+    const bedDepth = Number(bedSize?.[1]);
+    const nativeBed = Number.isFinite(bedWidth) && Number.isFinite(bedDepth) &&
+      bedWidth >= 50 && bedWidth <= 1000 && bedDepth >= 50 && bedDepth <= 1000;
+    const width = nativeBed ? bedWidth : 220;
+    const depth = nativeBed ? bedDepth : 220;
+    const grid = new THREE.GridHelper(Math.max(width, depth), Math.max(5, Math.round(Math.max(width, depth) / 10)), 0x5c728b, 0x304154);
     grid.position.y = -0.2;
     scene.add(grid);
     const bed = new THREE.Mesh(
-      new THREE.PlaneGeometry(220, 220),
+      new THREE.PlaneGeometry(width, depth),
       new THREE.MeshBasicMaterial({ color: 0x202d3c, side: THREE.DoubleSide, transparent: true, opacity: 0.52 })
     );
     bed.rotation.x = -Math.PI / 2;
@@ -70,16 +76,24 @@ export default function SlicerToolpath3D({
     }
     const centre = valid ? bounds.getCenter(new THREE.Vector3()) : new THREE.Vector3(110, 0, 110);
     const size = valid ? bounds.getSize(new THREE.Vector3()) : new THREE.Vector3(120, 40, 120);
-    // The visual bed is a reference plane centred on the path sample.
-    // Its extent is not a claim about the actual native printer dimensions.
-    grid.position.x = centre.x;
-    grid.position.z = centre.z;
-    bed.position.x = centre.x;
-    bed.position.z = centre.z;
-    const distance = Math.max(60, size.length() * 1.8);
-    controls.target.copy(centre);
-    camera.position.copy(centre).add(new THREE.Vector3(distance * 0.7, distance * 0.9, distance));
-    camera.lookAt(centre);
+    // With known machine dimensions, preserve the printer's actual XY origin
+    // at (0, 0). The sample may contain outlying purge/skirt moves and must
+    // not change the relative position of the bed and model.
+    const bedCentre = nativeBed
+      ? new THREE.Vector3(width / 2, 0, depth / 2)
+      : centre;
+    grid.position.x = bedCentre.x;
+    grid.position.z = bedCentre.z;
+    grid.scale.set(width / Math.max(width, depth), 1, depth / Math.max(width, depth));
+    bed.position.x = bedCentre.x;
+    bed.position.z = bedCentre.z;
+    const distance = nativeBed
+      ? Math.max(80, Math.hypot(width, depth) * 1.5)
+      : Math.max(60, size.length() * 1.8);
+    const target = nativeBed ? bedCentre : centre;
+    controls.target.copy(target);
+    camera.position.copy(target).add(new THREE.Vector3(distance * 0.7, distance * 0.9, distance));
+    camera.lookAt(target);
     controls.update();
     sceneRef.current = { scene, paths, marker, camera, controls, renderer };
     const resize = () => {
@@ -124,7 +138,7 @@ export default function SlicerToolpath3D({
     };
   // Mount once per preview; geometry is replaced independently below.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [bedSize?.[0], bedSize?.[1]]);
 
   useEffect(() => {
     const view = sceneRef.current;
@@ -181,6 +195,10 @@ export default function SlicerToolpath3D({
       3D preview requires WebGL. The generated G-code is still available for text inspection.
     </div> : <div className="slicerToolpath3DCanvas" ref={mount} role="img"
       aria-label="3D G-code toolpath preview. Drag to orbit, scroll to zoom and right-drag to pan." />}
-    <small>Drag to orbit · Scroll to zoom · Right-drag to pan · Z is vertical</small>
+    <small>Drag to orbit · Scroll to zoom · Right-drag to pan · Z is vertical ·
+      {bedSize && Number(bedSize[0]) > 0 && Number(bedSize[1]) > 0
+        ? " Bed is shown at its printer-coordinate origin (0, 0)."
+        : " Bed is an approximate reference grid, not verified printer dimensions."}
+    </small>
   </div>;
 }
