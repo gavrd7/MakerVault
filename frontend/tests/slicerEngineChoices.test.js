@@ -28,10 +28,14 @@ test("one reusable engine branding component is used by both selection and insta
   const workbench = fs.readFileSync(path.join(frontend, "src/components/SlicerWorkbench.jsx"), "utf8");
   for (const engine of Object.keys(files)) {
     assert.ok(widget.includes(engine));
-    assert.ok(widget.includes("/static/app/slicer-engines/" + engine + ".svg"));
+    assert.ok(widget.includes("../assets/slicer-engines/" + engine + ".svg?raw"));
   }
   assert.match(workbench, /<SlicerEngineChoices[^>]*engines=/);
   assert.match(workbench, /mode="install"/);
+  assert.match(widget, /data:image\/svg\+xml;charset=utf-8/);
+  assert.match(widget, /encodeURIComponent\(svg\)/);
+  assert.match(widget, /onError=\{\(\) => setFailed\(true\)\}/);
+  assert.doesNotMatch(widget, /loading="lazy"/);
   assert.match(widget, /type="radio"/);
   assert.match(widget, /Installation not yet available/);
 });
