@@ -4707,7 +4707,7 @@ def printing_overview(request):
         "gcode_files": [
             _serialise_file_asset(asset)
             for asset in FileAsset.objects.filter(owner=request.user, superseded_by__isnull=True, metadata__extension=".gcode").select_related("project", "board__manufacturer", "component__category")[:5000]
-        ],
+        ] if request.GET.get("include_files") != "0" else [],
         "model_files": [
             _serialise_file_asset(asset)
             for asset in FileAsset.objects.filter(owner=request.user).filter(Q(metadata__slicer_temporary__isnull=True) | Q(metadata__slicer_temporary=False)).filter(
@@ -4716,7 +4716,7 @@ def printing_overview(request):
             )
                 .select_related("project", "board__manufacturer", "component__category")
                 .order_by("category", "name")[:5000]
-        ],
+        ] if request.GET.get("include_files") != "0" else [],
         "models": [_serialise_printing_model(model) for model in models_3d],
         "recent_prints": [_serialise_print_job(job) for job in recent_prints],
         "analytics": _printing_analytics(request.user),
