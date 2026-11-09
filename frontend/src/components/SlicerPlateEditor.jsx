@@ -167,6 +167,7 @@ export default function SlicerPlateEditor({
   latestToolModeRef.current = toolMode;
   const [localSelected, setLocalSelected] = useState("");
   const [showNativeArtwork, setShowNativeArtwork] = useState(false);
+  const [nativeArtworkError, setNativeArtworkError] = useState("");
   const [showOrientationLabels, setShowOrientationLabels] = useState(false);
   const [showMachineLabel, setShowMachineLabel] = useState(false);
   const [showDimensionsLabel, setShowDimensionsLabel] = useState(false);
@@ -476,8 +477,9 @@ export default function SlicerPlateEditor({
     const profileArtwork = /^\/api\/printing\/slicer\/profiles\/[0-9a-f-]{36}\/artwork\/$/i.test(
       String(plate?.artwork_url || "")
     ) ? plate.artwork_url : null;
+    const bundledArtwork = nativeBedArtwork(printerLabel, bedX, bedY);
     const artworkPath = showNativeArtwork
-      ? (profileArtwork || nativeBedArtwork(printerLabel, bedX, bedY)) : null;
+      ? (profileArtwork || bundledArtwork) : null;
     const useMakerVaultBed = !artworkPath;
     const bedTexture = useMakerVaultBed
       ? makeMakerVaultPlateTexture(plateType, bedX, bedY)
@@ -535,9 +537,30 @@ export default function SlicerPlateEditor({
       const material = new THREE.MeshBasicMaterial({
         transparent: true, depthWrite: false, side: THREE.DoubleSide,
       });
-      const loadedTexture = new THREE.TextureLoader().load(
-        artworkPath, undefined, undefined,
-        () => { if (!disposed) setShowNativeArtwork(false); },
+      const loader = new THREE.TextureLoader();
+      const loadedTexture = loader.load(
+        artworkPath,
+        () => { if (!disposed) setNativeArtworkError(""); },
+        undefined,
+        () => {
+          if (disposed) return;
+          // Keep the option selected. Never silently override a user's
+          // display preference because an artwork file is unavailable.
+          if (profileArtwork && bundledArtwork && profileArtwork !== bundledArtwork) {
+            setNativeArtworkError("Profile artwork could not be loaded; using bundled printer artwork.");
+            const fallback = loader.load(
+              bundledArtwork, undefined, undefined,
+              () => {
+                if (!disposed) setNativeArtworkError("Official artwork is unavailable for this printer. The generic plate remains usable.");
+              },
+            );
+            fallback.colorSpace = THREE.SRGBColorSpace;
+            material.map = fallback;
+            material.needsUpdate = true;
+          } else {
+            setNativeArtworkError("Official artwork could not be loaded. The generic build plate remains usable.");
+          }
+        },
       );
       loadedTexture.colorSpace = THREE.SRGBColorSpace;
       material.map = loadedTexture;
@@ -1041,7 +1064,10 @@ export default function SlicerPlateEditor({
       <div className="slicerPlateDisplayOptionsRow">
         {(nativeBedArtwork(printerLabel, bedX, bedY) || plate?.artwork_url || plate?.bed_model_url) && <label>
           <input type="checkbox" checked={showNativeArtwork}
-            onChange={event => setShowNativeArtwork(event.target.checked)} />
+            onChange={event => {
+              setNativeArtworkError("");
+              setShowNativeArtwork(event.target.checked);
+            }} />
           <span>Official bed artwork</span>
         </label>}
         <label><input type="checkbox" checked={showOrientationLabels}
@@ -1069,6 +1095,7 @@ export default function SlicerPlateEditor({
         </button>
       </div>
     </fieldset>
+    {showNativeArtwork && nativeArtworkError && <p role="status" className="integrationError">{nativeArtworkError}</p>}
     <p className="slicerPlateHint"><strong>Selected surface:</strong> {PLATE_SURFACE[plateType]?.label || "Native default"} · Physical plate not detected. {!showNativeArtwork || !(plate?.artwork_url || plate?.bed_model_url || nativeBedArtwork(printerLabel, bedX, bedY)) ? "MakerVault 3D build plate." : ""} {showNativeArtwork && (plate?.artwork_url || nativeBedArtwork(printerLabel, bedX, bedY)) &&
       <small>Native artwork: {plate?.artwork_url ? "Imported official OrcaSlicer profile" : "OrcaSlicer v2.4.2"} (AGPL-3.0)</small>}</p>
     <p className="slicerPlateHint"><strong>Build plate volume:</strong> {pretty(bedX)} × {pretty(bedY)} mm (X × Y). Drag in 0.5 mm steps or enter coordinates below.</p>
