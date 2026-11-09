@@ -12,6 +12,7 @@ urlpatterns = [
     path("printing/slicer/profiles/", slicer_api.profiles, name="api-slicer-profiles"),
     path("printing/slicer/profiles/<uuid:profile_id>/", slicer_api.delete_profile, name="api-slicer-delete-profile"),
     path("printing/slicer/profiles/<uuid:profile_id>/customise/", slicer_api.customise_profile, name="api-slicer-customise-profile"),
+    path("printing/slicer/profiles/<uuid:profile_id>/save-process/", slicer_api.save_process_profile, name="api-slicer-save-process-profile"),
     path("printing/slicer/profiles/<uuid:profile_id>/default/", slicer_api.set_default_profile, name="api-slicer-default-profile"),
     path("printing/slicer/official-profiles/", slicer_api.official_profiles, name="api-slicer-official-profiles"),
     path("printing/slicer/profiles/<uuid:profile_id>/dependencies/", slicer_api.profile_dependencies, name="api-slicer-profile-dependencies"),
