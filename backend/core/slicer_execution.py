@@ -5,13 +5,15 @@ Execution requires a digest-pinned, healthy isolated worker and owner-scoped
 native profiles with validated content and intact inheritance chains.
 """
 import hashlib
+import json
 import logging
+import uuid
 import os
 from datetime import timedelta
 from django.db import transaction
 from django.utils import timezone
 
-from .models import SliceJob, FileAsset
+from .models import SliceJob, FileAsset, SlicerProfile
 from .slicer_engines import validate_engine_selection
 from .slicer_output import store_generated_gcode
 from .slicer_native_resolution import resolved_native_profile
@@ -28,6 +30,79 @@ MAX_PROFILE = 1024 * 1024
 
 class SlicerExecutionError(ValueError):
     pass
+
+
+_MACHINE_IDENTITY_FIELDS = (
+    "printer_model", "printer_variant", "nozzle_diameter",
+    "printable_area", "printable_height", "bed_exclude_area",
+)
+
+
+def _execution_printer_profile(printer_profile, resolved_printer, resolved_process):
+    """Use an authenticated native source identity for a compatible custom copy.
+
+    A custom preset has a user-facing unique name, while official process
+    profiles can list *only* its upstream native machine name under
+    compatible_printers. Preserve the copy's settings but use the original
+    machine name in the in-memory worker payload, only when the custom and
+    upstream machine model/nozzle/build geometry are identical and the
+    process was explicitly compatible with that upstream machine.
+
+    No stored profiles, process compatibility lists, or printer hardware
+    are modified. Unknown or changed machine geometry fails closed.
+    """
+    if printer_profile.engine != "orcaslicer":
+        return resolved_printer
+    try:
+        current = json.loads(resolved_printer)
+        process = json.loads(resolved_process)
+    except (ValueError, TypeError):
+        raise SlicerExecutionError("Selected native printer or process JSON is invalid.") from None
+    allowed = process.get("compatible_printers")
+    if not isinstance(allowed, list) or not allowed:
+        return resolved_printer
+    native_name = current.get("name")
+    if isinstance(native_name, str) and native_name in allowed:
+        return resolved_printer
+    metadata = printer_profile.file_asset.metadata or {}
+    source_id = metadata.get("slicer_custom_source_profile_id")
+    if not isinstance(source_id, str):
+        raise SlicerExecutionError(
+            "Selected process preset does not recognise this native printer profile. "
+            "Select a process preset compatible with the printer."
+        )
+    try:
+        source_uuid = uuid.UUID(source_id)
+    except ValueError:
+        raise SlicerExecutionError("Custom printer profile has an invalid native source identity.") from None
+    source = SlicerProfile.objects.filter(
+        pk=source_uuid, owner_id=printer_profile.owner_id,
+        engine=printer_profile.engine, engine_version=printer_profile.engine_version,
+        kind="printer",
+    ).select_related("file_asset").first()
+    if not source:
+        raise SlicerExecutionError(
+            "The original native machine preset for this custom profile is missing. "
+            "Restore its official parent chain or choose a matching process preset."
+        )
+    from .slicer_profiles import SlicerProfileError
+    try:
+        original = json.loads(resolved_native_profile(source))
+    except (SlicerProfileError, ValueError, OSError) as exc:
+        raise SlicerExecutionError("Original native printer profile cannot be safely resolved.") from exc
+    if (
+        not isinstance(original.get("name"), str) or original["name"] not in allowed
+        or any(current.get(key) != original.get(key) for key in _MACHINE_IDENTITY_FIELDS)
+    ):
+        raise SlicerExecutionError(
+            "This custom printer changes machine identity, nozzle or build geometry "
+            "and cannot use the selected process preset without compatibility review."
+        )
+    logger.info("Slicing with native source machine identity for compatible custom printer preset")
+    return json.dumps(
+        {**current, "name": original["name"]}, ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
 
 
 def verified_installation():
@@ -304,6 +379,11 @@ def process_queued_job(job_id):
                 raise SlicerExecutionError("Native profile contents changed since verification.")
             profiles.append(resolved_native_profile(profile)
                             if job.engine in {"orcaslicer", "crealityprint"} else data)
+        if job.engine == "orcaslicer":
+            stage = "checking native printer/process compatibility"
+            profiles[0] = _execution_printer_profile(
+                job.printer_profile, profiles[0], profiles[2]
+            )
         if model_format == "stl" and job.input_asset.sha256 and hashlib.sha256(model).hexdigest() != job.input_asset.sha256:
             raise SlicerExecutionError("Model contents changed since the job was prepared.")
         stage = "executing the isolated slicer worker"
