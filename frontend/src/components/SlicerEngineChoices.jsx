@@ -1,22 +1,35 @@
-import React from "react";
+import React, { useState } from "react";
+import orcaSvg from "../assets/slicer-engines/orcaslicer.svg?raw";
+import crealitySvg from "../assets/slicer-engines/crealityprint.svg?raw";
+import bambuSvg from "../assets/slicer-engines/bambustudio.svg?raw";
+import prusaSvg from "../assets/slicer-engines/prusaslicer.svg?raw";
+import snapmakerSvg from "../assets/slicer-engines/snapmakerorca.svg?raw";
 
-/** UI-only display metadata. Engine installation/verification remains server-owned. */
+/**
+ * Bundle logos inside the JS asset, rather than requesting fixed
+ * /static/app/slicer-engines paths that may not exist behind a reverse proxy.
+ * Vite's ?raw importer produces a stable same-bundle SVG image data URI.
+ */
+const logoUri = svg => "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
 const LOGOS = Object.freeze({
-  orcaslicer: "/static/app/slicer-engines/orcaslicer.svg",
-  crealityprint: "/static/app/slicer-engines/crealityprint.svg",
-  bambustudio: "/static/app/slicer-engines/bambustudio.svg",
-  prusaslicer: "/static/app/slicer-engines/prusaslicer.svg",
-  snapmakerorca: "/static/app/slicer-engines/snapmakerorca.svg",
+  orcaslicer: logoUri(orcaSvg),
+  crealityprint: logoUri(crealitySvg),
+  bambustudio: logoUri(bambuSvg),
+  prusaslicer: logoUri(prusaSvg),
+  snapmakerorca: logoUri(snapmakerSvg),
 });
 
 export function SlicerEngineLogo({ engine, label = "Slicer engine", size = "normal" }) {
+  const [failed, setFailed] = useState(false);
   const src = LOGOS[engine];
-  if (src) {
-    return <img className={"slicerEngineLogo" + (size === "small" ? " slicerEngineLogoSmall" : "")}
+  const className = "slicerEngineLogo" + (size === "small" ? " slicerEngineLogoSmall" : "");
+  if (src && !failed) {
+    return <img className={className}
       src={src} width={size === "small" ? 28 : 44} height={size === "small" ? 28 : 44}
-      alt="" loading="lazy" decoding="async" />;
+      alt="" decoding="async" onError={() => setFailed(true)} />;
   }
-  return <span className="slicerEngineLogo slicerEngineLogoFallback" aria-hidden="true">3D</span>;
+  return <span className={className + " slicerEngineLogoFallback"}
+    role="img" aria-label={label}>{String(label).trim().slice(0, 2).toUpperCase()}</span>;
 }
 
 /** A branded alternative to a native select (which cannot show image options). */
