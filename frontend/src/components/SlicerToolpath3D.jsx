@@ -62,6 +62,31 @@ export default function SlicerToolpath3D({
     bed.rotation.x = -Math.PI / 2;
     bed.position.y = -0.3;
     scene.add(bed);
+    const plateBoundary = new THREE.LineLoop(
+      new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, -0.12, 0),
+        new THREE.Vector3(width, -0.12, 0),
+        new THREE.Vector3(width, -0.12, depth),
+        new THREE.Vector3(0, -0.12, depth),
+      ]),
+      new THREE.LineBasicMaterial({ color: 0x8092a9 })
+    );
+    plateBoundary.visible = nativeBed;
+    scene.add(plateBoundary);
+    // Native printer XY axes: red X points right and blue Y points into bed.
+    // Never translate axes along with the sampled model's bounding box.
+    const axes = new THREE.Group();
+    for (const [end, colour] of [
+      [new THREE.Vector3(Math.min(40, width / 4), -0.08, 0), 0xe36a74],
+      [new THREE.Vector3(0, -0.08, Math.min(40, depth / 4)), 0x6ca9e8],
+    ]) {
+      axes.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, -0.08, 0), end]),
+        new THREE.LineBasicMaterial({ color: colour })
+      ));
+    }
+    axes.visible = nativeBed;
+    scene.add(axes);
     const marker = new THREE.Mesh(
       new THREE.SphereGeometry(1.6, 12, 8),
       new THREE.MeshBasicMaterial({ color: 0xff922b, depthTest: false })
@@ -99,7 +124,7 @@ export default function SlicerToolpath3D({
     camera.lookAt(target);
     controls.update();
     sceneRef.current = { scene, paths, marker, camera, controls, renderer,
-      grid, bed, bedCentre, modelCentre: centre, modelSize: size,
+      grid, bed, plateBoundary, axes, bedCentre, modelCentre: centre, modelSize: size,
       bedWidth: width, bedDepth: depth, nativeBed };
     const resize = () => {
       const width = Math.max(mountPoint.clientWidth, 1);
@@ -135,6 +160,9 @@ export default function SlicerToolpath3D({
       grid.material.dispose();
       bed.geometry.dispose();
       bed.material.dispose();
+      plateBoundary.geometry.dispose();
+      plateBoundary.material.dispose();
+      axes.children.forEach(axis => { axis.geometry.dispose(); axis.material.dispose(); });
       marker.geometry.dispose();
       marker.material.dispose();
       sceneRef.current = null;
@@ -172,6 +200,8 @@ export default function SlicerToolpath3D({
     const view = sceneRef.current;
     if (view) {
       view.grid.visible = showBedGrid;
+      view.plateBoundary.visible = showBedSurface && view.nativeBed;
+      view.axes.visible = showBedGrid && view.nativeBed;
       view.bed.visible = showBedSurface;
     }
   }, [showBedGrid, showBedSurface]);
@@ -284,7 +314,7 @@ export default function SlicerToolpath3D({
     </div>
     <small>Drag to orbit · Scroll to zoom · Right-drag to pan · Z is vertical ·
       {bedSize && Number(bedSize[0]) > 0 && Number(bedSize[1]) > 0
-        ? " Bed is shown at its printer-coordinate origin (0, 0)."
+        ? " Bed origin (0, 0) · red X axis · blue Y axis."
         : " Bed is an approximate reference grid, not verified printer dimensions."}
     </small>
   </div>;
