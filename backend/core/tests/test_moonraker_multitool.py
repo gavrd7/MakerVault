@@ -17,6 +17,8 @@ class MoonrakerMultiToolTests(SimpleTestCase):
                 "toolhead": {"extruder": active},
             }}},
         ]
+        # Active prints now query the optional Klipper pause_resume object first.
+        responses.append({"result": {"status": {"pause_resume": {"is_paused": False}}}})
         if extra is not None:
             responses.append(extra)
         with patch("core.printer_connectivity._get", side_effect=responses) as get:
@@ -41,13 +43,13 @@ class MoonrakerMultiToolTests(SimpleTestCase):
 
     def test_legacy_single_tool_needs_no_extra_request(self):
         snapshot, get = self.poll(None, active="extruder")
-        self.assertEqual(get.call_count, 2)
+        self.assertEqual(get.call_count, 3)
         self.assertEqual(snapshot["temperatures"]["tool0"]["actual_c"], 190)
         self.assertEqual(snapshot["source_metadata"]["active_tool"], "tool0")
 
     def test_untrusted_names_cannot_add_query_parameters(self):
         snapshot, get = self.poll(["extruder1&configfile", "extruder01", {}, "heater_generic chamber"])
-        self.assertEqual(get.call_count, 2)
+        self.assertEqual(get.call_count, 3)
         self.assertIsNone(snapshot["source_metadata"]["active_tool"])
 
     def test_extra_query_failure_preserves_print_monitoring(self):
