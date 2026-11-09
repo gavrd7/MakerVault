@@ -776,7 +776,11 @@ def customise_profile(request, profile_id):
                 available[key] = limits
                 value = properties.get(key)
                 if isinstance(value, list):
-                    value = value[0] if value else None
+                    # This simple editor works on one native value only.
+                    # Never imply that it can safely edit independent extruders.
+                    if len(value) != 1:
+                        continue
+                    value = value[0]
                 try:
                     numeric = float(value.removesuffix("%") if isinstance(value, str) else value)
                 except (ValueError, TypeError):
