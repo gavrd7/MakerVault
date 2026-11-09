@@ -14,7 +14,8 @@ DURATION = re.compile(r"^;\s*(?:estimated printing time(?: \(normal mode\))?|"
                       r"total estimated time|print time|printing time)\s*[:=]\s*(.+)$", re.I)
 FILAMENT = re.compile(r"^;\s*filament used \[(mm|g|cm3)\]\s*[:=]\s*(.+)$", re.I)
 TYPE = re.compile(r"^;\s*(?:TYPE|FEATURE)\s*:\s*([^;]+)", re.I)
-MAX_SEGMENTS = 6000
+WIDTH = re.compile(r"^;\s*(?:WIDTH|LINE_WIDTH)\s*:\s*([0-9]+(?:\.[0-9]+)?)\s*$", re.I)
+MAX_SEGMENTS = 80000
 MAX_LAYERS = 2000
 
 
@@ -59,6 +60,7 @@ def generated_preview(text, *, truncated=False):
     absolute_e = True
     x = y = z = e = 0.0
     feature = "Other"
+    width = None  # Slicer-declared per-path bead width, when available.
     segments = []
     stride = 1
     heights = set()
@@ -80,6 +82,11 @@ def generated_preview(text, *, truncated=False):
             found = TYPE.match(line)
             if found:
                 feature = found.group(1).strip()[:48] or "Other"
+            found = WIDTH.match(line)
+            if found:
+                candidate = float(found.group(1))
+                if math.isfinite(candidate) and 0.05 <= candidate <= 3.0:
+                    width = round(candidate, 3)
             continue
         line = line.split(";", 1)[0].strip().upper()
         command = line.split(None, 1)[0] if line else ""
@@ -116,13 +123,16 @@ def generated_preview(text, *, truncated=False):
                 total = sum(counts.values())
                 if total % stride == 0:
                     segments.append([round(x, 3), round(y, 3), round(nx, 3),
-                                     round(ny, 3), round(nz, 3), feature])
+                                     round(ny, 3), round(nz, 3), feature,
+                                     width])
                 if len(segments) > MAX_SEGMENTS:
                     stride *= 2
                     segments = segments[::2]
                     stats["sampled"] = True
             x, y, z, e = nx, ny, nz, ne
     stats["segments"] = segments
+    # Segments are exact native XY/Z moves within the bounded sample. Width
+    # is reported only when declared in G-code, never invented server-side.
     stats["segment_count"] = sum(counts.values())
     stats["feature_counts"] = dict(counts.most_common(12))
     stats["layers"] = sorted(heights)
