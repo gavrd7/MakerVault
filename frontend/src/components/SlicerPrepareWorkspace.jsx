@@ -279,7 +279,7 @@ export default function SlicerPrepareWorkspace({
           </div>}
         </div>)}
         {filamentNotice && <p className="slicerModelFilamentNotice" role="status">{filamentNotice}</p>}
-        <small>Model colours are previews only until native multi-material mapping is supported. Multi-plate output and modifier trees are not implemented yet.</small>
+        <small>One consistent model colour is now passed to OrcaSlicer as a single-filament colour. Different colours across models still need native multi-material mapping, and are preview-only. Multi-plate output and modifier trees are not implemented yet.</small>
         </aside>
       </div>
       <div className="slicerPrepareScene" ref={editorRef}>
