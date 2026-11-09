@@ -523,6 +523,18 @@ export default function SlicerPlateEditor({
     plateBody.position.z = -plateDepth + 0.25;
     plateBody.renderOrder = -1;
     scene.add(plateBody);
+    // A narrow illuminated edge strip gives the universal plate a visible
+    // physical thickness in isometric views without altering build geometry.
+    const rimGeometry = new THREE.ExtrudeGeometry(plateShape, {
+      depth: 0.9, bevelEnabled: false, curveSegments: 8,
+    });
+    const plateRim = new THREE.Mesh(rimGeometry, new THREE.MeshStandardMaterial({
+      color: useMakerVaultBed ? "#33aacf" : "#62798a",
+      metalness: 0.38, roughness: 0.43, side: THREE.DoubleSide,
+    }));
+    plateRim.position.z = -1.5;
+    plateRim.renderOrder = -1;
+    scene.add(plateRim);
     let bedArtwork = null;
     let artworkTextureController = null;
     if (artworkPath) {
@@ -636,6 +648,7 @@ export default function SlicerPlateEditor({
           nativeBedMesh.position.set(-centerX, -centerY, -bounds.max.z - 0.55);
           nativeBedMesh.userData.decorativeBed = true;
           plateBody.visible = false;
+          plateRim.visible = false;
           scene.add(nativeBedMesh);
         })
         .catch(() => { /* Missing/unavailable native bed mesh uses generated fallback geometry. */ });
@@ -902,6 +915,8 @@ export default function SlicerPlateEditor({
         nativeBedMesh.geometry.dispose();
         nativeBedMesh.material.dispose();
       }
+      plateRim.geometry.dispose();
+      plateRim.material.dispose();
       plateBody.geometry.dispose();
       plateBody.material.dispose();
       bed.geometry.dispose();
