@@ -322,7 +322,7 @@ class SliceJobApiTests(TestCase):
         self.assertEqual(row.settings["plate_label"], "Prototype A")
         self.assertEqual(response.json()["job"]["settings"]["plate_label"], "Prototype A")
 
-        for invalid in ("", "a" * 65, "Bad\\nPlate", 42):
+        for invalid in ("", "a" * 65, "Bad\nPlate", 42):
             with self.subTest(invalid=invalid):
                 payload["settings"]["plate_label"] = invalid
                 self.assertEqual(self.post(payload).status_code, 400)
