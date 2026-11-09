@@ -361,6 +361,12 @@ ALL_FIELDS = set(PROCESS_FIELDS) | set(CHOICE_FIELDS) | set(TOGGLE_FIELDS)
 
 # Curated from OrcaSlicer process panels. Basic contains ordinary, frequently
 # adjusted print outcomes. All other supported fields appear in Advanced.
+EXPERT_FIELDS = frozenset({
+    "zaa_enabled", "zaa_minimize_perimeter_height", "zaa_min_z",
+    "zaa_dont_alternate_fill_direction", "wall_transition_filter_deviation",
+    "wall_maximum_resolution", "wall_maximum_deviation",
+    "prime_tower_enable_framework", "overhang_reverse_threshold",
+})
 BASIC_FIELDS = frozenset({
     "layer_height", "initial_layer_print_height", "line_width",
     "wall_loops", "top_shell_layers", "bottom_shell_layers",
@@ -575,7 +581,7 @@ def process_schema(raw):
         result[key] = {
             "category": category, "label": label, "unit": unit,
             "minimum": lo, "maximum": hi, "integer": integer,
-            "current": current, "level": "basic" if key in BASIC_FIELDS else "advanced",
+            "current": current, "level": "basic" if key in BASIC_FIELDS else ("expert" if key in EXPERT_FIELDS else "advanced"),
             "section": SECTION_FOR.get(key, "Advanced"),
         }
     for key, (category, label, options) in CHOICE_FIELDS.items():
@@ -584,7 +590,7 @@ def process_schema(raw):
             continue
         result[key] = {"category": category, "label": label, "kind": "choice",
                        "options": [{"value": value, "label": text} for value, text in options],
-                       "current": current, "level": "basic" if key in BASIC_FIELDS else "advanced",
+                       "current": current, "level": "basic" if key in BASIC_FIELDS else ("expert" if key in EXPERT_FIELDS else "advanced"),
                        "section": SECTION_FOR.get(key, "Advanced")}
     for key, (category, label) in TOGGLE_FIELDS.items():
         current = _native_scalar(profile.get(key))
@@ -592,32 +598,82 @@ def process_schema(raw):
             continue
         result[key] = {"category": category, "label": label, "kind": "toggle",
                        "options": [{"value": "0", "label": "Off"}, {"value": "1", "label": "On"}],
-                       "current": current, "level": "basic" if key in BASIC_FIELDS else "advanced",
+                       "current": current, "level": "basic" if key in BASIC_FIELDS else ("expert" if key in EXPERT_FIELDS else "advanced"),
                        "section": SECTION_FOR.get(key, "Advanced")}
     # Conditional visibility is driven by actual native controls. Never expose a
     # synthetic enable switch when the resolved profile has no matching key.
+    # A dependent is visible only while the *native* feature is enabled.
+    # These relationships are descriptive: the original preset still provides
+    # the canonical defaults and all values remain validated before slicing.
     dependencies = {
         "ironing_type": ("ironing_pattern", "ironing_flow", "ironing_spacing",
-                         "ironing_speed", "ironing_inset", "ironing_angle"),
+                         "ironing_speed", "ironing_inset", "ironing_angle",
+                         "ironing_angle_fixed"),
         "zaa_enabled": ("zaa_minimize_perimeter_height", "zaa_min_z",
                         "zaa_dont_alternate_fill_direction"),
-        "enable_support": ("support_threshold_angle", "support_on_build_plate_only",
+        "enable_support": ("support_threshold_angle", "support_threshold_overlap",
+                           "support_style", "support_on_build_plate_only",
                            "support_remove_small_overhang", "support_type",
                            "support_critical_regions_only", "support_top_z_distance",
                            "support_bottom_z_distance", "support_interface_top_layers",
                            "support_interface_bottom_layers", "support_interface_spacing",
                            "support_bottom_interface_spacing", "support_object_xy_distance",
-                           "support_speed", "support_interface_speed", "support_expansion"),
+                           "support_speed", "support_interface_speed", "support_expansion",
+                           "support_base_pattern", "support_interface_pattern",
+                           "support_object_first_layer_gap", "support_angle",
+                           "independent_support_layer_height", "bridge_no_support"),
+        "enable_prime_tower": ("prime_tower_width", "prime_volume",
+                               "prime_tower_brim_width", "prime_tower_infill_gap",
+                               "wipe_tower_rotation_angle", "wipe_tower_extra_spacing",
+                               "wipe_tower_extra_flow", "wipe_tower_max_purge_speed",
+                               "enable_tower_interface_features",
+                               "prime_tower_enable_framework"),
+        "ooze_prevention": ("standby_temperature_delta", "preheat_time", "preheat_steps"),
+        "fuzzy_skin": ("fuzzy_skin_mode", "fuzzy_skin_noise_type",
+                       "fuzzy_skin_point_distance", "fuzzy_skin_thickness",
+                       "fuzzy_skin_scale", "fuzzy_skin_octaves",
+                       "fuzzy_skin_persistence", "fuzzy_skin_first_layer"),
+        "spiral_mode": ("spiral_mode_smooth", "spiral_mode_max_xy_smoothing",
+                        "spiral_starting_flow_ratio", "spiral_finishing_flow_ratio"),
+        "make_overhang_printable": ("make_overhang_printable_angle",
+                                    "make_overhang_printable_hole_size"),
+        "support_ironing": ("support_ironing_pattern", "support_ironing_flow",
+                            "support_ironing_spacing"),
+        "accel_to_decel_enable": ("accel_to_decel_factor",),
     }
     for master, dependents in dependencies.items():
         if master not in result:
             continue
         for dependent in dependents:
             if dependent in result:
-                result[dependent]["enabled_when"] = {
-                    "key": master,
-                    "not": "no ironing" if master == "ironing_type" else "0",
-                }
+                disabled = ("no ironing" if master == "ironing_type" else
+                            "none" if master == "fuzzy_skin" else "0")
+                result[dependent]["enabled_when"] = {"key": master, "not": disabled}
+    # Nested dependencies use an array to preserve every enabling condition.
+    nested = {
+        "ironing_pattern": ("ironing_angle", "ironing_angle_fixed"),
+        "support_type": ("tree_support_wall_count", "tree_support_tip_diameter",
+                         "tree_support_top_rate", "tree_support_branch_diameter_angle",
+                         "tree_support_angle_slow", "tree_support_auto_brim",
+                         "tree_support_brim_width"),
+        "brim_type": ("brim_ears_max_angle", "brim_ears_detection_length",
+                      "brim_ears_outer_only"),
+    }
+    for master, dependents in nested.items():
+        if master not in result:
+            continue
+        for dependent in dependents:
+            if dependent not in result:
+                continue
+            condition = ({
+                "key": master, "in": ["rectilinear"]
+            } if master == "ironing_pattern" else {
+                "key": master, "in": ["tree(auto)", "tree(manual)"]
+            } if master == "support_type" else {
+                "key": master, "in": ["brim_ears"]
+            })
+            previous = result[dependent].get("enabled_when")
+            result[dependent]["enabled_when"] = ([previous, condition] if previous else condition)
     return result
 
 
