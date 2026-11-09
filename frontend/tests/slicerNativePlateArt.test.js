@@ -43,3 +43,11 @@ test("native plate texture assets are bundled in the Vite module, never loaded f
   assert.ok(!src.includes('asset: "/slicer-bed-art/'));
 
 });
+
+test("failed official artwork keeps the user's toggle selected and reports a useful fallback", () => {
+  const editor = fs.readFileSync(new URL("../src/components/SlicerPlateEditor.jsx", import.meta.url), "utf8");
+  assert.ok(!editor.includes("setShowNativeArtwork(false)"));
+  assert.ok(editor.includes("setNativeArtworkError("));
+  assert.ok(editor.includes("profileArtwork && bundledArtwork"));
+  assert.ok(editor.includes('role="status" className="integrationError"'));
+});
