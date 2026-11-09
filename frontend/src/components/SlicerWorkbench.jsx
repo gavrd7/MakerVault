@@ -1382,7 +1382,14 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         {error && <p className="integrationError" role="alert">{error}</p>}
         {notice && <p role="status">{notice}</p>}
         <GcodeViewerModal key={previewJob.output_asset.id} embedded
-          file={previewJob.output_asset} canEdit={false} onClose={() => setPreviewJobId(null)} />
+          file={previewJob.output_asset} canEdit={false}
+          bedSize={(() => {
+            const printer = printers.find(item => String(item.id) === String(previewJob.printer?.id));
+            const x = Number(printer?.build_volume?.x);
+            const y = Number(printer?.build_volume?.y);
+            return x >= 50 && x <= 1000 && y >= 50 && y <= 1000 ? [x, y] : null;
+          })()}
+          onClose={() => setPreviewJobId(null)} />
       </> : <>
       {error && <p className="integrationError" role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
