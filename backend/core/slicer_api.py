@@ -131,7 +131,7 @@ def _draft_plate_settings(user, input_asset, settings):
     """Persist preview-only plate geometry; never compile it into slicer flags."""
     if settings in ({}, None):
         return {}
-    if not isinstance(settings, dict) or set(settings) - {"plate_objects", "save_gcode_to_library", "workflow"}:
+    if not isinstance(settings, dict) or set(settings) - {"plate_objects", "plate_label", "save_gcode_to_library", "workflow"}:
         raise ValueError("Unsupported slicer plate settings.")
     workflow = settings.get("workflow", "interactive")
     if not isinstance(workflow, str) or workflow not in {"setup", "quick", "interactive"}:
@@ -139,8 +139,13 @@ def _draft_plate_settings(user, input_asset, settings):
     save_to_library = settings.get("save_gcode_to_library", False)
     if not isinstance(save_to_library, bool):
         raise ValueError("G-code library preference must be true or false.")
+    label = settings.get("plate_label", "Plate 1")
+    if (not isinstance(label, str) or not 1 <= len(label.strip()) <= 64
+            or any(ord(character) < 32 or ord(character) == 127 for character in label)):
+        raise ValueError("Build plate label must be 1–64 printable characters.")
+    label = label.strip()
     if "plate_objects" not in settings:
-        return {"save_gcode_to_library": save_to_library, "workflow": workflow}
+        return {"plate_label": label, "save_gcode_to_library": save_to_library, "workflow": workflow}
     objects = settings["plate_objects"]
     if not isinstance(objects, list) or not 1 <= len(objects) <= 12:
         raise ValueError("The visual build plate supports one to twelve model instances.")
@@ -185,7 +190,7 @@ def _draft_plate_settings(user, input_asset, settings):
                       **values, "color": color.lower()})
     if saved[0]["asset_id"] != str(input_asset.pk):
         raise ValueError("The first plate model must match the selected primary STL.")
-    return {"plate_objects": saved, "save_gcode_to_library": save_to_library, "workflow": workflow}
+    return {"plate_objects": saved, "plate_label": label, "save_gcode_to_library": save_to_library, "workflow": workflow}
 
 
 def _draft(user, data):
