@@ -4,27 +4,31 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const printing = fs.readFileSync(path.resolve(
+const source = fs.readFileSync(path.resolve(
   path.dirname(fileURLToPath(import.meta.url)), "../src/components/PrintingPage.jsx"
 ), "utf8");
 
-test("3D Printing overview does not eagerly import the slicer editor", () => {
-  assert.doesNotMatch(printing, /^import SlicerWorkbench from /m);
-  assert.doesNotMatch(printing, /^import SavedSlicerJobsModal from /m);
-  assert.match(printing, /lazy\(\(\) => import\("\.\/SlicerWorkbench"\)\)/);
-  assert.match(printing, /lazy\(\(\) => import\("\.\/SavedSlicerJobsModal"\)\)/);
-  assert.match(printing, /Suspense fallback=\{<LoadingBlock/);
+test("3D Printing does not eagerly import the slicer editor", () => {
+  assert.ok(!source.includes('import SlicerWorkbench from'));
+  assert.ok(!source.includes('import SavedSlicerJobsModal from'));
+  assert.ok(source.includes('lazy(() => import("./SlicerWorkbench"))'));
+  assert.ok(source.includes('lazy(() => import("./SavedSlicerJobsModal"))'));
+  assert.ok(source.includes('<Suspense fallback='));
 });
 
-test("3D Printing requests overview data without the full filament catalogue", () => {
-  assert.match(printing, /useEffect\(\(\) => \{ load\(\{ includeFilaments: false \}\); \}, \[\]\)/);
-  assert.match(printing, /options\?\.includeFilaments \?\? filamentsLoaded/);
-  assert.match(printing, /\["spools", "filaments", "reusableSpools"\]\.includes\(workspaceView\)/);
-  assert.match(printing, /filamentFetchRef\.current/);
-  assert.match(printing, /Retry loading filament catalogue/);
+test("overview defers huge filament and model file catalogues", () => {
+  assert.ok(source.includes('load({ includeFilaments: false, includeFiles: false })'));
+  assert.ok(source.includes('query.set("include_filaments", "0")'));
+  assert.ok(source.includes('query.set("include_files", "0")'));
+  assert.ok(source.includes('filamentFetchRef.current'));
+  assert.ok(source.includes('filesFetchRef.current'));
+  assert.ok(source.includes('Retry loading filament catalogue'));
+  assert.ok(source.includes('Retry loading model and G-code files'));
 });
 
-test("15-second telemetry refresh leaves downloaded filament catalogue alone", () => {
-  assert.match(printing, /load\(\{includeFilaments:false\}\)/);
-  assert.match(printing, /filaments: previous\?\.filaments \|\| \[\]/);
+test("telemetry refresh preserves already fetched immutable catalogues", () => {
+  assert.ok(source.includes('load({includeFilaments:false, includeFiles:false})'));
+  assert.ok(source.includes('filaments: includeFilaments ? fresh.filaments : previous?.filaments || []'));
+  assert.ok(source.includes('gcode_files: includeFiles ? fresh.gcode_files : previous?.gcode_files || []'));
+  assert.ok(source.includes('model_files: includeFiles ? fresh.model_files : previous?.model_files || []'));
 });
