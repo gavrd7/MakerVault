@@ -97,7 +97,7 @@ def apply_process_overrides(raw, overrides):
         raise ValueError("A selected native process setting is unavailable in this profile.")
     for key, number in validated.items():
         previous = profile[key]
-        formatted = str(number) + ("%" if key == "sparse_infill_density" else "")
+        formatted = (str(int(number)) if float(number).is_integer() else str(number)) + ("%" if key == "sparse_infill_density" else "")
         profile[key] = [formatted for _ in previous] if isinstance(previous, list) else formatted
     output = json.dumps(profile, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     if len(output) > 1024 * 1024:
