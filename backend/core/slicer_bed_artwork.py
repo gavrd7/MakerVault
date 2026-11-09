@@ -95,13 +95,13 @@ def official_asset_source(profile, kind="texture"):
     if profile.engine == "prusaslicer":
         provenance = re.fullmatch(
             re.escape(source) + "@" + re.escape(ref) +
-            r"/([A-Za-z0-9_-]+)/([A-Za-z0-9_.-]+\\.ini)",
+            r"/([A-Za-z0-9_-]+)/([A-Za-z0-9_.-]+\.ini)",
             str(profile.provenance or ""),
         )
     else:
         provenance = re.fullmatch(
             re.escape(source) + "@" + re.escape(ref) +
-            r"/([A-Za-z0-9_-]+)/machine/([A-Za-z0-9_. -]+\\.json)",
+            r"/([A-Za-z0-9_-]+)/machine/([A-Za-z0-9_. -]+\.json)",
             str(profile.provenance or ""),
         )
     if not provenance or provenance.group(1) not in vendors:
