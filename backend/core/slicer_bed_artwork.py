@@ -6,6 +6,7 @@ MakerVault's pinned upstream official profile source, is eligible.
 No external URLs from imported profiles are followed.
 """
 import hashlib
+import json
 import re
 from xml.etree import ElementTree
 
@@ -15,6 +16,7 @@ from django.core.files.storage import default_storage
 
 from .slicer_official_profiles import REF, BASE, VENDORS
 from .slicer_profile_lineage import _inspect_source
+from .slicer_native_resolution import resolved_native_profile
 from .slicer_profiles import SlicerProfileError
 
 
@@ -42,6 +44,13 @@ def official_artwork_source(profile):
     except SlicerProfileError:
         return None
     filename = data.get("bed_texture")
+    if not filename and data.get("inherits"):
+        # Try the already-validated, same-owner/engine/version native parent chain.
+        # An absent or invalid chain is not grounds for guessing an artwork file.
+        try:
+            filename = json.loads(resolved_native_profile(profile)).get("bed_texture")
+        except (SlicerProfileError, ValueError, UnicodeDecodeError):
+            filename = None
     if not isinstance(filename, str) or not _BASENAME.fullmatch(filename):
         return None
     vendor = match.group(1)
