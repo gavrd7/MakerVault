@@ -55,6 +55,7 @@ export default function SlicerPrepareWorkspace({
   const [group, setGroup] = useState("Quality");
   const [toolMode, setToolMode] = useState("select");
   const [nativeProcessFields, setNativeProcessFields] = useState({});
+  const [nativeFieldDrafts, setNativeFieldDrafts] = useState({});
   const [nativeProcessError, setNativeProcessError] = useState("");
   const [nativeProcessLoading, setNativeProcessLoading] = useState(false);
   useEffect(() => {
@@ -65,6 +66,7 @@ export default function SlicerPrepareWorkspace({
       return undefined;
     }
     let live = true;
+    setNativeFieldDrafts({});
     setNativeProcessLoading(true);
     setNativeProcessError("");
     apiFetch("/api/printing/slicer/profiles/" + id + "/settings/")
@@ -80,6 +82,7 @@ export default function SlicerPrepareWorkspace({
   }, [engine, selectedProfiles?.process_id]);
   const updateNativeField = (key, raw) => {
     const spec = nativeProcessFields[key];
+    setNativeFieldDrafts(current => ({ ...current, [key]: raw }));
     const value = Number(raw);
     if (!spec || raw === "" || !Number.isFinite(value) ||
         value < spec.minimum || value > spec.maximum ||
@@ -372,8 +375,13 @@ export default function SlicerPrepareWorkspace({
                   <input type="number" min={spec.minimum} max={spec.maximum}
                     step={spec.integer ? 1 : 0.01}
                     disabled={!canEdit || busy}
-                    value={processOverrides[key] ?? spec.current}
+                    value={nativeFieldDrafts[key] ?? processOverrides[key] ?? spec.current}
                     onChange={event => updateNativeField(key, event.target.value)}
+                    onBlur={() => setNativeFieldDrafts(current => {
+                      const next = { ...current };
+                      delete next[key];
+                      return next;
+                    })}
                     aria-label={spec.label} />
                 </label>
               ))}
@@ -386,7 +394,7 @@ export default function SlicerPrepareWorkspace({
             {Object.keys(processOverrides).length > 0 && <div className="slicerNativeSettingsActions">
               <span>{Object.keys(processOverrides).length} draft override(s) · Original profile unchanged</span>
               <button type="button" disabled={!canEdit || busy}
-                onClick={() => onProcessOverridesChange?.({})}>Restore profile defaults</button>
+                onClick={() => { onProcessOverridesChange?.({}); setNativeFieldDrafts({}); }}>Restore profile defaults</button>
             </div>}
           </section>
         )}
