@@ -35,7 +35,7 @@ MakerVault's main software repository is licensed under the **GNU Affero General
 
 ## Get in touch
 
-Manufacturers interested in collaborating can start via a [GitHub issue](https://github.com/gavrd7/MakerVault/issues) to arrange an appropriate private contact channel. Please do not post confidential technical information in a public issue.
+For hardware loans, technical collaboration and other development partnership enquiries, email **[partnerships@makervault.co.uk](mailto:partnerships@makervault.co.uk)**. General enquiries can go to [maker@makervault.co.uk](mailto:maker@makervault.co.uk). Please do not share confidential technical information or personal contact details in a public issue.
 
 - [MakerVault repository](https://github.com/gavrd7/MakerVault)
 - [Documentation](https://gavrd7.github.io/MakerVault-docs/)

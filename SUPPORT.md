@@ -13,6 +13,14 @@ MakerVault is coded entirely through AI systems under human direction. Feature i
 Support therefore depends on the capabilities of the available AI tooling and on receiving enough reproducible information to investigate a problem. A report may require additional logs, screenshots, reproduction steps or human testing before a reliable fix can be produced. Automated tests and AI-generated patches are not treated as proof that a real-world problem is solved.
 
 
+## Contact addresses
+
+- **User help:** [support@makervault.co.uk](mailto:support@makervault.co.uk) for account-independent assistance and support enquiries.
+- **General project enquiries:** [maker@makervault.co.uk](mailto:maker@makervault.co.uk).
+- **Hardware development partnerships:** [partnerships@makervault.co.uk](mailto:partnerships@makervault.co.uk); see [Development Partners](DEVELOPMENT_PARTNERS.md).
+
+For bug reports and feature requests, use GitHub issues where practical so fixes and reproducible findings can be tracked. Email support is not a guaranteed response-time or service-level commitment. For security vulnerabilities, use the private process in [SECURITY.md](SECURITY.md) rather than ordinary support channels.
+
 ## Bugs
 
 If MakerVault is behaving incorrectly, open a **Bug report** using the repository issue form.

@@ -11,7 +11,8 @@
   <a href="docs/guide/getting-started/install.md">Install</a> ·
   <a href="docs/ROADMAP.md">Detailed roadmap</a> ·
   <a href="CHANGELOG.md">Changelog</a> ·
-  <a href="https://github.com/gavrd7/MakerVault-Hardware">Hardware</a>
+  <a href="https://github.com/gavrd7/MakerVault-Hardware">Hardware</a> ·
+  <a href="DEVELOPMENT_PARTNERS.md">Development partners</a>
 </p>
 
 <p align="center">
@@ -140,3 +141,11 @@ These are roadmap intentions, not promises for the next release.
 **Data and security:** Database, media, encryption keys and configuration require coordinated backups. Private-file encryption does not encrypt the entire database or every secret. Do not expose a development environment, untrusted printer integration or provisioning portal directly to the internet.
 
 **Licence:** MakerVault-authored code is licensed under the [GNU Affero General Public License v3](LICENSE); third-party content retains its own licensing and attribution.
+
+## Contact
+
+- **General project enquiries:** [maker@makervault.co.uk](mailto:maker@makervault.co.uk)
+- **Manufacturer and development partnerships:** [partnerships@makervault.co.uk](mailto:partnerships@makervault.co.uk) — see [Development Partners](DEVELOPMENT_PARTNERS.md).
+- **User support:** [support@makervault.co.uk](mailto:support@makervault.co.uk). For bugs and reproducible feature requests, please prefer the [GitHub issue forms](https://github.com/gavrd7/MakerVault/issues/new/choose) so updates remain trackable; see [Support](SUPPORT.md).
+
+**Security vulnerabilities:** do not send sensitive details through public issues; follow [the private reporting policy](SECURITY.md).
