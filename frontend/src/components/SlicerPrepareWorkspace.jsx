@@ -314,10 +314,6 @@ export default function SlicerPrepareWorkspace({
       <aside className={"slicerPrepareSettings" + (settingsExpanded ? " slicerPrepareSettingsExpanded" : "")} aria-label="Process settings categories">
         <div className="slicerSettingsPanelHeader">
           <div><h4>Print settings</h4><small>{selectedProfiles?.process || "Choose a process profile"}</small></div>
-          <button type="button" aria-haspopup="dialog" aria-expanded={settingsExpanded}
-            onClick={() => setSettingsExpanded(current => !current)}>
-            {settingsExpanded ? "Close expanded settings" : "Expand settings"}
-          </button>
         </div>
         <div className="slicerProcessQuickSelect">
           <label htmlFor="slicer-process-quick-select">Process profile</label>
@@ -372,6 +368,11 @@ export default function SlicerPrepareWorkspace({
               <option value="advanced">Advanced</option>
             </select>
           </label>
+          <button className="slicerExpandSettingsAction" type="button"
+            aria-haspopup="dialog" aria-expanded={settingsExpanded}
+            onClick={() => setSettingsExpanded(current => !current)}>
+            {settingsExpanded ? "Close expanded settings" : "Expand settings"}
+          </button>
         </div>
         {scope === "objects" ? (
           <p>Per-object settings are not yet available. Change Global settings to edit the native process profile for this draft.</p>
