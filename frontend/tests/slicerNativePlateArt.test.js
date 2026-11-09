@@ -101,3 +101,12 @@ test("MakerVault fallback logo is composited without a white rectangular badge",
   assert.match(editor, /ctx\.fillText\("Maker", labelStart, labelTop\)/);
   assert.match(editor, /ctx\.fillText\("Vault", labelStart \+ ctx\.measureText\("Maker"\)\.width, labelTop\)/);
 });
+
+
+test("fallback build plate grid is continuous through the logo's transparent area", () => {
+  const editor = fs.readFileSync(new URL("../src/components/SlicerPlateEditor.jsx", import.meta.url), "utf8");
+  assert.match(editor, /if \(inside\(x, \(y \+ yy\) \/ 2\)\) target\.push/);
+  assert.match(editor, /if \(inside\(\(x \+ xx\) \/ 2, y\)\) target\.push/);
+  assert.doesNotMatch(editor, /useMakerVaultBed &&\s*\(x \+ bedX \/ 2\)/);
+  assert.doesNotMatch(editor, /useMakerVaultBed &&\s*\(y \+ bedY \/ 2\)/);
+});
