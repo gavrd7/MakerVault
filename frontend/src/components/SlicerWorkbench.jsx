@@ -652,6 +652,24 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     }
   }
 
+  async function cacheImportedPrinterArtwork(profile) {
+    if (!profile || profile.kind !== "printer") return;
+    // Trigger the authenticated local cache after a user imports a verified
+    // upstream candidate. Missing or unavailable assets never fail import.
+    try {
+      const payload = await apiFetch("/api/printing/slicer/profiles/" + profile.id + "/plate/");
+      const plate = payload.plate || {};
+      const URLs = [plate.artwork_url, plate.bed_model_url].filter(url =>
+        /^\\/api\\/printing\\/slicer\\/profiles\\/[0-9a-f-]{36}\\/(artwork|bed-model)\\/$/i.test(String(url || "")));
+      await Promise.allSettled(URLs.map(url =>
+        fetch(url, { credentials: "same-origin" }).then(response => {
+          if (!response.ok) throw new Error("Native artwork is unavailable.");
+        })));
+    } catch {
+      // The procedural MakerVault bed is always an acceptable offline fallback.
+    }
+  }
+
   async function importOfficialProfile(candidate, asDefault = false) {
     setOfficialError(""); setOfficialBusy(true);
     try {
@@ -678,6 +696,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       // catalogue rather than hiding those newly imported parent presets.
       const loaded = await apiFetch("/api/printing/slicer/profiles/");
       setProfiles(loaded.profiles || []);
+      void cacheImportedPrinterArtwork(imported);
       setForm(current => ({
         ...current, engine: imported.engine, engine_version: result.engine_version,
         [imported.kind + "_profile_id"]: imported.id,
@@ -878,6 +897,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         },
       });
       setProfiles(current => [profile, ...current]);
+      void cacheImportedPrinterArtwork(profile);
       setImportFile(null);
       setImportName("");
       setNotice("Native profile imported. MakerVault will check its integrity and dependencies when slicing.");
