@@ -20,6 +20,7 @@ from .slicer_profiles import SlicerProfileError, inspect_native_profile
 from .slicer_profile_edit import SETTINGS as EDITABLE_PROFILE_SETTINGS, customise_native_json
 from .slicer_profile_lineage import inspect_orca_lineage
 from .slicer_native_resolution import resolved_native_profile
+from .slicer_native_overrides import ORCA_PLATES
 from .slicer_mesh import inspect_stl, MeshInspectionError, MAX_INSPECTION_BYTES
 from .slicer_bed import inspect_orca_plate, inspect_creality_plate
 from .slicer_official_chain import official_profile_chain
@@ -252,12 +253,17 @@ def _draft(user, data):
         native_profiles[f"{kind}_profile"] = profile
         native_labels[f"{kind}_preset"] = label
 
+    plate_type = _preset(data, "plate", 80) if "plate" in data else "default"
+    if engine.key == "orcaslicer" and plate_type not in ORCA_PLATES:
+        raise ValueError("Choose a supported OrcaSlicer build plate type.")
+    if engine.key != "orcaslicer" and plate_type != "default":
+        raise ValueError("Build plate overrides are not yet supported for this slicer engine.")
     return SliceJob.objects.create(
         owner=user, input_asset=input_asset, printer=printer, spool=spool,
         **native_profiles,
         engine=engine.key, engine_version=version,
         **native_labels,
-        nozzle_mm=nozzle, plate=_preset(data, "plate", 80) if "plate" in data else "default",
+        nozzle_mm=nozzle, plate=plate_type,
         status="draft", settings=settings_data,
     )
 
