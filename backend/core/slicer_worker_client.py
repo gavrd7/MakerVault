@@ -20,6 +20,9 @@ MAX_RESPONSE = 90 * 1024 * 1024
 MAX_GCODE = 64 * 1024 * 1024
 
 
+from .slicer_failure_messages import REASONS, explain_worker_failure
+
+
 class SlicerWorkerError(ValueError):
     pass
 
@@ -125,15 +128,7 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
                        "running slicer engine", "validating generated G-code"}
             stage = None
             reason = None
-            reasons = {"engine-exited", "unresolved-profile-parent", "no-output-directory",
-                       "unexpected-output-layout", "output-too-large", "engine-version-mismatch",
-                       "missing-gcode", "validation-error", "invalid-profile-json",
-                       "invalid-profile-structure", "unsafe-profile-settings",
-                       "engine-unavailable", "invalid-stl", "engine-timeout",
-                       "invalid-gcode", "engine-launch-failed", "invalid-3mf",
-                       "qt-platform-failed", "missing-runtime-library",
-                       "appimage-runtime-failed", "unsupported-cli-option",
-                       "native-profile-load-failed"}
+            reasons = set(REASONS)
             try:
                 declared_error_length = response.headers.get("Content-Length")
                 if (declared_error_length is None or (
@@ -153,12 +148,10 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
                                 reason = result["reason"]
             except (ValueError, requests.RequestException, UnicodeDecodeError):
                 pass
-            message = "Isolated worker rejected the slicing job (HTTP " + str(response.status_code) + ")"
-            if stage:
-                message += " during " + stage
+            message = explain_worker_failure(reason, response.status_code)
             if reason:
                 message += " [" + reason + "]"
-            raise SlicerWorkerError(message + ".")
+            raise SlicerWorkerError(message)
         declared = response.headers.get("Content-Length")
         if declared and (not declared.isdecimal() or int(declared) > MAX_RESPONSE):
             raise SlicerWorkerError("Worker response exceeds the allowed size.")
