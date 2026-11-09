@@ -90,7 +90,7 @@ function pretty(value) {
 
 export default function SlicerPlateEditor({
   files = [], objects = [], onChange, onPrimaryChange, plate = null, plateType = "default",
-  plateLabel = "Plate 1", onPlateLabelChange,
+  plateLabel = "Plate 1", onPlateLabelChange, printerLabel = "",
   canEdit = false, onFilesUploaded, defaultColor = null, onManualColorChange, footer = null,
   selectedInstanceId = null, onSelectedInstanceChange, toolMode = "select",
   localAssets = [], onLocalAssetsChange, onExitToolMode,
@@ -477,6 +477,12 @@ export default function SlicerPlateEditor({
     makeLabel("REAR · +Y", 0, bedY / 2 - 8, Math.min(bedX * 0.28, 64));
     makeLabel("X →", bedX / 2 - 19, -bedY / 2 + 16, 28);
     makeLabel("Y ↑", -bedX / 2 + 18, bedY / 2 - 17, 28);
+    // Label the native printer identity, not a guessed manufacturer logo.
+    // A generic bed remains visibly distinct without impersonating OEM art.
+    const machineName = String(printerLabel || "").trim().slice(0, 38);
+    if (machineName) makeLabel(machineName, 0, bedY / 2 - 21, Math.min(bedX * 0.58, 125));
+    makeLabel(pretty(bedX) + " × " + pretty(bedY) + " mm", 0, -bedY / 2 + 23,
+      Math.min(bedX * 0.35, 82));
 
     const camera = new THREE.PerspectiveCamera(45, 1, 0.5, 20000);
     camera.up.set(0, 0, 1);
@@ -634,7 +640,7 @@ export default function SlicerPlateEditor({
       renderer.dispose();
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
     };
-  }, [bedX, bedY, plate?.polygon_mm, plate?.bounds_mm, plateType]);
+  }, [bedX, bedY, plate?.polygon_mm, plate?.bounds_mm, plateType, printerLabel]);
 
   useEffect(() => {
     const state = sceneRef.current;
