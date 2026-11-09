@@ -4,6 +4,7 @@ import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { threeMfGeometryToStl, MAX_3MF_IMPORT_BYTES } from "./slicer3mfGeometry";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
+import { ViewHelper } from "three/examples/jsm/helpers/ViewHelper.js";
 import { apiFetch } from "../api";
 import { plateExtentWarning, plateFootprintsOverlap, autoArrangePlate } from "./slicerPlateGeometry";
 
@@ -499,6 +500,11 @@ export default function SlicerPlateEditor({
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     const transform = new TransformControls(camera, renderer.domElement);
+    const axisView = new ViewHelper(camera, renderer.domElement);
+    axisView.setLabels("X", "Y", "Z");
+    axisView.location.top = 8;
+    axisView.location.right = 8;
+    const orientationClock = new THREE.Clock();
     transform.setSpace("world");
     transform.setTranslationSnap(0.5);
     transform.setRotationSnap(THREE.MathUtils.degToRad(5));
@@ -582,9 +588,27 @@ export default function SlicerPlateEditor({
         y_mm: Math.round(mesh.position.y * 2) / 2,
         rotation_deg: Math.round(THREE.MathUtils.radToDeg(mesh.rotation.z) / 5) * 5,
       };
+      if (latestToolModeRef.current === "scale") {
+        const xyz = [mesh.scale.x, mesh.scale.y, mesh.scale.z].map(axis =>
+          Math.round(axis * 1000) / 10);
+        if (xyz.some(axis => !Number.isFinite(axis) || axis < 5 || axis > 400)) {
+          setError("Model scale must remain between 5% and 400% on every axis.");
+          const original = selectedItem.scale_xyz_percent || [
+            selectedItem.scale_percent, selectedItem.scale_percent, selectedItem.scale_percent,
+          ];
+          mesh.scale.set(...original.map(value => value / 100));
+          return;
+        }
+        candidate.scale_percent = 100;
+        candidate.scale_xyz_percent = xyz;
+      }
       if (!validPlacement(candidate, current)) {
         mesh.position.set(selectedItem.x_mm, selectedItem.y_mm, 0);
         mesh.rotation.z = THREE.MathUtils.degToRad(selectedItem.rotation_deg);
+        const original = selectedItem.scale_xyz_percent || [
+          selectedItem.scale_percent, selectedItem.scale_percent, selectedItem.scale_percent,
+        ];
+        mesh.scale.set(...original.map(value => value / 100));
         setError("Model handle transform exceeds the plate or overlaps another object.");
         return;
       }
@@ -592,6 +616,16 @@ export default function SlicerPlateEditor({
       latestOnChangeRef.current(current.map(item =>
         item.instance_id === selectedItem.instance_id ? candidate : item));
     });
+    const orientationPointerDown = event => {
+      if (event.button !== 0 || axisView.animating) return;
+      axisView.center.copy(controls.target);
+      if (axisView.handleClick(event)) {
+        event.stopImmediatePropagation();
+        event.preventDefault();
+        exitToolModeRef.current?.();
+      }
+    };
+    renderer.domElement.addEventListener("pointerdown", orientationPointerDown, true);
     renderer.domElement.addEventListener("pointerdown", pointerDown);
     renderer.domElement.addEventListener("pointermove", pointerMove);
     renderer.domElement.addEventListener("pointerup", pointerUp);
@@ -606,20 +640,28 @@ export default function SlicerPlateEditor({
     observer.observe(mount);
     resize();
     renderer.setAnimationLoop(() => {
+      const delta = Math.min(0.05, orientationClock.getDelta());
+      if (axisView.animating) {
+        axisView.update(delta);
+        controls.target.copy(axisView.center);
+      }
       controls.update();
       renderer.render(scene, camera);
+      axisView.render(renderer);
     });
     sceneRef.current = { scene, meshes, transform, camera, controls, bedX, bedY };
     return () => {
       disposed = true;
       sceneRef.current = null;
       observer.disconnect();
+      renderer.domElement.removeEventListener("pointerdown", orientationPointerDown, true);
       renderer.domElement.removeEventListener("pointerdown", pointerDown);
       renderer.domElement.removeEventListener("pointermove", pointerMove);
       renderer.domElement.removeEventListener("pointerup", pointerUp);
       renderer.domElement.removeEventListener("pointercancel", pointerUp);
       renderer.setAnimationLoop(null);
       controls.dispose();
+      axisView.dispose();
       transform.detach();
       scene.remove(transform.getHelper());
       transform.dispose();
@@ -702,7 +744,8 @@ export default function SlicerPlateEditor({
           state.meshes.set(item.instance_id, mesh);
           state.scene.add(mesh);
           if (latestToolModeRef.current !== "select" && item.instance_id === selectedInstanceId) {
-            state.transform.setMode(latestToolModeRef.current === "move" ? "translate" : "rotate");
+            state.transform.setMode(latestToolModeRef.current === "move" ? "translate" :
+              latestToolModeRef.current === "scale" ? "scale" : "rotate");
             state.transform.attach(mesh);
           }
         })
@@ -727,11 +770,11 @@ export default function SlicerPlateEditor({
       mesh.material.emissiveIntensity = item.instance_id === selected ? 0.18 : 0;
     }
     const selectedMesh = state.meshes.get(selected);
-    if (canEdit && selectedMesh && (toolMode === "move" || toolMode === "rotate")) {
-      state.transform.setMode(toolMode === "move" ? "translate" : "rotate");
-      state.transform.showX = toolMode === "move";
-      state.transform.showY = toolMode === "move";
-      state.transform.showZ = toolMode === "rotate";
+    if (canEdit && selectedMesh && (toolMode === "move" || toolMode === "rotate" || toolMode === "scale")) {
+      state.transform.setMode(toolMode === "move" ? "translate" : toolMode === "scale" ? "scale" : "rotate");
+      state.transform.showX = toolMode === "move" || toolMode === "scale";
+      state.transform.showY = toolMode === "move" || toolMode === "scale";
+      state.transform.showZ = toolMode === "rotate" || toolMode === "scale";
       state.transform.attach(selectedMesh);
     } else {
       state.transform.detach();
@@ -796,7 +839,7 @@ export default function SlicerPlateEditor({
       <button type="button" onClick={() => setPlateCamera("selection")} disabled={!chosen}
         title="Centre and zoom onto the currently selected model">Fit selected model</button>
     </div>
-    <div ref={hostRef} className="slicerPlateCanvas" aria-label="Interactive three-dimensional model plate preview" />
+    <div ref={hostRef} className="slicerPlateCanvas" aria-label="Interactive three-dimensional model plate preview with clickable X, Y, Z orientation control in the top right" />
 
     <p className="slicerPlateHint"><strong>Selected surface:</strong> {PLATE_SURFACE[plateType]?.label || "Native default"} · Representative finish only; physical plate not detected.</p>
     <p className="slicerPlateHint"><strong>Build plate volume:</strong> {pretty(bedX)} × {pretty(bedY)} mm (X × Y). Drag in 0.5 mm steps or enter coordinates below.</p>
