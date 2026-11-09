@@ -487,11 +487,29 @@ export default function SlicerPlateEditor({
     const artworkPath = showNativeArtwork
       ? (profileArtwork || bundledArtwork) : null;
     const useMakerVaultBed = !artworkPath;
+    // An official bed uses one stable, non-repeating surface. Drawing its
+    // artwork on that same texture avoids coplanar z-fighting during orbit.
     const bedTexture = useMakerVaultBed
       ? makeMakerVaultPlateTexture(plateType, bedX, bedY)
-      : makeRepresentativePlateTexture(plateType);
+      : (() => {
+          const canvas = document.createElement("canvas");
+          canvas.width = 2048;
+          canvas.height = 2048;
+          const context = canvas.getContext("2d");
+          if (context) {
+            context.fillStyle = PLATE_SURFACE[plateType]?.base || "#263342";
+            context.fillRect(0, 0, canvas.width, canvas.height);
+          }
+          const texture = new THREE.CanvasTexture(canvas);
+          texture.colorSpace = THREE.SRGBColorSpace;
+          texture.minFilter = THREE.LinearMipmapLinearFilter;
+          texture.magFilter = THREE.LinearFilter;
+          texture.generateMipmaps = true;
+          texture.anisotropy = Math.min(16, renderer.capabilities.getMaxAnisotropy());
+          return texture;
+        })();
     const bedGeometry = new THREE.ShapeGeometry(plateShape);
-    if (useMakerVaultBed) {
+    {
       const positions = bedGeometry.getAttribute("position");
       const uv = bedGeometry.getAttribute("uv");
       for (let i = 0; i < positions.count; i++) {
@@ -540,26 +558,8 @@ export default function SlicerPlateEditor({
     plateRim.position.z = -1.5;
     plateRim.renderOrder = -1;
     scene.add(plateRim);
-    let bedArtwork = null;
     let artworkTextureController = null;
     if (artworkPath) {
-      // ShapeGeometry uses world XY as UV; remap to 0..1 for the actual bed.
-      // This transparent SVG overlay adds original native markings without
-      // changing the physical plate selection or base surface texture.
-      const geometry = new THREE.ShapeGeometry(plateShape);
-      const positions = geometry.getAttribute("position");
-      const uv = geometry.getAttribute("uv");
-      for (let i = 0; i < positions.count; i++) {
-        uv.setXY(i, (positions.getX(i) + bedX / 2) / bedX,
-          (positions.getY(i) + bedY / 2) / bedY);
-      }
-      uv.needsUpdate = true;
-      const material = new THREE.MeshStandardMaterial({
-        color: "#ffffff", transparent: true, depthWrite: false,
-        side: THREE.DoubleSide, roughness: 0.9, metalness: 0.04,
-      });
-      // A vector with a 260px intrinsic viewport must be rasterised at
-      // display resolution before uploading it as a WebGL texture.
       const controller = new AbortController();
       artworkTextureController = controller;
       const loadArtwork = async (url, fallback = false) => {
@@ -570,9 +570,11 @@ export default function SlicerPlateEditor({
           throw new Error("Official bed artwork unavailable.");
         const svgText = await response.text();
         if (svgText.length > 512 * 1024 ||
-            !/^\s*(?:<\?xml[^>]*>\s*)?<svg\b/i.test(svgText))
+            !/^\\s*(?:<\\?xml[^>]*>\\s*)?<svg\\b/i.test(svgText))
           throw new Error("Official bed artwork must be an SVG.");
-        const svg = svgText.replace(/<svg\b/i, '<svg width="2048" height="2048"');
+        // Keep the upstream vector markings, rasterised once onto the same
+        // texture as the bed surface. Never render a second coplanar plate.
+        const svg = svgText.replace(/<svg\\b/i, '<svg width="2048" height="2048"');
         const blobUrl = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
         try {
           const artworkImage = new Image();
@@ -582,18 +584,14 @@ export default function SlicerPlateEditor({
             artworkImage.src = blobUrl;
           });
           if (disposed || controller.signal.aborted) return;
-          const canvas = document.createElement("canvas");
-          canvas.width = 2048; canvas.height = 2048;
-          const context = canvas.getContext("2d");
+          const canvas = bedTexture.image;
+          const context = canvas?.getContext("2d");
           if (!context) throw new Error("Artwork canvas is unavailable.");
+          context.clearRect(0, 0, canvas.width, canvas.height);
+          context.fillStyle = PLATE_SURFACE[plateType]?.base || "#263342";
+          context.fillRect(0, 0, canvas.width, canvas.height);
           context.drawImage(artworkImage, 0, 0, canvas.width, canvas.height);
-          const texture = new THREE.CanvasTexture(canvas);
-          texture.colorSpace = THREE.SRGBColorSpace;
-          texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-          texture.minFilter = THREE.LinearMipmapLinearFilter;
-          material.map?.dispose();
-          material.map = texture;
-          material.needsUpdate = true;
+          bedTexture.needsUpdate = true;
           setNativeArtworkError(fallback
             ? "Profile artwork was unavailable; displaying bundled printer artwork." : "");
         } finally {
@@ -608,12 +606,6 @@ export default function SlicerPlateEditor({
           });
         } else setNativeArtworkError("Official artwork is unavailable; the 3D plate remains usable.");
       });
-      bedArtwork = new THREE.Mesh(geometry, material);
-      // Artwork belongs above the 0.24 mm preview grid, not underneath it.
-      // Leave label overlays and printed models above the artwork.
-      bedArtwork.position.z = 0.28;
-      bedArtwork.renderOrder = 1;
-      scene.add(bedArtwork);
     }
     // The native STL is strictly decorative: never add it to the editable
     // model collection or include it in slicing, collision or auto-arrange.
@@ -933,12 +925,6 @@ export default function SlicerPlateEditor({
       bed.geometry.dispose();
       bed.material.map?.dispose();
       bed.material.dispose();
-      if (bedArtwork) {
-        scene.remove(bedArtwork);
-        bedArtwork.geometry.dispose();
-        bedArtwork.material.map?.dispose();
-        bedArtwork.material.dispose();
-      }
       gridLines.forEach(line => {
         scene.remove(line);
         line.geometry.dispose();
