@@ -272,3 +272,14 @@ test("native conditional editor distinguishes Simple Advanced and Expert setting
   assert.match(scene, /"Tree support"/);
   assert.match(scene, /"Prime tower"/);
 });
+
+
+test("official and fallback build plates avoid coplanar shimmer and repeating textures", () => {
+  const plate = read("SlicerPlateEditor.jsx");
+  assert.match(plate, /const canvas = bedTexture\.image/);
+  assert.match(plate, /context\.drawImage\(artworkImage, 0, 0, canvas\.width, canvas\.height\)/);
+  assert.match(plate, /bedTexture\.needsUpdate = true/);
+  assert.doesNotMatch(plate, /bedArtwork = new THREE\.Mesh/);
+  assert.doesNotMatch(plate, /makeRepresentativePlateTexture/);
+  assert.match(plate, /Math\.max\(2, Math\.min\(bedX, bedY\) \* 0\.015\)/);
+});
