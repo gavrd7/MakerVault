@@ -462,10 +462,17 @@ export default function SlicerPlateEditor({
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.font = "bold 39px sans-serif";
+      // Fit long printer names inside the generated on-bed artwork instead
+      // of cropping manufacturer/model strings against the canvas boundary.
+      let fontSize = 39;
+      ctx.font = "bold " + fontSize + "px sans-serif";
+      while (fontSize > 15 && ctx.measureText(message).width > 236) {
+        fontSize -= 2;
+        ctx.font = "bold " + fontSize + "px sans-serif";
+      }
       ctx.fillStyle = "#b3cada";
       ctx.textAlign = "center";
-      ctx.fillText(message, 128, 53);
+      ctx.fillText(message, 128, 52);
       const texture = new THREE.CanvasTexture(canvas);
       const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, width * 80 / 256),
         new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
