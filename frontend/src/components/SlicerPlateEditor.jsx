@@ -548,6 +548,47 @@ export default function SlicerPlateEditor({
       bedArtwork.renderOrder = 1;
       scene.add(bedArtwork);
     }
+    // The native STL is strictly decorative: never add it to the editable
+    // model collection or include it in slicing, collision or auto-arrange.
+    const nativeBedModelUrl = /^\\/api\\/printing\\/slicer\\/profiles\\/[0-9a-f-]{36}\\/bed-model\\/$/i.test(
+      String(plate?.bed_model_url || "")
+    ) ? plate.bed_model_url : null;
+    let nativeBedMesh = null;
+    const nativeBedController = new AbortController();
+    if (showNativeArtwork && nativeBedModelUrl) {
+      fetch(nativeBedModelUrl, { credentials: "same-origin", signal: nativeBedController.signal })
+        .then(async response => {
+          if (!response.ok || Number(response.headers.get("Content-Length") || 0) > 4 * 1024 * 1024)
+            throw new Error("Native bed model unavailable.");
+          const raw = await response.arrayBuffer();
+          if (raw.byteLength > 4 * 1024 * 1024) throw new Error("Native bed model exceeds limit.");
+          return raw;
+        })
+        .then(raw => {
+          if (disposed) return;
+          const geometry = new STLLoader().parse(raw);
+          geometry.computeBoundingBox();
+          const bounds = geometry.boundingBox;
+          if (!bounds || bounds.isEmpty()) { geometry.dispose(); return; }
+          // Native STL coordinates are in machine space. Preserve XY and move
+          // the uppermost face below the actual printable surface at Z=0.
+          const size = new THREE.Vector3();
+          bounds.getSize(size);
+          if (size.x > bedX * 1.5 || size.y > bedY * 1.5 ||
+              !Number.isFinite(size.z) || size.z > 100) {
+            geometry.dispose();
+            return;
+          }
+          nativeBedMesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({
+            color: "#465968", metalness: 0.35, roughness: 0.78,
+            side: THREE.DoubleSide,
+          }));
+          nativeBedMesh.position.set(-centerX, -centerY, -bounds.max.z - 0.55);
+          nativeBedMesh.userData.decorativeBed = true;
+          scene.add(nativeBedMesh);
+        })
+        .catch(() => { /* Missing/unavailable native bed mesh uses generated fallback geometry. */ });
+    }
     // Millimetre-accurate 10 mm minor / 50 mm major divisions. Clip grid
     // lines to the native polygon, rather than drawing an oversized square.
     const inside = (x, y) => {
@@ -802,6 +843,12 @@ export default function SlicerPlateEditor({
         mesh.geometry.dispose();
         mesh.material.dispose();
       }
+      nativeBedController.abort();
+      if (nativeBedMesh) {
+        scene.remove(nativeBedMesh);
+        nativeBedMesh.geometry.dispose();
+        nativeBedMesh.material.dispose();
+      }
       plateBody.geometry.dispose();
       plateBody.material.dispose();
       bed.geometry.dispose();
@@ -830,7 +877,7 @@ export default function SlicerPlateEditor({
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
     };
   }, [bedX, bedY, plate?.polygon_mm, plate?.bounds_mm, plateType, printerLabel,
-    showNativeArtwork, showOrientationLabels, showMachineLabel, showDimensionsLabel, showAxisLabels]);
+    showNativeArtwork, showOrientationLabels, showMachineLabel, showDimensionsLabel, showAxisLabels, plate?.bed_model_url, plate?.artwork_url]);
 
   useEffect(() => {
     const state = sceneRef.current;
@@ -894,7 +941,7 @@ export default function SlicerPlateEditor({
     }
     return () => { live = false; controller.abort(); };
   }, [objectKey, sourceFiles, bedX, bedY, plate?.polygon_mm, plate?.bounds_mm, plateType, printerLabel,
-    showNativeArtwork, showOrientationLabels, showMachineLabel, showDimensionsLabel, showAxisLabels]);
+    showNativeArtwork, showOrientationLabels, showMachineLabel, showDimensionsLabel, showAxisLabels, plate?.bed_model_url, plate?.artwork_url]);
 
   useEffect(() => {
     const state = sceneRef.current;
