@@ -325,3 +325,20 @@ test("first slicer navigation is queued while engine status is checking", () => 
   assert.match(app, /preloadSlicerWorkbench\(\)/);
   assert.match(printing, /export function preloadSlicerWorkbench\(\)/);
 });
+
+
+test("confirmed completed slice actions return to slicer without hiding uncertain submissions", () => {
+  const workbench = read("SlicerWorkbench.jsx");
+  const printer = read("PrinterStartGcodeModal.jsx");
+  const saved = workbench.slice(workbench.indexOf("async function saveOutputToLibrary"),
+    workbench.indexOf("async function startSlice"));
+  assert.match(saved, /await apiFetch\(/);
+  assert.match(saved, /setPreviewJobId\(null\)/);
+  assert.match(saved, /setShowDrafts\(false\)/);
+  assert.match(workbench, /onSubmissionConfirmed=\{receipt =>/);
+  assert.match(workbench, /setPrintSelection\(null\)/);
+  assert.match(printer, /isConfirmedSubmission\(result\.submission\)/);
+  assert.match(printer, /onSubmissionConfirmed\?\.\(updated\)/);
+  assert.match(printer, /submission\?\.status !== "started"/);
+  assert.match(printer, /submission\?\.status === "uploaded"/);
+});
