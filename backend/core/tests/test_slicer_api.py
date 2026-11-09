@@ -281,6 +281,48 @@ class SliceJobApiTests(TestCase):
         self.input_asset.file.save("part.stl", ContentFile(b"not an STL"), save=True)
         self.assertEqual(self.client.get(url).status_code, 422)
 
+    def test_object_process_overrides_are_instance_scoped_and_saved_in_draft(self):
+        self.client.force_login(self.owner)
+        first = {
+            "instance_id": str(uuid.uuid4()), "asset_id": str(self.input_asset.pk),
+            "x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+            "scale_percent": 100, "color": "#58b5e4",
+            "process_overrides": {"wall_loops": 5, "enable_support": "1"},
+        }
+        second = {
+            **first, "instance_id": str(uuid.uuid4()), "x_mm": 25,
+            "process_overrides": {"wall_loops": 2},
+        }
+        response = self.post({**self.payload, "settings": {
+            "plate_objects": [first, second],
+        }})
+        self.assertEqual(response.status_code, 201, response.content)
+        job = SliceJob.objects.get(pk=response.json()["job"]["id"])
+        stored = job.settings["plate_objects"]
+        self.assertEqual(stored[0]["process_overrides"], {
+            "wall_loops": 5, "enable_support": "1",
+        })
+        self.assertEqual(stored[1]["process_overrides"], {"wall_loops": 2})
+        self.assertNotEqual(stored[0]["instance_id"], stored[1]["instance_id"])
+
+        from core.slicer_execution import _validate_plate_execution, SlicerExecutionError
+        # Source meshes are currently merged by the worker: execution MUST
+        # refuse to silently discard these object-level overrides.
+        job.engine = "orcaslicer"
+        with self.assertRaisesRegex(SlicerExecutionError, "per-object settings"):
+            _validate_plate_execution(job)
+
+    def test_invalid_object_setting_is_rejected_before_draft_creation(self):
+        self.client.force_login(self.owner)
+        obj = {
+            "instance_id": str(uuid.uuid4()), "asset_id": str(self.input_asset.pk),
+            "x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+            "scale_percent": 100, "color": "#58b5e4",
+            "process_overrides": {"machine_start_gcode": "M104 S300"},
+        }
+        response = self.post({**self.payload, "settings": {"plate_objects": [obj]}})
+        self.assertEqual(response.status_code, 400, response.content)
+
     def test_visual_multi_stl_plate_is_saved_but_never_slicable(self):
         from core.slicer_execution import SlicerExecutionError, validate_scheduling
         self.client.force_login(self.owner)
