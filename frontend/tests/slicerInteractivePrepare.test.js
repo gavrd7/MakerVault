@@ -153,3 +153,14 @@ test("interactive settings can be saved as a selected reusable native process pr
   assert.match(workbench, /process_profile_id: saved.id/);
   assert.match(workbench, /setProcessOverrides\(\{\}\)/);
 });
+
+test("native process options remain searchable and gated behind Basic/Advanced", () => {
+  const scene = read("SlicerPrepareWorkspace.jsx");
+  assert.match(scene, /Find a setting/);
+  assert.match(scene, /value=\{settingsLevel\}/);
+  assert.match(scene, /value="advanced"/);
+  assert.match(scene, /nativeProcessFields/);
+  assert.match(scene, /spec\.options\.map/);
+  assert.match(scene, /updateNativeChoice/);
+  assert.match(scene, /processOverrides\[key\] \?\? spec\.current/);
+});
