@@ -974,6 +974,14 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       engine={form.engine + " " + form.engine_version} printer={selectedPrinter?.name}
       printerDetails={selectedPrinter} nozzleMm={form.nozzle_mm} plateType={form.plate}
       printerId={form.printer_id}
+      processProfiles={forKind("process")}
+      onSelectProcessProfile={id => {
+        if (id === form.process_profile_id) return;
+        if (Object.keys(processOverrides).length &&
+            !window.confirm("Discard unsaved print settings and switch to another process profile?")) return;
+        selectNativeProfile("process", id);
+      }}
+      onResetProcessSettings={() => setProcessOverrides({})}
       selectedProfiles={{ printer: form.printer_preset, process: form.process_preset, filament: form.filament_preset,
         printer_id: form.printer_profile_id, process_id: form.process_profile_id, filament_id: form.filament_profile_id }}
       onChangeProfiles={() => setProfileModal("change")}
