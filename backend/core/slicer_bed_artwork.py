@@ -14,49 +14,83 @@ import requests
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 
-from .slicer_official_profiles import REF, BASE, VENDORS
+from .slicer_official_profiles import VENDORS as ORCA_VENDORS
+from .slicer_creality_official_profiles import VENDORS as CREALITY_VENDORS
+from .slicer_mesh import inspect_stl, MeshInspectionError
 from .slicer_profile_lineage import _inspect_source
 from .slicer_native_resolution import resolved_native_profile
 from .slicer_profiles import SlicerProfileError
 
 
 MAX_ARTWORK_BYTES = 256 * 1024
-_PROVENANCE = re.compile(
-    r"^OrcaSlicer/OrcaSlicer@" + re.escape(REF) +
-    r"/([A-Za-z0-9_-]+)/machine/[^/]+\.json$"
-)
-_BASENAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,119}\.svg$", re.I)
+MAX_BED_MODEL_BYTES = 4 * 1024 * 1024
+# Only fixed, audited upstream owners and version-tagged profiles are eligible.
+# The user's own profile provenance cannot supply a hostname or URL.
+SOURCES = {
+    "orcaslicer": ("OrcaSlicer/OrcaSlicer", ORCA_VENDORS),
+    "crealityprint": ("CrealityOfficial/CrealityPrint", CREALITY_VENDORS),
+}
+_VERSION = re.compile(r"^v?([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)$")
+_BASENAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,119}$")
 _XML_SVG = "{http://www.w3.org/2000/svg}"
 
 
-def official_artwork_source(profile):
-    """Return a fixed upstream asset URL and cache key, or None.
+def official_asset_source(profile, kind="texture"):
+    """Resolve version-aware, owner-checked profile metadata to a fixed host.
 
-    This does not imply slicing or printer compatibility.
+    No profile may supply a URL. Future source adapters must be explicitly
+    registered and audited; newer engine versions work without a code release
+    only when a registered profile has a validated version tag/provenance.
     """
-    if profile.engine != "orcaslicer" or profile.kind != "printer":
+    if profile.kind != "printer" or kind not in ("texture", "model"):
         return None
-    match = _PROVENANCE.fullmatch(str(profile.provenance or ""))
-    if not match or match.group(1) not in VENDORS:
+    provider = SOURCES.get(profile.engine)
+    if provider is None:
+        return None
+    source, vendors = provider
+    match = _VERSION.fullmatch(str(profile.engine_version or ""))
+    if not match:
+        return None
+    version = match.group(1)
+    ref = "v" + version
+    provenance = re.fullmatch(
+        re.escape(source) + "@" + re.escape(ref) +
+        r"/([A-Za-z0-9_-]+)/machine/([A-Za-z0-9_.-]+\\.json)",
+        str(profile.provenance or ""),
+    )
+    if not provenance or provenance.group(1) not in vendors:
         return None
     try:
-        data = _inspect_source(profile)
-    except SlicerProfileError:
+        if profile.engine == "orcaslicer":
+            data = _inspect_source(profile)
+        else:
+            # Creality JSON is also hash-validated through native resolution.
+            data = json.loads(resolved_native_profile(profile))
+    except (SlicerProfileError, ValueError, UnicodeDecodeError, OSError, AttributeError):
         return None
-    filename = data.get("bed_texture")
-    if not filename and data.get("inherits"):
-        # Try the already-validated, same-owner/engine/version native parent chain.
-        # An absent or invalid chain is not grounds for guessing an artwork file.
+    key = "bed_texture" if kind == "texture" else "bed_model"
+    filename = data.get(key)
+    if not filename and data.get("inherits") and profile.engine == "orcaslicer":
         try:
-            filename = json.loads(resolved_native_profile(profile)).get("bed_texture")
-        except (SlicerProfileError, ValueError, UnicodeDecodeError):
-            filename = None
-    if not isinstance(filename, str) or not _BASENAME.fullmatch(filename):
+            filename = json.loads(resolved_native_profile(profile)).get(key)
+        except (SlicerProfileError, ValueError, UnicodeDecodeError, OSError):
+            return None
+    extension = ".svg" if kind == "texture" else ".stl"
+    if not isinstance(filename, str) or not _BASENAME.fullmatch(filename) or not filename.lower().endswith(extension):
         return None
-    vendor = match.group(1)
-    url = f"{BASE}/{vendor}/{filename}"
-    cache_key = hashlib.sha256(url.encode("utf-8")).hexdigest() + ".svg"
-    return url, "slicer-reviewed-native-artwork/" + cache_key
+    # No file paths, percent escapes, query strings, or user-provided hosts.
+    vendor = provenance.group(1)
+    url = f"https://raw.githubusercontent.com/{source}/{ref}/resources/profiles/{vendor}/{filename}"
+    digest = hashlib.sha256(url.encode("utf-8")).hexdigest()
+    return url, f"slicer-reviewed-native-artwork/{digest}{extension}"
+
+
+def official_artwork_source(profile):
+    return official_asset_source(profile, "texture")
+
+
+def official_bed_model_source(profile):
+    return official_asset_source(profile, "model")
 
 
 def _verify_svg(raw):
@@ -95,39 +129,62 @@ def _verify_svg(raw):
     return raw
 
 
-def cached_official_artwork(profile):
-    """Cache a bounded, vetted official asset locally for subsequent offline use."""
-    source = official_artwork_source(profile)
+def _verify_stl(raw):
+    if not raw or len(raw) > MAX_BED_MODEL_BYTES:
+        raise ValueError("Bed-model STL is empty or exceeds the size limit.")
+    try:
+        geometry = inspect_stl(raw)
+    except MeshInspectionError:
+        raise ValueError("Bed-model STL is invalid.") from None
+    if geometry["triangles"] > 100000:
+        raise ValueError("Bed-model STL exceeds the triangle limit.")
+    return raw
+
+
+def cached_official_asset(profile, kind="texture"):
+    """Cache bounded official SVG/STL assets. Never fetch supplied external URLs."""
+    source = official_asset_source(profile, kind)
     if source is None:
         return None
     url, name = source
+    limit = MAX_ARTWORK_BYTES if kind == "texture" else MAX_BED_MODEL_BYTES
+    verify = _verify_svg if kind == "texture" else _verify_stl
     if default_storage.exists(name):
         with default_storage.open(name, "rb") as stream:
-            raw = stream.read(MAX_ARTWORK_BYTES + 1)
+            raw = stream.read(limit + 1)
         try:
-            return _verify_svg(raw)
+            return verify(raw)
         except ValueError:
             default_storage.delete(name)
     try:
         response = requests.get(
             url, timeout=(3, 12), stream=True, allow_redirects=False,
-            headers={"Accept": "image/svg+xml", "User-Agent": "MakerVault-BedArtwork/1"},
+            headers={"Accept": "image/svg+xml" if kind == "texture" else "model/stl",
+                     "User-Agent": "MakerVault-BedArtwork/1"},
         )
         try:
             if response.status_code != 200:
                 return None
             declared = response.headers.get("Content-Length")
-            if declared and int(declared) > MAX_ARTWORK_BYTES:
+            if declared and int(declared) > limit:
                 return None
             chunks = bytearray()
             for chunk in response.iter_content(32768):
                 chunks.extend(chunk)
-                if len(chunks) > MAX_ARTWORK_BYTES:
+                if len(chunks) > limit:
                     return None
-            raw = _verify_svg(bytes(chunks))
+            raw = verify(bytes(chunks))
         finally:
             response.close()
     except (requests.RequestException, ValueError, OSError):
         return None
     default_storage.save(name, ContentFile(raw))
     return raw
+
+
+def cached_official_artwork(profile):
+    return cached_official_asset(profile, "texture")
+
+
+def cached_official_bed_model(profile):
+    return cached_official_asset(profile, "model")
