@@ -44,6 +44,7 @@ export default function App() {
   const [projects, setProjects] = useState([]);
   const [config, setConfig] = useState(null);
   const [slicerStatus, setSlicerStatus] = useState({ state: "checking" });
+  const [pendingSlicerNavigation, setPendingSlicerNavigation] = useState(false);
   const [error, setError] = useState("");
   const [importOpen, setImportOpen] = useState(false);
   const [notice, setNotice] = useState("");
@@ -256,7 +257,23 @@ export default function App() {
     setMakerTagReturn(null);
   }
 
+  useEffect(() => {
+    if (!pendingSlicerNavigation || slicerStatus.state === "checking") return;
+    setPendingSlicerNavigation(false);
+    if (["ready", "preview"].includes(slicerStatus.state)) {
+      setMakerTagReturn(null);
+      setSearchTarget(null);
+      setSection("MakerVault Slicer");
+    }
+  }, [pendingSlicerNavigation, slicerStatus.state]);
+
   function navigateSection(next) {
+    if (next === "MakerVault Slicer" && slicerStatus.state === "checking") {
+      // Do not discard the first click while engine availability is loading.
+      setPendingSlicerNavigation(true);
+      return;
+    }
+    setPendingSlicerNavigation(false);
     if (next === "MakerVault Slicer" && !["ready", "preview"].includes(slicerStatus.state)) return;
     setMakerTagReturn(null);
     setSearchTarget(next === "Model Library" ? { type: "models", token: Date.now() } : null);
@@ -289,8 +306,10 @@ export default function App() {
       </div>
       <GlobalSearch onOpenResult={openSearchResult} onOpenAdvanced={openAdvancedSearch} />
       <nav>{NAV.map(n => <button key={n} className={section === n ? "active" : ""}
-        disabled={n === "MakerVault Slicer" && !["ready", "preview"].includes(slicerStatus.state)}
-        title={n === "MakerVault Slicer" && !["ready", "preview"].includes(slicerStatus.state)
+        disabled={n === "MakerVault Slicer" && !["ready", "preview", "checking"].includes(slicerStatus.state)}
+        title={n === "MakerVault Slicer" && slicerStatus.state === "checking"
+          ? "Slicer availability is loading. Select to open automatically when ready."
+          : n === "MakerVault Slicer" && !["ready", "preview"].includes(slicerStatus.state)
           ? "The optional slicer service is not available. See 3D Printing for details." : undefined}
         onClick={() => navigateSection(n)}>{n}</button>)}</nav>
       <div className="asideBottom">{config?.is_superuser && <a href="/admin/">Administration</a>}<a href="/accounts/logout/">Sign out</a></div>
