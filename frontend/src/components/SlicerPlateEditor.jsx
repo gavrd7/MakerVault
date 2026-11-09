@@ -473,7 +473,11 @@ export default function SlicerPlateEditor({
       else plateShape.lineTo(x, y);
     });
     plateShape.closePath();
-    const artworkPath = showNativeArtwork ? nativeBedArtwork(printerLabel, bedX, bedY) : null;
+    const profileArtwork = /^\/api\/printing\/slicer\/profiles\/[0-9a-f-]{36}\/artwork\/$/i.test(
+      String(plate?.artwork_url || "")
+    ) ? plate.artwork_url : null;
+    const artworkPath = showNativeArtwork
+      ? (profileArtwork || nativeBedArtwork(printerLabel, bedX, bedY)) : null;
     const useMakerVaultBed = !artworkPath;
     const bedTexture = useMakerVaultBed
       ? makeMakerVaultPlateTexture(plateType, bedX, bedY)
@@ -988,7 +992,7 @@ export default function SlicerPlateEditor({
     <fieldset className="slicerPlateDisplayOptions">
       <legend>Build plate display</legend>
       <div className="slicerPlateDisplayOptionsRow">
-        {nativeBedArtwork(printerLabel, bedX, bedY) && <label>
+        {(nativeBedArtwork(printerLabel, bedX, bedY) || plate?.artwork_url) && <label>
           <input type="checkbox" checked={showNativeArtwork}
             onChange={event => setShowNativeArtwork(event.target.checked)} />
           <span>Official bed artwork</span>
@@ -1018,8 +1022,8 @@ export default function SlicerPlateEditor({
         </button>
       </div>
     </fieldset>
-    <p className="slicerPlateHint"><strong>Selected surface:</strong> {PLATE_SURFACE[plateType]?.label || "Native default"} · Physical plate not detected. {!showNativeArtwork || !nativeBedArtwork(printerLabel, bedX, bedY) ? "MakerVault 3D build plate." : ""} {showNativeArtwork && nativeBedArtwork(printerLabel, bedX, bedY) &&
-      <small>Native artwork: OrcaSlicer v2.4.2 (AGPL-3.0)</small>}</p>
+    <p className="slicerPlateHint"><strong>Selected surface:</strong> {PLATE_SURFACE[plateType]?.label || "Native default"} · Physical plate not detected. {!showNativeArtwork || !(plate?.artwork_url || nativeBedArtwork(printerLabel, bedX, bedY)) ? "MakerVault 3D build plate." : ""} {showNativeArtwork && (plate?.artwork_url || nativeBedArtwork(printerLabel, bedX, bedY)) &&
+      <small>Native artwork: {plate?.artwork_url ? "Imported official OrcaSlicer profile" : "OrcaSlicer v2.4.2"} (AGPL-3.0)</small>}</p>
     <p className="slicerPlateHint"><strong>Build plate volume:</strong> {pretty(bedX)} × {pretty(bedY)} mm (X × Y). Drag in 0.5 mm steps or enter coordinates below.</p>
     {arrangeNotice && <p role="status" className="slicerPlateHint">{arrangeNotice}</p>}
     {extentWarnings.length > 0 && <div role="status" className="integrationError">
