@@ -7,25 +7,11 @@ import { TransformControls } from "three/examples/jsm/controls/TransformControls
 import { ViewHelper } from "three/examples/jsm/helpers/ViewHelper.js";
 import { apiFetch } from "../api";
 import { plateExtentWarning, plateFootprintsOverlap, autoArrangePlate } from "./slicerPlateGeometry";
+import { nativeBedArtwork } from "./slicerNativePlateArt";
 
 const PALETTE = ["#58b5e4", "#f59e0b", "#a78bfa", "#10b981", "#ef4444", "#f472b6"];
 const MAX_OBJECTS = 12;
 const MAX_FILE_BYTES = 32 * 1024 * 1024;
-
-// Local, attributed OrcaSlicer assets. Exact model/bed matches only:
-// never guess an image based solely on the connected printer's manufacturer.
-function nativeBedArtwork(printerName, width, depth) {
-  const name = String(printerName || "").trim();
-  if (Math.abs(width - 260) < 0.5 && Math.abs(depth - 260) < 0.5 &&
-      /^creality\s+k2\b(?!\s*(?:plus|pro|max|se|combo)\b)/i.test(name)) {
-    return "/slicer-bed-art/creality-k2.svg";
-  }
-  if (Math.abs(width - 220) < 0.5 && Math.abs(depth - 220) < 0.5 &&
-      /^creality\s+k1\b(?!\s*(?:max|c|se)\b)/i.test(name)) {
-    return "/slicer-bed-art/creality-k1.svg";
-  }
-  return null;
-}
 
 const PLATE_SURFACE = {
   default: { base: "#263342", speckled: false, label: "Native default" },
