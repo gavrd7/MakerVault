@@ -12,8 +12,8 @@ MAX_DEPTH = 12
 
 
 def _inspect_source(record):
-    if record.engine != "orcaslicer":
-        raise SlicerProfileError("Dependency inspection is supported for OrcaSlicer only.")
+    if record.engine not in {"orcaslicer", "crealityprint"}:
+        raise SlicerProfileError("Native JSON profile inspection requires Orca or Creality Print.")
     if not record.file_asset.file:
         raise SlicerProfileError("Native profile file is unavailable.")
     try:
