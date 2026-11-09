@@ -77,6 +77,42 @@ class NativeProcessSettingsTests(SimpleTestCase):
                 "process_overrides": {"machine_start_gcode": "M600"},
             })
 
+
+    def test_ironing_native_mode_and_dependent_values(self):
+        source = json.dumps({
+            "name": "Orca process", "ironing_type": "no ironing",
+            "ironing_pattern": "rectilinear", "ironing_flow": "10%",
+            "ironing_spacing": "0.15", "machine_start_gcode": "START_PRINT",
+        }).encode()
+        fields = process_schema(source)
+        self.assertEqual(fields["ironing_type"]["kind"], "choice")
+        self.assertEqual(fields["ironing_flow"]["enabled_when"],
+                         {"key": "ironing_type", "not": "no ironing"})
+        updated = json.loads(apply_process_overrides(source, {
+            "ironing_type": "topmost", "ironing_flow": 12,
+        }))
+        self.assertEqual(updated["ironing_type"], "topmost")
+        self.assertEqual(updated["ironing_flow"], "12%")
+        self.assertEqual(updated["machine_start_gcode"], "START_PRINT")
+        self.assertNotIn("zaa_enabled", fields)
+
+    def test_z_contouring_native_switch_and_dependent_values(self):
+        source = json.dumps({
+            "name": "Orca process", "zaa_enabled": "0",
+            "zaa_minimize_perimeter_height": "35",
+            "zaa_min_z": "0.1",
+            "zaa_dont_alternate_fill_direction": "0",
+        }).encode()
+        fields = process_schema(source)
+        self.assertEqual(fields["zaa_enabled"]["kind"], "toggle")
+        self.assertEqual(fields["zaa_min_z"]["enabled_when"],
+                         {"key": "zaa_enabled", "not": "0"})
+        changed = json.loads(apply_process_overrides(source, {
+            "zaa_enabled": "1", "zaa_min_z": 0.12,
+        }))
+        self.assertEqual(changed["zaa_enabled"], "1")
+        self.assertEqual(changed["zaa_min_z"], "0.12")
+
     def test_native_enum_and_toggle_settings_round_trip_without_touching_startup(self):
         source = json.dumps({
             "name": "Official sample", "sparse_infill_pattern": "grid",
