@@ -37,7 +37,7 @@ test("bounded path sample is never represented as complete G-code execution", ()
 test("visualiser renders 3D extrusion geometry rather than top-down SVG", () => {
   const parent = fs.readFileSync(path.join(root, "SlicerGcodePreview.jsx"), "utf8");
   const renderer = fs.readFileSync(path.join(root, "SlicerToolpath3D.jsx"), "utf8");
-  assert.match(parent, /<SlicerToolpath3D segments=\{allSegments\}/);
+  assert.match(parent, /<SlicerToolpath3D segments=\{displaySegments\}/);
   assert.doesNotMatch(parent, /<svg viewBox="0 0 600 600"/);
   assert.match(renderer, /new THREE\.WebGLRenderer/);
   assert.match(renderer, /new OrbitControls\(camera, renderer\.domElement\)/);
