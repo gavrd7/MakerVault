@@ -306,11 +306,15 @@ class SliceJobApiTests(TestCase):
         self.assertNotEqual(stored[0]["instance_id"], stored[1]["instance_id"])
 
         from core.slicer_execution import _validate_plate_execution, SlicerExecutionError
-        # Source meshes are currently merged by the worker: execution MUST
-        # refuse to silently discard these object-level overrides.
+        # The real Orca two-cube fixture verifies wall/infill overrides.
+        # Support toggles remain blocked pending their own engine verification.
         job.engine = "orcaslicer"
-        with self.assertRaisesRegex(SlicerExecutionError, "per-object settings"):
+        with self.assertRaisesRegex(SlicerExecutionError, "not passed real Orca"):
             _validate_plate_execution(job)
+        for saved in stored:
+            saved["process_overrides"].pop("enable_support", None)
+        job.settings["plate_objects"] = stored
+        self.assertTrue(_validate_plate_execution(job))
 
     def test_invalid_object_setting_is_rejected_before_draft_creation(self):
         self.client.force_login(self.owner)
