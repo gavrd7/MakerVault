@@ -56,12 +56,16 @@ export function autoArrangePlate(objects, dimensions, bedX, bedY, clearance = 5)
     const width = envelope.maxX - envelope.minX, depth = envelope.maxY - envelope.minY;
     if (width > bedX || depth > bedY)
       return { error: "A model is larger than the available rectangular build plate." };
-    const candidatesX = [-bedX / 2 + width / 2];
-    const candidatesY = [-bedY / 2 + depth / 2];
+    // Start slightly inside the printable edge. Real STL bounds are often
+    // fractional millimetres: rounding the first centre to 0.01 mm could
+    // otherwise move the object *outside* the plate by a fraction of a mm.
+    const inset = 0.02;
+    const candidatesX = [-bedX / 2 + width / 2 + inset];
+    const candidatesY = [-bedY / 2 + depth / 2 + inset];
     for (const other of placed) {
       const bounds = plateEnvelope(other, dimensions[other.instance_id]);
-      candidatesX.push(bounds.maxX + clearance + width / 2);
-      candidatesY.push(bounds.maxY + clearance + depth / 2);
+      candidatesX.push(bounds.maxX + clearance + width / 2 + inset);
+      candidatesY.push(bounds.maxY + clearance + depth / 2 + inset);
     }
     let found = null;
     // Scan low Y, then X, keeping a deterministic bottom-left arrangement.
@@ -69,7 +73,13 @@ export function autoArrangePlate(objects, dimensions, bedX, bedY, clearance = 5)
     for (const y of candidatesY) for (const x of candidatesX) candidates.push({x, y});
     candidates.sort((a,b) => a.y - b.y || a.x - b.x);
     for (const {x,y} of candidates) {
-      const candidate = {...item, x_mm: Math.round(x * 100) / 100, y_mm: Math.round(y * 100) / 100};
+      // Snap towards the free (positive) side, never towards the previous
+      // model or past the lower plate edge. Floating-point noise is neutralised
+      // before rounding to the editor's hundredth-millimetre precision.
+      const candidate = {...item,
+        x_mm: Math.ceil(x * 100 - 1e-7) / 100,
+        y_mm: Math.ceil(y * 100 - 1e-7) / 100,
+      };
       if (plateExtentWarning(candidate, dimensions[item.instance_id], bedX, bedY)) continue;
       if (placed.some(other => plateFootprintsOverlap(candidate, dimensions[item.instance_id],
         other, dimensions[other.instance_id], clearance))) continue;
