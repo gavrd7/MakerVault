@@ -16,6 +16,29 @@ export function plateEnvelope(item, dimensions) {
   return { minX: x-hx, maxX: x+hx, minY: y-hy, maxY: y+hy };
 }
 
+/** Read-only preview measurement of the selected STL after saved XYZ scale and
+ * Z rotation. Dimensions are derived from the mesh's local bounds; XY values
+ * are a conservative rectangular envelope, not precise face/edge metrology.
+ * No scene state, imported meshes or slicing settings are changed.
+ */
+export function plateModelMeasurement(item, dimensions) {
+  const footprint = plateEnvelope(item, dimensions);
+  const rawHeight = Number(dimensions?.height);
+  const xyz = item?.scale_xyz_percent;
+  const zScale = Array.isArray(xyz) ? Number(xyz[2]) / 100 :
+    Number(item?.scale_percent) / 100;
+  if (!footprint || !Number.isFinite(rawHeight) || rawHeight <= 0 ||
+      !Number.isFinite(zScale) || zScale <= 0) return null;
+  const height = rawHeight * zScale;
+  if (!Number.isFinite(height)) return null;
+  return {
+    width: footprint.maxX - footprint.minX,
+    depth: footprint.maxY - footprint.minY,
+    height,
+    ...footprint,
+  };
+}
+
 export function plateExtentWarning(item, dimensions, sizeX, sizeY) {
   const envelope = plateEnvelope(item, dimensions);
   if (!envelope || !Number.isFinite(sizeX) || !Number.isFinite(sizeY) || sizeX <= 0 || sizeY <= 0)
