@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { featureMatchesFocus } from "./slicerToolpathFeatures";
 
 /**
  * Three-dimensional, read-only visualisation of the worker's bounded
@@ -11,6 +12,7 @@ export default function SlicerToolpath3D({
   segments = [], layers = [], activeLayer, activeStep, visible = {},
   colourMode = "feature", colours = {}, showToolhead = true, bedSize = null,
   renderMode = "solid", nozzleDiameter = 0.4,
+  layerDisplay = "current", featureFocus = "all",
 }) {
   const mount = useRef(null);
   const sceneRef = useRef(null);
@@ -37,6 +39,10 @@ export default function SlicerToolpath3D({
     mountPoint.appendChild(renderer.domElement);
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x111b27);
+    scene.add(new THREE.AmbientLight(0xffffff, 1.25));
+    const directional = new THREE.DirectionalLight(0xffffff, 1.7);
+    directional.position.set(120, 250, 140);
+    scene.add(directional);
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 10000);
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -115,10 +121,10 @@ export default function SlicerToolpath3D({
     grid.scale.set(width / Math.max(width, depth), 1, depth / Math.max(width, depth));
     bed.position.x = bedCentre.x;
     bed.position.z = bedCentre.z;
-    const distance = nativeBed
-      ? Math.max(80, Math.hypot(width, depth) * 1.5)
-      : Math.max(60, size.length() * 1.8);
-    const target = nativeBed ? bedCentre : centre;
+    // Frame the printed part rather than the full printer bed initially.
+    // An overview is still available from the Isometric camera control.
+    const distance = Math.max(45, size.length() * 1.7);
+    const target = valid ? centre : bedCentre;
     controls.target.copy(target);
     camera.position.copy(target).add(new THREE.Vector3(distance * 0.7, distance * 0.9, distance));
     camera.lookAt(target);
@@ -224,24 +230,30 @@ export default function SlicerToolpath3D({
     const selectedZ = Number.isFinite(activeZ) ? activeZ : Infinity;
     const maxStep = Math.max(0, Number(activeStep) || 0);
     const layerIndexByHeight = new Map(layers.map((height, index) => [Number(height).toFixed(3), index]));
+    const activeIndex = Math.max(0, Number(activeLayer) || 0);
+    const minVisibleIndex = layerDisplay === "current" ? activeIndex
+      : layerDisplay === "context" ? Math.max(0, activeIndex - 8) : 0;
     for (const segment of segments) {
       if (!Array.isArray(segment) || segment.length < 6 ||
           !segment.slice(0, 5).every(Number.isFinite)) continue;
       const [x1, y1, x2, y2, z, feature] = segment;
       if (z > selectedZ + 0.0005) continue;
-      const isCurrent = Math.abs(z - selectedZ) <= 0.0005;
+      const segmentLayerIndex = layerIndexByHeight.get(Number(z).toFixed(3));
+      if (segmentLayerIndex == null || segmentLayerIndex < minVisibleIndex) continue;
+      const isCurrent = segmentLayerIndex === activeIndex;
       if (isCurrent) {
         currentCount += 1;
         if (currentCount > maxStep) continue;
         lastStep = [x2, z, y2];
       }
-      if (visible[feature] === false) continue;
+      if (visible[feature] === false || !featureMatchesFocus(feature, featureFocus)) continue;
       const hex = colourMode === "layer"
         ? new THREE.Color().setHSL(0.56 - 0.44 * (layers.length > 1
           ? Math.max(0, (layerIndexByHeight.get(z.toFixed(3)) ?? -1)) / (layers.length - 1) : 0), 0.85, 0.64)
         : new THREE.Color(colourMode === "solid" ? "#f09a4b" : (colours[feature] || "#b8d4e5"));
-      // Dim completed layers while keeping current-layer paths vivid.
-      if (!isCurrent) hex.multiplyScalar(0.35);
+      // Render only selected layers by default. Optional previous layers
+      // provide subtle context without overwhelming fine surface detail.
+      if (!isCurrent) hex.multiplyScalar(layerDisplay === "context" ? 0.24 : 0.33);
       if (renderMode === "lines") {
         positions.push(x1, z, y1, x2, z, y2);
         for (let index = 0; index < 2; index++) coloursArray.push(hex.r, hex.g, hex.b);
@@ -259,8 +271,7 @@ export default function SlicerToolpath3D({
       const half = width / 2;
       const sideX = -(y2 - y1) / length * half;
       const sideY = (x2 - x1) / length * half;
-      const layerIndex = layers.findIndex(height => Math.abs(height - z) < 0.0005);
-      const priorHeight = layerIndex > 0 ? layers[layerIndex - 1] : 0;
+      const priorHeight = segmentLayerIndex > 0 ? layers[segmentLayerIndex - 1] : 0;
       const beadHeight = Math.max(0.07, Math.min(0.45, z - priorHeight || 0.2));
       const top = z;
       const bottom = z - beadHeight;
@@ -286,8 +297,11 @@ export default function SlicerToolpath3D({
         paths.add(new THREE.LineSegments(geometry,
           new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.98 })));
       } else {
+        // Orca/LibVGCode renders lit bead volume, not only flat face colours.
+        // Three.js supplies normals for correctly lit top and side walls.
+        geometry.computeVertexNormals();
         paths.add(new THREE.Mesh(geometry,
-          new THREE.MeshBasicMaterial({
+          new THREE.MeshLambertMaterial({
             vertexColors: true, side: THREE.DoubleSide, transparent: false,
           })));
       }
@@ -295,7 +309,7 @@ export default function SlicerToolpath3D({
     marker.visible = Boolean(showToolhead && lastStep);
     if (lastStep) marker.position.set(...lastStep);
   }, [segments, layers, activeLayer, activeStep, visible, colourMode, colours, showToolhead,
-    renderMode, nozzleDiameter, bedSize?.[0], bedSize?.[1]]);
+    renderMode, nozzleDiameter, layerDisplay, featureFocus, bedSize?.[0], bedSize?.[1]]);
 
   return <div className="slicerToolpath3D">
     {unavailable ? <div role="status" className="projectUploadHint">
