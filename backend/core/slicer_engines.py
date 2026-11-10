@@ -83,6 +83,13 @@ ENGINES = (
         profile_format="cura-native-unverified",
         cli_reference="https://github.com/Ultimaker/CuraEngine",
     ),
+    SlicerEngine(
+        key="anycubicslicernext",
+        label="Anycubic Slicer Next",
+        upstream="https://github.com/ANYCUBIC-3D/AnycubicSlicerNext",
+        profile_format="anycubic-next-native-unverified",
+        cli_reference="https://github.com/ANYCUBIC-3D/AnycubicSlicerNext",
+    ),
 )
 
 
