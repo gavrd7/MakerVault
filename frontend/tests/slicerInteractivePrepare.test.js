@@ -72,6 +72,19 @@ test("surface picking measures triangle vertices and edges without editing slice
   assert.match(editor, /Three-point circle is a geometric construction/);
   assert.match(editor, /setMeasurePoints\(\[\]\); \}, \[objects\]\)/);
 });
+test("active 3D model has a temporary outline and preserves preview filament colours", () => {
+  const scene = read("SlicerPrepareWorkspace.jsx");
+  const editor = read("SlicerPlateEditor.jsx");
+  assert.match(scene, /setSelectedId\(object.instance_id\)/);
+  assert.match(editor, /selectionOutline = new THREE.BoxHelper\(mesh, 0x39d9ff\)/);
+  assert.match(editor, /selectionOutline\?\.update\(\)/);
+  assert.match(editor, /state\.setSelectionOutline\(selectedMesh \|\| null\)/);
+  assert.match(editor, /mesh\.material\.color\.set\(item.color \|\| PALETTE\[0\]\)/);
+  assert.match(editor, /item.instance_id === selected \? "#168ab4" : "#000000"/);
+  assert.match(editor, /setSelectionOutline\(null\)/);
+  // Sorting or arranging must not activate a model merely because it was last touched.
+  assert.match(editor, /setSelected\("")/);
+});
 test("advanced tools are visibly gated pending safe native transformations", () => {
   const scene = read("SlicerPrepareWorkspace.jsx");
   for (const tool of ["Auto-orient", "Lay on face", "Cut", "Hollow",
