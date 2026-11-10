@@ -1,7 +1,7 @@
-"""Strictly bounded 3MF package generator for prepared multi-STL plates.
+"""Strictly bounded 3MF project generator for independently identified STL instances.
 
-The output contains only standard core 3MF mesh/build data. It does not
-propagate engine-specific settings or silently submit to a printer.
+Optional, validated per-object process metadata is stored in Orca/Bambu
+model_settings.config; this does not itself authorise worker execution.
 """
 import io
 import math
@@ -13,6 +13,7 @@ from defusedxml import ElementTree as SafeET
 
 from .slicer_mesh import MeshInspectionError
 from .slicer_profiles import SlicerProfileError
+from .slicer_process_settings import PROCESS_FIELDS, validate_process_overrides
 
 NS = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
 # Match the validated source-STL limit. Generated XML/archive limits remain
@@ -149,13 +150,31 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth):
     model_xml = ET.tostring(model, encoding="utf-8", xml_declaration=True)
     if len(model_xml) > 96 * 1024 * 1024:
         raise SlicerProfileError("The generated 3MF mesh is too large.")
-    # OrcaSlicer/Creality Print need an explicit plate-to-instance manifest
-    # for multi-object CLI slicing. Core 3MF build items alone are valid 3MF,
-    # but the native CLI may print only the first item without this mapping.
-    # No user-controlled scripts or native settings are embedded.
+    # Preserve Orca's model IDs one-to-one with the 3MF resource IDs.
+    # A distinct <object> entry holds validated native overrides. The
+    # production worker still rejects execution of object-specific edits
+    # until the unmerged-3MF real-binary fixture is approved.
+    per_object = []
+    for item, _raw in objects_with_stl:
+        try:
+            per_object.append(validate_process_overrides(item.get("process_overrides")))
+        except ValueError as exc:
+            raise SlicerProfileError("Invalid native per-object process setting.") from exc
     plate_xml = None
-    if len(objects_with_stl) > 1:
+    if len(objects_with_stl) > 1 or any(per_object):
         manifest = ET.Element("config")
+        for index, overrides in enumerate(per_object, start=1):
+            if not overrides:
+                continue
+            obj_settings = ET.SubElement(manifest, "object", {"id": str(index)})
+            for key, value in sorted(overrides.items()):
+                unit = PROCESS_FIELDS[key][2] if key in PROCESS_FIELDS else ""
+                value_str = str(value)
+                if unit == "%":
+                    value_str += "%"
+                ET.SubElement(obj_settings, "metadata", {
+                    "key": key, "value": value_str,
+                })
         plate = ET.SubElement(manifest, "plate")
         ET.SubElement(plate, "metadata", {"key": "plater_id", "value": "1"})
         for index in range(1, len(objects_with_stl) + 1):
