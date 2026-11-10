@@ -5,6 +5,7 @@ two separated native STL instances and no external assets, scripts or URLs.
 """
 import argparse
 import io
+import struct
 from pathlib import Path
 import sys
 import zipfile
@@ -43,6 +44,26 @@ def generate(path):
     print("Created validated two-object MakerVault 3MF fixture: " + str(output))
 
 
+def cube_fixture_stl(side=20.0):
+    """Closed 12-triangle cube, large enough to compare native wall/infill paths."""
+    p = [
+        (0, 0, 0), (side, 0, 0), (side, side, 0), (0, side, 0),
+        (0, 0, side), (side, 0, side), (side, side, side), (0, side, side),
+    ]
+    faces = [
+        (0, 2, 1), (0, 3, 2), (4, 5, 6), (4, 6, 7),
+        (0, 1, 5), (0, 5, 4), (1, 2, 6), (1, 6, 5),
+        (2, 3, 7), (2, 7, 6), (3, 0, 4), (3, 4, 7),
+    ]
+    triangles = b"".join(
+        struct.pack("<12fH", 0, 0, 1, *p[a], *p[b], *p[d], 0)
+        for a, b, d in faces
+    )
+    return b"MakerVault native object process fixture".ljust(80, b" ") + (
+        struct.pack("<I", len(faces)) + triangles
+    )
+
+
 def object_settings_fixture(target):
     """Create the exact per-object project the real Orca CLI must accept.
 
@@ -50,7 +71,7 @@ def object_settings_fixture(target):
     wall loops and infill percentages. The G-code probe must confirm *both*
     positions extrude before this route is eligible for runtime use.
     """
-    source = fixture_stl()
+    source = cube_fixture_stl()
     entries = [
         ({"x_mm": -35, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100,
           "process_overrides": {"wall_loops": 2, "sparse_infill_density": 15}}, source),
