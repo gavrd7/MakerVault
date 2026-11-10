@@ -631,7 +631,8 @@ def official_profiles(request):
             asset = FileAsset(
                 owner=request.user, name=native_name + (".ini" if engine == "prusaslicer" else ".json"), category="source",
                 metadata={"original_name": native_name + (".ini" if engine == "prusaslicer" else ".json"),
-                          "extension": ".ini" if engine == "prusaslicer" else ".json"},
+                          "extension": ".ini" if engine == "prusaslicer" else ".json",
+                          "slicer_profile_internal": True},
             )
             asset.file = ContentFile(raw, name="official-" + engine + ("-model.ini" if engine == "prusaslicer" else "-profile.json"))
             inspected = inspect_native_profile(asset, engine)
@@ -827,7 +828,8 @@ def customise_profile(request, profile_id):
         asset = FileAsset(
             owner=request.user, name=name + ".json", category="source",
             metadata={"original_name": name + ".json", "extension": ".json",
-                      "slicer_custom_source_profile_id": str(profile.id)},
+                      "slicer_custom_source_profile_id": str(profile.id),
+                      "slicer_profile_internal": True},
         )
         asset.file = ContentFile(edited, name="custom-native-slicer-profile.json")
         inspected = inspect_native_profile(asset, profile.engine)
@@ -891,7 +893,8 @@ def save_process_profile(request, profile_id):
         asset = FileAsset(
             owner=request.user, name=name + ".json", category="source",
             metadata={"original_name": name + ".json", "extension": ".json",
-                      "slicer_custom_source_profile_id": str(profile.pk)},
+                      "slicer_custom_source_profile_id": str(profile.pk),
+                      "slicer_profile_internal": True},
         )
         asset.file = ContentFile(updated, name="custom-native-process-profile.json")
         inspected = inspect_native_profile(asset, profile.engine)
