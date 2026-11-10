@@ -138,6 +138,12 @@ class DirectSingleModelSliceTests(SimpleTestCase):
             {**item, "scale_xyz_percent": [100, 100, 100]}
         ]))
 
+    def test_single_object_native_overrides_must_never_use_unconfigured_stl(self):
+        item = {"asset_id": "source", "x_mm": 0, "y_mm": 0,
+                "rotation_deg": 0, "scale_percent": 100,
+                "process_overrides": {"wall_loops": 5}}
+        self.assertFalse(_single_unmodified_stl([item]))
+
     def test_transforms_or_multiple_instances_require_project_path(self):
         item = {"asset_id": "source", "x_mm": 0, "y_mm": 0,
                 "rotation_deg": 0, "scale_percent": 100}
