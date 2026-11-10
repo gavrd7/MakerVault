@@ -27,9 +27,11 @@ test("underside build plate visibility applies to native and procedural bed geom
 });
 
 test("visibility setting adapts to mobile view without changing model meshes", () => {
-  assert.match(styles, /\.slicerPlateCameraToolbar \.slicerBedVisibilityControl/);
-  assert.match(styles, /\.slicerBedVisibilityControl select/);
+  assert.match(styles, /\.slicerPlateDisplayOptionsRow \.slicerBedVisibilityControl/);
+  assert.match(styles, /\.slicerPlateDisplayOptionsRow \.slicerBedVisibilityControl select/);
   assert.match(editor, /scene\.add\(mesh\)/);
+  assert.ok(editor.indexOf('className="slicerBedVisibilityControl"') > editor.indexOf('<legend>Build plate display</legend>'));
+  assert.ok(editor.indexOf('className="slicerBedVisibilityControl"') > editor.indexOf('className="slicerPlateCanvasViewport"'));
   assert.doesNotMatch(editor, /for \(const mesh of meshes\.values\(\)\) mesh\.visible = false/);
 });
 
