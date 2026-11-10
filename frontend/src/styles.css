@@ -4320,9 +4320,21 @@ a:focus-visible,
   display:inline-flex;align-items:center;justify-content:center;
   min-height:35px;line-height:1.25;padding:6px 11px;border-radius:8px;
 }
+.slicerPlateCameraToolbar .slicerBedVisibilityControl{
+  display:inline-flex;align-items:center;gap:7px;min-width:0;
+  font-size:.78rem;color:var(--muted,#a6b5c5);
+}
+.slicerBedVisibilityControl select{
+  width:auto;max-width:230px;min-width:0;min-height:35px;
+  border:1px solid var(--border,#394958);border-radius:8px;
+  padding:5px 9px;font-size:.82rem;
+}
+
 @media(max-width:620px){
   .slicerPlateCameraToolbar{justify-content:flex-start}
   .slicerPlateCameraToolbar button{flex:1 1 auto}
+  .slicerPlateCameraToolbar .slicerBedVisibilityControl{flex:1 1 100%;justify-content:space-between}
+  .slicerBedVisibilityControl select{flex:1 1 auto;max-width:100%}
 }
 
 /* Plate identification stays visible before the canvas without obscuring
