@@ -83,7 +83,7 @@ test("active 3D model has a temporary outline and preserves preview filament col
   assert.match(editor, /item.instance_id === selected \? "#168ab4" : "#000000"/);
   assert.match(editor, /setSelectionOutline\(null\)/);
   // Sorting or arranging must not activate a model merely because it was last touched.
-  assert.match(editor, /setSelected\("")/);
+  assert.match(editor, /setSelected\(""\)/);
 });
 test("advanced tools are visibly gated pending safe native transformations", () => {
   const scene = read("SlicerPrepareWorkspace.jsx");
