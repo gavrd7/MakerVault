@@ -196,11 +196,17 @@ def _execution_binary(binary: Path):
     return entry
 
 
-def orca_command(binary: Path, workdir: Path):
-    """Fixed single-model, single-plate slicing command."""
+def orca_command(binary: Path, workdir: Path, *,
+                 experimental_all_plates=False, experimental_no_arrange=False):
+    """Fixed slicing command; experimental flags are for isolated probes only."""
     if binary.is_symlink() or not binary.is_file() or not os.access(binary, os.X_OK):
         raise WorkerError("Approved OrcaSlicer binary is unavailable.")
+    if (not isinstance(experimental_all_plates, bool) or
+            not isinstance(experimental_no_arrange, bool)):
+        raise WorkerError("Invalid isolated slicer probe options.")
     is_project = (workdir / "input.3mf").exists()
+    if (experimental_all_plates or experimental_no_arrange) and not is_project:
+        raise WorkerError("Experimental plate mode requires a 3MF input.")
     model = _regular_file(workdir, "input.3mf" if is_project else "input.stl", MAX_MODEL_BYTES)
     if is_project:
         validate_worker_3mf(model.read_bytes())
@@ -225,21 +231,25 @@ def orca_command(binary: Path, workdir: Path):
         str(profiles[2]) + ";" + str(profiles[0]),
         "--load-filaments", str(profiles[1]),
         "--load-defaultfila",
-        *(["--arrange", "1"] if not is_project else []),
-        "--slice", "1",
+        *(["--arrange", "1"] if not is_project else
+          ["--arrange", "0"] if experimental_no_arrange else []),
+        "--slice", "0" if experimental_all_plates else "1",
         "--mtcpp", "500000", "--mstpp", "300",
         "--outputdir", str(outdir),
     ]
 
 
-def run_orca(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS):
+def run_orca(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
+             experimental_all_plates=False, experimental_no_arrange=False):
     """Run the proposed Orca integration inside an already isolated worker."""
     if not isinstance(timeout_seconds, int) or not 1 <= timeout_seconds <= 900:
         raise WorkerError("Invalid slice timeout.")
     workdir = Path(workdir).resolve(strict=True)
     if not workdir.is_dir():
         raise WorkerError("Worker scratch directory is invalid.")
-    command = orca_command(Path(binary), workdir)
+    command = orca_command(Path(binary), workdir,
+                           experimental_all_plates=experimental_all_plates,
+                           experimental_no_arrange=experimental_no_arrange)
     try:
         proc = subprocess.Popen(
             command, cwd=str(workdir),
