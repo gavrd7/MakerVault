@@ -323,6 +323,8 @@ def _single_unmodified_stl(plate):
     if not isinstance(plate, list) or len(plate) != 1 or not isinstance(plate[0], dict):
         return False
     item = plate[0]
+    if item.get("process_overrides"):
+        return False  # A native object setting must never fall back to plain STL.
     try:
         if any(float(item[key]) != expected for key, expected in (
             ("x_mm", 0), ("y_mm", 0), ("rotation_deg", 0),
