@@ -144,9 +144,11 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth):
     total_triangles = 0
     # Only native per-object projects use baked individual placements. Existing
     # generic 3MF exports and their transform semantics remain unchanged.
-    bake_native_positions = any(isinstance(entry[0], dict) and
-                                entry[0].get("process_overrides")
-                                for entry in objects_with_stl)
+    bake_native_positions = any(
+        isinstance(entry, tuple) and len(entry) == 2 and
+        isinstance(entry[0], dict) and bool(entry[0].get("process_overrides"))
+        for entry in objects_with_stl
+    )
     for index, pair in enumerate(objects_with_stl, start=1):
         if not isinstance(pair, tuple) or len(pair) != 2:
             raise SlicerProfileError("Invalid 3MF plate input.")
