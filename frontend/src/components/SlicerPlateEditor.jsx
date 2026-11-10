@@ -6,7 +6,8 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 import { SlicerOrientationCube } from "./slicerOrientationCube";
 import { apiFetch } from "../api";
-import { plateExtentWarning, plateFootprintsOverlap, autoArrangePlate, plateModelMeasurement } from "./slicerPlateGeometry";
+import { plateExtentWarning, plateFootprintsOverlap, autoArrangePlate, plateModelMeasurement,
+  measurementDistance, measurementCircle, measurementFormat } from "./slicerPlateGeometry";
 import { nativeBedArtwork } from "./slicerNativePlateArt";
 import makerVaultLogoSvg from "../assets/slicer-bed-art/makervault-official-logo.svg?raw";
 
@@ -210,6 +211,11 @@ export default function SlicerPlateEditor({
   const [error, setError] = useState("");
   const [arrangeNotice, setArrangeNotice] = useState("");
   const [dimensions, setDimensions] = useState({});
+  const [measureMode, setMeasureMode] = useState("distance");
+  const [measureUnit, setMeasureUnit] = useState("mm");
+  const [measurePoints, setMeasurePoints] = useState([]);
+  const latestMeasurementRef = useRef({ active: false, mode: "distance" });
+  latestMeasurementRef.current = { active: measurementVisible, mode: measureMode };
   dimensionsRef.current = dimensions;
   const sourceFiles = useMemo(() => [
     ...localAssets,
@@ -224,6 +230,10 @@ export default function SlicerPlateEditor({
   // mesh should receive a visual highlight.
   const chosen = objects.find(item => item.instance_id === selected) || objects[0] || null;
   const selectedMeasurement = chosen ? plateModelMeasurement(chosen, dimensions[chosen.instance_id]) : null;
+  const pinDistance = measurePoints.length === 2 && measureMode === "distance"
+    ? measurementDistance(measurePoints[0].point, measurePoints[1].point) : null;
+  const pinCircle = measurePoints.length === 3 && measureMode === "circle"
+    ? measurementCircle(...measurePoints.map(pin => pin.point)) : null;
   const objectKey = objects.map(item => item.instance_id + ":" + item.asset_id).join("|");
   const extentWarnings = objects.map((item, index) => ({
     id: item.instance_id,
@@ -792,6 +802,8 @@ export default function SlicerPlateEditor({
     });
 
     const meshes = new Map();
+    const measurementOverlay = new THREE.Group();
+    scene.add(measurementOverlay);
     const raycaster = new THREE.Raycaster();
     const bedPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
     let dragging = null;
@@ -810,6 +822,55 @@ export default function SlicerPlateEditor({
       if (!canEdit || event.button > 0 || transform.dragging) return;
       rayFromPointer(event);
       const hits = raycaster.intersectObjects([...meshes.values()], false);
+      if (latestMeasurementRef.current.active) {
+        if (!hits.length) return;
+        const hit = hits[0];
+        const target = hit.object;
+        const world = hit.point.clone();
+        let snap = "Surface";
+        // STL is triangulated, so prefer a nearby real triangle vertex or
+        // straight mesh edge. Never claim that an arbitrary triangle is a
+        // recognised CAD circle or a fitted cylinder.
+        if (hit.face) {
+          const position = target.geometry.getAttribute("position");
+          if (position) {
+            target.updateMatrixWorld(true);
+            const vertices = [hit.face.a, hit.face.b, hit.face.c].map(index =>
+              new THREE.Vector3().fromBufferAttribute(position, index)
+                .applyMatrix4(target.matrixWorld));
+            const closestVertex = vertices.reduce((best, point) =>
+              point.distanceTo(hit.point) < best.distanceTo(hit.point) ? point : best,
+            vertices[0]);
+            const vertexDistance = closestVertex.distanceTo(hit.point);
+            if (vertexDistance <= 2) {
+              world.copy(closestVertex);
+              snap = "Vertex";
+            } else {
+              let bestEdge = null, distance = Infinity;
+              for (let i = 0; i < 3; i++) {
+                const a = vertices[i], b = vertices[(i + 1) % 3];
+                const point = new THREE.Line3(a, b).closestPointToPoint(hit.point, true,
+                  new THREE.Vector3());
+                const candidate = point.distanceTo(hit.point);
+                if (candidate < distance) { distance = candidate; bestEdge = point; }
+              }
+              if (distance <= 1.5 && bestEdge) {
+                world.copy(bestEdge);
+                snap = "Triangle edge";
+              }
+            }
+          }
+        }
+        const pin = { point: [world.x, world.y, world.z],
+          instanceId: target.userData.instanceId, snap };
+        setSelected(target.userData.instanceId);
+        setMeasurePoints(current => {
+          const max = latestMeasurementRef.current.mode === "circle" ? 3 : 2;
+          return current.length >= max ? [pin] : [...current, pin];
+        });
+        event.preventDefault();
+        return;
+      }
       if (!hits.length) {
         setSelected("");
         exitToolModeRef.current?.();
@@ -921,7 +982,7 @@ export default function SlicerPlateEditor({
       renderer.render(scene, camera);
       orientationCube.render();
     });
-    sceneRef.current = { scene, meshes, transform, camera, controls, bedX, bedY };
+    sceneRef.current = { scene, meshes, transform, camera, controls, bedX, bedY, measurementOverlay };
     return () => {
       disposed = true;
       sceneRef.current = null;
@@ -937,6 +998,12 @@ export default function SlicerPlateEditor({
       transform.detach();
       scene.remove(transform.getHelper());
       transform.dispose();
+      for (const item of [...measurementOverlay.children]) {
+        measurementOverlay.remove(item);
+        item.geometry?.dispose();
+        item.material?.dispose();
+      }
+      scene.remove(measurementOverlay);
       for (const mesh of meshes.values()) {
         scene.remove(mesh);
         mesh.geometry.dispose();
@@ -1066,6 +1133,38 @@ export default function SlicerPlateEditor({
       state.transform.detach();
     }
   }, [objects, selected, toolMode, canEdit]);
+
+  // Measured world points would become stale after a model is transformed.
+  // Clear them rather than presenting a measurement for old geometry.
+  useEffect(() => { setMeasurePoints([]); }, [objects]);
+  useEffect(() => {
+    if (!measurementVisible) setMeasurePoints([]);
+  }, [measurementVisible]);
+  useEffect(() => {
+    const state = sceneRef.current;
+    if (!state?.measurementOverlay) return;
+    const overlay = state.measurementOverlay;
+    for (const item of [...overlay.children]) {
+      overlay.remove(item);
+      item.geometry?.dispose();
+      item.material?.dispose();
+    }
+    if (!measurementVisible) return;
+    const points = measurePoints.map(pin => new THREE.Vector3(...pin.point));
+    for (const point of points) {
+      const marker = new THREE.Mesh(new THREE.SphereGeometry(1.65, 10, 8),
+        new THREE.MeshBasicMaterial({ color: "#facc15", depthTest: false }));
+      marker.position.copy(point);
+      marker.renderOrder = 101;
+      overlay.add(marker);
+    }
+    if (points.length >= 2) {
+      const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),
+        new THREE.LineBasicMaterial({ color: "#facc15", depthTest: false }));
+      line.renderOrder = 100;
+      overlay.add(line);
+    }
+  }, [measurePoints, measurementVisible]);
 
   function setPlateCamera(view) {
     const state = sceneRef.current;
@@ -1234,15 +1333,57 @@ export default function SlicerPlateEditor({
 
     {measurementVisible && chosen && <section className="slicerPlateMeasurement" role="region"
       aria-label="Selected model measurements">
-      <h5>Selected model measurements</h5>
+      <h5>Measure geometry</h5>
+      <div className="slicerMeasurementActions">
+        <label>Measurement
+          <select value={measureMode} onChange={event => {
+            setMeasureMode(event.target.value);
+            setMeasurePoints([]);
+          }}>
+            <option value="distance">Distance · two pins</option>
+            <option value="circle">Construct circle · three pins</option>
+          </select>
+        </label>
+        <label>Units
+          <select value={measureUnit} onChange={event => setMeasureUnit(event.target.value)}>
+            <option value="mm">Millimetres (mm)</option>
+            <option value="in">Inches (in)</option>
+          </select>
+        </label>
+        <button type="button" disabled={!measurePoints.length} onClick={() => setMeasurePoints([])}>
+          Clear pins
+        </button>
+      </div>
+      <p className="slicerPlateHint">Click {measureMode === "circle" ? "three" : "two"} places on
+        a model surface to drop measurement pins. Pins snap to nearby STL triangle vertices
+        or edges. Orbit the model to reach other faces. Clicking again after completion starts
+        a new measurement.</p>
+      {measurePoints.length > 0 && <div role="status" className="slicerMeasurementResult">
+        {measurePoints.map((pin, index) => <div key={index}>
+          Pin {index + 1} · {pin.snap} · X {measurementFormat(pin.point[0], measureUnit)},
+          Y {measurementFormat(pin.point[1], measureUnit)},
+          Z {measurementFormat(pin.point[2], measureUnit)}
+        </div>)}
+        {pinDistance !== null && <strong>3D distance: {measurementFormat(pinDistance, measureUnit)}</strong>}
+        {measureMode === "circle" && measurePoints.length === 3 &&
+          (pinCircle ? <div><strong>Circle diameter: {measurementFormat(pinCircle.diameter, measureUnit)}</strong>
+            <span> · Radius: {measurementFormat(pinCircle.radius, measureUnit)}</span>
+            <span> · Circumference: {measurementFormat(pinCircle.circumference, measureUnit)}</span>
+          </div> : <div>Three collinear or nearly coincident points cannot define a circle.</div>)}
+      </div>}
+      {measureMode === "circle" && <p className="slicerPlateHint">
+        Three-point circle is a geometric construction, not automatic detection of a
+        true circular hole or cylindrical face in a triangulated STL.
+      </p>}
+      <h5>Selected model bounding box</h5>
       {selectedMeasurement ? <>
         <dl className="slicerMeasurementGrid">
-          <div><dt>X envelope</dt><dd>{pretty(selectedMeasurement.width)} mm</dd></div>
-          <div><dt>Y envelope</dt><dd>{pretty(selectedMeasurement.depth)} mm</dd></div>
-          <div><dt>Model height</dt><dd>{pretty(selectedMeasurement.height)} mm</dd></div>
-          <div><dt>Centre X / Y</dt><dd>{pretty(chosen.x_mm)} / {pretty(chosen.y_mm)} mm</dd></div>
-          <div><dt>X bounds</dt><dd>{pretty(selectedMeasurement.minX)} to {pretty(selectedMeasurement.maxX)} mm</dd></div>
-          <div><dt>Y bounds</dt><dd>{pretty(selectedMeasurement.minY)} to {pretty(selectedMeasurement.maxY)} mm</dd></div>
+          <div><dt>X envelope</dt><dd>{measurementFormat(selectedMeasurement.width, measureUnit)}</dd></div>
+          <div><dt>Y envelope</dt><dd>{measurementFormat(selectedMeasurement.depth, measureUnit)}</dd></div>
+          <div><dt>Model height</dt><dd>{measurementFormat(selectedMeasurement.height, measureUnit)}</dd></div>
+          <div><dt>Centre X / Y</dt><dd>{measurementFormat(chosen.x_mm, measureUnit)} / {measurementFormat(chosen.y_mm, measureUnit)}</dd></div>
+          <div><dt>X bounds</dt><dd>{pretty(selectedMeasurement.minX)} to {measurementFormat(selectedMeasurement.maxX, measureUnit)}</dd></div>
+          <div><dt>Y bounds</dt><dd>{pretty(selectedMeasurement.minY)} to {measurementFormat(selectedMeasurement.maxY, measureUnit)}</dd></div>
         </dl>
         <p className="slicerPlateHint">Read-only STL bounding-box estimate, accounting for X/Y/Z scaling and Z rotation.
           X/Y are relative to the plate centre. This is not face-to-face measurement,
