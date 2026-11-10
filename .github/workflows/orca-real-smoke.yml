@@ -33,7 +33,11 @@ jobs:
           python3 scripts/build_slicer_multimodel_fixture.py --output /tmp/makervault-orca-plate.3mf \
             --compound-output /tmp/makervault-orca-compound.3mf \
             --object-output /tmp/makervault-orca-object-settings.3mf \
-            --object-reverse-output /tmp/makervault-orca-object-reversed.3mf
+            --object-reverse-output /tmp/makervault-orca-object-reversed.3mf \
+            --object-wall-output /tmp/makervault-orca-wall-only.3mf \
+            --object-wall-reverse-output /tmp/makervault-orca-wall-reversed.3mf \
+            --object-infill-output /tmp/makervault-orca-infill-only.3mf \
+            --object-infill-reverse-output /tmp/makervault-orca-infill-reversed.3mf
       - name: Download SHA-256 verified official Orca 2.4.2 and build isolated image
         run: python3 scripts/install_slicer_staging.py prepare-orca
       - name: Check restricted worker loads real executable
@@ -140,6 +144,44 @@ jobs:
             --process /tmp/makervault-orca-k1/process.json \
             --model /tmp/makervault-orca-object-reversed.3mf \
             --verify-object-effects --reverse-object-effects
+      - name: Prove wall-loop override alone changes the correct object
+        id: native_wall_effect
+        continue-on-error: true
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k1/printer.json \
+            --filament /tmp/makervault-orca-k1/filament.json \
+            --process /tmp/makervault-orca-k1/process.json \
+            --model /tmp/makervault-orca-wall-only.3mf --verify-object-effects
+      - name: Prove wall-loop override after swapping objects
+        id: native_wall_reverse
+        continue-on-error: true
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k1/printer.json \
+            --filament /tmp/makervault-orca-k1/filament.json \
+            --process /tmp/makervault-orca-k1/process.json \
+            --model /tmp/makervault-orca-wall-reversed.3mf \
+            --verify-object-effects --reverse-object-effects
+      - name: Prove infill-density override alone changes the correct object
+        id: native_infill_effect
+        continue-on-error: true
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k1/printer.json \
+            --filament /tmp/makervault-orca-k1/filament.json \
+            --process /tmp/makervault-orca-k1/process.json \
+            --model /tmp/makervault-orca-infill-only.3mf --verify-object-effects
+      - name: Prove infill-density override after swapping objects
+        id: native_infill_reverse
+        continue-on-error: true
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k1/printer.json \
+            --filament /tmp/makervault-orca-k1/filament.json \
+            --process /tmp/makervault-orca-k1/process.json \
+            --model /tmp/makervault-orca-infill-reversed.3mf \
+            --verify-object-effects --reverse-object-effects
       - name: Summarize two-way per-object Orca verification gate
         if: always() && steps.native_object_effects.outcome != 'skipped'
         shell: bash
@@ -148,6 +190,8 @@ jobs:
             echo "### Per-object Orca 2.4.2 evidence"
             echo "- Normal assignments: ${{ steps.native_object_effects.outcome }}"
             echo "- Reversed assignments: ${{ steps.native_object_reverse.outcome }}"
+            echo "- Wall-only original/reversed: ${{ steps.native_wall_effect.outcome }} / ${{ steps.native_wall_reverse.outcome }}"
+            echo "- Infill-only original/reversed: ${{ steps.native_infill_effect.outcome }} / ${{ steps.native_infill_reverse.outcome }}"
             if [[ "${{ steps.native_object_effects.outcome }}" == "success" && "${{ steps.native_object_reverse.outcome }}" == "success" ]]; then
               echo "- Result: **Both directions demonstrate settings effects**. Production admission remains separately gated."
             else
