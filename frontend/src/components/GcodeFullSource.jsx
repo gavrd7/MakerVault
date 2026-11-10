@@ -46,6 +46,28 @@ export default function GcodeFullSource({ fileId }) {
     }
     return [...names];
   }, [lines]);
+  const objectStats = useMemo(() => {
+    const stats = new Map();
+    let object = null;
+    let feature = "";
+    for (const line of lines) {
+      const start = /^EXCLUDE_OBJECT_START\s+NAME=([^\s]+)/.exec(line);
+      if (start) { object = start[1]; if (!stats.has(object)) stats.set(object, { outer: 0, inner: 0, sparse: 0, solid: 0, total: 0 }); continue; }
+      if (/^EXCLUDE_OBJECT_END\b/.test(line)) { object = null; continue; }
+      const type = /^;TYPE:(.*)/.exec(line);
+      if (type) { feature = type[1].trim().toLowerCase(); continue; }
+      if (!object || !/^G[123]\s/.test(line)) continue;
+      const extrusion = /(?:^|\s)E(-?\d+(?:\.\d+)?)/.exec(line);
+      if (!extrusion || Number(extrusion[1]) <= 0) continue;
+      const stat = stats.get(object);
+      stat.total += 1;
+      if (feature.includes("outer wall") || feature.includes("external perimeter")) stat.outer += 1;
+      else if (feature.includes("inner wall") || feature === "perimeter") stat.inner += 1;
+      else if (feature.includes("sparse infill") || feature === "internal infill") stat.sparse += 1;
+      else if (feature.includes("solid infill")) stat.solid += 1;
+    }
+    return [...stats].map(([name, counts]) => ({ name, ...counts }));
+  }, [lines]);
   const pageText = useMemo(() => lines.slice(page * PAGE_LINES, (page + 1) * PAGE_LINES)
     .map((line, index) => `${page * PAGE_LINES + index + 1}: ${line}`).join("\n"), [lines, page]);
 
@@ -101,6 +123,17 @@ export default function GcodeFullSource({ fileId }) {
             {objects.map(name => <option key={name} value={name}>{name}</option>)}
           </select>
         </label>
+      </div>}
+      {objectStats.length > 0 && <div style={{ overflowX: "auto" }}>
+        <h4>Per-object toolpath evidence</h4>
+        <table className="dataTable" style={{ width: "100%" }}>
+          <thead><tr><th>Object</th><th>Outer-wall extrusion moves</th><th>Inner-wall extrusion moves</th><th>Sparse-infill extrusion moves</th><th>Solid-infill extrusion moves</th></tr></thead>
+          <tbody>{objectStats.map(item => <tr key={item.name}>
+            <td>{item.name}</td><td>{item.outer.toLocaleString()}</td><td>{item.inner.toLocaleString()}</td>
+            <td>{item.sparse.toLocaleString()}</td><td>{item.solid.toLocaleString()}</td>
+          </tr>)}</tbody>
+        </table>
+        <small>These are G-code extrusion command counts, not wall-loop counts or infill percentages. Different counts are evidence of distinct paths, but cannot alone prove that a requested 5-wall or 50% infill override was applied. The slicer's saved per-object settings should be checked separately.</small>
       </div>}
       <div className="formActions" style={{ justifyContent: "space-between", alignItems: "center" }}>
         <button type="button" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>Previous page</button>
