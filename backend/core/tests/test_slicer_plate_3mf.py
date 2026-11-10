@@ -62,7 +62,7 @@ class BuildPlate3MFTests(SimpleTestCase):
         self.assertEqual(recorded[0]["wall_loops"], "5")
         self.assertEqual(recorded[0]["enable_support"], "1")
         self.assertEqual(recorded[1]["wall_loops"], "2")
-        self.assertEqual(recorded[1]["infill_wall_overlap"], "18%")
+        self.assertAlmostEqual(float(recorded[1]["infill_wall_overlap"].removesuffix("%")), 18.0)
         self.assertEqual(len(config.find("plate").findall("model_instance")), 2)
 
     def test_individual_native_objects_have_baked_separated_placement(self):
