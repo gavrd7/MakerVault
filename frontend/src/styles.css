@@ -4700,3 +4700,28 @@ a:focus-visible,
   min-width:0;
   overflow-wrap:anywhere;
 }
+
+
+/* Per-instance settings reuse the same native controls as Global while
+   making the selected model and draft-only execution limitation explicit. */
+.slicerPrepareSettings .slicerObjectSettingsInfo{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:10px 12px;
+  border:1px solid var(--border, #334256);
+  border-radius:10px;
+  margin:0 0 12px;
+  min-width:0;
+}
+.slicerPrepareSettings .slicerObjectSettingsInfo label{
+  font-weight:650;
+}
+.slicerPrepareSettings .slicerObjectSettingsInfo select{
+  width:100%;
+  min-width:0;
+  max-width:100%;
+}
+.slicerPrepareSettings .slicerObjectSettingsInfo small{
+  line-height:1.45;
+}
