@@ -1508,7 +1508,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       </div>
 
     </Modal>}
-    {showDrafts && <Modal title={previewJob ? "Sliced G-code preview" : "Saved slicing drafts"}
+    {showDrafts && <Modal className={previewJob ? "slicerPreviewModal" : ""} title={previewJob ? "Sliced G-code preview" : "Saved slicing drafts"}
       onClose={() => { setShowDrafts(false); setPreviewJobId(null); }} wide>
       {previewJob ? <>
         <div className="formActions" style={{ justifyContent: "flex-start" }}>
