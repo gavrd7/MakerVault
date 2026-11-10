@@ -316,10 +316,15 @@ class SliceJobApiTests(TestCase):
         job.settings["plate_objects"] = stored
         # The API draft deliberately has no native printer profile selected.
         # Mock its profile geometry to isolate per-object admission here.
+        from types import SimpleNamespace
         from unittest.mock import patch
-        job.printer_profile_id = "native-fixture-printer"
+        validation_job = SimpleNamespace(
+            settings=job.settings, engine="orcaslicer",
+            printer_profile_id="fixture-printer",
+            printer_profile=SimpleNamespace(kind="printer"),
+        )
         with patch("core.slicer_execution.trusted_plate_dimensions", return_value=(220, 220)):
-            self.assertTrue(_validate_plate_execution(job))
+            self.assertTrue(_validate_plate_execution(validation_job))
 
     def test_invalid_object_setting_is_rejected_before_draft_creation(self):
         self.client.force_login(self.owner)
