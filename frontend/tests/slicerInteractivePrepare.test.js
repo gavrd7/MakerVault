@@ -63,7 +63,8 @@ test("surface picking measures triangle vertices and edges without editing slice
   assert.match(editor, /hit\.face\.a, hit\.face\.b, hit\.face\.c/);
   assert.match(editor, /closestPointToPoint\(hit\.point, true/);
   assert.match(editor, /bestEdgeLength = a\.distanceTo\(b\)/);
-  assert.match(editor, /STL triangle edge length:/);
+  assert.match(editor, /Triangle segment length:/);
+  assert.match(scene, /measureSnapMode=\{measureSnapMode\}/);
   assert.match(editor, /setMeasurePoints\(current =>/);
   assert.match(editor, /3D distance:/);
   assert.match(scene, /Three-point circle/);
@@ -79,7 +80,7 @@ test("Measure options open at the toolbar while a compact readout lives at top l
   assert.match(scene, /name: "Measure", target: "measure", icon: "measure", expandable: true/);
   assert.match(scene, /aria-controls=\{tool\.expandable \? "slicer-measure-toolbar-options"/);
   assert.match(scene, /className="slicerToolOptions"/);
-  assert.match(scene, /measureMode=\{measureMode\} measureUnit=\{measureUnit\} measureClearVersion=\{measureClearVersion\}/);
+  assert.match(scene, /measureMode=\{measureMode\} measureUnit=\{measureUnit\} measureSnapMode=\{measureSnapMode\}\s+measureClearVersion=\{measureClearVersion\}/);
   assert.match(scene, /setMeasureClearVersion\(value => value \+ 1\)/);
   assert.match(scene, /onMeasurePinPlaced=\{\(\) => setMeasureOptionsOpen\(false\)\}/);
   assert.match(scene, /setMeasureOptionsOpen\(current => !current\)/);
