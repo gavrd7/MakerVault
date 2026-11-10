@@ -40,7 +40,7 @@ def _pinned_image(config=DOTENV):
     return image
 
 
-def probe(printer, filament, process, *, model=None, compound=False, experimental_all_plates=False, experimental_no_arrange=False, config=DOTENV, runner=subprocess.run):
+def probe(printer, filament, process, *, model=None, compound=False, experimental_all_plates=False, experimental_no_arrange=False, verify_object_effects=False, config=DOTENV, runner=subprocess.run):
     """Exercise real engine without app, network, Docker socket or host mounts."""
     image = _pinned_image(config)
     sources = {"printer": printer, "filament": filament, "process": process}
@@ -97,6 +97,8 @@ def probe(printer, filament, process, *, model=None, compound=False, experimenta
                 command.append("--experimental-all-plates")
             if experimental_no_arrange:
                 command.append("--experimental-no-arrange")
+            if verify_object_effects:
+                command.append("--verify-object-effects")
         return runner(command, check=False).returncode
 
 
@@ -108,11 +110,13 @@ def main(argv=None):
     parser.add_argument("--compound", action="store_true", help="Experimental combined-mesh 3MF geometry-island test")
     parser.add_argument("--experimental-all-plates", action="store_true", help="Offline diagnostic: slice all native plates")
     parser.add_argument("--experimental-no-arrange", action="store_true", help="Offline diagnostic: disable native auto-arrange")
+    parser.add_argument("--verify-object-effects", action="store_true", help="Require measurable differences between the two native cube objects")
     args = parser.parse_args(argv)
     try:
         return probe(args.printer, args.filament, args.process, model=args.model, compound=args.compound,
                      experimental_all_plates=args.experimental_all_plates,
-                     experimental_no_arrange=args.experimental_no_arrange)
+                     experimental_no_arrange=args.experimental_no_arrange,
+                     verify_object_effects=args.verify_object_effects)
     except (ValueError, OSError, subprocess.SubprocessError) as exc:
         print("Offline Orca acceptance probe refused: " + str(exc), file=sys.stderr)
         return 1
