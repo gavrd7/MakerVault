@@ -102,10 +102,11 @@ The planned administrator workflow is to select an engine and supported pinned v
 
 The long-term goal is a single MakerVault interface with independently installable
 slicing engines: **OrcaSlicer**, **Creality Print**, **Bambu Studio**,
-**PrusaSlicer**, **Snapmaker Orca**, **ElegooSlicer**, and **UltiMaker Cura**
-(with a separately tested CuraEngine backend). Other manufacturer engines may
-follow once their executable, native profiles, licensing, and output pass
-isolated acceptance testing. ElegooSlicer and UltiMaker Cura are currently
+**PrusaSlicer**, **Snapmaker Orca**, **ElegooSlicer**, **UltiMaker Cura**
+(with a separately tested CuraEngine backend), and **Anycubic Slicer Next**.
+Other manufacturer engines may follow once their executable, native profiles,
+licensing, and output pass isolated acceptance testing. ElegooSlicer,
+UltiMaker Cura and Anycubic Slicer Next are currently
 **roadmap candidates, not working integrations**. Listing an engine does not
 make it installable, verified, or ready to slice.
 
