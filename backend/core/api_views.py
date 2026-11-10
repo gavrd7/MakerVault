@@ -2,6 +2,7 @@ from .creality_material_database import MaterialDatabaseError, pull_creality_mat
 from .models import PrinterMaterialDatabaseSnapshot
 from .filament_manufacturers import resolve_filament_manufacturer
 import hashlib
+import math
 import json
 import plistlib
 import uuid
@@ -2422,7 +2423,7 @@ def file_gcode_layer(request, asset_id):
         return _error("Only plain-text G-code can be inspected.", status=400)
     try:
         layer_z = float(request.GET.get("z", ""))
-        if not 0 <= layer_z <= 2000 or not __import__("math").isfinite(layer_z):
+        if not 0 <= layer_z <= 2000 or not math.isfinite(layer_z):
             raise ValueError()
     except (ValueError, TypeError):
         return _error("Choose a valid layer Z between 0 and 2000 mm.", status=400)
