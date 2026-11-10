@@ -828,6 +828,7 @@ export default function SlicerPlateEditor({
         const target = hit.object;
         const world = hit.point.clone();
         let snap = "Surface";
+        let edgeLength = null;
         // STL is triangulated, so prefer a nearby real triangle vertex or
         // straight mesh edge. Never claim that an arbitrary triangle is a
         // recognised CAD circle or a fitted cylinder.
@@ -846,23 +847,28 @@ export default function SlicerPlateEditor({
               world.copy(closestVertex);
               snap = "Vertex";
             } else {
-              let bestEdge = null, distance = Infinity;
+              let bestEdge = null, distance = Infinity, bestEdgeLength = null;
               for (let i = 0; i < 3; i++) {
                 const a = vertices[i], b = vertices[(i + 1) % 3];
                 const point = new THREE.Line3(a, b).closestPointToPoint(hit.point, true,
                   new THREE.Vector3());
                 const candidate = point.distanceTo(hit.point);
-                if (candidate < distance) { distance = candidate; bestEdge = point; }
+                if (candidate < distance) {
+                  distance = candidate;
+                  bestEdge = point;
+                  bestEdgeLength = a.distanceTo(b);
+                }
               }
               if (distance <= 1.5 && bestEdge) {
                 world.copy(bestEdge);
                 snap = "Triangle edge";
+                edgeLength = bestEdgeLength;
               }
             }
           }
         }
         const pin = { point: [world.x, world.y, world.z],
-          instanceId: target.userData.instanceId, snap };
+          instanceId: target.userData.instanceId, snap, edgeLength };
         setSelected(target.userData.instanceId);
         setMeasurePoints(current => {
           const max = latestMeasurementRef.current.mode === "circle" ? 3 : 2;
@@ -1363,6 +1369,7 @@ export default function SlicerPlateEditor({
           Pin {index + 1} · {pin.snap} · X {measurementFormat(pin.point[0], measureUnit)},
           Y {measurementFormat(pin.point[1], measureUnit)},
           Z {measurementFormat(pin.point[2], measureUnit)}
+          {pin.edgeLength != null && <small> · STL triangle edge length: {measurementFormat(pin.edgeLength, measureUnit)}</small>}
         </div>)}
         {pinDistance !== null && <strong>3D distance: {measurementFormat(pinDistance, measureUnit)}</strong>}
         {measureMode === "circle" && measurePoints.length === 3 &&
