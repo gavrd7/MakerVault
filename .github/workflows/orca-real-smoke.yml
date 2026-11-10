@@ -31,7 +31,8 @@ jobs:
           python3 scripts/build_orca_reference_fixture.py --printer k2 --output /tmp/makervault-orca-k2
           python3 scripts/build_orca_reference_fixture.py --printer prusa-mk4 --output /tmp/makervault-orca-prusa
           python3 scripts/build_slicer_multimodel_fixture.py --output /tmp/makervault-orca-plate.3mf \
-            --compound-output /tmp/makervault-orca-compound.3mf
+            --compound-output /tmp/makervault-orca-compound.3mf \
+            --object-output /tmp/makervault-orca-object-settings.3mf
       - name: Download SHA-256 verified official Orca 2.4.2 and build isolated image
         run: python3 scripts/install_slicer_staging.py prepare-orca
       - name: Check restricted worker loads real executable
@@ -105,6 +106,19 @@ jobs:
             --filament /tmp/makervault-orca-k1/filament.json \
             --process /tmp/makervault-orca-k1/process.json \
             --model /tmp/makervault-orca-plate.3mf
+      - name: Probe real Orca 2.4.2 with distinct per-object wall/infill settings
+        id: native_object_settings
+        continue-on-error: true
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k1/printer.json \
+            --filament /tmp/makervault-orca-k1/filament.json \
+            --process /tmp/makervault-orca-k1/process.json \
+            --model /tmp/makervault-orca-object-settings.3mf
+      - name: Warn if real object-specific project is not independently sliced
+        if: steps.native_object_settings.outcome == 'failure'
+        run: |
+          echo "::warning::Real Orca per-object 3MF still fails two-object G-code verification. Do not enable object-specific slicing."
       - name: Verify production compound plate prints both transformed models with real Orca
         run: |
           python3 scripts/probe_slicer_staging.py \
