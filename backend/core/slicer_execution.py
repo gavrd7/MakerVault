@@ -202,6 +202,19 @@ def _check_profile_integrity(profile, job, kind):
                                    str(exc)) from exc
 
 
+def _plate_builder(objects_with_stl):
+    """Select the independent-object path only for saved native overrides.
+
+    Existing global-only multi-model jobs retain the previously verified
+    compound geometry path, preserving working K1/K2 single-filament slices.
+    Admission still rejects per-object jobs until real-binary proof exists.
+    """
+    return (build_plate_3mf if any(
+        isinstance(item, dict) and bool(item.get("process_overrides"))
+        for item, _raw in objects_with_stl
+    ) else build_compound_plate_3mf)
+
+
 def _validate_plate_execution(job):
     """An untouched STL or a bounded native-bed-backed multi-object 3MF plate."""
     objects = (job.settings or {}).get("plate_objects")
@@ -380,11 +393,9 @@ def process_queued_job(job_id):
                 # queue admission still blocks unverified per-object jobs.
                 # Ordinary single-material multi-object plates retain their
                 # proven compound-mesh execution path.
-                has_object_settings = any(
-                    item.get("process_overrides") for item, _raw in source_models
+                model = _plate_builder(source_models)(
+                    source_models, bed_width=width, bed_depth=depth
                 )
-                builder = build_plate_3mf if has_object_settings else build_compound_plate_3mf
-                model = builder(source_models, bed_width=width, bed_depth=depth)
                 model_format = "3mf"
         stage = "resolving native slicing profiles"
         profiles = []
