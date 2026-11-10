@@ -70,7 +70,7 @@ test("surface picking measures triangle vertices and edges without editing slice
   assert.match(scene, /Millimetres \(mm\)/);
   assert.match(scene, /Inches \(in\)/);
   assert.match(editor, /Three-point circle is a geometric construction/);
-  assert.match(editor, /setMeasurePoints\(\[\]\); \}, \[objects\]\)/);
+  assert.match(editor, /setMeasurePoints\(\[\]\); \}, \[objects, measureMode, measureClearVersion\]\)/);
 });
 test("Measure options open at the toolbar while a compact readout lives at top left of the plate", () => {
   const scene = read("SlicerPrepareWorkspace.jsx");
