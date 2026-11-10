@@ -198,6 +198,9 @@ export default function SlicerPlateEditor({
   latestToolModeRef.current = toolMode;
   const [localSelected, setLocalSelected] = useState("");
   const [showNativeArtwork, setShowNativeArtwork] = useState(true);
+  const [undersidePlateMode, setUndersidePlateMode] = useState("auto");
+  const undersidePlateModeRef = useRef(undersidePlateMode);
+  undersidePlateModeRef.current = undersidePlateMode;
   const [nativeArtworkError, setNativeArtworkError] = useState("");
   const [showOrientationLabels, setShowOrientationLabels] = useState(false);
   const [showMachineLabel, setShowMachineLabel] = useState(false);
@@ -558,7 +561,7 @@ export default function SlicerPlateEditor({
       bedGeometry,
       new THREE.MeshStandardMaterial({
         color: bedTexture ? "#ffffff" : (PLATE_SURFACE[plateType]?.base || "#263342"),
-        map: bedTexture, side: THREE.FrontSide, roughness: 0.97,
+        map: bedTexture, side: THREE.DoubleSide, roughness: 0.97,
         metalness: 0.0,
         polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
       }),
@@ -1023,8 +1026,39 @@ export default function SlicerPlateEditor({
     const observer = new ResizeObserver(resize);
     observer.observe(mount);
     resize();
+    // Both the generated bed and an optional native decorative STL must
+    // become translucent beneath the surface. Changing only the print sheet
+    // leaves the opaque chassis in front of the model from underneath.
+    let lastBedAppearance = "";
+    const updateBedAppearance = () => {
+      const mode = undersidePlateModeRef.current;
+      const translucent = mode === "transparent" ||
+        (mode === "auto" && camera.position.z < -0.5);
+      const key = mode + ":" + translucent + ":" + Boolean(nativeBedMesh);
+      if (key === lastBedAppearance) return;
+      lastBedAppearance = key;
+      const setMaterial = (material, opacity) => {
+        material.transparent = translucent;
+        material.opacity = translucent ? opacity : 1;
+        material.depthWrite = !translucent;
+        material.needsUpdate = true;
+      };
+      const setMaterials = (mesh, opacity) => {
+        for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material])
+          setMaterial(material, opacity);
+      };
+      setMaterials(bed, 0.22);
+      setMaterials(plateBody, 0.12);
+      setMaterials(plateRim, 0.18);
+      if (nativeBedMesh) setMaterials(nativeBedMesh, 0.12);
+      // Reference grid and labels must not obscure the underside model.
+      for (const line of gridLines) line.visible = !translucent;
+      for (const mark of markings) mark.visible = !translucent;
+      boundary.visible = !translucent;
+    };
     renderer.setAnimationLoop(() => {
       controls.update();
+      updateBedAppearance();
       // Update continuously during gizmo and pointer drags, which can happen
       // between React object-state commits.
       selectionOutline?.update();
@@ -1334,6 +1368,14 @@ export default function SlicerPlateEditor({
       <button type="button" onClick={() => setPlateCamera("right")} title="View the right side of the printer build plate">Right</button>
       <button data-slicer-action="focus" type="button" onClick={() => setPlateCamera("selection")} disabled={!chosen}
         title="Centre and zoom onto the currently selected model">Fit selected model</button>
+      <label className="slicerBedVisibilityControl">Build plate
+        <select aria-label="Build plate visibility" value={undersidePlateMode}
+          onChange={event => setUndersidePlateMode(event.target.value)}>
+          <option value="auto">Auto (see through from below)</option>
+          <option value="opaque">Always opaque</option>
+          <option value="transparent">Always transparent</option>
+        </select>
+      </label>
     </div>
     <div className="slicerPlateCanvasViewport">
       <div ref={hostRef} className="slicerPlateCanvas"
