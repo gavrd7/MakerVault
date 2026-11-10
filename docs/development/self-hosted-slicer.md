@@ -218,7 +218,9 @@ User-facing guidance: [Slicer installation and engine management](../guide/3d-pr
 2. **Bambu Studio** — third, separate native JSON/profile and license checks.
 3. **PrusaSlicer** — fourth. Existing isolated runner prototype stays as reusable development groundwork, but is not the primary engine or an automatically installed service.
 4. **Snapmaker Orca** — fifth, validated independently rather than assumed compatible with OrcaSlicer.
-5. **Others** — CuraEngine, ElegooSlicer, Anycubic Slicer Next and sensible integrations for supported printer adapters, each conditional on real CLI/profile/license validation.
+5. **ElegooSlicer** — independently validated ELEGOO-native profiles and slicing behaviour, even where the codebase shares OrcaSlicer ancestry.
+6. **UltiMaker Cura / CuraEngine** — integrate the Cura slicing backend and compatible native definitions without assuming the full GUI can run headlessly.
+7. **Other candidates** — Anycubic Slicer Next and sensible integrations for supported printer adapters, each conditional on real CLI/profile/licence validation.
 
 ### E. Enhanced plate, profiles and multi-material
 - Model placement and transforms with server-validated build-volume bounds, units and plate orientation.
@@ -228,7 +230,7 @@ User-facing guidance: [Slicer installation and engine management](../guide/3d-pr
 - Reuse v1.6.0 K2 CFS mapping on *subsequent explicit print submission*, never as a hidden slicing side effect.
 
 ### F. Additional engines only after genuine CLI/licence verification
-Creality Print, Bambu Studio, PrusaSlicer, Snapmaker Orca, CuraEngine, ElegooSlicer and Anycubic Slicer Next are ordered candidates rather than automatically active or installed integrations. Validate distribution terms, headless CLI availability, profile compatibility and model-specific behaviour independently.
+Creality Print, Bambu Studio, PrusaSlicer, Snapmaker Orca, ElegooSlicer, UltiMaker Cura (via independently verified CuraEngine integration) and Anycubic Slicer Next are ordered candidates rather than automatically active or installed integrations. Validate distribution terms, headless CLI availability, profile compatibility and model-specific behaviour independently.
 
 ## Initial work in this branch
 
@@ -256,7 +258,7 @@ Orca real-engine fixture validation, interactive build plate manipulation, searc
 
 ## Orca-first verification and recovery checkpoint (6 November 2026)
 
-**Engine order:** OrcaSlicer (default) → Creality Print → Bambu Studio → PrusaSlicer → Snapmaker Orca → other printer-relevant engines. The Orca-specific runner has native JSON/CLI staging and file checks, but real CLI slicing remains unverified until a pinned worker image and native profiles complete a fixture run. Neither a mocked runner test nor a profile import demonstrates a working slicer.
+**Engine order:** OrcaSlicer (default) → Creality Print → Bambu Studio → PrusaSlicer → Snapmaker Orca → ElegooSlicer → UltiMaker Cura / CuraEngine → other printer-relevant engines. The Orca-specific runner has native JSON/CLI staging and file checks, but real CLI slicing remains unverified until a pinned worker image and native profiles complete a fixture run. Neither a mocked runner test nor a profile import demonstrates a working slicer.
 
 The branch now includes `slicer_worker/verify_orca.py`, which runs one real Orca CLI fixture **only inside an approved isolated container**. Feed it a known STL and complete engine-native machine, filament and process profile files; it returns SHA-256 checksums and bounded output metadata while explicitly setting `approved_for_production=false`. This receipt must be reviewed against the actual expected printer/material settings before installation can be approved.
 
@@ -396,6 +398,8 @@ slice. Printer communication is a separate optional adapter.
 | Bambu Studio | Bambu JSON | Not yet integrated; manual native import available | Not validated |
 | PrusaSlicer | Prusa INI | Not yet integrated; manual native import available | Not validated |
 | Snapmaker Orca | Snapmaker Orca JSON | Not yet integrated; manual native import available | Not validated |
+| ElegooSlicer | Engine-native profile handling requires verification | Planned; runtime and official profile catalogue not integrated | Not validated |
+| UltiMaker Cura | Cura definitions / intent / quality settings require independent mapping | Planned; CuraEngine integration and official profile catalogue not integrated | Not validated |
 
 Source counts represent pinned upstream **catalogue families**, not printer
 models, certified output, or execution-ready support. MakerVault advertises
