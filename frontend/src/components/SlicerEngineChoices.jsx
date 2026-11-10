@@ -4,6 +4,9 @@ import crealitySvg from "../assets/slicer-engines/crealityprint.svg?raw";
 import bambuSvg from "../assets/slicer-engines/bambustudio.svg?raw";
 import prusaSvg from "../assets/slicer-engines/prusaslicer.svg?raw";
 import snapmakerSvg from "../assets/slicer-engines/snapmakerorca.svg?raw";
+import elegooSvg from "../assets/slicer-engines/elegooslicer.svg?raw";
+import curaSvg from "../assets/slicer-engines/cura.svg?raw";
+import anycubicSvg from "../assets/slicer-engines/anycubicslicernext.svg?raw";
 
 /**
  * Bundle logos inside the JS asset, rather than requesting fixed
@@ -17,6 +20,9 @@ const LOGOS = Object.freeze({
   bambustudio: logoUri(bambuSvg),
   prusaslicer: logoUri(prusaSvg),
   snapmakerorca: logoUri(snapmakerSvg),
+  elegooslicer: logoUri(elegooSvg),
+  cura: logoUri(curaSvg),
+  anycubicslicernext: logoUri(anycubicSvg),
 });
 
 export function SlicerEngineLogo({ engine, label = "Slicer engine", size = "normal" }) {
