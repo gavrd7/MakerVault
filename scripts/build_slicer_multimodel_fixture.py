@@ -103,8 +103,10 @@ def object_settings_fixture(target, *, reverse=False, setting="combined"):
         values = [{
             v.attrib["key"]: v.attrib["value"] for v in obj.findall("metadata")
         } for obj in objects]
+        # Native 3MF encodes percentage options with their '%' unit, even
+        # though the validated API input is numeric.
         high, low, key = ("5", "2", "wall_loops") if setting != "sparse_infill_density" \
-            else ("80", "0", "sparse_infill_density")
+            else ("80%", "0%", "sparse_infill_density")
         expected = (high, low) if reverse else (low, high)
         if tuple(row[key] for row in values) != expected:
             raise ValueError("Per-object process settings were not saved correctly.")
