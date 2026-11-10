@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { plateEnvelope, plateExtentWarning, plateFootprintsOverlap, autoArrangePlate, plateModelMeasurement } from "../src/components/slicerPlateGeometry.js";
+import { plateEnvelope, plateExtentWarning, plateFootprintsOverlap, autoArrangePlate, plateModelMeasurement, measurementDistance, measurementCircle, measurementFormat } from "../src/components/slicerPlateGeometry.js";
 const item = { x_mm: 0, y_mm: 0, rotation_deg: 0, scale_percent: 100 };
 const box = { width: 40, depth: 20 };
 test("centred unrotated footprint", () => {
@@ -154,4 +154,27 @@ test("measurement swaps a rectangular XY footprint after quarter turn", () => {
 test("measurement waits for a measured STL and rejects nonfinite height", () => {
   assert.equal(plateModelMeasurement(item, { width: 30, depth: 20 }), null);
   assert.equal(plateModelMeasurement(item, { width: 30, depth: 20, height: Infinity }), null);
+});
+
+test("two surface pins measure 3D Euclidean distance, not just XY", () => {
+  assert.equal(measurementDistance([0, 0, 0], [3, 4, 12]), 13);
+  assert.equal(measurementDistance([0, 0, 0], [3, 4, Infinity]), null);
+  assert.equal(measurementDistance([0, 0], [3, 4, 12]), null);
+});
+test("unit toggle converts measurements without changing underlying millimetres", () => {
+  assert.equal(measurementFormat(25.4, "in"), "1.000 in");
+  assert.equal(measurementFormat(25.4, "mm"), "25.400 mm");
+  assert.equal(measurementFormat(-12.7, "in"), "-0.500 in");
+});
+test("three non-collinear surface pins construct a 3D circle", () => {
+  const result = measurementCircle([10, 0, 3], [0, 10, 3], [-10, 0, 3]);
+  assert.ok(Math.abs(result.radius - 10) < 1e-8);
+  assert.ok(Math.abs(result.diameter - 20) < 1e-8);
+  assert.ok(Math.abs(result.circumference - 20 * Math.PI) < 1e-8);
+  const upright = measurementCircle([0, 0, 10], [0, 10, 0], [0, 0, -10]);
+  assert.ok(Math.abs(upright.radius - 10) < 1e-8);
+});
+test("collinear or repeated points must not be reported as circles", () => {
+  assert.equal(measurementCircle([0, 0, 0], [1, 0, 0], [2, 0, 0]), null);
+  assert.equal(measurementCircle([0, 0, 0], [0, 0, 0], [1, 2, 3]), null);
 });
