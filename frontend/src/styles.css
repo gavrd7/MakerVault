@@ -4725,3 +4725,37 @@ a:focus-visible,
 .slicerPrepareSettings .slicerObjectSettingsInfo small{
   line-height:1.45;
 }
+
+
+/* Read-only, live per-instance bounding measurements in the Prepare editor. */
+.slicerPlateMeasurement {
+  margin: 12px 0;
+  padding: 12px;
+  min-width: 0;
+  border: 1px solid var(--border, #405062);
+  border-radius: 10px;
+  background: var(--surface-muted, rgba(90, 120, 150, 0.07));
+}
+.slicerPlateMeasurement h5 {
+  margin: 0 0 10px;
+}
+.slicerMeasurementGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 145px), 1fr));
+  gap: 8px 12px;
+  margin: 0;
+}
+.slicerMeasurementGrid > div { min-width: 0; }
+.slicerMeasurementGrid dt {
+  font-size: .8rem;
+  opacity: .78;
+}
+.slicerMeasurementGrid dd {
+  margin: 2px 0 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.slicerPlateMeasurement .slicerPlateHint {
+  margin: 12px 0 0;
+}
