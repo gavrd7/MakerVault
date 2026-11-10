@@ -18,6 +18,17 @@ PLATE_MANIFEST = "Metadata/model_settings.config"
 MAX_TRIANGLES = 500_000
 MAX_VERTICES_PER_OBJECT = 1_500_000
 
+# Only native, script-free process metadata used by the per-object
+# verification fixture can be admitted through the isolated 3MF channel.
+# Do not allow arbitrary project options (particularly G-code hooks).
+OBJECT_SETTINGS = {
+    "wall_loops": (0, 20, False),
+    "sparse_infill_density": (0, 100, True),
+    "infill_wall_overlap": (0, 100, True),
+    "enable_support": (0, 1, False),
+}
+MAX_OBJECT_SETTINGS = 16
+
 
 def validate_worker_3mf(data):
     if not isinstance(data, bytes) or not data or len(data) > 32 * 1024 * 1024:
@@ -69,20 +80,58 @@ def validate_worker_3mf(data):
                 raise WorkerError("3MF vertex coordinates are invalid.") from None
             if any(not math.isfinite(value) or abs(value) > 10000 for value in values):
                 raise WorkerError("3MF contains unsafe geometry.")
-    # A standard core 3MF can list many build items without telling native
-    # Orca/Creality Print which print plate each item belongs to. For multiple
-    # objects, require the minimal manifest emitted by MakerVault's builder.
-    if len(items) > 1:
-        if manifest is None:
-            raise WorkerError("Multi-object 3MF requires explicit native plate membership.")
+    # Native object records are explicitly allowlisted. A 3MF project must
+    # never pass arbitrary slicer options, file references, scripts or network
+    # settings into Orca via model_settings.config.
+    if len(items) > 1 and manifest is None:
+        raise WorkerError("Multi-object 3MF requires explicit native plate membership.")
+    if manifest is not None:
         try:
             manifest_root = ET.fromstring(manifest)
         except ET.ParseError:
             raise WorkerError("Malformed native 3MF plate manifest.") from None
-        if manifest_root.tag != "config" or manifest_root.attrib or len(manifest_root) != 1:
+        if manifest_root.tag != "config" or manifest_root.attrib:
             raise WorkerError("Unsupported native 3MF plate manifest.")
-        plate = manifest_root[0]
-        if plate.tag != "plate" or plate.attrib or len(plate) != len(items) + 1:
+        object_ids = set()
+        plate_nodes = []
+        for node in manifest_root:
+            if node.tag == "object":
+                obj_id = node.attrib.get("id")
+                if set(node.attrib) != {"id"} or obj_id not in ids or obj_id in object_ids:
+                    raise WorkerError("Invalid per-object 3MF settings identity.")
+                object_ids.add(obj_id)
+                if not 1 <= len(node) <= MAX_OBJECT_SETTINGS:
+                    raise WorkerError("Invalid per-object settings count.")
+                used_keys = set()
+                for entry in node:
+                    if (entry.tag != "metadata" or len(entry) or
+                            set(entry.attrib) != {"key", "value"}):
+                        raise WorkerError("Unsafe per-object 3MF metadata.")
+                    key, value = entry.attrib["key"], entry.attrib["value"]
+                    if key not in OBJECT_SETTINGS or key in used_keys:
+                        raise WorkerError("Unsupported per-object slicer setting.")
+                    used_keys.add(key)
+                    low, high, percentage = OBJECT_SETTINGS[key]
+                    if percentage:
+                        if not value.endswith("%"):
+                            raise WorkerError("Native object percent unit is missing.")
+                        value = value[:-1]
+                    try:
+                        number = float(value)
+                    except ValueError:
+                        raise WorkerError("Invalid native object value.") from None
+                    if not math.isfinite(number) or not low <= number <= high:
+                        raise WorkerError("Unsafe native object value.")
+                    if key in ("wall_loops", "enable_support") and not number.is_integer():
+                        raise WorkerError("Native object integer value required.")
+            elif node.tag == "plate":
+                plate_nodes.append(node)
+            else:
+                raise WorkerError("Unknown native 3MF metadata.")
+        if len(plate_nodes) != 1 or manifest_root[-1] is not plate_nodes[0]:
+            raise WorkerError("Exactly one final native plate mapping is required.")
+        plate = plate_nodes[0]
+        if plate.attrib or len(plate) != len(items) + 1:
             raise WorkerError("Unexpected 3MF plate mapping.")
         marker = plate[0]
         if (marker.tag != "metadata" or marker.attrib != {"key": "plater_id", "value": "1"}
@@ -105,8 +154,6 @@ def validate_worker_3mf(data):
             instance_ids.append(props["object_id"])
         if len(instance_ids) != len(set(instance_ids)) or set(instance_ids) != ids:
             raise WorkerError("3MF plate membership does not match mesh objects.")
-    elif manifest is not None:
-        raise WorkerError("Single-object 3MF must not contain an extra native plate manifest.")
     for item in items:
         try:
             values = [float(v) for v in item.attrib["transform"].split()]
