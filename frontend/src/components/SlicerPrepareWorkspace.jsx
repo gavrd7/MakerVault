@@ -18,6 +18,8 @@ const TOOLS = [
   { name: "Auto-arrange", target: "arrange", icon: "arrange" },
   { name: "Duplicate", target: "duplicate", icon: "duplicate" },
   { name: "Remove", target: "remove", icon: "remove" },
+  { name: "Centre selected", target: "center", icon: "center" },
+  { name: "Fit selected", target: "focus", icon: "focus" },
   { name: "Add plate", icon: "add", pending: "Multi-plate project persistence and native plate export" },
   { name: "Auto-orient", icon: "orient", pending: "Geometry-based safe orientation solver" },
   { name: "Lay on face", icon: "face", pending: "Mesh face selection and normal alignment" },
@@ -27,7 +29,7 @@ const TOOLS = [
   { name: "Drill", icon: "drill", pending: "Validated boolean subtraction" },
   { name: "Cut", icon: "cut", pending: "Robust planar mesh cutting" },
   { name: "Mesh boolean", icon: "boolean", pending: "Robust union, intersection and difference" },
-  { name: "Measure", icon: "measure", pending: "Face, edge and coordinate measurement" },
+  { name: "Measure", target: "measure", icon: "measure" },
   { name: "Support painting", icon: "paint", pending: "Native per-face support annotations" },
   { name: "Seam painting", icon: "paint", pending: "Native seam-region annotations" },
   { name: "Variable layer height", icon: "layers", pending: "Native variable layer representation" },
@@ -65,6 +67,7 @@ export default function SlicerPrepareWorkspace({
   const [scope, setScope] = useState("global");
   const [group, setGroup] = useState("Quality");
   const [toolMode, setToolMode] = useState("select");
+  const [measurementVisible, setMeasurementVisible] = useState(false);
   const [nativeProcessFields, setNativeProcessFields] = useState({});
   const [settingsSearch, setSettingsSearch] = useState("");
   const [settingsLevel, setSettingsLevel] = useState("basic");
@@ -312,6 +315,11 @@ export default function SlicerPrepareWorkspace({
     return file?.name || file?.filename || "STL model";
   };
   function selectTool(tool) {
+    if (tool.target === "measure") {
+      if (!selectedId && objects[0]?.instance_id) setSelectedId(objects[0].instance_id);
+      setMeasurementVisible(current => !current);
+      return;
+    }
     if (["x_mm", "rotation_deg", "scale_percent", "scale_xyz_percent"].includes(tool.target)) {
       // Selecting a handle-based tool should show its gizmo immediately,
       // including for the first model before it has been explicitly clicked.
@@ -324,11 +332,13 @@ export default function SlicerPrepareWorkspace({
     const el = editorRef.current?.querySelector(
       tool.target === "import" ? 'input[type="file"][accept=".stl,.3mf"]' :
         tool.target === "arrange" ? '[data-slicer-action="arrange"]' :
+        tool.target === "center" ? '[data-slicer-action="center"]' :
+        tool.target === "focus" ? '[data-slicer-action="focus"]' :
           tool.target === "duplicate" ? '[data-slicer-action="duplicate"]' :
             tool.target === "remove" ? '[data-slicer-action="remove"]' :
               '[data-slicer-field="' + tool.target + '"]'
     );
-    if (["import", "arrange", "duplicate", "remove"].includes(tool.target)) el?.click();
+    if (["import", "arrange", "duplicate", "remove", "center", "focus"].includes(tool.target)) el?.click();
     else {
       el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
       el?.focus();
@@ -585,8 +595,10 @@ export default function SlicerPrepareWorkspace({
         <button type="button"
           className={((tool.target === "x_mm" && toolMode === "move") ||
             (tool.target === "rotation_deg" && toolMode === "rotate") ||
-            ((tool.target === "scale_percent" || tool.target === "scale_xyz_percent") && toolMode === "scale")) ? "isActive" : ""}
-          aria-pressed={["x_mm", "rotation_deg", "scale_percent", "scale_xyz_percent"].includes(tool.target)
+            ((tool.target === "scale_percent" || tool.target === "scale_xyz_percent") && toolMode === "scale") ||
+            (tool.target === "measure" && measurementVisible)) ? "isActive" : ""}
+          aria-pressed={tool.target === "measure" ? measurementVisible :
+            ["x_mm", "rotation_deg", "scale_percent", "scale_xyz_percent"].includes(tool.target)
             ? (tool.target === "x_mm" ? toolMode === "move"
               : tool.target === "rotation_deg" ? toolMode === "rotate" : toolMode === "scale") : undefined}
           aria-label={tool.name}
@@ -690,7 +702,8 @@ export default function SlicerPrepareWorkspace({
           plate={plate} plateType={plateType} plateLabel={plateLabel}
           printerLabel={selectedProfiles?.printer || printerDetails?.model || printerDetails?.name || ""}
           onPlateLabelChange={onPlateLabelChange} canEdit={canEdit && !busy} toolMode={toolMode} selectedInstanceId={selectedId}
-          onSelectedInstanceChange={setSelectedId} onExitToolMode={() => setToolMode("select")} />
+          onSelectedInstanceChange={setSelectedId} measurementVisible={measurementVisible}
+          onExitToolMode={() => setToolMode("select")} />
       </div>
       {settingsExpanded ? createPortal(
         <div className="slicerSettingsModalBackdrop" role="presentation"
