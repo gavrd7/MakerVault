@@ -57,6 +57,20 @@ class AcceptanceProbeTests(unittest.TestCase):
             return type("Result", (), {"returncode": 0})()
         self.assertEqual(probe(*self.profiles, model=fixture, config=self.config, runner=runner), 0)
 
+    def test_reversed_object_effect_probe_is_passed_only_to_isolated_runner(self):
+        fixture = self.root / "reversed.3mf"
+        fixture.write_bytes(b"test-only-worker-validated-3mf")
+        def runner(command, check):
+            self.assertEqual(check, False)
+            self.assertIn("--verify-object-effects", command)
+            self.assertIn("--reverse-object-effects", command)
+            self.assertEqual(command[command.index("--expected-objects") + 1], "2")
+            self.assertEqual(command[command.index("--network") + 1], "none")
+            return type("Result", (), {"returncode": 0})()
+        self.assertEqual(probe(*self.profiles, model=fixture,
+                               verify_object_effects=True, reverse_object_effects=True,
+                               config=self.config, runner=runner), 0)
+
     def test_reject_unsafe_two_object_fixture_without_starting_container(self):
         fixture = self.root / "invalid.txt"
         fixture.write_bytes(b"not a 3mf")
