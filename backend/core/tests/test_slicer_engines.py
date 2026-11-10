@@ -10,10 +10,10 @@ DIGEST = "sha256:" + "a" * 64
 class SlicerEngineRegistryTests(SimpleTestCase):
     def test_catalogue_is_user_prioritised_and_does_not_claim_availability(self):
         rows = engine_catalogue()
-        self.assertEqual([row["key"] for row in rows], ["orcaslicer", "crealityprint", "bambustudio", "prusaslicer", "snapmakerorca"])
+        self.assertEqual([row["key"] for row in rows], ["orcaslicer", "crealityprint", "bambustudio", "prusaslicer", "snapmakerorca", "elegooslicer", "cura"])
         self.assertTrue(all(row["status"] == "candidate" for row in rows))
         self.assertTrue(all(row["available"] is False and row["enabled"] is False for row in rows))
-        self.assertEqual({row["profile_format"] for row in rows}, {"orca-json", "creality-json", "bambu-json", "prusa-ini", "snapmaker-orca-json"})
+        self.assertEqual({row["profile_format"] for row in rows}, {"orca-json", "creality-json", "bambu-json", "prusa-ini", "snapmaker-orca-json", "elegoo-native-unverified", "cura-native-unverified"})
         self.assertEqual(len({engine.key for engine in ENGINES}), len(ENGINES))
         self.assertEqual(rows[0]["key"], "orcaslicer")
 
