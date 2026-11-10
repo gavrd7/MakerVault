@@ -2403,6 +2403,32 @@ def component_image(request, component_id):
 
 @login_required
 @require_http_methods(["GET"])
+def file_gcode_source(request, asset_id):
+    """Stream the owner's complete original G-code, never the bounded inspection sample."""
+    asset = FileAsset.objects.filter(owner=request.user, pk=asset_id).first()
+    if not asset:
+        return _error("G-code file not found.", status=404)
+    filename = str((asset.metadata or {}).get("original_name") or asset.name or "")
+    if not filename.lower().endswith(".gcode"):
+        return _error("Only plain-text G-code is supported.", status=400)
+    try:
+        handle = asset.file.storage.open(asset.file.name, "rb")
+    except (OSError, ValueError):
+        return _error("Stored G-code could not be opened.", status=404)
+    response = FileResponse(handle, content_type="text/plain; charset=utf-8")
+    # Inline source is used for inspection; download is an explicit user action.
+    response["Content-Disposition"] = (
+        'attachment; filename="print.gcode"'
+        if request.GET.get("download") == "1"
+        else 'inline; filename="print.gcode"'
+    )
+    response["Cache-Control"] = "private, no-store"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+@login_required
+@require_http_methods(["GET"])
 def file_gcode_inspect(request, asset_id):
     """Authenticated, owner-scoped read-only G-code report and source preview."""
     from .gcode_analysis import inspect_asset, compare_printer_metadata
