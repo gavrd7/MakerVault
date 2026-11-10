@@ -201,11 +201,13 @@ class PerObjectExecutionRoutingTests(SimpleTestCase):
         job = SimpleNamespace(settings={"plate_objects": [row for row, _ in objects]},
                               engine="orcaslicer", printer_profile_id="printer",
                               printer_profile=SimpleNamespace())
-        self.assertTrue(_validate_plate_execution(job))
+        with patch("core.slicer_execution.trusted_plate_dimensions", return_value=(220, 220)):
+            self.assertTrue(_validate_plate_execution(job))
         job.settings["plate_objects"][1]["process_overrides"] = {
             "wall_loops": 5, "sparse_infill_density": 37,
         }
-        self.assertTrue(_validate_plate_execution(job))
+        with patch("core.slicer_execution.trusted_plate_dimensions", return_value=(220, 220)):
+            self.assertTrue(_validate_plate_execution(job))
         job.settings["plate_objects"][1]["process_overrides"]["enable_support"] = "1"
         with self.assertRaisesRegex(SlicerExecutionError, "not passed real Orca"):
             _validate_plate_execution(job)
