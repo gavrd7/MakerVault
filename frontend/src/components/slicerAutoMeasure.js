@@ -18,25 +18,37 @@ const geometryCache = new WeakMap();
 const edgeKey = (a, b) => a < b ? a + "|" + b : b + "|" + a;
 const pointKey = p => [p.x, p.y, p.z].map(n => Math.round(n * 10000)).join(",");
 
-function indexGeometry(geometry) {
-  if (geometryCache.has(geometry)) return geometryCache.get(geometry);
+function indexGeometry(geometry, localPoint, selectedFace) {
   const positions = geometry.getAttribute("position");
   const indices = geometry.getIndex();
   const count = Math.floor((indices ? indices.count : positions?.count || 0) / 3);
-  if (!positions || count < 1 || count > MAX_TRIANGLES) {
-    const unavailable = { unavailable: true };
-    geometryCache.set(geometry, unavailable);
-    return unavailable;
-  }
+  if (!positions || count < 1) return { unavailable: true };
+  const localOnly = count > MAX_TRIANGLES;
+  // Dense STLs (including common Benchy exports) are searched within a
+  // bounded local neighbourhood of the click rather than indexing the whole
+  // mesh into a large in-memory graph. Whole-mesh indexes are cached.
+  if (!localOnly && geometryCache.has(geometry)) return geometryCache.get(geometry);
+  if (localOnly && !localPoint) return { unavailable: true };
   const vertices = [];
   const vertexIds = new Map();
   const faces = [];
   const edges = new Map();
+  let included = 0;
   for (let i = 0; i < count; i++) {
-    const corners = [];
+    const raw = [];
     for (let j = 0; j < 3; j++) {
       const index = indices ? indices.getX(3 * i + j) : 3 * i + j;
-      const p = new THREE.Vector3().fromBufferAttribute(positions, index);
+      raw.push(new THREE.Vector3().fromBufferAttribute(positions, index));
+    }
+    // 25mm local neighbourhood, converted from the hit into unscaled STL
+    // coordinates. A partial patch must be labelled as such below.
+    if (localOnly && i !== selectedFace &&
+        !raw.some(point => point.distanceToSquared(localPoint) <= 25 * 25))
+      continue;
+    if (++included > MAX_TRIANGLES) return { unavailable: true };
+    const corners = [];
+    for (let j = 0; j < 3; j++) {
+      const p = raw[j];
       const key = pointKey(p);
       if (!vertexIds.has(key)) {
         vertexIds.set(key, vertices.length);
@@ -48,22 +60,24 @@ function indexGeometry(geometry) {
     const cross = new THREE.Vector3().subVectors(b, a)
       .cross(new THREE.Vector3().subVectors(c, a));
     const normal = cross.clone().normalize();
-    faces.push({ corners, normal });
+    faces[i] = { corners, normal };
     for (let j = 0; j < 3; j++) {
       const key = edgeKey(corners[j], corners[(j + 1) % 3]);
       if (!edges.has(key)) edges.set(key, []);
       edges.get(key).push(i);
     }
   }
-  const topology = { vertices, faces, edges };
-  geometryCache.set(geometry, topology);
+  const topology = { vertices, faces, edges, localOnly };
+  if (!localOnly) geometryCache.set(geometry, topology);
   return topology;
 }
 
 export function detectMeshMeasurement(mesh, hit, tolerance = 1.5) {
   if (!mesh?.geometry || !hit?.face || !hit?.point) return null;
-  const topology = indexGeometry(mesh.geometry);
+  mesh.updateMatrixWorld(true);
   const faceIndex = hit.faceIndex;
+  const localPoint = mesh.worldToLocal(hit.point.clone());
+  const topology = indexGeometry(mesh.geometry, localPoint, faceIndex);
   if (topology.unavailable || !Number.isInteger(faceIndex) || !topology.faces[faceIndex])
     return { kind: "unavailable", label: "Automatic feature detection is unavailable for this STL. Use two-point measurement." };
   mesh.updateMatrixWorld(true);
@@ -83,7 +97,7 @@ export function detectMeshMeasurement(mesh, hit, tolerance = 1.5) {
   for (let j = 0; j < 3; j++) {
     const idA = corners[j], idB = corners[(j + 1) % 3];
     const adjacent = topology.edges.get(edgeKey(idA, idB)) || [];
-    const isCrease = adjacent.length === 1 || adjacent.some(id =>
+    const isCrease = (!topology.localOnly && adjacent.length === 1) || adjacent.some(id =>
       id !== faceIndex && faceNormal(id).dot(faceNormal(faceIndex)) < CREASE_COSINE);
     if (!isCrease) continue;
     const a = world[idA], b = world[idB];
@@ -136,10 +150,13 @@ export function detectMeshMeasurement(mesh, hit, tolerance = 1.5) {
   if (visited.size >= 2 && area > 0 && Number.isFinite(area)) {
     return {
       kind: "face",
-      label: "Detected approximately planar mesh patch",
+      label: topology.localOnly
+        ? "Detected local planar mesh patch (partial area estimate)"
+        : "Detected approximately planar mesh patch",
       value: area,
       unit: "area",
       triangles: visited.size,
+      partial: topology.localOnly,
       point: hit.point.toArray(),
     };
   }
