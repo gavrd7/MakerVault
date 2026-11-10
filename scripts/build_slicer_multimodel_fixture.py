@@ -64,7 +64,7 @@ def cube_fixture_stl(side=20.0):
     )
 
 
-def object_settings_fixture(target, *, reverse=False):
+def object_settings_fixture(target, *, reverse=False, setting="combined"):
     """Create the exact per-object project the real Orca CLI must accept.
 
     Both objects are equal geometry at separated X positions, with distinct
@@ -72,10 +72,19 @@ def object_settings_fixture(target, *, reverse=False):
     positions extrude before this route is eligible for runtime use.
     """
     source = cube_fixture_stl()
-    settings = [
-        {"wall_loops": 2, "sparse_infill_density": 15},
-        {"wall_loops": 5, "sparse_infill_density": 37},
-    ]
+    if setting == "combined":
+        settings = [
+            {"wall_loops": 2, "sparse_infill_density": 15},
+            {"wall_loops": 5, "sparse_infill_density": 37},
+        ]
+    elif setting == "wall_loops":
+        settings = [{"wall_loops": 2}, {"wall_loops": 5}]
+    elif setting == "sparse_infill_density":
+        # An 80% difference is large enough to detect even with 20mm cubes
+        # and the manufacturer's top/bottom solid layers.
+        settings = [{"sparse_infill_density": 0}, {"sparse_infill_density": 80}]
+    else:
+        raise ValueError("Unsupported object settings acceptance fixture.")
     if reverse:
         settings.reverse()
     entries = [
@@ -94,9 +103,11 @@ def object_settings_fixture(target, *, reverse=False):
         values = [{
             v.attrib["key"]: v.attrib["value"] for v in obj.findall("metadata")
         } for obj in objects]
-        expected = ("5", "2") if reverse else ("2", "5")
-        if tuple(row["wall_loops"] for row in values) != expected:
-            raise ValueError("Per-object wall settings were not saved correctly.")
+        high, low, key = ("5", "2", "wall_loops") if setting != "sparse_infill_density" \
+            else ("80", "0", "sparse_infill_density")
+        expected = (high, low) if reverse else (low, high)
+        if tuple(row[key] for row in values) != expected:
+            raise ValueError("Per-object process settings were not saved correctly.")
     target = Path(target)
     if target.exists() or target.is_symlink():
         raise ValueError("Object fixture output already exists.")
@@ -137,6 +148,10 @@ def main():
     parser.add_argument("--compound-output", type=Path)
     parser.add_argument("--object-output", type=Path)
     parser.add_argument("--object-reverse-output", type=Path)
+    parser.add_argument("--object-wall-output", type=Path)
+    parser.add_argument("--object-wall-reverse-output", type=Path)
+    parser.add_argument("--object-infill-output", type=Path)
+    parser.add_argument("--object-infill-reverse-output", type=Path)
     args = parser.parse_args()
     generate(args.output)
     if args.compound_output:
@@ -145,6 +160,15 @@ def main():
         object_settings_fixture(args.object_output)
     if args.object_reverse_output:
         object_settings_fixture(args.object_reverse_output, reverse=True)
+    if args.object_wall_output:
+        object_settings_fixture(args.object_wall_output, setting="wall_loops")
+    if args.object_wall_reverse_output:
+        object_settings_fixture(args.object_wall_reverse_output, reverse=True, setting="wall_loops")
+    if args.object_infill_output:
+        object_settings_fixture(args.object_infill_output, setting="sparse_infill_density")
+    if args.object_infill_reverse_output:
+        object_settings_fixture(args.object_infill_reverse_output, reverse=True,
+                                setting="sparse_infill_density")
 
 
 if __name__ == "__main__":
