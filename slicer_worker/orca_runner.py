@@ -5,6 +5,9 @@ The CLI argument structure follows upstream Orca's documented --slice,
 version and produced G-code still needs independent real fixture validation.
 """
 import json
+import io
+import zipfile
+from xml.etree import ElementTree as ET
 import os
 import re
 from pathlib import Path
@@ -208,8 +211,18 @@ def orca_command(binary: Path, workdir: Path, *,
     if (experimental_all_plates or experimental_no_arrange) and not is_project:
         raise WorkerError("Experimental plate mode requires a 3MF input.")
     model = _regular_file(workdir, "input.3mf" if is_project else "input.stl", MAX_MODEL_BYTES)
+    native_object_settings = False
     if is_project:
-        validate_worker_3mf(model.read_bytes())
+        model_bytes = model.read_bytes()
+        validate_worker_3mf(model_bytes)
+        # The bounded worker validator has already checked the exact package
+        # layout, object IDs and native setting values. Project-specific
+        # settings must retain their baked placements, not be re-arranged by
+        # Orca's CLI automatic arrangement mode.
+        with zipfile.ZipFile(io.BytesIO(model_bytes)) as archive:
+            if "Metadata/model_settings.config" in archive.namelist():
+                metadata = ET.fromstring(archive.read("Metadata/model_settings.config"))
+                native_object_settings = bool(metadata.findall("object"))
     else:
         try:
             validate_stl(model.read_bytes())
@@ -232,7 +245,7 @@ def orca_command(binary: Path, workdir: Path, *,
         "--load-filaments", str(profiles[1]),
         "--load-defaultfila",
         *(["--arrange", "1"] if not is_project else
-          ["--arrange", "0"] if experimental_no_arrange else []),
+          ["--arrange", "0"] if native_object_settings or experimental_no_arrange else []),
         "--slice", "0" if experimental_all_plates else "1",
         "--mtcpp", "500000", "--mstpp", "300",
         "--outputdir", str(outdir),
