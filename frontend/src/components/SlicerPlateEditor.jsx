@@ -175,7 +175,7 @@ export default function SlicerPlateEditor({
   plateLabel = "Plate 1", onPlateLabelChange, printerLabel = "",
   canEdit = false, onFilesUploaded, defaultColor = null, onManualColorChange, footer = null,
   selectedInstanceId = null, onSelectedInstanceChange, toolMode = "select",
-  measurementVisible = false, measureMode = "distance", measureUnit = "mm", measureClearVersion = 0,
+  measurementVisible = false, measureMode = "distance", measureUnit = "mm", measureSnapMode = "auto", measureClearVersion = 0,
   onMeasurePinPlaced,
   localAssets = [], onLocalAssetsChange, onExitToolMode,
 }) {
@@ -217,7 +217,7 @@ export default function SlicerPlateEditor({
   const [measurePoints, setMeasurePoints] = useState([]);
   const [measureOverlayExpanded, setMeasureOverlayExpanded] = useState(false);
   const latestMeasurementRef = useRef({ active: false, mode: "distance" });
-  latestMeasurementRef.current = { active: measurementVisible, mode: measureMode };
+  latestMeasurementRef.current = { active: measurementVisible, mode: measureMode, snapMode: measureSnapMode };
   dimensionsRef.current = dimensions;
   const sourceFiles = useMemo(() => [
     ...localAssets,
@@ -856,7 +856,7 @@ export default function SlicerPlateEditor({
         // STL is triangulated, so prefer a nearby real triangle vertex or
         // straight mesh edge. Never claim that an arbitrary triangle is a
         // recognised CAD circle or a fitted cylinder.
-        if (hit.face) {
+        if (hit.face && latestMeasurementRef.current.snapMode !== "surface") {
           const position = target.geometry.getAttribute("position");
           if (position) {
             target.updateMatrixWorld(true);
@@ -867,7 +867,8 @@ export default function SlicerPlateEditor({
               point.distanceTo(hit.point) < best.distanceTo(hit.point) ? point : best,
             vertices[0]);
             const vertexDistance = closestVertex.distanceTo(hit.point);
-            if (vertexDistance <= 2) {
+            const tolerance = Math.min(2, Math.max(0.15, hit.distance * 5 / Math.max(320, renderer.domElement.clientHeight)));
+            if (latestMeasurementRef.current.snapMode !== "edge" && vertexDistance <= tolerance) {
               world.copy(closestVertex);
               snap = "Vertex";
             } else {
@@ -883,7 +884,7 @@ export default function SlicerPlateEditor({
                   bestEdgeLength = a.distanceTo(b);
                 }
               }
-              if (distance <= 1.5 && bestEdge) {
+              if (latestMeasurementRef.current.snapMode !== "vertex" && distance <= tolerance && bestEdge) {
                 world.copy(bestEdge);
                 snap = "Triangle edge";
                 edgeLength = bestEdgeLength;
@@ -1037,6 +1038,7 @@ export default function SlicerPlateEditor({
       for (const item of [...measurementOverlay.children]) {
         measurementOverlay.remove(item);
         item.geometry?.dispose();
+        item.material?.map?.dispose();
         item.material?.dispose();
       }
       scene.remove(measurementOverlay);
@@ -1184,6 +1186,7 @@ export default function SlicerPlateEditor({
     for (const item of [...overlay.children]) {
       overlay.remove(item);
       item.geometry?.dispose();
+      item.material?.map?.dispose();
       item.material?.dispose();
     }
     if (!measurementVisible) return;
@@ -1201,7 +1204,39 @@ export default function SlicerPlateEditor({
       line.renderOrder = 100;
       overlay.add(line);
     }
-  }, [measurePoints, measurementVisible]);
+    // Label completed measurements in 3D rather than forcing the user to read
+    // the details panel. Labels are display-only and never exported to STL/G-code.
+    const distance = points.length === 2 && measureMode === "distance"
+      ? measurementDistance(measurePoints[0].point, measurePoints[1].point) : null;
+    const circle = points.length === 3 && measureMode === "circle"
+      ? measurementCircle(...measurePoints.map(pin => pin.point)) : null;
+    const caption = distance !== null ? measurementFormat(distance, measureUnit)
+      : circle ? "Ø " + measurementFormat(circle.diameter, measureUnit) : "";
+    if (caption) {
+      const canvas = document.createElement("canvas");
+      canvas.width = 512; canvas.height = 96;
+      const context = canvas.getContext("2d");
+      if (context) {
+        context.fillStyle = "rgba(10, 23, 37, 0.9)";
+        context.fillRect(0, 0, 512, 96);
+        context.font = "bold 38px sans-serif";
+        context.fillStyle = "#fff5b5";
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+        context.fillText(caption, 256, 48, 490);
+        const texture = new THREE.CanvasTexture(canvas);
+        const label = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: texture, depthTest: false, transparent: true,
+        }));
+        const middle = points.reduce((result, point) => result.add(point),
+          new THREE.Vector3()).divideScalar(points.length);
+        label.position.copy(middle).add(new THREE.Vector3(0, 0, 5));
+        label.scale.set(37, 7, 1);
+        label.renderOrder = 102;
+        overlay.add(label);
+      }
+    }
+  }, [measurePoints, measurementVisible, measureUnit, measureMode]);
 
   function setPlateCamera(view) {
     const state = sceneRef.current;
@@ -1422,15 +1457,14 @@ export default function SlicerPlateEditor({
       <p className="slicerPlateHint">Choose measurement mode, units and Clear pins from the expandable
         Measure toolbar above the plate. A compact live readout is also shown at the top-left of the viewport.</p>
       <p className="slicerPlateHint">Click {measureMode === "circle" ? "three" : "two"} places on
-        a model surface to drop measurement pins. Pins snap to nearby STL triangle vertices
-        or edges. Orbit the model to reach other faces. Clicking again after completion starts
+        a model surface to drop measurement pins. Snapping follows the toolbar selection and refers to STL triangle geometry, not original CAD edges. Orbit the model to reach other faces. Clicking again after completion starts
         a new measurement.</p>
       {measurePoints.length > 0 && <div role="status" className="slicerMeasurementResult">
         {measurePoints.map((pin, index) => <div key={index}>
           Pin {index + 1} · {pin.snap} · X {measurementFormat(pin.point[0], measureUnit)},
           Y {measurementFormat(pin.point[1], measureUnit)},
           Z {measurementFormat(pin.point[2], measureUnit)}
-          {pin.edgeLength != null && <small> · STL triangle edge length: {measurementFormat(pin.edgeLength, measureUnit)}</small>}
+          {pin.edgeLength != null && <small> · Triangle segment length: {measurementFormat(pin.edgeLength, measureUnit)}</small>}
         </div>)}
         {pinDistance !== null && <strong>3D distance: {measurementFormat(pinDistance, measureUnit)}</strong>}
         {measureMode === "circle" && measurePoints.length === 3 &&
