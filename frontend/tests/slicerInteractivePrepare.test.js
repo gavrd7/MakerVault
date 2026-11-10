@@ -53,6 +53,23 @@ test("measurement, centre and focus toolbar actions are functional and guarded",
   assert.match(editor, /height: box.max.z - box.min.z/);
   assert.match(editor, /This is not face-to-face measurement/);
 });
+test("surface picking measures triangle vertices and edges without editing slice geometry", () => {
+  const scene = read("SlicerPrepareWorkspace.jsx");
+  const editor = read("SlicerPlateEditor.jsx");
+  assert.match(scene, /setToolMode\("select"\)/);
+  assert.match(scene, /setMeasurementVisible\(false\)/);
+  assert.match(editor, /raycaster\.intersectObjects\(\[\.\.\.meshes\.values\(\)\], false\)/);
+  assert.match(editor, /latestMeasurementRef\.current\.active/);
+  assert.match(editor, /hit\.face\.a, hit\.face\.b, hit\.face\.c/);
+  assert.match(editor, /closestPointToPoint\(hit\.point, true/);
+  assert.match(editor, /setMeasurePoints\(current =>/);
+  assert.match(editor, /3D distance:/);
+  assert.match(editor, /Construct circle · three pins/);
+  assert.match(editor, /Millimetres \(mm\)/);
+  assert.match(editor, /Inches \(in\)/);
+  assert.match(editor, /Three-point circle is a geometric construction/);
+  assert.match(editor, /setMeasurePoints\(\[\]\); \}, \[objects\]\)/);
+});
 test("advanced tools are visibly gated pending safe native transformations", () => {
   const scene = read("SlicerPrepareWorkspace.jsx");
   for (const tool of ["Auto-orient", "Lay on face", "Cut", "Hollow",
