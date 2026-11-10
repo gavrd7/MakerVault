@@ -40,9 +40,17 @@ These are representative documented gaps identified in the category-by-category 
 | Others | Timelapse, advanced fuzzy ripple options, exclusion/output edge cases |
 | Printer profiles | Complete printer motion, hardware, bed and multiple extruder editing, plus native boolean/enums/arrays; hardware G-code is deliberately protected |
 | Filament profiles | Cooling controls, overrides, temperatures and material-specific lists with proper per-extruder representation; not yet full GUI parity |
-| Object scope | True per-object/native process overrides; currently global process settings only |
+| Object scope | Individual object editing and draft persistence are implemented. Native Orca 2.4.2 has verified separate-object G-code for wall loops and sparse infill density. Other settings need individual engine validation; UI/backend refuse unverified controls at slice time. |
 | Versioning | Some wiki options are newer than the pinned Orca 2.4.2 binary. Runtime support, enum compatibility and version gates must be checked before exposing them |
 | Advanced workflows | 3MF painted materials, object-specific profiles and fully native multi-plate export remain separate functional work |
+
+## Per-object slicing verification checkpoint (10 November 2026)
+
+- The object editor uses the same native process catalog as Global, with per-instance overrides and global-value inheritance. This is not blanket permission to slice every native key.
+- Production `build_plate_3mf` keeps separate object IDs and native `Metadata/model_settings.config` overrides. Global-only multi-model jobs continue to use the verified compound mesh path for compatibility.
+- Real pinned OrcaSlicer 2.4.2 acceptance: identical independent cubes with 2 walls / 15% infill (left) and 5 walls / 37% infill (right) produced **1,214.081 mm** and **2,106.534 mm** extrusion respectively. Swapping the configurations reversed the extrusion ratio (1.735 → 0.576) and both real-binary runs passed.
+- Runtime whitelist currently includes `wall_loops` and `sparse_infill_density` only; model settings elsewhere remain draft-only and fail closed if sliced. Genuine independent-key fixtures (one setting changed at a time, each direction) are being used to further validate both options.
+- Successful fixture G-code is *not* equivalent to full hardware/filament/profile feature parity. The K1/K2 staging path must still validate saved drafts, preview, print submission and post-print telemetry.
 
 ## Test expectations
 
