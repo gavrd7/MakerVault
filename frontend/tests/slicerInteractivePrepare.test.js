@@ -62,6 +62,8 @@ test("surface picking measures triangle vertices and edges without editing slice
   assert.match(editor, /latestMeasurementRef\.current\.active/);
   assert.match(editor, /hit\.face\.a, hit\.face\.b, hit\.face\.c/);
   assert.match(editor, /closestPointToPoint\(hit\.point, true/);
+  assert.match(editor, /bestEdgeLength = a\.distanceTo\(b\)/);
+  assert.match(editor, /STL triangle edge length:/);
   assert.match(editor, /setMeasurePoints\(current =>/);
   assert.match(editor, /3D distance:/);
   assert.match(editor, /Construct circle · three pins/);
