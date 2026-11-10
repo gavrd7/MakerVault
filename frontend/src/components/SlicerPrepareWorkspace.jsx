@@ -29,7 +29,7 @@ const TOOLS = [
   { name: "Drill", icon: "drill", pending: "Validated boolean subtraction" },
   { name: "Cut", icon: "cut", pending: "Robust planar mesh cutting" },
   { name: "Mesh boolean", icon: "boolean", pending: "Robust union, intersection and difference" },
-  { name: "Measure", target: "measure", icon: "measure" },
+  { name: "Measure", target: "measure", icon: "measure", expandable: true },
   { name: "Support painting", icon: "paint", pending: "Native per-face support annotations" },
   { name: "Seam painting", icon: "paint", pending: "Native seam-region annotations" },
   { name: "Variable layer height", icon: "layers", pending: "Native variable layer representation" },
@@ -68,6 +68,9 @@ export default function SlicerPrepareWorkspace({
   const [group, setGroup] = useState("Quality");
   const [toolMode, setToolMode] = useState("select");
   const [measurementVisible, setMeasurementVisible] = useState(false);
+  const [measureMode, setMeasureMode] = useState("distance");
+  const [measureUnit, setMeasureUnit] = useState("mm");
+  const [measureClearVersion, setMeasureClearVersion] = useState(0);
   const [nativeProcessFields, setNativeProcessFields] = useState({});
   const [settingsSearch, setSettingsSearch] = useState("");
   const [settingsLevel, setSettingsLevel] = useState("basic");
@@ -591,9 +594,9 @@ export default function SlicerPrepareWorkspace({
         <button type="button" disabled={!redoRef.current.length || busy} onClick={redo}
           aria-label="Redo"><SlicerUiIcon name="redo" /></button>
       </span>
-      {TOOLS.map(tool => <span className="slicerToolTooltip" key={tool.name}
+      {TOOLS.map(tool => <span className={"slicerToolTooltip" + (tool.expandable && measurementVisible ? " slicerToolOptionsOpen" : "")} key={tool.name}
         data-tooltip={tool.pending ? tool.name + " · Not yet available: " + tool.pending
-          : tool.name}>
+          : tool.expandable ? tool.name + " · Click for measurement options" : tool.name}>
         <button type="button"
           className={((tool.target === "x_mm" && toolMode === "move") ||
             (tool.target === "rotation_deg" && toolMode === "rotate") ||
@@ -604,8 +607,30 @@ export default function SlicerPrepareWorkspace({
             ? (tool.target === "x_mm" ? toolMode === "move"
               : tool.target === "rotation_deg" ? toolMode === "rotate" : toolMode === "scale") : undefined}
           aria-label={tool.name}
+          aria-expanded={tool.expandable ? measurementVisible : undefined}
+          aria-controls={tool.expandable ? "slicer-measure-toolbar-options" : undefined}
           disabled={!!tool.pending || !canEdit || busy || (tool.target !== "import" && !objects.length)}
           onClick={() => selectTool(tool)}><SlicerUiIcon name={tool.icon || "others"} /></button>
+        {tool.expandable && measurementVisible && <div className="slicerToolOptions" id="slicer-measure-toolbar-options"
+          role="group" aria-label="Measure tool options">
+          <strong>Measure</strong>
+          <label>Measurement mode
+            <select value={measureMode} onChange={event => setMeasureMode(event.target.value)}>
+              <option value="distance">Two-point distance</option>
+              <option value="circle">Three-point circle</option>
+            </select>
+          </label>
+          <label>Units
+            <select value={measureUnit} onChange={event => setMeasureUnit(event.target.value)}>
+              <option value="mm">Millimetres (mm)</option>
+              <option value="in">Inches (in)</option>
+            </select>
+          </label>
+          <button type="button" className="slicerToolOptionsAction" onClick={() => setMeasureClearVersion(value => value + 1)}>
+            Clear pins
+          </button>
+          <small>Click the model to place pins. Results appear in the top-left of the 3D view.</small>
+        </div>}
       </span>)}
     </div>
     <div className="slicerPrepareStructure">
@@ -705,6 +730,7 @@ export default function SlicerPrepareWorkspace({
           printerLabel={selectedProfiles?.printer || printerDetails?.model || printerDetails?.name || ""}
           onPlateLabelChange={onPlateLabelChange} canEdit={canEdit && !busy} toolMode={toolMode} selectedInstanceId={selectedId}
           onSelectedInstanceChange={setSelectedId} measurementVisible={measurementVisible}
+          measureMode={measureMode} measureUnit={measureUnit} measureClearVersion={measureClearVersion}
           onExitToolMode={() => setToolMode("select")} />
       </div>
       {settingsExpanded ? createPortal(
