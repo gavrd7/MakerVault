@@ -317,9 +317,11 @@ export default function SlicerPrepareWorkspace({
   function selectTool(tool) {
     if (tool.target === "measure") {
       if (!selectedId && objects[0]?.instance_id) setSelectedId(objects[0].instance_id);
+      setToolMode("select");
       setMeasurementVisible(current => !current);
       return;
     }
+    setMeasurementVisible(false);
     if (["x_mm", "rotation_deg", "scale_percent", "scale_xyz_percent"].includes(tool.target)) {
       // Selecting a handle-based tool should show its gizmo immediately,
       // including for the first model before it has been explicitly clicked.
