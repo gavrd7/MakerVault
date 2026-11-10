@@ -38,6 +38,41 @@ class BuildPlate3MFTests(SimpleTestCase):
         self.assertAlmostEqual(second[1], 0.5, places=5)
         self.assertAlmostEqual(second[3], -0.5, places=5)
 
+    def test_object_settings_metadata_preserves_distinct_native_object_ids(self):
+        shape = fixture_stl()
+        identity = {"x_mm": 0, "y_mm": 0,
+                    "rotation_deg": 0, "scale_percent": 100}
+        models = [
+            ({**identity, "x_mm": -35,
+              "process_overrides": {"wall_loops": 5, "enable_support": "1"}}, shape),
+            ({**identity, "x_mm": 35,
+              "process_overrides": {"wall_loops": 2, "infill_wall_overlap": 18}}, shape),
+        ]
+        result = build_plate_3mf(models, bed_width=220, bed_depth=220)
+        with zipfile.ZipFile(io.BytesIO(result)) as archive:
+            model_xml = ET.fromstring(archive.read("3D/3dmodel.model"))
+            config = ET.fromstring(archive.read("Metadata/model_settings.config"))
+        self.assertEqual(len(model_xml.findall(".//{%s}object" % NS)), 2)
+        objects = config.findall("object")
+        self.assertEqual([obj.attrib["id"] for obj in objects], ["1", "2"])
+        recorded = [{
+            entry.attrib["key"]: entry.attrib["value"]
+            for entry in obj.findall("metadata")
+        } for obj in objects]
+        self.assertEqual(recorded[0]["wall_loops"], "5")
+        self.assertEqual(recorded[0]["enable_support"], "1")
+        self.assertEqual(recorded[1]["wall_loops"], "2")
+        self.assertEqual(recorded[1]["infill_wall_overlap"], "18%")
+        self.assertEqual(len(config.find("plate").findall("model_instance")), 2)
+
+    def test_unsafe_object_settings_never_enter_native_3mf_metadata(self):
+        shape = fixture_stl()
+        instance = {"x_mm": 0, "y_mm": 0,
+                    "rotation_deg": 0, "scale_percent": 100,
+                    "process_overrides": {"machine_start_gcode": "M104 S300"}}
+        with self.assertRaisesRegex(SlicerProfileError, "Invalid native per-object"):
+            build_plate_3mf([(instance, shape)], bed_width=220, bed_depth=220)
+
     def test_single_material_compound_keeps_both_printable_islands(self):
         source = fixture_stl()
         items = [
