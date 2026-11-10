@@ -4847,6 +4847,11 @@ a:focus-visible,
   padding: 8px 12px;
   justify-content: center;
 }
+/* Anchor the measurement card to the full canvas column so its top aligns
+ * with camera control buttons, even when the buttons wrap. */
+.slicerPlateCanvasColumn { position: relative; }
+.slicerPlateCanvasViewport { position: static; }
+
 /* Floating readout lives in the unused upper-left of the 3D scene, away
  * from the camera buttons and orientation cube. It never alters STL data. */
 .slicerPlateCanvasViewport {
@@ -4865,7 +4870,7 @@ a:focus-visible,
 }
 .slicerViewportMeasurement {
   position: absolute;
-  top: 12px;
+  top: 18px;
   left: 12px;
   z-index: 5;
   box-sizing: border-box;
