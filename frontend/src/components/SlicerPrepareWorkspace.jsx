@@ -343,10 +343,15 @@ export default function SlicerPrepareWorkspace({
     : !objects.length ? "Add a model to the build plate first."
     : !profilesReady ? "Select native printer, process and filament profiles in Slicer setup."
     : "";
-  const objectSettingsPending = objects.some(item => Object.keys(item.process_overrides || {}).length > 0);
+  // Matches the bounded keys proven by the pinned Orca 2.4.2 real-binary
+  // two-object G-code fixture. Object edits outside this set remain draft-only.
+  const verifiedObjectSettings = new Set(["wall_loops", "sparse_infill_density"]);
+  const objectSettingsPending = objects.some(item =>
+    Object.keys(item.process_overrides || {}).some(key => !verifiedObjectSettings.has(key))
+  );
   const sliceBlockReason = draftBlockReason ||
     (objectSettingsPending
-      ? "Per-object edits are saved in the draft, but slicing is disabled until the Orca worker preserves separate objects and applies each override."
+      ? "Some Object settings are not yet verified for slicing. Wall loops and sparse infill density are supported; other Object overrides can be saved in drafts but cannot be sliced yet."
       : !workerConfigured
         ? "The selected slicing engine is not available in the verified worker. Check engine installations or choose an installed engine."
         : "");
@@ -454,8 +459,9 @@ export default function SlicerPrepareWorkspace({
               {itemName(item)}
             </option>)}
           </select>
-          <small>Object changes are saved with this draft and inherit Global settings unless overridden.
-            Slicing with object overrides remains disabled until native Orca object configuration is verified.</small>
+          <small>Object overrides inherit Global values unless changed.
+            Wall loops and sparse infill density have passed native Orca 2.4.2 slicing tests.
+            Other Object settings can be saved in drafts but remain unavailable for slicing until verified.</small>
         </div>}
         <section aria-label={group + " native process controls"} className="slicerNativeSettingsFields">
             {nativeProcessLoading && <p role="status">Reading native process settings…</p>}
