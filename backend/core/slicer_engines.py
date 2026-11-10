@@ -67,6 +67,22 @@ ENGINES = (
         profile_format="snapmaker-orca-json",
         cli_reference="https://github.com/Snapmaker/OrcaSlicer",
     ),
+    # Planned candidates only: these records do not enable execution or imply
+    # binary, platform, profile, or headless-CLI compatibility.
+    SlicerEngine(
+        key="elegooslicer",
+        label="ElegooSlicer",
+        upstream="https://github.com/elegooofficial/ElegooSlicer",
+        profile_format="elegoo-native-unverified",
+        cli_reference="https://github.com/elegooofficial/ElegooSlicer",
+    ),
+    SlicerEngine(
+        key="cura",
+        label="UltiMaker Cura",
+        upstream="https://github.com/Ultimaker/Cura",
+        profile_format="cura-native-unverified",
+        cli_reference="https://github.com/Ultimaker/CuraEngine",
+    ),
 )
 
 
