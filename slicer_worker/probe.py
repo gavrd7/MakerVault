@@ -104,7 +104,7 @@ def _validate_gcode(path, *, min_extrusion_span_x=None):
     return {"gcode_sha256": hashlib.sha256(data).hexdigest(), "gcode_bytes": len(data)}
 
 
-def run_probe(*, engine, version, binary, printer, filament, process, timeout=120, model=None, expected_objects=1, expected_islands=1):
+def run_probe(*, engine, version, binary, printer, filament, process, timeout=120, model=None, expected_objects=1, expected_islands=1, experimental_all_plates=False, experimental_no_arrange=False):
     """Run the *real* worker adapter with the *real* binary and report evidence.
 
     No mock success, no automatic deployment and no stored G-code artifact.
@@ -143,7 +143,12 @@ def run_probe(*, engine, version, binary, printer, filament, process, timeout=12
             model_bytes if model_bytes is not None else fixture_stl())
         for name, data in inputs.items():
             (root / name).write_bytes(data)
-        receipt = ENGINES[engine](Path(binary), root, timeout_seconds=timeout)
+        if (experimental_all_plates or experimental_no_arrange) and (engine != "orcaslicer" or model is None):
+            raise WorkerError("Experimental plate mode requires Orca 3MF input.")
+        options = ({"experimental_all_plates": experimental_all_plates,
+                    "experimental_no_arrange": experimental_no_arrange}
+                   if engine == "orcaslicer" else {})
+        receipt = ENGINES[engine](Path(binary), root, timeout_seconds=timeout, **options)
         if receipt.get("status") != "completed":
             raise WorkerError("The engine did not complete the slicing fixture.")
         output = _validate_gcode(root / "output.gcode",
@@ -175,6 +180,8 @@ def main(argv=None):
     parser.add_argument("--model", help="Optional real two-model MakerVault core 3MF fixture")
     parser.add_argument("--expected-objects", type=int, choices=(1, 2), default=1)
     parser.add_argument("--expected-islands", type=int, choices=(1, 2), default=1)
+    parser.add_argument("--experimental-all-plates", action="store_true")
+    parser.add_argument("--experimental-no-arrange", action="store_true")
     args = parser.parse_args(argv)
     try:
         print(json.dumps(run_probe(**vars(args)), indent=2, sort_keys=True))
