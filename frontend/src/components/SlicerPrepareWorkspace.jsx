@@ -68,6 +68,7 @@ export default function SlicerPrepareWorkspace({
   const [group, setGroup] = useState("Quality");
   const [toolMode, setToolMode] = useState("select");
   const [measurementVisible, setMeasurementVisible] = useState(false);
+  const [measureOptionsOpen, setMeasureOptionsOpen] = useState(false);
   const [measureMode, setMeasureMode] = useState("distance");
   const [measureUnit, setMeasureUnit] = useState("mm");
   const [measureClearVersion, setMeasureClearVersion] = useState(0);
@@ -321,10 +322,16 @@ export default function SlicerPrepareWorkspace({
     if (tool.target === "measure") {
       if (!selectedId && objects[0]?.instance_id) setSelectedId(objects[0].instance_id);
       setToolMode("select");
-      setMeasurementVisible(current => !current);
+      if (measurementVisible) {
+        setMeasureOptionsOpen(current => !current);
+      } else {
+        setMeasurementVisible(true);
+        setMeasureOptionsOpen(true);
+      }
       return;
     }
     setMeasurementVisible(false);
+    setMeasureOptionsOpen(false);
     if (["x_mm", "rotation_deg", "scale_percent", "scale_xyz_percent"].includes(tool.target)) {
       // Selecting a handle-based tool should show its gizmo immediately,
       // including for the first model before it has been explicitly clicked.
@@ -594,7 +601,7 @@ export default function SlicerPrepareWorkspace({
         <button type="button" disabled={!redoRef.current.length || busy} onClick={redo}
           aria-label="Redo"><SlicerUiIcon name="redo" /></button>
       </span>
-      {TOOLS.map(tool => <div className={"slicerToolTooltip" + (tool.expandable && measurementVisible ? " slicerToolOptionsOpen" : "")} key={tool.name}
+      {TOOLS.map(tool => <div className={"slicerToolTooltip" + (tool.expandable && measureOptionsOpen ? " slicerToolOptionsOpen" : "")} key={tool.name}
         data-tooltip={tool.pending ? tool.name + " · Not yet available: " + tool.pending
           : tool.expandable ? tool.name + " · Click for measurement options" : tool.name}>
         <button type="button"
@@ -607,13 +614,15 @@ export default function SlicerPrepareWorkspace({
             ? (tool.target === "x_mm" ? toolMode === "move"
               : tool.target === "rotation_deg" ? toolMode === "rotate" : toolMode === "scale") : undefined}
           aria-label={tool.name}
-          aria-expanded={tool.expandable ? measurementVisible : undefined}
+          aria-expanded={tool.expandable ? measureOptionsOpen : undefined}
           aria-controls={tool.expandable ? "slicer-measure-toolbar-options" : undefined}
           disabled={!!tool.pending || !canEdit || busy || (tool.target !== "import" && !objects.length)}
           onClick={() => selectTool(tool)}><SlicerUiIcon name={tool.icon || "others"} /></button>
-        {tool.expandable && measurementVisible && <div className="slicerToolOptions" id="slicer-measure-toolbar-options"
+        {tool.expandable && measureOptionsOpen && <div className="slicerToolOptions" id="slicer-measure-toolbar-options"
           role="group" aria-label="Measure tool options">
-          <strong>Measure</strong>
+          <div className="slicerToolOptionsHeader"><strong>Measure</strong>
+            <button type="button" aria-label="Hide Measure options" onClick={() => setMeasureOptionsOpen(false)}>Hide</button>
+          </div>
           <label>Measurement mode
             <select value={measureMode} onChange={event => setMeasureMode(event.target.value)}>
               <option value="distance">Two-point distance</option>
@@ -630,6 +639,10 @@ export default function SlicerPrepareWorkspace({
             Clear pins
           </button>
           <small>Click the model to place pins. Results appear in the top-left of the 3D view.</small>
+          <button type="button" className="slicerToolOptionsAction" onClick={() => {
+            setMeasureOptionsOpen(false);
+            setMeasurementVisible(false);
+          }}>Finish measuring</button>
         </div>}
       </div>)}
     </div>
@@ -731,6 +744,7 @@ export default function SlicerPrepareWorkspace({
           onPlateLabelChange={onPlateLabelChange} canEdit={canEdit && !busy} toolMode={toolMode} selectedInstanceId={selectedId}
           onSelectedInstanceChange={setSelectedId} measurementVisible={measurementVisible}
           measureMode={measureMode} measureUnit={measureUnit} measureClearVersion={measureClearVersion}
+          onMeasurePinPlaced={() => setMeasureOptionsOpen(false)}
           onExitToolMode={() => setToolMode("select")} />
       </div>
       {settingsExpanded ? createPortal(
