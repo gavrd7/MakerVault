@@ -161,7 +161,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
               <button type="button" disabled={finalStep >= layerSegments.length}
                 onClick={() => setStep(Math.min(layerSegments.length, finalStep + 1))}
                 aria-label="Next sampled toolhead step">▶</button>
-              <button type="button" onClick={() => setStep(null)}>Show entire sampled layer</button>
+              <button type="button" onClick={() => setStep(null)}>Show entire selected layer</button>
             </div>
           </div>
         </div>
@@ -197,8 +197,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
       <p className="projectUploadHint">Travel, retract, wipe, speed, flow, per-tool colour mapping and other
         native preview modes require a complete indexed toolpath. They are not represented by this extrusion-only sample.</p>
     </> : <p>No extrusion paths were available for the preview.</p>}
-    <small>Print time comes from the generated G-code and depends on the selected printer and native profiles; it is not a manually editable value. Times and material are slicer-declared estimates. Layer selection and horizontal steps
-      operate on sampled extrusion moves only; paths can be omitted. This is not a complete
+    <small>Print time comes from the generated G-code and depends on the selected printer and native profiles; it is not a manually editable value. Times and material are slicer-declared estimates. Layer selection and horizontal steps operate on full-resolution extrusion moves when available. The earlier-layer overview remains sampled, and very large or unsupported G-code may be incomplete. This is not a complete
       OrcaSlicer simulation or printer-safety check.</small>
     <p className="slicerPreviewCoverage" role="status">
       Overall index: {allSegments.length.toLocaleString()} of {(preview?.segment_count ?? allSegments.length).toLocaleString()} deposited moves
