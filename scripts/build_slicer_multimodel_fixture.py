@@ -64,7 +64,7 @@ def cube_fixture_stl(side=20.0):
     )
 
 
-def object_settings_fixture(target):
+def object_settings_fixture(target, *, reverse=False):
     """Create the exact per-object project the real Orca CLI must accept.
 
     Both objects are equal geometry at separated X positions, with distinct
@@ -72,11 +72,17 @@ def object_settings_fixture(target):
     positions extrude before this route is eligible for runtime use.
     """
     source = cube_fixture_stl()
+    settings = [
+        {"wall_loops": 2, "sparse_infill_density": 15},
+        {"wall_loops": 5, "sparse_infill_density": 37},
+    ]
+    if reverse:
+        settings.reverse()
     entries = [
         ({"x_mm": -35, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100,
-          "process_overrides": {"wall_loops": 2, "sparse_infill_density": 15}}, source),
+          "process_overrides": settings[0]}, source),
         ({"x_mm": 35, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100,
-          "process_overrides": {"wall_loops": 5, "sparse_infill_density": 37}}, source),
+          "process_overrides": settings[1]}, source),
     ]
     data = build_plate_3mf(entries, bed_width=220, bed_depth=220)
     validate_worker_3mf(data)
@@ -88,7 +94,8 @@ def object_settings_fixture(target):
         values = [{
             v.attrib["key"]: v.attrib["value"] for v in obj.findall("metadata")
         } for obj in objects]
-        if values[0]["wall_loops"] != "2" or values[1]["wall_loops"] != "5":
+        expected = ("5", "2") if reverse else ("2", "5")
+        if tuple(row["wall_loops"] for row in values) != expected:
             raise ValueError("Per-object wall settings were not saved correctly.")
     target = Path(target)
     if target.exists() or target.is_symlink():
@@ -129,12 +136,15 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--compound-output", type=Path)
     parser.add_argument("--object-output", type=Path)
+    parser.add_argument("--object-reverse-output", type=Path)
     args = parser.parse_args()
     generate(args.output)
     if args.compound_output:
         compound_preview(args.output, args.compound_output)
     if args.object_output:
         object_settings_fixture(args.object_output)
+    if args.object_reverse_output:
+        object_settings_fixture(args.object_reverse_output, reverse=True)
 
 
 if __name__ == "__main__":
