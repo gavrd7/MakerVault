@@ -1166,7 +1166,7 @@ export default function SlicerPlateEditor({
     } else {
       state.transform.detach();
     }
-  }, [objects, selected, toolMode, canEdit]);
+  }, [objects, selected, toolMode, canEdit, dimensions]);
 
   // Measured world points would become stale after a model is transformed.
   // Clear them rather than presenting a measurement for old geometry.
