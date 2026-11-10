@@ -1508,6 +1508,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         {notice && <p role="status">{notice}</p>}
         <GcodeViewerModal key={previewJob.output_asset.id} embedded
           file={previewJob.output_asset} canEdit={false}
+          objectSettings={previewJob.settings?.plate_objects}
+          globalProcessOverrides={previewJob.settings?.process_overrides}
           bedSize={(() => {
             const printer = printers.find(item => String(item.id) === String(previewJob.printer?.id));
             const x = Number(printer?.build_volume?.x);
