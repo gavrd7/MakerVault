@@ -66,11 +66,32 @@ test("surface picking measures triangle vertices and edges without editing slice
   assert.match(editor, /STL triangle edge length:/);
   assert.match(editor, /setMeasurePoints\(current =>/);
   assert.match(editor, /3D distance:/);
-  assert.match(editor, /Construct circle · three pins/);
-  assert.match(editor, /Millimetres \(mm\)/);
-  assert.match(editor, /Inches \(in\)/);
+  assert.match(scene, /Three-point circle/);
+  assert.match(scene, /Millimetres \(mm\)/);
+  assert.match(scene, /Inches \(in\)/);
   assert.match(editor, /Three-point circle is a geometric construction/);
   assert.match(editor, /setMeasurePoints\(\[\]\); \}, \[objects\]\)/);
+});
+test("Measure options open at the toolbar while a compact readout lives at top left of the plate", () => {
+  const scene = read("SlicerPrepareWorkspace.jsx");
+  const editor = read("SlicerPlateEditor.jsx");
+  const css = fs.readFileSync(path.resolve(root, "../styles.css"), "utf8");
+  assert.match(scene, /name: "Measure", target: "measure", icon: "measure", expandable: true/);
+  assert.match(scene, /aria-controls=\{tool\.expandable \? "slicer-measure-toolbar-options"/);
+  assert.match(scene, /className="slicerToolOptions"/);
+  assert.match(scene, /measureMode=\{measureMode\} measureUnit=\{measureUnit\} measureClearVersion=\{measureClearVersion\}/);
+  assert.match(scene, /setMeasureClearVersion\(value => value \+ 1\)/);
+  assert.match(editor, /className="slicerPlateCanvasViewport"/);
+  assert.match(editor, /className="slicerViewportMeasurement"/);
+  assert.match(editor, /aria-label="On-plate measurements"/);
+  assert.match(editor, /pinDistance !== null/);
+  assert.match(editor, /measureOverlayExpanded/);
+  assert.match(editor, /measureClearVersion\]\)/);
+  assert.match(editor, /Choose measurement mode, units and Clear pins from the expandable/);
+  assert.match(css, /\.slicerToolOptions \{/);
+  assert.match(css, /\.slicerViewportMeasurement \{/);
+  assert.match(css, /position: absolute;/);
+  assert.match(css, /@media \(max-width: 700px\)/);
 });
 test("active 3D model has a temporary outline and preserves preview filament colours", () => {
   const scene = read("SlicerPrepareWorkspace.jsx");
