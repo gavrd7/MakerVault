@@ -628,6 +628,7 @@ export default function SlicerPrepareWorkspace({
             <select value={measureMode} onChange={event => setMeasureMode(event.target.value)}>
               <option value="distance">Two-point distance</option>
               <option value="circle">Three-point circle</option>
+              <option value="detect">Auto-detect mesh edge / face</option>
             </select>
           </label>
           <label>Snapping
@@ -647,7 +648,9 @@ export default function SlicerPrepareWorkspace({
           <button type="button" className="slicerToolOptionsAction" onClick={() => setMeasureClearVersion(value => value + 1)}>
             Clear pins
           </button>
-          <small>Click the model to place pins. Results appear in the top-left of the 3D view.</small>
+          <small>{measureMode === "detect"
+            ? "Click a feature to identify a sharp STL edge segment or connected planar patch. Values are mesh estimates, not original CAD dimensions."
+            : "Click the model to place pins. Results appear in the top-left of the 3D view."}</small>
           <button type="button" className="slicerToolOptionsAction" onClick={() => {
             setMeasureOptionsOpen(false);
             setMeasurementVisible(false);
