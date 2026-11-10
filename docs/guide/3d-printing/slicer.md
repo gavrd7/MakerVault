@@ -98,6 +98,23 @@ The planned administrator workflow is to select an engine and supported pinned v
 
 **Current PR limitations:** PR #171 includes OrcaSlicer and Creality Print worker adapters, a separately installed, pinned and isolated engine worker, upstream multi-manufacturer profile browsing, native-profile customisation, saved slice drafts, G-code output and a visual build plate. **The real OrcaSlicer 2.4.2 binary has passed single-STL fixtures for K1, a test-only-adjusted K2, and Prusa MK4, plus a two-model, single-filament compound 3MF fixture built by MakerVault.** Actual staging end-to-end profile approval and G-code review still require operator testing. There is no verified native multi-extruder/CFS print workflow, full GUI setting parity or production-ready multi-engine installer. Creality Print and the other engines are not yet real-CLI approved.
 
+### Planned slicer engine coverage
+
+The long-term goal is a single MakerVault interface with independently installable
+slicing engines: **OrcaSlicer**, **Creality Print**, **Bambu Studio**,
+**PrusaSlicer**, **Snapmaker Orca**, **ElegooSlicer**, and **UltiMaker Cura**
+(with a separately tested CuraEngine backend). Other manufacturer engines may
+follow once their executable, native profiles, licensing, and output pass
+isolated acceptance testing. ElegooSlicer and UltiMaker Cura are currently
+**roadmap candidates, not working integrations**. Listing an engine does not
+make it installable, verified, or ready to slice.
+
+MakerVault's common build-plate and print-submission workflow should work
+consistently across engines where their native capabilities allow it, while
+preserving each engine's distinct profile formats, version requirements and
+multi-material semantics. A printer's brand does not force the user to choose
+that manufacturer's slicer.
+
 ## Profile defaults and spool-aware suggestions (development)
 
 Within **Profile management → Manage profiles** or **Saved profiles**, choose **Set as default** for an imported printer, filament or process profile. Defaults are scoped to your account and that exact slicer engine/version. The official-profile search also offers **Import & set default**; imported profiles remain unverified until tested.
