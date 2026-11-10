@@ -47,6 +47,7 @@ from .filament_catalogue import (
 from .printing_catalogue_seed import COMMON_FILAMENT_MATERIALS
 from .model_analysis import ModelAnalysisError, analyse_file_asset
 from .print_material_reporting import capture_material, gcode_report, material_summary
+from .file_library_visibility import library_visible_assets
 from .printing_integrations import PrintingIntegrationError, probe_simplyprint, probe_spoolman
 from .printer_connectivity import (
     ADAPTERS as PRINTER_ADAPTERS,
@@ -2485,7 +2486,10 @@ def file_gcode_inspect(request, asset_id):
 @require_http_methods(["GET", "POST"])
 def files_lookup(request):
     if request.method == "GET":
-        qs = FileAsset.objects.filter(owner=request.user).exclude(category="image").filter(Q(metadata__slicer_temporary__isnull=True) | Q(metadata__slicer_temporary=False)).filter(superseded_by__isnull=True).select_related(
+        qs = library_visible_assets(
+            FileAsset.objects.filter(owner=request.user).exclude(category="image").filter(superseded_by__isnull=True),
+            request.user,
+        ).select_related(
             "project", "board__manufacturer", "component__category"
         )
         query = request.GET.get("q", "").strip()
@@ -4732,13 +4736,17 @@ def printing_overview(request):
         "common_filament_materials": COMMON_FILAMENT_MATERIALS,
         "gcode_files": [
             _serialise_file_asset(asset)
-            for asset in FileAsset.objects.filter(owner=request.user, superseded_by__isnull=True, metadata__extension=".gcode").select_related("project", "board__manufacturer", "component__category")[:5000]
+            for asset in library_visible_assets(
+                FileAsset.objects.filter(owner=request.user, superseded_by__isnull=True, category="gcode", metadata__extension=".gcode"),
+                request.user,
+            ).select_related("project", "board__manufacturer", "component__category")[:5000]
         ] if request.GET.get("include_files") != "0" else [],
         "model_files": [
             _serialise_file_asset(asset)
-            for asset in FileAsset.objects.filter(owner=request.user).filter(Q(metadata__slicer_temporary__isnull=True) | Q(metadata__slicer_temporary=False)).filter(
-                Q(category__in=["mesh", "slicer", "cad", "gcode"]) | Q(metadata__extension=".gcode"),
-                superseded_by__isnull=True,
+            for asset in library_visible_assets(
+                FileAsset.objects.filter(owner=request.user, superseded_by__isnull=True).filter(
+                    Q(category__in=["mesh", "slicer", "cad", "gcode"]) | Q(metadata__extension=".gcode"),
+                ), request.user,
             )
                 .select_related("project", "board__manufacturer", "component__category")
                 .order_by("category", "name")[:5000]
