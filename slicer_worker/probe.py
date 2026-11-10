@@ -104,7 +104,7 @@ def _validate_gcode(path, *, min_extrusion_span_x=None):
     return {"gcode_sha256": hashlib.sha256(data).hexdigest(), "gcode_bytes": len(data)}
 
 
-def _verify_two_native_object_effects(path):
+def _verify_two_native_object_effects(path, *, reverse=False):
     """Check toolpaths reflect different process settings on equal 20mm cubes.
 
     The fixture deliberately uses 15%/2-wall left and 37%/5-wall right.
@@ -157,10 +157,14 @@ def _verify_two_native_object_effects(path):
             "Per-object G-code verification is missing extrusion in one fixture region."
         )
     ratio = totals[1] / totals[0]
-    if ratio < 1.2:
+    # Compare both the original and reversed setting assignments. A position-
+    # dependent difference cannot satisfy both experiments: the high-infill,
+    # five-wall object must consume more filament wherever it is placed.
+    if (ratio >= 0.8 if reverse else ratio <= 1.2):
         raise WorkerError(
             f"Native object overrides were not proven effective: "
-            f"left={totals[0]:.2f} mm, right={totals[1]:.2f} mm, ratio={ratio:.2f}."
+            f"left={totals[0]:.2f} mm, right={totals[1]:.2f} mm, ratio={ratio:.2f}; "
+            f"reversed={reverse}."
         )
     return {"left_extrusion_mm": round(totals[0], 3),
             "right_extrusion_mm": round(totals[1], 3),
@@ -168,7 +172,7 @@ def _verify_two_native_object_effects(path):
             "left_moves": moves[0], "right_moves": moves[1]}
 
 
-def run_probe(*, engine, version, binary, printer, filament, process, timeout=120, model=None, expected_objects=1, expected_islands=1, experimental_all_plates=False, experimental_no_arrange=False, verify_object_effects=False):
+def run_probe(*, engine, version, binary, printer, filament, process, timeout=120, model=None, expected_objects=1, expected_islands=1, experimental_all_plates=False, experimental_no_arrange=False, verify_object_effects=False, reverse_object_effects=False):
     """Run the *real* worker adapter with the *real* binary and report evidence.
 
     No mock success, no automatic deployment and no stored G-code artifact.
@@ -183,6 +187,8 @@ def run_probe(*, engine, version, binary, printer, filament, process, timeout=12
             or ((expected_objects == 2 or expected_islands == 2) and not model)
             or (expected_objects == 2 and expected_islands == 2)):
         raise WorkerError("Explicit two-object 3MF input is required for multi-model acceptance.")
+    if reverse_object_effects and not verify_object_effects:
+        raise WorkerError("Reversed object settings require G-code effect verification.")
     model_bytes = None
     if model is not None:
         if (expected_objects != 2 and expected_islands != 2) or Path(model).suffix.lower() != ".3mf":
@@ -220,7 +226,8 @@ def run_probe(*, engine, version, binary, printer, filament, process, timeout=12
         if verify_object_effects:
             if expected_objects != 2 or model is None or engine != "orcaslicer":
                 raise WorkerError("Per-object effect probe requires independent Orca 3MF.")
-            output.update(_verify_two_native_object_effects(root / "output.gcode"))
+            output.update(_verify_two_native_object_effects(
+                root / "output.gcode", reverse=reverse_object_effects))
     return {
         "status": "passed",
         "engine": engine, "engine_version": version,
@@ -251,6 +258,7 @@ def main(argv=None):
     parser.add_argument("--experimental-all-plates", action="store_true")
     parser.add_argument("--experimental-no-arrange", action="store_true")
     parser.add_argument("--verify-object-effects", action="store_true")
+    parser.add_argument("--reverse-object-effects", action="store_true")
     args = parser.parse_args(argv)
     try:
         print(json.dumps(run_probe(**vars(args)), indent=2, sort_keys=True))
