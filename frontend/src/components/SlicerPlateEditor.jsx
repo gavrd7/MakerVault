@@ -176,6 +176,7 @@ export default function SlicerPlateEditor({
   canEdit = false, onFilesUploaded, defaultColor = null, onManualColorChange, footer = null,
   selectedInstanceId = null, onSelectedInstanceChange, toolMode = "select",
   measurementVisible = false, measureMode = "distance", measureUnit = "mm", measureClearVersion = 0,
+  onMeasurePinPlaced,
   localAssets = [], onLocalAssetsChange, onExitToolMode,
 }) {
   const hostRef = useRef(null);
@@ -183,6 +184,8 @@ export default function SlicerPlateEditor({
   const latestObjectsRef = useRef(objects);
   const latestOnChangeRef = useRef(onChange);
   const latestToolModeRef = useRef(toolMode);
+  const measurePinPlacedRef = useRef(onMeasurePinPlaced);
+  measurePinPlacedRef.current = onMeasurePinPlaced;
   const exitToolModeRef = useRef(onExitToolMode);
   exitToolModeRef.current = onExitToolMode;
   const dimensionsRef = useRef({});
@@ -891,6 +894,7 @@ export default function SlicerPlateEditor({
         const pin = { point: [world.x, world.y, world.z],
           instanceId: target.userData.instanceId, snap, edgeLength };
         setSelected(target.userData.instanceId);
+        measurePinPlacedRef.current?.();
         setMeasurePoints(current => {
           const max = latestMeasurementRef.current.mode === "circle" ? 3 : 2;
           return current.length >= max ? [pin] : [...current, pin];
