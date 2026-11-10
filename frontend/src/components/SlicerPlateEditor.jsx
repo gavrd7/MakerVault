@@ -9,6 +9,7 @@ import { apiFetch } from "../api";
 import { plateExtentWarning, plateFootprintsOverlap, autoArrangePlate, plateModelMeasurement,
   measurementDistance, measurementCircle, measurementFormat } from "./slicerPlateGeometry";
 import { nativeBedArtwork } from "./slicerNativePlateArt";
+import { detectMeshMeasurement, formatDetectedMeasurement } from "./slicerAutoMeasure";
 import makerVaultLogoSvg from "../assets/slicer-bed-art/makervault-official-logo.svg?raw";
 
 const PALETTE = ["#58b5e4", "#f59e0b", "#a78bfa", "#10b981", "#ef4444", "#f472b6"];
@@ -215,6 +216,7 @@ export default function SlicerPlateEditor({
   const [arrangeNotice, setArrangeNotice] = useState("");
   const [dimensions, setDimensions] = useState({});
   const [measurePoints, setMeasurePoints] = useState([]);
+  const [detectedFeature, setDetectedFeature] = useState(null);
   const [measureOverlayExpanded, setMeasureOverlayExpanded] = useState(false);
   const latestMeasurementRef = useRef({ active: false, mode: "distance" });
   latestMeasurementRef.current = { active: measurementVisible, mode: measureMode, snapMode: measureSnapMode };
@@ -850,6 +852,18 @@ export default function SlicerPlateEditor({
         if (!hits.length) return;
         const hit = hits[0];
         const target = hit.object;
+        if (latestMeasurementRef.current.mode === "detect") {
+          const tolerance = Math.min(2.5, Math.max(0.2,
+            hit.distance * 6 / Math.max(320, renderer.domElement.clientHeight)));
+          const result = detectMeshMeasurement(target, hit, tolerance);
+          setSelected(target.userData.instanceId);
+          setMeasurePoints([]);
+          setDetectedFeature(result);
+          measurePinPlacedRef.current?.();
+          event.preventDefault();
+          return;
+        }
+        setDetectedFeature(null);
         const world = hit.point.clone();
         let snap = "Surface";
         let edgeLength = null;
@@ -1175,9 +1189,9 @@ export default function SlicerPlateEditor({
 
   // Measured world points would become stale after a model is transformed.
   // Clear them rather than presenting a measurement for old geometry.
-  useEffect(() => { setMeasurePoints([]); }, [objects, measureMode, measureClearVersion]);
+  useEffect(() => { setMeasurePoints([]); setDetectedFeature(null); }, [objects, measureMode, measureClearVersion]);
   useEffect(() => {
-    if (!measurementVisible) setMeasurePoints([]);
+    if (!measurementVisible) { setMeasurePoints([]); setDetectedFeature(null); }
   }, [measurementVisible]);
   useEffect(() => {
     const state = sceneRef.current;
@@ -1191,6 +1205,21 @@ export default function SlicerPlateEditor({
     }
     if (!measurementVisible) return;
     const points = measurePoints.map(pin => new THREE.Vector3(...pin.point));
+    if (detectedFeature?.point && detectedFeature?.value != null) {
+      const marker = new THREE.Mesh(new THREE.SphereGeometry(1.65, 10, 8),
+        new THREE.MeshBasicMaterial({ color: "#facc15", depthTest: false }));
+      marker.position.set(...detectedFeature.point);
+      marker.renderOrder = 101;
+      overlay.add(marker);
+      if (detectedFeature.kind === "edge" && detectedFeature.start && detectedFeature.end) {
+        const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(...detectedFeature.start),
+          new THREE.Vector3(...detectedFeature.end),
+        ]), new THREE.LineBasicMaterial({ color: "#facc15", depthTest: false }));
+        line.renderOrder = 100;
+        overlay.add(line);
+      }
+    }
     for (const point of points) {
       const marker = new THREE.Mesh(new THREE.SphereGeometry(1.65, 10, 8),
         new THREE.MeshBasicMaterial({ color: "#facc15", depthTest: false }));
@@ -1210,7 +1239,9 @@ export default function SlicerPlateEditor({
       ? measurementDistance(measurePoints[0].point, measurePoints[1].point) : null;
     const circle = points.length === 3 && measureMode === "circle"
       ? measurementCircle(...measurePoints.map(pin => pin.point)) : null;
-    const caption = distance !== null ? measurementFormat(distance, measureUnit)
+    const caption = detectedFeature?.value != null
+      ? formatDetectedMeasurement(detectedFeature, measureUnit)
+      : distance !== null ? measurementFormat(distance, measureUnit)
       : circle ? "Ø " + measurementFormat(circle.diameter, measureUnit) : "";
     if (caption) {
       const canvas = document.createElement("canvas");
@@ -1228,15 +1259,17 @@ export default function SlicerPlateEditor({
         const label = new THREE.Sprite(new THREE.SpriteMaterial({
           map: texture, depthTest: false, transparent: true,
         }));
-        const middle = points.reduce((result, point) => result.add(point),
-          new THREE.Vector3()).divideScalar(points.length);
+        const labelPoints = detectedFeature?.point && detectedFeature?.value != null
+          ? [new THREE.Vector3(...detectedFeature.point)] : points;
+        const middle = labelPoints.reduce((result, point) => result.add(point),
+          new THREE.Vector3()).divideScalar(labelPoints.length);
         label.position.copy(middle).add(new THREE.Vector3(0, 0, 5));
         label.scale.set(37, 7, 1);
         label.renderOrder = 102;
         overlay.add(label);
       }
     }
-  }, [measurePoints, measurementVisible, measureUnit, measureMode]);
+  }, [measurePoints, detectedFeature, measurementVisible, measureUnit, measureMode]);
 
   function setPlateCamera(view) {
     const state = sceneRef.current;
@@ -1324,6 +1357,11 @@ export default function SlicerPlateEditor({
           <span>Z {measurementFormat(selectedMeasurement.height, measureUnit)}</span>
         </div> : <small>Loading STL dimensions…</small>}
         <div className="slicerViewportMeasurementReadout" role="status" aria-live="polite">
+          {measureMode === "detect" && (detectedFeature ? <div>
+            <strong>{detectedFeature.label}</strong>
+            {detectedFeature.value != null && <span>{formatDetectedMeasurement(detectedFeature, measureUnit)}</span>}
+            {detectedFeature.triangles != null && <span>{detectedFeature.triangles} connected triangles</span>}
+          </div> : <span>Click an edge or planar face to inspect it</span>)}
           {pinDistance !== null ? <strong>Distance: {measurementFormat(pinDistance, measureUnit)}</strong>
             : measureMode === "distance" ? <span>{measurePoints.length}/2 distance pins</span> : null}
           {measureMode === "circle" && (pinCircle ?
@@ -1346,7 +1384,8 @@ export default function SlicerPlateEditor({
           </div>)}
         </>}
         <small className="slicerViewportMeasurementHint">
-          Click the model to {measureMode === "circle" ? "set three circle points" : "place two pins"}.
+          {measureMode === "detect" ? "Click a mesh edge or face to detect a measurable feature" :
+            <>Click the model to {measureMode === "circle" ? "set three circle points" : "place two pins"}</>}.
           Options are in the Measure toolbar.
         </small>
       </aside>}
@@ -1456,9 +1495,16 @@ export default function SlicerPlateEditor({
       <h5>Measure geometry</h5>
       <p className="slicerPlateHint">Choose measurement mode, units and Clear pins from the expandable
         Measure toolbar above the plate. A compact live readout is also shown at the top-left of the viewport.</p>
-      <p className="slicerPlateHint">Click {measureMode === "circle" ? "three" : "two"} places on
-        a model surface to drop measurement pins. Snapping follows the toolbar selection and refers to STL triangle geometry, not original CAD edges. Orbit the model to reach other faces. Clicking again after completion starts
-        a new measurement.</p>
+      <p className="slicerPlateHint">{measureMode === "detect"
+        ? "Click near a sharp mesh edge or on a connected planar patch to measure it. Complex curved and densely triangulated meshes may not expose a clear feature."
+        : <>Click {measureMode === "circle" ? "three" : "two"} places on a model surface to drop measurement pins.
+          Snapping follows the toolbar selection and refers to STL triangle geometry, not original CAD edges.
+          Orbit the model to reach other faces. Clicking again after completion starts a new measurement.</>}</p>
+      {measureMode === "detect" && detectedFeature && <div role="status" className="slicerMeasurementResult">
+        <strong>{detectedFeature.label}</strong>
+        {detectedFeature.value != null && <p>{formatDetectedMeasurement(detectedFeature, measureUnit)}</p>}
+        <small>Mesh-based estimate, not a CAD feature or a certified dimension.</small>
+      </div>}
       {measurePoints.length > 0 && <div role="status" className="slicerMeasurementResult">
         {measurePoints.map((pin, index) => <div key={index}>
           Pin {index + 1} · {pin.snap} · X {measurementFormat(pin.point[0], measureUnit)},
