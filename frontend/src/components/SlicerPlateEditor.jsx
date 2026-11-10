@@ -1245,6 +1245,22 @@ export default function SlicerPlateEditor({
       marker.position.set(...detectedFeature.point);
       marker.renderOrder = 101;
       overlay.add(marker);
+      if (detectedFeature.kind === "face" && detectedFeature.highlightPositions?.length >= 9) {
+        // A temporary overlay made from the very triangles contributing to the
+        // measured area. It does not alter the STL or printable object colour.
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute("position",
+          new THREE.Float32BufferAttribute(detectedFeature.highlightPositions, 3));
+        geometry.computeVertexNormals();
+        const material = new THREE.MeshBasicMaterial({
+          color: "#facc15", side: THREE.DoubleSide, transparent: true,
+          opacity: 0.38, depthTest: true, depthWrite: false,
+          polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+        });
+        const highlight = new THREE.Mesh(geometry, material);
+        highlight.renderOrder = 95;
+        overlay.add(highlight);
+      }
       if (detectedFeature.kind === "edge" && detectedFeature.start && detectedFeature.end) {
         const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([
           new THREE.Vector3(...detectedFeature.start),
@@ -1368,14 +1384,7 @@ export default function SlicerPlateEditor({
       <button type="button" onClick={() => setPlateCamera("right")} title="View the right side of the printer build plate">Right</button>
       <button data-slicer-action="focus" type="button" onClick={() => setPlateCamera("selection")} disabled={!chosen}
         title="Centre and zoom onto the currently selected model">Fit selected model</button>
-      <label className="slicerBedVisibilityControl">Build plate
-        <select aria-label="Build plate visibility" value={undersidePlateMode}
-          onChange={event => setUndersidePlateMode(event.target.value)}>
-          <option value="auto">Auto (see through from below)</option>
-          <option value="opaque">Always opaque</option>
-          <option value="transparent">Always transparent</option>
-        </select>
-      </label>
+
     </div>
     <div className="slicerPlateCanvasViewport">
       <div ref={hostRef} className="slicerPlateCanvas"
@@ -1456,6 +1465,14 @@ export default function SlicerPlateEditor({
         <label><input type="checkbox" checked={showAxisLabels}
           onChange={event => setShowAxisLabels(event.target.checked)} />
           <span>X / Y axes</span></label>
+      <label className="slicerBedVisibilityControl">Build plate
+        <select aria-label="Build plate visibility" value={undersidePlateMode}
+          onChange={event => setUndersidePlateMode(event.target.value)}>
+          <option value="auto">Auto (see through from below)</option>
+          <option value="opaque">Always opaque</option>
+          <option value="transparent">Always transparent</option>
+        </select>
+      </label>
         <button type="button" onClick={() => {
           const anyVisible = showOrientationLabels || showMachineLabel ||
             showDimensionsLabel || showAxisLabels;
