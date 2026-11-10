@@ -1,4 +1,6 @@
 import struct
+import io
+import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
@@ -39,16 +41,31 @@ class OrcaRunnerTests(TestCase):
             orca_command(self.binary, self.root, experimental_all_plates=True)
         with self.assertRaisesRegex(WorkerError, "requires a 3MF input"):
             orca_command(self.binary, self.root, experimental_no_arrange=True)
-        (self.root / "input.3mf").write_bytes(b"bounded probe fixture")
+        package = io.BytesIO()
+        with zipfile.ZipFile(package, "w") as archive:
+            archive.writestr("3D/3dmodel.model", "<model/>")
+            archive.writestr("Metadata/model_settings.config", 
+                             '<config><object id="1"><metadata key="wall_loops" value="5"/></object></config>')
+        (self.root / "input.3mf").write_bytes(package.getvalue())
         with patch("slicer_worker.orca_runner.validate_worker_3mf"):
             regular = orca_command(self.binary, self.root)
             self.assertEqual(regular[regular.index("--slice") + 1], "1")
-            self.assertNotIn("--arrange", regular)
+            self.assertEqual(regular[regular.index("--arrange") + 1], "0")
             diagnostic = orca_command(self.binary, self.root,
                                       experimental_all_plates=True,
                                       experimental_no_arrange=True)
         self.assertEqual(diagnostic[diagnostic.index("--slice") + 1], "0")
         self.assertEqual(diagnostic[diagnostic.index("--arrange") + 1], "0")
+
+    def test_generic_3mf_without_per_object_metadata_keeps_existing_cli(self):
+        package = io.BytesIO()
+        with zipfile.ZipFile(package, "w") as archive:
+            archive.writestr("3D/3dmodel.model", "<model/>")
+        (self.root / "input.3mf").write_bytes(package.getvalue())
+        with patch("slicer_worker.orca_runner.validate_worker_3mf"):
+            command = orca_command(self.binary, self.root)
+        self.assertNotIn("--arrange", command)
+        self.assertEqual(command[command.index("--slice") + 1], "1")
 
     def test_verified_appimage_uses_pre_extracted_entrypoint(self):
         original = self.root / "orcaslicer.AppImage"
