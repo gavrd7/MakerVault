@@ -18,7 +18,7 @@ test("auto-arrange clears explicit mesh highlighting without changing the contro
 
 test("plate movement retains stored preview colours and clears residual emission", () => {
   assert.ok(source.includes("mesh.material.color.set(item.color || PALETTE[0])"));
-  assert.ok(source.includes("mesh.material.emissiveIntensity = item.instance_id === selected ? 0.18 : 0"));
+  assert.ok(source.includes("mesh.material.emissiveIntensity = item.instance_id === selected ? 0.32 : 0"));
 });
 
 test("plate height follows the model-control rail instead of fixed viewport height", () => {
