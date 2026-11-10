@@ -3,12 +3,14 @@ import { apiFetch } from "../api";
 import { Modal } from "./Common";
 import PrinterStartGcodeModal from "./PrinterStartGcodeModal";
 import SlicerGcodePreview from "./SlicerGcodePreview";
+import GcodeFullSource from "./GcodeFullSource";
 
 // Read-only analysis is evidence, not proof of safe G-code or firmware compatibility.
 export default function GcodeViewerModal({ file, canEdit = false, onClose, onSaved, onOpenModel, embedded = false, bedSize = null }) {
   const [report, setReport] = useState(null);
   const [text, setText] = useState("");
   const [mode, setMode] = useState("visual");
+  const [fullSource, setFullSource] = useState(false);
   const [edited, setEdited] = useState(false);
   const [version, setVersion] = useState("");
   const [printerId, setPrinterId] = useState("");
@@ -100,7 +102,7 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
       <div className="formActions" style={{ justifyContent: "flex-start" }}>
         <button type="button" className={mode === "visual" ? "primary" : ""} onClick={() => setMode("visual")}>Visual toolpath</button>
         <button type="button" className={mode === "code" ? "primary" : ""} onClick={() => setMode("code")}>G-code text</button>
-        {!embedded && file.url && <a className="assetButton" href={file.url}>Download original</a>}
+        <a className="assetButton" href={`/api/files/${encodeURIComponent(file.id)}/gcode/source/?download=1`}>Download complete G-code</a>
       </div>
       <p><strong>Linked model:</strong> {report.linked_models?.length
         ? report.linked_models.map(link => <button key={link.revision_id} type="button" onClick={() => onOpenModel?.(link.model_id)} disabled={!onOpenModel}>{link.model_name} · revision {link.revision}</button>)
@@ -128,9 +130,13 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
         </svg> : <p>No XY movements found.</p>}
         <small>Top-down XY trajectory only; not a validated print preview. {analysis.xy_preview_sampled ? "Only the first 3,000 moves are shown." : ""} Extrusion, machine-specific instructions and clearance are not fully simulated.</small>
       </div> : <div>
-        <textarea value={text} onChange={e => { setText(e.target.value); setEdited(true); setPrinterCheck(null); }} readOnly={!canEdit || report.preview_truncated} spellCheck={false} aria-label="G-code source" rows={17} style={{ width: "100%", fontFamily: "monospace", fontSize: 12 }} />
-        {report.preview_truncated && <p>Only the beginning of this file is displayed. Editing is disabled to prevent saving a truncated file.</p>}
-        {canEdit && !report.preview_truncated && <>
+        <div className="formActions" style={{ justifyContent: "flex-start" }}>
+          <button type="button" className={!fullSource ? "primary" : ""} onClick={() => setFullSource(false)}>Quick inspection</button>
+          <button type="button" className={fullSource ? "primary" : ""} onClick={() => setFullSource(true)}>Complete G-code</button>
+        </div>
+        {fullSource ? <GcodeFullSource fileId={file.id} /> : <textarea value={text} onChange={e => { setText(e.target.value); setEdited(true); setPrinterCheck(null); }} readOnly={!canEdit || report.preview_truncated} spellCheck={false} aria-label="G-code source" rows={17} style={{ width: "100%", fontFamily: "monospace", fontSize: 12 }} />}
+        {!fullSource && report.preview_truncated && <p>This quick inspection is limited to the beginning of the file. Open <strong>Complete G-code</strong> to search, inspect, copy or download all lines. Editing remains disabled to protect the original.</p>}
+        {!fullSource && canEdit && !report.preview_truncated && <>
           <label>New file version<input value={version} onChange={e => setVersion(e.target.value)} placeholder="e.g. 1.1" /></label>
           <button type="button" disabled={!edited || !version.trim() || busy} onClick={saveRevision}>{busy ? "Saving…" : "Save as new file version"}</button>
           <small>Original G-code is retained. Always revalidate edited instructions before printing.</small>
