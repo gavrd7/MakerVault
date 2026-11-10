@@ -1382,8 +1382,8 @@ export default function SlicerPlateEditor({
           <div><dt>Y envelope</dt><dd>{measurementFormat(selectedMeasurement.depth, measureUnit)}</dd></div>
           <div><dt>Model height</dt><dd>{measurementFormat(selectedMeasurement.height, measureUnit)}</dd></div>
           <div><dt>Centre X / Y</dt><dd>{measurementFormat(chosen.x_mm, measureUnit)} / {measurementFormat(chosen.y_mm, measureUnit)}</dd></div>
-          <div><dt>X bounds</dt><dd>{pretty(selectedMeasurement.minX)} to {measurementFormat(selectedMeasurement.maxX, measureUnit)}</dd></div>
-          <div><dt>Y bounds</dt><dd>{pretty(selectedMeasurement.minY)} to {measurementFormat(selectedMeasurement.maxY, measureUnit)}</dd></div>
+          <div><dt>X bounds</dt><dd>{measurementFormat(selectedMeasurement.minX, measureUnit)} to {measurementFormat(selectedMeasurement.maxX, measureUnit)}</dd></div>
+          <div><dt>Y bounds</dt><dd>{measurementFormat(selectedMeasurement.minY, measureUnit)} to {measurementFormat(selectedMeasurement.maxY, measureUnit)}</dd></div>
         </dl>
         <p className="slicerPlateHint">Read-only STL bounding-box estimate, accounting for X/Y/Z scaling and Z rotation.
           X/Y are relative to the plate centre. This is not face-to-face measurement,
