@@ -2415,12 +2415,12 @@ def file_gcode_source(request, asset_id):
         handle = asset.file.storage.open(asset.file.name, "rb")
     except (OSError, ValueError):
         return _error("Stored G-code could not be opened.", status=404)
-    response = FileResponse(handle, content_type="text/plain; charset=utf-8")
-    # Inline source is used for inspection; download is an explicit user action.
-    response["Content-Disposition"] = (
-        'attachment; filename="print.gcode"'
-        if request.GET.get("download") == "1"
-        else 'inline; filename="print.gcode"'
+    # Django constructs and escapes Content-Disposition, preserving the source name.
+    response = FileResponse(
+        handle,
+        as_attachment=request.GET.get("download") == "1",
+        filename=Path(filename).name,
+        content_type="text/plain; charset=utf-8",
     )
     response["Cache-Control"] = "private, no-store"
     response["X-Content-Type-Options"] = "nosniff"
