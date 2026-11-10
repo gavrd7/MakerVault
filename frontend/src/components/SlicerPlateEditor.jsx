@@ -175,7 +175,7 @@ export default function SlicerPlateEditor({
   plateLabel = "Plate 1", onPlateLabelChange, printerLabel = "",
   canEdit = false, onFilesUploaded, defaultColor = null, onManualColorChange, footer = null,
   selectedInstanceId = null, onSelectedInstanceChange, toolMode = "select",
-  measurementVisible = false,
+  measurementVisible = false, measureMode = "distance", measureUnit = "mm", measureClearVersion = 0,
   localAssets = [], onLocalAssetsChange, onExitToolMode,
 }) {
   const hostRef = useRef(null);
@@ -211,9 +211,8 @@ export default function SlicerPlateEditor({
   const [error, setError] = useState("");
   const [arrangeNotice, setArrangeNotice] = useState("");
   const [dimensions, setDimensions] = useState({});
-  const [measureMode, setMeasureMode] = useState("distance");
-  const [measureUnit, setMeasureUnit] = useState("mm");
   const [measurePoints, setMeasurePoints] = useState([]);
+  const [measureOverlayExpanded, setMeasureOverlayExpanded] = useState(false);
   const latestMeasurementRef = useRef({ active: false, mode: "distance" });
   latestMeasurementRef.current = { active: measurementVisible, mode: measureMode };
   dimensionsRef.current = dimensions;
@@ -1170,7 +1169,7 @@ export default function SlicerPlateEditor({
 
   // Measured world points would become stale after a model is transformed.
   // Clear them rather than presenting a measurement for old geometry.
-  useEffect(() => { setMeasurePoints([]); }, [objects]);
+  useEffect(() => { setMeasurePoints([]); }, [objects, measureMode, measureClearVersion]);
   useEffect(() => {
     if (!measurementVisible) setMeasurePoints([]);
   }, [measurementVisible]);
@@ -1264,7 +1263,55 @@ export default function SlicerPlateEditor({
       <button data-slicer-action="focus" type="button" onClick={() => setPlateCamera("selection")} disabled={!chosen}
         title="Centre and zoom onto the currently selected model">Fit selected model</button>
     </div>
-    <div ref={hostRef} className="slicerPlateCanvas" aria-label="Interactive three-dimensional model plate preview with a clickable six-face orientation cube in the top right" />
+    <div className="slicerPlateCanvasViewport">
+      <div ref={hostRef} className="slicerPlateCanvas"
+        aria-label="Interactive three-dimensional model plate preview with a clickable six-face orientation cube in the top right" />
+      {measurementVisible && chosen && <aside className="slicerViewportMeasurement" aria-label="On-plate measurements">
+        <div className="slicerViewportMeasurementHeader">
+          <strong>Measure · {measureUnit === "mm" ? "mm" : "in"}</strong>
+          <button type="button" aria-expanded={measureOverlayExpanded}
+            onClick={() => setMeasureOverlayExpanded(current => !current)}>
+            {measureOverlayExpanded ? "Less" : "Details"}
+          </button>
+        </div>
+        <div className="slicerViewportMeasurementModel" title={
+          sourceFiles.find(file => String(file.id) === String(chosen.asset_id))?.name || "Selected model"
+        }>
+          {sourceFiles.find(file => String(file.id) === String(chosen.asset_id))?.name || "Selected model"}
+        </div>
+        {selectedMeasurement ? <div className="slicerViewportMeasurementDimensions">
+          <span>X {measurementFormat(selectedMeasurement.width, measureUnit)}</span>
+          <span>Y {measurementFormat(selectedMeasurement.depth, measureUnit)}</span>
+          <span>Z {measurementFormat(selectedMeasurement.height, measureUnit)}</span>
+        </div> : <small>Loading STL dimensions…</small>}
+        <div className="slicerViewportMeasurementReadout" role="status" aria-live="polite">
+          {pinDistance !== null ? <strong>Distance: {measurementFormat(pinDistance, measureUnit)}</strong>
+            : measureMode === "distance" ? <span>{measurePoints.length}/2 distance pins</span> : null}
+          {measureMode === "circle" && (pinCircle ?
+            <div><strong>Ø {measurementFormat(pinCircle.diameter, measureUnit)}</strong>
+              <span>Radius {measurementFormat(pinCircle.radius, measureUnit)}</span>
+              <span>Circumference {measurementFormat(pinCircle.circumference, measureUnit)}</span>
+            </div> : <span>{measurePoints.length}/3 circle pins
+              {measurePoints.length === 3 ? " · Collinear points" : ""}</span>)}
+        </div>
+        {measureOverlayExpanded && <>
+          {selectedMeasurement && <div className="slicerViewportMeasurementBounds">
+            <span>X: {measurementFormat(selectedMeasurement.minX, measureUnit)} to {measurementFormat(selectedMeasurement.maxX, measureUnit)}</span>
+            <span>Y: {measurementFormat(selectedMeasurement.minY, measureUnit)} to {measurementFormat(selectedMeasurement.maxY, measureUnit)}</span>
+          </div>}
+          {measurePoints.map((pin, index) => <div className="slicerViewportMeasurementPin" key={index}>
+            {index + 1}. {pin.snap} · X {measurementFormat(pin.point[0], measureUnit)},
+            Y {measurementFormat(pin.point[1], measureUnit)},
+            Z {measurementFormat(pin.point[2], measureUnit)}
+            {pin.edgeLength != null && <> · Edge {measurementFormat(pin.edgeLength, measureUnit)}</>}
+          </div>)}
+        </>}
+        <small className="slicerViewportMeasurementHint">
+          Click the model to {measureMode === "circle" ? "set three circle points" : "place two pins"}.
+          Options are in the Measure toolbar.
+        </small>
+      </aside>}
+    </div>
 
     <fieldset className="slicerPlateDisplayOptions">
       <legend>Build plate display</legend>
@@ -1368,26 +1415,8 @@ export default function SlicerPlateEditor({
     {measurementVisible && chosen && <section className="slicerPlateMeasurement" role="region"
       aria-label="Selected model measurements">
       <h5>Measure geometry</h5>
-      <div className="slicerMeasurementActions">
-        <label>Measurement
-          <select value={measureMode} onChange={event => {
-            setMeasureMode(event.target.value);
-            setMeasurePoints([]);
-          }}>
-            <option value="distance">Distance · two pins</option>
-            <option value="circle">Construct circle · three pins</option>
-          </select>
-        </label>
-        <label>Units
-          <select value={measureUnit} onChange={event => setMeasureUnit(event.target.value)}>
-            <option value="mm">Millimetres (mm)</option>
-            <option value="in">Inches (in)</option>
-          </select>
-        </label>
-        <button type="button" disabled={!measurePoints.length} onClick={() => setMeasurePoints([])}>
-          Clear pins
-        </button>
-      </div>
+      <p className="slicerPlateHint">Choose measurement mode, units and Clear pins from the expandable
+        Measure toolbar above the plate. A compact live readout is also shown at the top-left of the viewport.</p>
       <p className="slicerPlateHint">Click {measureMode === "circle" ? "three" : "two"} places on
         a model surface to drop measurement pins. Pins snap to nearby STL triangle vertices
         or edges. Orbit the model to reach other faces. Clicking again after completion starts
