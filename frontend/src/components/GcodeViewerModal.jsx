@@ -6,7 +6,7 @@ import SlicerGcodePreview from "./SlicerGcodePreview";
 import GcodeFullSource from "./GcodeFullSource";
 
 // Read-only analysis is evidence, not proof of safe G-code or firmware compatibility.
-export default function GcodeViewerModal({ file, canEdit = false, onClose, onSaved, onOpenModel, embedded = false, bedSize = null }) {
+export default function GcodeViewerModal({ file, canEdit = false, onClose, onSaved, onOpenModel, embedded = false, bedSize = null, objectSettings = null, globalProcessOverrides = null }) {
   const [report, setReport] = useState(null);
   const [text, setText] = useState("");
   const [mode, setMode] = useState("visual");
@@ -121,6 +121,26 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
         ? analysis.print_setup.nozzle_diameters_mm.map(size => `${size} mm`).join(", ")
         : "Not specified"} · <strong>Build plate:</strong> {analysis.print_setup?.bed_type || "Not specified"}</p>
       <p><strong>XY moves:</strong> {analysis.xy_moves?.toLocaleString() || 0} · <strong>Coordinates:</strong> {["X", "Y", "Z"].map(axis => bounds[axis]?.[0] == null ? `${axis} unknown` : `${axis} ${bounds[axis][0].toFixed(1)}–${bounds[axis][1].toFixed(1)} mm`).join(" · ")}</p>
+      {Array.isArray(objectSettings) && objectSettings.length > 0 && <div className="settingsCallout">
+        <strong>Settings saved with this slicing job</strong>
+        <p>These are the requested plate overrides from the saved draft, not independently measured values from the generated G-code. Compare with the per-object extrusion evidence in Complete G-code.</p>
+        <div style={{ overflowX: "auto" }}>
+          <table className="dataTable" style={{ width: "100%" }}>
+            <thead><tr><th>Plate instance</th><th>Wall loops</th><th>Sparse infill</th><th>Additional overrides</th></tr></thead>
+            <tbody>{objectSettings.map((item, index) => {
+              const overrides = item.process_overrides || {};
+              const global = globalProcessOverrides || {};
+              const other = Object.entries(overrides).filter(([key]) => !["wall_loops", "sparse_infill_density"].includes(key));
+              return <tr key={item.instance_id || index}>
+                <td>Object {index + 1}</td>
+                <td>{overrides.wall_loops ?? global.wall_loops ?? "Native profile"}</td>
+                <td>{overrides.sparse_infill_density ?? global.sparse_infill_density ?? "Native profile"}{(overrides.sparse_infill_density ?? global.sparse_infill_density) != null ? "%" : ""}</td>
+                <td>{other.length ? other.map(([key, value]) => `${key}: ${value}`).join(" · ") : "None"}</td>
+              </tr>;
+            })}</tbody>
+          </table>
+        </div>
+      </div>}
       {(analysis.warnings || []).map((warning, i) => <div className="projectUploadHint" key={i}>{warning}</div>)}
       {mode === "visual" && embedded && analysis.slicer_preview
         ? <SlicerGcodePreview preview={analysis.slicer_preview} bedSize={bedSize} />
