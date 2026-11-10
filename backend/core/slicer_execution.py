@@ -215,6 +215,15 @@ def _plate_builder(objects_with_stl):
     ) else build_compound_plate_3mf)
 
 
+# Real OrcaSlicer 2.4.2 binary acceptance: two separate equal cubes,
+# 2 walls/15% infill versus 5 walls/37% infill, both geometry regions and
+# distinct measured extrusion in a single G-code job. Other native process
+# options remain draft-only until independently verified with the worker.
+VERIFIED_OBJECT_PROCESS_KEYS = frozenset({
+    "wall_loops", "sparse_infill_density",
+})
+
+
 def _validate_plate_execution(job):
     """An untouched STL or a bounded native-bed-backed multi-object 3MF plate."""
     objects = (job.settings or {}).get("plate_objects")
@@ -224,12 +233,18 @@ def _validate_plate_execution(job):
         raise SlicerExecutionError("Multi-model plate execution is currently verified only for the single-material OrcaSlicer worker.")
     if not isinstance(objects, list) or not 1 <= len(objects) <= 12:
         raise SlicerExecutionError("Plate model list is invalid.")
-    if any(isinstance(item, dict) and item.get("process_overrides") for item in objects):
-        raise SlicerExecutionError(
-            "This draft contains per-object settings, but the verified Orca worker still merges "
-            "plate objects. Save the draft; slicing will be available after native object "
-            "configuration and independent-object G-code have passed verification."
-        )
+    for item in objects:
+        if not isinstance(item, dict):
+            raise SlicerExecutionError("Invalid plate object.")
+        overrides = item.get("process_overrides") or {}
+        if not isinstance(overrides, dict):
+            raise SlicerExecutionError("Invalid per-object process settings.")
+        if set(overrides) - VERIFIED_OBJECT_PROCESS_KEYS:
+            raise SlicerExecutionError(
+                "This draft uses per-object settings that have not passed real Orca "
+                "G-code verification. Wall loops and sparse infill density are "
+                "currently verified; save the draft to retain other settings."
+            )
     if not job.printer_profile_id:
         raise SlicerExecutionError("Select a native printer profile for slicing.")
     # The single unchanged STL execution path uses Orca's native arrange
