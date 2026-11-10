@@ -13,6 +13,7 @@ const MAX_TRIANGLES = 90000;
 const CREASE_COSINE = Math.cos(Math.PI / 6);
 const PLANAR_COSINE = 0.9999;
 const PLANE_TOLERANCE_MM = 0.06;
+const MAX_HIGHLIGHT_TRIANGLES = 12000;
 const geometryCache = new WeakMap();
 
 const edgeKey = (a, b) => a < b ? a + "|" + b : b + "|" + a;
@@ -148,6 +149,19 @@ export function detectMeshMeasurement(mesh, hit, tolerance = 1.5) {
     }
   }
   if (visited.size >= 2 && area > 0 && Number.isFinite(area)) {
+    // Preserve the exact triangles used for the measurement so the viewport
+    // can highlight the measured patch rather than only a single click marker.
+    // Coordinates are in world space, matching the existing measurement overlay.
+    // Bound the overlay to avoid flooding mobile GPUs with large STL surfaces.
+    const highlightPositions = [];
+    for (const id of visited) {
+      if (highlightPositions.length >= MAX_HIGHLIGHT_TRIANGLES * 9) break;
+      const corners = topology.faces[id].corners;
+      for (const vertexId of corners) {
+        const vertex = world[vertexId];
+        highlightPositions.push(vertex.x, vertex.y, vertex.z);
+      }
+    }
     return {
       kind: "face",
       label: topology.localOnly
@@ -157,6 +171,8 @@ export function detectMeshMeasurement(mesh, hit, tolerance = 1.5) {
       unit: "area",
       triangles: visited.size,
       partial: topology.localOnly,
+      highlightPositions,
+      highlightLimited: visited.size > MAX_HIGHLIGHT_TRIANGLES,
       point: hit.point.toArray(),
     };
   }
