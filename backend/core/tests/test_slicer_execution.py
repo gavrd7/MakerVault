@@ -176,6 +176,29 @@ class NativePlateAdmissionTests(SimpleTestCase):
                 _validate_plate_execution(job)
 
 
+class PerObjectExecutionRoutingTests(SimpleTestCase):
+    def test_global_only_plates_keep_approved_compound_path(self):
+        from core.slicer_execution import _plate_builder
+        from core.slicer_plate_3mf import build_compound_plate_3mf
+        objects = [({"instance_id": "one"}, b"stl"),
+                   ({"instance_id": "two"}, b"stl")]
+        self.assertIs(_plate_builder(objects), build_compound_plate_3mf)
+
+    def test_native_object_overrides_select_independent_3mf_builder(self):
+        from core.slicer_execution import _plate_builder, _validate_plate_execution
+        from core.slicer_plate_3mf import build_plate_3mf
+        from types import SimpleNamespace
+        objects = [({"instance_id": "one"}, b"stl"),
+                   ({"instance_id": "two",
+                     "process_overrides": {"wall_loops": 5}}, b"stl")]
+        self.assertIs(_plate_builder(objects), build_plate_3mf)
+        job = SimpleNamespace(settings={"plate_objects": [row for row, _ in objects]},
+                              engine="orcaslicer", printer_profile_id="printer",
+                              printer_profile=SimpleNamespace())
+        with self.assertRaisesRegex(SlicerExecutionError, "per-object settings"):
+            _validate_plate_execution(job)
+
+
 class TemporarySlicerInputRetentionTests(SimpleTestCase):
     def test_removed_failed_job_does_not_delete_unsaved_plate_inputs(self):
         from types import SimpleNamespace
