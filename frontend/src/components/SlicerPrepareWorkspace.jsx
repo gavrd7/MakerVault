@@ -594,7 +594,7 @@ export default function SlicerPrepareWorkspace({
         <button type="button" disabled={!redoRef.current.length || busy} onClick={redo}
           aria-label="Redo"><SlicerUiIcon name="redo" /></button>
       </span>
-      {TOOLS.map(tool => <span className={"slicerToolTooltip" + (tool.expandable && measurementVisible ? " slicerToolOptionsOpen" : "")} key={tool.name}
+      {TOOLS.map(tool => <div className={"slicerToolTooltip" + (tool.expandable && measurementVisible ? " slicerToolOptionsOpen" : "")} key={tool.name}
         data-tooltip={tool.pending ? tool.name + " · Not yet available: " + tool.pending
           : tool.expandable ? tool.name + " · Click for measurement options" : tool.name}>
         <button type="button"
@@ -631,7 +631,7 @@ export default function SlicerPrepareWorkspace({
           </button>
           <small>Click the model to place pins. Results appear in the top-left of the 3D view.</small>
         </div>}
-      </span>)}
+      </div>)}
     </div>
     <div className="slicerPrepareStructure">
       <div className="slicerPrepareLeftRail">
