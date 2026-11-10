@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { plateEnvelope, plateExtentWarning, plateFootprintsOverlap, autoArrangePlate } from "../src/components/slicerPlateGeometry.js";
+import { plateEnvelope, plateExtentWarning, plateFootprintsOverlap, autoArrangePlate, plateModelMeasurement } from "../src/components/slicerPlateGeometry.js";
 const item = { x_mm: 0, y_mm: 0, rotation_deg: 0, scale_percent: 100 };
 const box = { width: 40, depth: 20 };
 test("centred unrotated footprint", () => {
@@ -131,4 +131,27 @@ test("fractional footprint dimensions never round the first model outside the be
     assert.equal(result.error, undefined, "unexpected packing failure for " + width + " × " + depth);
     assert.equal(plateExtentWarning(result.objects[0], { width, depth }, 220, 220), "");
   }
+});
+
+test("measurement includes mesh height, independent XYZ scale and translated envelope", () => {
+  const result = plateModelMeasurement({
+    x_mm: 15, y_mm: -20, rotation_deg: 0, scale_percent: 100,
+    scale_xyz_percent: [150, 50, 200],
+  }, { width: 40, depth: 20, height: 12 });
+  assert.deepEqual(result, {
+    width: 60, depth: 10, height: 24,
+    minX: -15, maxX: 45, minY: -25, maxY: -15,
+  });
+});
+test("measurement swaps a rectangular XY footprint after quarter turn", () => {
+  const result = plateModelMeasurement({
+    x_mm: 0, y_mm: 0, rotation_deg: 90, scale_percent: 100,
+  }, { width: 40, depth: 20, height: 25 });
+  assert.ok(Math.abs(result.width - 20) < 1e-8);
+  assert.ok(Math.abs(result.depth - 40) < 1e-8);
+  assert.equal(result.height, 25);
+});
+test("measurement waits for a measured STL and rejects nonfinite height", () => {
+  assert.equal(plateModelMeasurement(item, { width: 30, depth: 20 }), null);
+  assert.equal(plateModelMeasurement(item, { width: 30, depth: 20, height: Infinity }), null);
 });
