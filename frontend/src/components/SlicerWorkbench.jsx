@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../api";
 import { Modal } from "./Common";
 import { FileModelViewerModal, ModelThumbnail } from "./ModelViewer";
@@ -121,6 +121,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     });
   }, []);
   const [editorOpen, setEditorOpen] = useState(false);
+  const slicerPageRef = useRef(null);
   const openedDraftRef = useRef(null);
   const manuallyColouredModels = useRef(new Set());
   const manuallyChosenProfiles = useRef(new Set());
@@ -386,9 +387,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     setNotice(job.status === "draft"
       ? "Saved slicing draft loaded. Saving edits creates a new draft, preserving the original."
       : "Failed or interrupted job loaded for repair. Change profiles or settings, then create a new draft. The original is preserved.");
-    window.requestAnimationFrame(() =>
-      document.getElementById("slicer-plate-heading")?.scrollIntoView({ behavior: "smooth" })
-    );
+    // The editor-open effect restores the start of the slicer. Do not scroll
+    // straight to model controls: that hides the interactive build plate.
   }
 
   useEffect(() => {
@@ -950,7 +950,26 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     }
   }
 
-  return <div className="printingStack">
+  // Opening Prepare or loading a saved draft must start at the slicer header,
+  // not at the last focused model control. Restore nested scrolling containers
+  // as well as window scroll (the app can use either layout).
+  useLayoutEffect(() => {
+    if (!editorOpen) return undefined;
+    let frame = requestAnimationFrame(() => {
+      const root = slicerPageRef.current;
+      if (!root) return;
+      let parent = root.parentElement;
+      while (parent) {
+        if (parent.scrollHeight > parent.clientHeight &&
+            /(auto|scroll)/.test(getComputedStyle(parent).overflowY)) parent.scrollTop = 0;
+        parent = parent.parentElement;
+      }
+      window.scrollTo({ top: 0, behavior: "instant" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [editorOpen]);
+
+  return <div className="printingStack" ref={slicerPageRef}>
     <section className="panel printingHero">
       <div>
         <span className="settingsEyebrow">3D Printing · MakerVault Slicer</span>
