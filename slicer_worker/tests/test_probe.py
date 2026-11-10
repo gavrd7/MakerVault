@@ -43,6 +43,19 @@ class RealEngineProbeTests(TestCase):
         self.assertGreater(evidence["effective_extrusion_ratio"], 2)
         self.assertEqual(evidence["left_moves"], 40)
         self.assertEqual(evidence["right_moves"], 70)
+        reversed_gcode = self.root / "reversed-cubes.gcode"
+        reversed_lines = ["M83", "G90"]
+        for i in range(70):
+            reversed_lines.append(f"G1 X{75 + i % 10} Y{110 + i % 5} E0.12")
+        for i in range(40):
+            reversed_lines.append(f"G1 X{145 + i % 10} Y{110 + i % 5} E0.08")
+        reversed_gcode.write_text("\n".join(reversed_lines) + "\n")
+        reversed_evidence = _verify_two_native_object_effects(reversed_gcode, reverse=True)
+        self.assertLess(reversed_evidence["effective_extrusion_ratio"], 0.8)
+        with self.assertRaisesRegex(WorkerError, "not proven effective"):
+            _verify_two_native_object_effects(reversed_gcode)
+        with self.assertRaisesRegex(WorkerError, "not proven effective"):
+            _verify_two_native_object_effects(gcode, reverse=True)
         bad = self.root / "identical.gcode"
         equal = ["M83", "G90"]
         for center in (75, 145):
