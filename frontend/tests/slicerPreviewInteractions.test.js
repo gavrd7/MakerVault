@@ -13,7 +13,7 @@ test("post-slice preview exposes vertical layer and full-resolution layer-step c
   assert.match(source, /onChange=\{e => \{ setLayer\(Number\(e\.target\.value\)\); setStep\(null\); \}\}/);
   assert.match(source, /Full-resolution/);
   assert.match(source, /layer move/);
-  assert.match(source, /Show entire sampled layer/);
+  assert.match(source, /Show entire selected layer/);
   assert.match(source, /<SlicerToolpath3D segments=\{displaySegments\}/);
   const renderer = fs.readFileSync(path.join(root, "SlicerToolpath3D.jsx"), "utf8");
   assert.match(renderer, /marker\.position\.set\(\.\.\.lastStep\)/);
