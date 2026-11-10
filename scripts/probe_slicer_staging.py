@@ -40,7 +40,7 @@ def _pinned_image(config=DOTENV):
     return image
 
 
-def probe(printer, filament, process, *, model=None, compound=False, config=DOTENV, runner=subprocess.run):
+def probe(printer, filament, process, *, model=None, compound=False, experimental_all_plates=False, experimental_no_arrange=False, config=DOTENV, runner=subprocess.run):
     """Exercise real engine without app, network, Docker socket or host mounts."""
     image = _pinned_image(config)
     sources = {"printer": printer, "filament": filament, "process": process}
@@ -93,6 +93,10 @@ def probe(printer, filament, process, *, model=None, compound=False, config=DOTE
                             "1" if compound else "2"])
             if compound:
                 command.extend(["--expected-islands", "2"])
+            if experimental_all_plates:
+                command.append("--experimental-all-plates")
+            if experimental_no_arrange:
+                command.append("--experimental-no-arrange")
         return runner(command, check=False).returncode
 
 
@@ -102,9 +106,13 @@ def main(argv=None):
         parser.add_argument("--" + name, type=Path, required=True)
     parser.add_argument("--model", type=Path, help="Optional two-object MakerVault 3MF acceptance fixture")
     parser.add_argument("--compound", action="store_true", help="Experimental combined-mesh 3MF geometry-island test")
+    parser.add_argument("--experimental-all-plates", action="store_true", help="Offline diagnostic: slice all native plates")
+    parser.add_argument("--experimental-no-arrange", action="store_true", help="Offline diagnostic: disable native auto-arrange")
     args = parser.parse_args(argv)
     try:
-        return probe(args.printer, args.filament, args.process, model=args.model, compound=args.compound)
+        return probe(args.printer, args.filament, args.process, model=args.model, compound=args.compound,
+                     experimental_all_plates=args.experimental_all_plates,
+                     experimental_no_arrange=args.experimental_no_arrange)
     except (ValueError, OSError, subprocess.SubprocessError) as exc:
         print("Offline Orca acceptance probe refused: " + str(exc), file=sys.stderr)
         return 1
