@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import SlicerToolpath3D from "./SlicerToolpath3D";
+import { featureColour, hasFeatureFocus } from "./slicerToolpathFeatures";
 
 /**
  * Incremental read-only preview for generated G-code.
@@ -8,7 +9,6 @@ import SlicerToolpath3D from "./SlicerToolpath3D";
  * come from G-code metadata. Layer and step controls operate on the available
  * sample, not a claim of complete simulation; missing categories remain gated.
  */
-const PALETTE = ["#6ddfc7", "#be9aff", "#fbbf75", "#7eb6ff", "#ef9ab1", "#e1d781"];
 const COLOUR_MODES = [
   { value: "feature", label: "Line type", supported: true },
   { value: "layer", label: "Layer height / Z", supported: true },
@@ -28,6 +28,8 @@ export default function SlicerGcodePreview({ preview, bedSize = null }) {
   const [step, setStep] = useState(null);
   const [colourMode, setColourMode] = useState("feature");
   const [renderMode, setRenderMode] = useState("solid");
+  const [layerDisplay, setLayerDisplay] = useState("current");
+  const [featureFocus, setFeatureFocus] = useState("all");
   const [visible, setVisible] = useState({});
   const [showToolhead, setShowToolhead] = useState(true);
   const layers = preview?.layers || [];
@@ -36,7 +38,7 @@ export default function SlicerGcodePreview({ preview, bedSize = null }) {
   const z = layers[currentLayer];
 
   const features = Object.keys(preview?.feature_counts || {});
-  const colours = Object.fromEntries(features.map((feature, index) => [feature, PALETTE[index % PALETTE.length]]));
+  const colours = Object.fromEntries(features.map(feature => [feature, featureColour(feature)]));
   const layerSegments = useMemo(() =>
     z == null ? [] : allSegments.filter(segment => Math.abs(segment[4] - z) < 0.0005),
     [allSegments, z]);
@@ -70,6 +72,21 @@ export default function SlicerGcodePreview({ preview, bedSize = null }) {
               disabled={!mode.supported}>{mode.label}{mode.supported ? "" : " · unavailable"}</option>)}
           </select>
         </label>
+        <label>Layer visibility
+          <select value={layerDisplay} onChange={event => setLayerDisplay(event.target.value)}>
+            <option value="current">Current layer only · detail</option>
+            <option value="context">Current + 8 faded layers</option>
+            <option value="all">All earlier layers · overview</option>
+          </select>
+        </label>
+        <label>Feature focus
+          <select value={featureFocus} onChange={event => setFeatureFocus(event.target.value)}>
+            <option value="all">All extrusion types</option>
+            <option value="support" disabled={!hasFeatureFocus(features, "support")}>Support + interface</option>
+            <option value="walls" disabled={!hasFeatureFocus(features, "walls")}>Walls / perimeters</option>
+            <option value="infill" disabled={!hasFeatureFocus(features, "infill")}>Infill / solid / bridge</option>
+          </select>
+        </label>
         <label className="checkRow"><input type="checkbox" checked={showToolhead}
           onChange={e => setShowToolhead(e.target.checked)} /> Show toolhead marker</label>
       </div>
@@ -78,7 +95,7 @@ export default function SlicerGcodePreview({ preview, bedSize = null }) {
           <SlicerToolpath3D segments={allSegments} layers={layers}
             activeLayer={currentLayer} activeStep={finalStep} visible={visible}
             colourMode={colourMode} colours={colours} showToolhead={showToolhead} bedSize={bedSize}
-            renderMode={renderMode} />
+            renderMode={renderMode} layerDisplay={layerDisplay} featureFocus={featureFocus} />
           <div className="slicerResultSteps">
             <label htmlFor="slice-step-slider">Sampled toolhead step {finalStep} / {layerSegments.length}</label>
             <input id="slice-step-slider" type="range" min="0" max={layerSegments.length}
@@ -110,6 +127,7 @@ export default function SlicerGcodePreview({ preview, bedSize = null }) {
           {feature} ({preview.feature_counts[feature]?.toLocaleString() || 0})
         </label>)}
       </fieldset>
+      <p className="projectUploadHint">For detailed inspection, isolate the current layer or focus on support, wall or infill paths. Feature colours stay consistent across different G-code files. Partial samples can still omit fine toolpaths.</p>
       <p className="projectUploadHint">Travel, retract, wipe, speed, flow, per-tool colour mapping and other
         native preview modes require a complete indexed toolpath. They are not represented by this extrusion-only sample.</p>
     </> : <p>No extrusion paths were available for the preview.</p>}
