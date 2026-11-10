@@ -104,7 +104,71 @@ def _validate_gcode(path, *, min_extrusion_span_x=None):
     return {"gcode_sha256": hashlib.sha256(data).hexdigest(), "gcode_bytes": len(data)}
 
 
-def run_probe(*, engine, version, binary, printer, filament, process, timeout=120, model=None, expected_objects=1, expected_islands=1, experimental_all_plates=False, experimental_no_arrange=False):
+def _verify_two_native_object_effects(path):
+    """Check toolpaths reflect different process settings on equal 20mm cubes.
+
+    The fixture deliberately uses 15%/2-wall left and 37%/5-wall right.
+    Count positive extrusion only in each cube's bounded XY region. Global
+    G-code comments are not evidence of effective per-object settings.
+    """
+    gcode = Path(path).read_bytes()
+    last_x = last_y = 0.0
+    last_e = 0.0
+    relative_extrusion = False
+    totals = [0.0, 0.0]
+    moves = [0, 0]
+    value_pattern = re.compile(rb"(?:^|\\s)([XYE])([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))(?=\\s|$)", re.I)
+    for raw in gcode.splitlines():
+        code = raw.partition(b";")[0].strip().upper()
+        if code == b"M82":
+            relative_extrusion = False
+            continue
+        if code == b"M83":
+            relative_extrusion = True
+            continue
+        if code.startswith(b"G92"):
+            params = {key: float(value) for key, value in value_pattern.findall(code)}
+            if b"E" in params:
+                last_e = params[b"E"]
+            continue
+        if not (code.startswith(b"G1 ") or code.startswith(b"G01 ")):
+            # Track travel X/Y without treating it as extrusion.
+            if code.startswith(b"G0 ") or code.startswith(b"G00 "):
+                params = {key: float(value) for key, value in value_pattern.findall(code)}
+                last_x, last_y = params.get(b"X", last_x), params.get(b"Y", last_y)
+            continue
+        params = {key: float(value) for key, value in value_pattern.findall(code)}
+        x, y = params.get(b"X", last_x), params.get(b"Y", last_y)
+        extruded = 0.0
+        if b"E" in params:
+            extruded = (params[b"E"] if relative_extrusion
+                        else params[b"E"] - last_e)
+            last_e = params[b"E"] if not relative_extrusion else last_e
+        last_x, last_y = x, y
+        if extruded <= 0 or not (b"X" in params or b"Y" in params):
+            continue
+        region = (0 if 64 <= x <= 86 and 99 <= y <= 121 else
+                  1 if 134 <= x <= 156 and 99 <= y <= 121 else None)
+        if region is not None:
+            totals[region] += extruded
+            moves[region] += 1
+    if min(moves) < 20 or min(totals) <= 0:
+        raise WorkerError(
+            "Per-object G-code verification is missing extrusion in one fixture region."
+        )
+    ratio = totals[1] / totals[0]
+    if ratio < 1.2:
+        raise WorkerError(
+            f"Native object overrides were not proven effective: "
+            f"left={totals[0]:.2f} mm, right={totals[1]:.2f} mm, ratio={ratio:.2f}."
+        )
+    return {"left_extrusion_mm": round(totals[0], 3),
+            "right_extrusion_mm": round(totals[1], 3),
+            "effective_extrusion_ratio": round(ratio, 3),
+            "left_moves": moves[0], "right_moves": moves[1]}
+
+
+def run_probe(*, engine, version, binary, printer, filament, process, timeout=120, model=None, expected_objects=1, expected_islands=1, experimental_all_plates=False, experimental_no_arrange=False, verify_object_effects=False):
     """Run the *real* worker adapter with the *real* binary and report evidence.
 
     No mock success, no automatic deployment and no stored G-code artifact.
@@ -153,6 +217,10 @@ def run_probe(*, engine, version, binary, printer, filament, process, timeout=12
             raise WorkerError("The engine did not complete the slicing fixture.")
         output = _validate_gcode(root / "output.gcode",
                                  min_extrusion_span_x=35 if expected_objects == 2 or expected_islands == 2 else None)
+        if verify_object_effects:
+            if expected_objects != 2 or model is None or engine != "orcaslicer":
+                raise WorkerError("Per-object effect probe requires independent Orca 3MF.")
+            output.update(_verify_two_native_object_effects(root / "output.gcode"))
     return {
         "status": "passed",
         "engine": engine, "engine_version": version,
@@ -182,6 +250,7 @@ def main(argv=None):
     parser.add_argument("--expected-islands", type=int, choices=(1, 2), default=1)
     parser.add_argument("--experimental-all-plates", action="store_true")
     parser.add_argument("--experimental-no-arrange", action="store_true")
+    parser.add_argument("--verify-object-effects", action="store_true")
     args = parser.parse_args(argv)
     try:
         print(json.dumps(run_probe(**vars(args)), indent=2, sort_keys=True))
