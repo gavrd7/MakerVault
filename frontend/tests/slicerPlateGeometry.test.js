@@ -97,3 +97,38 @@ test("independent XY scale is applied before rotation and keeps conservative cle
   assert.equal(plateExtentWarning({ ...transformed, x_mm: 106 }, box, 220, 220),
     "Estimated XY footprint extends beyond the displayed plate");
 });
+
+test("two Benchy-sized fractional STL bounds fit on a 220 mm plate", () => {
+  // STL bounding boxes seldom end on exact hundredth-millimetre boundaries.
+  // Previously the first candidate could round just outside X/Y=-110 and
+  // incorrectly announce that the entire bed was full.
+  const models = [
+    { ...item, instance_id: "benchy-1", x_mm: -24, y_mm: 21 },
+    { ...item, instance_id: "benchy-2", x_mm: 28, y_mm: -69 },
+  ];
+  const sizes = {
+    "benchy-1": { width: 61.223, depth: 32.197 },
+    "benchy-2": { width: 61.223, depth: 32.197 },
+  };
+  const result = autoArrangePlate(models, sizes, 220, 220, 5);
+  assert.equal(result.error, undefined);
+  assert.equal(result.objects.length, 2);
+  for (const model of result.objects) {
+    assert.equal(plateExtentWarning(model, sizes[model.instance_id], 220, 220), "");
+  }
+  assert.equal(plateFootprintsOverlap(result.objects[0], sizes["benchy-1"],
+    result.objects[1], sizes["benchy-2"], 5), false);
+  assert.deepEqual(models.map(v => [v.x_mm, v.y_mm]), [[-24, 21], [28, -69]]);
+});
+
+test("fractional footprint dimensions never round the first model outside the bed", () => {
+  for (const [width, depth] of [
+    [61.223, 32.197], [55.001, 44.009], [60.337, 61.223],
+    [30.019, 79.991], [48.225, 48.225],
+  ]) {
+    const object = { ...item, instance_id: "one", x_mm: 0, y_mm: 0 };
+    const result = autoArrangePlate([object], { one: { width, depth } }, 220, 220);
+    assert.equal(result.error, undefined, "unexpected packing failure for " + width + " × " + depth);
+    assert.equal(plateExtentWarning(result.objects[0], { width, depth }, 220, 220), "");
+  }
+});
