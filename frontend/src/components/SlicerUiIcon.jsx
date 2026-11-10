@@ -9,6 +9,8 @@ const paths = {
   rotate: <><path d="M20 11a8 8 0 1 1-2.3-5.6L20 8"/><path d="M20 3v5h-5"/></>,
   scale: <><rect x="4" y="4" width="16" height="16" rx="2"/><path d="m8 16 8-8M12 8h4v4"/></>,
   arrange: <><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></>,
+  center: <><rect x="4" y="4" width="16" height="16" rx="1.5"/><path d="M12 2v6m0 8v6M2 12h6m8 0h6"/><circle cx="12" cy="12" r="2"/></>,
+  focus: <><path d="M8 3H5a2 2 0 0 0-2 2v3m13-5h3a2 2 0 0 1 2 2v3M3 16v3a2 2 0 0 0 2 2h3m13-5v3a2 2 0 0 1-2 2h-3"/><circle cx="12" cy="12" r="3"/><path d="M12 7v2m0 6v2M7 12h2m6 0h2"/></>,
   duplicate: <><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></>,
   remove: <><path d="M3 6h18M8 6V4h8v2m3 0-1 15H6L5 6M10 10v7m4-7v7"/></>,
   orient: <><path d="M4 20h16M12 4v12m-4-4 4 4 4-4M5 5l3-2m8 0 3 2"/></>,
