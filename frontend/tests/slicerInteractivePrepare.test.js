@@ -81,6 +81,10 @@ test("Measure options open at the toolbar while a compact readout lives at top l
   assert.match(scene, /className="slicerToolOptions"/);
   assert.match(scene, /measureMode=\{measureMode\} measureUnit=\{measureUnit\} measureClearVersion=\{measureClearVersion\}/);
   assert.match(scene, /setMeasureClearVersion\(value => value \+ 1\)/);
+  assert.match(scene, /onMeasurePinPlaced=\{\(\) => setMeasureOptionsOpen\(false\)\}/);
+  assert.match(scene, /setMeasureOptionsOpen\(current => !current\)/);
+  assert.match(scene, /Finish measuring/);
+  assert.match(editor, /measurePinPlacedRef\.current\?\.\(\)/);
   assert.match(editor, /className="slicerPlateCanvasViewport"/);
   assert.match(editor, /className="slicerViewportMeasurement"/);
   assert.match(editor, /aria-label="On-plate measurements"/);
