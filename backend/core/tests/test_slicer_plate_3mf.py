@@ -65,6 +65,32 @@ class BuildPlate3MFTests(SimpleTestCase):
         self.assertEqual(recorded[1]["infill_wall_overlap"], "18%")
         self.assertEqual(len(config.find("plate").findall("model_instance")), 2)
 
+    def test_individual_native_objects_have_baked_separated_placement(self):
+        shape = fixture_stl()
+        objects = [
+            ({"x_mm": -35, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100,
+              "process_overrides": {"wall_loops": 2}}, shape),
+            ({"x_mm": 35, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100,
+              "process_overrides": {"wall_loops": 5}}, shape),
+        ]
+        archive_bytes = build_plate_3mf(objects, bed_width=220, bed_depth=220)
+        with zipfile.ZipFile(io.BytesIO(archive_bytes)) as package:
+            root = ET.fromstring(package.read("3D/3dmodel.model"))
+        ns = "{" + NS + "}"
+        nodes = root.findall("./" + ns + "resources/" + ns + "object")
+        self.assertEqual(len(nodes), 2)
+        centers = []
+        for obj in nodes:
+            xs = [float(v.attrib["x"]) for v in
+                  obj.findall("./" + ns + "mesh/" + ns + "vertices/" + ns + "vertex")]
+            centers.append((min(xs) + max(xs)) / 2)
+        self.assertAlmostEqual(centers[1] - centers[0], 70, places=3)
+        placements = root.findall("./" + ns + "build/" + ns + "item")
+        self.assertEqual(len(placements), 2)
+        self.assertTrue(all(item.attrib["transform"] ==
+                            "1 0 0 0 1 0 0 0 1 0 0 0"
+                            for item in placements))
+
     def test_unsafe_object_settings_never_enter_native_3mf_metadata(self):
         shape = fixture_stl()
         instance = {"x_mm": 0, "y_mm": 0,
