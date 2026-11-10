@@ -131,3 +131,37 @@ export function autoArrangePlate(objects, dimensions, bedX, bedY, clearance = 5)
   }
   return { objects: placed };
 }
+
+
+/** Euclidean 3D distance between two picked surface points (STL units: mm). */
+export function measurementDistance(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== 3 || b.length !== 3 ||
+      ![...a, ...b].every(Number.isFinite)) return null;
+  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
+
+/** 3D circumcircle through three explicitly selected non-collinear points.
+ * A three-point construction is not equivalent to automatic CAD circle
+ * recognition, nor does it establish whether the mesh contains a true circle.
+ */
+export function measurementCircle(a, b, c) {
+  const ab = measurementDistance(a, b), bc = measurementDistance(b, c);
+  const ca = measurementDistance(c, a);
+  if (ab === null || bc === null || ca === null) return null;
+  const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
+  const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+  const cross = [
+    uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx,
+  ];
+  const area2 = Math.hypot(...cross);
+  if (!Number.isFinite(area2) || area2 <= 1e-7 * Math.max(ab * bc, bc * ca, ca * ab, 1))
+    return null;
+  const radius = ab * bc * ca / (2 * area2);
+  if (!Number.isFinite(radius) || radius > 1e7) return null;
+  return { radius, diameter: radius * 2, circumference: 2 * Math.PI * radius };
+}
+
+export function measurementFormat(mm, unit = "mm") {
+  if (!Number.isFinite(mm)) return "—";
+  return (unit === "in" ? mm / 25.4 : mm).toFixed(3) + " " + (unit === "in" ? "in" : "mm");
+}
