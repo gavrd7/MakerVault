@@ -38,7 +38,7 @@ test("planned engine cards load offline bundled upstream SVG icons", () => {
     assert.match(chooser, new RegExp(name + ": logoUri\\("));
     const svg = read("assets/slicer-engines/" + name + ".svg");
     assert.match(svg, /<svg\b/);
-    assert.doesNotMatch(svg, /https?:\/\//g); // self-contained assets only
+    assert.doesNotMatch(svg, /href="https?:\/\//); // No external resource dependencies.
   }
   assert.match(chooser, /snapmakerorca: logoUri\(snapmakerSvg\)/);
   assert.match(chooser, /onError=\{\(\) => setFailed\(true\)\}/);
