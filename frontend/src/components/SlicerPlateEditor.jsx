@@ -6,7 +6,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 import { SlicerOrientationCube } from "./slicerOrientationCube";
 import { apiFetch } from "../api";
-import { plateExtentWarning, plateFootprintsOverlap, autoArrangePlate } from "./slicerPlateGeometry";
+import { plateExtentWarning, plateFootprintsOverlap, autoArrangePlate, plateModelMeasurement } from "./slicerPlateGeometry";
 import { nativeBedArtwork } from "./slicerNativePlateArt";
 import makerVaultLogoSvg from "../assets/slicer-bed-art/makervault-official-logo.svg?raw";
 
@@ -174,6 +174,7 @@ export default function SlicerPlateEditor({
   plateLabel = "Plate 1", onPlateLabelChange, printerLabel = "",
   canEdit = false, onFilesUploaded, defaultColor = null, onManualColorChange, footer = null,
   selectedInstanceId = null, onSelectedInstanceChange, toolMode = "select",
+  measurementVisible = false,
   localAssets = [], onLocalAssetsChange, onExitToolMode,
 }) {
   const hostRef = useRef(null);
@@ -222,6 +223,7 @@ export default function SlicerPlateEditor({
   // The controls show the first model by default; only an explicitly selected
   // mesh should receive a visual highlight.
   const chosen = objects.find(item => item.instance_id === selected) || objects[0] || null;
+  const selectedMeasurement = chosen ? plateModelMeasurement(chosen, dimensions[chosen.instance_id]) : null;
   const objectKey = objects.map(item => item.instance_id + ":" + item.asset_id).join("|");
   const extentWarnings = objects.map((item, index) => ({
     id: item.instance_id,
@@ -1013,6 +1015,7 @@ export default function SlicerPlateEditor({
           );
           setDimensions(current => ({ ...current, [item.instance_id]: {
             width: box.max.x - box.min.x, depth: box.max.y - box.min.y,
+            height: box.max.z - box.min.z,
           } }));
           const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({
             color: item.color || PALETTE[0], roughness: 0.72, metalness: 0.04, side: THREE.DoubleSide,
@@ -1125,7 +1128,7 @@ export default function SlicerPlateEditor({
       <button type="button" onClick={() => setPlateCamera("top")} title="Top-down build-plate view">Top</button>
       <button type="button" onClick={() => setPlateCamera("front")} title="View the front of the printer build plate">Front</button>
       <button type="button" onClick={() => setPlateCamera("right")} title="View the right side of the printer build plate">Right</button>
-      <button type="button" onClick={() => setPlateCamera("selection")} disabled={!chosen}
+      <button data-slicer-action="focus" type="button" onClick={() => setPlateCamera("selection")} disabled={!chosen}
         title="Centre and zoom onto the currently selected model">Fit selected model</button>
     </div>
     <div ref={hostRef} className="slicerPlateCanvas" aria-label="Interactive three-dimensional model plate preview with a clickable six-face orientation cube in the top right" />
@@ -1229,6 +1232,24 @@ export default function SlicerPlateEditor({
       <button data-slicer-action="duplicate" type="button" disabled={!canEdit || !chosen || objects.length >= MAX_OBJECTS} onClick={duplicateSelected}>Duplicate selected</button>
     </div>}
 
+    {measurementVisible && chosen && <section className="slicerPlateMeasurement" role="region"
+      aria-label="Selected model measurements">
+      <h5>Selected model measurements</h5>
+      {selectedMeasurement ? <>
+        <dl className="slicerMeasurementGrid">
+          <div><dt>X envelope</dt><dd>{pretty(selectedMeasurement.width)} mm</dd></div>
+          <div><dt>Y envelope</dt><dd>{pretty(selectedMeasurement.depth)} mm</dd></div>
+          <div><dt>Model height</dt><dd>{pretty(selectedMeasurement.height)} mm</dd></div>
+          <div><dt>Centre X / Y</dt><dd>{pretty(chosen.x_mm)} / {pretty(chosen.y_mm)} mm</dd></div>
+          <div><dt>X bounds</dt><dd>{pretty(selectedMeasurement.minX)} to {pretty(selectedMeasurement.maxX)} mm</dd></div>
+          <div><dt>Y bounds</dt><dd>{pretty(selectedMeasurement.minY)} to {pretty(selectedMeasurement.maxY)} mm</dd></div>
+        </dl>
+        <p className="slicerPlateHint">Read-only STL bounding-box estimate, accounting for X/Y/Z scaling and Z rotation.
+          X/Y are relative to the plate centre. This is not face-to-face measurement,
+          the exact occupied outline, or a print-clearance certification.</p>
+      </> : <p role="status">Measuring the selected STL preview…</p>}
+    </section>}
+
     {objects.length > 0 && <div className="formGrid slicerPlateTransformFields">
       <label>X position (mm)
         <input data-slicer-field="x_mm" type="number" min={-10000} max={10000} step="0.5" value={chosen?.x_mm ?? 0}
@@ -1292,7 +1313,7 @@ export default function SlicerPlateEditor({
       </label>
       <div className="settingsActions slicerModelActions">
         <button type="button" disabled={!canEdit} onClick={() => patch("rotation_deg", ((chosen.rotation_deg + 90) % 360))}>Rotate 90°</button>
-        <button type="button" disabled={!canEdit || !chosen}
+        <button data-slicer-action="center" type="button" disabled={!canEdit || !chosen}
           onClick={() => applySelectedTransform({ x_mm: 0, y_mm: 0 },
             "Cannot centre this model without overlapping another model or leaving the build plate.")}>
           Centre selected
