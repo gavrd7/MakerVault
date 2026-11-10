@@ -802,6 +802,28 @@ export default function SlicerPlateEditor({
     });
 
     const meshes = new Map();
+    // The helper is owned by the selected instance, never by its STL asset.
+    // This keeps two copies of the same model independently selectable and
+    // prevents the highlight from changing filament/preview colours.
+    let selectionOutline = null;
+    function setSelectionOutline(mesh) {
+      if (selectionOutline?.userData?.target === mesh) return;
+      if (selectionOutline) {
+        scene.remove(selectionOutline);
+        selectionOutline.geometry.dispose();
+        selectionOutline.material.dispose();
+        selectionOutline = null;
+      }
+      if (!mesh) return;
+      selectionOutline = new THREE.BoxHelper(mesh, 0x39d9ff);
+      selectionOutline.userData.target = mesh;
+      selectionOutline.material.depthTest = false;
+      selectionOutline.material.transparent = true;
+      selectionOutline.material.opacity = 0.96;
+      selectionOutline.renderOrder = 90;
+      scene.add(selectionOutline);
+      selectionOutline.update();
+    }
     const measurementOverlay = new THREE.Group();
     scene.add(measurementOverlay);
     const raycaster = new THREE.Raycaster();
@@ -985,10 +1007,14 @@ export default function SlicerPlateEditor({
     resize();
     renderer.setAnimationLoop(() => {
       controls.update();
+      // Update continuously during gizmo and pointer drags, which can happen
+      // between React object-state commits.
+      selectionOutline?.update();
       renderer.render(scene, camera);
       orientationCube.render();
     });
-    sceneRef.current = { scene, meshes, transform, camera, controls, bedX, bedY, measurementOverlay };
+    sceneRef.current = { scene, meshes, transform, camera, controls, bedX, bedY,
+      measurementOverlay, setSelectionOutline };
     return () => {
       disposed = true;
       sceneRef.current = null;
@@ -1004,6 +1030,7 @@ export default function SlicerPlateEditor({
       transform.detach();
       scene.remove(transform.getHelper());
       transform.dispose();
+      setSelectionOutline(null);
       for (const item of [...measurementOverlay.children]) {
         measurementOverlay.remove(item);
         item.geometry?.dispose();
@@ -1125,10 +1152,11 @@ export default function SlicerPlateEditor({
       mesh.scale.set(xyz[0] / 100, xyz[1] / 100, xyz[2] / 100);
       // Position-only changes must never alter the displayed filament colour.
       mesh.material.color.set(item.color || PALETTE[0]);
-      mesh.material.emissive.set(item.instance_id === selected ? "#164051" : "#000000");
-      mesh.material.emissiveIntensity = item.instance_id === selected ? 0.18 : 0;
+      mesh.material.emissive.set(item.instance_id === selected ? "#168ab4" : "#000000");
+      mesh.material.emissiveIntensity = item.instance_id === selected ? 0.32 : 0;
     }
     const selectedMesh = state.meshes.get(selected);
+    state.setSelectionOutline(selectedMesh || null);
     if (canEdit && selectedMesh && (toolMode === "move" || toolMode === "rotate" || toolMode === "scale")) {
       state.transform.setMode(toolMode === "move" ? "translate" : toolMode === "scale" ? "scale" : "rotate");
       state.transform.showX = toolMode === "move" || toolMode === "scale";
