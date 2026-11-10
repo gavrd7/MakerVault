@@ -34,6 +34,22 @@ class OrcaRunnerTests(TestCase):
         self.assertEqual(cmd[cmd.index("--load-filaments") + 1], str(self.root / "filament.json"))
         self.assertIn(str(self.root / "process.json") + ";" + str(self.root / "printer.json"), cmd)
 
+    def test_experimental_native_plate_modes_are_probe_only(self):
+        with self.assertRaisesRegex(WorkerError, "requires a 3MF input"):
+            orca_command(self.binary, self.root, experimental_all_plates=True)
+        with self.assertRaisesRegex(WorkerError, "requires a 3MF input"):
+            orca_command(self.binary, self.root, experimental_no_arrange=True)
+        (self.root / "input.3mf").write_bytes(b"bounded probe fixture")
+        with patch("slicer_worker.orca_runner.validate_worker_3mf"):
+            regular = orca_command(self.binary, self.root)
+            self.assertEqual(regular[regular.index("--slice") + 1], "1")
+            self.assertNotIn("--arrange", regular)
+            diagnostic = orca_command(self.binary, self.root,
+                                      experimental_all_plates=True,
+                                      experimental_no_arrange=True)
+        self.assertEqual(diagnostic[diagnostic.index("--slice") + 1], "0")
+        self.assertEqual(diagnostic[diagnostic.index("--arrange") + 1], "0")
+
     def test_verified_appimage_uses_pre_extracted_entrypoint(self):
         original = self.root / "orcaslicer.AppImage"
         original.write_bytes(b"official pinned AppImage fixture")
