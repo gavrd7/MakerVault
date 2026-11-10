@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 from unittest import TestCase
 from unittest.mock import patch
 
-from slicer_worker.probe import fixture_stl, run_probe, _validate_gcode
+from slicer_worker.probe import fixture_stl, run_probe, _validate_gcode, _verify_two_native_object_effects
 from slicer_worker.runner import WorkerError
 from slicer_worker.stl_validation import validate_stl
 
@@ -30,6 +30,27 @@ class RealEngineProbeTests(TestCase):
             "filament": str(self.root / "filament.json"),
             "process": str(self.root / "process.json"),
         }
+
+    def test_native_object_effects_measure_real_extrusion_not_comments(self):
+        gcode = self.root / "two-cubes.gcode"
+        lines = ["M83", "G90"]
+        for i in range(40):
+            lines.append(f"G1 X{75 + i % 10} Y{110 + i % 5} E0.08")
+        for i in range(70):
+            lines.append(f"G1 X{145 + i % 10} Y{110 + i % 5} E0.12")
+        gcode.write_text("\\n".join(lines) + "\\n")
+        evidence = _verify_two_native_object_effects(gcode)
+        self.assertGreater(evidence["effective_extrusion_ratio"], 2)
+        self.assertEqual(evidence["left_moves"], 40)
+        self.assertEqual(evidence["right_moves"], 70)
+        bad = self.root / "identical.gcode"
+        equal = ["M83", "G90"]
+        for center in (75, 145):
+            for i in range(40):
+                equal.append(f"G1 X{center + i % 10} Y{110 + i % 5} E0.1")
+        bad.write_text("\\n".join(equal) + "\\n")
+        with self.assertRaisesRegex(WorkerError, "not proven effective"):
+            _verify_two_native_object_effects(bad)
 
     def test_binary_fixture_passes_structural_stl_validation(self):
         result = validate_stl(fixture_stl())
