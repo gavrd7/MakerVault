@@ -99,6 +99,31 @@ def _transform(item, offset_x, offset_y):
     return " ".join(format(value, ".6f") for value in values)
 
 
+def _bake_native_instance_transform(obj, transform):
+    """Apply the 3MF placement matrix to one mesh without merging objects.
+
+    Orca's generic 3MF import can ignore separated *build-item* transforms
+    during CLI slicing, yielding duplicate objects at one origin. Baking each
+    transform into its own distinct resource preserves placement and identity.
+    """
+    values = [float(part) for part in transform.split()]
+    if len(values) != 12 or any(not math.isfinite(value) for value in values):
+        raise SlicerProfileError("Invalid independent model transformation.")
+    mesh = obj.find(f"{{{NS}}}mesh")
+    vertices = mesh.find(f"{{{NS}}}vertices")
+    for vertex in vertices:
+        x, y, z = (float(vertex.attrib[key]) for key in ("x", "y", "z"))
+        mapped = (
+            values[0] * x + values[3] * y + values[6] * z + values[9],
+            values[1] * x + values[4] * y + values[7] * z + values[10],
+            values[2] * x + values[5] * y + values[8] * z + values[11],
+        )
+        if any(not math.isfinite(coord) or abs(coord) > 10000 for coord in mapped):
+            raise SlicerProfileError("Baked 3MF placement exceeds safe bounds.")
+        for axis, value in zip(("x", "y", "z"), mapped):
+            vertex.set(axis, format(value, ".6f"))
+
+
 def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth):
     """Render [(validated_plate_item_dict, owned_STL_bytes)] as one core 3MF.
 
@@ -117,6 +142,11 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth):
     build = ET.SubElement(model, f"{{{NS}}}build")
     total_bytes = 0
     total_triangles = 0
+    # Only native per-object projects use baked individual placements. Existing
+    # generic 3MF exports and their transform semantics remain unchanged.
+    bake_native_positions = any(isinstance(entry[0], dict) and
+                                entry[0].get("process_overrides")
+                                for entry in objects_with_stl)
     for index, pair in enumerate(objects_with_stl, start=1):
         if not isinstance(pair, tuple) or len(pair) != 2:
             raise SlicerProfileError("Invalid 3MF plate input.")
@@ -143,9 +173,13 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth):
                     raise SlicerProfileError("A model extends outside the verified build plate.")
         if total_triangles > MAX_TRIANGLES:
             raise SlicerProfileError("Total plate triangles exceed the limit.")
+        placement = _transform(item, bed_width / 2, bed_depth / 2)
+        if bake_native_positions:
+            _bake_native_instance_transform(obj, placement)
+            placement = "1 0 0 0 1 0 0 0 1 0 0 0"
         ET.SubElement(build, f"{{{NS}}}item", {
             "objectid": str(index),
-            "transform": _transform(item, bed_width / 2, bed_depth / 2),
+            "transform": placement,
         })
     model_xml = ET.tostring(model, encoding="utf-8", xml_declaration=True)
     if len(model_xml) > 96 * 1024 * 1024:
