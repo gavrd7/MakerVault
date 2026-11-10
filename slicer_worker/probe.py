@@ -117,7 +117,7 @@ def _verify_two_native_object_effects(path):
     relative_extrusion = False
     totals = [0.0, 0.0]
     moves = [0, 0]
-    value_pattern = re.compile(rb"(?:^|\\s)([XYE])([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))(?=\\s|$)", re.I)
+    value_pattern = re.compile(rb"(?:^|\s)([XYE])([-+]?(?:\d+(?:\.\d*)?|\.\d+))(?=\s|$)", re.I)
     for raw in gcode.splitlines():
         code = raw.partition(b";")[0].strip().upper()
         if code == b"M82":
