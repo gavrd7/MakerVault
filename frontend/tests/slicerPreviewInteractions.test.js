@@ -7,13 +7,14 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src/components");
 const source = fs.readFileSync(path.join(root, "SlicerGcodePreview.jsx"), "utf8");
 
-test("post-slice preview exposes vertical layer and horizontal sampled step controls", () => {
+test("post-slice preview exposes vertical layer and full-resolution layer-step controls", () => {
   assert.match(source, /id="slice-layer-slider"/);
   assert.match(source, /id="slice-step-slider"/);
   assert.match(source, /onChange=\{e => \{ setLayer\(Number\(e\.target\.value\)\); setStep\(null\); \}\}/);
-  assert.match(source, /Sampled toolhead step/);
+  assert.match(source, /Full-resolution/);
+  assert.match(source, /layer move/);
   assert.match(source, /Show entire sampled layer/);
-  assert.match(source, /<SlicerToolpath3D segments=\{allSegments\}/);
+  assert.match(source, /<SlicerToolpath3D segments=\{displaySegments\}/);
   const renderer = fs.readFileSync(path.join(root, "SlicerToolpath3D.jsx"), "utf8");
   assert.match(renderer, /marker\.position\.set\(\.\.\.lastStep\)/);
 });
@@ -27,8 +28,8 @@ test("feature visibility is configurable while unavailable numeric modes remain 
 });
 
 test("bounded path sample is never represented as complete G-code execution", () => {
-  assert.match(source, /sampled extrusion moves only/);
-  assert.match(source, /paths can be omitted/);
+  assert.match(source, /Earlier layers are still a sampled orientation reference/);
+  assert.match(source, /Partial samples can still omit fine toolpaths/);
   assert.match(source, /not a complete/);
   assert.match(source, /estimates/);
 });
