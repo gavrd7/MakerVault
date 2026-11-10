@@ -175,5 +175,5 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
   </>;
   return embedded ? content : <Modal title={`G-code · ${file.name}`}
     subtitle="Read-only analysis. A matching printer must be verified separately before uploading or printing."
-    onClose={onClose} wide>{content}</Modal>;
+    onClose={onClose} wide className={mode === "visual" && analysis.slicer_preview ? "slicerPreviewModal" : ""}>{content}</Modal>;
 }
