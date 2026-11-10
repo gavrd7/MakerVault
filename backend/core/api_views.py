@@ -2404,6 +2404,49 @@ def component_image(request, component_id):
 
 @login_required
 @require_http_methods(["GET"])
+def file_gcode_layer(request, asset_id):
+    """Read full-resolution extrusion paths for one layer of an owned G-code file.
+
+    Keep the indexed whole-model summary separate; only the selected layer is
+    returned at full resolution, avoiding the discontinuous global sample.
+    """
+    from .slicer_layer_preview import (
+        MAX_LAYER_SOURCE_BYTES, exact_layer_toolpaths,
+    )
+
+    asset = FileAsset.objects.filter(owner=request.user, pk=asset_id).first()
+    if asset is None:
+        return _error("G-code file not found.", status=404)
+    filename = str((asset.metadata or {}).get("original_name") or asset.name or "")
+    if (asset.metadata or {}).get("extension") != ".gcode" and not filename.lower().endswith(".gcode"):
+        return _error("Only plain-text G-code can be inspected.", status=400)
+    try:
+        layer_z = float(request.GET.get("z", ""))
+        if not 0 <= layer_z <= 2000 or not __import__("math").isfinite(layer_z):
+            raise ValueError()
+    except (ValueError, TypeError):
+        return _error("Choose a valid layer Z between 0 and 2000 mm.", status=400)
+    try:
+        with asset.file.storage.open(asset.file.name, "rb") as handle:
+            raw = handle.read(MAX_LAYER_SOURCE_BYTES + 1)
+    except (OSError, ValueError):
+        return _error("Stored G-code could not be opened.", status=404)
+    if len(raw) > MAX_LAYER_SOURCE_BYTES:
+        return _error("Full-resolution layer retrieval is unavailable for G-code larger than 32 MiB.", status=413)
+    if b"\\x00" in raw:
+        return _error("Binary G-code is not supported by this viewer.", status=400)
+    try:
+        source = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return _error("Full-resolution layer retrieval requires UTF-8 G-code.", status=400)
+    result = exact_layer_toolpaths(source, layer_z)
+    response = JsonResponse(result)
+    response["Cache-Control"] = "private, no-store"
+    return response
+
+
+@login_required
+@require_http_methods(["GET"])
 def file_gcode_source(request, asset_id):
     """Stream the owner's complete original G-code, never the bounded inspection sample."""
     asset = FileAsset.objects.filter(owner=request.user, pk=asset_id).first()
