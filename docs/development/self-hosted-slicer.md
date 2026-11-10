@@ -220,7 +220,8 @@ User-facing guidance: [Slicer installation and engine management](../guide/3d-pr
 4. **Snapmaker Orca** — fifth, validated independently rather than assumed compatible with OrcaSlicer.
 5. **ElegooSlicer** — independently validated ELEGOO-native profiles and slicing behaviour, even where the codebase shares OrcaSlicer ancestry.
 6. **UltiMaker Cura / CuraEngine** — integrate the Cura slicing backend and compatible native definitions without assuming the full GUI can run headlessly.
-7. **Other candidates** — Anycubic Slicer Next and sensible integrations for supported printer adapters, each conditional on real CLI/profile/licence validation.
+7. **Anycubic Slicer Next** — independent engine-native printer/material presets and headless runtime validation, despite its OrcaSlicer lineage.
+8. **Other candidates** — additional manufacturer slicers and sensible integrations for supported printer adapters, each conditional on real CLI/profile/licence validation.
 
 ### E. Enhanced plate, profiles and multi-material
 - Model placement and transforms with server-validated build-volume bounds, units and plate orientation.
@@ -258,7 +259,7 @@ Orca real-engine fixture validation, interactive build plate manipulation, searc
 
 ## Orca-first verification and recovery checkpoint (6 November 2026)
 
-**Engine order:** OrcaSlicer (default) → Creality Print → Bambu Studio → PrusaSlicer → Snapmaker Orca → ElegooSlicer → UltiMaker Cura / CuraEngine → other printer-relevant engines. The Orca-specific runner has native JSON/CLI staging and file checks, but real CLI slicing remains unverified until a pinned worker image and native profiles complete a fixture run. Neither a mocked runner test nor a profile import demonstrates a working slicer.
+**Engine order:** OrcaSlicer (default) → Creality Print → Bambu Studio → PrusaSlicer → Snapmaker Orca → ElegooSlicer → UltiMaker Cura / CuraEngine → Anycubic Slicer Next → other printer-relevant engines. The Orca-specific runner has native JSON/CLI staging and file checks, but real CLI slicing remains unverified until a pinned worker image and native profiles complete a fixture run. Neither a mocked runner test nor a profile import demonstrates a working slicer.
 
 The branch now includes `slicer_worker/verify_orca.py`, which runs one real Orca CLI fixture **only inside an approved isolated container**. Feed it a known STL and complete engine-native machine, filament and process profile files; it returns SHA-256 checksums and bounded output metadata while explicitly setting `approved_for_production=false`. This receipt must be reviewed against the actual expected printer/material settings before installation can be approved.
 
@@ -400,6 +401,7 @@ slice. Printer communication is a separate optional adapter.
 | Snapmaker Orca | Snapmaker Orca JSON | Not yet integrated; manual native import available | Not validated |
 | ElegooSlicer | Engine-native profile handling requires verification | Planned; runtime and official profile catalogue not integrated | Not validated |
 | UltiMaker Cura | Cura definitions / intent / quality settings require independent mapping | Planned; CuraEngine integration and official profile catalogue not integrated | Not validated |
+| Anycubic Slicer Next | Engine-native profile handling requires verification | Planned; runtime and official profile catalogue not integrated | Not validated |
 
 Source counts represent pinned upstream **catalogue families**, not printer
 models, certified output, or execution-ready support. MakerVault advertises
