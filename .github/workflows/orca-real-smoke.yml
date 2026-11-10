@@ -119,6 +119,26 @@ jobs:
         if: steps.native_object_settings.outcome == 'failure'
         run: |
           echo "::warning::Real Orca per-object 3MF still fails two-object G-code verification. Do not enable object-specific slicing."
+      - name: Diagnose native project with all-plates selection
+        id: object_all_plates
+        continue-on-error: true
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k1/printer.json \
+            --filament /tmp/makervault-orca-k1/filament.json \
+            --process /tmp/makervault-orca-k1/process.json \
+            --model /tmp/makervault-orca-object-settings.3mf \
+            --experimental-all-plates
+      - name: Diagnose native project with explicit no-arrange
+        id: object_no_arrange
+        continue-on-error: true
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k1/printer.json \
+            --filament /tmp/makervault-orca-k1/filament.json \
+            --process /tmp/makervault-orca-k1/process.json \
+            --model /tmp/makervault-orca-object-settings.3mf \
+            --experimental-no-arrange
       - name: Verify production compound plate prints both transformed models with real Orca
         run: |
           python3 scripts/probe_slicer_staging.py \
