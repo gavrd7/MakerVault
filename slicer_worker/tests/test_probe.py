@@ -38,7 +38,7 @@ class RealEngineProbeTests(TestCase):
             lines.append(f"G1 X{75 + i % 10} Y{110 + i % 5} E0.08")
         for i in range(70):
             lines.append(f"G1 X{145 + i % 10} Y{110 + i % 5} E0.12")
-        gcode.write_text("\\n".join(lines) + "\\n")
+        gcode.write_text("\n".join(lines) + "\n")
         evidence = _verify_two_native_object_effects(gcode)
         self.assertGreater(evidence["effective_extrusion_ratio"], 2)
         self.assertEqual(evidence["left_moves"], 40)
@@ -48,7 +48,7 @@ class RealEngineProbeTests(TestCase):
         for center in (75, 145):
             for i in range(40):
                 equal.append(f"G1 X{center + i % 10} Y{110 + i % 5} E0.1")
-        bad.write_text("\\n".join(equal) + "\\n")
+        bad.write_text("\n".join(equal) + "\n")
         with self.assertRaisesRegex(WorkerError, "not proven effective"):
             _verify_two_native_object_effects(bad)
 
