@@ -3931,6 +3931,21 @@ a:focus-visible,
 @media(max-width:500px){.slicerAxisScaling{grid-template-columns:minmax(0,1fr)}}
 
 /* Read-only 3D slicer preview (shared controls with sampled layer/step inspector). */
+/* The G-code viewer is a visual workstation, not an 860px form. Give the
+   3D viewport room without changing ordinary dialogs or mobile layouts. */
+@media (min-width: 900px) {
+  .modal.slicerPreviewModal { width:min(1480px,calc(100vw - 40px)); }
+  .slicerPreviewModal .slicerResultLayerLayout {
+    max-width:none;
+    grid-template-columns:minmax(0,1fr) minmax(68px,94px);
+  }
+  .slicerPreviewModal .slicerToolpath3DCanvas {
+    height:clamp(480px,67vh,850px);
+  }
+}
+.slicerPreviewModal .slicerResultModeRow { flex-wrap:wrap;gap:12px 16px; }
+.slicerPreviewModal .slicerResultViewport {min-width:0}
+
 .slicerToolpath3D{width:100%;min-width:0}
 .slicerToolpath3DCanvas{width:100%;height:clamp(340px,58vh,720px);background:#111b27;border:1px solid var(--border,#394958);border-radius:12px;overflow:hidden;touch-action:none}
 .slicerToolpath3D>small{display:block;color:var(--muted,#9aafc3);margin-top:7px;text-align:center}
