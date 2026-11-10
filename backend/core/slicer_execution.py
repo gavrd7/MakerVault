@@ -375,7 +375,16 @@ def process_queued_job(job_id):
                 stage = "resolving native printer bed dimensions"
                 width, depth = trusted_plate_dimensions(job.printer_profile)
                 stage = "assembling the build plate 3MF"
-                model = build_compound_plate_3mf(source_models, bed_width=width, bed_depth=depth)
+                # Keep every object and its native settings when this route
+                # eventually passes pinned-binary acceptance. The existing
+                # queue admission still blocks unverified per-object jobs.
+                # Ordinary single-material multi-object plates retain their
+                # proven compound-mesh execution path.
+                has_object_settings = any(
+                    item.get("process_overrides") for item, _raw in source_models
+                )
+                builder = build_plate_3mf if has_object_settings else build_compound_plate_3mf
+                model = builder(source_models, bed_width=width, bed_depth=depth)
                 model_format = "3mf"
         stage = "resolving native slicing profiles"
         profiles = []
