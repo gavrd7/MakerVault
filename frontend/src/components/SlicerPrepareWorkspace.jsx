@@ -71,6 +71,7 @@ export default function SlicerPrepareWorkspace({
   const [measureOptionsOpen, setMeasureOptionsOpen] = useState(false);
   const [measureMode, setMeasureMode] = useState("distance");
   const [measureUnit, setMeasureUnit] = useState("mm");
+  const [measureSnapMode, setMeasureSnapMode] = useState("auto");
   const [measureClearVersion, setMeasureClearVersion] = useState(0);
   const [nativeProcessFields, setNativeProcessFields] = useState({});
   const [settingsSearch, setSettingsSearch] = useState("");
@@ -629,6 +630,14 @@ export default function SlicerPrepareWorkspace({
               <option value="circle">Three-point circle</option>
             </select>
           </label>
+          <label>Snapping
+            <select value={measureSnapMode} onChange={event => setMeasureSnapMode(event.target.value)}>
+              <option value="auto">Automatic · nearby vertex or triangle edge</option>
+              <option value="vertex">Vertex only · otherwise surface</option>
+              <option value="edge">Triangle edge only · otherwise surface</option>
+              <option value="surface">Surface point · no snapping</option>
+            </select>
+          </label>
           <label>Units
             <select value={measureUnit} onChange={event => setMeasureUnit(event.target.value)}>
               <option value="mm">Millimetres (mm)</option>
@@ -743,7 +752,8 @@ export default function SlicerPrepareWorkspace({
           printerLabel={selectedProfiles?.printer || printerDetails?.model || printerDetails?.name || ""}
           onPlateLabelChange={onPlateLabelChange} canEdit={canEdit && !busy} toolMode={toolMode} selectedInstanceId={selectedId}
           onSelectedInstanceChange={setSelectedId} measurementVisible={measurementVisible}
-          measureMode={measureMode} measureUnit={measureUnit} measureClearVersion={measureClearVersion}
+          measureMode={measureMode} measureUnit={measureUnit} measureSnapMode={measureSnapMode}
+          measureClearVersion={measureClearVersion}
           onMeasurePinPlaced={() => setMeasureOptionsOpen(false)}
           onExitToolMode={() => setToolMode("select")} />
       </div>
