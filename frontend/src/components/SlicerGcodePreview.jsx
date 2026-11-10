@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import SlicerToolpath3D from "./SlicerToolpath3D";
 import { featureColour, hasFeatureFocus } from "./slicerToolpathFeatures";
 
@@ -23,7 +23,7 @@ const COLOUR_MODES = [
   { value: "acceleration", label: "Acceleration", supported: false },
 ];
 
-export default function SlicerGcodePreview({ preview, bedSize = null }) {
+export default function SlicerGcodePreview({ fileId = null, preview, bedSize = null }) {
   const [layer, setLayer] = useState(null);
   const [step, setStep] = useState(null);
   const [colourMode, setColourMode] = useState("feature");
@@ -31,7 +31,11 @@ export default function SlicerGcodePreview({ preview, bedSize = null }) {
   const [layerDisplay, setLayerDisplay] = useState("current");
   const [featureFocus, setFeatureFocus] = useState("all");
   const [visible, setVisible] = useState({});
-  const [showToolhead, setShowToolhead] = useState(true);
+  const [showToolhead, setShowToolhead] = useState(false);
+  const [exactLayer, setExactLayer] = useState(null);
+  const [layerBusy, setLayerBusy] = useState(false);
+  const [layerError, setLayerError] = useState("");
+  const fullLayerCache = useRef(new Map());
   const layers = preview?.layers || [];
   const allSegments = preview?.segments || [];
   const currentLayer = Math.min(layer ?? Math.max(0, layers.length - 1), Math.max(0, layers.length - 1));
@@ -39,9 +43,60 @@ export default function SlicerGcodePreview({ preview, bedSize = null }) {
 
   const features = Object.keys(preview?.feature_counts || {});
   const colours = Object.fromEntries(features.map(feature => [feature, featureColour(feature)]));
-  const layerSegments = useMemo(() =>
-    z == null ? [] : allSegments.filter(segment => Math.abs(segment[4] - z) < 0.0005),
-    [allSegments, z]);
+  // Query original stored G-code for this exact layer. Global 80k-move
+  // samples are not sufficient for continuous wall and support geometry.
+  useEffect(() => {
+    if (!fileId || !Number.isFinite(z)) return undefined;
+    const key = String(fileId) + ":" + Number(z).toFixed(3);
+    const cached = fullLayerCache.current.get(key);
+    if (cached) {
+      setExactLayer(cached);
+      setLayerError("");
+      setLayerBusy(false);
+      return undefined;
+    }
+    let live = true;
+    const controller = new AbortController();
+    setExactLayer(null);
+    setLayerError("");
+    setLayerBusy(true);
+    fetch(`/api/files/${encodeURIComponent(fileId)}/gcode/layer/?z=${encodeURIComponent(z.toFixed(3))}`, {
+      credentials: "same-origin", signal: controller.signal,
+    }).then(async response => {
+      if (!response.ok) {
+        let message = `Layer retrieval failed (HTTP ${response.status}).`;
+        try { message = (await response.json()).error || message; } catch { /* Retain HTTP detail. */ }
+        throw new Error(message);
+      }
+      return response.json();
+    }).then(data => {
+      if (!live) return;
+      if (!Array.isArray(data.segments)) throw new Error("Invalid layer response.");
+      fullLayerCache.current.set(key, data);
+      // Retain only a small number of recent layers in browser memory.
+      if (fullLayerCache.current.size > 12) {
+        fullLayerCache.current.delete(fullLayerCache.current.keys().next().value);
+      }
+      setExactLayer(data);
+    }).catch(error => {
+      if (live && error.name !== "AbortError") setLayerError(error.message);
+    }).finally(() => { if (live) setLayerBusy(false); });
+    return () => { live = false; controller.abort(); };
+  }, [fileId, z]);
+
+  const layerSegments = useMemo(() => {
+    if (exactLayer?.z != null && Math.abs(exactLayer.z - z) < 0.0005)
+      return exactLayer.segments;
+    // While loading, do not pretend that the sparse global sample is exact.
+    return [];
+  }, [exactLayer, z]);
+  const displaySegments = useMemo(() => {
+    const current = layerSegments;
+    if (layerDisplay === "current") return current;
+    const previous = allSegments.filter(segment =>
+      Math.abs(segment[4] - z) > 0.0005 && segment[4] <= z);
+    return [...previous, ...current];
+  }, [allSegments, layerSegments, layerDisplay, z]);
   const finalStep = Math.min(step ?? layerSegments.length, layerSegments.length);
   const formatTime = seconds => {
     if (seconds == null) return "Not declared";
@@ -76,7 +131,7 @@ export default function SlicerGcodePreview({ preview, bedSize = null }) {
           <select value={layerDisplay} onChange={event => setLayerDisplay(event.target.value)}>
             <option value="current">Current layer only · detail</option>
             <option value="context">Current + 8 faded layers</option>
-            <option value="all">All earlier layers · overview</option>
+            <option value="all">All earlier layers · sampled overview</option>
           </select>
         </label>
         <label>Feature focus
@@ -92,12 +147,12 @@ export default function SlicerGcodePreview({ preview, bedSize = null }) {
       </div>
       <div className="slicerResultLayerLayout">
         <div className="slicerResultViewport">
-          <SlicerToolpath3D segments={allSegments} layers={layers}
+          <SlicerToolpath3D segments={displaySegments} layers={layers}
             activeLayer={currentLayer} activeStep={finalStep} visible={visible}
             colourMode={colourMode} colours={colours} showToolhead={showToolhead} bedSize={bedSize}
             renderMode={renderMode} layerDisplay={layerDisplay} featureFocus={featureFocus} />
           <div className="slicerResultSteps">
-            <label htmlFor="slice-step-slider">Sampled toolhead step {finalStep} / {layerSegments.length}</label>
+            <label htmlFor="slice-step-slider">{exactLayer && !exactLayer.limited ? "Full-resolution" : "Available"} layer move {finalStep} / {layerSegments.length}</label>
             <input id="slice-step-slider" type="range" min="0" max={layerSegments.length}
               step="1" value={finalStep} onChange={e => setStep(Number(e.target.value))} />
             <div className="settingsActions">
@@ -118,6 +173,17 @@ export default function SlicerGcodePreview({ preview, bedSize = null }) {
           <span>Z {z?.toFixed(2)} mm</span>
         </label>
       </div>
+      <div className="slicerPreviewCoverage" role="status">
+        {layerBusy ? "Loading complete toolpaths for the selected layer…" :
+          layerError ? "Full-resolution layer unavailable: " + layerError :
+          exactLayer?.limited ? `Layer contains ${exactLayer.segment_count.toLocaleString()} moves; only the first ${exactLayer.segments.length.toLocaleString()} are shown. Reduce model complexity or increase the server limit.` :
+          exactLayer ? `Full-resolution layer: ${exactLayer.segments.length.toLocaleString()} consecutive extrusion moves at Z ${z?.toFixed(3)} mm.` :
+          "Select a G-code layer to inspect its complete extrusion paths."}
+      </div>
+      {layerDisplay !== "current" && <p className="projectUploadHint">
+        Earlier layers are still a sampled orientation reference, not a continuous solid model.
+        Switch to Current layer only for accurate walls, support details and full-resolution paths.
+      </p>}
       <fieldset className="slicerResultVisibility">
         <legend>Visible extrusion features</legend>
         {features.map(feature => <label className="checkRow" key={feature}>
@@ -135,11 +201,11 @@ export default function SlicerGcodePreview({ preview, bedSize = null }) {
       operate on sampled extrusion moves only; paths can be omitted. This is not a complete
       OrcaSlicer simulation or printer-safety check.</small>
     <p className="slicerPreviewCoverage" role="status">
-      Displaying {allSegments.length.toLocaleString()} of {(preview?.segment_count ?? allSegments.length).toLocaleString()} detected deposited moves
+      Overall index: {allSegments.length.toLocaleString()} of {(preview?.segment_count ?? allSegments.length).toLocaleString()} deposited moves
       {preview?.sampled ? " · partial toolpath sample" : " · all indexed extrusion moves"}.
       Solid preview draws bead-width geometry; it does not simulate the complete native slicer.
     </p>
-    {preview?.sampled && <p className="projectUploadHint">Preview is partial; the G-code contains
-      additional paths beyond this bounded sample.</p>}
+    {preview?.sampled && <p className="projectUploadHint">The full-model overview is partial.
+      Selected-layer toolpaths are retrieved separately from the original stored file.</p>}
   </div>;
 }
