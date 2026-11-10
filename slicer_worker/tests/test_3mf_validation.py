@@ -26,6 +26,57 @@ class Core3MFWorkerTests(TestCase):
             archive.writestr("_rels/.rels", "<Relationships/>")
         return data.getvalue()
 
+
+    def with_object_metadata(self, overrides):
+        """Build two core objects and a single native plate mapping."""
+        ns = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+        def mesh(index):
+            return (f'<object id="{index}" type="model"><mesh><vertices>'
+                    '<vertex x="0" y="0" z="0"/><vertex x="1" y="0" z="0"/>'
+                    '<vertex x="0" y="1" z="0"/></vertices>'
+                    '<triangles><triangle v1="0" v2="1" v3="2"/></triangles>'
+                    '</mesh></object>')
+        model = (f'<model xmlns="{ns}" unit="millimeter"><resources>'
+                 + mesh(1) + mesh(2) + '</resources><build>'
+                 '<item objectid="1" transform="1 0 0 0 1 0 0 0 1 10 10 0"/>'
+                 '<item objectid="2" transform="1 0 0 0 1 0 0 0 1 40 40 0"/>'
+                 '</build></model>')
+        metadata = ''.join(f'<metadata key="{key}" value="{value}"/>' for key, value in overrides)
+        manifest = ('<config><object id="2">' + metadata + '</object>'
+                    '<plate><metadata key="plater_id" value="1"/>'
+                    '<model_instance><metadata key="object_id" value="1"/>'
+                    '<metadata key="instance_id" value="0"/>'
+                    '<metadata key="identify_id" value="1"/></model_instance>'
+                    '<model_instance><metadata key="object_id" value="2"/>'
+                    '<metadata key="instance_id" value="0"/>'
+                    '<metadata key="identify_id" value="2"/></model_instance>'
+                    '</plate></config>')
+        out = io.BytesIO()
+        with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED) as zipfile_out:
+            zipfile_out.writestr("3D/3dmodel.model", model)
+            zipfile_out.writestr("Metadata/model_settings.config", manifest)
+            zipfile_out.writestr("[Content_Types].xml", "<Types/>")
+            zipfile_out.writestr("_rels/.rels", "<Relationships/>")
+        return out.getvalue()
+
+    def test_safe_per_object_metadata_passes_worker_validation(self):
+        self.assertTrue(validate_worker_3mf(self.with_object_metadata([
+            ("wall_loops", "5"), ("sparse_infill_density", "37%"),
+        ])))
+
+    def test_unsafe_per_object_metadata_is_rejected(self):
+        for overrides in (
+            [("machine_start_gcode", "M104 S300")],
+            [("wall_loops", "999")],
+            [("wall_loops", "-2")],
+            [("wall_loops", "3.5")],
+            [("sparse_infill_density", "50")],
+            [("sparse_infill_density", "NaN%")],
+            [("wall_loops", "3"), ("wall_loops", "5")],
+        ):
+            with self.subTest(overrides=overrides), self.assertRaises(WorkerError):
+                validate_worker_3mf(self.with_object_metadata(overrides))
+
     def test_valid_core_model_is_admitted(self):
         self.assertTrue(validate_worker_3mf(self.package()))
 
