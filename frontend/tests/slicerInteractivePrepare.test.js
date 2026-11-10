@@ -38,6 +38,21 @@ test("editor provides actual model tree, undo redo and existing placement operat
   assert.match(plate, /data-slicer-field="x_mm"/);
 });
 
+test("measurement, centre and focus toolbar actions are functional and guarded", () => {
+  const scene = read("SlicerPrepareWorkspace.jsx");
+  const editor = read("SlicerPlateEditor.jsx");
+  for (const tool of ["Measure", "Centre selected", "Fit selected"])
+    assert.match(scene, new RegExp('name: "' + tool + '", target:'));
+  assert.match(scene, /tool.target === "measure"/);
+  assert.match(scene, /measurementVisible=\{measurementVisible\}/);
+  assert.match(editor, /aria-label="Selected model measurements"/);
+  assert.match(editor, /plateModelMeasurement\(chosen, dimensions\[chosen.instance_id\]\)/);
+  assert.match(editor, /data-slicer-action="center"/);
+  assert.match(editor, /data-slicer-action="focus"/);
+  assert.match(editor, /applySelectedTransform\(\{ x_mm: 0, y_mm: 0 \}/);
+  assert.match(editor, /height: box.max.z - box.min.z/);
+  assert.match(editor, /This is not face-to-face measurement/);
+});
 test("advanced tools are visibly gated pending safe native transformations", () => {
   const scene = read("SlicerPrepareWorkspace.jsx");
   for (const tool of ["Auto-orient", "Lay on face", "Cut", "Hollow",
