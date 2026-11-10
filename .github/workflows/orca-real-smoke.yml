@@ -119,6 +119,20 @@ jobs:
         if: steps.native_object_settings.outcome == 'failure'
         run: |
           echo "::warning::Real Orca per-object 3MF still fails two-object G-code verification. Do not enable object-specific slicing."
+      - name: Measure true per-object settings effect on two separate 20mm cubes
+        id: native_object_effects
+        continue-on-error: true
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k1/printer.json \
+            --filament /tmp/makervault-orca-k1/filament.json \
+            --process /tmp/makervault-orca-k1/process.json \
+            --model /tmp/makervault-orca-object-settings.3mf \
+            --verify-object-effects
+      - name: Report per-object override verification limitation
+        if: steps.native_object_effects.outcome == 'failure'
+        run: |
+          echo "::warning::Object geometry is verified, but different effective Orca process settings are not yet proven. Keep object slicing disabled."
       - name: Diagnose native project with all-plates selection
         id: object_all_plates
         continue-on-error: true
