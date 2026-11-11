@@ -113,13 +113,14 @@ test("active 3D model has a temporary outline and preserves preview filament col
 });
 test("advanced tools are visibly gated pending safe native transformations", () => {
   const scene = read("SlicerPrepareWorkspace.jsx");
-  for (const tool of ["Auto-orient", "Cut", "Hollow",
+  for (const tool of ["Cut", "Hollow",
                        "Support painting", "Seam painting", "Variable layer height",
                        "Colour painting", "Add plate"]) {
     assert.match(scene, new RegExp('name: "' + tool + '", icon: "[^"]+", pending:'));
   }
   assert.match(scene, /disabled=\{!!tool.pending/);
   assert.match(scene, /name: "Lay on face", target: "lay_face", icon: "face"/);
+  assert.match(scene, /name: "Auto-orient", target: "auto_orient", icon: "orient"/);
   for (const group of ["Quality", "Strength", "Speed", "Supports", "Multifilament", "Others"])
     assert.match(scene, new RegExp('"' + group + '"'));
   assert.match(scene, /Wall loops and sparse infill density have passed native Orca/);
