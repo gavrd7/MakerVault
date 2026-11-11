@@ -48,7 +48,13 @@ export function plateModelMeasurement(item, dimensions) {
     Number(item?.scale_percent) / 100;
   if (!footprint || !Number.isFinite(rawHeight) || rawHeight <= 0 ||
       !Number.isFinite(zScale) || zScale <= 0) return null;
-  const height = rawHeight * zScale;
+  const rotation = plateRotationMatrix(item);
+  const rawWidth = Number(dimensions?.width), rawDepth = Number(dimensions?.depth);
+  const sx = Array.isArray(xyz) ? Number(xyz[0]) / 100 : Number(item?.scale_percent) / 100;
+  const sy = Array.isArray(xyz) ? Number(xyz[1]) / 100 : Number(item?.scale_percent) / 100;
+  const height = Math.abs(rotation[2][0]) * rawWidth * sx +
+    Math.abs(rotation[2][1]) * rawDepth * sy +
+    Math.abs(rotation[2][2]) * rawHeight * zScale;
   if (!Number.isFinite(height)) return null;
   return {
     width: footprint.maxX - footprint.minX,
