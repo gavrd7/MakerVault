@@ -178,7 +178,7 @@ def _draft_plate_settings(user, input_asset, settings):
         required = {"instance_id", "asset_id", "x_mm", "y_mm", "rotation_deg",
                     "scale_percent", "color"}
         if (not isinstance(item, dict) or not required.issubset(item)
-                or set(item) - required - {"scale_xyz_percent", "process_overrides"}):
+                or set(item) - required - {"scale_xyz_percent", "process_overrides", "rotation_xyz_deg"}):
             raise ValueError("Invalid plate model instance.")
         instance_id = str(_uuid(item["instance_id"]))
         asset_id = _uuid(item["asset_id"])
@@ -198,6 +198,13 @@ def _draft_plate_settings(user, input_asset, settings):
             if key != "scale_percent" and abs(raw) > bound:
                 raise ValueError("Plate transform exceeds its allowed range.")
             values[key] = round(float(raw), 3)
+        tilt = item.get("rotation_xyz_deg")
+        if tilt is not None:
+            if (not isinstance(tilt, list) or len(tilt) != 2 or
+                    any(isinstance(v, bool) or not isinstance(v, (int, float)) or
+                        not math.isfinite(v) or abs(v) > 360 for v in tilt)):
+                raise ValueError("Model X/Y tilt must be two finite angles.")
+            values["rotation_xyz_deg"] = [round(float(v), 3) for v in tilt]
         xyz = item.get("scale_xyz_percent")
         if xyz is not None:
             if (not isinstance(xyz, list) or len(xyz) != 3 or any(
