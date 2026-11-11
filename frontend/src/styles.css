@@ -5273,3 +5273,13 @@ a:focus-visible,
 .slicerAssemblyActions small { color: #b7c8d7; line-height: 1.4; }
 .slicerAssemblyActions > div { display: flex; flex-wrap: wrap; gap: 7px; }
 .slicerAssemblyActions button { flex: 1 1 auto; min-height: 33px; font-size: .8rem; }
+
+
+/* The camera toolbar and floating readout share the plate-column anchor;
+   viewport-relative positioning previously put Measure a row too low. */
+@media (min-width: 701px) {
+  .slicerPlateCanvasColumn > .slicerPlateCanvasViewport { position: static; }
+  .slicerPlateCanvasColumn .slicerPlateCanvasViewport > .slicerViewportMeasurement {
+    top: 18px; left: 12px;
+  }
+}
