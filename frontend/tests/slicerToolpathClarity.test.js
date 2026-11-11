@@ -21,8 +21,8 @@ test("feature colours are stable regardless of sample order or printer", () => {
   assert.ok(hasFeatureFocus(["Inner wall", "Support material"], "support"));
 });
 
-test("G-code preview defaults to isolated layers and exposes focus modes", () => {
-  assert.match(preview, /useState\("current"\)/);
+test("G-code preview defaults to complete-print overview while retaining layer detail", () => {
+  assert.match(preview, /const \[layerDisplay, setLayerDisplay\] = useState\("all"\)/);
   assert.match(preview, /Layer visibility/);
   assert.match(preview, /Current layer only/);
   assert.match(preview, /Current \+ 8 faded layers/);
