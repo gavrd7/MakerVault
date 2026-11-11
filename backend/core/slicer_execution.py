@@ -346,6 +346,8 @@ def _single_unmodified_stl(plate):
             ("scale_percent", 100),
         )):
             return False
+        if any(abs(float(v)) > 1e-7 for v in item.get("rotation_xyz_deg", [0, 0])):
+            return False
         xyz = item.get("scale_xyz_percent", [100, 100, 100])
         return isinstance(xyz, (list, tuple)) and len(xyz) == 3 and all(
             float(value) == 100 for value in xyz
