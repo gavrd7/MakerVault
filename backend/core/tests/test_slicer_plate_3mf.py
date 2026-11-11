@@ -38,6 +38,36 @@ class BuildPlate3MFTests(SimpleTestCase):
         self.assertAlmostEqual(second[1], 0.5, places=5)
         self.assertAlmostEqual(second[3], -0.5, places=5)
 
+    def test_lay_on_face_tilt_is_baked_and_sits_on_print_bed(self):
+        source = fixture_stl()
+        model = {"x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+                 "rotation_xyz_deg": [90, 0], "scale_percent": 100}
+        data = build_plate_3mf([(model, source)], bed_width=220, bed_depth=220)
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            root = ET.fromstring(archive.read("3D/3dmodel.model"))
+        ns = "{" + NS + "}"
+        vertices = root.findall("./" + ns + "resources/" + ns + "object/" +
+                                ns + "mesh/" + ns + "vertices/" + ns + "vertex")
+        zs = [float(vertex.attrib["z"]) for vertex in vertices]
+        self.assertTrue(zs)
+        self.assertAlmostEqual(min(zs), 0, places=4)
+        self.assertGreater(max(zs), 0)
+        item = root.find("./" + ns + "build/" + ns + "item")
+        self.assertEqual(item.attrib["transform"], "1 0 0 0 1 0 0 0 1 0 0 0")
+
+    def test_untilted_geometry_retains_native_z_rotation(self):
+        model = {"x_mm": 0, "y_mm": 0, "rotation_deg": 90,
+                 "rotation_xyz_deg": [0, 0], "scale_percent": 100}
+        data = build_plate_3mf([(model, fixture_stl())],
+                                bed_width=220, bed_depth=220)
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            root = ET.fromstring(archive.read("3D/3dmodel.model"))
+        item = root.find("./{%s}build/{%s}item" % (NS, NS))
+        transform = [float(value) for value in item.attrib["transform"].split()]
+        self.assertAlmostEqual(transform[0], 0, places=5)
+        self.assertAlmostEqual(transform[1], 1, places=5)
+        self.assertAlmostEqual(transform[3], -1, places=5)
+
     def test_object_settings_metadata_preserves_distinct_native_object_ids(self):
         shape = fixture_stl()
         identity = {"x_mm": 0, "y_mm": 0,
