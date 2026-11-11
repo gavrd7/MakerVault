@@ -5035,3 +5035,27 @@ a:focus-visible,
 @media(prefers-reduced-motion:reduce){
   .slicerMobilePaneTabs{scroll-behavior:auto}
 }
+
+/* Compact G-code modal controls on phones, without affecting desktop. */
+@media(max-width:650px){
+  .slicerPreviewModal .modalBody{padding:12px}
+  .slicerPreviewModal .slicerResultModeRow{
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+    align-items:start;gap:9px;margin:10px 0;
+  }
+  .slicerPreviewModal .slicerResultModeRow > label{
+    display:flex;flex-direction:column;align-items:stretch;
+    gap:5px;min-width:0;font-size:.79rem;
+  }
+  .slicerPreviewModal .slicerResultModeRow > label:first-child{
+    display:flex;flex-direction:column;align-items:stretch;
+  }
+  .slicerPreviewModal .slicerResultModeRow select{
+    width:100%;max-width:100%;min-width:0;font-size:.79rem;padding:9px 6px;
+  }
+  .slicerPreviewModal .slicerResultModeRow > label.checkRow{
+    grid-column:1/-1;flex-direction:row;align-items:center;justify-content:flex-start;
+  }
+  .slicerPreviewModal .slicerResultLayerLayout{gap:6px}
+  .slicerPreviewModal .slicerToolpath3DCanvas{height:min(54dvh,510px);min-height:300px}
+}
