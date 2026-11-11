@@ -5155,3 +5155,38 @@ a:focus-visible,
 /* Prevent the browser from re-anchoring the scroller to the old Setup
    controls when the tall form is replaced by the interactive canvas. */
 .slicerWorkbenchRoot.slicerEditorOpen { overflow-anchor: none; }
+
+
+/* Auto-orient keeps its choices at the toolbar; comparison opens over the
+   workbench, and hover/focus previews the candidate on the 3D plate. */
+.slicerPrepareTools .slicerAutoOrientMenu { width: 245px; }
+.slicerPrepareTools .slicerAutoOrientMenuChoice {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 8px; width: 100%; min-width: 0; height: auto; min-height: 38px;
+  padding: 8px 10px; text-align: left;
+  border-radius: 8px; background: #223246;
+}
+.slicerAutoOrientMenuChoice span { color: #91cde9; cursor: help; }
+.slicerAutoOrientModalBackdrop {
+  position: fixed; inset: 0; z-index: 1200;
+  display: flex; align-items: center; justify-content: flex-end;
+  padding: clamp(12px, 4vw, 50px);
+  background: rgba(4, 10, 18, .38);
+}
+.slicerAutoOrientModal {
+  width: min(510px, 100%); max-height: min(88vh, 850px);
+  overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,.55);
+  background: #101d2a; border: 1px solid #41556d;
+}
+.slicerAutoOrientModalHeader, .slicerAutoOrientModalActions {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 12px;
+}
+.slicerAutoOrientModalHeader h3 { margin: 0; }
+.slicerAutoOrientModalHeader p { margin: 5px 0 0; }
+.slicerAutoOrientModalHeader button { flex: 0 0 auto; }
+.slicerAutoOrientModalActions { align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+@media (max-width: 750px) {
+  .slicerAutoOrientModalBackdrop { justify-content: center; align-items: flex-end; padding: 8px; }
+  .slicerAutoOrientModal { width: 100%; max-height: 76dvh; }
+}
