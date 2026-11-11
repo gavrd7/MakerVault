@@ -21,7 +21,7 @@ const TOOLS = [
   { name: "Centre selected", target: "center", icon: "center" },
   { name: "Fit selected", target: "focus", icon: "focus" },
   { name: "Add plate", icon: "add", pending: "Multi-plate project persistence and native plate export" },
-  { name: "Auto-orient", icon: "orient", pending: "Geometry-based safe orientation solver" },
+  { name: "Auto-orient", target: "auto_orient", icon: "orient" },
   { name: "Lay on face", target: "lay_face", icon: "face" },
   { name: "Split", icon: "split", pending: "Connected-component mesh separation" },
   { name: "Individual XYZ scale", target: "scale_xyz_percent", icon: "scale" },
@@ -334,6 +334,12 @@ export default function SlicerPrepareWorkspace({
     }
     setMeasurementVisible(false);
     setMeasureOptionsOpen(false);
+    if (tool.target === "auto_orient") {
+      if (!selectedId && objects[0]?.instance_id) setSelectedId(objects[0].instance_id);
+      setToolMode(current => current === "auto_orient" ? "select" : "auto_orient");
+      setMobilePane("plate");
+      return;
+    }
     if (tool.target === "lay_face") {
       if (!selectedId && objects[0]?.instance_id) setSelectedId(objects[0].instance_id);
       setToolMode(current => current === "lay_face" ? "select" : "lay_face");
@@ -616,9 +622,11 @@ export default function SlicerPrepareWorkspace({
             (tool.target === "rotation_deg" && toolMode === "rotate") ||
             ((tool.target === "scale_percent" || tool.target === "scale_xyz_percent") && toolMode === "scale") ||
             (tool.target === "measure" && measurementVisible) ||
-            (tool.target === "lay_face" && toolMode === "lay_face")) ? "isActive" : ""}
+            (tool.target === "lay_face" && toolMode === "lay_face") ||
+            (tool.target === "auto_orient" && toolMode === "auto_orient")) ? "isActive" : ""}
           aria-pressed={tool.target === "measure" ? measurementVisible :
             tool.target === "lay_face" ? toolMode === "lay_face" :
+            tool.target === "auto_orient" ? toolMode === "auto_orient" :
             ["x_mm", "rotation_deg", "scale_percent", "scale_xyz_percent"].includes(tool.target)
             ? (tool.target === "x_mm" ? toolMode === "move"
               : tool.target === "rotation_deg" ? toolMode === "rotate" : toolMode === "scale") : undefined}
@@ -768,6 +776,9 @@ export default function SlicerPrepareWorkspace({
 
       </div>
       <div id="slicer-prepare-plate" className="slicerPrepareScene" ref={editorRef} aria-labelledby="slicer-mobile-tab-plate">
+        {toolMode === "auto_orient" && <p className="projectUploadHint" role="status">
+          <strong>Auto-orient:</strong> Choose a goal below the model to compare possible orientations. Results are relative mesh-based estimates until native test slices verify time, filament and supports.
+        </p>}
         {toolMode === "lay_face" && <p className="projectUploadHint" role="status">
           <strong>Lay on face:</strong> Tap or click the model face you want touching the build plate.
           MakerVault will rotate the model and place it back on the bed. Select the tool again to cancel.
