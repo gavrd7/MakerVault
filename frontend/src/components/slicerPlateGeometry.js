@@ -14,9 +14,7 @@ export function plateRotationMatrix(item) {
 
 /** Conservative oriented cuboid envelope including tilts around X/Y.
  * STL source geometry is centred in X/Y and rests on local Z=0.
- */
-
- * Preview-only: excludes printer keep-outs, extrusion clearance, supports and Z.
+ * Preview-only: excludes printer keep-outs, extrusion clearance and supports.
  */
 export function plateEnvelope(item, dimensions) {
   const x = Number(item.x_mm), y = Number(item.y_mm);
