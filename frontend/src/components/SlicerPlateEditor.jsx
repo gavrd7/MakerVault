@@ -286,6 +286,7 @@ export default function SlicerPlateEditor({
   const [splitError, setSplitError] = useState("");
   const [measureOverlayExpanded, setMeasureOverlayExpanded] = useState(false);
   const [transformOverlayExpanded, setTransformOverlayExpanded] = useState(false);
+  const [liveRotation, setLiveRotation] = useState(null);
   const [groupDeltaX, setGroupDeltaX] = useState(0);
   const [groupDeltaY, setGroupDeltaY] = useState(0);
   const [groupRotation, setGroupRotation] = useState(0);
@@ -1098,7 +1099,23 @@ export default function SlicerPlateEditor({
     const orientationCube = new SlicerOrientationCube(camera, renderer);
     transform.setSpace("world");
     transform.setTranslationSnap(0.5);
-    transform.setRotationSnap(THREE.MathUtils.degToRad(5));
+    // Rotation normally settles on 45° detents. Hold Shift for 5° precision.
+    transform.setRotationSnap(THREE.MathUtils.degToRad(45));
+    const onRotationKeyChange = event => {
+      transform.setRotationSnap(THREE.MathUtils.degToRad(event.shiftKey ? 5 : 45));
+    };
+    window.addEventListener("keydown", onRotationKeyChange);
+    window.addEventListener("keyup", onRotationKeyChange);
+    const formatAngle = radians => {
+      const degrees = THREE.MathUtils.radToDeg(radians);
+      return Math.round(degrees * 10) / 10;
+    };
+    transform.addEventListener("objectChange", () => {
+      if (!transform.object || latestToolModeRef.current !== "rotate") return;
+      const r = transform.object.rotation;
+      setLiveRotation({ x: formatAngle(r.x), y: formatAngle(r.y), z: formatAngle(r.z),
+        axis: transform.axis || "" });
+    });
     transform.showZ = false;
     scene.add(transform.getHelper());
     transform.addEventListener("dragging-changed", event => {
@@ -1296,6 +1313,7 @@ export default function SlicerPlateEditor({
       }
     }
     transform.addEventListener("mouseUp", () => {
+      setLiveRotation(null);
       const mesh = transform.object;
       if (!mesh) return;
       const current = latestObjectsRef.current;
@@ -1304,9 +1322,9 @@ export default function SlicerPlateEditor({
       const candidate = { ...selectedItem,
         x_mm: Math.round(mesh.position.x * 2) / 2,
         y_mm: Math.round(mesh.position.y * 2) / 2,
-        rotation_deg: Math.round(THREE.MathUtils.radToDeg(mesh.rotation.z) / 5) * 5,
+        rotation_deg: Math.round(THREE.MathUtils.radToDeg(mesh.rotation.z) * 1000) / 1000,
         rotation_xyz_deg: [mesh.rotation.x, mesh.rotation.y].map(v =>
-          Math.round(THREE.MathUtils.radToDeg(v) / 5) * 5),
+          Math.round(THREE.MathUtils.radToDeg(v) * 1000) / 1000),
       };
       if (latestToolModeRef.current === "scale") {
         const xyz = [mesh.scale.x, mesh.scale.y, mesh.scale.z].map(axis =>
@@ -1405,6 +1423,8 @@ export default function SlicerPlateEditor({
       renderer.domElement.removeEventListener("pointerup", pointerUp);
       renderer.domElement.removeEventListener("pointercancel", pointerUp);
       renderer.setAnimationLoop(null);
+      window.removeEventListener("keydown", onRotationKeyChange);
+      window.removeEventListener("keyup", onRotationKeyChange);
       controls.dispose();
       orientationCube.dispose();
       transform.detach();
@@ -1728,11 +1748,11 @@ export default function SlicerPlateEditor({
         <button type="button" disabled={!canEdit || ![groupDeltaX, groupDeltaY, groupRotation].every(Number.isFinite)}
           onClick={() => transformGroup(groupDeltaX, groupDeltaY, groupRotation)}>Apply group transform</button>
       </aside>}
-      {selection.length <= 1 && (toolMode === "move" || toolMode === "rotate") && chosen && <aside
+      {selection.length <= 1 && ["move", "rotate", "scale"].includes(toolMode) && chosen && <aside
         className="slicerViewportMeasurement slicerViewportTransform"
-        aria-label={toolMode === "move" ? "On-plate position controls" : "On-plate rotation controls"}>
+        aria-label={toolMode === "move" ? "On-plate position controls" : toolMode === "rotate" ? "On-plate rotation controls" : "On-plate scale controls"}>
         <div className="slicerViewportMeasurementHeader">
-          <strong>{toolMode === "move" ? "Move · mm" : "Rotate · degrees"}</strong>
+          <strong>{toolMode === "move" ? "Move · mm" : toolMode === "rotate" ? "Rotate · degrees" : "Scale · %"}</strong>
           <button type="button" aria-expanded={transformOverlayExpanded}
             onClick={() => setTransformOverlayExpanded(open => !open)}>
             {transformOverlayExpanded ? "Less" : "Details"}
@@ -1753,17 +1773,18 @@ export default function SlicerPlateEditor({
             {selectedMeasurement && <p className="slicerViewportMeasurementHint">
               X bounds: {pretty(selectedMeasurement.minX)} to {pretty(selectedMeasurement.maxX)} mm.
               Y bounds: {pretty(selectedMeasurement.minY)} to {pretty(selectedMeasurement.maxY)} mm.</p>}
-            <button type="button" disabled={!canEdit}
+            <button type="button" className="slicerTransformQuickAction" disabled={!canEdit}
               onClick={() => applySelectedTransform({ x_mm: 0, y_mm: 0 },
                 "The model cannot be centred without leaving the bed or overlapping another model.")}>
-              Centre model
+              <SlicerUiIcon name="center" /> <span>Centre model</span>
             </button>
           </>}
-        </> : <>
+        </> : toolMode === "rotate" ? <>
           <div className="slicerViewportTransformGrid">
             {["X", "Y", "Z"].map((axis, index) => <label key={axis}>{axis} (°)
-              <input type="number" step="5" value={index === 2 ? chosen.rotation_deg :
-                chosen.rotation_xyz_deg?.[index] || 0} disabled={!canEdit}
+              <input type="number" step="5" value={liveRotation
+                ? [liveRotation.x, liveRotation.y, liveRotation.z][index]
+                : index === 2 ? chosen.rotation_deg : chosen.rotation_xyz_deg?.[index] || 0} disabled={!canEdit}
                 onChange={event => {
                   const next = Number(event.target.value);
                   if (!Number.isFinite(next)) return;
@@ -1775,15 +1796,51 @@ export default function SlicerPlateEditor({
                   }
                 }} /></label>)}
           </div>
-          <button type="button" disabled={!canEdit}
+          {liveRotation && <div className="slicerTransformDragAngle" role="status" aria-live="off">
+            {liveRotation.axis || "Rotation"} · X {liveRotation.x}° · Y {liveRotation.y}° · Z {liveRotation.z}°
+          </div>}
+          <button type="button" className="slicerTransformQuickAction" disabled={!canEdit}
             onClick={() => applySelectedTransform({
               rotation_deg: 0, rotation_xyz_deg: [0, 0],
             }, "Reset rotation would collide with another model or leave the plate.")}>
-            Reset rotation
+            <SlicerUiIcon name="rotate" /> <span>Reset rotation</span>
           </button>
           {transformOverlayExpanded && <small className="slicerViewportMeasurementHint">
             Drag the red, green or blue rotation ring for X, Y or Z.
-            Changes are snapped to 5°. Each object remains grounded on the plate.
+            Drag the coloured axis arcs. Rotation snaps to 45° by default; hold Shift for 5° increments. Each object remains grounded on the plate.
+          </small>}
+        </> : <>
+          <label className="slicerViewportScaleUniform">Uniform scale (%)
+            <input type="number" min="5" max="400" step="5"
+              value={chosen.scale_percent ?? 100} disabled={!canEdit}
+              onChange={event => {
+                const value = Number(event.target.value);
+                if (!Number.isFinite(value) || value < 5 || value > 400) return;
+                patch("scale_xyz_percent", [value, value, value]);
+                patch("scale_percent", value);
+              }} />
+          </label>
+          <div className="slicerViewportTransformGrid">
+            {["X", "Y", "Z"].map((axis, index) => <label key={axis}>{axis} (%)
+              <input type="number" min="5" max="400" step="1"
+                value={chosen.scale_xyz_percent?.[index] ?? chosen.scale_percent ?? 100}
+                disabled={!canEdit} onChange={event => {
+                  const value = Number(event.target.value);
+                  if (!Number.isFinite(value) || value < 5 || value > 400) return;
+                  const next = [...(chosen.scale_xyz_percent || [chosen.scale_percent, chosen.scale_percent, chosen.scale_percent])];
+                  next[index] = value;
+                  patch("scale_xyz_percent", next);
+                }} /></label>)}
+          </div>
+          <button type="button" className="slicerTransformQuickAction" disabled={!canEdit}
+            onClick={() => applySelectedTransform({
+              scale_percent: 100, scale_xyz_percent: [100, 100, 100],
+            }, "Resetting scale would overlap another object or leave the plate.")}>
+            <SlicerUiIcon name="scale" /> <span>Reset scale</span>
+          </button>
+          {transformOverlayExpanded && <small className="slicerViewportMeasurementHint">
+            Change all dimensions together with uniform scale, or edit X, Y and Z separately.
+            Scale is restricted to 5–400% per axis.
           </small>}
         </>}
       </aside>}
