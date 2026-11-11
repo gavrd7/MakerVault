@@ -5205,3 +5205,15 @@ a:focus-visible,
 .slicerAutoOrientMetrics .slicerOrientDelta.isBetter { color: #68d6a0; }
 .slicerAutoOrientMetrics .slicerOrientDelta.isWorse { color: #ff9c97; }
 .slicerAutoOrientMetrics .slicerOrientDelta.isNeutral { color: #b6c2d0; }
+
+
+/* Temporary split preview: coloured object list stays inside the modal. */
+.slicerSplitParts { display: grid; gap: 8px; max-height: 260px; overflow-y: auto; }
+.slicerSplitParts [role="listitem"] {
+  display: flex; align-items: center; gap: 10px;
+  border: 1px solid #35485b; border-radius: 8px;
+  padding: 9px; background: #192a3b;
+}
+.slicerSplitParts [role="listitem"] > div { display: grid; gap: 3px; min-width: 0; }
+.slicerSplitParts small { color: #b9c8d5; overflow-wrap: anywhere; }
+.slicerSplitSwatch { flex: 0 0 18px; width: 18px; height: 18px; border-radius: 5px; }
