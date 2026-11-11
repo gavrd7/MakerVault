@@ -28,7 +28,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
   const [step, setStep] = useState(null);
   const [colourMode, setColourMode] = useState("feature");
   const [renderMode, setRenderMode] = useState("solid");
-  const [layerDisplay, setLayerDisplay] = useState("current");
+  const [layerDisplay, setLayerDisplay] = useState("all");
   const [featureFocus, setFeatureFocus] = useState("all");
   const [visible, setVisible] = useState({});
   const [showToolhead, setShowToolhead] = useState(false);
