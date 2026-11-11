@@ -491,3 +491,17 @@ test("auto-orient comparison labels good and bad deltas rather than treating plu
   assert.match(css, /\.slicerOrientDelta\.isWorse/);
   assert.match(css, /\.slicerOrientDelta\.isNeutral/);
 });
+
+test("Split toolbar invokes bounded component preview and atomic private STL replacement", () => {
+  const workspace = read("SlicerPrepareWorkspace.jsx");
+  const editor = read("SlicerPlateEditor.jsx");
+  assert.match(workspace, /name: "Split", target: "split", icon: "split"/);
+  assert.match(workspace, /splitRequest=\{splitRequest\}/);
+  assert.match(editor, /splitDisconnectedMesh\(mesh, MAX_OBJECTS - objects\.length \+ 1\)/);
+  assert.match(editor, /aria-label="Split disconnected objects"/);
+  assert.match(editor, /userData\.splitPreview = true/);
+  assert.match(editor, /if \(packed\.error\)/);
+  assert.match(editor, /\/api\/printing\/slicer\/meshes\/temporary\//);
+  assert.match(editor, /onChange\(next\)/);
+  assert.match(editor, /setSplitPreview\(null\)/);
+});
