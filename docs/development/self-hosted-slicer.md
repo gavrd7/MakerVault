@@ -416,3 +416,36 @@ engine-version compatibility limits, and real CLI fixture tests with at least
 two unrelated printer manufacturers. A new engine **must not** be declared
 generally test-ready solely because an existing Orca profile worked. User
 provided native profiles remain a supported alternative to catalogue search.
+
+## Auto-orient goals and validation stages
+
+The interactive editor offers three orientation priorities for each selected
+STL object, without changing the other objects on the plate:
+
+- **Balanced:** weighted comparison of estimated print-time burden (25%),
+  extra material risk (15%), required support risk (20%) and stability/failure
+  risk (40%). This mode strongly penalises narrow bed contact.
+- **Minimum supports:** prioritises downward-facing unsupported surface area
+  with height weighting (78%), with secondary material, time and stability
+  considerations.
+- **Fastest print:** prioritises shorter estimated print height and the burden
+  of supporting overhangs (82%), with smaller stability and waste penalties.
+
+The initial implementation uses bounded triangle-mesh surface sampling,
+candidate alignment from major facet normals and six principal directions,
+geometry-derived overhang/contact proxies and conservative footprint/collision
+checking. The current orientation is also a candidate. Results show **relative
+indices, 0 best to 100 worst within that candidate set** and never claim minutes,
+grams, a print-success probability or actual slicer support volumes. The user
+must explicitly apply a candidate, which is stored as a normal XYZ model
+rotation and goes through the existing 3MF orientation/bed-contact path.
+
+**Next validation stage:** optionally run a bounded native test slice for each
+shortlisted candidate against the exact installed engine/version and selected
+printer, filament and process profiles. Compare real G-code time, consumed
+material, generated support volume and warnings; retain user-approval before
+modifying orientation. These actual metrics should replace proxy ordering where
+available. Native validation also needs to account for first-layer adhesion,
+collision/keep-out regions, supports, thin walls, cooling and material-specific
+failure modes. Until then, geometry-based rank is a suggestion, not a guarantee
+that a print will succeed.
