@@ -5190,3 +5190,18 @@ a:focus-visible,
   .slicerAutoOrientModalBackdrop { justify-content: center; align-items: flex-end; padding: 8px; }
   .slicerAutoOrientModal { width: 100%; max-height: 76dvh; }
 }
+
+
+/* Directional hints for auto-orient: all four geometry proxies are costs.
+   Preserve a text/icon cue for people who cannot distinguish colours. */
+.slicerAutoOrientMetrics .slicerOrientProxy { color: #edf4fa; }
+.slicerAutoOrientMetrics .slicerOrientDelta {
+  display: inline-block;
+  margin-left: .35em;
+  font-weight: 650;
+  font-size: .9em;
+  white-space: normal;
+}
+.slicerAutoOrientMetrics .slicerOrientDelta.isBetter { color: #68d6a0; }
+.slicerAutoOrientMetrics .slicerOrientDelta.isWorse { color: #ff9c97; }
+.slicerAutoOrientMetrics .slicerOrientDelta.isNeutral { color: #b6c2d0; }
