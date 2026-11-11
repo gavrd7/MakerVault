@@ -15,6 +15,9 @@ test("mobile slicer tabs expose plate, models, and settings without unmounting t
   assert.match(editor, /"plate", "Build plate"/);
   assert.match(editor, /"models", `Models \(\$\{objects\.length\}\)`/);
   assert.match(editor, /"settings", "Print settings"/);
+  assert.match(editor, /<SlicerUiIcon name=\{key\} size=\{18\}/);
+  assert.match(editor, /slicerMobileTabLabel/);
+  assert.match(editor, /slicerMobileTabCount/);
   assert.match(editor, /aria-selected=\{mobilePane === key\}/);
   assert.match(editor, /data-mobile-pane=\{mobilePane\}/);
   assert.match(editor, /id="slicer-prepare-plate"/);
@@ -25,6 +28,8 @@ test("mobile slicer tabs expose plate, models, and settings without unmounting t
   assert.match(css, /data-mobile-pane="plate"/);
   assert.match(css, /data-mobile-pane="models"/);
   assert.match(css, /data-mobile-pane="settings"/);
+  assert.match(css, /slicerMobilePaneTabs \.slicerUiIcon/);
+  assert.match(css, /slicerMobileTabCount/);
 });
 
 test("default G-code view is full printed overview while layer-only inspection remains optional", () => {
