@@ -280,6 +280,7 @@ export default function SlicerPlateEditor({
   const [splitBusy, setSplitBusy] = useState(false);
   const [splitError, setSplitError] = useState("");
   const [measureOverlayExpanded, setMeasureOverlayExpanded] = useState(false);
+  const [transformOverlayExpanded, setTransformOverlayExpanded] = useState(false);
   const latestMeasurementRef = useRef({ active: false, mode: "distance" });
   latestMeasurementRef.current = { active: measurementVisible, mode: measureMode, snapMode: measureSnapMode };
   dimensionsRef.current = dimensions;
@@ -437,7 +438,7 @@ export default function SlicerPlateEditor({
       }
       candidate.scale_percent = 100;
     }
-    if (["x_mm", "y_mm", "rotation_deg", "scale_percent", "scale_xyz_percent"].includes(field) &&
+    if (["x_mm", "y_mm", "rotation_deg", "rotation_xyz_deg", "scale_percent", "scale_xyz_percent"].includes(field) &&
         !validPlacement(candidate, objects)) {
       setError("This position or transform overlaps another model, exceeds the build plate, or has dimensions still loading. Try Auto-arrange.");
       return;
@@ -1261,6 +1262,8 @@ export default function SlicerPlateEditor({
         x_mm: Math.round(mesh.position.x * 2) / 2,
         y_mm: Math.round(mesh.position.y * 2) / 2,
         rotation_deg: Math.round(THREE.MathUtils.radToDeg(mesh.rotation.z) / 5) * 5,
+        rotation_xyz_deg: [mesh.rotation.x, mesh.rotation.y].map(v =>
+          Math.round(THREE.MathUtils.radToDeg(v) / 5) * 5),
       };
       if (latestToolModeRef.current === "scale") {
         const xyz = [mesh.scale.x, mesh.scale.y, mesh.scale.z].map(axis =>
@@ -1488,9 +1491,10 @@ export default function SlicerPlateEditor({
     state.setSelectionOutline(selectedMesh || null);
     if (canEdit && selectedMesh && (toolMode === "move" || toolMode === "rotate" || toolMode === "scale")) {
       state.transform.setMode(toolMode === "move" ? "translate" : toolMode === "scale" ? "scale" : "rotate");
-      state.transform.showX = toolMode === "move" || toolMode === "scale";
-      state.transform.showY = toolMode === "move" || toolMode === "scale";
+      state.transform.showX = true;
+      state.transform.showY = true;
       state.transform.showZ = toolMode === "rotate" || toolMode === "scale";
+      state.transform.setSpace(toolMode === "rotate" ? "local" : "world");
       state.transform.attach(selectedMesh);
     } else {
       state.transform.detach();
@@ -1665,6 +1669,65 @@ export default function SlicerPlateEditor({
     <div className="slicerPlateCanvasViewport">
       <div ref={hostRef} className="slicerPlateCanvas"
         aria-label="Interactive three-dimensional model plate preview with a clickable six-face orientation cube in the top right" />
+      {(toolMode === "move" || toolMode === "rotate") && chosen && <aside
+        className="slicerViewportMeasurement slicerViewportTransform"
+        aria-label={toolMode === "move" ? "On-plate position controls" : "On-plate rotation controls"}>
+        <div className="slicerViewportMeasurementHeader">
+          <strong>{toolMode === "move" ? "Move · mm" : "Rotate · degrees"}</strong>
+          <button type="button" aria-expanded={transformOverlayExpanded}
+            onClick={() => setTransformOverlayExpanded(open => !open)}>
+            {transformOverlayExpanded ? "Less" : "Details"}
+          </button>
+        </div>
+        <div className="slicerViewportMeasurementModel">{sourceFiles.find(file =>
+          String(file.id) === String(chosen.asset_id))?.name || "Selected model"}</div>
+        {toolMode === "move" ? <>
+          <div className="slicerViewportTransformGrid">
+            {["X", "Y"].map((axis, index) => <label key={axis}>{axis} (mm)
+              <input type="number" step="0.5" value={index === 0 ? chosen.x_mm : chosen.y_mm}
+                disabled={!canEdit} onChange={event => patch(index === 0 ? "x_mm" : "y_mm",
+                  Number(event.target.value))} /></label>)}
+            <div className="slicerTransformReadout">Z (bed): 0 mm</div>
+          </div>
+          {transformOverlayExpanded && <>
+            <p className="slicerViewportMeasurementHint">Coordinates are measured from the build plate centre (0, 0).</p>
+            {selectedMeasurement && <p className="slicerViewportMeasurementHint">
+              X bounds: {pretty(selectedMeasurement.minX)} to {pretty(selectedMeasurement.maxX)} mm.
+              Y bounds: {pretty(selectedMeasurement.minY)} to {pretty(selectedMeasurement.maxY)} mm.</p>}
+            <button type="button" disabled={!canEdit}
+              onClick={() => applySelectedTransform({ x_mm: 0, y_mm: 0 },
+                "The model cannot be centred without leaving the bed or overlapping another model.")}>
+              Centre model
+            </button>
+          </>}
+        </> : <>
+          <div className="slicerViewportTransformGrid">
+            {["X", "Y", "Z"].map((axis, index) => <label key={axis}>{axis} (°)
+              <input type="number" step="5" value={index === 2 ? chosen.rotation_deg :
+                chosen.rotation_xyz_deg?.[index] || 0} disabled={!canEdit}
+                onChange={event => {
+                  const next = Number(event.target.value);
+                  if (!Number.isFinite(next)) return;
+                  if (index === 2) patch("rotation_deg", next);
+                  else {
+                    const rotations = [...(chosen.rotation_xyz_deg || [0, 0])];
+                    rotations[index] = next;
+                    patch("rotation_xyz_deg", rotations);
+                  }
+                }} /></label>)}
+          </div>
+          <button type="button" disabled={!canEdit}
+            onClick={() => applySelectedTransform({
+              rotation_deg: 0, rotation_xyz_deg: [0, 0],
+            }, "Reset rotation would collide with another model or leave the plate.")}>
+            Reset rotation
+          </button>
+          {transformOverlayExpanded && <small className="slicerViewportMeasurementHint">
+            Drag the red, green or blue rotation ring for X, Y or Z.
+            Changes are snapped to 5°. Each object remains grounded on the plate.
+          </small>}
+        </>}
+      </aside>}
       {measurementVisible && chosen && <aside className="slicerViewportMeasurement" aria-label="On-plate measurements">
         <div className="slicerViewportMeasurementHeader">
           <strong>Measure · {measureUnit === "mm" ? "mm" : "in"}</strong>
