@@ -162,9 +162,32 @@ export function newPlateInstance(assetId, index = 0) {
   return {
     instance_id: plateUuid(), asset_id: String(assetId),
     x_mm: (index % 4) * 25, y_mm: Math.floor(index / 4) * 25,
-    rotation_deg: 0, scale_percent: 100, scale_xyz_percent: [100, 100, 100],
+    rotation_deg: 0, rotation_xyz_deg: [0, 0], scale_percent: 100, scale_xyz_percent: [100, 100, 100],
     color: PALETTE[index % PALETTE.length],
   };
+}
+
+function positionOrientedMesh(mesh, item) {
+  const [rx, ry] = item.rotation_xyz_deg || [0, 0];
+  mesh.rotation.set(THREE.MathUtils.degToRad(rx), THREE.MathUtils.degToRad(ry),
+    THREE.MathUtils.degToRad(item.rotation_deg || 0), "XYZ");
+  const xyz = item.scale_xyz_percent || [item.scale_percent, item.scale_percent, item.scale_percent];
+  mesh.scale.set(...xyz.map(v => v / 100));
+  mesh.position.set(item.x_mm, item.y_mm, 0);
+  // Exact vertex minimum, not the tilted cuboid approximation. A clicked
+  // face must rest on the bed, never float above it or clip through it.
+  mesh.updateMatrix();
+  const positions = mesh.geometry.getAttribute("position");
+  const e = mesh.matrix.elements;
+  let minZ = Infinity;
+  if (positions) {
+    for (let i = 0; i < positions.count; i++) {
+      const z = e[2] * positions.getX(i) + e[6] * positions.getY(i) + e[10] * positions.getZ(i);
+      if (z < minZ) minZ = z;
+    }
+  }
+  mesh.position.z = Number.isFinite(minZ) ? -minZ : 0;
+  mesh.updateMatrix();
 }
 
 function pretty(value) {
@@ -926,6 +949,37 @@ export default function SlicerPlateEditor({
         return;
       }
       const target = hits[0].object;
+      if (latestToolModeRef.current === "lay_face") {
+        const hit = hits[0];
+        const current = latestObjectsRef.current;
+        const selectedItem = current.find(item => item.instance_id === target.userData.instanceId);
+        if (!selectedItem || !hit.face) return;
+        target.updateMatrixWorld(true);
+        const normal = hit.face.normal.clone().applyNormalMatrix(
+          new THREE.Matrix3().getNormalMatrix(target.matrixWorld)).normalize();
+        if (normal.lengthSq() < 0.9) return;
+        const align = new THREE.Quaternion().setFromUnitVectors(normal,
+          new THREE.Vector3(0, 0, -1));
+        const orientation = new THREE.Euler().setFromQuaternion(
+          align.multiply(target.quaternion), "XYZ");
+        const candidate = {
+          ...selectedItem,
+          rotation_xyz_deg: [orientation.x, orientation.y].map(v =>
+            Math.round(THREE.MathUtils.radToDeg(v) * 1000) / 1000),
+          rotation_deg: Math.round(THREE.MathUtils.radToDeg(orientation.z) * 1000) / 1000,
+        };
+        setSelected(selectedItem.instance_id);
+        if (!validPlacement(candidate, current)) {
+          setError("That face orientation exceeds the plate or overlaps another model. Move or auto-arrange models and try again.");
+          return;
+        }
+        setError("");
+        latestOnChangeRef.current(current.map(item =>
+          item.instance_id === selectedItem.instance_id ? candidate : item));
+        exitToolModeRef.current?.();
+        event.preventDefault();
+        return;
+      }
       const location = new THREE.Vector3();
       if (!raycaster.ray.intersectPlane(bedPlane, location)) return;
       const id = target.userData.instanceId;
@@ -990,12 +1044,7 @@ export default function SlicerPlateEditor({
         candidate.scale_xyz_percent = xyz;
       }
       if (!validPlacement(candidate, current)) {
-        mesh.position.set(selectedItem.x_mm, selectedItem.y_mm, 0);
-        mesh.rotation.z = THREE.MathUtils.degToRad(selectedItem.rotation_deg);
-        const original = selectedItem.scale_xyz_percent || [
-          selectedItem.scale_percent, selectedItem.scale_percent, selectedItem.scale_percent,
-        ];
-        mesh.scale.set(...original.map(value => value / 100));
+        positionOrientedMesh(mesh, selectedItem);
         setError("Model handle transform exceeds the plate or overlaps another object.");
         return;
       }
@@ -1175,10 +1224,7 @@ export default function SlicerPlateEditor({
           }));
           mesh.userData.instanceId = item.instance_id;
           const latest = latestObjectsRef.current.find(row => row.instance_id === item.instance_id) || item;
-          mesh.position.set(latest.x_mm, latest.y_mm, 0);
-          mesh.rotation.z = latest.rotation_deg * Math.PI / 180;
-          const xyz = latest.scale_xyz_percent || [latest.scale_percent, latest.scale_percent, latest.scale_percent];
-          mesh.scale.set(xyz[0] / 100, xyz[1] / 100, xyz[2] / 100);
+          positionOrientedMesh(mesh, latest);
           state.meshes.set(item.instance_id, mesh);
           state.scene.add(mesh);
           if (latestToolModeRef.current !== "select" && item.instance_id === selectedInstanceId) {
@@ -1199,10 +1245,7 @@ export default function SlicerPlateEditor({
     for (const item of objects) {
       const mesh = state.meshes.get(item.instance_id);
       if (!mesh) continue;
-      mesh.position.set(item.x_mm, item.y_mm, 0);
-      mesh.rotation.z = item.rotation_deg * Math.PI / 180;
-      const xyz = item.scale_xyz_percent || [item.scale_percent, item.scale_percent, item.scale_percent];
-      mesh.scale.set(xyz[0] / 100, xyz[1] / 100, xyz[2] / 100);
+      positionOrientedMesh(mesh, item);
       // Position-only changes must never alter the displayed filament colour.
       mesh.material.color.set(item.color || PALETTE[0]);
       mesh.material.emissive.set(item.instance_id === selected ? "#168ab4" : "#000000");
@@ -1668,7 +1711,7 @@ export default function SlicerPlateEditor({
         </button>
         <button type="button" disabled={!canEdit || !chosen}
           onClick={() => applySelectedTransform({
-            rotation_deg: 0, scale_percent: 100,
+            rotation_deg: 0, rotation_xyz_deg: [0, 0], scale_percent: 100,
             scale_xyz_percent: [100, 100, 100],
           }, "Resetting the model would overlap another object or leave the plate.")}>
           Reset orientation / scale
