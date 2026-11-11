@@ -24,6 +24,7 @@ const paths = {
   paint: <><path d="m14 4 6 6M4 20c2 0 4-2 4-4l9-9-4-4-9 9c-1 1-2 3-2 5v3h2Z"/></>,
   layers: <><path d="m12 2 9 6-9 6-9-6 9-6Zm-9 9 9 6 9-6m-18 5 9 6 9-6"/></>,
   plate: <><path d="m3 8 9-5 9 5-9 5-9-5Z"/><path d="m3 8 0 8 9 5 9-5V8M12 13v8"/><path d="m8 8 4-2 4 2-4 2-4-2Z"/></>,
+  printer: <><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M6 7h12M6 17h12M8 10h8v5H8zM12 7v3M7 21v1m10-1v1"/><circle cx="18" cy="5" r="1"/></>,
   models: <><path d="m3 7 5-3 5 3-5 3-5-3Z"/><path d="M3 7v6l5 3 5-3V7M8 10v6"/><path d="m14 13 4-2 4 2-4 2-4-2Z"/><path d="M14 13v5l4 3 4-3v-5M18 15v6"/></>,
   settings: <><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2" fill="#10161e"/><circle cx="16" cy="12" r="2" fill="#10161e"/><circle cx="10" cy="18" r="2" fill="#10161e"/></>,
   quality: <><path d="m12 2 2.8 6.2L22 9l-5.3 4.9 1.4 7L12 17.5 5.9 21l1.4-7L2 9l7.2-.8L12 2Z"/></>,
