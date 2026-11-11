@@ -77,6 +77,7 @@ export default function SlicerPrepareWorkspace({
   const [settingsSearch, setSettingsSearch] = useState("");
   const [settingsLevel, setSettingsLevel] = useState("basic");
   const [settingsExpanded, setSettingsExpanded] = useState(false);
+  const [mobilePane, setMobilePane] = useState("plate");
   const [nativeFieldDrafts, setNativeFieldDrafts] = useState({});
   const [nativeProcessError, setNativeProcessError] = useState("");
   const [nativeProcessLoading, setNativeProcessLoading] = useState(false);
@@ -407,7 +408,7 @@ export default function SlicerPrepareWorkspace({
   }, []);
 
   const settingsPanel = (
-      <aside className={"slicerPrepareSettings" + (settingsExpanded ? " slicerPrepareSettingsExpanded" : "")}
+      <aside id="slicer-prepare-settings" className={"slicerPrepareSettings" + (settingsExpanded ? " slicerPrepareSettingsExpanded" : "")}
         style={!settingsExpanded && sceneHeight ? { maxHeight: sceneHeight + "px" } : undefined}
         aria-label="Process settings categories">
         <div className="slicerSettingsPanelHeader">
@@ -658,8 +659,18 @@ export default function SlicerPrepareWorkspace({
         </div>}
       </div>)}
     </div>
-    <div className="slicerPrepareStructure">
-      <div className="slicerPrepareLeftRail">
+    <nav className="slicerMobilePaneTabs" role="tablist" aria-label="Mobile slicer workspace">
+      {[
+        ["plate", "Build plate", "slicer-prepare-plate"],
+        ["models", `Models (${objects.length})`, "slicer-prepare-models"],
+        ["settings", "Print settings", "slicer-prepare-settings"],
+      ].map(([key, label, target]) => <button key={key} id={`slicer-mobile-tab-${key}`}
+        type="button" role="tab" aria-selected={mobilePane === key}
+        aria-controls={target} className={mobilePane === key ? "selected" : ""}
+        onClick={() => setMobilePane(key)}>{label}</button>)}
+    </nav>
+    <div className="slicerPrepareStructure" data-mobile-pane={mobilePane}>
+      <div id="slicer-prepare-models" className="slicerPrepareLeftRail" aria-labelledby="slicer-mobile-tab-models">
         <section className="slicerPreparePrinter" aria-label="Selected printer configuration">
           <span className="slicerPreparePrinterCaption">Printer</span>
           <div className="slicerPreparePrinterIdentity">
@@ -746,7 +757,7 @@ export default function SlicerPrepareWorkspace({
         </section>
 
       </div>
-      <div className="slicerPrepareScene" ref={editorRef}>
+      <div id="slicer-prepare-plate" className="slicerPrepareScene" ref={editorRef} aria-labelledby="slicer-mobile-tab-plate">
         <SlicerPlateEditor files={files} localAssets={localAssets}
           onLocalAssetsChange={onLocalAssetsChange} objects={objects} onChange={updatePlate}
           onPrimaryChange={onPrimaryChange} onFilesUploaded={onFilesUploaded}
