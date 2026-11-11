@@ -174,19 +174,24 @@ function positionOrientedMesh(mesh, item) {
   const xyz = item.scale_xyz_percent || [item.scale_percent, item.scale_percent, item.scale_percent];
   mesh.scale.set(...xyz.map(v => v / 100));
   mesh.position.set(item.x_mm, item.y_mm, 0);
-  // Exact vertex minimum, not the tilted cuboid approximation. A clicked
-  // face must rest on the bed, never float above it or clip through it.
-  mesh.updateMatrix();
-  const positions = mesh.geometry.getAttribute("position");
-  const e = mesh.matrix.elements;
-  let minZ = Infinity;
-  if (positions) {
-    for (let i = 0; i < positions.count; i++) {
-      const z = e[2] * positions.getX(i) + e[6] * positions.getY(i) + e[10] * positions.getZ(i);
-      if (z < minZ) minZ = z;
+  // Exact vertex minimum, not the tilted cuboid approximation. Cache the
+  // expensive mesh scan by orientation and scale so dragging X/Y remains fast.
+  const pose = [rx, ry, item.rotation_deg || 0, ...xyz].join(":");
+  if (mesh.userData.bedPose !== pose) {
+    mesh.updateMatrix();
+    const positions = mesh.geometry.getAttribute("position");
+    const e = mesh.matrix.elements;
+    let minZ = Infinity;
+    if (positions) {
+      for (let i = 0; i < positions.count; i++) {
+        const z = e[2] * positions.getX(i) + e[6] * positions.getY(i) + e[10] * positions.getZ(i);
+        if (z < minZ) minZ = z;
+      }
     }
+    mesh.userData.bedPose = pose;
+    mesh.userData.bedZOffset = Number.isFinite(minZ) ? -minZ : 0;
   }
-  mesh.position.z = Number.isFinite(minZ) ? -minZ : 0;
+  mesh.position.z = mesh.userData.bedZOffset;
   mesh.updateMatrix();
 }
 
