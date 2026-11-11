@@ -950,26 +950,43 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     }
   }
 
-  // Opening Prepare or loading a saved draft must start at the slicer header,
-  // not at the last focused model control. Restore nested scrolling containers
-  // as well as window scroll (the app can use either layout).
+  // Switching Setup -> Prepare replaces a tall form with a differently sized
+  // editor. Browsers can restore the old scroll offset or re-anchor the viewport
+  // after the first frame when the Three.js canvas settles. Reset synchronously
+  // before paint, repeat through two layout frames and one short late-layout
+  // check. Stop immediately if the user interacts with the new editor.
   useLayoutEffect(() => {
     if (!editorOpen) return undefined;
-    let frame = requestAnimationFrame(() => {
-      const root = slicerPageRef.current;
-      if (!root) return;
-      let parent = root.parentElement;
-      while (parent) {
-        if (parent.scrollHeight > parent.clientHeight &&
-            /(auto|scroll)/.test(getComputedStyle(parent).overflowY)) parent.scrollTop = 0;
-        parent = parent.parentElement;
+    let cancelled = false;
+    const frames = [];
+    const restoreTop = () => {
+      if (cancelled || !slicerPageRef.current) return;
+      let node = slicerPageRef.current.parentElement;
+      while (node) {
+        if (node.scrollTop > 0) node.scrollTop = 0;
+        node = node.parentElement;
       }
-      window.scrollTo({ top: 0, behavior: "instant" });
-    });
-    return () => cancelAnimationFrame(frame);
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+      document.scrollingElement?.scrollTo?.({ top: 0, left: 0, behavior: "instant" });
+    };
+    const stopOnInteraction = () => { cancelled = true; };
+    const events = ["wheel", "touchstart", "pointerdown", "keydown"];
+    for (const name of events) window.addEventListener(name, stopOnInteraction, { passive: true });
+    restoreTop();
+    frames.push(requestAnimationFrame(() => {
+      restoreTop();
+      frames.push(requestAnimationFrame(restoreTop));
+    }));
+    const timeout = window.setTimeout(restoreTop, 180);
+    return () => {
+      cancelled = true;
+      frames.forEach(cancelAnimationFrame);
+      clearTimeout(timeout);
+      for (const name of events) window.removeEventListener(name, stopOnInteraction);
+    };
   }, [editorOpen]);
 
-  return <div className="printingStack" ref={slicerPageRef}>
+  return <div className={"printingStack slicerWorkbenchRoot" + (editorOpen ? " slicerEditorOpen" : "")} ref={slicerPageRef}>
     <section className="panel printingHero">
       <div>
         <span className="settingsEyebrow">3D Printing · MakerVault Slicer</span>
@@ -1182,7 +1199,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               !plateObjects.length || !printers.length}>
             {busy ? "Preparing…" : "Quick slice"}
           </button>
-          <button type="button" className="primary" onClick={() => { setError(""); setNotice(""); setEditorOpen(true); }}
+          <button type="button" className="primary" onClick={() => { setError(""); setNotice(""); window.scrollTo({ top: 0, left: 0, behavior: "instant" }); setEditorOpen(true); }}
             disabled={!canPrepare || busy || loading}>
             Slice → Interactive slicer
           </button>
