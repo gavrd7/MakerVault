@@ -12,6 +12,7 @@ import AboutPage from "./components/AboutPage";
 import SettingsPage from "./components/SettingsPage";
 import PrintingPage, { preloadSlicerWorkbench } from "./components/PrintingPage";
 import GlobalSearch from "./components/GlobalSearch";
+import ResponsiveNav from "./components/ResponsiveNav";
 import SearchPage from "./components/SearchPage";
 import MakerTagsPage from "./components/MakerTagsPage";
 import WiringPage from "./components/WiringPage";
@@ -315,13 +316,13 @@ export default function App() {
         <small className="brandVersion">{config?.version ? "v" + config.version : "version loading…"} · AGPL</small>
       </div>
       <GlobalSearch onOpenResult={openSearchResult} onOpenAdvanced={openAdvancedSearch} />
-      <nav>{NAV.map(n => <button key={n} className={section === n ? "active" : ""}
-        disabled={n === "MakerVault Slicer" && !["ready", "preview", "checking"].includes(slicerStatus.state)}
-        title={n === "MakerVault Slicer" && slicerStatus.state === "checking"
+      <ResponsiveNav items={NAV} selected={section} onSelect={navigateSection}
+        isDisabled={n => n === "MakerVault Slicer" && !["ready", "preview", "checking"].includes(slicerStatus.state)}
+        getTitle={n => n === "MakerVault Slicer" && slicerStatus.state === "checking"
           ? "Slicer availability is loading. Select to open automatically when ready."
           : n === "MakerVault Slicer" && !["ready", "preview"].includes(slicerStatus.state)
           ? "The optional slicer service is not available. See 3D Printing for details." : undefined}
-        onClick={() => navigateSection(n)}>{n}</button>)}</nav>
+      />
       <div className="asideBottom">{config?.is_superuser && <a href="/admin/">Administration</a>}<a href="/accounts/logout/">Sign out</a></div>
     </aside>
     <main>
