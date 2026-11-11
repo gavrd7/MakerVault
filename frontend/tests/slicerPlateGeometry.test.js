@@ -3,6 +3,20 @@ import assert from "node:assert/strict";
 import { plateEnvelope, plateExtentWarning, plateFootprintsOverlap, autoArrangePlate, plateModelMeasurement, measurementDistance, measurementCircle, measurementFormat } from "../src/components/slicerPlateGeometry.js";
 const item = { x_mm: 0, y_mm: 0, rotation_deg: 0, scale_percent: 100 };
 const box = { width: 40, depth: 20 };
+test("lay-on-face tilt changes footprint and effective model height", () => {
+  const upright = { ...item, rotation_xyz_deg: [0, 0] };
+  const lying = { ...item, rotation_xyz_deg: [90, 0] };
+  const dims = { width: 30, depth: 12, height: 50 };
+  const oldBox = plateEnvelope(upright, dims);
+  const newBox = plateEnvelope(lying, dims);
+  assert.ok(Math.abs(oldBox.maxY - oldBox.minY - 12) < 1e-8);
+  assert.ok(Math.abs(newBox.maxY - newBox.minY - 50) < 1e-8);
+  const measurement = plateModelMeasurement(lying, dims);
+  assert.ok(Math.abs(measurement.height - 12) < 1e-8);
+  // Without a loaded STL height, rotated placement must not invent bounds.
+  assert.equal(plateEnvelope(lying, { width: 30, depth: 12 }), null);
+});
+
 test("centred unrotated footprint", () => {
   assert.deepEqual(plateEnvelope(item, box), { minX: -20, maxX: 20, minY: -10, maxY: 10 });
   assert.equal(plateExtentWarning(item, box, 220, 220), "");
