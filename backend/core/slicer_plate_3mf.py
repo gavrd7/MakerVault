@@ -153,7 +153,10 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth):
     # generic 3MF exports and their transform semantics remain unchanged.
     bake_native_positions = any(
         isinstance(entry, tuple) and len(entry) == 2 and
-        isinstance(entry[0], dict) and bool(entry[0].get("process_overrides"))
+        isinstance(entry[0], dict) and (
+            bool(entry[0].get("process_overrides")) or
+            any(abs(float(v)) > 1e-7 for v in entry[0].get("rotation_xyz_deg", [0, 0]))
+        )
         for entry in objects_with_stl
     )
     for index, pair in enumerate(objects_with_stl, start=1):
