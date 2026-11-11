@@ -78,7 +78,7 @@ test("Measure options open at the toolbar while a compact readout lives at top l
   const editor = read("SlicerPlateEditor.jsx");
   const css = fs.readFileSync(path.resolve(root, "../styles.css"), "utf8");
   assert.match(scene, /name: "Measure", target: "measure", icon: "measure", expandable: true/);
-  assert.match(scene, /aria-controls=\{tool\.expandable \? "slicer-measure-toolbar-options"/);
+  assert.match(scene, /aria-controls=\{tool\.target === "auto_orient" \? "slicer-auto-orient-toolbar-options" : tool\.expandable \? "slicer-measure-toolbar-options"/);
   assert.match(scene, /className="slicerToolOptions"/);
   assert.match(scene, /measureMode=\{measureMode\} measureUnit=\{measureUnit\} measureSnapMode=\{measureSnapMode\}\s+measureClearVersion=\{measureClearVersion\}/);
   assert.match(scene, /setMeasureClearVersion\(value => value \+ 1\)/);
@@ -460,4 +460,22 @@ test("per-object settings inherit global profile values and remain instance scop
   assert.match(scene, /Clear object overrides/);
   assert.match(scene, /id="slicer-object-settings-instance"/);
   assert.match(workbench, /plate_objects: plateObjects/);
+});
+
+test("Auto-orient goals are in a toolbar menu and comparison is modal with a non-destructive ghost", () => {
+  const scene = read("SlicerPrepareWorkspace.jsx");
+  const editor = read("SlicerPlateEditor.jsx");
+  const css = fs.readFileSync(path.resolve(root, "../styles.css"), "utf8");
+  assert.match(scene, /slicerAutoOrientMenuChoice/);
+  assert.match(scene, /\["balanced", "Balanced"/);
+  assert.match(scene, /\["supports", "Fewest supports"/);
+  assert.match(scene, /\["speed", "Fastest print"/);
+  assert.match(scene, /autoOrientGoal=\{autoOrientGoal\} autoOrientRequest=\{autoOrientRequest\}/);
+  assert.match(editor, /createPortal\(/);
+  assert.match(editor, /aria-label="Compare model orientations"/);
+  assert.match(editor, /userData\.isOrientationPreview = true/);
+  assert.match(editor, /positionOrientedMesh\(ghost, \{ \.\.\.chosen, \.\.\.candidate\.orientation \}\)/);
+  assert.match(editor, /state\.scene\.remove\(ghost\)/);
+  assert.match(editor, /onClick=\{applyAutoOrientation\}/);
+  assert.match(css, /\.slicerAutoOrientModalBackdrop/);
 });
