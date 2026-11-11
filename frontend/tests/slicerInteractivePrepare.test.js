@@ -505,3 +505,28 @@ test("Split toolbar invokes bounded component preview and atomic private STL rep
   assert.match(editor, /onChange\(next\)/);
   assert.match(editor, /setSplitPreview\(null\)/);
 });
+
+
+test("multi-select assembles without merging STL assets and provides guarded group transforms", () => {
+  const scene = read("SlicerPrepareWorkspace.jsx");
+  const editor = read("SlicerPlateEditor.jsx");
+  assert.match(scene, /setSelectedIds\(next\)/);
+  assert.match(scene, /event\.ctrlKey \|\| event\.metaKey \|\| event\.shiftKey/);
+  assert.match(scene, /Assemble selection/);
+  assert.match(scene, /Disassemble/);
+  assert.match(scene, /assembly_id: id/);
+  assert.match(scene, /assembly_id: null/);
+  assert.match(editor, /function transformGroup\(/);
+  assert.match(editor, /Group transform would leave the build plate or overlap another object/);
+  assert.match(editor, /onChange\(objects\.map\(row => byId\.get\(row\.instance_id\) \|\| row\)\)/);
+  assert.match(editor, /aria-label="Multi-model assembly controls"/);
+});
+test("Move and Rotate have matching on-plate controls and all three rotate gizmo axes", () => {
+  const editor = read("SlicerPlateEditor.jsx");
+  assert.match(editor, /state\.transform\.showX = true/);
+  assert.match(editor, /state\.transform\.showY = true/);
+  assert.match(editor, /rotation_xyz_deg: \[mesh\.rotation\.x, mesh\.rotation\.y\]/);
+  assert.match(editor, /aria-label="On-plate position controls"/);
+  assert.match(editor, /aria-label="On-plate rotation controls"/);
+  assert.match(editor, /Reset rotation/);
+});
