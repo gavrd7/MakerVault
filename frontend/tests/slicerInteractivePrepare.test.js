@@ -530,3 +530,25 @@ test("Move and Rotate have matching on-plate controls and all three rotate gizmo
   assert.match(editor, /"On-plate rotation controls"/);
   assert.match(editor, /Reset rotation/);
 });
+
+test("Move Rotate and Scale share compact on-plate panels with validated resets", () => {
+  const editor = read("SlicerPlateEditor.jsx");
+  const css = fs.readFileSync(path.resolve(root, "../styles.css"), "utf8");
+  assert.match(editor, /"On-plate scale controls"/);
+  assert.match(editor, /"Scale · %"/);
+  assert.match(editor, /Uniform scale \(%\)/);
+  assert.match(editor, /Reset scale/);
+  assert.match(editor, /Centre model/);
+  assert.match(editor, /className="slicerTransformQuickAction"/);
+  assert.match(css, /\.slicerPlateCanvasColumn \.slicerViewportMeasurement\.slicerViewportTransform/);
+  assert.match(css, /justify-content: flex-start/);
+  assert.match(css, /\.slicerViewportTransform \.slicerTransformQuickAction/);
+});
+test("Rotate gizmo uses 45 degree default detents with Shift precision and a live drag angle", () => {
+  const editor = read("SlicerPlateEditor.jsx");
+  assert.match(editor, /transform\.setRotationSnap\(THREE\.MathUtils\.degToRad\(45\)\)/);
+  assert.match(editor, /event\.shiftKey \? 5 : 45/);
+  assert.match(editor, /transform\.addEventListener\("objectChange"/);
+  assert.match(editor, /setLiveRotation\(\{ x:/);
+  assert.match(editor, /slicerTransformDragAngle/);
+});
