@@ -5006,11 +5006,11 @@ a:focus-visible,
     display:flex;align-items:center;justify-content:center;gap:6px;
     padding:9px 7px;min-width:0;min-height:44px;
     font-size:clamp(.72rem,2.3vw,.84rem);line-height:1.25;
-    border-radius:9px;white-space:nowrap;
+    border-radius:9px;white-space:normal;
     font-weight:650;
   }
   .slicerMobilePaneTabs .slicerUiIcon{flex:0 0 18px}
-  .slicerMobileTabLabel{min-width:0;overflow:hidden;text-overflow:ellipsis}
+  .slicerMobileTabLabel{min-width:0;white-space:normal;overflow-wrap:normal;text-align:center;line-height:1.2}
   .slicerMobileTabCount{
     display:inline-grid;place-items:center;min-width:19px;height:19px;
     padding:0 4px;border-radius:99px;background:#26303e;
