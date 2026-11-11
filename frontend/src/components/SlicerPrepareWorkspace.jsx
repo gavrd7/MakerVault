@@ -661,16 +661,15 @@ export default function SlicerPrepareWorkspace({
     </div>
     <nav className="slicerMobilePaneTabs" role="tablist" aria-label="Mobile slicer workspace">
       {[
-        ["plate", "Build plate", "slicer-prepare-plate"],
-        ["models", `Models (${objects.length})`, "slicer-prepare-models"],
-        ["settings", "Print settings", "slicer-prepare-settings"],
+        ["plate", "Build", "slicer-prepare-plate"],
+        ["models", "Printer & Filament", "slicer-prepare-models"],
+        ["settings", "Print Settings", "slicer-prepare-settings"],
       ].map(([key, label, target]) => <button key={key} id={`slicer-mobile-tab-${key}`}
         type="button" role="tab" aria-selected={mobilePane === key}
         aria-controls={target} className={mobilePane === key ? "selected" : ""}
         onClick={() => setMobilePane(key)} title={label}>
-        <SlicerUiIcon name={key} size={18} />
-        <span className="slicerMobileTabLabel">{key === "models" ? "Models" : label}</span>
-        {key === "models" && <span className="slicerMobileTabCount" aria-hidden="true">{objects.length}</span>}
+        <SlicerUiIcon name={key === "models" ? "printer" : key} size={18} />
+        <span className="slicerMobileTabLabel">{label}</span>
       </button>)}
     </nav>
     <div className="slicerPrepareStructure" data-mobile-pane={mobilePane}>
