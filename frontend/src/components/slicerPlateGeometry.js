@@ -19,13 +19,16 @@ export function plateRotationMatrix(item) {
 export function plateEnvelope(item, dimensions) {
   const x = Number(item.x_mm), y = Number(item.y_mm);
   const width = Number(dimensions?.width), depth = Number(dimensions?.depth);
-  const height = Number(dimensions?.height);
+  const hasHeight = dimensions?.height != null;
+  const height = hasHeight ? Number(dimensions.height) : 0;
+  const tilt = item.rotation_xyz_deg || [0, 0];
+  if (!hasHeight && tilt.some(v => Math.abs(Number(v)) > 1e-7)) return null;
   const legacy = Number(item.scale_percent) / 100;
   const xyz = item.scale_xyz_percent;
   const scale = Array.isArray(xyz) ? xyz.map(v => Number(v) / 100) : [legacy, legacy, legacy];
   const rot = plateRotationMatrix(item);
   if (![x, y, width, depth, height, ...scale, ...rot.flat()].every(Number.isFinite) ||
-      width <= 0 || depth <= 0 || height <= 0 || scale.some(v => v <= 0)) return null;
+      width <= 0 || depth <= 0 || height < 0 || scale.some(v => v <= 0)) return null;
   const half = [width * scale[0] / 2, depth * scale[1] / 2, height * scale[2] / 2];
   const centre = [x + rot[0][2] * half[2], y + rot[1][2] * half[2]];
   const hx = rot[0].reduce((total, v, i) => total + Math.abs(v) * half[i], 0);
