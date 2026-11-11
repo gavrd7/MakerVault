@@ -362,6 +362,24 @@ class SliceJobApiTests(TestCase):
             validate_scheduling(row, {"prusaslicer": {"enabled": True, "verified": True}})
         self.assertEqual(self.client.post(f"{self.url}{row.pk}/start/").status_code, 409)
 
+    def test_logical_assembly_id_round_trips_without_merging_meshes(self):
+        self.client.force_login(self.owner)
+        group_id = "assembly:" + str(uuid.uuid4())
+        first = {
+            "instance_id": str(uuid.uuid4()), "asset_id": str(self.input_asset.pk),
+            "x_mm": 0, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100,
+            "color": "#58b5e4", "assembly_id": group_id,
+        }
+        second = {**first, "instance_id": str(uuid.uuid4()), "x_mm": 25}
+        response = self.post({**self.payload, "settings": {"plate_objects": [first, second]}})
+        self.assertEqual(response.status_code, 201, response.content)
+        saved = SliceJob.objects.get(pk=response.json()["job"]["id"]).settings["plate_objects"]
+        self.assertEqual([row["assembly_id"] for row in saved], [group_id, group_id])
+        self.assertNotEqual(saved[0]["instance_id"], saved[1]["instance_id"])
+        first["assembly_id"] = "not-an-assembly-id"
+        invalid = self.post({**self.payload, "settings": {"plate_objects": [first]}})
+        self.assertEqual(invalid.status_code, 400, invalid.content)
+
     def test_plate_label_is_saved_without_affecting_native_slicing_settings(self):
         self.client.force_login(self.owner)
         instance = {
