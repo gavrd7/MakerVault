@@ -431,6 +431,11 @@ class SliceJobApiTests(TestCase):
             {**valid, "scale_xyz_percent": [100, True, 100]},
             {**valid, "scale_xyz_percent": [100, 100]},
             {**valid, "scale_xyz_percent": "100,100,100"},
+            {**valid, "rotation_xyz_deg": [90]},
+            {**valid, "rotation_xyz_deg": [90, 0, 20]},
+            {**valid, "rotation_xyz_deg": [float("inf"), 0]},
+            {**valid, "rotation_xyz_deg": [True, 0]},
+            {**valid, "rotation_xyz_deg": "90,0"},
             {**valid, "color": "#red"},
             {**valid, "script": "M112"},
         ):
@@ -438,6 +443,20 @@ class SliceJobApiTests(TestCase):
                 response = self.post({**self.payload, "settings": {"plate_objects": [obj]}})
                 self.assertEqual(response.status_code, 400, response.content)
         self.assertEqual(SliceJob.objects.count(), 0)
+
+    def test_lay_on_face_xyz_tilt_round_trips_through_slice_job(self):
+        self.client.force_login(self.owner)
+        source = {
+            "instance_id": str(uuid.uuid4()), "asset_id": str(self.input_asset.pk),
+            "x_mm": 0, "y_mm": 0, "rotation_deg": -35.123,
+            "rotation_xyz_deg": [90, -15.5], "scale_percent": 100,
+            "color": "#58b5e4",
+        }
+        response = self.post({**self.payload, "settings": {"plate_objects": [source]}})
+        self.assertEqual(response.status_code, 201, response.content)
+        saved = SliceJob.objects.get(pk=response.json()["job"]["id"])
+        self.assertEqual(saved.settings["plate_objects"][0]["rotation_xyz_deg"], [90.0, -15.5])
+        self.assertEqual(saved.settings["plate_objects"][0]["rotation_deg"], -35.123)
 
     def test_individual_xyz_scale_is_saved_without_changing_legacy_uniform_drafts(self):
         self.client.force_login(self.owner)
