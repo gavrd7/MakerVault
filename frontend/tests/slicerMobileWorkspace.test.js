@@ -12,12 +12,11 @@ const css = fs.readFileSync(path.join(base, "styles.css"), "utf8");
 test("mobile slicer tabs expose plate, models, and settings without unmounting their state", () => {
   assert.match(editor, /const \[mobilePane, setMobilePane\] = useState\("plate"\)/);
   assert.match(editor, /role="tablist" aria-label="Mobile slicer workspace"/);
-  assert.match(editor, /"plate", "Build plate"/);
-  assert.match(editor, /"models", `Models \(\$\{objects\.length\}\)`/);
-  assert.match(editor, /"settings", "Print settings"/);
-  assert.match(editor, /<SlicerUiIcon name=\{key\} size=\{18\}/);
+  assert.match(editor, /"plate", "Build"/);
+  assert.match(editor, /"models", "Printer & Filament"/);
+  assert.match(editor, /"settings", "Print Settings"/);
+  assert.match(editor, /<SlicerUiIcon name=\{key === "models" \? "printer" : key\} size=\{18\}/);
   assert.match(editor, /slicerMobileTabLabel/);
-  assert.match(editor, /slicerMobileTabCount/);
   assert.match(editor, /aria-selected=\{mobilePane === key\}/);
   assert.match(editor, /data-mobile-pane=\{mobilePane\}/);
   assert.match(editor, /id="slicer-prepare-plate"/);
