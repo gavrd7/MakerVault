@@ -4991,3 +4991,47 @@ a:focus-visible,
     margin-bottom: 8px;
   }
 }
+
+
+/* Mobile slicer workspace: keep desktop's three-pane layout intact. Switching
+   tabs only changes visibility; React controls and imported models stay mounted. */
+.slicerMobilePaneTabs{display:none}
+@media(max-width:850px){
+  .slicerMobilePaneTabs{
+    display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:6px;position:sticky;top:0;z-index:35;
+    padding:8px 0;background:#10161e;margin:8px 0 12px;
+  }
+  .slicerMobilePaneTabs button{
+    padding:11px 5px;min-width:0;min-height:44px;
+    font-size:clamp(.72rem,2.3vw,.88rem);line-height:1.2;
+    border-radius:9px;white-space:normal;
+  }
+  .slicerMobilePaneTabs button.selected{
+    background:#26233f;border-color:#8d78f4;color:#f4efff;
+  }
+  .slicerPrepareStructure[data-mobile-pane="plate"] > .slicerPrepareLeftRail,
+  .slicerPrepareStructure[data-mobile-pane="plate"] > .slicerPrepareSettings,
+  .slicerPrepareStructure[data-mobile-pane="models"] > .slicerPrepareScene,
+  .slicerPrepareStructure[data-mobile-pane="models"] > .slicerPrepareSettings,
+  .slicerPrepareStructure[data-mobile-pane="settings"] > .slicerPrepareScene,
+  .slicerPrepareStructure[data-mobile-pane="settings"] > .slicerPrepareLeftRail{
+    display:none;
+  }
+  .slicerPrepareStructure[data-mobile-pane]{
+    display:block;min-width:0;
+  }
+  .slicerPrepareStructure[data-mobile-pane] > .slicerPrepareScene,
+  .slicerPrepareStructure[data-mobile-pane] > .slicerPrepareLeftRail,
+  .slicerPrepareStructure[data-mobile-pane] > .slicerPrepareSettings{
+    width:100%;max-width:100%;min-width:0;
+  }
+  .slicerPrepareStructure[data-mobile-pane="settings"] > .slicerPrepareSettings{
+    max-height:min(70dvh,850px)!important;overflow-y:auto;
+  }
+  .slicerPrepareActions{margin-top:10px;padding-top:12px}
+  .slicerPrepareActions .settingsActions>button{flex:1 1 130px}
+}
+@media(prefers-reduced-motion:reduce){
+  .slicerMobilePaneTabs{scroll-behavior:auto}
+}
