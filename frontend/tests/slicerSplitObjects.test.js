@@ -5,7 +5,7 @@ import { splitDisconnectedMesh } from "../src/components/slicerSplitObjects.js";
 
 function joinedModels(offset = 40) {
   const first = new THREE.BoxGeometry(10, 10, 10).toNonIndexed();
-  const second = new THREE.BoxGeometry(8, 8, 8).toNonIndexed();
+  const second = new THREE.BoxGeometry(offset === 0 ? 10 : 8, offset === 0 ? 10 : 8, offset === 0 ? 10 : 8).toNonIndexed();
   second.translate(offset, 0, 0);
   const a = first.getAttribute("position").array;
   const b = second.getAttribute("position").array;
