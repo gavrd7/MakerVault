@@ -205,13 +205,20 @@ function pretty(value) {
 // probabilities. Show their actual magnitude alongside a true delta from
 // the best analysed pose. A zero baseline has no meaningful percent change.
 function orientationComparison(metricValue) {
-  if (!metricValue) return "—";
+  if (!metricValue) return <span className="slicerOrientDelta isNeutral">—</span>;
   const value = Number(metricValue.absolute);
   const proxy = value === 0 ? "0" : Number(value.toPrecision(4)).toString();
-  const difference = metricValue.percent === null ? "above zero baseline"
-    : metricValue.percent === 0 ? "best / tied"
-    : "+" + metricValue.percent + "% vs best";
-  return proxy + " · " + difference;
+  const percent = metricValue.percent;
+  // All four proxies are costs: a smaller value is preferable.
+  // The comparison is with the best value PER metric, not the first card.
+  const tied = percent !== null && percent === 0;
+  const deltaClass = percent === null ? "isNeutral" : tied ? "isBetter" : "isWorse";
+  const deltaText = percent === null ? "↑ from zero baseline" :
+    tied ? "✓ Best / tied" : "↑ +" + percent + "% worse";
+  return <>
+    <span className="slicerOrientProxy">{proxy}</span>
+    <span className={"slicerOrientDelta " + deltaClass}>{deltaText}</span>
+  </>;
 }
 
 export default function SlicerPlateEditor({
@@ -1785,7 +1792,7 @@ export default function SlicerPlateEditor({
                 </dl>
               </>;
             })()}
-            <p className="slicerPlateHint">{autoOrientAnalysis.warning} Smaller proxy values are preferred; percentages compare against the best analysed orientation for that metric, not a 0–100 ranking.</p>
+            <p className="slicerPlateHint">{autoOrientAnalysis.warning} Lower is better for all four proxy metrics. Green means best or tied; red means worse than the best analysed pose for that metric. These comparisons are not print-success probabilities.</p>
           </>}
           <footer className="slicerAutoOrientModalActions">
             <button type="button" onClick={() => setAutoOrientModalOpen(false)}>Cancel</button>
