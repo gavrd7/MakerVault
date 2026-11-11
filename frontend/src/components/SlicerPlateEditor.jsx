@@ -226,7 +226,7 @@ export default function SlicerPlateEditor({
   files = [], objects = [], onChange, onPrimaryChange, plate = null, plateType = "default",
   plateLabel = "Plate 1", onPlateLabelChange, printerLabel = "",
   canEdit = false, onFilesUploaded, defaultColor = null, onManualColorChange, footer = null,
-  selectedInstanceId = null, onSelectedInstanceChange, toolMode = "select",
+  selectedInstanceId = null, onSelectedInstanceChange, selectedInstanceIds = [], onSelectModel, toolMode = "select",
   autoOrientGoal = "balanced", autoOrientRequest = 0, splitRequest = 0,
   measurementVisible = false, measureMode = "distance", measureUnit = "mm", measureSnapMode = "auto", measureClearVersion = 0,
   onMeasurePinPlaced,
@@ -259,6 +259,11 @@ export default function SlicerPlateEditor({
   const [showDimensionsLabel, setShowDimensionsLabel] = useState(false);
   const [showAxisLabels, setShowAxisLabels] = useState(false);
   const selected = selectedInstanceId === null ? localSelected : selectedInstanceId;
+  const selection = selectedInstanceIds.length ? selectedInstanceIds : (selected ? [selected] : []);
+  const selectionRef = useRef(selection);
+  selectionRef.current = selection;
+  const onSelectModelRef = useRef(onSelectModel);
+  onSelectModelRef.current = onSelectModel;
   const setSelected = next => {
     if (selectedInstanceId === null) setLocalSelected(next);
     else onSelectedInstanceChange?.(next);
@@ -281,6 +286,9 @@ export default function SlicerPlateEditor({
   const [splitError, setSplitError] = useState("");
   const [measureOverlayExpanded, setMeasureOverlayExpanded] = useState(false);
   const [transformOverlayExpanded, setTransformOverlayExpanded] = useState(false);
+  const [groupDeltaX, setGroupDeltaX] = useState(0);
+  const [groupDeltaY, setGroupDeltaY] = useState(0);
+  const [groupRotation, setGroupRotation] = useState(0);
   const latestMeasurementRef = useRef({ active: false, mode: "distance" });
   latestMeasurementRef.current = { active: measurementVisible, mode: measureMode, snapMode: measureSnapMode };
   dimensionsRef.current = dimensions;
@@ -642,6 +650,38 @@ export default function SlicerPlateEditor({
     } finally {
       setSplitBusy(false);
     }
+  }
+
+  function transformGroup(dx = 0, dy = 0, angle = 0) {
+    if (!canEdit || selection.length < 2) return;
+    const members = objects.filter(row => selection.includes(row.instance_id));
+    const others = objects.filter(row => !selection.includes(row.instance_id));
+    const centerX = members.reduce((sum, row) => sum + Number(row.x_mm), 0) / members.length;
+    const centerY = members.reduce((sum, row) => sum + Number(row.y_mm), 0) / members.length;
+    const theta = THREE.MathUtils.degToRad(angle), cos = Math.cos(theta), sin = Math.sin(theta);
+    const moved = members.map(row => {
+      const x = row.x_mm - centerX, y = row.y_mm - centerY;
+      return {
+        ...row,
+        x_mm: pretty(centerX + x * cos - y * sin + dx),
+        y_mm: pretty(centerY + x * sin + y * cos + dy),
+        rotation_deg: pretty(((Number(row.rotation_deg || 0) + angle + 180) % 360 + 360) % 360 - 180),
+      };
+    });
+    const invalid = moved.some(item => {
+      const d = dimensionsRef.current[item.instance_id];
+      return !d || plateExtentWarning(item, d, bedX, bedY) ||
+        others.some(other => plateFootprintsOverlap(item, d, other,
+          dimensionsRef.current[other.instance_id], 2) !== false);
+    });
+    if (invalid) {
+      setError("Group transform would leave the build plate or overlap another object. No changes were applied.");
+      return;
+    }
+    const byId = new Map(moved.map(row => [row.instance_id, row]));
+    onChange(objects.map(row => byId.get(row.instance_id) || row));
+    setGroupDeltaX(0); setGroupDeltaY(0); setGroupRotation(0);
+    setError("");
   }
 
   function applySelectedTransform(fields, message) {
@@ -1217,7 +1257,10 @@ export default function SlicerPlateEditor({
       const location = new THREE.Vector3();
       if (!raycaster.ray.intersectPlane(bedPlane, location)) return;
       const id = target.userData.instanceId;
-      setSelected(id);
+      const additive = event.ctrlKey || event.metaKey || event.shiftKey;
+      if (onSelectModelRef.current) onSelectModelRef.current(id, additive);
+      else setSelected(id);
+      if (additive || selectionRef.current.length > 1) return;
       if (latestToolModeRef.current !== "select") return;
       dragging = {
         id, pointerId: event.pointerId,
@@ -1484,12 +1527,12 @@ export default function SlicerPlateEditor({
       positionOrientedMesh(mesh, item);
       // Position-only changes must never alter the displayed filament colour.
       mesh.material.color.set(item.color || PALETTE[0]);
-      mesh.material.emissive.set(item.instance_id === selected ? "#168ab4" : "#000000");
-      mesh.material.emissiveIntensity = item.instance_id === selected ? 0.32 : 0;
+      mesh.material.emissive.set(selection.includes(item.instance_id) ? "#168ab4" : "#000000");
+      mesh.material.emissiveIntensity = selection.includes(item.instance_id) ? 0.32 : 0;
     }
     const selectedMesh = state.meshes.get(selected);
     state.setSelectionOutline(selectedMesh || null);
-    if (canEdit && selectedMesh && (toolMode === "move" || toolMode === "rotate" || toolMode === "scale")) {
+    if (canEdit && selectedMesh && selection.length < 2 && (toolMode === "move" || toolMode === "rotate" || toolMode === "scale")) {
       state.transform.setMode(toolMode === "move" ? "translate" : toolMode === "scale" ? "scale" : "rotate");
       state.transform.showX = true;
       state.transform.showY = true;
@@ -1499,7 +1542,7 @@ export default function SlicerPlateEditor({
     } else {
       state.transform.detach();
     }
-  }, [objects, selected, toolMode, canEdit, dimensions]);
+  }, [objects, selected, selectedInstanceIds, toolMode, canEdit, dimensions]);
 
   // Measured world points would become stale after a model is transformed.
   // Clear them rather than presenting a measurement for old geometry.
@@ -1669,7 +1712,23 @@ export default function SlicerPlateEditor({
     <div className="slicerPlateCanvasViewport">
       <div ref={hostRef} className="slicerPlateCanvas"
         aria-label="Interactive three-dimensional model plate preview with a clickable six-face orientation cube in the top right" />
-      {(toolMode === "move" || toolMode === "rotate") && chosen && <aside
+      {selection.length > 1 && <aside className="slicerViewportMeasurement slicerViewportTransform"
+        aria-label="Multi-model assembly controls">
+        <div className="slicerViewportMeasurementHeader"><strong>{selection.length} models selected</strong></div>
+        <p className="slicerViewportMeasurementHint">Move or rotate the selected models together.
+          Each part keeps its original mesh and relative offset.</p>
+        <div className="slicerViewportTransformGrid">
+          <label>Move X (mm)<input type="number" step="0.5" value={groupDeltaX}
+            onChange={event => setGroupDeltaX(Number(event.target.value))} /></label>
+          <label>Move Y (mm)<input type="number" step="0.5" value={groupDeltaY}
+            onChange={event => setGroupDeltaY(Number(event.target.value))} /></label>
+          <label>Rotate Z (°)<input type="number" step="5" value={groupRotation}
+            onChange={event => setGroupRotation(Number(event.target.value))} /></label>
+        </div>
+        <button type="button" disabled={!canEdit || ![groupDeltaX, groupDeltaY, groupRotation].every(Number.isFinite)}
+          onClick={() => transformGroup(groupDeltaX, groupDeltaY, groupRotation)}>Apply group transform</button>
+      </aside>}
+      {selection.length <= 1 && (toolMode === "move" || toolMode === "rotate") && chosen && <aside
         className="slicerViewportMeasurement slicerViewportTransform"
         aria-label={toolMode === "move" ? "On-plate position controls" : "On-plate rotation controls"}>
         <div className="slicerViewportMeasurementHeader">
@@ -1728,7 +1787,7 @@ export default function SlicerPlateEditor({
           </small>}
         </>}
       </aside>}
-      {measurementVisible && chosen && <aside className="slicerViewportMeasurement" aria-label="On-plate measurements">
+      {selection.length <= 1 && measurementVisible && chosen && <aside className="slicerViewportMeasurement" aria-label="On-plate measurements">
         <div className="slicerViewportMeasurementHeader">
           <strong>Measure · {measureUnit === "mm" ? "mm" : "in"}</strong>
           <button type="button" aria-expanded={measureOverlayExpanded}
