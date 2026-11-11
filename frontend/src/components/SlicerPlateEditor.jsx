@@ -423,7 +423,11 @@ export default function SlicerPlateEditor({
   useEffect(() => {
     setAutoOrientAnalysis(null);
     setAutoOrientChoice(0);
-  }, [selected, toolMode, objects.length]);
+  }, [selected, toolMode, objects.length, chosen?.rotation_deg,
+    chosen?.rotation_xyz_deg?.[0], chosen?.rotation_xyz_deg?.[1],
+    chosen?.scale_percent, chosen?.scale_xyz_percent?.[0],
+    chosen?.scale_xyz_percent?.[1], chosen?.scale_xyz_percent?.[2],
+    chosen?.x_mm, chosen?.y_mm]);
 
   const analyseOrientations = () => {
     if (!chosen || !canEdit || autoOrientBusy) return;
@@ -1722,15 +1726,21 @@ export default function SlicerPlateEditor({
             </button>)}
         </div>
         {(() => {
-          const metrics = autoOrientAnalysis.choices[autoOrientGoal][autoOrientChoice]?.metrics;
-          if (!metrics) return null;
-          return <dl className="slicerAutoOrientMetrics">
-            <div><dt>Support-risk proxy</dt><dd>{(metrics.supportRisk * 100).toFixed(1)}%</dd></div>
-            <div><dt>Bed-contact area estimate</dt><dd>{metrics.contactArea.toFixed(1)} mm²</dd></div>
-            <div><dt>Print height</dt><dd>{metrics.height.toFixed(1)} mm</dd></div>
-            <div><dt>Relative speed / material / stability</dt>
-              <dd>Analysed as orientation scores, not minutes, grams or a success probability</dd></div>
-          </dl>;
+          const selectedCandidate = autoOrientAnalysis.choices[autoOrientGoal][autoOrientChoice];
+          const metrics = selectedCandidate?.metrics;
+          const relative = selectedCandidate?.relative;
+          if (!metrics || !relative) return null;
+          return <>
+            <p className="slicerPlateHint">Relative comparison indices (0 = best, 100 = worst among analysed orientations). These are not absolute time, filament consumption or print-success predictions.</p>
+            <dl className="slicerAutoOrientMetrics">
+              <div><dt>Estimated print-time index</dt><dd>{relative.time} / 100</dd></div>
+              <div><dt>Extra material index</dt><dd>{relative.material} / 100</dd></div>
+              <div><dt>Support-risk index</dt><dd>{relative.support} / 100</dd></div>
+              <div><dt>Failure-risk index</dt><dd>{relative.failure} / 100</dd></div>
+              <div><dt>Bed-contact area estimate</dt><dd>{metrics.contactArea.toFixed(1)} mm²</dd></div>
+              <div><dt>Print height</dt><dd>{metrics.height.toFixed(1)} mm</dd></div>
+            </dl>
+          </>;
         })()}
         <p className="slicerPlateHint">{autoOrientAnalysis.warning}</p>
         <button type="button" disabled={!canEdit || !autoOrientAnalysis.choices[autoOrientGoal][autoOrientChoice]}
