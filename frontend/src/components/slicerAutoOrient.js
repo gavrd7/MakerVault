@@ -198,6 +198,12 @@ export function evaluateAutoOrient(geometry, item, bedX, bedY, others = [], dime
   for (const [goal, weights] of Object.entries(weight)) {
     choices[goal] = candidates.map((candidate, index) => ({
       ...candidate, index,
+      relative: {
+        time: Math.round(normalized.timeProxy[index] * 100),
+        material: Math.round(normalized.materialProxy[index] * 100),
+        support: Math.round(normalized.supportRisk[index] * 100),
+        failure: Math.round(normalized.failureRisk[index] * 100),
+      },
       score: metric(Object.entries(weights).reduce((sum, [key, w]) =>
         sum + normalized[key][index] * w, 0)),
     })).sort((a, b) => a.score - b.score || a.metrics.failureRisk - b.metrics.failureRisk);
