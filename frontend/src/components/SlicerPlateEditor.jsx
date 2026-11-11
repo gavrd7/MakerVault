@@ -12,6 +12,7 @@ import { plateExtentWarning, plateFootprintsOverlap, autoArrangePlate, plateMode
 import { nativeBedArtwork } from "./slicerNativePlateArt";
 import { detectMeshMeasurement, formatDetectedMeasurement } from "./slicerAutoMeasure";
 import { evaluateAutoOrient, AUTO_ORIENT_GOALS } from "./slicerAutoOrient";
+import { splitDisconnectedMesh } from "./slicerSplitObjects";
 import makerVaultLogoSvg from "../assets/slicer-bed-art/makervault-official-logo.svg?raw";
 
 const PALETTE = ["#58b5e4", "#f59e0b", "#a78bfa", "#10b981", "#ef4444", "#f472b6"];
@@ -226,7 +227,7 @@ export default function SlicerPlateEditor({
   plateLabel = "Plate 1", onPlateLabelChange, printerLabel = "",
   canEdit = false, onFilesUploaded, defaultColor = null, onManualColorChange, footer = null,
   selectedInstanceId = null, onSelectedInstanceChange, toolMode = "select",
-  autoOrientGoal = "balanced", autoOrientRequest = 0,
+  autoOrientGoal = "balanced", autoOrientRequest = 0, splitRequest = 0,
   measurementVisible = false, measureMode = "distance", measureUnit = "mm", measureSnapMode = "auto", measureClearVersion = 0,
   onMeasurePinPlaced,
   localAssets = [], onLocalAssetsChange, onExitToolMode,
@@ -275,6 +276,9 @@ export default function SlicerPlateEditor({
   const [autoOrientChoice, setAutoOrientChoice] = useState(0);
   const [autoOrientBusy, setAutoOrientBusy] = useState(false);
   const [autoOrientModalOpen, setAutoOrientModalOpen] = useState(false);
+  const [splitPreview, setSplitPreview] = useState(null);
+  const [splitBusy, setSplitBusy] = useState(false);
+  const [splitError, setSplitError] = useState("");
   const [measureOverlayExpanded, setMeasureOverlayExpanded] = useState(false);
   const latestMeasurementRef = useRef({ active: false, mode: "distance" });
   latestMeasurementRef.current = { active: measurementVisible, mode: measureMode, snapMode: measureSnapMode };
@@ -515,6 +519,129 @@ export default function SlicerPlateEditor({
     };
   }, [autoOrientModalOpen, autoOrientAnalysis, autoOrientGoal, autoOrientChoice,
     chosen?.instance_id, chosen?.x_mm, chosen?.y_mm]);
+
+  // Preview only: the loaded model stays intact until every replacement STL
+  // has passed the same private, server-side validation used by normal imports.
+  useEffect(() => {
+    if (!splitRequest || !chosen || !canEdit) return undefined;
+    const mesh = sceneRef.current?.meshes.get(chosen.instance_id);
+    setSplitError("");
+    if (!mesh) {
+      setSplitError("The selected STL is still loading. Try Split when it appears on the plate.");
+      return undefined;
+    }
+    try {
+      const analysis = splitDisconnectedMesh(mesh, MAX_OBJECTS - objects.length + 1);
+      if (!analysis.parts.length) {
+        setSplitError(analysis.message);
+        setSplitPreview(null);
+      } else {
+        const source = sourceFiles.find(file => String(file.id) === String(chosen.asset_id));
+        setSplitPreview({
+          id: chosen.instance_id, name: source?.name || source?.filename || "Model",
+          parts: analysis.parts,
+        });
+      }
+    } catch (error) {
+      setSplitError(error.message || "Could not inspect the selected STL.");
+      setSplitPreview(null);
+    }
+    return undefined;
+  }, [splitRequest]);
+
+  // Show split components in independent colours without altering the draft.
+  useEffect(() => {
+    if (!splitPreview) return undefined;
+    const state = sceneRef.current;
+    const original = state?.meshes.get(splitPreview.id);
+    if (!state || !original) return undefined;
+    const overlays = [];
+    const oldVisibility = original.visible;
+    original.visible = false;
+    for (const [index, part] of splitPreview.parts.entries()) {
+      const geometry = new STLLoader().parse(part.buffer);
+      const ghost = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({
+        color: PALETTE[index % PALETTE.length], transparent: true,
+        opacity: 0.78, depthWrite: true, side: THREE.DoubleSide,
+      }));
+      ghost.position.set(part.x_mm, part.y_mm, 0);
+      ghost.userData.splitPreview = true;
+      overlays.push(ghost);
+      state.scene.add(ghost);
+    }
+    return () => {
+      original.visible = oldVisibility;
+      overlays.forEach(ghost => {
+        state.scene.remove(ghost);
+        ghost.geometry.dispose();
+        ghost.material.dispose();
+      });
+    };
+  }, [splitPreview]);
+
+  async function applySplit() {
+    if (!splitPreview || splitBusy || !canEdit) return;
+    const selectedObject = objects.find(item => item.instance_id === splitPreview.id);
+    if (!selectedObject) {
+      setSplitError("The selected object changed. Reopen Split to inspect the current model.");
+      return;
+    }
+    const remaining = objects.filter(item => item.instance_id !== splitPreview.id);
+    const drafts = splitPreview.parts.map((part, i) => ({
+      ...selectedObject, ...newPlateInstance("pending:" + i, objects.length + i),
+      x_mm: pretty(part.x_mm), y_mm: pretty(part.y_mm),
+      color: PALETTE[i % PALETTE.length],
+    }));
+    const knownDimensions = { ...dimensionsRef.current };
+    for (const [index, part] of splitPreview.parts.entries()) {
+      knownDimensions[drafts[index].instance_id] = {
+        width: part.width, depth: part.depth, height: part.height,
+      };
+    }
+    // Arrange before uploading. Never replace the original if all pieces do
+    // not fit on the bed together with the remaining objects.
+    const packed = autoArrangePlate([...remaining, ...drafts], knownDimensions, bedX, bedY, 5);
+    if (packed.error) {
+      setSplitError(packed.error + " The original model has not been changed.");
+      return;
+    }
+    setSplitBusy(true);
+    setSplitError("");
+    const created = [];
+    try {
+      for (const [index, part] of splitPreview.parts.entries()) {
+        const name = splitPreview.name.replace(/\.stl$/i, "").slice(0, 85) +
+          " - part " + (index + 1) + ".stl";
+        const file = new File([part.buffer], name, { type: "model/stl" });
+        const form = new FormData();
+        form.append("file", file);
+        const result = await apiFetch("/api/printing/slicer/meshes/temporary/", {
+          method: "POST", body: form,
+        });
+        const id = String(result?.asset_id || "");
+        if (!id) throw new Error("MakerVault did not return an STL input identifier.");
+        created.push({ id, name, file });
+      }
+      const next = packed.objects.map(item => {
+        const index = drafts.findIndex(draft => draft.instance_id === item.instance_id);
+        return index === -1 ? item : { ...item, asset_id: created[index].id };
+      });
+      onLocalAssetsChange?.(current => [...current, ...created.map(part => ({
+        id: part.id, category: "mesh", name: part.name, filename: part.name,
+        url: URL.createObjectURL(part.file), localOnly: true,
+      }))]);
+      onChange(next);
+      setSelected(drafts[0]?.instance_id || "");
+      setArrangeNotice(created.length + " independent objects created and arranged. Use Undo to restore the original assembly.");
+      setSplitPreview(null);
+    } catch (error) {
+      // No plate mutation: any accepted temporary uploads remain private and
+      // unreferenced; no partial set of pieces is introduced into the draft.
+      setSplitError((error.message || "Split upload failed.") + " The original model was not changed.");
+    } finally {
+      setSplitBusy(false);
+    }
+  }
 
   function applySelectedTransform(fields, message) {
     if (!chosen || !canEdit) return;
@@ -1747,6 +1874,43 @@ export default function SlicerPlateEditor({
       </> : <p role="status">Measuring the selected STL preview…</p>}
     </section>}
 
+    {splitPreview && createPortal(
+      <div className="slicerAutoOrientModalBackdrop" role="presentation"
+        onMouseDown={event => {
+          if (event.target === event.currentTarget && !splitBusy) setSplitPreview(null);
+        }}>
+        <section className="slicerAutoOrientPanel slicerAutoOrientModal" role="dialog" aria-modal="true"
+          aria-label="Split disconnected objects">
+          <header className="slicerAutoOrientModalHeader">
+            <div><h3>Split into objects</h3>
+              <p className="slicerPlateHint">{splitPreview.name}</p></div>
+            <button type="button" disabled={splitBusy} aria-label="Cancel split"
+              onClick={() => setSplitPreview(null)}>✕</button>
+          </header>
+          <p>{splitPreview.parts.length} disconnected components detected. Each colour on the
+            build plate represents one resulting object. The original remains unchanged until you confirm.</p>
+          <div className="slicerSplitParts" role="list" aria-label="Detected parts">
+            {splitPreview.parts.map((part, i) => <div role="listitem" key={i}>
+              <span className="slicerSplitSwatch" style={{ background: PALETTE[i % PALETTE.length] }} />
+              <div><strong>Part {i + 1}</strong><small>{part.triangles.toLocaleString()} triangles ·
+                {part.width.toFixed(1)} × {part.depth.toFixed(1)} × {part.height.toFixed(1)} mm</small></div>
+            </div>)}
+          </div>
+          <p className="slicerPlateHint">Each part will be saved as a private, independently editable STL
+            and arranged on the plate with 5 mm clearance. Existing per-object print settings are retained.
+            Original rotations and scale are baked into the resulting geometry; all parts rest on the build plate.
+            Connected or intersecting geometry cannot be separated by this operation.</p>
+          {splitError && <p role="alert" className="integrationError">{splitError}</p>}
+          <footer className="slicerAutoOrientModalActions">
+            <button type="button" disabled={splitBusy} onClick={() => setSplitPreview(null)}>Cancel</button>
+            <button type="button" disabled={splitBusy} onClick={applySplit}>
+              {splitBusy ? "Creating objects…" : "Split into " + splitPreview.parts.length + " objects"}
+            </button>
+          </footer>
+        </section>
+      </div>, document.body
+    )}
+    {splitError && !splitPreview && <p role="alert" className="integrationError">{splitError}</p>}
     {autoOrientModalOpen && createPortal(
       <div className="slicerAutoOrientModalBackdrop" role="presentation"
         onMouseDown={event => { if (event.target === event.currentTarget) setAutoOrientModalOpen(false); }}>
