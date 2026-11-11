@@ -5217,3 +5217,49 @@ a:focus-visible,
 .slicerSplitParts [role="listitem"] > div { display: grid; gap: 3px; min-width: 0; }
 .slicerSplitParts small { color: #b9c8d5; overflow-wrap: anywhere; }
 .slicerSplitSwatch { flex: 0 0 18px; width: 18px; height: 18px; border-radius: 5px; }
+
+
+/* All interactive readouts share one viewport anchor, aligned vertically
+   with the camera-button row immediately above the canvas. */
+@media (min-width: 701px) {
+  .slicerPlateCanvasViewport > .slicerViewportMeasurement {
+    top: -40px;
+    left: 12px;
+  }
+}
+.slicerViewportTransform {
+  width: min(268px, calc(100% - 24px));
+}
+.slicerViewportTransformGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.slicerViewportTransformGrid label {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  font-size: .75rem;
+  color: #bfcedc;
+}
+.slicerViewportTransformGrid input {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  border: 1px solid #445970;
+  border-radius: 6px;
+  padding: 4px;
+  background: #0d1926;
+  color: #f0f6ff;
+  font-variant-numeric: tabular-nums;
+}
+.slicerViewportTransformGrid .slicerTransformReadout {
+  grid-column: 1 / -1;
+  font-size: .76rem;
+  color: #b9c9d8;
+}
+.slicerViewportTransform > button {
+  min-height: 30px;
+  font-size: .78rem;
+}
