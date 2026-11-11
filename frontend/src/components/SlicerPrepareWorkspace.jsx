@@ -23,7 +23,7 @@ const TOOLS = [
   { name: "Add plate", icon: "add", pending: "Multi-plate project persistence and native plate export" },
   { name: "Auto-orient", target: "auto_orient", icon: "orient" },
   { name: "Lay on face", target: "lay_face", icon: "face" },
-  { name: "Split", icon: "split", pending: "Connected-component mesh separation" },
+  { name: "Split", target: "split", icon: "split" },
   { name: "Individual XYZ scale", target: "scale_xyz_percent", icon: "scale" },
   { name: "Hollow", icon: "hollow", pending: "Watertight offset geometry and drain holes" },
   { name: "Drill", icon: "drill", pending: "Validated boolean subtraction" },
@@ -67,6 +67,7 @@ export default function SlicerPrepareWorkspace({
   const [scope, setScope] = useState("global");
   const [group, setGroup] = useState("Quality");
   const [toolMode, setToolMode] = useState("select");
+  const [splitRequest, setSplitRequest] = useState(0);
   const [autoOrientMenuOpen, setAutoOrientMenuOpen] = useState(false);
   const [autoOrientGoal, setAutoOrientGoal] = useState("balanced");
   const [autoOrientRequest, setAutoOrientRequest] = useState(0);
@@ -344,6 +345,13 @@ export default function SlicerPrepareWorkspace({
       return;
     }
     setAutoOrientMenuOpen(false);
+    if (tool.target === "split") {
+      if (!selectedId && objects[0]?.instance_id) setSelectedId(objects[0].instance_id);
+      setToolMode("select");
+      setSplitRequest(value => value + 1);
+      setMobilePane("plate");
+      return;
+    }
     if (tool.target === "lay_face") {
       if (!selectedId && objects[0]?.instance_id) setSelectedId(objects[0].instance_id);
       setToolMode(current => current === "lay_face" ? "select" : "lay_face");
@@ -806,6 +814,7 @@ export default function SlicerPrepareWorkspace({
           printerLabel={selectedProfiles?.printer || printerDetails?.model || printerDetails?.name || ""}
           onPlateLabelChange={onPlateLabelChange} canEdit={canEdit && !busy} toolMode={toolMode} selectedInstanceId={selectedId}
           autoOrientGoal={autoOrientGoal} autoOrientRequest={autoOrientRequest}
+          splitRequest={splitRequest}
           onSelectedInstanceChange={setSelectedId} measurementVisible={measurementVisible}
           measureMode={measureMode} measureUnit={measureUnit} measureSnapMode={measureSnapMode}
           measureClearVersion={measureClearVersion}
