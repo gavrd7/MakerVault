@@ -644,7 +644,7 @@ export default function SlicerPrepareWorkspace({
           {[
             ["balanced", "Balanced", "Balance estimated time, material, support need and failure risk"],
             ["supports", "Fewest supports", "Prefer orientations with less unsupported geometry"],
-            ["fastest", "Fastest print", "Prioritise estimated print time and model height"],
+            ["speed", "Fastest print", "Prioritise estimated print time and model height"],
           ].map(([goal, name, description]) => <button key={goal} type="button" className="slicerAutoOrientMenuChoice"
             title={description} onClick={() => {
               setAutoOrientGoal(goal);
