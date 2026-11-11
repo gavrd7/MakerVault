@@ -9,13 +9,20 @@ const read = name => fs.readFileSync(path.join(base, name), "utf8");
 const workbench = read("components/SlicerWorkbench.jsx");
 const editor = read("components/SlicerPlateEditor.jsx");
 const detection = read("components/slicerAutoMeasure.js");
+const styles = read("styles.css");
 
 test("new interactive editor and resumed draft start at the top of the slicer", () => {
   assert.match(workbench, /useLayoutEffect\(\(\) => \{/);
   assert.match(workbench, /\}, \[editorOpen\]\)/);
-  assert.match(workbench, /window\.scrollTo\(\{ top: 0, behavior: "instant" \}\)/);
-  assert.match(workbench, /parent\.scrollTop = 0/);
+  assert.match(workbench, /window\.scrollTo\(\{ top: 0, left: 0, behavior: "instant" \}\)/);
+  assert.match(workbench, /if \(node\.scrollTop > 0\) node\.scrollTop = 0/);
+  assert.match(workbench, /restoreTop\(\)/);
+  assert.match(workbench, /requestAnimationFrame\(restoreTop\)/);
+  assert.match(workbench, /setTimeout\(restoreTop, 180\)/);
+  assert.match(workbench, /window\.addEventListener\(name, stopOnInteraction/);
+  assert.match(workbench, /slicerEditorOpen/);
   assert.doesNotMatch(workbench, /scrollIntoView\(\{ behavior: "smooth" \}\)/);
+  assert.match(styles, /\.slicerWorkbenchRoot\.slicerEditorOpen \{ overflow-anchor: none; \}/);
 });
 
 test("auto-measured planar patch is highlighted by its detected mesh triangles", () => {
