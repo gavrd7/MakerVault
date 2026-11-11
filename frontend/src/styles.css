@@ -5263,3 +5263,13 @@ a:focus-visible,
   min-height: 30px;
   font-size: .78rem;
 }
+
+
+.slicerAssemblyActions {
+  display: grid; gap: 8px; margin: 6px 0 12px;
+  padding: 9px; border: 1px solid #34475c; border-radius: 9px;
+  background: #152333;
+}
+.slicerAssemblyActions small { color: #b7c8d7; line-height: 1.4; }
+.slicerAssemblyActions > div { display: flex; flex-wrap: wrap; gap: 7px; }
+.slicerAssemblyActions button { flex: 1 1 auto; min-height: 33px; font-size: .8rem; }
