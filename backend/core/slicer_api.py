@@ -178,7 +178,7 @@ def _draft_plate_settings(user, input_asset, settings):
         required = {"instance_id", "asset_id", "x_mm", "y_mm", "rotation_deg",
                     "scale_percent", "color"}
         if (not isinstance(item, dict) or not required.issubset(item)
-                or set(item) - required - {"scale_xyz_percent", "process_overrides", "rotation_xyz_deg"}):
+                or set(item) - required - {"scale_xyz_percent", "process_overrides", "rotation_xyz_deg", "assembly_id"}):
             raise ValueError("Invalid plate model instance.")
         instance_id = str(_uuid(item["instance_id"]))
         asset_id = _uuid(item["asset_id"])
@@ -217,7 +217,12 @@ def _draft_plate_settings(user, input_asset, settings):
         if not isinstance(color, str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
             raise ValueError("Choose a six-digit colour for each model.")
         instance_overrides = validate_process_overrides(item.get("process_overrides"))
+        assembly_id = item.get("assembly_id")
+        if assembly_id is not None and (not isinstance(assembly_id, str) or
+                not re.fullmatch(r"assembly:[a-zA-Z0-9-]{8,64}", assembly_id)):
+            raise ValueError("Invalid assembly identifier.")
         saved.append({"instance_id": instance_id, "asset_id": str(asset_id),
+                      **({"assembly_id": assembly_id} if assembly_id is not None else {}),
                       **values, "color": color.lower(),
                       **({"process_overrides": instance_overrides} if instance_overrides else {})})
     if saved[0]["asset_id"] != str(input_asset.pk):
