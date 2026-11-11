@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import * as THREE from "three";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { threeMfGeometryToStl, MAX_3MF_IMPORT_BYTES } from "./slicer3mfGeometry";
@@ -205,6 +206,7 @@ export default function SlicerPlateEditor({
   plateLabel = "Plate 1", onPlateLabelChange, printerLabel = "",
   canEdit = false, onFilesUploaded, defaultColor = null, onManualColorChange, footer = null,
   selectedInstanceId = null, onSelectedInstanceChange, toolMode = "select",
+  autoOrientGoal = "balanced", autoOrientRequest = 0,
   measurementVisible = false, measureMode = "distance", measureUnit = "mm", measureSnapMode = "auto", measureClearVersion = 0,
   onMeasurePinPlaced,
   localAssets = [], onLocalAssetsChange, onExitToolMode,
@@ -249,10 +251,10 @@ export default function SlicerPlateEditor({
   const [dimensions, setDimensions] = useState({});
   const [measurePoints, setMeasurePoints] = useState([]);
   const [detectedFeature, setDetectedFeature] = useState(null);
-  const [autoOrientGoal, setAutoOrientGoal] = useState("balanced");
   const [autoOrientAnalysis, setAutoOrientAnalysis] = useState(null);
   const [autoOrientChoice, setAutoOrientChoice] = useState(0);
   const [autoOrientBusy, setAutoOrientBusy] = useState(false);
+  const [autoOrientModalOpen, setAutoOrientModalOpen] = useState(false);
   const [measureOverlayExpanded, setMeasureOverlayExpanded] = useState(false);
   const latestMeasurementRef = useRef({ active: false, mode: "distance" });
   latestMeasurementRef.current = { active: measurementVisible, mode: measureMode, snapMode: measureSnapMode };
@@ -459,8 +461,40 @@ export default function SlicerPlateEditor({
     applySelectedTransform(candidate.orientation,
       "The suggested orientation no longer fits the build plate. Move other models and analyse again.");
     setAutoOrientAnalysis(null);
+    setAutoOrientModalOpen(false);
     exitToolModeRef.current?.();
   };
+
+  // The toolbar owns the goal. Opening comparison never commits a transform.
+  useEffect(() => {
+    if (!autoOrientRequest) return;
+    setAutoOrientModalOpen(true);
+    setAutoOrientChoice(0);
+    analyseOrientations();
+  }, [autoOrientRequest]);
+
+  // Preview the selected pose as a translucent duplicate beside the solid
+  // original. The ghost is display-only and never changes objects or exports.
+  useEffect(() => {
+    if (!autoOrientModalOpen || !chosen) return undefined;
+    const state = sceneRef.current;
+    const original = state?.meshes.get(chosen.instance_id);
+    const candidate = autoOrientAnalysis?.choices?.[autoOrientGoal]?.[autoOrientChoice];
+    if (!state || !original || !candidate) return undefined;
+    const ghost = new THREE.Mesh(original.geometry, new THREE.MeshBasicMaterial({
+      color: "#89d9ff", transparent: true, opacity: 0.3,
+      depthWrite: false, side: THREE.DoubleSide,
+    }));
+    ghost.userData.isOrientationPreview = true;
+    positionOrientedMesh(ghost, { ...chosen, ...candidate.orientation });
+    ghost.renderOrder = 8;
+    state.scene.add(ghost);
+    return () => {
+      state.scene.remove(ghost);
+      ghost.material.dispose();
+    };
+  }, [autoOrientModalOpen, autoOrientAnalysis, autoOrientGoal, autoOrientChoice,
+    chosen?.instance_id, chosen?.x_mm, chosen?.y_mm]);
 
   function applySelectedTransform(fields, message) {
     if (!chosen || !canEdit) return;
@@ -1693,60 +1727,61 @@ export default function SlicerPlateEditor({
       </> : <p role="status">Measuring the selected STL preview…</p>}
     </section>}
 
-    {toolMode === "auto_orient" && chosen && <section className="slicerAutoOrientPanel"
-      aria-label="Automatic model orientation">
-      <h5>Auto-orient selected model</h5>
-      <label>Optimisation goal
-        <select value={autoOrientGoal} onChange={event => {
-          setAutoOrientGoal(event.target.value);
-          setAutoOrientChoice(0);
-        }}>
-          {Object.entries(AUTO_ORIENT_GOALS).map(([value, label]) =>
-            <option key={value} value={value}>{label}</option>)}
-        </select>
-      </label>
-      <button type="button" disabled={!canEdit || autoOrientBusy}
-        onClick={analyseOrientations}>
-        {autoOrientBusy ? "Comparing mesh orientations…" : "Compare orientations"}
-      </button>
-      {autoOrientAnalysis?.error && <p role="alert" className="integrationError">{autoOrientAnalysis.error}</p>}
-      {autoOrientAnalysis?.choices?.[autoOrientGoal] && <>
-        <p className="slicerPlateHint">{autoOrientAnalysis.faceSamples.toLocaleString()}
-          {autoOrientAnalysis.approximate ? " sampled" : ""} mesh faces analysed.
-          Choose a suggestion to preview its relative indicators.</p>
-        <div className="slicerAutoOrientChoices" role="group" aria-label="Suggested orientations">
-          {autoOrientAnalysis.choices[autoOrientGoal].slice(0, 3).map((option, rank) =>
-            <button key={option.index} type="button"
-              className={autoOrientChoice === rank ? "isActive" : ""}
-              aria-pressed={autoOrientChoice === rank}
-              onClick={() => setAutoOrientChoice(rank)}>
-              <strong>{rank === 0 ? "Recommended" : "Alternative " + rank}</strong>
-              <span>{option.label}</span>
-              <small>Height {option.metrics.height.toFixed(1)} mm</small>
-            </button>)}
-        </div>
-        {(() => {
-          const selectedCandidate = autoOrientAnalysis.choices[autoOrientGoal][autoOrientChoice];
-          const metrics = selectedCandidate?.metrics;
-          const relative = selectedCandidate?.relative;
-          if (!metrics || !relative) return null;
-          return <>
-            <p className="slicerPlateHint">Relative comparison indices (0 = best, 100 = worst among analysed orientations). These are not absolute time, filament consumption or print-success predictions.</p>
-            <dl className="slicerAutoOrientMetrics">
-              <div><dt>Estimated print-time index</dt><dd>{relative.time} / 100</dd></div>
-              <div><dt>Extra material index</dt><dd>{relative.material} / 100</dd></div>
-              <div><dt>Support-risk index</dt><dd>{relative.support} / 100</dd></div>
-              <div><dt>Failure-risk index</dt><dd>{relative.failure} / 100</dd></div>
-              <div><dt>Bed-contact area estimate</dt><dd>{metrics.contactArea.toFixed(1)} mm²</dd></div>
-              <div><dt>Print height</dt><dd>{metrics.height.toFixed(1)} mm</dd></div>
-            </dl>
-          </>;
-        })()}
-        <p className="slicerPlateHint">{autoOrientAnalysis.warning}</p>
-        <button type="button" disabled={!canEdit || !autoOrientAnalysis.choices[autoOrientGoal][autoOrientChoice]}
-          onClick={applyAutoOrientation}>Apply selected orientation</button>
-      </>}
-    </section>}
+    {autoOrientModalOpen && createPortal(
+      <div className="slicerAutoOrientModalBackdrop" role="presentation"
+        onMouseDown={event => { if (event.target === event.currentTarget) setAutoOrientModalOpen(false); }}>
+        <section className="slicerAutoOrientPanel slicerAutoOrientModal" role="dialog" aria-modal="true"
+          aria-label="Compare model orientations">
+          <header className="slicerAutoOrientModalHeader">
+            <div><h3>Compare orientations</h3>
+              <p className="slicerPlateHint">Review suggestions for {AUTO_ORIENT_GOALS[autoOrientGoal] || "your chosen goal"}.</p>
+            </div>
+            <button type="button" onClick={() => setAutoOrientModalOpen(false)} aria-label="Close comparison">✕</button>
+          </header>
+          {autoOrientBusy && <p role="status">Comparing mesh orientations…</p>}
+          {autoOrientAnalysis?.error && <p role="alert" className="integrationError">{autoOrientAnalysis.error}</p>}
+          {autoOrientAnalysis?.choices?.[autoOrientGoal] && <>
+            <p className="slicerPlateHint">{autoOrientAnalysis.faceSamples.toLocaleString()}
+              {autoOrientAnalysis.approximate ? " sampled" : ""} mesh faces analysed.</p>
+            <div className="slicerAutoOrientChoices" role="group" aria-label="Suggested orientations">
+              {autoOrientAnalysis.choices[autoOrientGoal].slice(0, 3).map((option, rank) =>
+                <button key={option.index} type="button"
+                  className={autoOrientChoice === rank ? "isActive" : ""}
+                  aria-pressed={autoOrientChoice === rank}
+                  onMouseEnter={() => setAutoOrientChoice(rank)}
+                  onFocus={() => setAutoOrientChoice(rank)}
+                  onClick={() => setAutoOrientChoice(rank)}>
+                  <strong>{rank === 0 ? "Recommended" : "Alternative " + rank}</strong>
+                  <span>{option.label}</span>
+                  <small>Height {option.metrics.height.toFixed(1)} mm</small>
+                </button>)}
+            </div>
+            {(() => {
+              const option = autoOrientAnalysis.choices[autoOrientGoal][autoOrientChoice];
+              const metrics = option?.metrics, relative = option?.relative;
+              if (!metrics || !relative) return null;
+              return <>
+                <p className="slicerPlateHint">The blue ghost on the plate shows the proposed orientation while the solid model remains unchanged.</p>
+                <dl className="slicerAutoOrientMetrics">
+                  <div><dt>Print-time index</dt><dd>{relative.time} / 100</dd></div>
+                  <div><dt>Extra material index</dt><dd>{relative.material} / 100</dd></div>
+                  <div><dt>Support-risk index</dt><dd>{relative.support} / 100</dd></div>
+                  <div><dt>Failure-risk index</dt><dd>{relative.failure} / 100</dd></div>
+                  <div><dt>Bed-contact area estimate</dt><dd>{metrics.contactArea.toFixed(1)} mm²</dd></div>
+                  <div><dt>Print height</dt><dd>{metrics.height.toFixed(1)} mm</dd></div>
+                </dl>
+              </>;
+            })()}
+            <p className="slicerPlateHint">{autoOrientAnalysis.warning} These are relative mesh heuristics, not native slicer predictions.</p>
+          </>}
+          <footer className="slicerAutoOrientModalActions">
+            <button type="button" onClick={() => setAutoOrientModalOpen(false)}>Cancel</button>
+            <button type="button" disabled={!canEdit || !autoOrientAnalysis?.choices?.[autoOrientGoal]?.[autoOrientChoice]}
+              onClick={applyAutoOrientation}>Apply orientation</button>
+          </footer>
+        </section>
+      </div>, document.body
+    )}
 
     {objects.length > 0 && <div className="formGrid slicerPlateTransformFields">
       <label>X position (mm)
