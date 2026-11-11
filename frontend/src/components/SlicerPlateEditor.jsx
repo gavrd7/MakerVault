@@ -1816,8 +1816,9 @@ export default function SlicerPlateEditor({
               onChange={event => {
                 const value = Number(event.target.value);
                 if (!Number.isFinite(value) || value < 5 || value > 400) return;
-                patch("scale_xyz_percent", [value, value, value]);
-                patch("scale_percent", value);
+                applySelectedTransform({
+                  scale_percent: value, scale_xyz_percent: [value, value, value],
+                }, "Scaling uniformly would overlap another model or leave the build plate.");
               }} />
           </label>
           <div className="slicerViewportTransformGrid">
