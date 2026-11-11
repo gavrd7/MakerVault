@@ -150,13 +150,28 @@ function evaluate(samples, quaternion) {
   };
 }
 
-const rank = (candidates, metricName) => {
+// Compare with the best absolute proxy, not with the worst candidate in the
+// current shortlist. Min/max scaling incorrectly forces a two-pose comparison
+// to read 0/100 even when the measured difference is tiny.
+const relativeMetric = (candidates, metricName) => {
   const values = candidates.map(item => item.metrics[metricName]);
-  const min = Math.min(...values), max = Math.max(...values);
-  return candidates.map((candidate, index) => ({
-    ...candidate,
-    normalized: (values[index] - min) / (max - min || 1),
-  }));
+  const best = Math.min(...values);
+  return values.map(value => {
+    // An exact zero baseline cannot have a meaningful percentage increase.
+    // Keep the absolute proxy visible and record that the percentage is N/A.
+    const overhead = Math.max(0, value - best);
+    const percent = best > 1e-9 ? (overhead / best) * 100 :
+      overhead <= 1e-9 ? 0 : null;
+    // Saturating score is used ONLY to weight different proxy dimensions.
+    // The displayed overhead remains uncapped and is not a probability.
+    const score = overhead <= 1e-9 ? 0 :
+      overhead / (Math.max(Math.abs(best), 1e-9) + overhead);
+    return {
+      absolute: value,
+      percent: percent === null ? null : Math.round(percent * 10) / 10,
+      score,
+    };
+  });
 };
 
 export const AUTO_ORIENT_GOALS = Object.freeze({
@@ -186,9 +201,9 @@ export function evaluateAutoOrient(geometry, item, bedX, bedY, others = [], dime
   if (!candidates.length) return {
     error: "No candidate orientation fits this plate without overlapping another model. Move or auto-arrange models first.",
   };
-  const normalized = {};
+  const compared = {};
   for (const key of ["supportRisk", "timeProxy", "materialProxy", "failureRisk"])
-    normalized[key] = rank(candidates, key).map(v => v.normalized);
+    compared[key] = relativeMetric(candidates, key);
   const weight = {
     balanced: { supportRisk: 0.20, timeProxy: 0.25, materialProxy: 0.15, failureRisk: 0.40 },
     supports: { supportRisk: 0.78, timeProxy: 0.06, materialProxy: 0.12, failureRisk: 0.04 },
@@ -199,13 +214,13 @@ export function evaluateAutoOrient(geometry, item, bedX, bedY, others = [], dime
     choices[goal] = candidates.map((candidate, index) => ({
       ...candidate, index,
       relative: {
-        time: Math.round(normalized.timeProxy[index] * 100),
-        material: Math.round(normalized.materialProxy[index] * 100),
-        support: Math.round(normalized.supportRisk[index] * 100),
-        failure: Math.round(normalized.failureRisk[index] * 100),
+        time: compared.timeProxy[index],
+        material: compared.materialProxy[index],
+        support: compared.supportRisk[index],
+        failure: compared.failureRisk[index],
       },
       score: metric(Object.entries(weights).reduce((sum, [key, w]) =>
-        sum + normalized[key][index] * w, 0)),
+        sum + compared[key][index].score * w, 0)),
     })).sort((a, b) => a.score - b.score || a.metrics.failureRisk - b.metrics.failureRisk);
   }
   return {
