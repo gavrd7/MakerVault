@@ -22,7 +22,7 @@ const TOOLS = [
   { name: "Fit selected", target: "focus", icon: "focus" },
   { name: "Add plate", icon: "add", pending: "Multi-plate project persistence and native plate export" },
   { name: "Auto-orient", icon: "orient", pending: "Geometry-based safe orientation solver" },
-  { name: "Lay on face", icon: "face", pending: "Mesh face selection and normal alignment" },
+  { name: "Lay on face", target: "lay_face", icon: "face" },
   { name: "Split", icon: "split", pending: "Connected-component mesh separation" },
   { name: "Individual XYZ scale", target: "scale_xyz_percent", icon: "scale" },
   { name: "Hollow", icon: "hollow", pending: "Watertight offset geometry and drain holes" },
@@ -334,6 +334,11 @@ export default function SlicerPrepareWorkspace({
     }
     setMeasurementVisible(false);
     setMeasureOptionsOpen(false);
+    if (tool.target === "lay_face") {
+      if (!selectedId && objects[0]?.instance_id) setSelectedId(objects[0].instance_id);
+      setToolMode(current => current === "lay_face" ? "select" : "lay_face");
+      return;
+    }
     if (["x_mm", "rotation_deg", "scale_percent", "scale_xyz_percent"].includes(tool.target)) {
       // Selecting a handle-based tool should show its gizmo immediately,
       // including for the first model before it has been explicitly clicked.
@@ -610,8 +615,10 @@ export default function SlicerPrepareWorkspace({
           className={((tool.target === "x_mm" && toolMode === "move") ||
             (tool.target === "rotation_deg" && toolMode === "rotate") ||
             ((tool.target === "scale_percent" || tool.target === "scale_xyz_percent") && toolMode === "scale") ||
-            (tool.target === "measure" && measurementVisible)) ? "isActive" : ""}
+            (tool.target === "measure" && measurementVisible) ||
+            (tool.target === "lay_face" && toolMode === "lay_face")) ? "isActive" : ""}
           aria-pressed={tool.target === "measure" ? measurementVisible :
+            tool.target === "lay_face" ? toolMode === "lay_face" :
             ["x_mm", "rotation_deg", "scale_percent", "scale_xyz_percent"].includes(tool.target)
             ? (tool.target === "x_mm" ? toolMode === "move"
               : tool.target === "rotation_deg" ? toolMode === "rotate" : toolMode === "scale") : undefined}
