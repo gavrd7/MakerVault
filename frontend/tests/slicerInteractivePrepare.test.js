@@ -479,3 +479,15 @@ test("Auto-orient goals are in a toolbar menu and comparison is modal with a non
   assert.match(editor, /onClick=\{applyAutoOrientation\}/);
   assert.match(css, /\.slicerAutoOrientModalBackdrop/);
 });
+
+test("auto-orient comparison labels good and bad deltas rather than treating plus as positive", () => {
+  const editor = read("SlicerPlateEditor.jsx");
+  const css = fs.readFileSync(path.resolve(root, "../styles.css"), "utf8");
+  assert.match(editor, /percent === null \? "isNeutral" : tied \? "isBetter" : "isWorse"/);
+  assert.match(editor, /"✓ Best \/ tied"/);
+  assert.match(editor, /"% worse"/);
+  assert.match(editor, /Lower is better for all four proxy metrics/);
+  assert.match(css, /\.slicerOrientDelta\.isBetter/);
+  assert.match(css, /\.slicerOrientDelta\.isWorse/);
+  assert.match(css, /\.slicerOrientDelta\.isNeutral/);
+});
