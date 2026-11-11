@@ -67,6 +67,9 @@ export default function SlicerPrepareWorkspace({
   const [scope, setScope] = useState("global");
   const [group, setGroup] = useState("Quality");
   const [toolMode, setToolMode] = useState("select");
+  const [autoOrientMenuOpen, setAutoOrientMenuOpen] = useState(false);
+  const [autoOrientGoal, setAutoOrientGoal] = useState("balanced");
+  const [autoOrientRequest, setAutoOrientRequest] = useState(0);
   const [measurementVisible, setMeasurementVisible] = useState(false);
   const [measureOptionsOpen, setMeasureOptionsOpen] = useState(false);
   const [measureMode, setMeasureMode] = useState("distance");
@@ -336,10 +339,11 @@ export default function SlicerPrepareWorkspace({
     setMeasureOptionsOpen(false);
     if (tool.target === "auto_orient") {
       if (!selectedId && objects[0]?.instance_id) setSelectedId(objects[0].instance_id);
-      setToolMode(current => current === "auto_orient" ? "select" : "auto_orient");
+      setAutoOrientMenuOpen(current => !current);
       setMobilePane("plate");
       return;
     }
+    setAutoOrientMenuOpen(false);
     if (tool.target === "lay_face") {
       if (!selectedId && objects[0]?.instance_id) setSelectedId(objects[0].instance_id);
       setToolMode(current => current === "lay_face" ? "select" : "lay_face");
@@ -614,7 +618,7 @@ export default function SlicerPrepareWorkspace({
         <button type="button" disabled={!redoRef.current.length || busy} onClick={redo}
           aria-label="Redo"><SlicerUiIcon name="redo" /></button>
       </span>
-      {TOOLS.map(tool => <div className={"slicerToolTooltip" + (tool.expandable && measureOptionsOpen ? " slicerToolOptionsOpen" : "")} key={tool.name}
+      {TOOLS.map(tool => <div className={"slicerToolTooltip" + (((tool.expandable && measureOptionsOpen) || (tool.target === "auto_orient" && autoOrientMenuOpen)) ? " slicerToolOptionsOpen" : "")} key={tool.name}
         data-tooltip={tool.pending ? tool.name + " · Not yet available: " + tool.pending
           : tool.expandable ? tool.name + " · Click for measurement options" : tool.name}>
         <button type="button"
@@ -623,18 +627,32 @@ export default function SlicerPrepareWorkspace({
             ((tool.target === "scale_percent" || tool.target === "scale_xyz_percent") && toolMode === "scale") ||
             (tool.target === "measure" && measurementVisible) ||
             (tool.target === "lay_face" && toolMode === "lay_face") ||
-            (tool.target === "auto_orient" && toolMode === "auto_orient")) ? "isActive" : ""}
+            (tool.target === "auto_orient" && autoOrientMenuOpen)) ? "isActive" : ""}
           aria-pressed={tool.target === "measure" ? measurementVisible :
             tool.target === "lay_face" ? toolMode === "lay_face" :
-            tool.target === "auto_orient" ? toolMode === "auto_orient" :
+            tool.target === "auto_orient" ? autoOrientMenuOpen :
             ["x_mm", "rotation_deg", "scale_percent", "scale_xyz_percent"].includes(tool.target)
             ? (tool.target === "x_mm" ? toolMode === "move"
               : tool.target === "rotation_deg" ? toolMode === "rotate" : toolMode === "scale") : undefined}
           aria-label={tool.name}
-          aria-expanded={tool.expandable ? measureOptionsOpen : undefined}
-          aria-controls={tool.expandable ? "slicer-measure-toolbar-options" : undefined}
+          aria-expanded={tool.target === "auto_orient" ? autoOrientMenuOpen : tool.expandable ? measureOptionsOpen : undefined}
+          aria-controls={tool.target === "auto_orient" ? "slicer-auto-orient-toolbar-options" : tool.expandable ? "slicer-measure-toolbar-options" : undefined}
           disabled={!!tool.pending || !canEdit || busy || (tool.target !== "import" && !objects.length)}
           onClick={() => selectTool(tool)}><SlicerUiIcon name={tool.icon || "others"} /></button>
+        {tool.target === "auto_orient" && autoOrientMenuOpen && <div className="slicerToolOptions slicerAutoOrientMenu" id="slicer-auto-orient-toolbar-options" role="group" aria-label="Auto-orient choices">
+          <div className="slicerToolOptionsHeader"><strong>Auto-orient</strong><button type="button" onClick={() => setAutoOrientMenuOpen(false)}>Close</button></div>
+          {[
+            ["balanced", "Balanced", "Balance estimated time, material, support need and failure risk"],
+            ["supports", "Fewest supports", "Prefer orientations with less unsupported geometry"],
+            ["fastest", "Fastest print", "Prioritise estimated print time and model height"],
+          ].map(([goal, name, description]) => <button key={goal} type="button" className="slicerAutoOrientMenuChoice"
+            title={description} onClick={() => {
+              setAutoOrientGoal(goal);
+              setAutoOrientRequest(request => request + 1);
+              setAutoOrientMenuOpen(false);
+            }}><strong>{name}</strong><span aria-hidden="true">ⓘ</span></button>)}
+          <small>Hover over ⓘ or a choice for details. Compare results before applying.</small>
+        </div>}
         {tool.expandable && measureOptionsOpen && <div className="slicerToolOptions" id="slicer-measure-toolbar-options"
           role="group" aria-label="Measure tool options">
           <div className="slicerToolOptionsHeader"><strong>Measure</strong>
@@ -776,9 +794,6 @@ export default function SlicerPrepareWorkspace({
 
       </div>
       <div id="slicer-prepare-plate" className="slicerPrepareScene" ref={editorRef} aria-labelledby="slicer-mobile-tab-plate">
-        {toolMode === "auto_orient" && <p className="projectUploadHint" role="status">
-          <strong>Auto-orient:</strong> Choose a goal below the model to compare possible orientations. Results are relative mesh-based estimates until native test slices verify time, filament and supports.
-        </p>}
         {toolMode === "lay_face" && <p className="projectUploadHint" role="status">
           <strong>Lay on face:</strong> Tap or click the model face you want touching the build plate.
           MakerVault will rotate the model and place it back on the bed. Select the tool again to cancel.
@@ -790,6 +805,7 @@ export default function SlicerPrepareWorkspace({
           plate={plate} plateType={plateType} plateLabel={plateLabel}
           printerLabel={selectedProfiles?.printer || printerDetails?.model || printerDetails?.name || ""}
           onPlateLabelChange={onPlateLabelChange} canEdit={canEdit && !busy} toolMode={toolMode} selectedInstanceId={selectedId}
+          autoOrientGoal={autoOrientGoal} autoOrientRequest={autoOrientRequest}
           onSelectedInstanceChange={setSelectedId} measurementVisible={measurementVisible}
           measureMode={measureMode} measureUnit={measureUnit} measureSnapMode={measureSnapMode}
           measureClearVersion={measureClearVersion}
