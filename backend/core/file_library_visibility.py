@@ -20,10 +20,18 @@ def library_visible_assets(queryset, owner):
     but no private metadata marker. G-code explicitly saved to the library has
     category='gcode', whether chosen during slicing or promoted afterwards.
     """
+    # PostgreSQL JSON-key lookups are NULL for missing keys. Applying a
+    # negated OR directly to the library queryset excludes otherwise-visible
+    # ordinary files with missing metadata keys (three-valued SQL logic).
+    # Build a positive private-ID subquery, then exclude only matched IDs.
+    # Files without slicer markers remain visible, including legacy uploads.
+    from .models import FileAsset
+
     profile_assets = SlicerProfile.objects.filter(owner=owner).values("file_asset_id")
-    return queryset.exclude(
+    private_ids = FileAsset.objects.filter(owner=owner).filter(
         Q(metadata__slicer_temporary=True)
         | Q(metadata__slicer_profile_internal=True)
         | Q(pk__in=profile_assets)
         | (Q(metadata__generated_by="makervault-slicer") & ~Q(category="gcode"))
-    )
+    ).values("pk")
+    return queryset.exclude(pk__in=private_ids)
