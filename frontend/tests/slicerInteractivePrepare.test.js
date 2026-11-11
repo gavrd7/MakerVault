@@ -113,12 +113,13 @@ test("active 3D model has a temporary outline and preserves preview filament col
 });
 test("advanced tools are visibly gated pending safe native transformations", () => {
   const scene = read("SlicerPrepareWorkspace.jsx");
-  for (const tool of ["Auto-orient", "Lay on face", "Cut", "Hollow",
+  for (const tool of ["Auto-orient", "Cut", "Hollow",
                        "Support painting", "Seam painting", "Variable layer height",
                        "Colour painting", "Add plate"]) {
     assert.match(scene, new RegExp('name: "' + tool + '", icon: "[^"]+", pending:'));
   }
   assert.match(scene, /disabled=\{!!tool.pending/);
+  assert.match(scene, /name: "Lay on face", target: "lay_face", icon: "face"/);
   for (const group of ["Quality", "Strength", "Speed", "Supports", "Multifilament", "Others"])
     assert.match(scene, new RegExp('"' + group + '"'));
   assert.match(scene, /Wall loops and sparse infill density have passed native Orca/);
@@ -137,7 +138,7 @@ test("independent XYZ scaling updates visual mesh and is selectable from the too
   assert.match(scene, /name: "Individual XYZ scale", target: "scale_xyz_percent"/);
   assert.match(editor, /Independent axis scaling \(%\)/);
   assert.match(editor, /data-slicer-field=\{index === 0 \? "scale_xyz_percent"/);
-  assert.match(editor, /mesh\.scale\.set\(xyz\[0\] \/ 100, xyz\[1\] \/ 100, xyz\[2\] \/ 100\)/);
+  assert.match(editor, /mesh\.scale\.set\(\.\.\.xyz\.map\(v => v \/ 100\)\)/);
 });
 
 test("duplicating a selected model preserves every saved transformation", () => {
