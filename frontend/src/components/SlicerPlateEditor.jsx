@@ -10,6 +10,7 @@ import { plateExtentWarning, plateFootprintsOverlap, autoArrangePlate, plateMode
   measurementDistance, measurementCircle, measurementFormat } from "./slicerPlateGeometry";
 import { nativeBedArtwork } from "./slicerNativePlateArt";
 import { detectMeshMeasurement, formatDetectedMeasurement } from "./slicerAutoMeasure";
+import { evaluateAutoOrient, AUTO_ORIENT_GOALS } from "./slicerAutoOrient";
 import makerVaultLogoSvg from "../assets/slicer-bed-art/makervault-official-logo.svg?raw";
 
 const PALETTE = ["#58b5e4", "#f59e0b", "#a78bfa", "#10b981", "#ef4444", "#f472b6"];
@@ -248,6 +249,10 @@ export default function SlicerPlateEditor({
   const [dimensions, setDimensions] = useState({});
   const [measurePoints, setMeasurePoints] = useState([]);
   const [detectedFeature, setDetectedFeature] = useState(null);
+  const [autoOrientGoal, setAutoOrientGoal] = useState("balanced");
+  const [autoOrientAnalysis, setAutoOrientAnalysis] = useState(null);
+  const [autoOrientChoice, setAutoOrientChoice] = useState(0);
+  const [autoOrientBusy, setAutoOrientBusy] = useState(false);
   const [measureOverlayExpanded, setMeasureOverlayExpanded] = useState(false);
   const latestMeasurementRef = useRef({ active: false, mode: "distance" });
   latestMeasurementRef.current = { active: measurementVisible, mode: measureMode, snapMode: measureSnapMode };
@@ -414,6 +419,44 @@ export default function SlicerPlateEditor({
     setError("");
     onChange(objects.map(item => item.instance_id === chosen.instance_id ? candidate : item));
   }
+
+  useEffect(() => {
+    setAutoOrientAnalysis(null);
+    setAutoOrientChoice(0);
+  }, [selected, toolMode, objects.length]);
+
+  const analyseOrientations = () => {
+    if (!chosen || !canEdit || autoOrientBusy) return;
+    const mesh = sceneRef.current?.meshes.get(chosen.instance_id);
+    if (!mesh) {
+      setAutoOrientAnalysis({ error: "The model mesh is still loading. Try again when it appears on the plate." });
+      return;
+    }
+    setAutoOrientBusy(true);
+    setAutoOrientAnalysis(null);
+    // Yield to the browser to render progress before bounded mesh analysis.
+    requestAnimationFrame(() => {
+      try {
+        const result = evaluateAutoOrient(mesh.geometry, chosen, bedX, bedY,
+          objects, dimensionsRef.current);
+        setAutoOrientAnalysis(result);
+        setAutoOrientChoice(0);
+      } catch (error) {
+        setAutoOrientAnalysis({ error: error.message || "Unable to evaluate model orientations." });
+      } finally {
+        setAutoOrientBusy(false);
+      }
+    });
+  };
+
+  const applyAutoOrientation = () => {
+    const candidate = autoOrientAnalysis?.choices?.[autoOrientGoal]?.[autoOrientChoice];
+    if (!chosen || !candidate || !canEdit) return;
+    applySelectedTransform(candidate.orientation,
+      "The suggested orientation no longer fits the build plate. Move other models and analyse again.");
+    setAutoOrientAnalysis(null);
+    exitToolModeRef.current?.();
+  };
 
   function applySelectedTransform(fields, message) {
     if (!chosen || !canEdit) return;
@@ -1644,6 +1687,55 @@ export default function SlicerPlateEditor({
           X/Y are relative to the plate centre. This is not face-to-face measurement,
           the exact occupied outline, or a print-clearance certification.</p>
       </> : <p role="status">Measuring the selected STL preview…</p>}
+    </section>}
+
+    {toolMode === "auto_orient" && chosen && <section className="slicerAutoOrientPanel"
+      aria-label="Automatic model orientation">
+      <h5>Auto-orient selected model</h5>
+      <label>Optimisation goal
+        <select value={autoOrientGoal} onChange={event => {
+          setAutoOrientGoal(event.target.value);
+          setAutoOrientChoice(0);
+        }}>
+          {Object.entries(AUTO_ORIENT_GOALS).map(([value, label]) =>
+            <option key={value} value={value}>{label}</option>)}
+        </select>
+      </label>
+      <button type="button" disabled={!canEdit || autoOrientBusy}
+        onClick={analyseOrientations}>
+        {autoOrientBusy ? "Comparing mesh orientations…" : "Compare orientations"}
+      </button>
+      {autoOrientAnalysis?.error && <p role="alert" className="integrationError">{autoOrientAnalysis.error}</p>}
+      {autoOrientAnalysis?.choices?.[autoOrientGoal] && <>
+        <p className="slicerPlateHint">{autoOrientAnalysis.faceSamples.toLocaleString()}
+          {autoOrientAnalysis.approximate ? " sampled" : ""} mesh faces analysed.
+          Choose a suggestion to preview its relative indicators.</p>
+        <div className="slicerAutoOrientChoices" role="group" aria-label="Suggested orientations">
+          {autoOrientAnalysis.choices[autoOrientGoal].slice(0, 3).map((option, rank) =>
+            <button key={option.index} type="button"
+              className={autoOrientChoice === rank ? "isActive" : ""}
+              aria-pressed={autoOrientChoice === rank}
+              onClick={() => setAutoOrientChoice(rank)}>
+              <strong>{rank === 0 ? "Recommended" : "Alternative " + rank}</strong>
+              <span>{option.label}</span>
+              <small>Height {option.metrics.height.toFixed(1)} mm</small>
+            </button>)}
+        </div>
+        {(() => {
+          const metrics = autoOrientAnalysis.choices[autoOrientGoal][autoOrientChoice]?.metrics;
+          if (!metrics) return null;
+          return <dl className="slicerAutoOrientMetrics">
+            <div><dt>Support-risk proxy</dt><dd>{(metrics.supportRisk * 100).toFixed(1)}%</dd></div>
+            <div><dt>Bed-contact area estimate</dt><dd>{metrics.contactArea.toFixed(1)} mm²</dd></div>
+            <div><dt>Print height</dt><dd>{metrics.height.toFixed(1)} mm</dd></div>
+            <div><dt>Relative speed / material / stability</dt>
+              <dd>Analysed as orientation scores, not minutes, grams or a success probability</dd></div>
+          </dl>;
+        })()}
+        <p className="slicerPlateHint">{autoOrientAnalysis.warning}</p>
+        <button type="button" disabled={!canEdit || !autoOrientAnalysis.choices[autoOrientGoal][autoOrientChoice]}
+          onClick={applyAutoOrientation}>Apply selected orientation</button>
+      </>}
     </section>}
 
     {objects.length > 0 && <div className="formGrid slicerPlateTransformFields">
