@@ -65,3 +65,23 @@ test("orientation analysis never mutates source item or its STL geometry", () =>
   assert.deepEqual([...geometry.attributes.position.array], [...original]);
   geometry.dispose();
 });
+
+test("two candidates preserve genuine proportional differences instead of forced 0/100 scores", () => {
+  const geometry = tallModel();
+  const result = evaluateAutoOrient(geometry, instance, 220, 220, [instance], dims);
+  assert.ok(!result.error, result.error);
+  for (const key of ["time", "material", "support", "failure"]) {
+    const values = result.choices.balanced.map(candidate => candidate.relative[key]);
+    assert.ok(values.every(value => Number.isFinite(value.absolute) && Number.isFinite(value.score)));
+    for (const value of values) {
+      assert.ok(value.score >= 0 && value.score < 1, "proportional scores should not become binary extrema");
+      assert.ok(value.percent === null || value.percent >= 0);
+    }
+  }
+  const times = result.choices.balanced.map(candidate => candidate.relative.time);
+  const min = Math.min(...times.map(value => value.absolute));
+  for (const value of times) {
+    assert.equal(value.percent, Math.round(((value.absolute - min) / min) * 1000) / 10);
+  }
+  geometry.dispose();
+});
