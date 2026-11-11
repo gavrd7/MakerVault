@@ -1,19 +1,38 @@
-/** Conservative XY axis-aligned envelope of a centred STL after Z rotation.
+/** Three.js Euler XYZ rotation matrix, also used by the native 3MF exporter. */
+export function plateRotationMatrix(item) {
+  const [rx, ry] = (item?.rotation_xyz_deg || [0, 0]).map(v => Number(v) * Math.PI / 180);
+  const rz = Number(item?.rotation_deg || 0) * Math.PI / 180;
+  const [cx, sx, cy, sy, cz, sz] = [
+    Math.cos(rx), Math.sin(rx), Math.cos(ry), Math.sin(ry), Math.cos(rz), Math.sin(rz),
+  ];
+  return [
+    [cy * cz, -cy * sz, sy],
+    [cx * sz + sx * sy * cz, cx * cz - sx * sy * sz, -sx * cy],
+    [sx * sz - cx * sy * cz, sx * cz + cx * sy * sz, cx * cy],
+  ];
+}
+
+/** Conservative oriented cuboid envelope including tilts around X/Y.
+ * STL source geometry is centred in X/Y and rests on local Z=0.
+ */
+
  * Preview-only: excludes printer keep-outs, extrusion clearance, supports and Z.
  */
 export function plateEnvelope(item, dimensions) {
   const x = Number(item.x_mm), y = Number(item.y_mm);
   const width = Number(dimensions?.width), depth = Number(dimensions?.depth);
-  const legacyScale = Number(item.scale_percent) / 100;
+  const height = Number(dimensions?.height);
+  const legacy = Number(item.scale_percent) / 100;
   const xyz = item.scale_xyz_percent;
-  const sx = Array.isArray(xyz) ? Number(xyz[0]) / 100 : legacyScale;
-  const sy = Array.isArray(xyz) ? Number(xyz[1]) / 100 : legacyScale;
-  const angle = Number(item.rotation_deg) * Math.PI / 180;
-  if (![x,y,width,depth,sx,sy,angle].every(Number.isFinite) ||
-      width <= 0 || depth <= 0 || sx <= 0 || sy <= 0) return null;
-  const hx = (Math.abs(Math.cos(angle)) * sx * width + Math.abs(Math.sin(angle)) * sy * depth) / 2;
-  const hy = (Math.abs(Math.sin(angle)) * sx * width + Math.abs(Math.cos(angle)) * sy * depth) / 2;
-  return { minX: x-hx, maxX: x+hx, minY: y-hy, maxY: y+hy };
+  const scale = Array.isArray(xyz) ? xyz.map(v => Number(v) / 100) : [legacy, legacy, legacy];
+  const rot = plateRotationMatrix(item);
+  if (![x, y, width, depth, height, ...scale, ...rot.flat()].every(Number.isFinite) ||
+      width <= 0 || depth <= 0 || height <= 0 || scale.some(v => v <= 0)) return null;
+  const half = [width * scale[0] / 2, depth * scale[1] / 2, height * scale[2] / 2];
+  const centre = [x + rot[0][2] * half[2], y + rot[1][2] * half[2]];
+  const hx = rot[0].reduce((total, v, i) => total + Math.abs(v) * half[i], 0);
+  const hy = rot[1].reduce((total, v, i) => total + Math.abs(v) * half[i], 0);
+  return { minX: centre[0]-hx, maxX: centre[0]+hx, minY: centre[1]-hy, maxY: centre[1]+hy };
 }
 
 /** Read-only preview measurement of the selected STL after saved XYZ scale and
