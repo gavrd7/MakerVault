@@ -64,6 +64,25 @@ export default function SlicerPrepareWorkspace({
   const redoRef = useRef([]);
   const [, setHistoryVersion] = useState(0);
   const [selectedId, setSelectedId] = useState("");
+  const [selectedIds, setSelectedIds] = useState([]);
+  const selectSingle = id => { setSelectedId(id); setSelectedIds(id ? [id] : []); };
+  const selectMultiple = (id, additive = false) => {
+    const item = objects.find(row => row.instance_id === id);
+    if (!item) return;
+    if (!additive) {
+      const ids = item.assembly_id
+        ? objects.filter(row => row.assembly_id === item.assembly_id).map(row => row.instance_id)
+        : [id];
+      setSelectedIds(ids);
+      setSelectedId(id);
+      return;
+    }
+    setSelectedIds(current => {
+      const next = current.includes(id) ? current.filter(value => value !== id) : [...current, id];
+      setSelectedId(next.at(-1) || "");
+      return next;
+    });
+  };
   const [scope, setScope] = useState("global");
   const [group, setGroup] = useState("Quality");
   const [toolMode, setToolMode] = useState("select");
@@ -319,6 +338,24 @@ export default function SlicerPrepareWorkspace({
     return () => window.removeEventListener("keydown", listener);
   }, [undo, redo]);
 
+  const validSelection = selectedIds.filter(id => objects.some(row => row.instance_id === id));
+  const selectedModels = objects.filter(row => validSelection.includes(row.instance_id));
+  const activeAssembly = selectedModels.length > 0 && selectedModels.every(row =>
+    row.assembly_id && row.assembly_id === selectedModels[0].assembly_id)
+    ? selectedModels[0].assembly_id : "";
+  function assembleSelected() {
+    if (!canEdit || busy || selectedModels.length < 2) return;
+    // Logical groups preserve original STL sources and object settings.
+    const id = "assembly:" + (typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID() : Math.random().toString(36).slice(2));
+    updatePlate(objects.map(row => validSelection.includes(row.instance_id)
+      ? { ...row, assembly_id: id } : row));
+  }
+  function disassembleSelected() {
+    if (!canEdit || busy || !activeAssembly) return;
+    updatePlate(objects.map(row => row.assembly_id === activeAssembly
+      ? { ...row, assembly_id: null } : row));
+  }
   const active = selectedId ? objects.find(row => row.instance_id === selectedId) : null;
   const itemName = object => {
     const file = [...localAssets, ...files].find(row => String(row.id) === String(object.asset_id));
@@ -751,11 +788,21 @@ export default function SlicerPrepareWorkspace({
         <aside className="slicerPrepareTree" aria-label="Build plate object tree">
         <h4>{plateLabel || "Plate 1"} · Models ({objects.length})</h4>
         {objects.length === 0 && <p>Add an STL to start editing.</p>}
+        {objects.length > 0 && <div className="slicerAssemblyActions">
+          <small>{validSelection.length} selected · Ctrl/Cmd-click to select several models.
+            Click an assembled object to select its group.</small>
+          <div>
+            <button type="button" disabled={!canEdit || busy || selectedModels.length < 2}
+              onClick={assembleSelected}>Assemble selection</button>
+            <button type="button" disabled={!canEdit || busy || !activeAssembly}
+              onClick={disassembleSelected}>Disassemble</button>
+          </div>
+        </div>}
         {objects.map((object, index) => <div className="slicerPrepareModelEntry" key={object.instance_id}>
           <button type="button"
-            className={active?.instance_id === object.instance_id ? "selected" : ""}
-            onClick={() => setSelectedId(object.instance_id)}
-            aria-pressed={active?.instance_id === object.instance_id}>
+            className={validSelection.includes(object.instance_id) ? "selected" : ""}
+            onClick={event => selectMultiple(object.instance_id, event.ctrlKey || event.metaKey || event.shiftKey)}
+            aria-pressed={validSelection.includes(object.instance_id)}>
             <span className="slicerPrepareModelSwatch"
               style={{ background: object.color }} aria-hidden="true" />
             <span>{index + 1}. {itemName(object)}</span>
@@ -815,7 +862,8 @@ export default function SlicerPrepareWorkspace({
           onPlateLabelChange={onPlateLabelChange} canEdit={canEdit && !busy} toolMode={toolMode} selectedInstanceId={selectedId}
           autoOrientGoal={autoOrientGoal} autoOrientRequest={autoOrientRequest}
           splitRequest={splitRequest}
-          onSelectedInstanceChange={setSelectedId} measurementVisible={measurementVisible}
+          selectedInstanceIds={validSelection} onSelectModel={selectMultiple}
+          onSelectedInstanceChange={selectSingle} measurementVisible={measurementVisible}
           measureMode={measureMode} measureUnit={measureUnit} measureSnapMode={measureSnapMode}
           measureClearVersion={measureClearVersion}
           onMeasurePinPlaced={() => setMeasureOptionsOpen(false)}
