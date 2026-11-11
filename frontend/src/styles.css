@@ -5077,3 +5077,43 @@ a:focus-visible,
   .slicerPreviewModal .slicerResultLayerLayout{gap:6px}
   .slicerPreviewModal .slicerToolpath3DCanvas{height:min(54dvh,510px);min-height:300px}
 }
+
+/* Main mobile navigation: fixed chevron controls appear only where the
+   scroll container actually overflows, while keeping native touch-swiping. */
+.mobileNavOverflow{display:contents}
+.mobileNavArrow{display:none}
+@media(max-width:900px){
+  .shell>aside .mobileNavOverflow{
+    grid-area:nav;display:flex;align-items:center;min-width:0;width:100%;gap:2px;
+  }
+  .shell>aside .mobileNavOverflow nav{
+    flex:1 1 auto;min-width:0;grid-area:auto;
+    scroll-behavior:smooth;overflow-x:auto;
+  }
+  .shell>aside .mobileNavArrow{
+    display:grid;place-items:center;flex:0 0 0;width:0;min-width:0;
+    padding:0;border:0;margin:0;opacity:0;overflow:hidden;
+    pointer-events:none;transition:opacity .15s ease;
+  }
+  .shell>aside .mobileNavArrow.isVisible{
+    flex:0 0 32px;width:32px;height:40px;
+    border:1px solid #38465a;border-radius:9px;
+    background:#172231;color:#dce5f2;
+    opacity:1;pointer-events:auto;
+  }
+  .shell>aside .mobileNavArrow.isVisible:hover{
+    background:#25344a;border-color:#7258e8;
+  }
+  .shell>aside .mobileNavArrow svg{
+    width:20px;height:20px;max-width:none;fill:none;
+    stroke:currentColor;stroke-width:2.2;
+    stroke-linecap:round;stroke-linejoin:round;
+  }
+  .shell>aside .mobileNavArrow:focus-visible{
+    outline:2px solid #a99bff;outline-offset:2px;
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  .shell>aside .mobileNavOverflow nav{scroll-behavior:auto}
+  .shell>aside .mobileNavArrow{transition:none}
+}
