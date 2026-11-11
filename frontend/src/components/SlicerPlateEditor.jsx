@@ -1558,6 +1558,7 @@ export default function SlicerPlateEditor({
       state.transform.showY = true;
       state.transform.showZ = toolMode === "rotate" || toolMode === "scale";
       state.transform.setSpace(toolMode === "rotate" ? "local" : "world");
+      state.transform.setSize(toolMode === "rotate" ? 1.3 : 1);
       state.transform.attach(selectedMesh);
     } else {
       state.transform.detach();
