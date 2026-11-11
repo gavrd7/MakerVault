@@ -88,11 +88,18 @@ def _axis_scales(item):
 def _transform(item, offset_x, offset_y):
     sx, sy, sz = _axis_scales(item)
     angle = math.radians(float(item["rotation_deg"]))
-    cos, sin = math.cos(angle), math.sin(angle)
-    # 3MF stores a 4x3 row-vector matrix: translation is the final triple.
-    # Scale the local axes BEFORE rotation; do not distort a previously rotated
-    # global XY frame when a model has nonuniform scaling.
-    values = (sx * cos, sx * sin, 0, -sy * sin, sy * cos, 0, 0, 0, sz,
+    rx, ry = (math.radians(float(value)) for value in
+              item.get("rotation_xyz_deg", [0, 0]))
+    cx, cy, cz = math.cos(rx), math.cos(ry), math.cos(angle)
+    ax, ay, az = math.sin(rx), math.sin(ry), math.sin(angle)
+    # THREE.Euler('XYZ') is Rx * Ry * Rz. Store 3MF row-major local axis
+    # columns so the preview and exported geometry have identical orientation.
+    r00, r01, r02 = cy * cz, -cy * az, ay
+    r10, r11, r12 = cx * az + ax * ay * cz, cx * cz - ax * ay * az, -ax * cy
+    r20, r21, r22 = ax * az - cx * ay * cz, ax * cz + cx * ay * az, cx * cy
+    values = (sx * r00, sx * r10, sx * r20,
+              sy * r01, sy * r11, sy * r21,
+              sz * r02, sz * r12, sz * r22,
               offset_x + float(item["x_mm"]), offset_y + float(item["y_mm"]), 0)
     if any(not math.isfinite(value) or abs(value) > 10000 for value in values):
         raise SlicerProfileError("Invalid 3MF object placement.")
@@ -161,21 +168,30 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth):
         obj = ET.SubElement(resources, f"{{{NS}}}object", {"id": str(index), "type": "model"})
         count, width, depth = _render_mesh(raw, obj)
         total_triangles += count
-        sx, sy, _sz = _axis_scales(item)
-        angle = math.radians(float(item["rotation_deg"]))
-        cosine, sine = math.cos(angle), math.sin(angle)
-        centre_x = bed_width / 2 + float(item["x_mm"])
-        centre_y = bed_depth / 2 + float(item["y_mm"])
-        # Every transformed XY corner must fit inside the declared rectangle.
-        for x in (-width / 2, width / 2):
-            for y in (-depth / 2, depth / 2):
-                moved_x = centre_x + sx * x * cosine - sy * y * sine
-                moved_y = centre_y + sx * x * sine + sy * y * cosine
-                if not (0 <= moved_x <= bed_width and 0 <= moved_y <= bed_depth):
-                    raise SlicerProfileError("A model extends outside the verified build plate.")
+        # Transform the actual welded vertices, not only the original 2D
+        # bounding rectangle: a tilted model has a different XY footprint.
+        # Compute bottom clearance from the same matrix to ensure it rests at
+        # Z=0 in both the 3MF exporter and the browser's 3D preview.
+        provisional = [float(value) for value in
+                       _transform(item, bed_width / 2, bed_depth / 2).split()]
+        vertex_nodes = obj.findall(f"./{{{NS}}}mesh/{{{NS}}}vertices/{{{NS}}}vertex")
+        placed = []
+        for vertex in vertex_nodes:
+            x, y, z = (float(vertex.attrib[key]) for key in ("x", "y", "z"))
+            placed.append((
+                provisional[0] * x + provisional[3] * y + provisional[6] * z + provisional[9],
+                provisional[1] * x + provisional[4] * y + provisional[7] * z + provisional[10],
+                provisional[2] * x + provisional[5] * y + provisional[8] * z,
+            ))
+        if not placed or any(not (0 <= x <= bed_width and 0 <= y <= bed_depth)
+                             for x, y, _z in placed):
+            raise SlicerProfileError("A model extends outside the verified build plate.")
+        minimum_z = min(point[2] for point in placed)
+        if abs(minimum_z) > 1e-6:
+            provisional[11] = -minimum_z
+        placement = " ".join(format(value, ".6f") for value in provisional)
         if total_triangles > MAX_TRIANGLES:
             raise SlicerProfileError("Total plate triangles exceed the limit.")
-        placement = _transform(item, bed_width / 2, bed_depth / 2)
         if bake_native_positions:
             _bake_native_instance_transform(obj, placement)
             placement = "1 0 0 0 1 0 0 0 1 0 0 0"
