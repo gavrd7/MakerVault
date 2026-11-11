@@ -5151,3 +5151,7 @@ a:focus-visible,
   .slicerAutoOrientMetrics{grid-template-columns:1fr}
   .slicerAutoOrientPanel>button:last-child{width:100%}
 }
+
+/* Prevent the browser from re-anchoring the scroller to the old Setup
+   controls when the tall form is replaced by the interactive canvas. */
+.slicerWorkbenchRoot.slicerEditorOpen { overflow-anchor: none; }
