@@ -201,6 +201,19 @@ function pretty(value) {
   return Math.round(Number(value) * 100) / 100;
 }
 
+// These values are dimensionless geometry proxies, not minutes, grams or
+// probabilities. Show their actual magnitude alongside a true delta from
+// the best analysed pose. A zero baseline has no meaningful percent change.
+function orientationComparison(metricValue) {
+  if (!metricValue) return "—";
+  const value = Number(metricValue.absolute);
+  const proxy = value === 0 ? "0" : Number(value.toPrecision(4)).toString();
+  const difference = metricValue.percent === null ? "above zero baseline"
+    : metricValue.percent === 0 ? "best / tied"
+    : "+" + metricValue.percent + "% vs best";
+  return proxy + " · " + difference;
+}
+
 export default function SlicerPlateEditor({
   files = [], objects = [], onChange, onPrimaryChange, plate = null, plateType = "default",
   plateLabel = "Plate 1", onPlateLabelChange, printerLabel = "",
@@ -1763,16 +1776,16 @@ export default function SlicerPlateEditor({
               return <>
                 <p className="slicerPlateHint">The blue ghost on the plate shows the proposed orientation while the solid model remains unchanged.</p>
                 <dl className="slicerAutoOrientMetrics">
-                  <div><dt>Print-time index</dt><dd>{relative.time} / 100</dd></div>
-                  <div><dt>Extra material index</dt><dd>{relative.material} / 100</dd></div>
-                  <div><dt>Support-risk index</dt><dd>{relative.support} / 100</dd></div>
-                  <div><dt>Failure-risk index</dt><dd>{relative.failure} / 100</dd></div>
+                  <div><dt>Print-time proxy</dt><dd>{orientationComparison(relative.time)}</dd></div>
+                  <div><dt>Extra material proxy</dt><dd>{orientationComparison(relative.material)}</dd></div>
+                  <div><dt>Support-risk proxy</dt><dd>{orientationComparison(relative.support)}</dd></div>
+                  <div><dt>Failure-risk proxy</dt><dd>{orientationComparison(relative.failure)}</dd></div>
                   <div><dt>Bed-contact area estimate</dt><dd>{metrics.contactArea.toFixed(1)} mm²</dd></div>
                   <div><dt>Print height</dt><dd>{metrics.height.toFixed(1)} mm</dd></div>
                 </dl>
               </>;
             })()}
-            <p className="slicerPlateHint">{autoOrientAnalysis.warning} These are relative mesh heuristics, not native slicer predictions.</p>
+            <p className="slicerPlateHint">{autoOrientAnalysis.warning} Smaller proxy values are preferred; percentages compare against the best analysed orientation for that metric, not a 0–100 ranking.</p>
           </>}
           <footer className="slicerAutoOrientModalActions">
             <button type="button" onClick={() => setAutoOrientModalOpen(false)}>Cancel</button>
