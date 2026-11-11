@@ -768,6 +768,10 @@ export default function SlicerPrepareWorkspace({
 
       </div>
       <div id="slicer-prepare-plate" className="slicerPrepareScene" ref={editorRef} aria-labelledby="slicer-mobile-tab-plate">
+        {toolMode === "lay_face" && <p className="projectUploadHint" role="status">
+          <strong>Lay on face:</strong> Tap or click the model face you want touching the build plate.
+          MakerVault will rotate the model and place it back on the bed. Select the tool again to cancel.
+        </p>}
         <SlicerPlateEditor files={files} localAssets={localAssets}
           onLocalAssetsChange={onLocalAssetsChange} objects={objects} onChange={updatePlate}
           onPrimaryChange={onPrimaryChange} onFilesUploaded={onFilesUploaded}
