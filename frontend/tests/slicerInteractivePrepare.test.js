@@ -29,7 +29,7 @@ test("editor provides actual model tree, undo redo and existing placement operat
   assert.match(scene, /Ctrl\+Z/);
   assert.match(scene, /aria-label="Build plate object tree"/);
   assert.match(scene, /selectedInstanceId=\{selectedId\}/);
-  assert.match(scene, /onSelectedInstanceChange=\{setSelectedId\}/);
+  assert.match(scene, /onSelectedInstanceChange=\{selectSingle\}/);
   for (const tool of ["Move", "Rotate", "Scale", "Auto-arrange", "Duplicate"]) {
     assert.match(scene, new RegExp('name: "' + tool + '"'));
   }
@@ -101,12 +101,12 @@ test("Measure options open at the toolbar while a compact readout lives at top l
 test("active 3D model has a temporary outline and preserves preview filament colours", () => {
   const scene = read("SlicerPrepareWorkspace.jsx");
   const editor = read("SlicerPlateEditor.jsx");
-  assert.match(scene, /setSelectedId\(object.instance_id\)/);
+  assert.match(scene, /selectMultiple\(object.instance_id, event.ctrlKey/);
   assert.match(editor, /selectionOutline = new THREE.BoxHelper\(mesh, 0x39d9ff\)/);
   assert.match(editor, /selectionOutline\?\.update\(\)/);
   assert.match(editor, /state\.setSelectionOutline\(selectedMesh \|\| null\)/);
   assert.match(editor, /mesh\.material\.color\.set\(item.color \|\| PALETTE\[0\]\)/);
-  assert.match(editor, /item.instance_id === selected \? "#168ab4" : "#000000"/);
+  assert.match(editor, /selection.includes\(item.instance_id\) \? "#168ab4" : "#000000"/);
   assert.match(editor, /setSelectionOutline\(null\)/);
   // Sorting or arranging must not activate a model merely because it was last touched.
   assert.match(editor, /setSelected\(""\)/);
