@@ -96,8 +96,13 @@ export function snapRotationDegrees(degrees, shift = false, speed = 0) {
   // Fine handling stays at 1° while the pointer moves slowly or is held.
   // Quicker gestures progressively use larger detents, rather than locking
   // every drag to 45°. Shift explicitly requests 1° precision at any speed.
-  const increment = shift || speed < 75 ? 1 : speed < 230 ? 5 : 45;
-  return Math.round(degrees / increment) * increment;
+  if (shift || speed < 75) return Math.round(degrees);
+  if (speed < 230) return Math.round(degrees / 5) * 5;
+  // A fast flick attracts the handle to a nearby 45° stop, but does not
+  // unexpectedly jump to 0° when the user passes through e.g. 17°.
+  const nearestDetent = Math.round(degrees / 45) * 45;
+  return Math.abs(degrees - nearestDetent) <= 10
+    ? nearestDetent : Math.round(degrees / 5) * 5;
 }
 
 export function createMakerVaultRotationGizmo(scene) {
