@@ -102,12 +102,12 @@ test("active 3D model has a temporary outline and preserves preview filament col
   const scene = read("SlicerPrepareWorkspace.jsx");
   const editor = read("SlicerPlateEditor.jsx");
   assert.match(scene, /selectMultiple\(object.instance_id, event.ctrlKey/);
-  assert.match(editor, /selectionOutline = new THREE.BoxHelper\(mesh, 0x39d9ff\)/);
-  assert.match(editor, /selectionOutline\?\.update\(\)/);
-  assert.match(editor, /state\.setSelectionOutline\(selectedMesh \|\| null\)/);
+  assert.match(editor, /const helper = new THREE.BoxHelper\(mesh, 0x39d9ff\)/);
+  assert.match(editor, /selectionOutlines\.forEach\(helper=>helper\.update\(\)\)/);
+  assert.match(editor, /state\.setSelectionOutlines\(selection\.map\(id=>state\.meshes\.get\(id\)\)/);
   assert.match(editor, /mesh\.material\.color\.set\(item.color \|\| PALETTE\[0\]\)/);
   assert.match(editor, /selection.includes\(item.instance_id\) \? "#168ab4" : "#000000"/);
-  assert.match(editor, /setSelectionOutline\(null\)/);
+  assert.match(editor, /setSelectionOutlines\(\[\]\)/);
   // Sorting or arranging must not activate a model merely because it was last touched.
   assert.match(editor, /setSelected\(""\)/);
 });
@@ -693,7 +693,7 @@ test("Hollow, Drill, Cut and Mesh boolean share one preview-and-confirm model ed
   assert.match(workspace,/solidRequest=\{solidRequest\}/);
   assert.match(editor,/executeSolidOperation\(solidDialog\.kind,target,solidOptions,second\)/);
   assert.match(editor,/aria-label=\{solidDialog\.kind\+" model geometry"\}/);
-  assert.match(editor,/Preview result/);
+  assert.match(editor,/Preview updates automatically/);
   assert.match(editor,/Apply mesh edit/);
   assert.match(editor,/setSolidPreview\(null\);setSolidDialog\(null\)/);
   assert.match(editor,/meshes\/temporary\//);
