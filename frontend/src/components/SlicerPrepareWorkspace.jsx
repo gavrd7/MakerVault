@@ -90,6 +90,7 @@ export default function SlicerPrepareWorkspace({
   const [autoOrientMenuOpen, setAutoOrientMenuOpen] = useState(false);
   const [addModelMenuOpen, setAddModelMenuOpen] = useState(false);
   const [toolDescriptor, setToolDescriptor] = useState("");
+  const [toolPopupStyle, setToolPopupStyle] = useState(null);
   const [autoOrientGoal, setAutoOrientGoal] = useState("balanced");
   const [autoOrientRequest, setAutoOrientRequest] = useState(0);
   const [measurementVisible, setMeasurementVisible] = useState(false);
@@ -363,7 +364,23 @@ export default function SlicerPrepareWorkspace({
     const file = [...localAssets, ...files].find(row => String(row.id) === String(object.asset_id));
     return file?.name || file?.filename || "STL model";
   };
-  function selectTool(tool) {
+  function selectTool(tool, event) {
+    // Keep each menu inside the bordered toolbar, even when icons wrap.
+    if (["import","auto_orient","measure"].includes(tool.target)) {
+      const anchor=event?.currentTarget?.closest(".slicerToolTooltip");
+      const toolbar=anchor?.closest(".slicerPrepareTools");
+      if (anchor && toolbar) {
+        const frame=toolbar.getBoundingClientRect();
+        const button=anchor.getBoundingClientRect();
+        const width=Math.min(260,Math.max(160,frame.width-16));
+        const desired=button.left+button.width/2-frame.left-width/2;
+        const left=Math.max(8,Math.min(desired,frame.width-width-8));
+        setToolPopupStyle({
+          left:(left-(button.left-frame.left))+"px",
+          right:"auto",transform:"none",width:width+"px",
+        });
+      }
+    }
     if (tool.target === "import") {
       setMeasureOptionsOpen(false);
       setAutoOrientMenuOpen(false);
@@ -701,9 +718,9 @@ export default function SlicerPrepareWorkspace({
           aria-expanded={tool.target === "import" ? addModelMenuOpen : tool.target === "auto_orient" ? autoOrientMenuOpen : tool.expandable ? measureOptionsOpen : undefined}
           aria-controls={tool.target === "import" ? "slicer-add-model-toolbar-options" : tool.target === "auto_orient" ? "slicer-auto-orient-toolbar-options" : tool.expandable ? "slicer-measure-toolbar-options" : undefined}
           disabled={!!tool.pending || !canEdit || busy || (tool.target !== "import" && !objects.length)}
-          onClick={() => selectTool(tool)}><SlicerUiIcon name={tool.icon || "others"} /></button>
+          onClick={event => selectTool(tool,event)}><SlicerUiIcon name={tool.icon || "others"} /></button>
         {tool.target === "import" && addModelMenuOpen && <div
-          className="slicerToolOptions slicerAddModelMenu" id="slicer-add-model-toolbar-options"
+          className="slicerToolOptions slicerAddModelMenu" style={toolPopupStyle} id="slicer-add-model-toolbar-options"
           role="group" aria-label="Add model options">
           <div className="slicerToolOptionsHeader"><strong>Add model</strong>
             <button type="button" aria-label="Close Add model menu"
@@ -721,7 +738,7 @@ export default function SlicerPrepareWorkspace({
             });
           }}><SlicerUiIcon name="models" /> Add from MakerVault</button>
         </div>}
-        {tool.target === "auto_orient" && autoOrientMenuOpen && <div className="slicerToolOptions slicerAutoOrientMenu" id="slicer-auto-orient-toolbar-options" role="group" aria-label="Auto-orient choices">
+        {tool.target === "auto_orient" && autoOrientMenuOpen && <div className="slicerToolOptions slicerAutoOrientMenu" style={toolPopupStyle} id="slicer-auto-orient-toolbar-options" role="group" aria-label="Auto-orient choices">
           <div className="slicerToolOptionsHeader"><strong>Auto-orient</strong><button type="button" onClick={() => setAutoOrientMenuOpen(false)}>Close</button></div>
           {[
             ["balanced", "Balanced", "Balance estimated time, material, support need and failure risk"],
@@ -735,7 +752,7 @@ export default function SlicerPrepareWorkspace({
             }}><strong>{name}</strong><span aria-hidden="true">ⓘ</span></button>)}
           <small>Hover over ⓘ or a choice for details. Compare results before applying.</small>
         </div>}
-        {tool.expandable && measureOptionsOpen && <div className="slicerToolOptions" id="slicer-measure-toolbar-options"
+        {tool.expandable && measureOptionsOpen && <div className="slicerToolOptions" style={toolPopupStyle} id="slicer-measure-toolbar-options"
           role="group" aria-label="Measure tool options">
           <div className="slicerToolOptionsHeader"><strong>Measure</strong>
             <button type="button" aria-label="Hide Measure options" onClick={() => setMeasureOptionsOpen(false)}>Hide</button>
