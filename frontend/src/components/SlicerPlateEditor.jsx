@@ -307,7 +307,10 @@ export default function SlicerPlateEditor({
   const [solidBusy, setSolidBusy] = useState(false);
   const [solidError, setSolidError] = useState("");
   const [solidOptions, setSolidOptions] = useState({wall: 2, radius: 3, x_mm: 0, y_mm: 0, cutHeight: 5, cutAxis: "z", keep: "both", booleanMode: "union", secondId: "", booleanIds:[], primitiveType: "box", width: 20, depth: 20, height: 20, z_mm: 10,
-    rotation_x:0,rotation_y:0,rotation_z:0,text:"MakerVault",font:"block",svgData:""});
+    rotation_x:0,rotation_y:0,rotation_z:0,text:"MakerVault",font:"block",svgData:"",
+    cavity_x_mm:0,cavity_y_mm:0,cavity_z_mm:0,
+    cavity_scale_x:100,cavity_scale_y:100,cavity_scale_z:100,
+    cavity_rotation_x:0,cavity_rotation_y:0,cavity_rotation_z:0});
   // An applied result must always correspond to the options actually shown.
   useEffect(() => { setSolidPreview(null); }, [solidOptions]);
   const lastPreviewKeyRef = useRef("");
@@ -714,6 +717,9 @@ export default function SlicerPlateEditor({
       rotation_z:editingText?Number(item.text_model.rotation_z||0):0,
       text:editingText?item.text_model.text:"MakerVault",
       font:editingText?item.text_model.font||"block":"block",svgData:"",
+      cavity_x_mm:0,cavity_y_mm:0,cavity_z_mm:0,
+      cavity_scale_x:100,cavity_scale_y:100,cavity_scale_z:100,
+      cavity_rotation_x:0,cavity_rotation_y:0,cavity_rotation_z:0,
     });
     setSolidDialog({kind:solidRequest.kind,id:item?.instance_id || null,
       editTargetId:editingText?item.instance_id:null,anchorRect:solidRequest.anchorRect||null,name:
