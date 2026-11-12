@@ -706,7 +706,7 @@ test("assembly toolbar gizmos use a shared pivot and keep meshes independent",()
   assert.match(scene,/groupProxy=new THREE\.Object3D\(\)/);
   assert.match(scene,/state\.transform\.attach\(pivot\)/);
   assert.match(scene,/groupCommitRef\.current\?\.\(dx,dy,rotation,scale\)/);
-  assert.match(scene,/groupEditable = canEdit && selection\.length > 1/);
+  assert.match(scene,/groupEditable = canEdit && !solidDialog && selection\.length > 1/);
   assert.match(scene,/state\.setSelectionOutlines\(selection\.map/);
   assert.match(scene,/transformGroup\(groupDeltaX, groupDeltaY, groupRotation, groupScale\)/);
   assert.match(workspace,/const memberIds = item\.assembly_id/);
