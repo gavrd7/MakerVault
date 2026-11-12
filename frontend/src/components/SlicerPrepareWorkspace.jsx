@@ -64,6 +64,7 @@ export default function SlicerPrepareWorkspace({
   const [, setHistoryVersion] = useState(0);
   const [selectedId, setSelectedId] = useState("");
   const [selectedIds, setSelectedIds] = useState([]);
+  const [expandedAssemblies, setExpandedAssemblies] = useState([]);
   const selectSingle = id => { setSelectedId(id); setSelectedIds(id ? [id] : []); };
   const selectMultiple = (id, additive = false) => {
     const item = objects.find(row => row.instance_id === id);
@@ -353,11 +354,13 @@ export default function SlicerPrepareWorkspace({
       ? crypto.randomUUID() : Math.random().toString(36).slice(2));
     updatePlate(objects.map(row => validSelection.includes(row.instance_id)
       ? { ...row, assembly_id: id } : row));
+    setExpandedAssemblies(current => current.filter(value => value !== id));
   }
   function disassembleSelected() {
     if (!canEdit || busy || !activeAssembly) return;
     updatePlate(objects.map(row => row.assembly_id === activeAssembly
       ? { ...row, assembly_id: null } : row));
+    setExpandedAssemblies(current=>current.filter(id=>id!==activeAssembly));
   }
   const active = selectedId ? objects.find(row => row.instance_id === selectedId) : null;
   const itemName = object => {
@@ -876,7 +879,25 @@ export default function SlicerPrepareWorkspace({
               onClick={disassembleSelected}>Disassemble</button>
           </div>
         </div>}
-        {objects.map((object, index) => <div className="slicerPrepareModelEntry" key={object.instance_id}>
+        {objects.map((object, index) => {
+          const assembly = object.assembly_id;
+          const members = assembly ? objects.filter(row=>row.assembly_id===assembly) : [];
+          const firstMember = assembly && members[0]?.instance_id===object.instance_id;
+          const expanded = assembly && expandedAssemblies.includes(assembly);
+          return <React.Fragment key={object.instance_id}>
+          {firstMember && <div className="slicerAssemblyTreeHeader">
+            <button type="button" className={members.every(row=>validSelection.includes(row.instance_id))?"selected":""}
+              aria-label={"Select assembly of "+members.length+" parts"}
+              onClick={event=>selectMultiple(object.instance_id,event.ctrlKey||event.metaKey||event.shiftKey)}>
+              <SlicerUiIcon name="models"/> Assembly · {members.length} parts
+            </button>
+            <button type="button" aria-expanded={!!expanded} aria-label={expanded?"Collapse assembly":"Expand assembly"}
+              onClick={()=>setExpandedAssemblies(current=>expanded?
+                current.filter(id=>id!==assembly):[...current,assembly])}>
+              {expanded?"−":"+"}
+            </button>
+          </div>}
+          {(!assembly || expanded) && <div className={"slicerPrepareModelEntry"+(assembly?" slicerAssemblyTreePart":"")}>
           <button type="button"
             className={validSelection.includes(object.instance_id) ? "selected" : ""}
             onClick={event => selectMultiple(object.instance_id, event.ctrlKey || event.metaKey || event.shiftKey)}
@@ -904,7 +925,8 @@ export default function SlicerPrepareWorkspace({
             </button>)}
             <small>Changing this swatch does not assign an extruder, modify G-code or change the slicer filament preset.</small>
           </div>}
-        </div>)}
+        </div>}
+        </React.Fragment>})}
         {filamentNotice && <p className="slicerModelFilamentNotice" role="status">{filamentNotice}</p>}
         <small>One consistent model colour is now passed to OrcaSlicer as a single-filament colour. Different colours across models still need native multi-material mapping, and are preview-only. Multi-plate output and modifier trees are not implemented yet.</small>
         </aside>
