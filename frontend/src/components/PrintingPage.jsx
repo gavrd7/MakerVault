@@ -417,10 +417,6 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
 
   if (workspaceView === "slicer") {
     return <>
-      {slicerStatus.state === "preview" && <section className="panel printingSection slicerPreviewNotice" role="status" aria-label="Slicer workbench preview">
-        <strong>Workbench preview — no slicer engine installed</strong>
-        <p>Staging-only preparation mode. You can explore the visual plate, import models, search native profiles and save drafts, but slicing execution and printing generated G-code are unavailable until a verified worker is installed.</p>
-      </section>}
       <SlicerErrorBoundary onBack={() => initialWorkspaceView === "slicer" && onModelLibraryBack ? onModelLibraryBack() : setWorkspaceView("overview")}>
       <Suspense fallback={<LoadingBlock label="Loading MakerVault Slicer…" />}>
       <SlicerWorkbench
@@ -493,7 +489,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
         <section className="printingActionGroup" aria-labelledby="printing-slicer-heading">
           <h3 id="printing-slicer-heading">MakerVault Slicer</h3>
           {["ready", "preview"].includes(slicerStatus.state) ? <>
-            <p>{slicerStatus.state === "preview" ? "Workbench preview enabled for staging: explore model placement and slicing profiles without an installed engine. Slicing execution remains disabled." : "Prepare models and slicing profiles in MakerVault's dedicated self-hosted slicer workspace."}</p>
+            <p>Prepare models, configure profiles and manage slicing drafts in MakerVault's self-hosted slicer workspace.</p>
             <div className="printingHeroActions">
               <button type="button" onClick={() => onOpenSlicer ? onOpenSlicer() : setWorkspaceView("slicer")}>Open MakerVault Slicer</button>
               <button type="button" onClick={() => setSavedSlicerOpen(true)}>Saved slice drafts</button>
