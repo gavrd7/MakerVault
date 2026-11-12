@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import { createPrimitiveStl,createPrimitiveMesh,PRIMITIVE_TYPES } from "../src/components/slicerPrimitives.js";
+import { createPrimitiveStl,createPrimitiveMesh,createTextStl,PRIMITIVE_TYPES } from "../src/components/slicerPrimitives.js";
 import { executeSolidOperation } from "../src/components/slicerSolidOperations.js";
 
 test("all five parametric primitives produce valid binary STLs",()=>{
@@ -21,4 +21,17 @@ test("a negative box subtracts geometry without changing the original",()=>{
   assert.ok(result.length===1&&result[0].triangles>0);
   assert.deepEqual(Array.from(source.geometry.getAttribute("position").array),Array.from(before));
   source.geometry.dispose();tool.geometry.dispose();
+});
+
+test("Text creates printable geometry without external font downloads",()=>{
+  const output=createTextStl({text:"MAKERVAULT 2026",width:100,depth:16,height:3});
+  assert.ok(output.triangles>30);
+  assert.equal(output.buffer.byteLength,84+output.triangles*50);
+  assert.ok(output.height>2.9 && output.height<3.1);
+});
+test("Disc and rotation produce distinct real STL geometry",()=>{
+  const shape=createPrimitiveStl({primitiveType:"disc",width:25,depth:25,height:4});
+  assert.ok(shape.triangles>12);
+  const rotated=createPrimitiveStl({primitiveType:"box",width:24,depth:12,height:8,rotation_z:45});
+  assert.ok(rotated.width>24 && rotated.depth>12);
 });
