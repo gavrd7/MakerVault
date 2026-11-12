@@ -814,7 +814,7 @@ export default function SlicerPlateEditor({
 
   // Positionable drill cylinder and cut plane; edits stay previews until Apply.
   useEffect(() => {
-    if(!["drill","cut"].includes(solidDialog?.kind))return undefined;
+    if(!["drill","cut","hollow"].includes(solidDialog?.kind))return undefined;
     const state=sceneRef.current;
     const target=state?.meshes.get(solidDialog.id);
     if(!state||!target)return undefined;
@@ -823,7 +823,7 @@ export default function SlicerPlateEditor({
     const mid=bounds.getCenter(new THREE.Vector3());
     let geometry,ghost;
     const material=new THREE.MeshBasicMaterial({
-      color:solidDialog.kind==="drill"?"#eab96a":"#6ed9e0",
+      color:solidDialog.kind==="drill"?"#eab96a":solidDialog.kind==="hollow"?"#f3b256":"#6ed9e0",
       transparent:true,opacity:0.3,depthWrite:false,side:THREE.DoubleSide,
     });
     if(solidDialog.kind==="drill") {
@@ -832,6 +832,20 @@ export default function SlicerPlateEditor({
       geometry.rotateX(Math.PI/2);
       ghost=new THREE.Mesh(geometry,material);
       ghost.position.set(Number(solidOptions.x_mm||0),Number(solidOptions.y_mm||0),mid.z);
+    } else if(solidDialog.kind==="hollow") {
+      const wall=Number(solidOptions.wall||1);
+      geometry=target.geometry.clone();
+      geometry.applyMatrix4(target.matrixWorld);
+      geometry.translate(-mid.x,-mid.y,-mid.z);
+      const fit=axis=>Math.max(.001,(size[axis]-2*wall)/Math.max(.001,size[axis]))*
+        Number(solidOptions["cavity_scale_"+axis]||100)/100;
+      geometry.scale(fit("x"),fit("y"),fit("z"));
+      geometry.translate(mid.x,mid.y,mid.z);
+      ghost=new THREE.Mesh(geometry,material);
+      ghost.position.set(Number(solidOptions.cavity_x_mm||0),
+        Number(solidOptions.cavity_y_mm||0),Number(solidOptions.cavity_z_mm||0));
+      ghost.rotation.set(...["x","y","z"].map(axis=>
+        THREE.MathUtils.degToRad(Number(solidOptions["cavity_rotation_"+axis]||0))));
     } else {
       const cover=Math.max(size.x,size.y,size.z)*2+20;
       geometry=new THREE.PlaneGeometry(cover,cover);
