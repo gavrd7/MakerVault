@@ -393,7 +393,7 @@ export default function SlicerPrepareWorkspace({
       setToolMode(current => current === "lay_face" ? "select" : "lay_face");
       return;
     }
-    if (["x_mm", "rotation_deg", "scale_percent", "scale_xyz_percent"].includes(tool.target)) {
+    if (["x_mm", "rotation_deg", "scale_percent"].includes(tool.target)) {
       // Selecting a handle-based tool should show its gizmo immediately,
       // including for the first model before it has been explicitly clicked.
       if (!selectedId && objects[0]?.instance_id) setSelectedId(objects[0].instance_id);
@@ -671,14 +671,14 @@ export default function SlicerPrepareWorkspace({
         <button type="button"
           className={((tool.target === "x_mm" && toolMode === "move") ||
             (tool.target === "rotation_deg" && toolMode === "rotate") ||
-            ((tool.target === "scale_percent" || tool.target === "scale_xyz_percent") && toolMode === "scale") ||
+            (tool.target === "scale_percent" && toolMode === "scale") ||
             (tool.target === "measure" && measurementVisible) ||
             (tool.target === "lay_face" && toolMode === "lay_face") ||
             (tool.target === "auto_orient" && autoOrientMenuOpen)) ? "isActive" : ""}
           aria-pressed={tool.target === "measure" ? measurementVisible :
             tool.target === "lay_face" ? toolMode === "lay_face" :
             tool.target === "auto_orient" ? autoOrientMenuOpen :
-            ["x_mm", "rotation_deg", "scale_percent", "scale_xyz_percent"].includes(tool.target)
+            ["x_mm", "rotation_deg", "scale_percent"].includes(tool.target)
             ? (tool.target === "x_mm" ? toolMode === "move"
               : tool.target === "rotation_deg" ? toolMode === "rotate" : toolMode === "scale") : undefined}
           aria-label={tool.name}
