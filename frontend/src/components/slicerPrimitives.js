@@ -1,6 +1,27 @@
 /** Parametric printable primitives, shared by Add model and negative-volume editing. */
 import * as THREE from "three";
 import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
+import { FontLoader } from "three/addons/loaders/FontLoader.js";
+import { TextGeometry } from "three/addons/geometries/TextGeometry.js";
+import helvetikerRegular from "three/examples/fonts/helvetiker_regular.typeface.json";
+import helvetikerBold from "three/examples/fonts/helvetiker_bold.typeface.json";
+import optimerRegular from "three/examples/fonts/optimer_regular.typeface.json";
+import gentilisRegular from "three/examples/fonts/gentilis_regular.typeface.json";
+
+// Permissively licensed MgOpen-based typefaces shipped with three.js.
+// The original block face remains available for backward compatibility.
+export const TEXT_FONTS = [
+  {id:"block",name:"Block · original"},
+  {id:"sans",name:"Sans · regular"},
+  {id:"sans-bold",name:"Sans · bold"},
+  {id:"optimer",name:"Optimer · serif"},
+  {id:"gentilis",name:"Gentilis · classic"},
+];
+const FONT_DATA = {"sans":helvetikerRegular,"sans-bold":helvetikerBold,
+  "optimer":optimerRegular,"gentilis":gentilisRegular};
+const FONT_LOADER = new FontLoader();
+const PARSED_FONTS = new Map();
+
 import { resultToStl } from "./slicerSolidOperations.js";
 
 export const PRIMITIVE_TYPES = ["box","cylinder","sphere","cone","disc","torus"];
@@ -189,7 +210,20 @@ export function createTextStl(options={}) {
   const width=finite(options.width,0.5,500,"Width");
   const depth=finite(options.depth,0.5,500,"Depth");
   const height=finite(options.height,0.5,100,"Thickness");
-  const geometry=blockTextGeometry(value,height);
+  const fontId=String(options.font||"block");
+  if(fontId!=="block" && !FONT_DATA[fontId])
+    throw new Error("Choose a supported text font.");
+  let geometry;
+  if(fontId==="block") {
+    geometry=blockTextGeometry(value,height);
+  } else {
+    if(!PARSED_FONTS.has(fontId)) PARSED_FONTS.set(fontId,
+      FONT_LOADER.parse(FONT_DATA[fontId]));
+    geometry=new TextGeometry(value,{
+      font:PARSED_FONTS.get(fontId),size:10,depth:height,
+      curveSegments:8,bevelEnabled:false,
+    });
+  }
   normalizeBounds(geometry,width,depth,height);
   const mesh=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial());
   try{return resultToStl(mesh);}
