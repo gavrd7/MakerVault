@@ -68,3 +68,19 @@ test("high-resolution input is no longer arbitrarily capped at 80,000 faces", ()
   assert.ok(high.getIndex().count/3<=CSG_MAX_INPUT_TRIANGLES);
   mesh.geometry.dispose();detailed.geometry.dispose();
 });
+
+
+test("zero-area CSG fragments are stripped before binary STL validation",()=>{
+  const cube=solid();
+  const position=cube.geometry.getAttribute("position").array;
+  const combined=new Float32Array(position.length+9);
+  combined.set(position,0);
+  combined.set([1,1,1,1,1,1,1,1,1],position.length);
+  const geometry=new THREE.BufferGeometry();
+  geometry.setAttribute("position",new THREE.BufferAttribute(combined,3));
+  const output=resultToStl(new THREE.Mesh(geometry,new THREE.MeshBasicMaterial()));
+  assert.equal(output.triangles,12);
+  assert.equal(output.removedZeroAreaFaces,1);
+  assert.equal(output.buffer.byteLength,84+12*50);
+  geometry.dispose();cube.geometry.dispose();
+});
