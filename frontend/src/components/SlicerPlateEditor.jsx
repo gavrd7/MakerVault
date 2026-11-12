@@ -10,7 +10,8 @@ import { SlicerOrientationCube } from "./slicerOrientationCube";
 import SlicerUiIcon from "./SlicerUiIcon";
 import { apiFetch } from "../api";
 import { plateExtentWarning, plateFootprintsOverlap, autoArrangePlate, plateModelMeasurement,
-  measurementDistance, measurementCircle, measurementFormat } from "./slicerPlateGeometry";
+  measurementDistance, measurementCircle, measurementFormat,
+  findFreeDuplicatePosition } from "./slicerPlateGeometry";
 import { nativeBedArtwork } from "./slicerNativePlateArt";
 import { detectMeshMeasurement, formatDetectedMeasurement } from "./slicerAutoMeasure";
 import { evaluateAutoOrient, AUTO_ORIENT_GOALS } from "./slicerAutoOrient";
@@ -477,9 +478,14 @@ export default function SlicerPlateEditor({
     const copy = { ...chosen, instance_id: plateUuid() };
     if (Array.isArray(chosen.scale_xyz_percent))
       copy.scale_xyz_percent = [...chosen.scale_xyz_percent];
-    pendingArrangeRef.current = true;
-    pendingAddIdsRef.current.add(copy.instance_id);
-    onChange([...objects, copy]);
+    const known={...dimensionsRef.current,
+      [copy.instance_id]:dimensionsRef.current[chosen.instance_id]};
+    const placed=findFreeDuplicatePosition(copy,objects,known,bedX,bedY,3);
+    if (!placed) {
+      setError("No available non-overlapping position for a duplicate on the plate.");
+      return;
+    }
+    onChange([...objects,placed]);
     setSelected(copy.instance_id);
     setError("");
   }
