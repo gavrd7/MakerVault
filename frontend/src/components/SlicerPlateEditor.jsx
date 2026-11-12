@@ -15,6 +15,7 @@ import { nativeBedArtwork } from "./slicerNativePlateArt";
 import { detectMeshMeasurement, formatDetectedMeasurement } from "./slicerAutoMeasure";
 import { evaluateAutoOrient, AUTO_ORIENT_GOALS } from "./slicerAutoOrient";
 import { splitDisconnectedMesh } from "./slicerSplitObjects";
+import { validateStackPlacement } from "./slicerStacking";
 import makerVaultLogoSvg from "../assets/slicer-bed-art/makervault-official-logo.svg?raw";
 
 const PALETTE = ["#58b5e4", "#f59e0b", "#a78bfa", "#10b981", "#ef4444", "#f472b6"];
@@ -166,7 +167,7 @@ function plateUuid() {
 export function newPlateInstance(assetId, index = 0) {
   return {
     instance_id: plateUuid(), asset_id: String(assetId),
-    x_mm: (index % 4) * 25, y_mm: Math.floor(index / 4) * 25,
+    x_mm: (index % 4) * 25, y_mm: Math.floor(index / 4) * 25, z_mm: 0,
     rotation_deg: 0, rotation_xyz_deg: [0, 0], scale_percent: 100, scale_xyz_percent: [100, 100, 100],
     color: PALETTE[index % PALETTE.length],
   };
@@ -196,7 +197,7 @@ function positionOrientedMesh(mesh, item) {
     mesh.userData.bedPose = pose;
     mesh.userData.bedZOffset = Number.isFinite(minZ) ? -minZ : 0;
   }
-  mesh.position.z = mesh.userData.bedZOffset;
+  mesh.position.z = mesh.userData.bedZOffset + Number(item.z_mm || 0);
   mesh.updateMatrix();
 }
 
@@ -355,11 +356,24 @@ export default function SlicerPlateEditor({
 
   function validPlacement(candidate, items) {
     const own = dimensionsRef.current[candidate.instance_id];
-    if (!own) return false;
-    if (plateExtentWarning(candidate, own, bedX, bedY)) return false;
-    return !items.some(other => other.instance_id !== candidate.instance_id &&
-      plateFootprintsOverlap(candidate, own, other,
-        dimensionsRef.current[other.instance_id], 2) !== false);
+    if (!own || plateExtentWarning(candidate, own, bedX, bedY)) return false;
+    if (!items.some(item => Number(item.instance_id === candidate.instance_id
+      ? candidate.z_mm || 0 : item.z_mm || 0) > 0)) {
+      return !items.some(other => other.instance_id !== candidate.instance_id &&
+        plateFootprintsOverlap(candidate, own, other,
+          dimensionsRef.current[other.instance_id], 2) !== false);
+    }
+    const state = sceneRef.current;
+    const mesh = state?.meshes.get(candidate.instance_id);
+    if (!mesh) return false;
+    const previous = items.find(item => item.instance_id === candidate.instance_id);
+    positionOrientedMesh(mesh, candidate);
+    const verdict = validateStackPlacement(
+      items.map(row => row.instance_id === candidate.instance_id ? candidate : row),
+      state.meshes, candidate.instance_id, bedX, bedY);
+    if (previous) positionOrientedMesh(mesh, previous);
+    if (!verdict.valid) setError(verdict.reason);
+    return verdict.valid;
   }
 
   // Newly imported STLs are measured asynchronously. Arrange them as soon as
@@ -441,6 +455,10 @@ export default function SlicerPlateEditor({
     if (!chosen) return;
     const candidate = { ...chosen, [field]: value };
     if (field === "scale_percent") candidate.scale_xyz_percent = [value, value, value];
+    if (field === "z_mm" && (!Number.isFinite(value) || value < 0 || value > 1000)) {
+      setError("Model elevation must be between 0 and 1000 mm.");
+      return;
+    }
     if (field === "scale_xyz_percent") {
       if (!Array.isArray(value) || value.length !== 3 ||
           value.some(axis => !Number.isFinite(axis) || axis < 5 || axis > 400)) {
@@ -449,7 +467,7 @@ export default function SlicerPlateEditor({
       }
       candidate.scale_percent = 100;
     }
-    if (["x_mm", "y_mm", "rotation_deg", "rotation_xyz_deg", "scale_percent", "scale_xyz_percent"].includes(field) &&
+    if (["x_mm", "y_mm", "z_mm", "rotation_deg", "rotation_xyz_deg", "scale_percent", "scale_xyz_percent"].includes(field) &&
         !validPlacement(candidate, objects)) {
       setError("This position or transform overlaps another model, exceeds the build plate, or has dimensions still loading. Try Auto-arrange.");
       return;
@@ -1398,6 +1416,7 @@ export default function SlicerPlateEditor({
       const candidate = { ...selectedItem,
         x_mm: Math.round(mesh.position.x * 2) / 2,
         y_mm: Math.round(mesh.position.y * 2) / 2,
+        z_mm: Math.max(0, pretty(mesh.position.z - (mesh.userData.bedZOffset || 0))),
         rotation_deg: Math.round(THREE.MathUtils.radToDeg(mesh.rotation.z) * 1000) / 1000,
         rotation_xyz_deg: [mesh.rotation.x, mesh.rotation.y].map(v =>
           Math.round(THREE.MathUtils.radToDeg(v) * 1000) / 1000),
@@ -1418,7 +1437,7 @@ export default function SlicerPlateEditor({
       }
       if (!validPlacement(candidate, current)) {
         positionOrientedMesh(mesh, selectedItem);
-        setError("Model handle transform exceeds the plate or overlaps another object.");
+        setError("Move rejected: model is unsupported, intersects another model or exceeds the plate.");
         return;
       }
       setError("");
@@ -1648,7 +1667,7 @@ export default function SlicerPlateEditor({
         state.transform.setMode(toolMode === "move" ? "translate" : "scale");
         state.transform.showX = true;
         state.transform.showY = true;
-        state.transform.showZ = toolMode === "scale";
+        state.transform.showZ = toolMode === "move" || toolMode === "scale";
         state.transform.setSpace("world");
         state.transform.setSize(1);
         state.transform.attach(selectedMesh);
