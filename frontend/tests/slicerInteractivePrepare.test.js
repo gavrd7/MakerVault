@@ -580,3 +580,24 @@ test("expanded Move, Rotate and Scale panels import the shared icon component", 
   for (const name of ["center", "rotate", "scale"])
     assert.match(icons, new RegExp(name + ":"));
 });
+
+
+test("top slicer header provides a matching direct interactive entry on mobile and desktop", () => {
+  const workbench = read("SlicerWorkbench.jsx");
+  const css = fs.readFileSync(path.resolve(root, "../styles.css"), "utf8");
+  const start = workbench.indexOf('className="printingHeroActions slicerHeroActions"');
+  const end = workbench.indexOf("</section>", start);
+  assert.ok(start > 0 && end > start);
+  const header = workbench.slice(start, end);
+  assert.match(header, /Printing overview/);
+  assert.match(header, /Saved drafts/);
+  assert.match(header, /Open interactive slicer/);
+  assert.ok(header.indexOf("Saved drafts") < header.indexOf("Open interactive slicer"));
+  assert.match(header, /className="primary slicerHeroInteractive"/);
+  assert.match(header, /setEditorOpen\(true\)/);
+  assert.match(header, /disabled=\{!canPrepare \|\| busy \|\| loading\}/);
+  assert.match(header, /!editorOpen && <button/);
+  assert.match(css, /\.slicerHeroInteractive \{/);
+  assert.match(css, /grid-column: 1 \/ -1/);
+  assert.match(css, /@media \(max-width: 900px\)/);
+});
