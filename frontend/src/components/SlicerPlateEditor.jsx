@@ -262,6 +262,7 @@ export default function SlicerPlateEditor({
   const [sectionPercent, setSectionPercent] = useState(100);
   const [sectionAxis, setSectionAxis] = useState("z");
   const sectionPercentRef = useRef(100);
+  const sectionCapsRef = useRef(new Map());
   const lastBooleanPlateSelectionRef = useRef("");
   const [undersidePlateMode, setUndersidePlateMode] = useState("auto");
   const undersidePlateModeRef = useRef(undersidePlateMode);
@@ -2436,42 +2437,76 @@ export default function SlicerPlateEditor({
       sectionBounds.min+(sectionBounds.max-sectionBounds.min)*sectionPercent/100;
   }, [sectionPercent,sectionAxis,sectionBounds.min,sectionBounds.max]);
 
-  // Clipping only hides the outer surfaces, which makes solid boxes appear
-  // hollow. Build actual cut-face geometry from the STL intersections.
-  // This is visual-only: no STL, source model or native slicer data changes.
+  // Keep cut faces mounted while the slider moves. The old effect removed all
+  // caps immediately, then delayed rebuilding by 80 ms, so every wheel step
+  // exposed the empty STL shell and caused the reported flashing.
+  const disposeSectionCap = (state, id) => {
+    const entry=sectionCapsRef.current.get(id);
+    if(!entry)return;
+    state?.scene.remove(entry.cap);
+    entry.cap.geometry.dispose();
+    entry.cap.material.dispose();
+    sectionCapsRef.current.delete(id);
+  };
+  useEffect(() => {
+    return () => {
+      const state=sceneRef.current;
+      for(const id of [...sectionCapsRef.current.keys()])disposeSectionCap(state,id);
+    };
+  }, []);
+
   useEffect(() => {
     const state=sceneRef.current;
-    if(!state || sectionPercent>=100)return undefined;
+    if(!state)return undefined;
+    const caps=sectionCapsRef.current;
+    if(sectionPercent>=100){
+      for(const id of [...caps.keys()])disposeSectionCap(state,id);
+      return undefined;
+    }
     let cancelled=false;
-    const caps=[];
+    // Debounce the heavy intersection calculation while retaining the
+    // previous cut faces until the new geometry is ready to swap in.
     const handle=setTimeout(()=>{
-      if(cancelled)return;
-      for(const model of state.meshes.values()) {
-        let geometry;
-        try{geometry=buildSectionCapGeometry(model,state.sectionPlane);}
-        catch{continue;} // malformed mesh is never modified to draw a cap
-        if(!geometry)continue;
+      if(cancelled||sceneRef.current!==state)return;
+      const valid=new Set(state.meshes.keys());
+      for(const id of [...caps.keys()])if(!valid.has(id))disposeSectionCap(state,id);
+      const plane=state.sectionPlane.clone();
+      for(const [id,model] of state.meshes){
+        if(cancelled)break;
+        let geometry=null;
+        try{geometry=buildSectionCapGeometry(model,plane);}
+        catch{ /* A malformed or open mesh must not crash the viewport. */ }
+        const previous=caps.get(id);
+        if(!geometry) {
+          // No closed contour at this height. Do not invent infill or
+          // leave a stale previous cap hiding the true cut.
+          if(previous)disposeSectionCap(state,id);
+          continue;
+        }
         const source=Array.isArray(model.material)?model.material[0]:model.material;
-        const material=new THREE.MeshStandardMaterial({
-          color:source?.color||"#a78bfa",roughness:0.83,metalness:0,
-          side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-1,
-          polygonOffsetUnits:-1,
-        });
-        const cap=new THREE.Mesh(geometry,material);
-        cap.userData.isSectionCap=true;
-        cap.renderOrder=2;
-        state.scene.add(cap);
-        caps.push(cap);
+        if(previous && previous.model===model) {
+          const old=previous.cap.geometry;
+          previous.cap.geometry=geometry;
+          previous.cap.material.color.copy(source?.color||new THREE.Color("#a78bfa"));
+          old.dispose();
+        } else {
+          if(previous)disposeSectionCap(state,id);
+          const material=new THREE.MeshStandardMaterial({
+            color:source?.color||"#a78bfa",roughness:0.83,metalness:0,
+            side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2,
+            polygonOffsetUnits:-2,
+          });
+          const cap=new THREE.Mesh(geometry,material);
+          cap.userData.isSectionCap=true;
+          cap.renderOrder=2;
+          state.scene.add(cap);
+          caps.set(id,{cap,model});
+        }
       }
-    },80);
-    return ()=>{
-      cancelled=true;clearTimeout(handle);
-      for(const cap of caps){
-        state.scene.remove(cap);
-        cap.geometry.dispose();
-        cap.material.dispose();
-      }
-    };
+    },50);
+    // Unlike the previous implementation, cleanup only cancels the pending
+    // recalculation. Existing caps stay visible across successive slider steps.
+    return ()=>{cancelled=true;clearTimeout(handle);};
   }, [sectionPercent,sectionAxis,objects,dimensions]);
 
   // Measured world points would become stale after a model is transformed.
