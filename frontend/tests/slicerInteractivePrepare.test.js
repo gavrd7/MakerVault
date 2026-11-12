@@ -78,7 +78,7 @@ test("Measure options open at the toolbar while a compact readout lives at top l
   const editor = read("SlicerPlateEditor.jsx");
   const css = fs.readFileSync(path.resolve(root, "../styles.css"), "utf8");
   assert.match(scene, /name: "Measure", target: "measure", icon: "measure", expandable: true/);
-  assert.match(scene, /aria-controls=\{tool\.target === "auto_orient" \? "slicer-auto-orient-toolbar-options" : tool\.expandable \? "slicer-measure-toolbar-options"/);
+  assert.match(scene, /aria-controls=\{tool\.target === "import" \? "slicer-add-model-toolbar-options" : tool\.target === "auto_orient" \? "slicer-auto-orient-toolbar-options" : tool\.expandable \? "slicer-measure-toolbar-options"/);
   assert.match(scene, /className="slicerToolOptions"/);
   assert.match(scene, /measureMode=\{measureMode\} measureUnit=\{measureUnit\} measureSnapMode=\{measureSnapMode\}\s+measureClearVersion=\{measureClearVersion\}/);
   assert.match(scene, /setMeasureClearVersion\(value => value \+ 1\)/);
@@ -113,8 +113,7 @@ test("active 3D model has a temporary outline and preserves preview filament col
 });
 test("advanced tools are visibly gated pending safe native transformations", () => {
   const scene = read("SlicerPrepareWorkspace.jsx");
-  for (const tool of ["Cut", "Hollow",
-                       "Support painting", "Seam painting", "Variable layer height",
+  for (const tool of ["Support painting", "Seam painting", "Variable layer height",
                        "Colour painting", "Add plate"]) {
     assert.match(scene, new RegExp('name: "' + tool + '", icon: "[^"]+", pending:'));
   }
