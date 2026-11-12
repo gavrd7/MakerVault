@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { plateEnvelope, plateExtentWarning, plateFootprintsOverlap, autoArrangePlate, plateModelMeasurement, measurementDistance, measurementCircle, measurementFormat } from "../src/components/slicerPlateGeometry.js";
+import { plateEnvelope, plateExtentWarning, plateFootprintsOverlap, autoArrangePlate, findFreeDuplicatePosition, plateModelMeasurement, measurementDistance, measurementCircle, measurementFormat } from "../src/components/slicerPlateGeometry.js";
 const item = { x_mm: 0, y_mm: 0, rotation_deg: 0, scale_percent: 100 };
 const box = { width: 40, depth: 20 };
 test("lay-on-face tilt changes footprint and effective model height", () => {
@@ -191,4 +191,21 @@ test("three non-collinear surface pins construct a 3D circle", () => {
 test("collinear or repeated points must not be reported as circles", () => {
   assert.equal(measurementCircle([0, 0, 0], [1, 0, 0], [2, 0, 0]), null);
   assert.equal(measurementCircle([0, 0, 0], [0, 0, 0], [1, 2, 3]), null);
+});
+
+test("duplicate placement fills nearby free 2D slots without relocating originals",()=>{
+  const dims={
+    a:{width:20,depth:20,height:20},
+    b:{width:20,depth:20,height:20},
+    copy:{width:20,depth:20,height:20},
+  };
+  const a={instance_id:"a",x_mm:0,y_mm:0,rotation_deg:0,scale_percent:100};
+  const b={...a,instance_id:"b",x_mm:23,y_mm:0};
+  const copy={...a,instance_id:"copy"};
+  const result=findFreeDuplicatePosition(copy,[a,b],dims,100,100,3);
+  assert.ok(result,"a free slot exists off the central row");
+  assert.equal(plateFootprintsOverlap(result,dims.copy,a,dims.a,3),false);
+  assert.equal(plateFootprintsOverlap(result,dims.copy,b,dims.b,3),false);
+  assert.equal(a.x_mm,0);
+  assert.equal(b.x_mm,23);
 });
