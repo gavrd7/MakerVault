@@ -137,8 +137,8 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth):
     Preview coordinates are centred around the bed. Shift all instances by the
     explicitly validated bed half-extent to place them in its positive quadrant.
     """
-    if not isinstance(objects_with_stl, list) or not 1 <= len(objects_with_stl) <= 12:
-        raise SlicerProfileError("A plate needs one to twelve STL models.")
+    if not isinstance(objects_with_stl, list) or not 1 <= len(objects_with_stl) <= 200:
+        raise SlicerProfileError("A plate needs one to 200 STL models.")
     if (not all(isinstance(v, (int, float)) and not isinstance(v, bool)
                 and math.isfinite(v) and 1 <= v <= 1000
                 for v in (bed_width, bed_depth))):
@@ -279,8 +279,8 @@ def build_compound_plate_3mf(objects_with_stl, *, bed_width, bed_depth):
     Each input still runs through build_plate_3mf's strict ownership-independent
     geometry, triangle-count, bed-fit and archive-size validations first.
     """
-    if not isinstance(objects_with_stl, list) or not 1 <= len(objects_with_stl) <= 12:
-        raise SlicerProfileError("A plate needs one to twelve STL models.")
+    if not isinstance(objects_with_stl, list) or not 1 <= len(objects_with_stl) <= 200:
+        raise SlicerProfileError("A plate needs one to 200 STL models.")
     if len(objects_with_stl) == 1:
         return build_plate_3mf(objects_with_stl, bed_width=bed_width, bed_depth=bed_depth)
     source = build_plate_3mf(objects_with_stl, bed_width=bed_width, bed_depth=bed_depth)
