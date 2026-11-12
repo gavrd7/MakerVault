@@ -726,7 +726,8 @@ export default function SlicerPrepareWorkspace({
           }}>Finish measuring</button>
         </div>}
       </div>)}
-    </div>\n  );
+    </div>
+  );
   return <section className="panel printingSection slicerPrepareWorkspace"
     aria-label="Interactive slicer Prepare workspace">
     <div className="slicerPrepareHeader">
