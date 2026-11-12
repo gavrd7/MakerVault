@@ -657,3 +657,19 @@ test("model toolbar renders immediately above the interactive build plate, not i
   assert.match(styles, /\.slicerPlateEditingToolbar > \.slicerPrepareTools/);
   assert.match(styles, /overflow-x: auto/);
 });
+
+
+test("Add model toolbar offers upload picker and scroll to MakerVault library", () => {
+  const workspace = read("SlicerPrepareWorkspace.jsx");
+  const plate = read("SlicerPlateEditor.jsx");
+  const css = fs.readFileSync(path.resolve(root, "../styles.css"), "utf8");
+  assert.match(workspace, /const \[addModelMenuOpen, setAddModelMenuOpen\] = useState\(false\)/);
+  assert.match(workspace, /slicer-add-model-toolbar-options/);
+  assert.match(workspace, /Upload from device/);
+  assert.match(workspace, /Add from MakerVault/);
+  assert.match(workspace, /input\[type="file"\]\[accept="\.stl,\.3mf"\]/);
+  assert.match(workspace, /\[data-slicer-add-models\]/);
+  assert.match(workspace, /scrollIntoView\(/);
+  assert.match(plate, /data-slicer-add-models/);
+  assert.match(css, /\.slicerAddModelChoice/);
+});
