@@ -9,7 +9,7 @@ import { createMakerVaultRotationGizmo } from "./slicerRotationGizmo";
 import { SlicerOrientationCube } from "./slicerOrientationCube";
 import SlicerUiIcon from "./SlicerUiIcon";
 import { apiFetch } from "../api";
-import { plateExtentWarning, plateFootprintsOverlap, autoArrangePlate, plateModelMeasurement,
+import { plateExtentWarning, plateEnvelope, plateFootprintsOverlap, autoArrangePlate, plateModelMeasurement,
   measurementDistance, measurementCircle, measurementFormat,
   findFreeDuplicatePosition } from "./slicerPlateGeometry";
 import { nativeBedArtwork } from "./slicerNativePlateArt";
@@ -519,8 +519,8 @@ export default function SlicerPlateEditor({
     setSelected(remaining[0]?.instance_id || "");
   }
 
-  // Model shortcuts use an internal clipboard: never hijack text fields,
-  // browser copy/paste, or native shortcuts inside an open dialog.
+  // Model shortcuts use an internal clipboard. Keep the OS text clipboard
+  // untouched, and preserve relative placement and assembly membership.
   useEffect(() => {
     const keydown = event => {
       if (!canEdit || uploadBusy || solidDialog || splitPreview) return;
@@ -528,52 +528,99 @@ export default function SlicerPlateEditor({
       if (["input","textarea","select"].includes(tag) ||
           event.target?.isContentEditable || event.target?.closest?.('[role="dialog"]')) return;
       if (document.getSelection()?.toString()) return;
-      const mod = event.ctrlKey || event.metaKey;
-      const key = event.key.toLowerCase();
-      const deleting = (key === "delete" || key === "backspace") && !mod && !event.altKey;
-      if (deleting && chosen && selection.length <= 1) {
-        event.preventDefault();
-        removeSelected();
-        return;
+      const mod=event.ctrlKey||event.metaKey;
+      const key=event.key.toLowerCase();
+      const selectedRows=objects.filter(item=>selection.includes(item.instance_id));
+      const removeRows=()=>{
+        const ids=new Set(selectedRows.map(item=>item.instance_id));
+        const remaining=objects.filter(item=>!ids.has(item.instance_id));
+        onChange(remaining);
+        onPrimaryChange?.(remaining.find(item=>!String(item.asset_id).startsWith("local:"))?.asset_id||"");
+        setSelected(remaining[0]?.instance_id||"");
+      };
+      if (!mod && !event.altKey && (key==="delete"||key==="backspace") &&
+          selectedRows.length) {
+        event.preventDefault();removeRows();return;
       }
-      if (!mod || event.altKey || event.shiftKey) return;
-      if ((key === "c" || key === "x") && chosen && selection.length <= 1) {
+      if(!mod||event.altKey||event.shiftKey)return;
+      if((key==="c"||key==="x")&&selectedRows.length) {
         event.preventDefault();
-        modelClipboardRef.current = {
-          model: {...chosen,scale_xyz_percent:Array.isArray(chosen.scale_xyz_percent)
-            ? [...chosen.scale_xyz_percent]:chosen.scale_xyz_percent},
-          size:dimensionsRef.current[chosen.instance_id],
-        };
-        if (key === "x") removeSelected();
+        modelClipboardRef.current=selectedRows.map(model=>({
+          model:{...model,
+            scale_xyz_percent:Array.isArray(model.scale_xyz_percent)
+              ?[...model.scale_xyz_percent]:model.scale_xyz_percent},
+          size:dimensionsRef.current[model.instance_id],
+        }));
+        if(key==="x")removeRows();
         setError("");
-      } else if (key === "v" && modelClipboardRef.current) {
+      } else if(key==="v" && modelClipboardRef.current) {
         event.preventDefault();
-        if (objects.length >= MAX_OBJECTS) {
-          setError("Cannot paste: the build plate has reached its 200-object limit.");
-          return;
+        const source=modelClipboardRef.current;
+        if(objects.length+source.length>MAX_OBJECTS) {
+          setError("Cannot paste: the result would exceed 200 objects.");return;
         }
-        const {model,size} = modelClipboardRef.current;
-        if (!size) {
-          setError("Cannot paste this model until its dimensions have loaded.");
-          return;
+        if(source.some(row=>!row.size)) {
+          setError("Cannot paste until all copied model dimensions have loaded.");return;
         }
-        const copy = {...model,instance_id:plateUuid(),assembly_id:null,
-          scale_xyz_percent:Array.isArray(model.scale_xyz_percent)
-            ? [...model.scale_xyz_percent]:model.scale_xyz_percent};
-        const known = {...dimensionsRef.current,[copy.instance_id]:size};
-        const placed = findFreeDuplicatePosition(copy,objects,known,bedX,bedY,3);
-        if (!placed) {
-          setError("Cannot paste: no free position is available on this plate.");
-          return;
+        const assemblyMap=new Map();
+        const copies=source.map(({model})=>{
+          if(model.assembly_id&&!assemblyMap.has(model.assembly_id))
+            assemblyMap.set(model.assembly_id,"assembly:"+plateUuid());
+          return {...model,instance_id:plateUuid(),
+            assembly_id:model.assembly_id?assemblyMap.get(model.assembly_id):null,
+            scale_xyz_percent:Array.isArray(model.scale_xyz_percent)
+              ?[...model.scale_xyz_percent]:model.scale_xyz_percent};
+        });
+        const known={...dimensionsRef.current};
+        copies.forEach((row,i)=>{known[row.instance_id]=source[i].size;});
+        if(copies.length===1) {
+          const placed=findFreeDuplicatePosition(copies[0],objects,known,bedX,bedY,3);
+          if(!placed){setError("Cannot paste: no free position on this plate.");return;}
+          onChange([...objects,placed]);setSelected(placed.instance_id);setError("");return;
         }
-        onChange([...objects,placed]);
-        setSelected(placed.instance_id);
-        setError("");
+        const envelopes=copies.map(row=>plateEnvelope(row,known[row.instance_id]));
+        const otherEnvelopes=objects.map(row=>plateEnvelope(row,known[row.instance_id]));
+        if([...envelopes,...otherEnvelopes].some(v=>!v)) {
+          setError("Cannot paste until all build plate dimensions are known.");return;
+        }
+        const minX=Math.min(...envelopes.map(v=>v.minX)),
+          maxX=Math.max(...envelopes.map(v=>v.maxX)),
+          minY=Math.min(...envelopes.map(v=>v.minY)),
+          maxY=Math.max(...envelopes.map(v=>v.maxY));
+        const clearance=3;
+        const shiftsX=[-bedX/2-minX+.1,bedX/2-maxX-.1,
+          maxX-minX+clearance,-(maxX-minX+clearance)];
+        const shiftsY=[-bedY/2-minY+.1,bedY/2-maxY-.1,
+          maxY-minY+clearance,-(maxY-minY+clearance)];
+        for(const envelope of otherEnvelopes){
+          shiftsX.push(envelope.minX-maxX-clearance,envelope.maxX-minX+clearance);
+          shiftsY.push(envelope.minY-maxY-clearance,envelope.maxY-minY+clearance);
+        }
+        const offsets=[];
+        for(const dx of shiftsX)for(const dy of [0,...shiftsY])offsets.push([dx,dy]);
+        for(const dy of shiftsY)offsets.push([0,dy]);
+        offsets.sort((a,b)=>a[0]**2+a[1]**2-b[0]**2-b[1]**2);
+        let placed=null;
+        for(const [dx,dy] of offsets){
+          const candidate=copies.map(row=>({...row,
+            x_mm:pretty(Number(row.x_mm||0)+dx),
+            y_mm:pretty(Number(row.y_mm||0)+dy)}));
+          if(candidate.some(row=>plateExtentWarning(row,known[row.instance_id],bedX,bedY)))continue;
+          if(candidate.some(row=>objects.some(other=>
+            plateFootprintsOverlap(row,known[row.instance_id],
+              other,known[other.instance_id],clearance)!==false)))continue;
+          placed=candidate;break;
+        }
+        if(!placed) {
+          setError("Cannot paste the selected group without moving existing models.");return;
+        }
+        onChange([...objects,...placed]);setSelected(placed[0].instance_id);setError("");
       }
     };
     window.addEventListener("keydown",keydown);
-    return () => window.removeEventListener("keydown",keydown);
-  }, [canEdit,uploadBusy,solidDialog,splitPreview,chosen,selection,objects,onChange,bedX,bedY]);
+    return ()=>window.removeEventListener("keydown",keydown);
+  }, [canEdit,uploadBusy,solidDialog,splitPreview,selection,objects,onChange,
+      onPrimaryChange,bedX,bedY]);
 
   function patch(field, value) {
     if (!chosen) return;
