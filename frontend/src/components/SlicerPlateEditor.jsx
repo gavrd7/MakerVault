@@ -298,6 +298,7 @@ export default function SlicerPlateEditor({
   const [splitBusy, setSplitBusy] = useState(false);
   const [splitError, setSplitError] = useState("");
   const [solidDialog, setSolidDialog] = useState(null);
+  const [solidViewportRect, setSolidViewportRect] = useState(null);
   const [solidPreview, setSolidPreview] = useState(null);
   const liveGhostRef = useRef(null);
   const negativeGhostRef = useRef(null);
@@ -2611,16 +2612,57 @@ export default function SlicerPlateEditor({
     controls.update();
   }
 
-  const solidAnchor=solidDialog?.anchorRect;
+  // The mesh editor must stay alongside the canvas, not below whichever
+  // toolbar button opened it. Track viewport bounds as panes resize or scroll.
+  useEffect(() => {
+    if (!solidDialog) return undefined;
+    const viewport=hostRef.current?.closest(".slicerPlateCanvasViewport");
+    if (!viewport) return undefined;
+    const measure=()=>{
+      const rect=viewport.getBoundingClientRect();
+      setSolidViewportRect(previous => {
+        const next={left:rect.left,right:rect.right,top:rect.top,bottom:rect.bottom,
+          width:rect.width,height:rect.height};
+        return previous && Object.keys(next).every(key=>Math.abs(previous[key]-next[key])<1)
+          ? previous : next;
+      });
+    };
+    measure();
+    const observer=typeof ResizeObserver!=="undefined"
+      ?new ResizeObserver(measure):null;
+    observer?.observe(viewport);
+    window.addEventListener("resize",measure);
+    window.addEventListener("scroll",measure,true);
+    return ()=>{
+      observer?.disconnect();
+      window.removeEventListener("resize",measure);
+      window.removeEventListener("scroll",measure,true);
+    };
+  }, [solidDialog?.kind,solidDialog?.id,solidDialog?.editTargetId]);
+
   const solidPanelStyle=(()=>{
-    if(!solidAnchor || typeof window==="undefined") return {pointerEvents:"auto"};
-    const width=Math.min(560,window.innerWidth-26);
-    const left=Math.max(12,Math.min(solidAnchor.left,window.innerWidth-width-12));
-    const below=window.innerHeight-solidAnchor.bottom-18;
-    const top=below>=260?solidAnchor.bottom+8:
-      Math.max(12,solidAnchor.top-Math.min(window.innerHeight*0.72,660));
-    return {pointerEvents:"auto",position:"fixed",left,top,
-      width,maxHeight:Math.max(180,window.innerHeight-top-12)};
+    if(typeof window==="undefined")return {pointerEvents:"auto"};
+    const rect=solidViewportRect;
+    const screenW=window.innerWidth,screenH=window.innerHeight;
+    if(!rect)return {pointerEvents:"auto",position:"fixed",
+      top:12,left:12,width:Math.min(430,screenW-24),
+      maxHeight:Math.max(180,screenH-24)};
+    const compact=screenW<740 || rect.width<620;
+    if(compact){
+      const top=Math.max(8,Math.min(screenH-220,rect.top+8));
+      return {pointerEvents:"auto",position:"fixed",
+        left:Math.max(8,Math.min(screenW-rect.width,rect.left)),
+        top,width:Math.min(rect.width,screenW-16),
+        maxHeight:Math.max(180,screenH-top-8)};
+    }
+    // Left-side inspector: 38% or less of the build-plate viewport.
+    // Reserve the remaining majority for the model and its transform handles.
+    const width=Math.min(440,Math.max(320,rect.width*0.38),screenW-24);
+    const left=Math.max(8,Math.min(rect.left+10,screenW-width-8));
+    const top=Math.max(8,Math.min(rect.top+10,screenH-300));
+    const availableHeight=Math.min(screenH-top-8,rect.bottom-top-8);
+    return {pointerEvents:"auto",position:"fixed",left,top,width,
+      maxHeight:Math.max(220,availableHeight)};
   })();
   return <section className="panel printingSection slicerPlatePanel" aria-labelledby="slicer-plate-heading">
     <div className="slicerPlateHeading">
@@ -2997,7 +3039,7 @@ export default function SlicerPlateEditor({
     {solidDialog && createPortal(
       <div className="slicerAutoOrientModalBackdrop" role="presentation"
         style={{pointerEvents:"none"}}>
-        <section className="slicerAutoOrientPanel slicerAutoOrientModal slicerSolidModal"
+        <section className="slicerAutoOrientPanel slicerAutoOrientModal slicerSolidModal slicerViewportAnchoredModal"
           role="dialog" aria-modal="false" style={solidPanelStyle} aria-label={solidDialog.kind+" model geometry"}>
           <header className="slicerAutoOrientModalHeader">
             <div><h3>{solidDialog.kind==="boolean"?"Mesh Boolean":
