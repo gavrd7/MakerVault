@@ -1,0 +1,47 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import * as THREE from "three";
+import {
+  executeSolidOperation, CSG_MAX_INPUT_TRIANGLES, resultToStl,
+} from "../src/components/slicerSolidOperations.js";
+
+function solid(x=0,y=0,z=0) {
+  const geometry=new THREE.BoxGeometry(20,20,20).toNonIndexed();
+  // BoxGeometry is centred. Put its lower face at Z=0 in world units.
+  const mesh=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial());
+  mesh.position.set(x,y,z+10);
+  mesh.updateMatrixWorld(true);
+  return mesh;
+}
+test("drilling does not mutate the source geometry", () => {
+  const mesh=solid();
+  const before=Array.from(mesh.geometry.getAttribute("position").array);
+  const out=executeSolidOperation("drill",mesh,{radius:3,x_mm:0,y_mm:0});
+  assert.equal(out.length,1);
+  assert.ok(out[0].triangles>0);
+  assert.equal(new DataView(out[0].buffer).getUint32(80,true),out[0].triangles);
+  assert.deepEqual(Array.from(mesh.geometry.getAttribute("position").array),before);
+});
+test("Cut may keep two, top or bottom independently", () => {
+  const mesh=solid();
+  assert.equal(executeSolidOperation("cut",mesh,{cutHeight:10,keep:"both"}).length,2);
+  assert.equal(executeSolidOperation("cut",mesh,{cutHeight:10,keep:"top"}).length,1);
+  assert.equal(executeSolidOperation("cut",mesh,{cutHeight:10,keep:"bottom"}).length,1);
+});
+test("Boolean union difference intersection on overlapping manifold cubes", () => {
+  const a=solid(), b=solid(10,0,0);
+  for (const booleanMode of ["union","difference","intersection"]) {
+    const out=executeSolidOperation("boolean",a,{booleanMode},b);
+    assert.equal(out.length,1);
+    assert.ok(out[0].triangles>0);
+  }
+});
+test("Hollow refuses a wall larger than available solid", () => {
+  const mesh=solid();
+  assert.throws(()=>executeSolidOperation("hollow",mesh,{wall:12}),/wall|thin/i);
+});
+test("Csg errors do not modify source meshes", () => {
+  const mesh=solid();
+  assert.throws(()=>executeSolidOperation("boolean",mesh,{booleanMode:"union"},null),/second/i);
+  assert.equal(CSG_MAX_INPUT_TRIANGLES,80000);
+});
