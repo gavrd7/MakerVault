@@ -2353,6 +2353,35 @@ export default function SlicerPlateEditor({
             <button type="button" disabled={solidBusy} aria-label="Close mesh editor"
               onClick={()=>{setSolidPreview(null);setSolidDialog(null);}}>✕</button>
           </header>
+          {["primitive","negative"].includes(solidDialog.kind) && <>
+            <label>Shape
+              <select value={solidOptions.primitiveType} onChange={event=>
+                setSolidOptions(v=>({...v,primitiveType:event.target.value}))}>
+                {PRIMITIVE_TYPES.map(type=><option key={type} value={type}>
+                  {type[0].toUpperCase()+type.slice(1)}</option>)}
+              </select></label>
+            <div className="slicerSolidGrid">
+              {["width","depth","height"].map((field,index)=><label key={field}>
+                {["Width X","Depth Y","Height Z"][index]} (mm)
+                <input type="number" min="0.5" max="500" step="0.5"
+                  value={solidOptions[field]} onChange={event=>
+                    setSolidOptions(v=>({...v,[field]:event.target.value}))}/></label>)}
+            </div>
+            {solidDialog.kind==="negative" && <>
+              <div className="slicerSolidGrid">
+                {["x_mm","y_mm","z_mm"].map((field,index)=><label key={field}>
+                  {["X centre","Y centre","Z centre"][index]} (mm)
+                  <input type="number" step="0.5" value={solidOptions[field]}
+                    onChange={event=>setSolidOptions(v=>({...v,[field]:event.target.value}))}/></label>)}
+              </div>
+              <p className="slicerPlateHint">Subtract this shape from the selected model.
+                The original stays intact until the result has been previewed and validated.
+                This changes mesh geometry, not native print settings.</p>
+            </>}
+            {solidDialog.kind==="primitive" && <p className="slicerPlateHint">
+              Creates a real STL primitive, then automatically arranges it on the plate.
+              Move, rotate, scale, duplicate or use it in a Boolean operation like any model.</p>}
+          </>}
           {solidDialog.kind==="hollow" && <>
             <label>Approximate wall thickness (mm)
               <input type="number" min="0.4" step="0.5" value={solidOptions.wall}
