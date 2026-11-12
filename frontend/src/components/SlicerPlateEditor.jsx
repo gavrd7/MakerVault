@@ -3197,6 +3197,7 @@ export default function SlicerPlateEditor({
             {solidPreview.parts.map((p,i)=><span key={i}>{p.triangles.toLocaleString()} triangles ·
               {p.width.toFixed(1)} × {p.depth.toFixed(1)} × {p.height.toFixed(1)} mm</span>)}
           </div>}
+          {solidPreview?.parts.some(part=>part.geometryAdvisory) && <p className="slicerPlateHint" role="status">Font geometry may need slicer repair.</p>}
           {solidPreview?.parts.some(part=>part.validationWarning) && <p className="slicerPlateHint" role="status">This mesh has open edges. Preview is available, but Apply is disabled until the geometry is repaired or the operation changes.</p>}
           {solidError && <p className="integrationError" role="alert">{solidError}</p>}
           <footer className="slicerAutoOrientModalActions">
