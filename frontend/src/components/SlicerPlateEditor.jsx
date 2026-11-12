@@ -2662,9 +2662,11 @@ export default function SlicerPlateEditor({
     if (!viewport) return undefined;
     const measure=()=>{
       const rect=viewport.getBoundingClientRect();
+      const camera=viewport.closest(".slicerPlateCanvasColumn")
+        ?.querySelector(".slicerPlateCameraToolbar")?.getBoundingClientRect();
       setSolidViewportRect(previous => {
         const next={left:rect.left,right:rect.right,top:rect.top,bottom:rect.bottom,
-          width:rect.width,height:rect.height};
+          cameraTop:camera?.top??rect.top,width:rect.width,height:rect.height};
         return previous && Object.keys(next).every(key=>Math.abs(previous[key]-next[key])<1)
           ? previous : next;
       });
@@ -2691,7 +2693,7 @@ export default function SlicerPlateEditor({
       maxHeight:Math.max(180,screenH-24)};
     const compact=screenW<740 || rect.width<620;
     if(compact){
-      const top=Math.max(8,Math.min(screenH-220,rect.top-42));
+      const top=Math.max(8,Math.min(screenH-220,rect.cameraTop??rect.top));
       return {pointerEvents:"auto",position:"fixed",
         left:Math.max(8,Math.min(screenW-rect.width,rect.left)),
         top,width:Math.min(rect.width,screenW-16),
@@ -2701,7 +2703,7 @@ export default function SlicerPlateEditor({
     // Reserve the remaining majority for the model and its transform handles.
     const width=Math.min(440,Math.max(320,rect.width*0.38),screenW-24);
     const left=Math.max(8,Math.min(rect.left+10,screenW-width-8));
-    const top=Math.max(8,Math.min(rect.top-42,screenH-300));
+    const top=Math.max(8,Math.min(rect.cameraTop??rect.top,screenH-300));
     const availableHeight=Math.min(screenH-top-8,rect.bottom-top-8);
     return {pointerEvents:"auto",position:"fixed",left,top,width,
       maxHeight:Math.max(220,availableHeight)};
