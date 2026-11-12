@@ -36,6 +36,18 @@ test("Boolean union difference intersection on overlapping manifold cubes", () =
     assert.ok(out[0].triangles>0);
   }
 });
+test("Hollow produces a closed internal shell on a simple manifold cube", () => {
+  const mesh=solid();
+  const out=executeSolidOperation("hollow",mesh,{wall:2});
+  assert.equal(out.length,1);
+  assert.ok(out[0].triangles>=12);
+  assert.ok(out[0].buffer.byteLength===84+out[0].triangles*50);
+});
+test("Cut also accepts X and Y oriented planes", () => {
+  const mesh=solid();
+  assert.equal(executeSolidOperation("cut",mesh,{cutAxis:"x",cutHeight:0,keep:"both"}).length,2);
+  assert.equal(executeSolidOperation("cut",mesh,{cutAxis:"y",cutHeight:0,keep:"both"}).length,2);
+});
 test("Hollow refuses a wall larger than available solid", () => {
   const mesh=solid();
   assert.throws(()=>executeSolidOperation("hollow",mesh,{wall:12}),/wall|thin/i);
