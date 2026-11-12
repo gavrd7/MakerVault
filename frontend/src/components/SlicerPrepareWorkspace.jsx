@@ -88,6 +88,7 @@ export default function SlicerPrepareWorkspace({
   const [splitRequest, setSplitRequest] = useState(0);
   const [autoOrientMenuOpen, setAutoOrientMenuOpen] = useState(false);
   const [addModelMenuOpen, setAddModelMenuOpen] = useState(false);
+  const [toolDescriptor, setToolDescriptor] = useState("");
   const [autoOrientGoal, setAutoOrientGoal] = useState("balanced");
   const [autoOrientRequest, setAutoOrientRequest] = useState(0);
   const [measurementVisible, setMeasurementVisible] = useState(false);
@@ -653,15 +654,25 @@ export default function SlicerPrepareWorkspace({
   );
   const modelToolbar = (
 <div className="slicerPrepareTools" role="toolbar" aria-label="Model editing tools">
-      <span className="slicerToolTooltip" data-tooltip="Undo · Ctrl+Z">
+      <span className="slicerToolTooltip" onMouseEnter={() => setToolDescriptor("Undo · Ctrl+Z")}
+        onMouseLeave={() => setToolDescriptor("")}
+        onFocus={() => setToolDescriptor("Undo · Ctrl+Z")}
+        onBlur={() => setToolDescriptor("")}>
         <button type="button" disabled={!undoRef.current.length || busy} onClick={undo}
           aria-label="Undo"><SlicerUiIcon name="undo" /></button>
       </span>
-      <span className="slicerToolTooltip" data-tooltip="Redo · Ctrl+Y">
+      <span className="slicerToolTooltip" onMouseEnter={() => setToolDescriptor("Redo · Ctrl+Y")}
+        onMouseLeave={() => setToolDescriptor("")}
+        onFocus={() => setToolDescriptor("Redo · Ctrl+Y")}
+        onBlur={() => setToolDescriptor("")}>
         <button type="button" disabled={!redoRef.current.length || busy} onClick={redo}
           aria-label="Redo"><SlicerUiIcon name="redo" /></button>
       </span>
       {TOOLS.map(tool => <div className={"slicerToolTooltip" + (((tool.expandable && measureOptionsOpen) || (tool.target === "auto_orient" && autoOrientMenuOpen) || (tool.target === "import" && addModelMenuOpen)) ? " slicerToolOptionsOpen" : "")} key={tool.name}
+        onMouseEnter={() => setToolDescriptor(tool.pending ? tool.name + " · Not yet available: " + tool.pending : tool.name)}
+        onMouseLeave={() => setToolDescriptor("")}
+        onFocus={() => setToolDescriptor(tool.pending ? tool.name + " · Not yet available: " + tool.pending : tool.name)}
+        onBlur={() => setToolDescriptor("")}
         data-tooltip={tool.pending ? tool.name + " · Not yet available: " + tool.pending
           : tool.expandable ? tool.name + " · Click for measurement options" : tool.name}>
         <button type="button"
@@ -754,6 +765,7 @@ export default function SlicerPrepareWorkspace({
           }}>Finish measuring</button>
         </div>}
       </div>)}
+      <div className="slicerToolbarDescriptor" role="status" aria-live="off">{toolDescriptor || "\u00a0"}</div>
     </div>
   );
   return <section className="panel printingSection slicerPrepareWorkspace"
