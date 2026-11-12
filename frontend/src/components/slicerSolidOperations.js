@@ -76,28 +76,63 @@ function bounding(mesh) {
   return bounds;
 }
 function checkManifold(geometry, maxTriangles) {
-  const attr = geometry.getAttribute("position");
-  const idx = geometry.getIndex();
-  const faces = triangles(geometry);
-  if (faces > maxTriangles)
-    throw new Error("CSG result has too many triangles to validate or slice.");
-  const edges = new Map();
-  const key = i => [
-    Math.round(attr.getX(i) / WELD),Math.round(attr.getY(i) / WELD),
-    Math.round(attr.getZ(i) / WELD),
-  ].join(",");
-  for (let i = 0; i < faces * 3; i += 3) {
-    const v = [0,1,2].map(k => key(idx ? idx.getX(i+k) : i+k));
-    if (new Set(v).size !== 3) {
-      throw new Error("CSG produced degenerate faces. The original model is unchanged.");
-    }
-    for (const [a,b] of [[0,1],[1,2],[2,0]]) {
-      const id = v[a] < v[b] ? v[a] + "|" + v[b] : v[b] + "|" + v[a];
-      edges.set(id,(edges.get(id)||0)+1);
+  const attr=geometry.getAttribute("position"), index=geometry.getIndex();
+  const faces=triangles(geometry);
+  if (faces>maxTriangles) throw new Error("CSG result is too complex to validate.");
+  const vertices=new Map(),edges=new Map();
+  function vertex(i) {
+    const coords=[attr.getX(i),attr.getY(i),attr.getZ(i)];
+    if (coords.some(v=>!Number.isFinite(v))) throw new Error("CSG produced invalid coordinates.");
+    const point=coords.map(v=>Math.round(v/WELD));
+    const key=point.join(",");
+    vertices.set(key,point);
+    return key;
+  }
+  for(let i=0;i<faces*3;i+=3) {
+    const v=[0,1,2].map(n=>vertex(index?index.getX(i+n):i+n));
+    if(new Set(v).size!==3) throw new Error("CSG produced a degenerate mesh triangle.");
+    for(const [a,b] of [[0,1],[1,2],[2,0]]) {
+      const id=v[a]<v[b]?v[a]+"|"+v[b]:v[b]+"|"+v[a];
+      const old=edges.get(id);
+      if(old) old.count++;
+      else edges.set(id,{a:v[a],b:v[b],count:1});
     }
   }
-  if ([...edges.values()].some(count=>count!==2))
-    throw new Error("Result is not a closed watertight solid. Try a simpler mesh or operation.");
+  const unmatched=[...edges.values()].filter(edge=>edge.count!==2);
+  if(!unmatched.length) return;
+  if(unmatched.length>20000)
+    throw new Error("CSG has too many unmatched mesh edges for safe validation.");
+  // CSG may subdivide one side of a watertight edge into multiple collinear
+  // segments. Count coverage along the entire quantised line instead of
+  // rejecting an otherwise closed T-junction at the original edge endpoints.
+  const lines=new Map();
+  function gcd(a,b) {a=Math.abs(a);b=Math.abs(b);while(b){const next=a%b;a=b;b=next;}return a;}
+  for(const edge of unmatched) {
+    const a=vertices.get(edge.a),b=vertices.get(edge.b);
+    const d=b.map((value,i)=>value-a[i]);
+    const divisor=gcd(gcd(d[0],d[1]),d[2]);
+    if(!divisor) throw new Error("Zero-length edge in CSG result.");
+    const unit=d.map(value=>value/divisor);
+    const sign=unit.find(v=>v!==0)<0?-1:1;
+    const dir=unit.map(v=>v*sign);
+    const cross=[a[1]*dir[2]-a[2]*dir[1],a[2]*dir[0]-a[0]*dir[2],
+      a[0]*dir[1]-a[1]*dir[0]];
+    const key=dir.join(",")+"|"+cross.join(",");
+    const t1=a.reduce((sum,value,i)=>sum+value*dir[i],0);
+    const t2=b.reduce((sum,value,i)=>sum+value*dir[i],0);
+    if(!lines.has(key))lines.set(key,[]);
+    lines.get(key).push({start:Math.min(t1,t2),end:Math.max(t1,t2),count:edge.count});
+  }
+  for(const group of lines.values()) {
+    const points=[...new Set(group.flatMap(v=>[v.start,v.end]))].sort((a,b)=>a-b);
+    for(let i=0;i<points.length-1;i++) {
+      const at=(points[i]+points[i+1])/2;
+      const coverage=group.reduce((sum,v)=>sum+
+        (v.start<at&&v.end>at?v.count:0),0);
+      if(coverage!==2)
+        throw new Error("Result is not a closed watertight solid. Try a simpler mesh or operation.");
+    }
+  }
 }
 /** Convert a world-space CSG result to a 3D-printable, AABB-centred binary STL. */
 export function resultToStl(mesh) {
