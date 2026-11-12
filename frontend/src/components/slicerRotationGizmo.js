@@ -85,6 +85,12 @@ export function dragAngleFromRay(ray, center, normal, originDirection, previous 
   const cross = new THREE.Vector3().crossVectors(originDirection, direction);
   return Math.atan2(cross.dot(normal), originDirection.dot(direction));
 }
+export function unwrapRotationDelta(current, previous) {
+  let delta = current - previous;
+  if (delta > Math.PI) delta -= TWO_PI;
+  if (delta < -Math.PI) delta += TWO_PI;
+  return delta;
+}
 export function snapRotationDegrees(degrees, shift = false) {
   if (!Number.isFinite(degrees)) return 0;
   const increment = shift ? 5 : 45;
@@ -217,6 +223,8 @@ export function createMakerVaultRotationGizmo(scene) {
       startEuler: activeMesh.rotation.clone(),
       mesh: activeMesh,
       lastAngle: 0,
+      lastRaw: 0,
+      accumulated: 0,
     };
     activeAxis = axisName;
     angleBadge.visible = true;
@@ -234,9 +242,11 @@ export function createMakerVaultRotationGizmo(scene) {
   }
   function drag(ray, shift = false) {
     if (!dragState) return null;
-    const radians = dragAngleFromRay(ray, group.position,
-      dragState.normal, dragState.startDirection, dragState.lastAngle);
-    const degrees = snapRotationDegrees(THREE.MathUtils.radToDeg(radians), shift);
+    const raw = dragAngleFromRay(ray, group.position,
+      dragState.normal, dragState.startDirection, dragState.lastRaw);
+    dragState.accumulated += unwrapRotationDelta(raw, dragState.lastRaw);
+    dragState.lastRaw = raw;
+    const degrees = snapRotationDegrees(THREE.MathUtils.radToDeg(dragState.accumulated), shift);
     dragState.lastAngle = THREE.MathUtils.degToRad(degrees);
     if (activeArc) {
       group.remove(activeArc);
