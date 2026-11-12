@@ -170,8 +170,8 @@ def _draft_plate_settings(user, input_asset, settings):
     if "plate_objects" not in settings:
         return {"plate_label": label, "save_gcode_to_library": save_to_library, "workflow": workflow, "process_overrides": process_overrides}
     objects = settings["plate_objects"]
-    if not isinstance(objects, list) or not 1 <= len(objects) <= 12:
-        raise ValueError("The visual build plate supports one to twelve model instances.")
+    if not isinstance(objects, list) or not 1 <= len(objects) <= 200:
+        raise ValueError("The visual build plate supports up to 200 model instances.")
     seen = set()
     saved = []
     for item in objects:
