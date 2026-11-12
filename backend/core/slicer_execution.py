@@ -341,8 +341,8 @@ def _single_unmodified_stl(plate):
     if item.get("process_overrides"):
         return False  # A native object setting must never fall back to plain STL.
     try:
-        if any(float(item[key]) != expected for key, expected in (
-            ("x_mm", 0), ("y_mm", 0), ("rotation_deg", 0),
+        if any(float(item.get(key, 0) if key == "z_mm" else item[key]) != expected for key, expected in (
+            ("x_mm", 0), ("y_mm", 0), ("z_mm", 0), ("rotation_deg", 0),
             ("scale_percent", 100),
         )):
             return False
