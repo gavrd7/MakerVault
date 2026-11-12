@@ -3032,9 +3032,34 @@ export default function SlicerPlateEditor({
               Move, rotate, scale, duplicate or use it in a Boolean operation like any model.</p>}
           </>}
           {solidDialog.kind==="hollow" && <>
+            <div className="slicerInsertionMode" role="group" aria-label="Hollow cavity handles">
+              {[["translate","Move"],["scale","Scale"],["rotate","Rotate"]].map(([mode,label])=>
+                <button type="button" key={mode} aria-pressed={insertionMode===mode}
+                  className={insertionMode===mode?"selected":""}
+                  onClick={()=>setInsertionMode(mode)}>{label}</button>)}
+            </div>
             <label>Approximate wall thickness (mm)
               <input type="number" min="0.4" step="0.5" value={solidOptions.wall}
                 onChange={event=>setSolidOptions(v=>({...v,wall:event.target.value}))}/></label>
+            <div className="slicerSolidGrid">
+              {["x","y","z"].map(axis=><label key={"cavity-offset-"+axis}>
+                Cavity offset {axis.toUpperCase()} (mm)
+                <input type="number" step="0.5" value={solidOptions["cavity_"+axis+"_mm"]}
+                  onChange={event=>setSolidOptions(v=>({...v,["cavity_"+axis+"_mm"]:event.target.value}))}/>
+              </label>)}
+              {["x","y","z"].map(axis=><label key={"cavity-scale-"+axis}>
+                Cavity scale {axis.toUpperCase()} (%)
+                <input type="number" min="20" max="150" step="1"
+                  value={solidOptions["cavity_scale_"+axis]}
+                  onChange={event=>setSolidOptions(v=>({...v,["cavity_scale_"+axis]:event.target.value}))}/>
+              </label>)}
+              {["x","y","z"].map(axis=><label key={"cavity-rotation-"+axis}>
+                Cavity rotate {axis.toUpperCase()} (°)
+                <input type="number" min="-360" max="360" step="1"
+                  value={solidOptions["cavity_rotation_"+axis]}
+                  onChange={event=>setSolidOptions(v=>({...v,["cavity_rotation_"+axis]:event.target.value}))}/>
+              </label>)}
+            </div>
 
           </>}
           {["drill","cut"].includes(solidDialog.kind) && <div className="slicerInsertionMode"
