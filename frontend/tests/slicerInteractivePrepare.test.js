@@ -698,3 +698,22 @@ test("Hollow, Drill, Cut and Mesh boolean share one preview-and-confirm model ed
   assert.match(editor,/setSolidPreview\(null\);setSolidDialog\(null\)/);
   assert.match(editor,/meshes\/temporary\//);
 });
+
+
+test("assembly toolbar gizmos use a shared pivot and keep meshes independent",()=>{
+  const scene=read("SlicerPlateEditor.jsx");
+  const workspace=read("SlicerPrepareWorkspace.jsx");
+  assert.match(scene,/groupProxy=new THREE\.Object3D\(\)/);
+  assert.match(scene,/state\.transform\.attach\(pivot\)/);
+  assert.match(scene,/groupCommitRef\.current\?\.\(dx,dy,rotation,scale\)/);
+  assert.match(scene,/groupEditable = canEdit && selection\.length > 1/);
+  assert.match(scene,/state\.setSelectionOutlines\(selection\.map/);
+  assert.match(scene,/transformGroup\(groupDeltaX, groupDeltaY, groupRotation, groupScale\)/);
+  assert.match(workspace,/const memberIds = item\.assembly_id/);
+  assert.match(workspace,/memberIds\.every\(value => current\.includes\(value\)\)/);
+});
+test("negative volume warns if the subtraction shape misses the model",()=>{
+  const editor=read("SlicerPlateEditor.jsx");
+  assert.match(editor,/if \(!targetBounds\.intersectsBox\(toolBounds\)\)/);
+  assert.match(editor,/Negative shape does not intersect the selected model/);
+});
