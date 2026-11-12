@@ -173,12 +173,17 @@ export function executeSolidOperation(kind, target, options={}, second=null) {
       secondary=primitiveGeometry(cylinder,[x,y,mid.z]);
       outputs.push(run(first,secondary,SUBTRACTION));
     } else if(kind==="cut") {
-      const height=safeNumber(options.cutHeight,bounds.min.z+0.01,bounds.max.z-0.01,"Cut Z height");
+      const axis=options.cutAxis||"z";
+      if (!["x","y","z"].includes(axis)) throw new Error("Choose a valid cut axis.");
+      const height=safeNumber(options.cutHeight,bounds.min[axis]+0.01,
+        bounds.max[axis]-0.01,"Cut "+axis.toUpperCase()+" position");
       const cover=Math.max(size.x,size.y,size.z)*4+20;
-      const bottom=primitiveGeometry(new THREE.BoxGeometry(cover,cover,cover),
-        [mid.x,mid.y,height-cover/2]);
-      const top=primitiveGeometry(new THREE.BoxGeometry(cover,cover,cover),
-        [mid.x,mid.y,height+cover/2]);
+      const low=[mid.x,mid.y,mid.z], high=[mid.x,mid.y,mid.z];
+      const index={x:0,y:1,z:2}[axis];
+      low[index]=height-cover/2;
+      high[index]=height+cover/2;
+      const bottom=primitiveGeometry(new THREE.BoxGeometry(cover,cover,cover),low);
+      const top=primitiveGeometry(new THREE.BoxGeometry(cover,cover,cover),high);
       secondary=bottom;
       const keep=options.keep||"both";
       if(["both","bottom"].includes(keep))outputs.push(run(first,bottom,INTERSECTION));
