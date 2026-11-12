@@ -691,7 +691,7 @@ test("Hollow, Drill, Cut and Mesh boolean share one preview-and-confirm model ed
   for (const kind of ["hollow","drill","cut","boolean"])
     assert.match(workspace,new RegExp('target: "'+kind+'"'));
   assert.match(workspace,/solidRequest=\{solidRequest\}/);
-  assert.match(editor,/executeSolidOperation\(solidDialog\.kind,target,solidOptions,second\)/);
+  assert.match(editor,/executeSolidOperation\(solidDialog\.kind,target,\{\.\.\.solidOptions,allowOpenPreview:true\},second\)/);
   assert.match(editor,/aria-label=\{solidDialog\.kind\+" model geometry"\}/);
   assert.match(editor,/Preview updates automatically/);
   assert.match(editor,/Apply mesh edit/);
