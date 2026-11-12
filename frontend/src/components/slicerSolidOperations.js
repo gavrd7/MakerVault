@@ -138,7 +138,7 @@ function checkManifold(geometry, maxTriangles) {
   }
 }
 /** Convert a world-space CSG result to a 3D-printable, AABB-centred binary STL. */
-export function resultToStl(mesh) {
+export function resultToStl(mesh, {allowOpenPreview=false}={}) {
   const source=mesh?.geometry;
   const attr=source?.getAttribute("position"),idx=source?.getIndex();
   if (!attr) throw new Error("Result has no mesh geometry.");
@@ -169,7 +169,15 @@ export function resultToStl(mesh) {
   const geometry=new THREE.BufferGeometry();
   geometry.setAttribute("position",new THREE.Float32BufferAttribute(clean,3));
   try {
-    checkManifold(geometry,clean.length/9);
+    let validationWarning="";
+    try {checkManifold(geometry,clean.length/9);}
+    catch(error) {
+      // An unsafe result may be shown as a temporary ghost, but never applied
+      // or sent to native slicing. Other geometry failures still throw.
+      if(!allowOpenPreview || !/watertight|unmatched mesh edges/i.test(error.message))
+        throw error;
+      validationWarning="Open mesh edges detected; preview only.";
+    }
     geometry.computeBoundingBox();
     const box=geometry.boundingBox,center=box.getCenter(new THREE.Vector3());
     const size=box.getSize(new THREE.Vector3());
@@ -188,7 +196,7 @@ export function resultToStl(mesh) {
       position.copy(ab.cross(ac)).normalize();
       write(position);write(a);write(b);write(c);cursor+=2;
     }
-    return {buffer,triangles:faces,removedZeroAreaFaces:discarded,
+    return {buffer,triangles:faces,removedZeroAreaFaces:discarded,validationWarning,
       x_mm:center.x,y_mm:center.y,z_mm:box.min.z,
       width:size.x,depth:size.y,height:size.z};
   } finally {geometry.dispose();}
@@ -253,7 +261,7 @@ export function executeSolidOperation(kind, target, options={}, second=null) {
       secondary.updateMatrixWorld();
       outputs.push(run(first,secondary,SUBTRACTION));
     }
-    return outputs.map(resultToStl);
+    return outputs.map(result=>resultToStl(result,{allowOpenPreview:!!options.allowOpenPreview}));
   } finally {
     first.geometry.dispose();
     secondary?.geometry.dispose();
