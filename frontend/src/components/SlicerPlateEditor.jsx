@@ -296,6 +296,18 @@ export default function SlicerPlateEditor({
   const [solidOptions, setSolidOptions] = useState({wall: 2, radius: 3, x_mm: 0, y_mm: 0, cutHeight: 5, cutAxis: "z", keep: "both", booleanMode: "union", secondId: "", primitiveType: "box", width: 20, depth: 20, height: 20, z_mm: 10});
   // An applied result must always correspond to the options actually shown.
   useEffect(() => { setSolidPreview(null); }, [solidOptions]);
+  const lastPreviewKeyRef = useRef("");
+  // Coalesce rapid changes so high-resolution CSG is not rerun every keystroke.
+  useEffect(() => {
+    if (!solidDialog || solidBusy) return undefined;
+    const key = JSON.stringify([solidDialog.kind,solidDialog.id,solidOptions]);
+    if (lastPreviewKeyRef.current === key) return undefined;
+    const handle = setTimeout(() => {
+      lastPreviewKeyRef.current = key;
+      previewSolid();
+    }, solidDialog.kind === "primitive" ? 120 : 300);
+    return () => clearTimeout(handle);
+  }, [solidDialog, solidOptions, solidBusy]);
   const [measureOverlayExpanded, setMeasureOverlayExpanded] = useState(false);
   const [transformOverlayExpanded, setTransformOverlayExpanded] = useState(false);
   const [liveRotation, setLiveRotation] = useState(null);
@@ -619,8 +631,8 @@ export default function SlicerPlateEditor({
     for (const [index,part] of solidPreview.parts.entries()) {
       const geom=new STLLoader().parse(part.buffer);
       const mesh=new THREE.Mesh(geom,new THREE.MeshStandardMaterial({
-        color: PALETTE[(index+2)%PALETTE.length], transparent:true,
-        opacity:0.8, roughness:0.75, side:THREE.DoubleSide,
+        color: solidDialog?.kind === "hollow" ? "#f3b256" : PALETTE[(index+2)%PALETTE.length], transparent:true,
+        opacity:0.48, roughness:0.75, side:THREE.DoubleSide,
       }));
       mesh.position.set(part.x_mm,part.y_mm,part.z_mm);
       mesh.userData.solidPreview=true;
@@ -2340,11 +2352,9 @@ export default function SlicerPlateEditor({
 
     {solidDialog && createPortal(
       <div className="slicerAutoOrientModalBackdrop" role="presentation"
-        onMouseDown={event=>{if(event.target===event.currentTarget&&!solidBusy){
-          setSolidPreview(null);setSolidDialog(null);
-        }}}>
+        style={{pointerEvents:"none"}}>
         <section className="slicerAutoOrientPanel slicerAutoOrientModal slicerSolidModal"
-          role="dialog" aria-modal="true" aria-label={solidDialog.kind+" model geometry"}>
+          role="dialog" aria-modal="false" style={{pointerEvents:"auto"}} aria-label={solidDialog.kind+" model geometry"}>
           <header className="slicerAutoOrientModalHeader">
             <div><h3>{solidDialog.kind==="boolean"?"Mesh Boolean":
               solidDialog.kind[0].toUpperCase()+solidDialog.kind.slice(1)} model</h3>
@@ -2446,8 +2456,9 @@ export default function SlicerPlateEditor({
           {solidError && <p className="integrationError" role="alert">{solidError}</p>}
           <footer className="slicerAutoOrientModalActions">
             <button type="button" disabled={solidBusy} onClick={()=>{setSolidPreview(null);setSolidDialog(null);}}>Cancel</button>
-            <button type="button" disabled={solidBusy} onClick={previewSolid}>
-              {solidBusy?"Processing…":"Preview result"}</button>
+            <span className="slicerSolidPreviewStatus" role="status">
+              {solidBusy?"Updating preview…":solidPreview?"Preview up to date":"Preview updates automatically"}
+            </span>
             <button type="button" disabled={!solidPreview||solidBusy} onClick={applySolid}>
               {solidBusy?"Saving…":"Apply mesh edit"}</button>
           </footer>
