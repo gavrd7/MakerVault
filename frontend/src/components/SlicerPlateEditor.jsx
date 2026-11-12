@@ -248,6 +248,7 @@ export default function SlicerPlateEditor({
   const exitToolModeRef = useRef(onExitToolMode);
   exitToolModeRef.current = onExitToolMode;
   const dimensionsRef = useRef({});
+  const modelClipboardRef = useRef(null);
   const pendingArrangeRef = useRef(false);
   const pendingManualArrangeRef = useRef(false);
   const pendingAddIdsRef = useRef(new Set());
@@ -502,6 +503,62 @@ export default function SlicerPlateEditor({
     onPrimaryChange?.(remaining.find(item => !String(item.asset_id).startsWith("local:"))?.asset_id || "");
     setSelected(remaining[0]?.instance_id || "");
   }
+
+  // Model shortcuts use an internal clipboard: never hijack text fields,
+  // browser copy/paste, or native shortcuts inside an open dialog.
+  useEffect(() => {
+    const keydown = event => {
+      if (!canEdit || uploadBusy || solidDialog || splitPreview) return;
+      const tag = event.target?.tagName?.toLowerCase();
+      if (["input","textarea","select"].includes(tag) ||
+          event.target?.isContentEditable || event.target?.closest?.('[role="dialog"]')) return;
+      if (document.getSelection()?.toString()) return;
+      const mod = event.ctrlKey || event.metaKey;
+      const key = event.key.toLowerCase();
+      const deleting = (key === "delete" || key === "backspace") && !mod && !event.altKey;
+      if (deleting && chosen && selection.length <= 1) {
+        event.preventDefault();
+        removeSelected();
+        return;
+      }
+      if (!mod || event.altKey || event.shiftKey) return;
+      if ((key === "c" || key === "x") && chosen && selection.length <= 1) {
+        event.preventDefault();
+        modelClipboardRef.current = {
+          model: {...chosen,scale_xyz_percent:Array.isArray(chosen.scale_xyz_percent)
+            ? [...chosen.scale_xyz_percent]:chosen.scale_xyz_percent},
+          size:dimensionsRef.current[chosen.instance_id],
+        };
+        if (key === "x") removeSelected();
+        setError("");
+      } else if (key === "v" && modelClipboardRef.current) {
+        event.preventDefault();
+        if (objects.length >= MAX_OBJECTS) {
+          setError("Cannot paste: the build plate has reached its 200-object limit.");
+          return;
+        }
+        const {model,size} = modelClipboardRef.current;
+        if (!size) {
+          setError("Cannot paste this model until its dimensions have loaded.");
+          return;
+        }
+        const copy = {...model,instance_id:plateUuid(),assembly_id:null,
+          scale_xyz_percent:Array.isArray(model.scale_xyz_percent)
+            ? [...model.scale_xyz_percent]:model.scale_xyz_percent};
+        const known = {...dimensionsRef.current,[copy.instance_id]:size};
+        const placed = findFreeDuplicatePosition(copy,objects,known,bedX,bedY,3);
+        if (!placed) {
+          setError("Cannot paste: no free position is available on this plate.");
+          return;
+        }
+        onChange([...objects,placed]);
+        setSelected(placed.instance_id);
+        setError("");
+      }
+    };
+    window.addEventListener("keydown",keydown);
+    return () => window.removeEventListener("keydown",keydown);
+  }, [canEdit,uploadBusy,solidDialog,splitPreview,chosen,selection,objects,onChange,bedX,bedY]);
 
   function patch(field, value) {
     if (!chosen) return;
