@@ -21,6 +21,7 @@ from .slicer_bed_dimensions import trusted_plate_dimensions
 from .slicer_native_overrides import apply_orca_job_overrides
 from .slicer_process_settings import apply_process_overrides
 from .slicer_plate_3mf import build_plate_3mf, build_compound_plate_3mf
+from .slicer_plate_validation import validate_plate_collisions, PlateCollisionError
 from .slicer_worker_client import SlicerWorkerError, health, run_remote_job
 
 
@@ -291,6 +292,23 @@ def queue_draft(job_id, user):
         if not job:
             raise SlicerExecutionError("Slice draft not found.")
         validate_scheduling(job, installed)
+        plate = (job.settings or {}).get("plate_objects") or []
+        if len(plate) > 1:
+            # The UI disables conflicting plates, but an older saved draft
+            # or a direct API call must not bypass the same safety rule.
+            owned = {str(row.pk): row for row in FileAsset.objects.filter(
+                pk__in=[item["asset_id"] for item in plate],
+                owner_id=job.owner_id, category="mesh")}
+            try:
+                validate_plate_collisions([(
+                    item, _read_owned_file(owned[str(item["asset_id"])],
+                                           job.owner_id, MAX_INPUT, "Plate STL")
+                ) for item in plate])
+            except (KeyError, PlateCollisionError, ValueError) as exc:
+                raise SlicerExecutionError(
+                    "Build plate models overlap or cannot be checked. "
+                    "Open the draft and resolve the highlighted conflicts before slicing."
+                ) from exc
         job.status = "queued"
         job.progress = 0
         job.message = "Queued for the isolated slicing worker."
