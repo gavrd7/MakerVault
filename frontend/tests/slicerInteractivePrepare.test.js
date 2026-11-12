@@ -673,3 +673,29 @@ test("Add model toolbar offers upload picker and scroll to MakerVault library", 
   assert.match(plate, /data-slicer-add-models/);
   assert.match(css, /\.slicerAddModelChoice/);
 });
+
+
+test("all existing and new tool descriptions remain inside toolbar border", () => {
+  const workspace=read("SlicerPrepareWorkspace.jsx");
+  const styles=fs.readFileSync(path.resolve(root,"../styles.css"),"utf8");
+  assert.match(workspace,/className="slicerToolbarDescriptor"/);
+  assert.match(workspace,/onMouseEnter=\{\(\) => setToolDescriptor/);
+  assert.match(workspace,/onFocus=\{\(\) => setToolDescriptor/);
+  assert.match(styles,/\.slicerPlateEditingToolbar \.slicerToolTooltip::after/);
+  assert.match(styles,/content: none !important/);
+  assert.match(styles,/\.slicerPlateEditingToolbar \.slicerToolbarDescriptor/);
+  assert.match(styles,/flex: 1 0 100%/);
+});
+test("Hollow, Drill, Cut and Mesh boolean share one preview-and-confirm model editor", () => {
+  const workspace=read("SlicerPrepareWorkspace.jsx");
+  const editor=read("SlicerPlateEditor.jsx");
+  for (const kind of ["hollow","drill","cut","boolean"])
+    assert.match(workspace,new RegExp('target: "'+kind+'"'));
+  assert.match(workspace,/solidRequest=\{solidRequest\}/);
+  assert.match(editor,/executeSolidOperation\(solidDialog\.kind,target,solidOptions,second\)/);
+  assert.match(editor,/aria-label=\{solidDialog\.kind\+" model geometry"\}/);
+  assert.match(editor,/Preview result/);
+  assert.match(editor,/Apply mesh edit/);
+  assert.match(editor,/setSolidPreview\(null\);setSolidDialog\(null\)/);
+  assert.match(editor,/meshes\/temporary\//);
+});
