@@ -317,6 +317,7 @@ export default function SlicerPlateEditor({
   const [groupDeltaX, setGroupDeltaX] = useState(0);
   const [groupDeltaY, setGroupDeltaY] = useState(0);
   const [groupRotation, setGroupRotation] = useState(0);
+  const [groupScale, setGroupScale] = useState(100);
   const latestMeasurementRef = useRef({ active: false, mode: "distance" });
   latestMeasurementRef.current = { active: measurementVisible, mode: measureMode, snapMode: measureSnapMode };
   dimensionsRef.current = dimensions;
@@ -866,19 +867,25 @@ export default function SlicerPlateEditor({
     }
   }
 
-  function transformGroup(dx = 0, dy = 0, angle = 0) {
+  function transformGroup(dx = 0, dy = 0, angle = 0, scalePercent = 100) {
     if (!canEdit || selection.length < 2) return;
     const members = objects.filter(row => selection.includes(row.instance_id));
     const others = objects.filter(row => !selection.includes(row.instance_id));
     const centerX = members.reduce((sum, row) => sum + Number(row.x_mm), 0) / members.length;
     const centerY = members.reduce((sum, row) => sum + Number(row.y_mm), 0) / members.length;
     const theta = THREE.MathUtils.degToRad(angle), cos = Math.cos(theta), sin = Math.sin(theta);
+    const scale = Number(scalePercent)/100;
+    if (!Number.isFinite(scale) || scale<0.05 || scale>4) {
+      setError("Assembly scale must be between 5% and 400%.");return;
+    }
     const moved = members.map(row => {
       const x = row.x_mm - centerX, y = row.y_mm - centerY;
       return {
         ...row,
-        x_mm: pretty(centerX + x * cos - y * sin + dx),
-        y_mm: pretty(centerY + x * sin + y * cos + dy),
+        x_mm: pretty(centerX + (x * cos - y * sin)*scale + dx),
+        y_mm: pretty(centerY + (x * sin + y * cos)*scale + dy),
+        scale_xyz_percent: (row.scale_xyz_percent || [row.scale_percent,row.scale_percent,row.scale_percent])
+          .map(value => pretty(Number(value)*scale)),
         rotation_deg: pretty(((Number(row.rotation_deg || 0) + angle + 180) % 360 + 360) % 360 - 180),
       };
     });
@@ -892,7 +899,7 @@ export default function SlicerPlateEditor({
     }
     const byId = new Map(moved.map(row => [row.instance_id, row]));
     onChange(objects.map(row => byId.get(row.instance_id) || row));
-    setGroupDeltaX(0); setGroupDeltaY(0); setGroupRotation(0);
+    setGroupDeltaX(0); setGroupDeltaY(0); setGroupRotation(0); setGroupScale(100);
     setError("");
   }
 
@@ -2074,11 +2081,13 @@ export default function SlicerPlateEditor({
             onChange={event => setGroupDeltaX(Number(event.target.value))} /></label>
           <label>Move Y (mm)<input type="number" step="0.5" value={groupDeltaY}
             onChange={event => setGroupDeltaY(Number(event.target.value))} /></label>
-          <label>Rotate Z (°)<input type="number" step="5" value={groupRotation}
+          <label>Rotate Z (°)<input type="number" step="1" value={groupRotation}
             onChange={event => setGroupRotation(Number(event.target.value))} /></label>
+          <label>Group scale (%)<input type="number" step="5" min="5" max="400" value={groupScale}
+            onChange={event => setGroupScale(Number(event.target.value))} /></label>
         </div>
-        <button type="button" disabled={!canEdit || ![groupDeltaX, groupDeltaY, groupRotation].every(Number.isFinite)}
-          onClick={() => transformGroup(groupDeltaX, groupDeltaY, groupRotation)}>Apply group transform</button>
+        <button type="button" disabled={!canEdit || ![groupDeltaX, groupDeltaY, groupRotation, groupScale].every(Number.isFinite)}
+          onClick={() => transformGroup(groupDeltaX, groupDeltaY, groupRotation, groupScale)}>Apply group transform</button>
       </aside>}
       {selection.length <= 1 && ["move", "rotate", "scale"].includes(toolMode) && chosen && <aside
         className="slicerViewportMeasurement slicerViewportTransform"
