@@ -5695,3 +5695,76 @@ a:focus-visible,
   width:100%;min-height:26px;padding:3px 7px;margin:0;
   font-size:.76rem;line-height:1.2;
 }
+
+/* Geometry insertion/editor is an inspector beside the visible print plate.
+   It must not inherit the older right-side modal position or full-page height. */
+.slicerSolidModal.slicerViewportAnchoredModal{
+  box-sizing:border-box;
+  margin:0;
+  padding:12px;
+  min-width:0;
+  max-width:calc(100vw - 16px);
+  min-height:0;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  gap:10px;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalHeader{
+  position:sticky;
+  top:-12px;
+  z-index:2;
+  background:#101d2a;
+  padding:2px 0 8px;
+  border-bottom:1px solid #30445a;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalActions{
+  position:sticky;
+  bottom:-12px;
+  z-index:2;
+  background:#101d2a;
+  border-top:1px solid #30445a;
+  padding:10px 0 2px;
+  margin-top:auto;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalHeader h3{
+  font-size:1rem;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalHeader p{
+  font-size:.75rem;
+  margin-top:2px;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerPrimitivePicker{
+  padding:6px 8px;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerPrimitiveShapeGrid{
+  gap:5px;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerPrimitiveShapeGrid button{
+  min-height:34px;
+  padding:5px;
+  gap:5px;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerInsertionMode{
+  margin:0;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerSolidGrid{
+  gap:8px;
+}
+.slicerSolidModal.slicerViewportAnchoredModal input,
+.slicerSolidModal.slicerViewportAnchoredModal select{
+  min-height:32px;
+  padding:4px 7px;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerSolidResult{
+  padding:7px 9px;
+}
+@media (max-width:740px){
+  .slicerSolidModal.slicerViewportAnchoredModal{
+    width:calc(100vw - 16px) !important;
+    max-height:calc(100dvh - 16px);
+  }
+}
