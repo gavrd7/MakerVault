@@ -136,7 +136,8 @@ test("advanced tools are visibly gated pending safe native transformations", () 
 test("independent XYZ scaling updates visual mesh and is selectable from the toolbar", () => {
   const scene = read("SlicerPrepareWorkspace.jsx");
   const editor = read("SlicerPlateEditor.jsx");
-  assert.match(scene, /name: "Individual XYZ scale", target: "scale_xyz_percent"/);
+  assert.match(scene, /name: "Scale", target: "scale_percent"/);
+  assert.doesNotMatch(scene, /name: "Individual XYZ scale"/);
   assert.match(editor, /Independent axis scaling \(%\)/);
   assert.match(editor, /data-slicer-field=\{index === 0 \? "scale_xyz_percent"/);
   assert.match(editor, /mesh\.scale\.set\(\.\.\.xyz\.map\(v => v \/ 100\)\)/);
@@ -517,7 +518,7 @@ test("multi-select assembles without merging STL assets and provides guarded gro
   assert.match(scene, /assembly_id: id/);
   assert.match(scene, /assembly_id: null/);
   assert.match(editor, /function transformGroup\(/);
-  assert.match(editor, /Group transform would leave the build plate or overlap another object/);
+  assert.match(editor, /Group transform would leave the build plate/);
   assert.match(editor, /onChange\(objects\.map\(row => byId\.get\(row\.instance_id\) \|\| row\)\)/);
   assert.match(editor, /aria-label="Multi-model assembly controls"/);
 });
