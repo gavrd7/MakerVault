@@ -5447,3 +5447,30 @@ a:focus-visible,
     flex-wrap: wrap;
   }
 }
+
+
+/* Small Add model popover adjacent to the build-plate tool icon. */
+.slicerPlateEditingToolbar .slicerAddModelMenu {
+  width: 240px;
+  max-width: min(280px, calc(100vw - 36px));
+  gap: 7px;
+}
+.slicerPlateEditingToolbar .slicerAddModelChoice {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 9px;
+  width: 100%;
+  min-height: 39px;
+  height: auto;
+  padding: 9px 10px;
+  text-align: left;
+  line-height: 1.35;
+  white-space: normal;
+}
+.slicerPlateEditingToolbar .slicerAddModelChoice .slicerUiIcon {
+  flex: 0 0 17px;
+}
+.slicerPlateControlsGroup[data-slicer-add-models] {
+  scroll-margin-top: 24px;
+}
