@@ -87,6 +87,7 @@ export default function SlicerPrepareWorkspace({
   const [toolMode, setToolMode] = useState("select");
   const [splitRequest, setSplitRequest] = useState(0);
   const [autoOrientMenuOpen, setAutoOrientMenuOpen] = useState(false);
+  const [addModelMenuOpen, setAddModelMenuOpen] = useState(false);
   const [autoOrientGoal, setAutoOrientGoal] = useState("balanced");
   const [autoOrientRequest, setAutoOrientRequest] = useState(0);
   const [measurementVisible, setMeasurementVisible] = useState(false);
@@ -361,6 +362,13 @@ export default function SlicerPrepareWorkspace({
     return file?.name || file?.filename || "STL model";
   };
   function selectTool(tool) {
+    if (tool.target === "import") {
+      setMeasureOptionsOpen(false);
+      setAutoOrientMenuOpen(false);
+      setAddModelMenuOpen(open => !open);
+      return;
+    }
+    setAddModelMenuOpen(false);
     if (tool.target === "measure") {
       if (!selectedId && objects[0]?.instance_id) setSelectedId(objects[0].instance_id);
       setToolMode("select");
@@ -653,7 +661,7 @@ export default function SlicerPrepareWorkspace({
         <button type="button" disabled={!redoRef.current.length || busy} onClick={redo}
           aria-label="Redo"><SlicerUiIcon name="redo" /></button>
       </span>
-      {TOOLS.map(tool => <div className={"slicerToolTooltip" + (((tool.expandable && measureOptionsOpen) || (tool.target === "auto_orient" && autoOrientMenuOpen)) ? " slicerToolOptionsOpen" : "")} key={tool.name}
+      {TOOLS.map(tool => <div className={"slicerToolTooltip" + (((tool.expandable && measureOptionsOpen) || (tool.target === "auto_orient" && autoOrientMenuOpen) || (tool.target === "import" && addModelMenuOpen)) ? " slicerToolOptionsOpen" : "")} key={tool.name}
         data-tooltip={tool.pending ? tool.name + " · Not yet available: " + tool.pending
           : tool.expandable ? tool.name + " · Click for measurement options" : tool.name}>
         <button type="button"
@@ -662,7 +670,8 @@ export default function SlicerPrepareWorkspace({
             (tool.target === "scale_percent" && toolMode === "scale") ||
             (tool.target === "measure" && measurementVisible) ||
             (tool.target === "lay_face" && toolMode === "lay_face") ||
-            (tool.target === "auto_orient" && autoOrientMenuOpen)) ? "isActive" : ""}
+            (tool.target === "auto_orient" && autoOrientMenuOpen) ||
+            (tool.target === "import" && addModelMenuOpen)) ? "isActive" : ""}
           aria-pressed={tool.target === "measure" ? measurementVisible :
             tool.target === "lay_face" ? toolMode === "lay_face" :
             tool.target === "auto_orient" ? autoOrientMenuOpen :
@@ -670,10 +679,29 @@ export default function SlicerPrepareWorkspace({
             ? (tool.target === "x_mm" ? toolMode === "move"
               : tool.target === "rotation_deg" ? toolMode === "rotate" : toolMode === "scale") : undefined}
           aria-label={tool.name}
-          aria-expanded={tool.target === "auto_orient" ? autoOrientMenuOpen : tool.expandable ? measureOptionsOpen : undefined}
-          aria-controls={tool.target === "auto_orient" ? "slicer-auto-orient-toolbar-options" : tool.expandable ? "slicer-measure-toolbar-options" : undefined}
+          aria-expanded={tool.target === "import" ? addModelMenuOpen : tool.target === "auto_orient" ? autoOrientMenuOpen : tool.expandable ? measureOptionsOpen : undefined}
+          aria-controls={tool.target === "import" ? "slicer-add-model-toolbar-options" : tool.target === "auto_orient" ? "slicer-auto-orient-toolbar-options" : tool.expandable ? "slicer-measure-toolbar-options" : undefined}
           disabled={!!tool.pending || !canEdit || busy || (tool.target !== "import" && !objects.length)}
           onClick={() => selectTool(tool)}><SlicerUiIcon name={tool.icon || "others"} /></button>
+        {tool.target === "import" && addModelMenuOpen && <div
+          className="slicerToolOptions slicerAddModelMenu" id="slicer-add-model-toolbar-options"
+          role="group" aria-label="Add model options">
+          <div className="slicerToolOptionsHeader"><strong>Add model</strong>
+            <button type="button" aria-label="Close Add model menu"
+              onClick={() => setAddModelMenuOpen(false)}>Close</button>
+          </div>
+          <button type="button" className="slicerAddModelChoice" onClick={() => {
+            setAddModelMenuOpen(false);
+            editorRef.current?.querySelector('input[type="file"][accept=".stl,.3mf"]')?.click();
+          }}><SlicerUiIcon name="add" /> Upload from device</button>
+          <button type="button" className="slicerAddModelChoice" onClick={() => {
+            setAddModelMenuOpen(false);
+            setMobilePane("plate");
+            editorRef.current?.querySelector('[data-slicer-add-models]')?.scrollIntoView({
+              behavior: "smooth", block: "start"
+            });
+          }}><SlicerUiIcon name="folder" /> Add from MakerVault</button>
+        </div>}
         {tool.target === "auto_orient" && autoOrientMenuOpen && <div className="slicerToolOptions slicerAutoOrientMenu" id="slicer-auto-orient-toolbar-options" role="group" aria-label="Auto-orient choices">
           <div className="slicerToolOptionsHeader"><strong>Auto-orient</strong><button type="button" onClick={() => setAutoOrientMenuOpen(false)}>Close</button></div>
           {[
