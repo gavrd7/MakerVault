@@ -1315,10 +1315,9 @@ export default function SlicerPlateEditor({
           lastRotationPreview = angle.delta;
           // Re-seat the preview mesh on Z=0 as it tilts. The STL and saved
           // instance remain untouched until pointer-up passes placement checks.
-          const mesh = rotationGizmo.group.visible
-            ? [...meshes.values()].find(row => row.userData.instanceId === selected)
-            : null;
-          const model = latestObjectsRef.current.find(row => row.instance_id === selected);
+          const mesh = rotationGizmo.activeMesh;
+          const model = latestObjectsRef.current.find(row =>
+            row.instance_id === mesh?.userData.instanceId);
           if (mesh && model) positionOrientedMesh(mesh, {
             ...model, rotation_xyz_deg: [angle.x, angle.y], rotation_deg: angle.z,
           });
