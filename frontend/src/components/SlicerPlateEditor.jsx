@@ -233,7 +233,7 @@ export default function SlicerPlateEditor({
   autoOrientGoal = "balanced", autoOrientRequest = 0, splitRequest = 0,
   measurementVisible = false, measureMode = "distance", measureUnit = "mm", measureSnapMode = "auto", measureClearVersion = 0,
   onMeasurePinPlaced,
-  localAssets = [], onLocalAssetsChange, onExitToolMode, onPlateIssuesChange,
+  localAssets = [], onLocalAssetsChange, onExitToolMode, onPlateIssuesChange, toolbar = null,
 }) {
   const hostRef = useRef(null);
   const sceneRef = useRef(null);
@@ -1848,9 +1848,9 @@ export default function SlicerPlateEditor({
       </label>
       <span>Plate 1 of 1 · {PLATE_SURFACE[plateType]?.label || "Native default"} · {pretty(bedX)} × {pretty(bedY)} mm</span>
     </div>
-    <p>Arrange models, change their size and position, and preview the build plate. Multiple models can be sliced together with an approved OrcaSlicer worker using one filament profile. Individual preview colours do not assign separate print materials.</p>
     <div className="slicerPlateWorkspace">
       <div className="slicerPlateCanvasColumn">
+    {toolbar && <div className="slicerPlateEditingToolbar">{toolbar}</div>}
     <div className="slicerPlateCameraToolbar" role="toolbar" aria-label="Build-plate camera views">
       <button type="button" onClick={() => setPlateCamera("iso")} title="Isometric build-plate view">Isometric</button>
       <button type="button" onClick={() => setPlateCamera("top")} title="Top-down build-plate view">Top</button>
