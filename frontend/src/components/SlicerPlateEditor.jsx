@@ -949,10 +949,10 @@ export default function SlicerPlateEditor({
   // Independent insertion gizmo. Never attach the normal model control
   // to preview geometry: original objects and their transforms stay intact.
   useEffect(() => {
-    if(!["primitive","negative","text","svg","drill","cut"].includes(solidDialog?.kind))return undefined;
+    if(!["primitive","negative","text","svg","drill","cut","hollow"].includes(solidDialog?.kind))return undefined;
     const state=sceneRef.current;
     const canvas=hostRef.current?.querySelector("canvas");
-    const ghost=["drill","cut"].includes(solidDialog.kind)?operationGhostRef.current:
+    const ghost=["drill","cut","hollow"].includes(solidDialog.kind)?operationGhostRef.current:
       solidDialog.kind==="negative"?negativeGhostRef.current:liveGhostRef.current;
     if(!state||!canvas||!ghost)return undefined;
     const gizmo=new TransformControls(state.camera,canvas);
@@ -970,7 +970,23 @@ export default function SlicerPlateEditor({
     const draggingChanged=event=>{state.controls.enabled=!event.value;};
     const applyChange=()=>{
       const position=ghost.position;
-      if(solidDialog.kind==="cut") {
+      if(solidDialog.kind==="hollow") {
+        const degrees=axis=>Math.round(THREE.MathUtils.radToDeg(axis)*10)/10;
+        if(insertionMode==="translate") {
+          setSolidOptions(old=>({...old,cavity_x_mm:pretty(position.x),
+            cavity_y_mm:pretty(position.y),cavity_z_mm:pretty(position.z)}));
+        } else if(insertionMode==="scale") {
+          setSolidOptions(old=>({...old,
+            cavity_scale_x:Math.max(20,Math.min(150,pretty(Number(old.cavity_scale_x||100)*Math.abs(ghost.scale.x)))),
+            cavity_scale_y:Math.max(20,Math.min(150,pretty(Number(old.cavity_scale_y||100)*Math.abs(ghost.scale.y)))),
+            cavity_scale_z:Math.max(20,Math.min(150,pretty(Number(old.cavity_scale_z||100)*Math.abs(ghost.scale.z))))}));
+        } else {
+          setSolidOptions(old=>({...old,
+            cavity_rotation_x:degrees(ghost.rotation.x),
+            cavity_rotation_y:degrees(ghost.rotation.y),
+            cavity_rotation_z:degrees(ghost.rotation.z)}));
+        }
+      } else if(solidDialog.kind==="cut") {
         const axis=solidOptions.cutAxis||"z";
         setSolidOptions(old=>({...old,cutHeight:pretty(position[axis])}));
       } else if(solidDialog.kind==="drill") {
