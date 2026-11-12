@@ -100,7 +100,7 @@ def _transform(item, offset_x, offset_y):
     values = (sx * r00, sx * r10, sx * r20,
               sy * r01, sy * r11, sy * r21,
               sz * r02, sz * r12, sz * r22,
-              offset_x + float(item["x_mm"]), offset_y + float(item["y_mm"]), 0)
+              offset_x + float(item["x_mm"]), offset_y + float(item["y_mm"]), float(item.get("z_mm", 0))
     if any(not math.isfinite(value) or abs(value) > 10000 for value in values):
         raise SlicerProfileError("Invalid 3MF object placement.")
     return " ".join(format(value, ".6f") for value in values)
@@ -155,6 +155,7 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth):
         isinstance(entry, tuple) and len(entry) == 2 and
         isinstance(entry[0], dict) and (
             bool(entry[0].get("process_overrides")) or
+            abs(float(entry[0].get("z_mm", 0))) > 1e-7 or
             any(abs(float(v)) > 1e-7 for v in entry[0].get("rotation_xyz_deg", [0, 0]))
         )
         for entry in objects_with_stl
@@ -190,8 +191,12 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth):
                              for x, y, _z in placed):
             raise SlicerProfileError("A model extends outside the verified build plate.")
         minimum_z = min(point[2] for point in placed)
-        if abs(minimum_z) > 1e-6:
-            provisional[11] = -minimum_z
+        # Tilted STL always rests on its lowest vertex before applying the
+        # explicitly requested elevation. Do not auto-drop stacked objects.
+        desired_z = float(item.get("z_mm", 0))
+        if not math.isfinite(desired_z) or not 0 <= desired_z <= 1000:
+            raise SlicerProfileError("Invalid model elevation.")
+        provisional[11] += desired_z - minimum_z
         placement = " ".join(format(value, ".6f") for value in provisional)
         if total_triangles > MAX_TRIANGLES:
             raise SlicerProfileError("Total plate triangles exceed the limit.")
