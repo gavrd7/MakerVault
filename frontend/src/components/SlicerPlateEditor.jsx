@@ -1094,7 +1094,7 @@ export default function SlicerPlateEditor({
         throw new Error("Selected model is not loaded.");
       if (solidDialog.kind==="boolean" && (!booleanIds.length ||
         booleanIds.some(id=>!state?.meshes.get(id))))
-        throw new Error("Ctrl/Shift-select one or more other models for Mesh Boolean.");
+        throw new Error("Select at least one additional model to combine with the primary model.");
       let parts;
       if (solidDialog.kind==="primitive") {
         parts=[createPrimitiveStl(solidOptions)];
@@ -3214,16 +3214,21 @@ export default function SlicerPlateEditor({
           </>}
           {solidDialog.kind==="boolean" && <>
             <fieldset className="slicerBooleanOperands">
-              <legend>Other models · select one or more</legend>
-              {objects.filter(row=>row.instance_id!==solidDialog.id).map((row,index)=>
-                <label key={row.instance_id}>
-                  <input type="checkbox" checked={(solidOptions.booleanIds||[]).includes(row.instance_id)}
+              <legend>Models to combine · {1+(solidOptions.booleanIds||[]).length} selected</legend>
+              {objects.map((row,index)=>{
+                const primary=row.instance_id===solidDialog.id;
+                return <label key={row.instance_id}>
+                  <input type="checkbox" checked={primary||(solidOptions.booleanIds||[]).includes(row.instance_id)}
+                    disabled={primary}
+                    aria-label={primary?"Primary model (always included)":"Include model "+(index+1)}
                     onChange={event=>setSolidOptions(v=>({...v,
-                      booleanIds:event.target.checked?[...(v.booleanIds||[]),row.instance_id]:
+                      booleanIds:event.target.checked?[...new Set([...(v.booleanIds||[]),row.instance_id])]:
                         (v.booleanIds||[]).filter(id=>id!==row.instance_id),
                     }))}/>
                   {index+1}. {sourceFiles.find(file=>String(file.id)===String(row.asset_id))?.name||"Model"}
-                </label>)}
+                  {primary && <strong className="slicerBooleanPrimary">Primary</strong>}
+                </label>;
+              })}
             </fieldset>
             <label>Operation
               <select value={solidOptions.booleanMode}
