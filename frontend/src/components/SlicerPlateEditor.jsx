@@ -2716,8 +2716,6 @@ export default function SlicerPlateEditor({
       {selection.length > 1 && <aside className="slicerViewportMeasurement slicerViewportTransform slicerGroupTransformOverlay"
         aria-label="Multi-model assembly controls">
         <div className="slicerViewportMeasurementHeader"><strong>{selection.length} models selected</strong></div>
-        <p className="slicerViewportMeasurementHint">Move or rotate the selected models together.
-          Each part keeps its original mesh and relative offset.</p>
         <div className="slicerViewportTransformGrid">
           <label>Move X (mm)<input type="number" step="0.5" value={groupDeltaX}
             onChange={event => setGroupDeltaX(Number(event.target.value))} /></label>
@@ -2990,17 +2988,9 @@ export default function SlicerPlateEditor({
     {measurementVisible && chosen && <section className="slicerPlateMeasurement" role="region"
       aria-label="Selected model measurements">
       <h5>Measure geometry</h5>
-      <p className="slicerPlateHint">Choose measurement mode, units and Clear pins from the expandable
-        Measure toolbar above the plate. A compact live readout is also shown at the top-left of the viewport.</p>
-      <p className="slicerPlateHint">{measureMode === "detect"
-        ? "Click near a sharp mesh edge or on a connected planar patch to measure it. Complex curved and densely triangulated meshes may not expose a clear feature."
-        : <>Click {measureMode === "circle" ? "three" : "two"} places on a model surface to drop measurement pins.
-          Snapping follows the toolbar selection and refers to STL triangle geometry, not original CAD edges.
-          Orbit the model to reach other faces. Clicking again after completion starts a new measurement.</>}</p>
       {measureMode === "detect" && detectedFeature && <div role="status" className="slicerMeasurementResult">
         <strong>{detectedFeature.label}</strong>
         {detectedFeature.value != null && <p>{formatDetectedMeasurement(detectedFeature, measureUnit)}</p>}
-        <small>Mesh-based estimate, not a CAD feature or a certified dimension.</small>
       </div>}
       {measurePoints.length > 0 && <div role="status" className="slicerMeasurementResult">
         {measurePoints.map((pin, index) => <div key={index}>
@@ -3016,10 +3006,6 @@ export default function SlicerPlateEditor({
             <span> · Circumference: {measurementFormat(pinCircle.circumference, measureUnit)}</span>
           </div> : <div>Three collinear or nearly coincident points cannot define a circle.</div>)}
       </div>}
-      {measureMode === "circle" && <p className="slicerPlateHint">
-        Three-point circle is a geometric construction, not automatic detection of a
-        true circular hole or cylindrical face in a triangulated STL.
-      </p>}
       <h5>Selected model bounding box</h5>
       {selectedMeasurement ? <>
         <dl className="slicerMeasurementGrid">
@@ -3030,9 +3016,6 @@ export default function SlicerPlateEditor({
           <div><dt>X bounds</dt><dd>{measurementFormat(selectedMeasurement.minX, measureUnit)} to {measurementFormat(selectedMeasurement.maxX, measureUnit)}</dd></div>
           <div><dt>Y bounds</dt><dd>{measurementFormat(selectedMeasurement.minY, measureUnit)} to {measurementFormat(selectedMeasurement.maxY, measureUnit)}</dd></div>
         </dl>
-        <p className="slicerPlateHint">Read-only STL bounding-box estimate, accounting for X/Y/Z scaling and Z rotation.
-          X/Y are relative to the plate centre. This is not face-to-face measurement,
-          the exact occupied outline, or a print-clearance certification.</p>
       </> : <p role="status">Measuring the selected STL preview…</p>}
     </section>}
 
@@ -3044,7 +3027,7 @@ export default function SlicerPlateEditor({
           <header className="slicerAutoOrientModalHeader">
             <div><h3>{solidDialog.kind==="boolean"?"Mesh Boolean":
               solidDialog.kind[0].toUpperCase()+solidDialog.kind.slice(1)} model</h3>
-              <p className="slicerPlateHint">{solidDialog.name}</p></div>
+              </div>
             <button type="button" disabled={solidBusy} aria-label="Close mesh editor"
               onClick={()=>{setSolidPreview(null);setSolidDialog(null);}}>✕</button>
           </header>
@@ -3106,8 +3089,6 @@ export default function SlicerPlateEditor({
                 {["Centre X","Centre Y","Base Z"][index]} (mm)
                 <input type="number" step="0.5" value={solidOptions[field]}
                   onChange={event=>setSolidOptions(v=>({...v,[field]:event.target.value}))}/></label>)}
-              <small>Drag the preview shape on the plate to position it.
-                Shift + scroll over the shape to rotate Z, or enter exact angles above.</small>
             </div>}
             {solidDialog.kind==="negative" && <>
               <div className="slicerSolidGrid">
@@ -3118,9 +3099,6 @@ export default function SlicerPlateEditor({
               </div>
 
             </>}
-            {["primitive","text","svg"].includes(solidDialog.kind) && <p className="slicerPlateHint">
-              Creates a real STL primitive, then automatically arranges it on the plate.
-              Move, rotate, scale, duplicate or use it in a Boolean operation like any model.</p>}
           </>}
           {solidDialog.kind==="hollow" && <>
             <div className="slicerInsertionMode" role="group" aria-label="Hollow cavity handles">
@@ -3169,7 +3147,6 @@ export default function SlicerPlateEditor({
               onChange={event=>setSolidOptions(v=>({...v,x_mm:event.target.value}))}/></label>
             <label>Centre Y (mm)<input type="number" step="0.5" value={solidOptions.y_mm}
               onChange={event=>setSolidOptions(v=>({...v,y_mm:event.target.value}))}/></label>
-            <p className="slicerPlateHint">Drills a vertical through-hole along Z.</p>
           </div>}
           {solidDialog.kind==="cut" && <>
             <label>Cut plane axis
@@ -3196,7 +3173,6 @@ export default function SlicerPlateEditor({
           {solidDialog.kind==="boolean" && <>
             <fieldset className="slicerBooleanOperands">
               <legend>Other models · select one or more</legend>
-              <small>Previously selected parts are checked automatically.</small>
               {objects.filter(row=>row.instance_id!==solidDialog.id).map((row,index)=>
                 <label key={row.instance_id}>
                   <input type="checkbox" checked={(solidOptions.booleanIds||[]).includes(row.instance_id)}
@@ -3247,8 +3223,6 @@ export default function SlicerPlateEditor({
             <button type="button" disabled={splitBusy} aria-label="Cancel split"
               onClick={() => setSplitPreview(null)}>✕</button>
           </header>
-          <p>{splitPreview.parts.length} disconnected components detected. Each colour on the
-            build plate represents one resulting object. The original remains unchanged until you confirm.</p>
           <div className="slicerSplitParts" role="list" aria-label="Detected parts">
             {splitPreview.parts.map((part, i) => <div role="listitem" key={i}>
               <span className="slicerSplitSwatch" style={{ background: PALETTE[i % PALETTE.length] }} />
@@ -3256,10 +3230,6 @@ export default function SlicerPlateEditor({
                 {part.width.toFixed(1)} × {part.depth.toFixed(1)} × {part.height.toFixed(1)} mm</small></div>
             </div>)}
           </div>
-          <p className="slicerPlateHint">Each part will be saved as a private, independently editable STL
-            and arranged on the plate with 5 mm clearance. Existing per-object print settings are retained.
-            Original rotations and scale are baked into the resulting geometry; all parts rest on the build plate.
-            Connected or intersecting geometry cannot be separated by this operation.</p>
           {splitError && <p role="alert" className="integrationError">{splitError}</p>}
           <footer className="slicerAutoOrientModalActions">
             <button type="button" disabled={splitBusy} onClick={() => setSplitPreview(null)}>Cancel</button>
@@ -3278,7 +3248,6 @@ export default function SlicerPlateEditor({
           aria-label="Compare model orientations">
           <header className="slicerAutoOrientModalHeader">
             <div><h3>Compare orientations</h3>
-              <p className="slicerPlateHint">Review suggestions for {AUTO_ORIENT_GOALS[autoOrientGoal] || "your chosen goal"}.</p>
             </div>
             <button type="button" onClick={() => setAutoOrientModalOpen(false)} aria-label="Close comparison">✕</button>
           </header>
@@ -3305,7 +3274,6 @@ export default function SlicerPlateEditor({
               const metrics = option?.metrics, relative = option?.relative;
               if (!metrics || !relative) return null;
               return <>
-                <p className="slicerPlateHint">The blue ghost on the plate shows the proposed orientation while the solid model remains unchanged.</p>
                 <dl className="slicerAutoOrientMetrics">
                   <div><dt>Print-time proxy</dt><dd>{orientationComparison(relative.time)}</dd></div>
                   <div><dt>Extra material proxy</dt><dd>{orientationComparison(relative.material)}</dd></div>
@@ -3316,7 +3284,6 @@ export default function SlicerPlateEditor({
                 </dl>
               </>;
             })()}
-            <p className="slicerPlateHint">{autoOrientAnalysis.warning} Lower is better for all four proxy metrics. Green means best or tied; red means worse than the best analysed pose for that metric. These comparisons are not print-success probabilities.</p>
           </>}
           <footer className="slicerAutoOrientModalActions">
             <button type="button" onClick={() => setAutoOrientModalOpen(false)}>Cancel</button>
