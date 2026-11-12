@@ -5828,3 +5828,78 @@ a:focus-visible,
     width:57px;
   }
 }
+
+/* Dense object-tree rows with real assembly branches. Tree entries remain
+   separate buttons for selection and individual filament editing. */
+.slicerPrepareTree .slicerPrepareModelEntry{
+  position:relative;
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  margin:0 0 3px;
+  padding:0;
+}
+.slicerPrepareTree .slicerPrepareModelEntry>button:first-child{
+  min-height:28px;
+  padding:4px 6px;
+  font-size:.76rem;
+  line-height:1.15;
+}
+.slicerPrepareTree .slicerModelChangeFilament,
+.slicerPrepareTree .slicerModelEditText{
+  width:100%;
+  min-height:22px;
+  height:auto;
+  padding:2px 6px;
+  margin:0;
+  font-size:.7rem;
+  line-height:1.15;
+}
+.slicerPrepareTree .slicerAssemblyTreeHeader{
+  padding:3px;
+  margin:6px 0 2px;
+  min-height:32px;
+}
+.slicerPrepareTree .slicerAssemblyTreeHeader>button:first-child{
+  min-height:26px;
+  padding:3px 6px;
+}
+.slicerPrepareTree .slicerAssemblyTreePart{
+  position:relative;
+  margin-left:12px;
+  margin-bottom:0;
+  padding-left:13px;
+  padding-bottom:3px;
+  border:0;
+  border-radius:0;
+  background:transparent;
+}
+.slicerPrepareTree .slicerAssemblyTreePart::before{
+  content:"";
+  position:absolute;
+  left:2px;
+  top:-3px;
+  bottom:0;
+  width:1px;
+  background:#526b83;
+  pointer-events:none;
+}
+.slicerPrepareTree .slicerAssemblyTreePart::after{
+  content:"";
+  position:absolute;
+  left:2px;
+  top:13px;
+  width:11px;
+  height:1px;
+  background:#526b83;
+  pointer-events:none;
+}
+.slicerPrepareTree .slicerAssemblyTreePart.slicerAssemblyTreeLast::before{
+  bottom:auto;
+  height:16px;
+}
+.slicerPrepareTree .slicerModelFilamentChoices{
+  margin:2px 0 4px;
+  padding:5px;
+  gap:3px;
+}
