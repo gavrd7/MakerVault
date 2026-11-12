@@ -1153,6 +1153,7 @@ export default function SlicerPlateEditor({
     const bedPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
     let dragging = null;
     let rotationPointerId = null;
+    let lastRotationPreview = null;
 
     function rayFromPointer(event) {
       const rect = renderer.domElement.getBoundingClientRect();
@@ -1173,6 +1174,7 @@ export default function SlicerPlateEditor({
         const axis = rotationGizmo.pick(raycaster.ray);
         if (axis && rotationGizmo.begin(axis, raycaster.ray)) {
           rotationPointerId = event.pointerId;
+          lastRotationPreview = null;
           controls.enabled = false;
           renderer.domElement.setPointerCapture?.(event.pointerId);
           event.preventDefault();
@@ -1309,7 +1311,19 @@ export default function SlicerPlateEditor({
       if (rotationPointerId === event.pointerId && rotationGizmo.dragging) {
         rayFromPointer(event);
         const angle = rotationGizmo.drag(raycaster.ray, event.shiftKey);
-        if (angle) setLiveRotation(angle);
+        if (angle && (lastRotationPreview !== angle.delta || event.shiftKey)) {
+          lastRotationPreview = angle.delta;
+          // Re-seat the preview mesh on Z=0 as it tilts. The STL and saved
+          // instance remain untouched until pointer-up passes placement checks.
+          const mesh = rotationGizmo.group.visible
+            ? [...meshes.values()].find(row => row.userData.instanceId === selected)
+            : null;
+          const model = latestObjectsRef.current.find(row => row.instance_id === selected);
+          if (mesh && model) positionOrientedMesh(mesh, {
+            ...model, rotation_xyz_deg: [angle.x, angle.y], rotation_deg: angle.z,
+          });
+          setLiveRotation(angle);
+        }
         event.preventDefault();
         return;
       }
@@ -1330,6 +1344,7 @@ export default function SlicerPlateEditor({
     function pointerUp(event) {
       if (rotationPointerId === event.pointerId) {
         rotationPointerId = null;
+        lastRotationPreview = null;
         const operation = rotationGizmo.end();
         controls.enabled = true;
         setLiveRotation(null);
