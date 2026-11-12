@@ -301,6 +301,7 @@ export default function SlicerPlateEditor({
   const [solidPreview, setSolidPreview] = useState(null);
   const liveGhostRef = useRef(null);
   const negativeGhostRef = useRef(null);
+  const operationGhostRef = useRef(null);
   const insertionGizmoRef = useRef(null);
   const [insertionMode, setInsertionMode] = useState("translate");
   const [solidBusy, setSolidBusy] = useState(false);
@@ -805,6 +806,46 @@ export default function SlicerPlateEditor({
       state.scene.remove(ghost);ghost.geometry.dispose();ghost.material.dispose();};
   }, [solidDialog?.kind,solidOptions]);
 
+  // Positionable drill cylinder and cut plane; edits stay previews until Apply.
+  useEffect(() => {
+    if(!["drill","cut"].includes(solidDialog?.kind))return undefined;
+    const state=sceneRef.current;
+    const target=state?.meshes.get(solidDialog.id);
+    if(!state||!target)return undefined;
+    const bounds=new THREE.Box3().setFromObject(target);
+    const size=bounds.getSize(new THREE.Vector3());
+    const mid=bounds.getCenter(new THREE.Vector3());
+    let geometry,ghost;
+    const material=new THREE.MeshBasicMaterial({
+      color:solidDialog.kind==="drill"?"#eab96a":"#6ed9e0",
+      transparent:true,opacity:0.3,depthWrite:false,side:THREE.DoubleSide,
+    });
+    if(solidDialog.kind==="drill") {
+      const radius=Math.max(.2,Number(solidOptions.radius||.2));
+      geometry=new THREE.CylinderGeometry(radius,radius,size.z+4,48);
+      geometry.rotateX(Math.PI/2);
+      ghost=new THREE.Mesh(geometry,material);
+      ghost.position.set(Number(solidOptions.x_mm||0),Number(solidOptions.y_mm||0),mid.z);
+    } else {
+      const cover=Math.max(size.x,size.y,size.z)*2+20;
+      geometry=new THREE.PlaneGeometry(cover,cover);
+      ghost=new THREE.Mesh(geometry,material);
+      const axis=solidOptions.cutAxis||"z";
+      const normal=new THREE.Vector3(axis==="x"?1:0,axis==="y"?1:0,axis==="z"?1:0);
+      ghost.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),normal);
+      ghost.position.copy(mid);
+      ghost.position[axis]=Number(solidOptions.cutHeight||0);
+    }
+    ghost.renderOrder=75;
+    operationGhostRef.current=ghost;
+    state.scene.add(ghost);
+    return ()=>{
+      if(operationGhostRef.current===ghost)operationGhostRef.current=null;
+      state.scene.remove(ghost);
+      geometry.dispose();material.dispose();
+    };
+  }, [solidDialog?.kind,solidDialog?.id,solidOptions]);
+
   // Drag the real-time primitive or negative-volume ghost without dismissing
   // its settings panel. The committed STL remains untouched until Apply.
   useEffect(() => {
@@ -888,22 +929,37 @@ export default function SlicerPlateEditor({
   // Independent insertion gizmo. Never attach the normal model control
   // to preview geometry: original objects and their transforms stay intact.
   useEffect(() => {
-    if(!["primitive","negative","text","svg"].includes(solidDialog?.kind))return undefined;
+    if(!["primitive","negative","text","svg","drill","cut"].includes(solidDialog?.kind))return undefined;
     const state=sceneRef.current;
     const canvas=hostRef.current?.querySelector("canvas");
-    const ghost=solidDialog.kind==="negative"?negativeGhostRef.current:liveGhostRef.current;
+    const ghost=["drill","cut"].includes(solidDialog.kind)?operationGhostRef.current:
+      solidDialog.kind==="negative"?negativeGhostRef.current:liveGhostRef.current;
     if(!state||!canvas||!ghost)return undefined;
     const gizmo=new TransformControls(state.camera,canvas);
     const helper=gizmo.getHelper();
     insertionGizmoRef.current=gizmo;
     state.scene.add(helper);
     gizmo.attach(ghost);
-    gizmo.setMode(insertionMode);
+    gizmo.setMode(solidDialog.kind==="cut"?"translate":insertionMode);
     gizmo.setSize(0.8);
+    if(solidDialog.kind==="drill")gizmo.showZ=false;
+    if(solidDialog.kind==="cut"){
+      const axis=solidOptions.cutAxis||"z";
+      gizmo.showX=axis==="x";gizmo.showY=axis==="y";gizmo.showZ=axis==="z";
+    }
     const draggingChanged=event=>{state.controls.enabled=!event.value;};
     const applyChange=()=>{
       const position=ghost.position;
-      if(insertionMode==="translate") {
+      if(solidDialog.kind==="cut") {
+        const axis=solidOptions.cutAxis||"z";
+        setSolidOptions(old=>({...old,cutHeight:pretty(position[axis])}));
+      } else if(solidDialog.kind==="drill") {
+        if(insertionMode==="scale") {
+          const factor=(Math.abs(ghost.scale.x)+Math.abs(ghost.scale.y))/2;
+          setSolidOptions(old=>({...old,radius:pretty(Math.max(.2,Math.min(500,
+            Number(old.radius||1)*factor)))}));
+        } else setSolidOptions(old=>({...old,x_mm:pretty(position.x),y_mm:pretty(position.y)}));
+      } else if(insertionMode==="translate") {
         setSolidOptions(old=>({...old,x_mm:pretty(position.x),y_mm:pretty(position.y),
           z_mm:pretty(position.z+(solidDialog.kind==="negative"?Number(old.height||0)/2:0))}));
       } else if(insertionMode==="scale") {
