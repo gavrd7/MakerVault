@@ -8,6 +8,41 @@ from core.slicer_profiles import SlicerProfileError
 
 
 class BuildPlate3MFTests(SimpleTestCase):
+    def test_elevation_is_preserved_in_individual_and_compound_3mf(self):
+        shape = fixture_stl()
+        items = [
+            ({"x_mm": -25, "y_mm": 0, "z_mm": 0,
+              "rotation_deg": 0, "scale_percent": 100}, shape),
+            ({"x_mm": 25, "y_mm": 0, "z_mm": 12.5,
+              "rotation_deg": 0, "scale_percent": 100}, shape),
+        ]
+        for builder in (build_plate_3mf, build_compound_plate_3mf):
+            data = builder(items, bed_width=220, bed_depth=220)
+            with zipfile.ZipFile(io.BytesIO(data)) as archive:
+                root = ET.fromstring(archive.read("3D/3dmodel.model"))
+            ns = "{" + NS + "}"
+            if builder is build_plate_3mf:
+                objects = root.findall("./" + ns + "resources/" + ns + "object")
+                placements = root.findall("./" + ns + "build/" + ns + "item")
+                self.assertEqual(len(objects), 2)
+                second = [float(v) for v in placements[1].attrib["transform"].split()]
+                self.assertAlmostEqual(second[11], 12.5, places=3)
+            else:
+                vertices = root.findall(".//" + ns + "vertex")
+                zs = sorted({round(float(v.attrib["z"]), 3) for v in vertices})
+                self.assertTrue(any(z >= 12.5 for z in zs))
+
+    def test_tilted_elevated_mesh_preserves_requested_bottom_height(self):
+        shape = fixture_stl()
+        item = {"x_mm": 0, "y_mm": 0, "z_mm": 8.5,
+                "rotation_deg": 0, "rotation_xyz_deg": [90, 0],
+                "scale_percent": 100}
+        data = build_plate_3mf([(item, shape)], bed_width=220, bed_depth=220)
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            root = ET.fromstring(archive.read("3D/3dmodel.model"))
+        zs = [float(v.attrib["z"]) for v in root.findall(".//{%s}vertex" % NS)]
+        self.assertAlmostEqual(min(zs), 8.5, places=3)
+
     def test_multiple_meshes_preserve_distinct_transforms(self):
         shape = fixture_stl()
         items = [
