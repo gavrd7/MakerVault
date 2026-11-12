@@ -5386,3 +5386,64 @@ a:focus-visible,
   .slicerWorkbenchRoot .slicerHeroActions { gap: 7px; }
   .slicerWorkbenchRoot .slicerHeroActions > button { font-size: .85rem; }
 }
+
+
+/* Editing commands belong to the build plate, not the distant page header. */
+.slicerPlateEditingToolbar {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  margin: 0 0 10px;
+  isolation: isolate;
+  z-index: 10;
+}
+.slicerPlateEditingToolbar > .slicerPrepareTools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid #34465b;
+  border-radius: 10px;
+  background: #111b27;
+}
+.slicerPlateEditingToolbar .slicerToolTooltip {
+  flex: 0 0 38px;
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+}
+.slicerPlateEditingToolbar .slicerToolTooltip > button {
+  width: 38px;
+  height: 38px;
+}
+.slicerPlateEditingToolbar .slicerToolOptions {
+  z-index: 55;
+}
+@media (max-width: 850px) {
+  .slicerPlateEditingToolbar > .slicerPrepareTools {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+    padding: 7px;
+  }
+  .slicerPlateEditingToolbar .slicerToolTooltip {
+    flex: 0 0 40px;
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+  }
+  .slicerPlateEditingToolbar .slicerToolTooltip > button {
+    width: 40px;
+    height: 40px;
+  }
+  /* Dropdowns must be able to extend beyond the horizontal toolbar viewport. */
+  .slicerPlateEditingToolbar > .slicerPrepareTools:has(.slicerToolOptionsOpen) {
+    overflow: visible;
+    flex-wrap: wrap;
+  }
+}
