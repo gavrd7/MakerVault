@@ -2100,7 +2100,7 @@ export default function SlicerPlateEditor({
 
       </div>
       <aside className="slicerPlateControls" aria-label="Build plate controls">
-        <div className="slicerPlateControlsGroup">
+        <div className="slicerPlateControlsGroup" data-slicer-add-models>
           <h4>Add models</h4>
     <div className="formGrid slicerPlateImportFields">
       <label>Existing STL from Files
