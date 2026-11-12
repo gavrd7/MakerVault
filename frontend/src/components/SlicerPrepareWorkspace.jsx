@@ -352,6 +352,19 @@ export default function SlicerPrepareWorkspace({
 
   const validSelection = selectedIds.filter(id => objects.some(row => row.instance_id === id));
   const selectedModels = objects.filter(row => validSelection.includes(row.instance_id));
+  // Assemblies display as contiguous logical groups regardless of the
+  // underlying object order. Individual parts retain their instance IDs
+  // and remain independently editable inside the expanded group.
+  const modelTreeRows=(()=>{
+    const visited=new Set(),result=[];
+    for(const row of objects) {
+      if(!row.assembly_id){result.push(row);continue;}
+      if(visited.has(row.assembly_id))continue;
+      visited.add(row.assembly_id);
+      result.push(...objects.filter(item=>item.assembly_id===row.assembly_id));
+    }
+    return result;
+  })();
   const activeAssembly = selectedModels.length > 0 && selectedModels.every(row =>
     row.assembly_id && row.assembly_id === selectedModels[0].assembly_id)
     ? selectedModels[0].assembly_id : "";
@@ -893,7 +906,7 @@ export default function SlicerPrepareWorkspace({
               onClick={disassembleSelected}>Disassemble</button>
           </div>
         </div>}
-        {objects.map((object, index) => {
+        {modelTreeRows.map((object, index) => {
           const assembly = object.assembly_id;
           const members = assembly ? objects.filter(row=>row.assembly_id===assembly) : [];
           const firstMember = assembly && members[0]?.instance_id===object.instance_id;
