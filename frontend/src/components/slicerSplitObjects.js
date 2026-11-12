@@ -6,7 +6,9 @@
  */
 import * as THREE from "three";
 
-const MAX_TRIANGLES = 200000;
+// Match the current native 3MF plate triangle ceiling. This cap also prevents
+// unbounded geometry allocations on mobile browsers.
+const MAX_TRIANGLES = 500000;
 const WELD_MM = 0.0001;
 const MAX_STL_BYTES = 32 * 1024 * 1024;
 
@@ -18,7 +20,7 @@ export function splitDisconnectedMesh(mesh, maxParts = 12) {
   if (!position || !Number.isInteger(triangleCount) || triangleCount < 1)
     throw new Error("The selected model has no valid triangles.");
   if (triangleCount > MAX_TRIANGLES)
-    throw new Error("Split supports up to 200,000 triangles per source. Simplify this STL before splitting.");
+    throw new Error("This STL exceeds the current 500,000-triangle slicing limit. Split requires a smaller mesh or a higher validated native export limit.");
   const parent = new Int32Array(triangleCount);
   for (let i = 0; i < triangleCount; i++) parent[i] = i;
   const find = id => {
