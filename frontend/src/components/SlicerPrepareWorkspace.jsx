@@ -924,7 +924,7 @@ export default function SlicerPrepareWorkspace({
               {expanded?"−":"+"}
             </button>
           </div>}
-          {(!assembly || expanded) && <div className={"slicerPrepareModelEntry"+(assembly?" slicerAssemblyTreePart":"")}>
+          {(!assembly || expanded) && <div className={"slicerPrepareModelEntry"+(assembly?" slicerAssemblyTreePart"+(members.at(-1)?.instance_id===object.instance_id?" slicerAssemblyTreeLast":""):"")}>
           <button type="button"
             className={validSelection.includes(object.instance_id) ? "selected" : ""}
             onClick={event => selectMultiple(object.instance_id, event.ctrlKey || event.metaKey || event.shiftKey, !!assembly)}
