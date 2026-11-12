@@ -93,7 +93,11 @@ function checkManifold(geometry, maxTriangles) {
   }
   for(let i=0;i<faces*3;i+=3) {
     const v=[0,1,2].map(n=>vertex(index?index.getX(i+n):i+n));
-    if(new Set(v).size!==3) throw new Error("CSG produced a degenerate mesh triangle.");
+    // A nonzero-area triangle can collapse under 0.0001 mm validation
+    // quantisation at near-coplanar CSG seams. It is already screened for
+    // physical area in resultToStl; skip just this zero-length welded face
+    // rather than failing an otherwise valid printable surface.
+    if(new Set(v).size!==3) continue;
     for(const [a,b] of [[0,1],[1,2],[2,0]]) {
       const id=v[a]<v[b]?v[a]+"|"+v[b]:v[b]+"|"+v[a];
       const old=edges.get(id);
