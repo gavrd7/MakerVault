@@ -569,3 +569,14 @@ test("MakerVault angle gizmo replaces default rotation rings with interactive ax
   assert.match(gizmo, /angleBadge\.visible = true/);
   assert.match(gizmo, /activeArc = new THREE\.Line\(/);
 });
+
+test("expanded Move, Rotate and Scale panels import the shared icon component", () => {
+  const editor = read("SlicerPlateEditor.jsx");
+  const icons = read("SlicerUiIcon.jsx");
+  assert.match(editor, /import SlicerUiIcon from "\.\/SlicerUiIcon"/);
+  assert.match(editor, /<SlicerUiIcon name="center"/);
+  assert.match(editor, /<SlicerUiIcon name="rotate"/);
+  assert.match(editor, /<SlicerUiIcon name="scale"/);
+  for (const name of ["center", "rotate", "scale"])
+    assert.match(icons, new RegExp(name + ":"));
+});
