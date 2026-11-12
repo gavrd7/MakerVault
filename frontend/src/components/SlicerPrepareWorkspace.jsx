@@ -897,7 +897,12 @@ export default function SlicerPrepareWorkspace({
         </p>}
         {!draftBlockReason && sliceBlockReason && <p className="slicerActionStatus" role="status">
           <strong>Slicing unavailable:</strong> {sliceBlockReason}
-          <button type="button" onClick={onChangeProfiles}>Check profiles and engine</button>
+          {conflictsBlockSlice
+            ? <button type="button" onClick={() => {
+              setMobilePane("plate");
+              editorRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+            }}>Review build plate</button>
+            : <button type="button" onClick={onChangeProfiles}>Check profiles and engine</button>}
         </p>}
       </div>
       <div className="settingsActions">
