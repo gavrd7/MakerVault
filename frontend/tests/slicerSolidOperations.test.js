@@ -84,3 +84,31 @@ test("zero-area CSG fragments are stripped before binary STL validation",()=>{
   assert.equal(output.buffer.byteLength,84+12*50);
   geometry.dispose();cube.geometry.dispose();
 });
+
+test("hollow cavity can be adjusted without altering the source STL",()=>{
+  const mesh=solid();
+  const before=Array.from(mesh.geometry.getAttribute("position").array);
+  const out=executeSolidOperation("hollow",mesh,{
+    wall:2,cavity_x_mm:0.5,cavity_y_mm:0,cavity_z_mm:0,
+    cavity_scale_x:101,cavity_scale_y:100,cavity_scale_z:100,
+    cavity_rotation_x:0,cavity_rotation_y:0,cavity_rotation_z:0,
+  });
+  assert.equal(out.length,1);
+  assert.ok(out[0].triangles>0);
+  assert.equal(out[0].validationWarning,"");
+  assert.deepEqual(Array.from(mesh.geometry.getAttribute("position").array),before);
+  mesh.geometry.dispose();
+});
+test("open mesh can be previewed but strict STL conversion rejects it",()=>{
+  const mesh=solid();
+  const position=mesh.geometry.getAttribute("position").array;
+  const geometry=new THREE.BufferGeometry();
+  geometry.setAttribute("position",
+    new THREE.Float32BufferAttribute(Array.from(position).slice(9),3));
+  const open=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial());
+  assert.throws(()=>resultToStl(open),/watertight|unmatched/i);
+  const preview=resultToStl(open,{allowOpenPreview:true});
+  assert.match(preview.validationWarning,/open mesh/i);
+  assert.ok(preview.triangles>0);
+  mesh.geometry.dispose();geometry.dispose();open.material.dispose();
+});
