@@ -991,7 +991,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       <div>
         <span className="settingsEyebrow">3D Printing · MakerVault Slicer</span>
         <h2>Prepare a slice</h2>
-        <p>Choose the model, physical printer and spool, then keep each slicing engine's printer, filament and process presets separate. Slicing execution is not enabled until a verified self-hosted worker is installed.</p>
+        <p>Choose a model, printer and filament, then configure the native slicing profiles. Prepare the build plate, save drafts, and slice when the selected engine is available.</p>
       </div>
       <div className="printingHeroActions">
         {editorOpen && <button type="button" onClick={() => setEditorOpen(false)}>← Slicer setup</button>}
@@ -1040,9 +1040,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     <div className="slicerWorkbenchTop">
     <section className="panel printingSection" aria-labelledby="slicer-preparation-heading">
       <div className="slicerSetupHeading"><h3 id="slicer-preparation-heading">Slicer setup</h3></div>
-      <p role="status">{workerConfigured
-        ? "An isolated slicing worker is configured. Selected native profiles are checked for integrity before execution. Slicing never starts a print."
-        : "Preparation mode — no isolated slicing worker is available. Saving a draft does not run a slicer, send a printer command or change spool inventory."}</p>
       {error && <p className="integrationError" role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
       <form id="slicer-configuration-form" className="formGrid" onSubmit={event => { event.preventDefault(); saveDraft("draft"); }}>
