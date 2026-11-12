@@ -146,6 +146,25 @@ function blockTextGeometry(value,height) {
     cursor+=6;
   }
   if(!active.size)throw new Error("Enter visible text to extrude.");
+  // Bitmap glyph diagonals can touch at a single vertical edge, producing
+  // four-face non-manifold junctions. Bridge those isolated diagonal contacts
+  // before extrusion so every connected pixel cluster is a printable solid.
+  // This is preferable to silently disabling the watertightness check.
+  for(let pass=0;pass<8;pass++) {
+    const bridges=new Set();
+    for(const key of active) {
+      const [x,y]=key.split(",").map(Number);
+      for(const dy of [-1,1]) {
+        const diagonal=(x+1)+","+(y+dy);
+        const right=(x+1)+","+y;
+        const vertical=x+","+(y+dy);
+        if(active.has(diagonal) && !active.has(right) && !active.has(vertical))
+          bridges.add(right);
+      }
+    }
+    if(!bridges.size)break;
+    bridges.forEach(key=>active.add(key));
+  }
   if(active.size>950)throw new Error("Text is too complex for local extrusion.");
   const array=[];
   const quad=(a,b,c,d)=>{array.push(...a,...b,...c,...a,...c,...d);};
