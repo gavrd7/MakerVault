@@ -3,10 +3,10 @@ import * as THREE from "three";
 import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { FontLoader } from "three/addons/loaders/FontLoader.js";
 import { TextGeometry } from "three/addons/geometries/TextGeometry.js";
-import helvetikerRegular from "three/examples/fonts/helvetiker_regular.typeface.json";
-import helvetikerBold from "three/examples/fonts/helvetiker_bold.typeface.json";
-import optimerRegular from "three/examples/fonts/optimer_regular.typeface.json";
-import gentilisRegular from "three/examples/fonts/gentilis_regular.typeface.json";
+import helvetikerRegular from "../assets/slicer-fonts/helvetiker_regular.typeface.json" with { type: "json" };
+import helvetikerBold from "../assets/slicer-fonts/helvetiker_bold.typeface.json" with { type: "json" };
+import optimerRegular from "../assets/slicer-fonts/optimer_regular.typeface.json" with { type: "json" };
+import gentilisRegular from "../assets/slicer-fonts/gentilis_regular.typeface.json" with { type: "json" };
 
 // Permissively licensed MgOpen-based typefaces shipped with three.js.
 // The original block face remains available for backward compatibility.
