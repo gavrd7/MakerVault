@@ -5628,3 +5628,33 @@ a:focus-visible,
 }
 .slicerAssemblyTreeHeader>button:last-child {min-width:30px;padding:4px}
 .slicerAssemblyTreePart {margin-left:12px; border-left:2px solid #45657b;padding-left:6px}
+
+
+.slicerPrimitivePicker,.slicerBooleanOperands {
+  border:1px solid #3d566e;border-radius:9px;padding:9px 10px;min-width:0;margin:0;
+}
+.slicerPrimitivePicker legend,.slicerBooleanOperands legend {color:#bdd0df;font-size:.83rem;padding:0 5px}
+.slicerPrimitiveShapeGrid {
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;
+}
+.slicerPrimitiveShapeGrid button {
+  display:flex;align-items:center;justify-content:flex-start;gap:8px;
+  min-width:0;min-height:43px;padding:8px;
+  border-radius:8px;border:1px solid #405875;background:#152332;color:#d7e4f3;
+  font-size:.79rem;text-align:left;
+}
+.slicerPrimitiveShapeGrid button.selected {
+  border-color:#aa8bfc;background:#292342;color:#eee7ff;
+}
+.slicerPrimitiveShapeGrid .slicerUiIcon {flex:0 0 21px}
+.slicerBooleanOperands {
+  display:grid;max-height:220px;overflow-y:auto;gap:7px;
+}
+.slicerBooleanOperands label {
+  display:flex;align-items:center;gap:8px;font-size:.79rem;line-height:1.4;
+}
+.slicerBooleanOperands input[type=checkbox] {width:17px;min-height:17px;flex:0 0 17px}
+.slicerBooleanOperands small {font-size:.73rem;color:#9aacbf}
+@media(max-width:480px) {
+  .slicerPrimitiveShapeGrid {grid-template-columns:repeat(2,minmax(0,1fr))}
+}
