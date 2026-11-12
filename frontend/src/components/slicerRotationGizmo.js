@@ -91,9 +91,12 @@ export function unwrapRotationDelta(current, previous) {
   if (delta < -Math.PI) delta += TWO_PI;
   return delta;
 }
-export function snapRotationDegrees(degrees, shift = false) {
+export function snapRotationDegrees(degrees, shift = false, speed = 0) {
   if (!Number.isFinite(degrees)) return 0;
-  const increment = shift ? 5 : 45;
+  // Fine handling stays at 1° while the pointer moves slowly or is held.
+  // Quicker gestures progressively use larger detents, rather than locking
+  // every drag to 45°. Shift explicitly requests 1° precision at any speed.
+  const increment = shift || speed < 75 ? 1 : speed < 230 ? 5 : 45;
   return Math.round(degrees / increment) * increment;
 }
 
@@ -225,6 +228,7 @@ export function createMakerVaultRotationGizmo(scene) {
       lastAngle: 0,
       lastRaw: 0,
       accumulated: 0,
+      lastTimestamp: null,
     };
     activeAxis = axisName;
     angleBadge.visible = true;
@@ -240,13 +244,18 @@ export function createMakerVaultRotationGizmo(scene) {
     for (const [name, ring] of rings) ring.children[0].material.opacity = name === axisName ? 1 : 0.16;
     return true;
   }
-  function drag(ray, shift = false) {
+  function drag(ray, shift = false, timestamp = null) {
     if (!dragState) return null;
     const raw = dragAngleFromRay(ray, group.position,
       dragState.normal, dragState.startDirection, dragState.lastRaw);
-    dragState.accumulated += unwrapRotationDelta(raw, dragState.lastRaw);
+    const motionRadians = unwrapRotationDelta(raw, dragState.lastRaw);
+    dragState.accumulated += motionRadians;
     dragState.lastRaw = raw;
-    const degrees = snapRotationDegrees(THREE.MathUtils.radToDeg(dragState.accumulated), shift);
+    const elapsed = Number.isFinite(timestamp) && dragState.lastTimestamp !== null
+      ? Math.max(1, timestamp - dragState.lastTimestamp) : 100;
+    if (Number.isFinite(timestamp)) dragState.lastTimestamp = timestamp;
+    const speed = Math.abs(THREE.MathUtils.radToDeg(motionRadians)) * 1000 / elapsed;
+    const degrees = snapRotationDegrees(THREE.MathUtils.radToDeg(dragState.accumulated), shift, speed);
     dragState.lastAngle = THREE.MathUtils.degToRad(degrees);
     if (activeArc) {
       group.remove(activeArc);
