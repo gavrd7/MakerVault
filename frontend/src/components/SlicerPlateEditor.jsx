@@ -16,7 +16,7 @@ import { detectMeshMeasurement, formatDetectedMeasurement } from "./slicerAutoMe
 import { evaluateAutoOrient, AUTO_ORIENT_GOALS } from "./slicerAutoOrient";
 import { splitDisconnectedMesh } from "./slicerSplitObjects";
 import { executeSolidOperation } from "./slicerSolidOperations";
-import { PRIMITIVE_TYPES, createPrimitiveMesh, createPrimitiveStl } from "./slicerPrimitives";
+import { PRIMITIVE_TYPES, createPrimitiveMesh, createPrimitiveStl, createTextStl, createSvgStl } from "./slicerPrimitives";
 import { validateStackPlacement } from "./slicerStacking";
 import makerVaultLogoSvg from "../assets/slicer-bed-art/makervault-official-logo.svg?raw";
 
@@ -295,7 +295,8 @@ export default function SlicerPlateEditor({
   const [solidPreview, setSolidPreview] = useState(null);
   const [solidBusy, setSolidBusy] = useState(false);
   const [solidError, setSolidError] = useState("");
-  const [solidOptions, setSolidOptions] = useState({wall: 2, radius: 3, x_mm: 0, y_mm: 0, cutHeight: 5, cutAxis: "z", keep: "both", booleanMode: "union", secondId: "", primitiveType: "box", width: 20, depth: 20, height: 20, z_mm: 10});
+  const [solidOptions, setSolidOptions] = useState({wall: 2, radius: 3, x_mm: 0, y_mm: 0, cutHeight: 5, cutAxis: "z", keep: "both", booleanMode: "union", secondId: "", primitiveType: "box", width: 20, depth: 20, height: 20, z_mm: 10,
+    rotation_x:0,rotation_y:0,rotation_z:0,text:"MakerVault",svgData:""});
   // An applied result must always correspond to the options actually shown.
   useEffect(() => { setSolidPreview(null); }, [solidOptions]);
   const lastPreviewKeyRef = useRef("");
@@ -597,7 +598,7 @@ export default function SlicerPlateEditor({
     const mesh = item && sceneRef.current?.meshes.get(item.instance_id);
     setSolidError("");
     setSolidPreview(null);
-    if (!mesh && solidRequest.kind !== "primitive") {
+    if (!mesh && !["primitive","text","svg"].includes(solidRequest.kind)) {
       setSolidError("Select a loaded STL model to edit.");
       return;
     }
@@ -614,9 +615,10 @@ export default function SlicerPlateEditor({
       keep: "both", booleanMode: "union",
       secondId: objects.find(row => row.instance_id!==item?.instance_id)?.instance_id || "",
       primitiveType:"box", width:20,depth:20,height:20,z_mm:pretty(center.z),
+      rotation_x:0,rotation_y:0,rotation_z:0,text:"MakerVault",svgData:"",
     });
     setSolidDialog({kind:solidRequest.kind,id:item?.instance_id || null,name:
-      solidRequest.kind === "primitive" ? "Primitive" :
+      ["primitive","text","svg"].includes(solidRequest.kind) ? solidRequest.kind[0].toUpperCase()+solidRequest.kind.slice(1) :
       sourceFiles.find(file => String(file.id)===String(item?.asset_id))?.name || "Model"});
   }, [solidRequest?.id]);
 
@@ -656,13 +658,17 @@ export default function SlicerPlateEditor({
       const state=sceneRef.current;
       const target=state?.meshes.get(solidDialog.id);
       const second=solidDialog.kind==="boolean" ? state?.meshes.get(solidOptions.secondId) : null;
-      if (!target && solidDialog.kind !== "primitive")
+      if (!target && !["primitive","text","svg"].includes(solidDialog.kind))
         throw new Error("Selected model is not loaded.");
       if (solidDialog.kind==="boolean" && (!second || second===target))
         throw new Error("Choose a different model for this Boolean operation.");
       let parts;
       if (solidDialog.kind==="primitive") {
         parts=[createPrimitiveStl(solidOptions)];
+      } else if (solidDialog.kind==="text") {
+        parts=[createTextStl(solidOptions)];
+      } else if (solidDialog.kind==="svg") {
+        parts=[createSvgStl(solidOptions)];
       } else if (solidDialog.kind==="negative") {
         const tool=createPrimitiveMesh(solidOptions,[
           Number(solidOptions.x_mm),Number(solidOptions.y_mm),
@@ -674,7 +680,7 @@ export default function SlicerPlateEditor({
       } else {
         parts=executeSolidOperation(solidDialog.kind,target,solidOptions,second);
       }
-      if (objects.length-(solidDialog.kind==="primitive"?0:1)-(second?1:0)+parts.length>MAX_OBJECTS)
+      if (objects.length-(["primitive","text","svg"].includes(solidDialog.kind)?0:1)-(second?1:0)+parts.length>MAX_OBJECTS)
         throw new Error("The result would exceed the 200-object build plate limit.");
       setSolidPreview({parts,secondId:second ? solidOptions.secondId : null});
     } catch(error) {
@@ -684,7 +690,7 @@ export default function SlicerPlateEditor({
   async function applySolid() {
     if (!solidDialog || !solidPreview || solidBusy) return;
     const selectedObject=objects.find(row=>row.instance_id===solidDialog.id);
-    if (!selectedObject && solidDialog.kind!=="primitive") {
+    if (!selectedObject && !["primitive","text","svg"].includes(solidDialog.kind)) {
       setSolidError("Selection changed. Reopen the mesh operation.");return;
     }
     setSolidBusy(true);setSolidError("");
@@ -702,7 +708,7 @@ export default function SlicerPlateEditor({
         if(!id) throw new Error("MakerVault did not return a validated STL identifier.");
         created.push({id,name:filename,file,part});
       }
-      const remaining=objects.filter(row=>solidDialog.kind==="primitive" ||
+      const remaining=objects.filter(row=>["primitive","text","svg"].includes(solidDialog.kind) ||
         (row.instance_id!==solidDialog.id && row.instance_id!==solidPreview.secondId));
       const additions=created.map(({id,part},index)=>({
         ...selectedObject,
@@ -711,7 +717,7 @@ export default function SlicerPlateEditor({
         color:PALETTE[(index+2)%PALETTE.length],
         assembly_id:null,
       }));
-      if (solidDialog.kind==="primitive") {
+      if (["primitive","text","svg"].includes(solidDialog.kind)) {
         pendingArrangeRef.current=true;
         additions.forEach(item=>pendingAddIdsRef.current.add(item.instance_id));
         onChange([...remaining,...additions]);
@@ -2391,13 +2397,30 @@ export default function SlicerPlateEditor({
             <button type="button" disabled={solidBusy} aria-label="Close mesh editor"
               onClick={()=>{setSolidPreview(null);setSolidDialog(null);}}>✕</button>
           </header>
-          {["primitive","negative"].includes(solidDialog.kind) && <>
-            <label>Shape
-              <select value={solidOptions.primitiveType} onChange={event=>
-                setSolidOptions(v=>({...v,primitiveType:event.target.value}))}>
-                {PRIMITIVE_TYPES.map(type=><option key={type} value={type}>
-                  {type[0].toUpperCase()+type.slice(1)}</option>)}
-              </select></label>
+          {["primitive","negative","text","svg"].includes(solidDialog.kind) && <>
+            {["primitive","negative"].includes(solidDialog.kind) && <fieldset className="slicerPrimitivePicker">
+              <legend>Shape</legend>
+              <div className="slicerPrimitiveShapeGrid">
+                {PRIMITIVE_TYPES.map(type=><button key={type} type="button"
+                  className={solidOptions.primitiveType===type?"selected":""}
+                  aria-pressed={solidOptions.primitiveType===type}
+                  onClick={()=>setSolidOptions(v=>({...v,primitiveType:type}))}>
+                  <SlicerUiIcon name={"shape-"+type}/>
+                  {type[0].toUpperCase()+type.slice(1)}
+                </button>)}
+              </div>
+            </fieldset>}
+            {solidDialog.kind==="text" && <label>Text
+              <input type="text" maxLength="40" value={solidOptions.text}
+                onChange={event=>setSolidOptions(v=>({...v,text:event.target.value}))}/></label>}
+            {solidDialog.kind==="svg" && <label>Vector artwork
+              <input type="file" accept=".svg,image/svg+xml" onChange={async event=>{
+                const file=event.target.files?.[0];
+                if(!file)return;
+                if(file.size>500000){setSolidError("SVG must be smaller than 500 KB.");return;}
+                const content=await file.text();
+                setSolidOptions(v=>({...v,svgData:content}));
+              }}/></label>}
             <div className="slicerSolidGrid">
               {["width","depth","height"].map((field,index)=><label key={field}>
                 {["Width X","Depth Y","Height Z"][index]} (mm)
@@ -2405,6 +2428,13 @@ export default function SlicerPlateEditor({
                   value={solidOptions[field]} onChange={event=>
                     setSolidOptions(v=>({...v,[field]:event.target.value}))}/></label>)}
             </div>
+            {["primitive","negative"].includes(solidDialog.kind) && <div className="slicerSolidGrid">
+              {["rotation_x","rotation_y","rotation_z"].map((field,index)=><label key={field}>
+                {["Rotate X","Rotate Y","Rotate Z"][index]} (°)
+                <input type="number" min="-360" max="360" step="1"
+                  value={solidOptions[field]} onChange={event=>
+                    setSolidOptions(v=>({...v,[field]:event.target.value}))}/></label>)}
+            </div>}
             {solidDialog.kind==="negative" && <>
               <div className="slicerSolidGrid">
                 {["x_mm","y_mm","z_mm"].map((field,index)=><label key={field}>
@@ -2416,7 +2446,7 @@ export default function SlicerPlateEditor({
                 The original stays intact until the result has been previewed and validated.
                 This changes mesh geometry, not native print settings.</p>
             </>}
-            {solidDialog.kind==="primitive" && <p className="slicerPlateHint">
+            {["primitive","text","svg"].includes(solidDialog.kind) && <p className="slicerPlateHint">
               Creates a real STL primitive, then automatically arranges it on the plate.
               Move, rotate, scale, duplicate or use it in a Boolean operation like any model.</p>}
           </>}
