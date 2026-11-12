@@ -100,7 +100,7 @@ def _transform(item, offset_x, offset_y):
     values = (sx * r00, sx * r10, sx * r20,
               sy * r01, sy * r11, sy * r21,
               sz * r02, sz * r12, sz * r22,
-              offset_x + float(item["x_mm"]), offset_y + float(item["y_mm"]), float(item.get("z_mm", 0))
+              offset_x + float(item["x_mm"]), offset_y + float(item["y_mm"]), float(item.get("z_mm", 0)))
     if any(not math.isfinite(value) or abs(value) > 10000 for value in values):
         raise SlicerProfileError("Invalid 3MF object placement.")
     return " ".join(format(value, ".6f") for value in values)
