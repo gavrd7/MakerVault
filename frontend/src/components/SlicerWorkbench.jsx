@@ -993,10 +993,15 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         <h2>Prepare a slice</h2>
         <p>Choose a model, printer and filament, then configure the native slicing profiles. Prepare the build plate, save drafts, and slice when the selected engine is available.</p>
       </div>
-      <div className="printingHeroActions">
-        {editorOpen && <button type="button" onClick={() => setEditorOpen(false)}>← Slicer setup</button>}
+      <div className="printingHeroActions slicerHeroActions">
+        {editorOpen && <button type="button" className="slicerHeroBack" onClick={() => setEditorOpen(false)}>← Slicer setup</button>}
         <button type="button" onClick={onBack}>← Printing overview</button>
         <button type="button" onClick={() => setShowDrafts(true)}>Saved drafts ({jobs.length})</button>
+        {!editorOpen && <button type="button" className="primary slicerHeroInteractive"
+          onClick={() => { setError(""); setNotice(""); window.scrollTo({ top: 0, left: 0, behavior: "instant" }); setEditorOpen(true); }}
+          disabled={!canPrepare || busy || loading}>
+          <span aria-hidden="true">✦</span> Open interactive slicer
+        </button>}
       </div>
     </section>
 
