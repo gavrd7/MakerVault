@@ -66,20 +66,20 @@ export default function SlicerPrepareWorkspace({
   const [selectedIds, setSelectedIds] = useState([]);
   const [expandedAssemblies, setExpandedAssemblies] = useState([]);
   const selectSingle = id => { setSelectedId(id); setSelectedIds(id ? [id] : []); };
-  const selectMultiple = (id, additive = false) => {
+  const selectMultiple = (id, additive = false, partOnly = false) => {
     const item = objects.find(row => row.instance_id === id);
     if (!item) return;
     if (!additive) {
-      const ids = item.assembly_id
+      const ids = item.assembly_id && !partOnly
         ? objects.filter(row => row.assembly_id === item.assembly_id).map(row => row.instance_id)
         : [id];
       setSelectedIds(ids);
       setSelectedId(id);
       return;
     }
-    // Ctrl/Shift-clicking any part of an assembly adds/removes the full
-    // logical group, never an arbitrary single child.
-    const memberIds = item.assembly_id
+    // The assembly header selects a group; its expanded tree children can
+    // be selected independently for per-part positioning and settings.
+    const memberIds = item.assembly_id && !partOnly
       ? objects.filter(row => row.assembly_id === item.assembly_id).map(row => row.instance_id)
       : [id];
     setSelectedIds(current => {
@@ -887,7 +887,7 @@ export default function SlicerPrepareWorkspace({
         {objects.length === 0 && <p>Add an STL to start editing.</p>}
         {objects.length > 0 && <div className="slicerAssemblyActions">
           <small>{validSelection.length} selected · Ctrl/Cmd-click to select several models.
-            Click an assembled object to select its group.</small>
+            Use an assembly header to select its group; expand it to edit individual parts.</small>
           <div>
             <button type="button" disabled={!canEdit || busy || selectedModels.length < 2}
               onClick={assembleSelected}>Assemble selection</button>
@@ -916,7 +916,7 @@ export default function SlicerPrepareWorkspace({
           {(!assembly || expanded) && <div className={"slicerPrepareModelEntry"+(assembly?" slicerAssemblyTreePart":"")}>
           <button type="button"
             className={validSelection.includes(object.instance_id) ? "selected" : ""}
-            onClick={event => selectMultiple(object.instance_id, event.ctrlKey || event.metaKey || event.shiftKey)}
+            onClick={event => selectMultiple(object.instance_id, event.ctrlKey || event.metaKey || event.shiftKey, !!assembly)}
             aria-pressed={validSelection.includes(object.instance_id)}>
             <span className="slicerPrepareModelSwatch"
               style={{ background: object.color }} aria-hidden="true" />
