@@ -20,6 +20,7 @@ import { executeSolidOperation } from "./slicerSolidOperations";
 import { PRIMITIVE_TYPES, TEXT_FONTS, createPrimitiveMesh, createPrimitiveStl, createTextStl, createSvgStl } from "./slicerPrimitives";
 import { validateStackPlacement } from "./slicerStacking";
 import { buildSectionCapGeometry } from "./slicerSectionCaps";
+import { meshesProjectivelyOverlapXY } from "./slicerMeshFootprints";
 import makerVaultLogoSvg from "../assets/slicer-bed-art/makervault-official-logo.svg?raw";
 
 const PALETTE = ["#58b5e4", "#f59e0b", "#a78bfa", "#10b981", "#ef4444", "#f472b6"];
@@ -362,8 +363,15 @@ export default function SlicerPlateEditor({
       const h2 = plateModelMeasurement(other, dimensions[other.instance_id])?.height;
       if (h1 != null && h2 != null &&
         (first >= second + h2 - 0.1 || second >= first + h1 - 0.1)) return false;
-      return plateFootprintsOverlap(item, dimensions[item.instance_id],
-        other, dimensions[other.instance_id], 0) === true;
+      if(plateFootprintsOverlap(item,dimensions[item.instance_id],
+        other,dimensions[other.instance_id],0)!==true)return false;
+      // AABB intersection is only a broad phase. Long or multipart meshes
+      // can have substantial genuinely empty space inside that envelope.
+      const firstMesh=sceneRef.current?.meshes.get(item.instance_id);
+      const secondMesh=sceneRef.current?.meshes.get(other.instance_id);
+      const actual=meshesProjectivelyOverlapXY(firstMesh,secondMesh);
+      // Unknown/complex geometry stays conservatively blocked.
+      return actual!==false;
     })
     .map(other => ({
       id: item.instance_id + ":" + other.instance_id,
