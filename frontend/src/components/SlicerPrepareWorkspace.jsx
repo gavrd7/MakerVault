@@ -89,6 +89,7 @@ export default function SlicerPrepareWorkspace({
   const [solidRequest, setSolidRequest] = useState(null);
   const [autoOrientMenuOpen, setAutoOrientMenuOpen] = useState(false);
   const [addModelMenuOpen, setAddModelMenuOpen] = useState(false);
+  const [addShapeRequest, setAddShapeRequest] = useState(null);
   const [toolDescriptor, setToolDescriptor] = useState("");
   const [toolPopupStyle, setToolPopupStyle] = useState(null);
   const [autoOrientGoal, setAutoOrientGoal] = useState("balanced");
@@ -737,6 +738,15 @@ export default function SlicerPrepareWorkspace({
               behavior: "smooth", block: "start"
             });
           }}><SlicerUiIcon name="models" /> Add from MakerVault</button>
+          <button type="button" className="slicerAddModelChoice" onClick={() => {
+            setAddModelMenuOpen(false);setMobilePane("plate");
+            setAddShapeRequest({kind:"primitive",id:Date.now()});
+          }}><SlicerUiIcon name="models" /> Add primitive shape</button>
+          <button type="button" className="slicerAddModelChoice" disabled={!objects.length} onClick={() => {
+            setAddModelMenuOpen(false);setMobilePane("plate");
+            setAddShapeRequest({kind:"negative",id:Date.now()});
+          }}><SlicerUiIcon name="cut" /> Subtract shape from model</button>
+          <small>Native print-setting modifier regions are not yet supported.</small>
         </div>}
         {tool.target === "auto_orient" && autoOrientMenuOpen && <div className="slicerToolOptions slicerAutoOrientMenu" style={toolPopupStyle} id="slicer-auto-orient-toolbar-options" role="group" aria-label="Auto-orient choices">
           <div className="slicerToolOptionsHeader"><strong>Auto-orient</strong><button type="button" onClick={() => setAutoOrientMenuOpen(false)}>Close</button></div>
@@ -930,7 +940,7 @@ export default function SlicerPrepareWorkspace({
           printerLabel={selectedProfiles?.printer || printerDetails?.model || printerDetails?.name || ""}
           onPlateLabelChange={onPlateLabelChange} canEdit={canEdit && !busy} toolMode={toolMode} selectedInstanceId={selectedId}
           autoOrientGoal={autoOrientGoal} autoOrientRequest={autoOrientRequest}
-          splitRequest={splitRequest} solidRequest={solidRequest}
+          splitRequest={splitRequest} solidRequest={addShapeRequest || solidRequest}
           selectedInstanceIds={validSelection} onSelectModel={selectMultiple}
           onSelectedInstanceChange={selectSingle} measurementVisible={measurementVisible}
           measureMode={measureMode} measureUnit={measureUnit} measureSnapMode={measureSnapMode}
