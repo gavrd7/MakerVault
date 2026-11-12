@@ -77,8 +77,16 @@ export default function SlicerPrepareWorkspace({
       setSelectedId(id);
       return;
     }
+    // Ctrl/Shift-clicking any part of an assembly adds/removes the full
+    // logical group, never an arbitrary single child.
+    const memberIds = item.assembly_id
+      ? objects.filter(row => row.assembly_id === item.assembly_id).map(row => row.instance_id)
+      : [id];
     setSelectedIds(current => {
-      const next = current.includes(id) ? current.filter(value => value !== id) : [...current, id];
+      const allSelected = memberIds.every(value => current.includes(value));
+      const next = allSelected
+        ? current.filter(value => !memberIds.includes(value))
+        : [...new Set([...current, ...memberIds])];
       setSelectedId(next.at(-1) || "");
       return next;
     });
