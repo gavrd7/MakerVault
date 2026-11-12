@@ -5346,3 +5346,43 @@ a:focus-visible,
   color: #b6e7ff; padding: 5px 7px; border-radius: 5px;
   background: rgba(43, 126, 177, .17);
 }
+
+
+/* Slicer: primary workspace entry remains visible at the very top.
+   Two utility actions sit above a full-width accent CTA on all devices. */
+.slicerWorkbenchRoot .slicerHeroActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  width: min(100%, 480px);
+  flex: 0 1 480px;
+  align-content: start;
+}
+.slicerWorkbenchRoot .slicerHeroActions > button {
+  min-width: 0;
+  min-height: 43px;
+  white-space: normal;
+}
+.slicerWorkbenchRoot .slicerHeroActions > .slicerHeroInteractive {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 49px;
+  font-weight: 700;
+}
+.slicerWorkbenchRoot .slicerHeroActions > .slicerHeroBack {
+  grid-column: 1 / -1;
+}
+@media (max-width: 900px) {
+  .slicerWorkbenchRoot .printingHero { display: grid; }
+  .slicerWorkbenchRoot .slicerHeroActions {
+    width: 100%;
+    flex: none;
+  }
+}
+@media (max-width: 390px) {
+  .slicerWorkbenchRoot .slicerHeroActions { gap: 7px; }
+  .slicerWorkbenchRoot .slicerHeroActions > button { font-size: .85rem; }
+}
