@@ -744,7 +744,7 @@ export default function SlicerPrepareWorkspace({
           <button type="button" className="slicerAddModelChoice" disabled={!objects.length} onClick={() => {
             setAddModelMenuOpen(false);setMobilePane("plate");
             setSolidRequest({kind:"negative",id:Date.now()});
-          }}><SlicerUiIcon name="cut" /> Subtract shape from model</button>
+          }}><SlicerUiIcon name="cut" /> Add negative volume</button>
           <small>Native print-setting modifier regions are not yet supported.</small>
         </div>}
         {tool.target === "auto_orient" && autoOrientMenuOpen && <div className="slicerToolOptions slicerAutoOrientMenu" style={toolPopupStyle} id="slicer-auto-orient-toolbar-options" role="group" aria-label="Auto-orient choices">
