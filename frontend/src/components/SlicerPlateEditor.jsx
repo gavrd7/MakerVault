@@ -808,6 +808,10 @@ export default function SlicerPlateEditor({
           Number(solidOptions.z_mm)-Number(solidOptions.height)/2,
         ]);
         try {
+          const targetBounds=new THREE.Box3().setFromObject(target);
+          const toolBounds=new THREE.Box3().setFromObject(tool);
+          if (!targetBounds.intersectsBox(toolBounds))
+            throw new Error("Negative shape does not intersect the selected model. Drag the pink shape onto the model or adjust its X/Y/Z position.");
           parts=executeSolidOperation("boolean",target,{booleanMode:"difference"},tool);
         } finally {tool.geometry.dispose();tool.material.dispose();}
       } else if (solidDialog.kind==="boolean") {
@@ -1805,7 +1809,9 @@ export default function SlicerPlateEditor({
         const dx=pretty(groupProxy.position.x-pivot.x);
         const dy=pretty(groupProxy.position.y-pivot.y);
         const rotation=pretty(THREE.MathUtils.radToDeg(groupProxy.rotation.z));
-        const scale=pretty(groupProxy.scale.x*100);
+        const axisScale=[groupProxy.scale.x,groupProxy.scale.y,groupProxy.scale.z]
+          .find(value=>Math.abs(value-1)>0.001) || 1;
+        const scale=pretty(axisScale*100);
         groupProxy.position.set(pivot.x,pivot.y,pivot.z);
         groupProxy.rotation.set(0,0,0);
         groupProxy.scale.set(1,1,1);
