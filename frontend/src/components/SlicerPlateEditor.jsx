@@ -293,6 +293,8 @@ export default function SlicerPlateEditor({
   const [solidBusy, setSolidBusy] = useState(false);
   const [solidError, setSolidError] = useState("");
   const [solidOptions, setSolidOptions] = useState({wall: 2, radius: 3, x_mm: 0, y_mm: 0, cutHeight: 5, cutAxis: "z", keep: "both", booleanMode: "union", secondId: ""});
+  // An applied result must always correspond to the options actually shown.
+  useEffect(() => { setSolidPreview(null); }, [solidOptions]);
   const [measureOverlayExpanded, setMeasureOverlayExpanded] = useState(false);
   const [transformOverlayExpanded, setTransformOverlayExpanded] = useState(false);
   const [liveRotation, setLiveRotation] = useState(null);
