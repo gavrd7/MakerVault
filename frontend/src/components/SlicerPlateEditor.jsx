@@ -1345,7 +1345,7 @@ export default function SlicerPlateEditor({
     function pointerMove(event) {
       if (rotationPointerId === event.pointerId && rotationGizmo.dragging) {
         rayFromPointer(event);
-        const angle = rotationGizmo.drag(raycaster.ray, event.shiftKey);
+        const angle = rotationGizmo.drag(raycaster.ray, event.shiftKey, event.timeStamp);
         if (angle && (lastRotationPreview !== angle.delta || event.shiftKey)) {
           lastRotationPreview = angle.delta;
           // Re-seat the preview mesh on Z=0 as it tilts. The STL and saved
@@ -1937,7 +1937,7 @@ export default function SlicerPlateEditor({
             <SlicerUiIcon name="rotate" /> <span>Reset rotation</span>
           </button>
           {transformOverlayExpanded && <small className="slicerViewportMeasurementHint">
-            Drag a coloured ring or its labelled grip to rotate about X, Y or Z. Major marks show 45° detents; hold Shift for 5° precision. The live degree readout appears while dragging.
+            Drag a coloured ring or its labelled grip to rotate about X, Y or Z. Major marks show 45° detents; move slowly for 1° precision or move quickly for 5°/45° detents. Shift holds 1° precision.
           </small>}
         </> : <>
           <label className="slicerViewportScaleUniform">Uniform scale (%)
