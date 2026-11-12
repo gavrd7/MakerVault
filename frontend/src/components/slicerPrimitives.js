@@ -111,6 +111,18 @@ function normalizeBounds(geometry,width,depth,height) {
   geometry.translate(-(box.min.x+box.max.x)/2,-(box.min.y+box.max.y)/2,-box.min.z);
   return geometry;
 }
+function applyPrintableRotation(geometry,options={}) {
+  const radians=["rotation_x","rotation_y","rotation_z"].map(key=>
+    finite(options[key]??0,-360,360,key)*Math.PI/180);
+  geometry.rotateX(radians[0]);
+  geometry.rotateY(radians[1]);
+  geometry.rotateZ(radians[2]);
+  geometry.computeBoundingBox();
+  const box=geometry.boundingBox;
+  geometry.translate(-(box.min.x+box.max.x)/2,
+    -(box.min.y+box.max.y)/2,-box.min.z);
+  return geometry;
+}
 // Original, minimal 5x7 geometric block alphabet. The bitmap is procedural
 // geometry rather than a bundled font file or a network-loaded typeface.
 const GLYPHS={
@@ -225,6 +237,7 @@ export function createTextStl(options={}) {
     });
   }
   normalizeBounds(geometry,width,depth,height);
+  applyPrintableRotation(geometry,options);
   const mesh=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial());
   try{return resultToStl(mesh);}
   finally{geometry.dispose();mesh.material.dispose();}
@@ -247,6 +260,7 @@ export function createSvgStl(options={}) {
   }
   geometry.scale(1,-1,1);
   normalizeBounds(geometry,width,depth,height);
+  applyPrintableRotation(geometry,options);
   const mesh=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial());
   try {return resultToStl(mesh);}
   finally {geometry.dispose();mesh.material.dispose();}
