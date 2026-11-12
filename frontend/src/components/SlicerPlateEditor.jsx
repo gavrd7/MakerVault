@@ -640,7 +640,7 @@ export default function SlicerPlateEditor({
       if (solidDialog.kind==="boolean" && (!second || second===target))
         throw new Error("Choose a different model for this Boolean operation.");
       const parts=executeSolidOperation(solidDialog.kind,target,solidOptions,second);
-      if (objects.length-parts.length-(second?1:0)+parts.length>MAX_OBJECTS)
+      if (objects.length-1-(second?1:0)+parts.length>MAX_OBJECTS)
         throw new Error("The result would exceed the 12-object build plate limit.");
       setSolidPreview({parts,secondId:second ? solidOptions.secondId : null});
     } catch(error) {
