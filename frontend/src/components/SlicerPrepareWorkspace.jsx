@@ -700,7 +700,7 @@ export default function SlicerPrepareWorkspace({
             editorRef.current?.querySelector('[data-slicer-add-models]')?.scrollIntoView({
               behavior: "smooth", block: "start"
             });
-          }}><SlicerUiIcon name="folder" /> Add from MakerVault</button>
+          }}><SlicerUiIcon name="models" /> Add from MakerVault</button>
         </div>}
         {tool.target === "auto_orient" && autoOrientMenuOpen && <div className="slicerToolOptions slicerAutoOrientMenu" id="slicer-auto-orient-toolbar-options" role="group" aria-label="Auto-orient choices">
           <div className="slicerToolOptionsHeader"><strong>Auto-orient</strong><button type="button" onClick={() => setAutoOrientMenuOpen(false)}>Close</button></div>
