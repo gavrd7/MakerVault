@@ -601,3 +601,20 @@ test("top slicer header provides a matching direct interactive entry on mobile a
   assert.match(css, /grid-column: 1 \/ -1/);
   assert.match(css, /@media \(max-width: 900px\)/);
 });
+
+
+test("Move controls expose just model-centre XYZ and reject unsupported Z placement", () => {
+  const plate = read("SlicerPlateEditor.jsx");
+  assert.match(plate, /import \{ validateStackPlacement \} from "\.\/slicerStacking"/);
+  assert.match(plate, /state\.transform\.showZ = toolMode === "move" \|\| toolMode === "scale"/);
+  assert.match(plate, /mesh\.position\.z = mesh\.userData\.bedZOffset \+ Number\(item\.z_mm \|\| 0\)/);
+  assert.match(plate, /patch\("z_mm", pretty\(number - \(selectedMeasurement\?\.height \|\| 0\) \/ 2\)\)/);
+  assert.match(plate, /z_mm: Math\.max\(0, pretty\(mesh\.position\.z/);
+  assert.match(plate, /Move rejected: model is unsupported/);
+  const header = plate.indexOf('aria-label={toolMode === "move"');
+  const move = plate.slice(header, plate.indexOf('toolMode === "rotate" ? <>', header));
+  assert.match(move, /\["X", "Y", "Z"\]/);
+  assert.doesNotMatch(move, /Coordinates are measured from/);
+  assert.doesNotMatch(move, /X bounds:/);
+  assert.doesNotMatch(move, /Z \(bed\): 0 mm/);
+});
