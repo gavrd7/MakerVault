@@ -3001,6 +3001,14 @@ export default function SlicerPlateEditor({
                 onChange={event=>setSolidOptions(v=>({...v,wall:event.target.value}))}/></label>
 
           </>}
+          {["drill","cut"].includes(solidDialog.kind) && <div className="slicerInsertionMode"
+            role="group" aria-label="Mesh operation preview handles">
+            {(solidDialog.kind==="cut" ? [["translate","Move cut plane"]] :
+              [["translate","Move"],["scale","Scale radius"]]).map(([mode,label])=>
+              <button type="button" key={mode} aria-pressed={insertionMode===mode}
+                className={insertionMode===mode?"selected":""}
+                onClick={()=>setInsertionMode(mode)}>{label}</button>)}
+          </div>}
           {solidDialog.kind==="drill" && <div className="slicerSolidGrid">
             <label>Hole radius (mm)<input type="number" min="0.2" step="0.5"
               value={solidOptions.radius}
