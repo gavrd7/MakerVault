@@ -7,6 +7,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 import { createMakerVaultRotationGizmo } from "./slicerRotationGizmo";
 import { SlicerOrientationCube } from "./slicerOrientationCube";
+import SlicerUiIcon from "./SlicerUiIcon";
 import { apiFetch } from "../api";
 import { plateExtentWarning, plateFootprintsOverlap, autoArrangePlate, plateModelMeasurement,
   measurementDistance, measurementCircle, measurementFormat } from "./slicerPlateGeometry";
