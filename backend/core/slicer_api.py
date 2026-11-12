@@ -91,7 +91,7 @@ def serialise(job, installed=None):
     } for asset in FileAsset.objects.filter(owner=job.owner, pk__in=source_ids,
                                               metadata__slicer_temporary=True)]
     can_slice = False
-    if installed:
+    if installed and not (job.settings or {}).get("plate_conflicts"):
         try:
             can_slice = validate_scheduling(job, installed)
         except (SlicerExecutionError, ValueError):
@@ -279,6 +279,23 @@ def _draft(user, data):
         raise ValueError("Nozzle diameter must be between 0.10 and 2.00 mm with at most two decimals.")
     settings_data = data.get("settings", {})
     settings_data = _draft_plate_settings(user, input_asset, settings_data)
+    plate_models = settings_data.get("plate_objects") or []
+    if len(plate_models) > 1:
+        # An inert draft may keep conflicting objects for editing. Record a
+        # server-derived status so "Slice now" isn't advertised as available.
+        # Actual scheduling independently re-checks geometry and ownership.
+        from .slicer_plate_validation import validate_plate_collisions
+        from .slicer_execution import _read_owned_file, MAX_INPUT
+        try:
+            owned = {str(asset.pk): asset for asset in FileAsset.objects.filter(
+                owner=user, category="mesh",
+                pk__in=[item["asset_id"] for item in plate_models])}
+            validate_plate_collisions([(
+                item, _read_owned_file(owned[str(item["asset_id"])],
+                                       user.pk, MAX_INPUT, "Draft STL")
+            ) for item in plate_models])
+        except (KeyError, ValueError, OSError):
+            settings_data["plate_conflicts"] = True
     native_profiles = {}
     native_labels = {}
     for kind in ("printer", "filament", "process"):
