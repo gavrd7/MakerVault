@@ -1,9 +1,6 @@
 /** Parametric printable primitives, shared by Add model and negative-volume editing. */
 import * as THREE from "three";
-import { FontLoader } from "three/addons/loaders/FontLoader.js";
-import { TextGeometry } from "three/addons/geometries/TextGeometry.js";
 import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
-import helvetiker from "three/examples/fonts/helvetiker_regular.typeface.json";
 import { resultToStl } from "./slicerSolidOperations.js";
 
 export const PRIMITIVE_TYPES = ["box","cylinder","sphere","cone","disc","torus"];
@@ -81,7 +78,6 @@ export function createPrimitiveStl(options={}) {
   } finally {mesh.geometry.dispose();mesh.material.dispose();}
 }
 
-const font=new FontLoader().parse(helvetiker);
 function normalizeBounds(geometry,width,depth,height) {
   geometry.computeBoundingBox();
   if (!geometry.boundingBox || geometry.boundingBox.isEmpty())
@@ -94,19 +90,91 @@ function normalizeBounds(geometry,width,depth,height) {
   geometry.translate(-(box.min.x+box.max.x)/2,-(box.min.y+box.max.y)/2,-box.min.z);
   return geometry;
 }
+// Original, minimal 5x7 geometric block alphabet. The bitmap is procedural
+// geometry rather than a bundled font file or a network-loaded typeface.
+const GLYPHS={
+A:["01110","10001","10001","11111","10001","10001","10001"],
+B:["11110","10001","10001","11110","10001","10001","11110"],
+C:["01111","10000","10000","10000","10000","10000","01111"],
+D:["11110","10001","10001","10001","10001","10001","11110"],
+E:["11111","10000","10000","11110","10000","10000","11111"],
+F:["11111","10000","10000","11110","10000","10000","10000"],
+G:["01111","10000","10000","10111","10001","10001","01111"],
+H:["10001","10001","10001","11111","10001","10001","10001"],
+I:["11111","00100","00100","00100","00100","00100","11111"],
+J:["00111","00010","00010","00010","10010","10010","01100"],
+K:["10001","10010","10100","11000","10100","10010","10001"],
+L:["10000","10000","10000","10000","10000","10000","11111"],
+M:["10001","11011","10101","10101","10001","10001","10001"],
+N:["10001","11001","10101","10011","10001","10001","10001"],
+O:["01110","10001","10001","10001","10001","10001","01110"],
+P:["11110","10001","10001","11110","10000","10000","10000"],
+Q:["01110","10001","10001","10001","10101","10010","01101"],
+R:["11110","10001","10001","11110","10100","10010","10001"],
+S:["01111","10000","10000","01110","00001","00001","11110"],
+T:["11111","00100","00100","00100","00100","00100","00100"],
+U:["10001","10001","10001","10001","10001","10001","01110"],
+V:["10001","10001","10001","10001","10001","01010","00100"],
+W:["10001","10001","10001","10101","10101","10101","01010"],
+X:["10001","10001","01010","00100","01010","10001","10001"],
+Y:["10001","10001","01010","00100","00100","00100","00100"],
+Z:["11111","00001","00010","00100","01000","10000","11111"],
+"0":["01110","10011","10101","10101","11001","10001","01110"],
+"1":["00100","01100","00100","00100","00100","00100","01110"],
+"2":["01110","10001","00001","00010","00100","01000","11111"],
+"3":["11110","00001","00001","00110","00001","00001","11110"],
+"4":["00010","00110","01010","10010","11111","00010","00010"],
+"5":["11111","10000","10000","11110","00001","00001","11110"],
+"6":["01111","10000","10000","11110","10001","10001","01110"],
+"7":["11111","00001","00010","00100","01000","01000","01000"],
+"8":["01110","10001","10001","01110","10001","10001","01110"],
+"9":["01110","10001","10001","01111","00001","00001","11110"],
+"-":["00000","00000","00000","11111","00000","00000","00000"],
+".":["00000","00000","00000","00000","00000","01100","01100"],
+":":["00000","01100","01100","00000","01100","01100","00000"],
+" ":["00000","00000","00000","00000","00000","00000","00000"],
+};
+function blockTextGeometry(value,height) {
+  const upper=value.toUpperCase();
+  const active=new Set();
+  let cursor=0;
+  for(const character of upper) {
+    const rows=GLYPHS[character];
+    if(!rows) throw new Error("Text supports A–Z, digits, spaces, periods, hyphens and colons.");
+    rows.forEach((row,r)=>{for(let x=0;x<5;x++)
+      if(row[x]==="1")active.add((cursor+x)+","+(6-r));});
+    cursor+=6;
+  }
+  if(!active.size)throw new Error("Enter visible text to extrude.");
+  if(active.size>950)throw new Error("Text is too complex for local extrusion.");
+  const array=[];
+  const quad=(a,b,c,d)=>{array.push(...a,...b,...c,...a,...c,...d);};
+  for(const key of active) {
+    const [x,y]=key.split(",").map(Number);
+    const a=[x,y,0],b=[x+1,y,0],c=[x+1,y+1,0],d=[x,y+1,0];
+    const e=[x,y,height],f=[x+1,y,height],g=[x+1,y+1,height],h=[x,y+1,height];
+    quad(e,f,g,h);quad(d,c,b,a);
+    if(!active.has(x+","+(y-1)))quad(a,b,f,e);
+    if(!active.has((x+1)+","+y))quad(b,c,g,f);
+    if(!active.has(x+","+(y+1)))quad(c,d,h,g);
+    if(!active.has((x-1)+","+y))quad(d,a,e,h);
+  }
+  const geometry=new THREE.BufferGeometry();
+  geometry.setAttribute("position",new THREE.Float32BufferAttribute(array,3));
+  geometry.computeVertexNormals();
+  return geometry;
+}
 export function createTextStl(options={}) {
   const value=String(options.text||"").trim().slice(0,40);
-  if (!value) throw new Error("Enter text to create a model.");
+  if(!value)throw new Error("Enter text to create a model.");
   const width=finite(options.width,0.5,500,"Width");
   const depth=finite(options.depth,0.5,500,"Depth");
   const height=finite(options.height,0.5,100,"Thickness");
-  const geometry=new TextGeometry(value,{
-    font,size:20,depth:height,curveSegments:8,bevelEnabled:false,
-  });
+  const geometry=blockTextGeometry(value,height);
   normalizeBounds(geometry,width,depth,height);
   const mesh=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial());
-  try {return resultToStl(mesh);}
-  finally {geometry.dispose();mesh.material.dispose();}
+  try{return resultToStl(mesh);}
+  finally{geometry.dispose();mesh.material.dispose();}
 }
 export function createSvgStl(options={}) {
   const xml=String(options.svgData||"");
