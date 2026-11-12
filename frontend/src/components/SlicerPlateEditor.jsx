@@ -299,6 +299,8 @@ export default function SlicerPlateEditor({
   const [solidPreview, setSolidPreview] = useState(null);
   const liveGhostRef = useRef(null);
   const negativeGhostRef = useRef(null);
+  const insertionGizmoRef = useRef(null);
+  const [insertionMode, setInsertionMode] = useState("translate");
   const [solidBusy, setSolidBusy] = useState(false);
   const [solidError, setSolidError] = useState("");
   const [solidOptions, setSolidOptions] = useState({wall: 2, radius: 3, x_mm: 0, y_mm: 0, cutHeight: 5, cutAxis: "z", keep: "both", booleanMode: "union", secondId: "", booleanIds:[], primitiveType: "box", width: 20, depth: 20, height: 20, z_mm: 10,
@@ -672,6 +674,7 @@ export default function SlicerPlateEditor({
     const mesh = item && sceneRef.current?.meshes.get(item.instance_id);
     setSolidError("");
     setSolidPreview(null);
+    setInsertionMode("translate");
     if (!mesh && !["primitive","text","svg"].includes(solidRequest.kind)) {
       setSolidError("Select a loaded STL model to edit.");
       return;
@@ -809,6 +812,7 @@ export default function SlicerPlateEditor({
       caster.setFromCamera(pointer,state.camera);
     };
     const down=event=>{
+      if(insertionGizmoRef.current) return;
       if(event.button!==0)return;
       const ghost=solidDialog.kind==="negative"?negativeGhostRef.current:liveGhostRef.current;
       if(!ghost)return;
@@ -845,6 +849,7 @@ export default function SlicerPlateEditor({
       event.preventDefault();event.stopImmediatePropagation();
     };
     const wheel=event=>{
+      if(insertionGizmoRef.current) return;
       if(!event.shiftKey)return;
       const ghost=solidDialog.kind==="negative"?negativeGhostRef.current:liveGhostRef.current;
       if(!ghost)return;
@@ -868,6 +873,53 @@ export default function SlicerPlateEditor({
       canvas.removeEventListener("wheel",wheel,true);
     };
   }, [solidDialog?.kind,solidDialog?.id,solidPreview]);
+
+  // Independent insertion gizmo. Never attach the normal model control
+  // to preview geometry: original objects and their transforms stay intact.
+  useEffect(() => {
+    if(!["primitive","negative","text","svg"].includes(solidDialog?.kind))return undefined;
+    const state=sceneRef.current;
+    const canvas=hostRef.current?.querySelector("canvas");
+    const ghost=solidDialog.kind==="negative"?negativeGhostRef.current:liveGhostRef.current;
+    if(!state||!canvas||!ghost)return undefined;
+    const gizmo=new TransformControls(state.camera,canvas);
+    const helper=gizmo.getHelper();
+    insertionGizmoRef.current=gizmo;
+    state.scene.add(helper);
+    gizmo.attach(ghost);
+    gizmo.setMode(insertionMode);
+    gizmo.setSize(0.8);
+    const draggingChanged=event=>{state.controls.enabled=!event.value;};
+    const applyChange=()=>{
+      const position=ghost.position;
+      if(insertionMode==="translate") {
+        setSolidOptions(old=>({...old,x_mm:pretty(position.x),y_mm:pretty(position.y),
+          z_mm:pretty(position.z+(solidDialog.kind==="negative"?Number(old.height||0)/2:0))}));
+      } else if(insertionMode==="scale") {
+        const toSize=(old,scale)=>Math.max(0.5,Math.min(500,
+          Math.round(Number(old||20)*Math.max(0.025,Math.abs(scale))*100)/100));
+        setSolidOptions(old=>({...old,width:toSize(old.width,ghost.scale.x),
+          depth:toSize(old.depth,ghost.scale.y),height:toSize(old.height,ghost.scale.z)}));
+      } else if(insertionMode==="rotate") {
+        const degrees=axis=>Math.round(THREE.MathUtils.radToDeg(axis)*10)/10;
+        setSolidOptions(old=>({...old,
+          rotation_x:degrees(ghost.rotation.x)+Number(old.rotation_x||0),
+          rotation_y:degrees(ghost.rotation.y)+Number(old.rotation_y||0),
+          rotation_z:degrees(ghost.rotation.z)+Number(old.rotation_z||0)}));
+      }
+    };
+    gizmo.addEventListener("dragging-changed",draggingChanged);
+    gizmo.addEventListener("mouseUp",applyChange);
+    return ()=>{
+      insertionGizmoRef.current=null;
+      state.controls.enabled=true;
+      gizmo.removeEventListener("dragging-changed",draggingChanged);
+      gizmo.removeEventListener("mouseUp",applyChange);
+      gizmo.detach();
+      state.scene.remove(helper);
+      gizmo.dispose();
+    };
+  }, [solidDialog?.kind,solidDialog?.id,solidPreview,solidOptions,insertionMode]);
 
   async function previewSolid() {
     if (!solidDialog || solidBusy) return;
@@ -2793,6 +2845,13 @@ export default function SlicerPlateEditor({
                 const content=await file.text();
                 setSolidOptions(v=>({...v,svgData:content}));
               }}/></label>}
+            <div className="slicerInsertionMode" role="group" aria-label="Insertion transform handles">
+              {[
+                ["translate","Move"],["scale","Scale"],["rotate","Rotate"],
+              ].map(([mode,label])=><button key={mode} type="button"
+                className={insertionMode===mode?"selected":""} aria-pressed={insertionMode===mode}
+                onClick={()=>setInsertionMode(mode)}>{label}</button>)}
+            </div>
             <div className="slicerSolidGrid">
               {["width","depth","height"].map((field,index)=><label key={field}>
                 {["Width X","Depth Y","Height Z"][index]} (mm)
