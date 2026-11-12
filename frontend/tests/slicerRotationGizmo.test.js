@@ -3,13 +3,14 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { snapRotationDegrees, dragAngleFromRay, unwrapRotationDelta } from "../src/components/slicerRotationGizmo.js";
 
-test("rotation detents default to 45 degrees, Shift enables 5-degree precision", () => {
-  assert.equal(snapRotationDegrees(43), 45);
-  assert.equal(snapRotationDegrees(17), 0);
-  assert.equal(snapRotationDegrees(-80), -90);
-  assert.equal(snapRotationDegrees(43, true), 45);
-  assert.equal(snapRotationDegrees(18, true), 20);
-  assert.equal(snapRotationDegrees(-12, true), -10);
+test("slow dragging uses 1 degree steps and faster gestures snap to 5 or 45 degrees", () => {
+  assert.equal(snapRotationDegrees(43), 43);
+  assert.equal(snapRotationDegrees(17), 17);
+  assert.equal(snapRotationDegrees(-80), -80);
+  assert.equal(snapRotationDegrees(43, false, 300), 45);
+  assert.equal(snapRotationDegrees(17, false, 300), 0);
+  assert.equal(snapRotationDegrees(18, false, 150), 20);
+  assert.equal(snapRotationDegrees(18.4, true, 600), 18);
 });
 
 test("rotating about a local axis uses signed radial displacement", () => {
