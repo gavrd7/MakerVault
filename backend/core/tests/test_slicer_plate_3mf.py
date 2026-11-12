@@ -25,8 +25,15 @@ class BuildPlate3MFTests(SimpleTestCase):
                 objects = root.findall("./" + ns + "resources/" + ns + "object")
                 placements = root.findall("./" + ns + "build/" + ns + "item")
                 self.assertEqual(len(objects), 2)
+                # Native Orca consumes transforms baked into resource
+                # vertices, while the build-item matrices stay identity.
                 second = [float(v) for v in placements[1].attrib["transform"].split()]
-                self.assertAlmostEqual(second[11], 12.5, places=3)
+                self.assertAlmostEqual(second[11], 0, places=3)
+                second_vertices = objects[1].findall(
+                    "./" + ns + "mesh/" + ns + "vertices/" + ns + "vertex")
+                self.assertTrue(second_vertices)
+                self.assertAlmostEqual(min(float(v.attrib["z"]) for v in
+                                           second_vertices), 12.5, places=3)
             else:
                 vertices = root.findall(".//" + ns + "vertex")
                 zs = sorted({round(float(v.attrib["z"]), 3) for v in vertices})
