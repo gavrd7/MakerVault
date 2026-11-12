@@ -630,6 +630,18 @@ export default function SlicerPlateEditor({
       sourceFiles.find(file => String(file.id)===String(item?.asset_id))?.name || "Model"});
   }, [solidRequest?.id]);
 
+  // Ctrl/Shift-clicking models on the plate updates Boolean operands while
+  // the non-modal editor remains open; checkbox choices work independently.
+  const booleanSelectionKey=selectedInstanceIds.join("|");
+  useEffect(() => {
+    if(solidDialog?.kind!=="boolean")return;
+    const ids=selectedInstanceIds.filter(id=>id!==solidDialog.id);
+    setSolidOptions(old=>{
+      if(JSON.stringify(old.booleanIds||[])===JSON.stringify(ids))return old;
+      return {...old,booleanIds:ids};
+    });
+  }, [booleanSelectionKey,solidDialog?.id,solidDialog?.kind]);
+
   // Results are previewed as translucent, independent STL ghosts. None of
   // the source geometry or its saved coordinates is mutated before Apply.
   useEffect(() => {
