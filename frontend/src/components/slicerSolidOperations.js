@@ -61,6 +61,8 @@ function evaluator() {
   const e = new Evaluator();
   e.attributes = ["position", "normal"];
   e.useGroups = false;
+  // Constrained triangulation reduces T-junction artefacts around round holes.
+  e.useCDTClipping = true;
   return e;
 }
 function run(a, b, operation) {
