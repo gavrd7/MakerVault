@@ -1514,7 +1514,22 @@ export default function SlicerPlateEditor({
       const additive = event.ctrlKey || event.metaKey || event.shiftKey;
       if (onSelectModelRef.current) onSelectModelRef.current(id, additive);
       else setSelected(id);
-      if (additive || selectionRef.current.length > 1) return;
+      if (additive) return;
+      if (selectionRef.current.length > 1) {
+        if (!selectionRef.current.includes(id) ||
+          !["select","move"].includes(latestToolModeRef.current)) return;
+        const members=latestObjectsRef.current.filter(row=>selectionRef.current.includes(row.instance_id));
+        dragging={
+          groupIds:selectionRef.current.slice(),
+          pointerId:event.pointerId,
+          originX:location.x,originY:location.y,
+          originals:members,
+        };
+        controls.enabled=false;
+        renderer.domElement.setPointerCapture?.(event.pointerId);
+        event.preventDefault();
+        return;
+      }
       if (latestToolModeRef.current !== "select") return;
       dragging = {
         id, pointerId: event.pointerId,
@@ -1549,6 +1564,21 @@ export default function SlicerPlateEditor({
       rayFromPointer(event);
       const location = new THREE.Vector3();
       if (!raycaster.ray.intersectPlane(bedPlane, location)) return;
+      if (dragging.groupIds) {
+        const dx=Math.round((location.x-dragging.originX)*2)/2;
+        const dy=Math.round((location.y-dragging.originY)*2)/2;
+        const moved=dragging.originals.map(row=>({
+          ...row,x_mm:pretty(Number(row.x_mm)+dx),
+          y_mm:pretty(Number(row.y_mm)+dy),
+        }));
+        if (moved.some(row=>plateExtentWarning(row,
+          dimensionsRef.current[row.instance_id],bedX,bedY))) return;
+        const byId=new Map(moved.map(row=>[row.instance_id,row]));
+        latestOnChangeRef.current(latestObjectsRef.current.map(row=>
+          byId.get(row.instance_id)||row));
+        event.preventDefault();
+        return;
+      }
       const x = Math.max(-10000, Math.min(10000, Math.round((location.x + dragging.deltaX) * 2) / 2));
       const y = Math.max(-10000, Math.min(10000, Math.round((location.y + dragging.deltaY) * 2) / 2));
       const current = latestObjectsRef.current;
