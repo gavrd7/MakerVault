@@ -643,7 +643,8 @@ export default function SlicerPrepareWorkspace({
           Printer startup and purge G-code are never changed here.</p>
       </aside>
   );
-  const modelToolbar = (\n<div className="slicerPrepareTools" role="toolbar" aria-label="Model editing tools">
+  const modelToolbar = (
+<div className="slicerPrepareTools" role="toolbar" aria-label="Model editing tools">
       <span className="slicerToolTooltip" data-tooltip="Undo · Ctrl+Z">
         <button type="button" disabled={!undoRef.current.length || busy} onClick={undo}
           aria-label="Undo"><SlicerUiIcon name="undo" /></button>
@@ -725,7 +726,8 @@ export default function SlicerPrepareWorkspace({
           }}>Finish measuring</button>
         </div>}
       </div>)}
-    </div>\n  );\n  return <section className="panel printingSection slicerPrepareWorkspace"
+    </div>\n  );
+  return <section className="panel printingSection slicerPrepareWorkspace"
     aria-label="Interactive slicer Prepare workspace">
     <div className="slicerPrepareHeader">
       <div>
