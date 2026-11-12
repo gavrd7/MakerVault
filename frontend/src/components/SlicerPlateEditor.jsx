@@ -617,8 +617,8 @@ export default function SlicerPlateEditor({
     setSolidOptions({
       wall: pretty(Math.max(0.4, Math.min(size.x,size.y,size.z)*0.08)),
       radius: pretty(Math.max(0.5,Math.min(size.x,size.y)/10)),
-      x_mm: solidRequest.kind==="negative"?pretty(center.x):0,
-      y_mm: solidRequest.kind==="negative"?pretty(center.y):0,
+      x_mm: ["primitive","text","svg"].includes(solidRequest.kind)?0:pretty(center.x),
+      y_mm: ["primitive","text","svg"].includes(solidRequest.kind)?0:pretty(center.y),
       cutHeight: pretty((box.min.z+box.max.z)/2), cutAxis: "z",
       keep: "both", booleanMode: "union",
       secondId: objects.find(row => row.instance_id!==item?.instance_id)?.instance_id || "",
