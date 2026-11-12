@@ -922,6 +922,13 @@ export default function SlicerPrepareWorkspace({
               style={{ background: object.color }} aria-hidden="true" />
             <span>{index + 1}. {itemName(object)}</span>
           </button>
+          {object.text_model && <button type="button" className="slicerModelEditText"
+            disabled={!canEdit || busy} onClick={()=>{
+              selectSingle(object.instance_id);
+              setMobilePane("plate");
+              setSolidRequest({kind:"text",editTargetId:object.instance_id,
+                id:Date.now()+Math.random()});
+            }}>Edit text</button>}
           <button type="button" className="slicerModelChangeFilament"
             disabled={!canEdit || busy || !liveMaterials.length}
             aria-expanded={filamentPickerId === object.instance_id}
