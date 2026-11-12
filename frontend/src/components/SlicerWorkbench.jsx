@@ -121,6 +121,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     });
   }, []);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [plateValidation, setPlateValidation] = useState(null);
+  const unresolvedPlateIssues = !plateValidation ||
+    plateValidation.signature !== JSON.stringify(plateObjects) ||
+    plateValidation.issues.length > 0;
   const slicerPageRef = useRef(null);
   const openedDraftRef = useRef(null);
   const manuallyColouredModels = useRef(new Set());
@@ -540,6 +544,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     setError(""); setNotice("");
     if (!plateObjects.length) {
       setError("Add at least one STL to the visual build plate before saving or slicing.");
+      return;
+    }
+    if (sliceNow && unresolvedPlateIssues) {
+      setError("Slicing is blocked: resolve overlapping or out-of-bounds models on the build plate first. You can still save a draft.");
       return;
     }
     if (plateObjects.some(item => String(item.asset_id).startsWith("local:"))) {
@@ -1008,6 +1016,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     {editorOpen ? <SlicerPrepareWorkspace
       plateLabel={plateLabel} onPlateLabelChange={setPlateLabel}
       objects={plateObjects} onChange={setPlateObjects} files={stlFiles}
+      plateIssues={plateValidation} onPlateIssuesChange={setPlateValidation}
       localAssets={plateLocalAssets} onLocalAssetsChange={setPlateLocalAssets}
       onPrimaryChange={id => update("input_asset_id", String(id))}
       onFilesUploaded={onFilesUploaded} defaultColor={selectedSpoolHex}
@@ -1172,6 +1181,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       localAssets={plateLocalAssets} onLocalAssetsChange={setPlateLocalAssets}
       objects={plateObjects}
       onChange={setPlateObjects}
+      onPlateIssuesChange={setPlateValidation}
       defaultColor={selectedSpoolHex}
       onManualColorChange={instanceId => manuallyColouredModels.current.add(instanceId)}
       onPrimaryChange={id => update("input_asset_id", String(id))}
@@ -1198,7 +1208,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           <button type="button" onClick={() => saveDraft("quick")}
             disabled={!canPrepare || busy || loading || !workerConfigured ||
               !engines.some(engine => engine.key === form.engine && engine.available) ||
-              !plateObjects.length || !printers.length}>
+              !plateObjects.length || !printers.length || unresolvedPlateIssues}>
             {busy ? "Preparing…" : "Quick slice"}
           </button>
           <button type="button" className="primary" onClick={() => { setError(""); setNotice(""); window.scrollTo({ top: 0, left: 0, behavior: "instant" }); setEditorOpen(true); }}
