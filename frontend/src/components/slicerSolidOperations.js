@@ -10,8 +10,9 @@
 import * as THREE from "three";
 import { Brush, Evaluator, ADDITION, SUBTRACTION, INTERSECTION } from "three-bvh-csg";
 
-export const CSG_MAX_INPUT_TRIANGLES = 80000;
-export const CSG_MAX_OUTPUT_TRIANGLES = 350000;
+// Match native plate validation; complexity remains constrained by the STL byte cap.
+export const CSG_MAX_INPUT_TRIANGLES = 500000;
+export const CSG_MAX_OUTPUT_TRIANGLES = 500000;
 const STL_MAX_BYTES = 32 * 1024 * 1024;
 const WELD = 1e-4;
 
@@ -41,7 +42,7 @@ function brushFor(mesh, maxTriangles = CSG_MAX_INPUT_TRIANGLES) {
   mesh.updateMatrixWorld(true);
   if (triangles(mesh.geometry) > maxTriangles)
     throw new Error("Mesh edit exceeds " + maxTriangles.toLocaleString() +
-      " input triangles. This browser limit protects mobile memory; the original is unchanged.");
+      " input triangles, the current native slicer plate limit. The original is unchanged.");
   const geometry = normalizedGeometry(mesh.geometry);
   geometry.applyMatrix4(mesh.matrixWorld);
   const brush = new Brush(geometry);
@@ -138,48 +139,59 @@ function checkManifold(geometry, maxTriangles) {
 }
 /** Convert a world-space CSG result to a 3D-printable, AABB-centred binary STL. */
 export function resultToStl(mesh) {
-  const g=mesh.geometry, attr=g?.getAttribute("position"), idx=g?.getIndex();
+  const source=mesh?.geometry;
+  const attr=source?.getAttribute("position"),idx=source?.getIndex();
   if (!attr) throw new Error("Result has no mesh geometry.");
-  const faceCount=triangles(g);
-  const draw=g.drawRange || {start:0,count:Infinity};
-  const start=Math.max(0,draw.start||0);
-  const count=Math.min(faceCount*3-start,Number.isFinite(draw.count)?draw.count:faceCount*3);
-  const len=Math.floor(count/3);
-  if (len<1 || len>CSG_MAX_OUTPUT_TRIANGLES || 84+len*50>STL_MAX_BYTES)
-    throw new Error("CSG output exceeds validated STL size limits.");
-  const geometry=g.clone();
-  const subset=geometry.index
-    ? geometry.index.array.slice(start,start+len*3)
-    : null;
-  if (subset) geometry.setIndex(Array.from(subset));
-  else {
-    const output=geometry.getAttribute("position").array.slice(start*3,(start+len*3)*3);
-    geometry.setAttribute("position",new THREE.BufferAttribute(new Float32Array(output),3));
+  const faceCount=triangles(source);
+  const range=source.drawRange || {start:0,count:Infinity};
+  const start=Math.max(0,range.start||0);
+  const count=Math.min(faceCount*3-start,Number.isFinite(range.count)?range.count:faceCount*3);
+  const position=new THREE.Vector3(),a=new THREE.Vector3(),b=new THREE.Vector3(),c=new THREE.Vector3();
+  const ab=new THREE.Vector3(),ac=new THREE.Vector3();
+  const clean=[];
+  const get=(at,out)=>out.fromBufferAttribute(attr,idx?idx.getX(at):at);
+  // CSG clipping commonly emits triangles with identical vertices or
+  // near-zero area at coplanar seams. They carry no physical surface and
+  // should be discarded before the actual watertightness validation.
+  let discarded=0;
+  for(let i=start;i+2<start+count;i+=3) {
+    get(i,a);get(i+1,b);get(i+2,c);
+    if(![a,b,c].every(v=>Number.isFinite(v.x)&&Number.isFinite(v.y)&&Number.isFinite(v.z)))
+      throw new Error("CSG produced non-finite coordinates.");
+    ab.subVectors(b,a);ac.subVectors(c,a);
+    if(ab.cross(ac).lengthSq()<1e-14) { discarded++; continue; }
+    clean.push(a.x,a.y,a.z,b.x,b.y,b.z,c.x,c.y,c.z);
+    if(clean.length/9>CSG_MAX_OUTPUT_TRIANGLES ||
+      84+clean.length/9*50>STL_MAX_BYTES)
+      throw new Error("CSG output exceeds the native slicing mesh limit.");
   }
-  checkManifold(geometry,len);
-  geometry.computeBoundingBox();
-  const box=geometry.boundingBox, center=box.getCenter(new THREE.Vector3());
-  const size=box.getSize(new THREE.Vector3());
-  const offset=new THREE.Vector3(center.x,center.y,box.min.z);
-  const buffer=new ArrayBuffer(84+len*50), view=new DataView(buffer);
-  view.setUint32(80,len,true);
-  const a=new THREE.Vector3(),b=new THREE.Vector3(),c=new THREE.Vector3();
-  const normal=new THREE.Vector3();
-  let cursor=84;
-  const write=v=>{view.setFloat32(cursor,v.x,true);view.setFloat32(cursor+4,v.y,true);
-    view.setFloat32(cursor+8,v.z,true);cursor+=12;};
-  for(let t=0;t<len;t++) {
-    const at=component=>{
-      const i=geometry.index?geometry.index.getX(t*3+component):t*3+component;
-      return new THREE.Vector3().fromBufferAttribute(geometry.getAttribute("position"),i).sub(offset);
-    };
-    a.copy(at(0));b.copy(at(1));c.copy(at(2));
-    normal.copy(b).sub(a).cross(new THREE.Vector3().copy(c).sub(a)).normalize();
-    write(normal);write(a);write(b);write(c);cursor+=2;
-  }
-  geometry.dispose();
-  return {buffer,triangles:len,x_mm:center.x,y_mm:center.y,
-    z_mm:box.min.z,width:size.x,depth:size.y,height:size.z};
+  if(!clean.length) throw new Error("The mesh operation produced no printable surface.");
+  const geometry=new THREE.BufferGeometry();
+  geometry.setAttribute("position",new THREE.Float32BufferAttribute(clean,3));
+  try {
+    checkManifold(geometry,clean.length/9);
+    geometry.computeBoundingBox();
+    const box=geometry.boundingBox,center=box.getCenter(new THREE.Vector3());
+    const size=box.getSize(new THREE.Vector3());
+    const offset=new THREE.Vector3(center.x,center.y,box.min.z);
+    const faces=clean.length/9;
+    const buffer=new ArrayBuffer(84+faces*50),view=new DataView(buffer);
+    view.setUint32(80,faces,true);
+    let cursor=84;
+    const write=v=>{view.setFloat32(cursor,v.x,true);view.setFloat32(cursor+4,v.y,true);
+      view.setFloat32(cursor+8,v.z,true);cursor+=12;};
+    for(let i=0;i<clean.length;i+=9) {
+      a.set(clean[i],clean[i+1],clean[i+2]).sub(offset);
+      b.set(clean[i+3],clean[i+4],clean[i+5]).sub(offset);
+      c.set(clean[i+6],clean[i+7],clean[i+8]).sub(offset);
+      ab.subVectors(b,a);ac.subVectors(c,a);
+      position.copy(ab.cross(ac)).normalize();
+      write(position);write(a);write(b);write(c);cursor+=2;
+    }
+    return {buffer,triangles:faces,removedZeroAreaFaces:discarded,
+      x_mm:center.x,y_mm:center.y,z_mm:box.min.z,
+      width:size.x,depth:size.y,height:size.z};
+  } finally {geometry.dispose();}
 }
 export function executeSolidOperation(kind, target, options={}, second=null) {
   if (!["hollow","drill","cut","boolean"].includes(kind))
@@ -206,6 +218,7 @@ export function executeSolidOperation(kind, target, options={}, second=null) {
       const y=safeNumber(options.y_mm,-1000,1000,"Y coordinate");
       const height=size.z+4;
       const cylinder=new THREE.CylinderGeometry(radius,radius,height,48);
+      // Three.js cylinders are Y-aligned; turn the drill along build-plate Z.
       cylinder.rotateX(Math.PI/2);
       secondary=primitiveGeometry(cylinder,[x,y,mid.z]);
       outputs.push(run(first,secondary,SUBTRACTION));
