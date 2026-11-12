@@ -375,6 +375,11 @@ export default function SlicerPrepareWorkspace({
     const file = [...localAssets, ...files].find(row => String(row.id) === String(object.asset_id));
     return file?.name || file?.filename || "STL model";
   };
+  const toolbarAnchor = event => {
+    const button=event?.currentTarget?.closest(".slicerToolTooltip")?.querySelector("button");
+    const rect=(button||event?.currentTarget)?.getBoundingClientRect?.();
+    return rect ? {left:rect.left,right:rect.right,top:rect.top,bottom:rect.bottom} : null;
+  };
   function selectTool(tool, event) {
     // Keep each menu inside the bordered toolbar, even when icons wrap.
     if (["import","auto_orient","measure"].includes(tool.target)) {
@@ -423,7 +428,7 @@ export default function SlicerPrepareWorkspace({
       if (!selectedId && objects[0]?.instance_id) setSelectedId(objects[0].instance_id);
       setToolMode("select");
       setMobilePane("plate");
-      setSolidRequest({ kind: tool.target, id: Date.now() + Math.random() });
+      setSolidRequest({ kind: tool.target, id: Date.now() + Math.random(), anchorRect:toolbarAnchor(event) });
       return;
     }
     if (tool.target === "split") {
@@ -647,7 +652,7 @@ export default function SlicerPrepareWorkspace({
               <span>{Object.keys(editingOverrides).length} {editingObject ? "object" : "global"} draft override(s) · Original profile unchanged</span>
               <div className="slicerNativeSettingsButtons">
                 {!editingObject && <button type="button" disabled={!canEdit || busy || savingCustomProfile || !onSaveCustomProcessProfile}
-                  onClick={() => {
+                  onClick={event => {
                     setCustomProfileName((selectedProfiles?.process || "Custom process") + " - Custom");
                     setCustomProfileError("");
                     setShowCustomProfileSave(true);
@@ -737,32 +742,32 @@ export default function SlicerPrepareWorkspace({
             <button type="button" aria-label="Close Add model menu"
               onClick={() => setAddModelMenuOpen(false)}>Close</button>
           </div>
-          <button type="button" className="slicerAddModelChoice" onClick={() => {
+          <button type="button" className="slicerAddModelChoice" onClick={event => {
             setAddModelMenuOpen(false);
             editorRef.current?.querySelector('input[type="file"][accept=".stl,.3mf"]')?.click();
           }}><SlicerUiIcon name="add" /> Upload from device</button>
-          <button type="button" className="slicerAddModelChoice" onClick={() => {
+          <button type="button" className="slicerAddModelChoice" onClick={event => {
             setAddModelMenuOpen(false);
             setMobilePane("plate");
             editorRef.current?.querySelector('[data-slicer-add-models]')?.scrollIntoView({
               behavior: "smooth", block: "start"
             });
           }}><SlicerUiIcon name="models" /> Add from MakerVault</button>
-          <button type="button" className="slicerAddModelChoice" onClick={() => {
+          <button type="button" className="slicerAddModelChoice" onClick={event => {
             setAddModelMenuOpen(false);setMobilePane("plate");
-            setSolidRequest({kind:"primitive",id:Date.now()});
+            setSolidRequest({kind:"primitive",id:Date.now(),anchorRect:toolbarAnchor(event)});
           }}><SlicerUiIcon name="models" /> Add primitive shape</button>
           <button type="button" className="slicerAddModelChoice" onClick={() => {
             setAddModelMenuOpen(false);setMobilePane("plate");
-            setSolidRequest({kind:"text",id:Date.now()});
+            setSolidRequest({kind:"text",id:Date.now(),anchorRect:toolbarAnchor(event)});
           }}><SlicerUiIcon name="shape-text" /> Add text</button>
           <button type="button" className="slicerAddModelChoice" onClick={() => {
             setAddModelMenuOpen(false);setMobilePane("plate");
-            setSolidRequest({kind:"svg",id:Date.now()});
+            setSolidRequest({kind:"svg",id:Date.now(),anchorRect:toolbarAnchor(event)});
           }}><SlicerUiIcon name="shape-svg" /> Add SVG</button>
           <button type="button" className="slicerAddModelChoice" disabled={!objects.length} onClick={() => {
             setAddModelMenuOpen(false);setMobilePane("plate");
-            setSolidRequest({kind:"negative",id:Date.now()});
+            setSolidRequest({kind:"negative",id:Date.now(),anchorRect:toolbarAnchor(event)});
           }}><SlicerUiIcon name="cut" /> Add negative volume</button>
           <small>Native print-setting modifier regions are not yet supported.</small>
         </div>}
