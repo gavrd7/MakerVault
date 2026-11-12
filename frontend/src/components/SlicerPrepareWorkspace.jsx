@@ -744,6 +744,14 @@ export default function SlicerPrepareWorkspace({
             setAddModelMenuOpen(false);setMobilePane("plate");
             setSolidRequest({kind:"primitive",id:Date.now()});
           }}><SlicerUiIcon name="models" /> Add primitive shape</button>
+          <button type="button" className="slicerAddModelChoice" onClick={() => {
+            setAddModelMenuOpen(false);setMobilePane("plate");
+            setSolidRequest({kind:"text",id:Date.now()});
+          }}><SlicerUiIcon name="shape-text" /> Add text</button>
+          <button type="button" className="slicerAddModelChoice" onClick={() => {
+            setAddModelMenuOpen(false);setMobilePane("plate");
+            setSolidRequest({kind:"svg",id:Date.now()});
+          }}><SlicerUiIcon name="shape-svg" /> Add SVG</button>
           <button type="button" className="slicerAddModelChoice" disabled={!objects.length} onClick={() => {
             setAddModelMenuOpen(false);setMobilePane("plate");
             setSolidRequest({kind:"negative",id:Date.now()});
