@@ -2632,7 +2632,7 @@ export default function SlicerPlateEditor({
                 <input type="number" step="0.5" value={solidOptions[field]}
                   onChange={event=>setSolidOptions(v=>({...v,[field]:event.target.value}))}/></label>)}
               <small>Drag the preview shape on the plate to position it.
-                Use the rotation fields above for initial orientation.</small>
+                Shift + scroll over the shape to rotate Z, or enter exact angles above.</small>
             </div>}
             {solidDialog.kind==="negative" && <>
               <div className="slicerSolidGrid">
