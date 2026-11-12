@@ -362,6 +362,23 @@ class SliceJobApiTests(TestCase):
             validate_scheduling(row, {"prusaslicer": {"enabled": True, "verified": True}})
         self.assertEqual(self.client.post(f"{self.url}{row.pk}/start/").status_code, 409)
 
+    def test_elevation_is_saved_as_a_bounded_plate_coordinate(self):
+        self.client.force_login(self.owner)
+        item = {
+            "instance_id": str(uuid.uuid4()), "asset_id": str(self.input_asset.pk),
+            "x_mm": 0, "y_mm": 0, "z_mm": 15,
+            "rotation_deg": 0, "scale_percent": 100, "color": "#58b5e4",
+        }
+        response = self.post({**self.payload, "settings": {"plate_objects": [item]}})
+        self.assertEqual(response.status_code, 201, response.content)
+        saved = SliceJob.objects.get(pk=response.json()["job"]["id"])
+        self.assertEqual(saved.settings["plate_objects"][0]["z_mm"], 15.0)
+        for bad in (-1, 1001, "15", True):
+            invalid = self.post({**self.payload, "settings": {
+                "plate_objects": [{**item, "z_mm": bad}],
+            }})
+            self.assertEqual(invalid.status_code, 400, invalid.content)
+
     def test_logical_assembly_id_round_trips_without_merging_meshes(self):
         self.client.force_login(self.owner)
         group_id = "assembly:" + str(uuid.uuid4())
