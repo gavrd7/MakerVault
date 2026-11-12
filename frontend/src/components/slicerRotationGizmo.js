@@ -101,6 +101,20 @@ export function createMakerVaultRotationGizmo(scene) {
   const rings = new Map();
   let activeMesh = null, activeAxis = null, dragState = null;
   let radius = 25;
+  const angleCanvas = document.createElement("canvas");
+  angleCanvas.width = 256; angleCanvas.height = 88;
+  const angleContext = angleCanvas.getContext("2d");
+  const angleTexture = new THREE.CanvasTexture(angleCanvas);
+  const angleBadge = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: angleTexture, transparent: true, depthTest: false, depthWrite: false,
+  }));
+  angleBadge.name = "MakerVaultRotationAngle";
+  angleBadge.scale.set(0.86, 0.3, 1);
+  angleBadge.position.set(0, 0, 1.35);
+  angleBadge.renderOrder = 120;
+  angleBadge.visible = false;
+  group.add(angleBadge);
+  let activeArc = null;
   const raycaster = new THREE.Raycaster();
   raycaster.params.Line.threshold = 3;
 
@@ -205,6 +219,16 @@ export function createMakerVaultRotationGizmo(scene) {
       lastAngle: 0,
     };
     activeAxis = axisName;
+    angleBadge.visible = true;
+    if (angleContext) {
+      angleContext.clearRect(0, 0, 256, 88);
+      angleContext.fillStyle = "#14293a";
+      angleContext.fillRect(0, 0, 256, 88);
+      angleContext.fillStyle = "#e2f7ff";
+      angleContext.font = "bold 42px sans-serif";
+      angleContext.fillText(axisName + " 0°", 24, 57);
+      angleTexture.needsUpdate = true;
+    }
     for (const [name, ring] of rings) ring.children[0].material.opacity = name === axisName ? 1 : 0.16;
     return true;
   }
@@ -214,6 +238,40 @@ export function createMakerVaultRotationGizmo(scene) {
       dragState.normal, dragState.startDirection, dragState.lastAngle);
     const degrees = snapRotationDegrees(THREE.MathUtils.radToDeg(radians), shift);
     dragState.lastAngle = THREE.MathUtils.degToRad(degrees);
+    if (activeArc) {
+      group.remove(activeArc);
+      activeArc.geometry.dispose();
+      activeArc.material.dispose();
+      activeArc = null;
+    }
+    if (Math.abs(degrees) > 0.1) {
+      const axisVector = AXES.find(entry => entry.name === dragState.axisName).vector;
+      const segments = Math.max(2, Math.ceil(Math.abs(degrees) / 5));
+      const arcPoints = [];
+      for (let i = 0; i <= segments; i++) {
+        arcPoints.push(ringPoint(axisVector, dragState.lastAngle * i / segments, 1.02));
+      }
+      activeArc = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(arcPoints),
+        new THREE.LineBasicMaterial({
+          color: 0xffffff, depthTest: false, depthWrite: false,
+        }),
+      );
+      activeArc.renderOrder = 115;
+      group.add(activeArc);
+      angleBadge.position.copy(ringPoint(axisVector, dragState.lastAngle, 1.38));
+    }
+    if (angleContext) {
+      angleContext.clearRect(0, 0, 256, 88);
+      angleContext.fillStyle = "#14293a";
+      angleContext.fillRect(0, 0, 256, 88);
+      angleContext.strokeStyle = "#67cfff";
+      angleContext.strokeRect(2, 2, 252, 84);
+      angleContext.fillStyle = "#f2fbff";
+      angleContext.font = "bold 42px sans-serif";
+      angleContext.fillText(dragState.axisName + " " + degrees + "°", 18, 56);
+      angleTexture.needsUpdate = true;
+    }
     const axis = AXES.find(entry => entry.name === dragState.axisName);
     const quaternion = new THREE.Quaternion().setFromAxisAngle(axis.vector, dragState.lastAngle);
     dragState.mesh.quaternion.copy(dragState.startQuaternion).multiply(quaternion);
@@ -231,6 +289,13 @@ export function createMakerVaultRotationGizmo(scene) {
     const state = dragState;
     dragState = null;
     activeAxis = null;
+    angleBadge.visible = false;
+    if (activeArc) {
+      group.remove(activeArc);
+      activeArc.geometry.dispose();
+      activeArc.material.dispose();
+      activeArc = null;
+    }
     for (const ring of rings.values()) ring.children[0].material.opacity = 0.9;
     return state;
   }
