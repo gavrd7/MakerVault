@@ -16,6 +16,7 @@ import { detectMeshMeasurement, formatDetectedMeasurement } from "./slicerAutoMe
 import { evaluateAutoOrient, AUTO_ORIENT_GOALS } from "./slicerAutoOrient";
 import { splitDisconnectedMesh } from "./slicerSplitObjects";
 import { executeSolidOperation } from "./slicerSolidOperations";
+import { PRIMITIVE_TYPES, createPrimitiveMesh, createPrimitiveStl } from "./slicerPrimitives";
 import { validateStackPlacement } from "./slicerStacking";
 import makerVaultLogoSvg from "../assets/slicer-bed-art/makervault-official-logo.svg?raw";
 
@@ -292,7 +293,7 @@ export default function SlicerPlateEditor({
   const [solidPreview, setSolidPreview] = useState(null);
   const [solidBusy, setSolidBusy] = useState(false);
   const [solidError, setSolidError] = useState("");
-  const [solidOptions, setSolidOptions] = useState({wall: 2, radius: 3, x_mm: 0, y_mm: 0, cutHeight: 5, cutAxis: "z", keep: "both", booleanMode: "union", secondId: ""});
+  const [solidOptions, setSolidOptions] = useState({wall: 2, radius: 3, x_mm: 0, y_mm: 0, cutHeight: 5, cutAxis: "z", keep: "both", booleanMode: "union", secondId: "", primitiveType: "box", width: 20, depth: 20, height: 20, z_mm: 10});
   // An applied result must always correspond to the options actually shown.
   useEffect(() => { setSolidPreview(null); }, [solidOptions]);
   const [measureOverlayExpanded, setMeasureOverlayExpanded] = useState(false);
@@ -582,12 +583,13 @@ export default function SlicerPlateEditor({
     const mesh = item && sceneRef.current?.meshes.get(item.instance_id);
     setSolidError("");
     setSolidPreview(null);
-    if (!mesh) {
+    if (!mesh && solidRequest.kind !== "primitive") {
       setSolidError("Select a loaded STL model to edit.");
       return;
     }
-    mesh.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(mesh);
+    mesh?.updateMatrixWorld(true);
+    const box = mesh ? new THREE.Box3().setFromObject(mesh) :
+      new THREE.Box3(new THREE.Vector3(-10,-10,0),new THREE.Vector3(10,10,20));
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
     setSolidOptions({
@@ -596,10 +598,12 @@ export default function SlicerPlateEditor({
       x_mm: pretty(center.x), y_mm: pretty(center.y),
       cutHeight: pretty((box.min.z+box.max.z)/2), cutAxis: "z",
       keep: "both", booleanMode: "union",
-      secondId: objects.find(row => row.instance_id!==item.instance_id)?.instance_id || "",
+      secondId: objects.find(row => row.instance_id!==item?.instance_id)?.instance_id || "",
+      primitiveType:"box", width:20,depth:20,height:20,z_mm:pretty(center.z),
     });
-    setSolidDialog({kind:solidRequest.kind,id:item.instance_id,name:
-      sourceFiles.find(file => String(file.id)===String(item.asset_id))?.name || "Model"});
+    setSolidDialog({kind:solidRequest.kind,id:item?.instance_id || null,name:
+      solidRequest.kind === "primitive" ? "Primitive" :
+      sourceFiles.find(file => String(file.id)===String(item?.asset_id))?.name || "Model"});
   }, [solidRequest?.id]);
 
   // Results are previewed as translucent, independent STL ghosts. None of
@@ -638,11 +642,25 @@ export default function SlicerPlateEditor({
       const state=sceneRef.current;
       const target=state?.meshes.get(solidDialog.id);
       const second=solidDialog.kind==="boolean" ? state?.meshes.get(solidOptions.secondId) : null;
-      if (!target) throw new Error("Selected model is not loaded.");
+      if (!target && solidDialog.kind !== "primitive")
+        throw new Error("Selected model is not loaded.");
       if (solidDialog.kind==="boolean" && (!second || second===target))
         throw new Error("Choose a different model for this Boolean operation.");
-      const parts=executeSolidOperation(solidDialog.kind,target,solidOptions,second);
-      if (objects.length-1-(second?1:0)+parts.length>MAX_OBJECTS)
+      let parts;
+      if (solidDialog.kind==="primitive") {
+        parts=[createPrimitiveStl(solidOptions)];
+      } else if (solidDialog.kind==="negative") {
+        const tool=createPrimitiveMesh(solidOptions,[
+          Number(solidOptions.x_mm),Number(solidOptions.y_mm),
+          Number(solidOptions.z_mm)-Number(solidOptions.height)/2,
+        ]);
+        try {
+          parts=executeSolidOperation("boolean",target,{booleanMode:"difference"},tool);
+        } finally {tool.geometry.dispose();tool.material.dispose();}
+      } else {
+        parts=executeSolidOperation(solidDialog.kind,target,solidOptions,second);
+      }
+      if (objects.length-(solidDialog.kind==="primitive"?0:1)-(second?1:0)+parts.length>MAX_OBJECTS)
         throw new Error("The result would exceed the 12-object build plate limit.");
       setSolidPreview({parts,secondId:second ? solidOptions.secondId : null});
     } catch(error) {
@@ -652,7 +670,9 @@ export default function SlicerPlateEditor({
   async function applySolid() {
     if (!solidDialog || !solidPreview || solidBusy) return;
     const selectedObject=objects.find(row=>row.instance_id===solidDialog.id);
-    if (!selectedObject) {setSolidError("Selection changed. Reopen the mesh operation.");return;}
+    if (!selectedObject && solidDialog.kind!=="primitive") {
+      setSolidError("Selection changed. Reopen the mesh operation.");return;
+    }
     setSolidBusy(true);setSolidError("");
     try {
       const created=[];
@@ -668,8 +688,8 @@ export default function SlicerPlateEditor({
         if(!id) throw new Error("MakerVault did not return a validated STL identifier.");
         created.push({id,name:filename,file,part});
       }
-      const remaining=objects.filter(row=>row.instance_id!==solidDialog.id &&
-        row.instance_id!==solidPreview.secondId);
+      const remaining=objects.filter(row=>solidDialog.kind==="primitive" ||
+        (row.instance_id!==solidDialog.id && row.instance_id!==solidPreview.secondId));
       const additions=created.map(({id,part},index)=>({
         ...selectedObject,
         ...newPlateInstance(id,objects.length+index),
@@ -677,7 +697,11 @@ export default function SlicerPlateEditor({
         color:PALETTE[(index+2)%PALETTE.length],
         assembly_id:null,
       }));
-      if (solidDialog.kind==="cut" && additions.length>1) {
+      if (solidDialog.kind==="primitive") {
+        pendingArrangeRef.current=true;
+        additions.forEach(item=>pendingAddIdsRef.current.add(item.instance_id));
+        onChange([...remaining,...additions]);
+      } else if (solidDialog.kind==="cut" && additions.length>1) {
         const dims={...dimensionsRef.current};
         additions.forEach((item,i)=>{const p=created[i].part;
           dims[item.instance_id]={width:p.width,depth:p.depth,height:p.height};item.z_mm=0;});
