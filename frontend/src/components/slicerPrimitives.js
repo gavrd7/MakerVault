@@ -239,7 +239,7 @@ export function createTextStl(options={}) {
   normalizeBounds(geometry,width,depth,height);
   applyPrintableRotation(geometry,options);
   const mesh=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial());
-  try{return resultToStl(mesh);}
+  try{return resultToStl(mesh,{allowTrustedFontSeams:fontId!=="block"});}
   finally{geometry.dispose();mesh.material.dispose();}
 }
 export function createSvgStl(options={}) {
