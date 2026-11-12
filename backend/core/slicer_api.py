@@ -178,7 +178,7 @@ def _draft_plate_settings(user, input_asset, settings):
         required = {"instance_id", "asset_id", "x_mm", "y_mm", "rotation_deg",
                     "scale_percent", "color"}
         if (not isinstance(item, dict) or not required.issubset(item)
-                or set(item) - required - {"scale_xyz_percent", "process_overrides", "rotation_xyz_deg", "assembly_id"}):
+                or set(item) - required - {"scale_xyz_percent", "process_overrides", "rotation_xyz_deg", "assembly_id", "z_mm"}):
             raise ValueError("Invalid plate model instance.")
         instance_id = str(_uuid(item["instance_id"]))
         asset_id = _uuid(item["asset_id"])
@@ -189,13 +189,15 @@ def _draft_plate_settings(user, input_asset, settings):
         if not asset or not str((asset.metadata or {}).get("extension") or (asset.name or "")[-4:]).lower().endswith(".stl"):
             raise ValueError("Every plate model must be an owned STL asset.")
         values = {}
-        for key, bound in (("x_mm", 10000), ("y_mm", 10000), ("rotation_deg", 360), ("scale_percent", 400)):
-            raw = item[key]
+        for key, bound in (("x_mm", 10000), ("y_mm", 10000), ("rotation_deg", 360), ("scale_percent", 400), ("z_mm", 1000)):
+            raw = item.get(key, 0) if key == "z_mm" else item[key]
             if isinstance(raw, bool) or not isinstance(raw, (int, float)) or not math.isfinite(raw):
                 raise ValueError("Plate coordinates must be finite numbers.")
             if key == "scale_percent" and not 5 <= raw <= bound:
                 raise ValueError("Plate scale must be between 5% and 400%.")
-            if key != "scale_percent" and abs(raw) > bound:
+            if key == "z_mm" and not 0 <= raw <= bound:
+                raise ValueError("Model elevation must be between 0 and 1000 mm.")
+            if key not in {"scale_percent", "z_mm"} and abs(raw) > bound:
                 raise ValueError("Plate transform exceeds its allowed range.")
             values[key] = round(float(raw), 3)
         tilt = item.get("rotation_xyz_deg")
