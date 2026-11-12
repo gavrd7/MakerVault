@@ -701,7 +701,7 @@ export default function SlicerPlateEditor({
       font:editingText?item.text_model.font||"block":"block",svgData:"",
     });
     setSolidDialog({kind:solidRequest.kind,id:item?.instance_id || null,
-      editTargetId:editingText?item.instance_id:null,name:
+      editTargetId:editingText?item.instance_id:null,anchorRect:solidRequest.anchorRect||null,name:
       ["primitive","text","svg"].includes(solidRequest.kind) ? solidRequest.kind[0].toUpperCase()+solidRequest.kind.slice(1) :
       sourceFiles.find(file => String(file.id)===String(item?.asset_id))?.name || "Model"});
   }, [solidRequest?.id]);
@@ -2366,6 +2366,17 @@ export default function SlicerPlateEditor({
     controls.update();
   }
 
+  const solidAnchor=solidDialog?.anchorRect;
+  const solidPanelStyle=(()=>{
+    if(!solidAnchor || typeof window==="undefined") return {pointerEvents:"auto"};
+    const width=Math.min(560,window.innerWidth-26);
+    const left=Math.max(12,Math.min(solidAnchor.left,window.innerWidth-width-12));
+    const below=window.innerHeight-solidAnchor.bottom-18;
+    const top=below>=260?solidAnchor.bottom+8:
+      Math.max(12,solidAnchor.top-Math.min(window.innerHeight*0.72,660));
+    return {pointerEvents:"auto",position:"fixed",left,top,
+      width,maxHeight:Math.max(180,window.innerHeight-top-12)};
+  })();
   return <section className="panel printingSection slicerPlatePanel" aria-labelledby="slicer-plate-heading">
     <div className="slicerPlateHeading">
       <h3 id="slicer-plate-heading">Visual build plate</h3>
@@ -2742,7 +2753,7 @@ export default function SlicerPlateEditor({
       <div className="slicerAutoOrientModalBackdrop" role="presentation"
         style={{pointerEvents:"none"}}>
         <section className="slicerAutoOrientPanel slicerAutoOrientModal slicerSolidModal"
-          role="dialog" aria-modal="false" style={{pointerEvents:"auto"}} aria-label={solidDialog.kind+" model geometry"}>
+          role="dialog" aria-modal="false" style={solidPanelStyle} aria-label={solidDialog.kind+" model geometry"}>
           <header className="slicerAutoOrientModalHeader">
             <div><h3>{solidDialog.kind==="boolean"?"Mesh Boolean":
               solidDialog.kind[0].toUpperCase()+solidDialog.kind.slice(1)} model</h3>
