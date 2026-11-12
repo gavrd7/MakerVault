@@ -1329,24 +1329,24 @@ export default function SlicerPlateEditor({
     // The helper is owned by the selected instance, never by its STL asset.
     // This keeps two copies of the same model independently selectable and
     // prevents the highlight from changing filament/preview colours.
-    let selectionOutline = null;
-    function setSelectionOutline(mesh) {
-      if (selectionOutline?.userData?.target === mesh) return;
-      if (selectionOutline) {
-        scene.remove(selectionOutline);
-        selectionOutline.geometry.dispose();
-        selectionOutline.material.dispose();
-        selectionOutline = null;
+    const selectionOutlines = new Map();
+    function setSelectionOutlines(targets) {
+      const active = new Set(targets.filter(Boolean));
+      for (const [mesh, helper] of selectionOutlines) {
+        if (active.has(mesh)) continue;
+        scene.remove(helper);helper.geometry.dispose();helper.material.dispose();
+        selectionOutlines.delete(mesh);
       }
-      if (!mesh) return;
-      selectionOutline = new THREE.BoxHelper(mesh, 0x39d9ff);
-      selectionOutline.userData.target = mesh;
-      selectionOutline.material.depthTest = false;
-      selectionOutline.material.transparent = true;
-      selectionOutline.material.opacity = 0.96;
-      selectionOutline.renderOrder = 90;
-      scene.add(selectionOutline);
-      selectionOutline.update();
+      for (const mesh of active) {
+        if (selectionOutlines.has(mesh)) continue;
+        const helper = new THREE.BoxHelper(mesh, 0x39d9ff);
+        helper.material.depthTest=false;
+        helper.material.transparent=true;
+        helper.material.opacity=0.96;
+        helper.renderOrder=90;
+        scene.add(helper);selectionOutlines.set(mesh,helper);
+      }
+      selectionOutlines.forEach(helper=>helper.update());
     }
     const measurementOverlay = new THREE.Group();
     scene.add(measurementOverlay);
@@ -1692,12 +1692,12 @@ export default function SlicerPlateEditor({
       updateBedAppearance();
       // Update continuously during gizmo and pointer drags, which can happen
       // between React object-state commits.
-      selectionOutline?.update();
+      selectionOutlines.forEach(helper=>helper.update());
       renderer.render(scene, camera);
       orientationCube.render();
     });
     sceneRef.current = { scene, meshes, transform, rotationGizmo, camera, controls, bedX, bedY,
-      measurementOverlay, setSelectionOutline };
+      measurementOverlay, setSelectionOutlines };
     return () => {
       disposed = true;
       sceneRef.current = null;
@@ -1717,7 +1717,7 @@ export default function SlicerPlateEditor({
       scene.remove(transform.getHelper());
       transform.dispose();
       rotationGizmo.dispose();
-      setSelectionOutline(null);
+      setSelectionOutlines([]);
       for (const item of [...measurementOverlay.children]) {
         measurementOverlay.remove(item);
         item.geometry?.dispose();
@@ -1840,7 +1840,7 @@ export default function SlicerPlateEditor({
         selection.includes(item.instance_id) ? 0.32 : 0;
     }
     const selectedMesh = state.meshes.get(selected);
-    state.setSelectionOutline(selectedMesh || null);
+    state.setSelectionOutlines(selection.map(id=>state.meshes.get(id)).filter(Boolean));
     const singleEditable = canEdit && selectedMesh && selection.length < 2;
     if (singleEditable && toolMode === "rotate") {
       state.transform.detach();
