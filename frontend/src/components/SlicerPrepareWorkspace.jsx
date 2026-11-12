@@ -24,7 +24,6 @@ const TOOLS = [
   { name: "Auto-orient", target: "auto_orient", icon: "orient" },
   { name: "Lay on face", target: "lay_face", icon: "face" },
   { name: "Split", target: "split", icon: "split" },
-  { name: "Individual XYZ scale", target: "scale_xyz_percent", icon: "scale" },
   { name: "Hollow", icon: "hollow", pending: "Watertight offset geometry and drain holes" },
   { name: "Drill", icon: "drill", pending: "Validated boolean subtraction" },
   { name: "Cut", icon: "cut", pending: "Robust planar mesh cutting" },
@@ -55,7 +54,7 @@ export default function SlicerPrepareWorkspace({
   processOverrides = {}, onProcessOverridesChange, onSaveCustomProcessProfile,
   processProfiles = [], onSelectProcessProfile, onResetProcessSettings,
   printerDetails, nozzleMm, selectedPlateType = "Native / profile default",
-  localAssets = [], onLocalAssetsChange,
+  localAssets = [], onLocalAssetsChange, onPlateIssuesChange, plateIssues = null,
 }) {
   const editorRef = useRef(null);
   const [sceneHeight, setSceneHeight] = useState(0);
@@ -419,6 +418,8 @@ export default function SlicerPrepareWorkspace({
     }
   }
   const plateReady = canEdit && !!objects.length && !busy;
+  const conflictsBlockSlice = !plateIssues || plateIssues.signature !== JSON.stringify(objects) ||
+    plateIssues.issues.length > 0;
   const profilesReady = ["printer", "process", "filament"].every(
     kind => selectedProfiles?.[kind + "_id"]);
   const draftBlockReason = !canEdit
@@ -434,6 +435,7 @@ export default function SlicerPrepareWorkspace({
     Object.keys(item.process_overrides || {}).some(key => !verifiedObjectSettings.has(key))
   );
   const sliceBlockReason = draftBlockReason ||
+    (conflictsBlockSlice ? "Resolve build-plate conflicts or wait for models to finish loading before slicing." : "") ||
     (objectSettingsPending
       ? "Some Object settings are not yet verified for slicing. Wall loops and sparse infill density are supported; other Object overrides can be saved in drafts but cannot be sliced yet."
       : !workerConfigured
@@ -854,7 +856,7 @@ export default function SlicerPrepareWorkspace({
           MakerVault will rotate the model and place it back on the bed. Select the tool again to cancel.
         </p>}
         <SlicerPlateEditor files={files} localAssets={localAssets}
-          onLocalAssetsChange={onLocalAssetsChange} objects={objects} onChange={updatePlate}
+          onLocalAssetsChange={onLocalAssetsChange} onPlateIssuesChange={onPlateIssuesChange} objects={objects} onChange={updatePlate}
           onPrimaryChange={onPrimaryChange} onFilesUploaded={onFilesUploaded}
           onManualColorChange={onManualColorChange} defaultColor={defaultColor}
           plate={plate} plateType={plateType} plateLabel={plateLabel}
@@ -900,7 +902,7 @@ export default function SlicerPrepareWorkspace({
       </div>
       <div className="settingsActions">
         <button type="button" disabled={!plateReady || !profilesReady} onClick={onSaveDraft}>Save draft</button>
-        <button type="button" className="primary" disabled={!plateReady || !profilesReady || !workerConfigured}
+        <button type="button" className="primary" disabled={!plateReady || !profilesReady || !workerConfigured || conflictsBlockSlice || objectSettingsPending}
           onClick={onSlice}>Slice and preview</button>
       </div>
     </div>
