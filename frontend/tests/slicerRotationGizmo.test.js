@@ -1,0 +1,29 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import * as THREE from "three";
+import { snapRotationDegrees, dragAngleFromRay } from "../src/components/slicerRotationGizmo.js";
+
+test("rotation detents default to 45 degrees, Shift enables 5-degree precision", () => {
+  assert.equal(snapRotationDegrees(43), 45);
+  assert.equal(snapRotationDegrees(17), 0);
+  assert.equal(snapRotationDegrees(-80), -90);
+  assert.equal(snapRotationDegrees(43, true), 45);
+  assert.equal(snapRotationDegrees(18, true), 20);
+  assert.equal(snapRotationDegrees(-12, true), -10);
+});
+
+test("rotating about a local axis uses signed radial displacement", () => {
+  const center = new THREE.Vector3(0, 0, 0);
+  const axis = new THREE.Vector3(0, 0, 1);
+  const start = new THREE.Vector3(1, 0, 0);
+  const ray = new THREE.Ray(new THREE.Vector3(0, 1, 10), new THREE.Vector3(0, 0, -1));
+  assert.ok(Math.abs(dragAngleFromRay(ray, center, axis, start) - Math.PI / 2) < 1e-8);
+  const reverse = new THREE.Ray(new THREE.Vector3(0, -1, 10), new THREE.Vector3(0, 0, -1));
+  assert.ok(Math.abs(dragAngleFromRay(reverse, center, axis, start) + Math.PI / 2) < 1e-8);
+});
+
+test("ray parallel to selected plane preserves the last angle", () => {
+  const ray = new THREE.Ray(new THREE.Vector3(0, 0, 5), new THREE.Vector3(1, 0, 0));
+  assert.equal(dragAngleFromRay(ray, new THREE.Vector3(), new THREE.Vector3(0, 0, 1),
+    new THREE.Vector3(1, 0, 0), 0.123), 0.123);
+});
