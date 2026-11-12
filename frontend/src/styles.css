@@ -5768,3 +5768,63 @@ a:focus-visible,
     max-height:calc(100dvh - 16px);
   }
 }
+
+/* Section tool sits below the view cube at every desktop density.
+   Keep a stable bottom control area rather than squeezing the Axis label. */
+.slicerPlateCanvasViewport > .slicerPlateSectionControl{
+  top:clamp(135px, 22%, 170px);
+  bottom:12px;
+  right:10px;
+  width:62px;
+  min-height:190px;
+  padding:9px 6px;
+  gap:6px;
+}
+.slicerPlateSectionControl .slicerSectionAxisLabel{
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  justify-content:center;
+  flex:0 0 auto;
+  width:100%;
+  min-width:0;
+  gap:4px;
+  margin:0;
+  padding:0;
+  text-align:center;
+  white-space:nowrap;
+  font-size:11px;
+  font-weight:500;
+  line-height:1.2;
+}
+.slicerPlateSectionControl .slicerSectionAxisLabel select{
+  display:block;
+  box-sizing:border-box;
+  width:100%;
+  min-width:0;
+  max-width:100%;
+  height:28px;
+  padding:3px 5px;
+  margin:0;
+  border-radius:5px;
+  text-align:center;
+  text-align-last:center;
+  font-size:12px;
+  line-height:1.2;
+}
+.slicerPlateSectionControl .slicerSectionValue{
+  overflow-wrap:normal;
+  word-break:normal;
+  white-space:nowrap;
+}
+.slicerPlateSectionControl input[type="range"]{
+  min-height:42px;
+}
+@media(max-width:700px){
+  .slicerPlateCanvasViewport > .slicerPlateSectionControl{
+    top:clamp(125px, 22%, 155px);
+    right:5px;
+    bottom:10px;
+    width:57px;
+  }
+}
