@@ -89,6 +89,39 @@ export function plateFootprintsOverlap(a, aDims, b, bDims, clearance = 0) {
     left.maxY + clearance > right.minY + epsilon;
 }
 
+/** Place one new copy without rearranging any existing objects.
+ * Candidate centres include gaps beside every occupied footprint, not only
+ * free space in the source model's row. Complexity is capped to 200 entries.
+ */
+export function findFreeDuplicatePosition(item,objects,dimensions,bedX,bedY,clearance=3) {
+  const dims=dimensions[item.instance_id];
+  const footprint=plateEnvelope({...item,x_mm:0,y_mm:0},dims);
+  if(!footprint)return null;
+  const w=footprint.maxX-footprint.minX,d=footprint.maxY-footprint.minY;
+  const margin=0.06;
+  const xs=[-bedX/2+w/2+margin,0,bedX/2-w/2-margin];
+  const ys=[-bedY/2+d/2+margin,0,bedY/2-d/2-margin];
+  for(const other of objects) {
+    const envelope=plateEnvelope(other,dimensions[other.instance_id]);
+    if(!envelope) return null;
+    xs.push(envelope.minX-w/2-clearance-margin,envelope.maxX+w/2+clearance+margin);
+    ys.push(envelope.minY-d/2-clearance-margin,envelope.maxY+d/2+clearance+margin);
+  }
+  const candidates=[];
+  for(const y of ys)for(const x of xs) {
+    if(!Number.isFinite(x)||!Number.isFinite(y))continue;
+    const candidate={...item,x_mm:Math.round(x*100)/100,y_mm:Math.round(y*100)/100};
+    if(plateExtentWarning(candidate,dims,bedX,bedY))continue;
+    const dist=(x-item.x_mm)**2+(y-item.y_mm)**2;
+    candidates.push({candidate,dist});
+  }
+  candidates.sort((a,b)=>a.dist-b.dist||a.candidate.y_mm-b.candidate.y_mm||a.candidate.x_mm-b.candidate.x_mm);
+  for(const {candidate} of candidates)
+    if(objects.every(other=>plateFootprintsOverlap(candidate,dims,other,
+      dimensions[other.instance_id],clearance)===false))return candidate;
+  return null;
+}
+
 /** Deterministic shelf-like packing by footprint. No geometry or profile data is modified.
  * All positions are centred on the displayed plate, and rotation/scale are respected.
  * Failure does not change the original arrangement. This is a preview only; native
