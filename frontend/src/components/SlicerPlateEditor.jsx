@@ -654,23 +654,38 @@ export default function SlicerPlateEditor({
     const state=sceneRef.current;
     if (!state) return undefined;
     // Keep source models visible; ghosts overlay rather than replace.
-    const originals=[];
-    const visibility=[];
+    const original=solidDialog?.id ? state.meshes.get(solidDialog.id) : null;
+    const originalMaterial=solidDialog?.kind==="hollow" && original?.material && !Array.isArray(original.material)
+      ? original.material : null;
+    let fadedMaterial=null;
+    if(originalMaterial) {
+      fadedMaterial=originalMaterial.clone();
+      fadedMaterial.transparent=true;
+      fadedMaterial.opacity=0.16;
+      fadedMaterial.depthWrite=false;
+      fadedMaterial.needsUpdate=true;
+      original.material=fadedMaterial;
+    }
     const overlays=[];
     for (const [index,part] of solidPreview.parts.entries()) {
       const geom=new STLLoader().parse(part.buffer);
       const mesh=new THREE.Mesh(geom,new THREE.MeshStandardMaterial({
         color: solidDialog?.kind === "hollow" ? "#f3b256" : PALETTE[(index+2)%PALETTE.length], transparent:true,
-        opacity:0.48, roughness:0.75, side:THREE.DoubleSide,
+        opacity:solidDialog?.kind==="hollow"?0.64:0.32,
+        depthWrite:false, roughness:0.75, side:THREE.DoubleSide,
         clippingPlanes:[state.sectionPlane],
       }));
       mesh.position.set(part.x_mm,part.y_mm,part.z_mm);
       mesh.userData.solidPreview=true;
+      mesh.renderOrder=80;
       state.scene.add(mesh);overlays.push(mesh);
       if(index===0 && ["primitive","text","svg"].includes(solidDialog?.kind))liveGhostRef.current=mesh;
     }
     return () => {
-      originals.forEach((mesh,index)=>{mesh.visible=visibility[index];});
+      if(originalMaterial && original){
+        original.material=originalMaterial;
+        fadedMaterial?.dispose();
+      }
       if(liveGhostRef.current===overlays[0])liveGhostRef.current=null;
       overlays.forEach(mesh=>{state.scene.remove(mesh);mesh.geometry.dispose();mesh.material.dispose();});
     };
