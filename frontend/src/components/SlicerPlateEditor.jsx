@@ -321,8 +321,15 @@ export default function SlicerPlateEditor({
       ? plateExtentWarning(item, dimensions[item.instance_id], bedX, bedY) : "",
   })).filter(row => row.message);
   const overlapWarnings = objects.flatMap((item, index) => objects.slice(index + 1)
-    .filter(other => plateFootprintsOverlap(item, dimensions[item.instance_id],
-      other, dimensions[other.instance_id], 2) === true)
+    .filter(other => {
+      const first = Number(item.z_mm || 0), second = Number(other.z_mm || 0);
+      const h1 = plateModelMeasurement(item, dimensions[item.instance_id])?.height;
+      const h2 = plateModelMeasurement(other, dimensions[other.instance_id])?.height;
+      if (h1 != null && h2 != null &&
+        (first >= second + h2 - 0.1 || second >= first + h1 - 0.1)) return false;
+      return plateFootprintsOverlap(item, dimensions[item.instance_id],
+        other, dimensions[other.instance_id], 2) === true;
+    })
     .map(other => ({
       id: item.instance_id + ":" + other.instance_id,
       message: (sourceFiles.find(file => String(file.id) === item.asset_id)?.name || "Model " + (index + 1)) +
@@ -1631,9 +1638,9 @@ export default function SlicerPlateEditor({
           positionOrientedMesh(mesh, latest);
           state.meshes.set(item.instance_id, mesh);
           state.scene.add(mesh);
-          if (latestToolModeRef.current !== "select" && item.instance_id === selectedInstanceId) {
-            state.transform.setMode(latestToolModeRef.current === "move" ? "translate" :
-              latestToolModeRef.current === "scale" ? "scale" : "rotate");
+          if (latestToolModeRef.current !== "select" && item.instance_id === selectedInstanceId &&
+              ["move", "scale"].includes(latestToolModeRef.current)) {
+            state.transform.setMode(latestToolModeRef.current === "move" ? "translate" : "scale");
             state.transform.attach(mesh);
           }
         })
