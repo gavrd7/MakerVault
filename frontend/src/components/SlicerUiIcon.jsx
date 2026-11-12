@@ -2,6 +2,14 @@ import React from "react";
 
 /** Compact, accessible outline icons for the native MakerVault slicer UI. */
 const paths = {
+  "shape-box": <><path d="m3 7 9-5 9 5-9 5-9-5Z"/><path d="M3 7v10l9 5 9-5V7M12 12v10"/></>,
+  "shape-cylinder": <><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5"/></>,
+  "shape-sphere": <><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/></>,
+  "shape-cone": <><path d="M12 2 3 19c1 4 17 4 18 0L12 2Z"/><ellipse cx="12" cy="19" rx="9" ry="3"/></>,
+  "shape-disc": <><ellipse cx="12" cy="8" rx="9" ry="4"/><path d="M3 8v7c0 5 18 5 18 0V8"/></>,
+  "shape-torus": <><ellipse cx="12" cy="12" rx="10" ry="8"/><ellipse cx="12" cy="12" rx="4" ry="3"/></>,
+  "shape-text": <><path d="M3 5h18M12 5v16M6 5v3m12-3v3"/></>,
+  "shape-svg": <><path d="M4 2h11l5 5v15H4zM15 2v5h5M7 17l3-6 3 3 4-5"/></>,
   add: <><path d="M12 5v14M5 12h14" /></>,
   undo: <><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-2"/></>,
   redo: <><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h2"/></>,
