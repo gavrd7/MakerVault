@@ -23,5 +23,5 @@ test("measurements are shown on the 3D model as read-only labels and cleaned up"
   assert.match(plate, /measurementFormat\(distance, measureUnit\)/);
   assert.match(plate, /measurementFormat\(circle\.diameter, measureUnit\)/);
   assert.match(plate, /item\.material\?\.map\?\.dispose\(\)/);
-  assert.match(plate, /not original CAD edges/);
+  assert.match(plate, /aria-label="Selected model measurements"/);
 });
