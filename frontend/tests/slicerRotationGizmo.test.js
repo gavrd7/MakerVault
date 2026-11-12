@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import { snapRotationDegrees, dragAngleFromRay } from "../src/components/slicerRotationGizmo.js";
+import { snapRotationDegrees, dragAngleFromRay, unwrapRotationDelta } from "../src/components/slicerRotationGizmo.js";
 
 test("rotation detents default to 45 degrees, Shift enables 5-degree precision", () => {
   assert.equal(snapRotationDegrees(43), 45);
@@ -26,4 +26,11 @@ test("ray parallel to selected plane preserves the last angle", () => {
   const ray = new THREE.Ray(new THREE.Vector3(0, 0, 5), new THREE.Vector3(1, 0, 0));
   assert.equal(dragAngleFromRay(ray, new THREE.Vector3(), new THREE.Vector3(0, 0, 1),
     new THREE.Vector3(1, 0, 0), 0.123), 0.123);
+});
+
+test("drag angle can cross ±180 degrees without jumping backwards", () => {
+  const before = THREE.MathUtils.degToRad(179);
+  const after = THREE.MathUtils.degToRad(-178);
+  assert.ok(Math.abs(THREE.MathUtils.radToDeg(unwrapRotationDelta(after, before)) - 3) < 1e-8);
+  assert.ok(Math.abs(THREE.MathUtils.radToDeg(unwrapRotationDelta(before, after)) + 3) < 1e-8);
 });
