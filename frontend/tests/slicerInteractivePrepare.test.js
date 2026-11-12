@@ -51,7 +51,7 @@ test("measurement, centre and focus toolbar actions are functional and guarded",
   assert.match(editor, /data-slicer-action="focus"/);
   assert.match(editor, /applySelectedTransform\(\{ x_mm: 0, y_mm: 0 \}/);
   assert.match(editor, /height: box.max.z - box.min.z/);
-  assert.match(editor, /This is not face-to-face measurement/);
+  assert.match(editor, /aria-label="Selected model measurements"/);
 });
 test("surface picking measures triangle vertices and edges without editing slice geometry", () => {
   const scene = read("SlicerPrepareWorkspace.jsx");
@@ -70,7 +70,7 @@ test("surface picking measures triangle vertices and edges without editing slice
   assert.match(scene, /Three-point circle/);
   assert.match(scene, /Millimetres \(mm\)/);
   assert.match(scene, /Inches \(in\)/);
-  assert.match(editor, /Three-point circle is a geometric construction/);
+  assert.match(editor, /measureMode === "circle"/);
   assert.match(editor, /setMeasurePoints\(\[\]\); setDetectedFeature\(null\); \}, \[objects, measureMode, measureClearVersion\]\)/);
 });
 test("Measure options open at the toolbar while a compact readout lives at top left of the plate", () => {
@@ -92,7 +92,7 @@ test("Measure options open at the toolbar while a compact readout lives at top l
   assert.match(editor, /pinDistance !== null/);
   assert.match(editor, /measureOverlayExpanded/);
   assert.match(editor, /measureClearVersion\]\)/);
-  assert.match(editor, /Choose measurement mode, units and Clear pins from the expandable/);
+  assert.doesNotMatch(editor, /Choose measurement mode, units and Clear pins from the expandable/);
   assert.match(css, /\.slicerToolOptions \{/);
   assert.match(css, /\.slicerViewportMeasurement \{/);
   assert.match(css, /position: absolute;/);
@@ -486,7 +486,7 @@ test("auto-orient comparison labels good and bad deltas rather than treating plu
   assert.match(editor, /percent === null \? "isNeutral" : tied \? "isBetter" : "isWorse"/);
   assert.match(editor, /"✓ Best \/ tied"/);
   assert.match(editor, /"% worse"/);
-  assert.match(editor, /Lower is better for all four proxy metrics/);
+  assert.match(editor, /orientationComparison\(relative\.time\)/);
   assert.match(css, /\.slicerOrientDelta\.isBetter/);
   assert.match(css, /\.slicerOrientDelta\.isWorse/);
   assert.match(css, /\.slicerOrientDelta\.isNeutral/);
