@@ -24,10 +24,10 @@ const TOOLS = [
   { name: "Auto-orient", target: "auto_orient", icon: "orient" },
   { name: "Lay on face", target: "lay_face", icon: "face" },
   { name: "Split", target: "split", icon: "split" },
-  { name: "Hollow", icon: "hollow", pending: "Watertight offset geometry and drain holes" },
-  { name: "Drill", icon: "drill", pending: "Validated boolean subtraction" },
-  { name: "Cut", icon: "cut", pending: "Robust planar mesh cutting" },
-  { name: "Mesh boolean", icon: "boolean", pending: "Robust union, intersection and difference" },
+  { name: "Hollow", target: "hollow", icon: "hollow" },
+  { name: "Drill", target: "drill", icon: "drill" },
+  { name: "Cut", target: "cut", icon: "cut" },
+  { name: "Mesh boolean", target: "boolean", icon: "boolean" },
   { name: "Measure", target: "measure", icon: "measure", expandable: true },
   { name: "Support painting", icon: "paint", pending: "Native per-face support annotations" },
   { name: "Seam painting", icon: "paint", pending: "Native seam-region annotations" },
@@ -86,6 +86,7 @@ export default function SlicerPrepareWorkspace({
   const [group, setGroup] = useState("Quality");
   const [toolMode, setToolMode] = useState("select");
   const [splitRequest, setSplitRequest] = useState(0);
+  const [solidRequest, setSolidRequest] = useState(null);
   const [autoOrientMenuOpen, setAutoOrientMenuOpen] = useState(false);
   const [addModelMenuOpen, setAddModelMenuOpen] = useState(false);
   const [toolDescriptor, setToolDescriptor] = useState("");
@@ -390,6 +391,13 @@ export default function SlicerPrepareWorkspace({
       return;
     }
     setAutoOrientMenuOpen(false);
+    if (["hollow", "drill", "cut", "boolean"].includes(tool.target)) {
+      if (!selectedId && objects[0]?.instance_id) setSelectedId(objects[0].instance_id);
+      setToolMode("select");
+      setMobilePane("plate");
+      setSolidRequest({ kind: tool.target, id: Date.now() + Math.random() });
+      return;
+    }
     if (tool.target === "split") {
       if (!selectedId && objects[0]?.instance_id) setSelectedId(objects[0].instance_id);
       setToolMode("select");
@@ -905,7 +913,7 @@ export default function SlicerPrepareWorkspace({
           printerLabel={selectedProfiles?.printer || printerDetails?.model || printerDetails?.name || ""}
           onPlateLabelChange={onPlateLabelChange} canEdit={canEdit && !busy} toolMode={toolMode} selectedInstanceId={selectedId}
           autoOrientGoal={autoOrientGoal} autoOrientRequest={autoOrientRequest}
-          splitRequest={splitRequest}
+          splitRequest={splitRequest} solidRequest={solidRequest}
           selectedInstanceIds={validSelection} onSelectModel={selectMultiple}
           onSelectedInstanceChange={selectSingle} measurementVisible={measurementVisible}
           measureMode={measureMode} measureUnit={measureUnit} measureSnapMode={measureSnapMode}
