@@ -663,7 +663,12 @@ export default function SlicerPlateEditor({
 
   useEffect(() => {
     if (!solidRequest?.id || !canEdit) return;
-    const item = objects.find(row => row.instance_id === selected) || objects[0];
+    const item = objects.find(row => row.instance_id === (solidRequest.editTargetId||selected)) || objects[0];
+    const editingText = solidRequest.kind==="text" && !!solidRequest.editTargetId;
+    if(editingText && !item?.text_model) {
+      setSolidError("This object was not created with the editable text tool.");
+      return;
+    }
     const mesh = item && sceneRef.current?.meshes.get(item.instance_id);
     setSolidError("");
     setSolidPreview(null);
@@ -680,17 +685,23 @@ export default function SlicerPlateEditor({
     setSolidOptions({
       wall: pretty(Math.max(0.4, Math.min(size.x,size.y,size.z)*0.08)),
       radius: pretty(Math.max(0.5,Math.min(size.x,size.y)/10)),
-      x_mm: ["primitive","text","svg"].includes(solidRequest.kind)?0:pretty(center.x),
-      y_mm: ["primitive","text","svg"].includes(solidRequest.kind)?0:pretty(center.y),
+      x_mm: ["primitive","text","svg"].includes(solidRequest.kind)&&!editingText?0:pretty(center.x),
+      y_mm: ["primitive","text","svg"].includes(solidRequest.kind)&&!editingText?0:pretty(center.y),
       cutHeight: pretty((box.min.z+box.max.z)/2), cutAxis: "z",
       keep: "both", booleanMode: "union",
       secondId: objects.find(row => row.instance_id!==item?.instance_id)?.instance_id || "",
       booleanIds: selectedInstanceIds.filter(id=>id!==item?.instance_id),
-      primitiveType:"box", width:20,depth:20,height:20,
-      z_mm:solidRequest.kind==="negative"?pretty(center.z):0,
-      rotation_x:0,rotation_y:0,rotation_z:0,text:"MakerVault",font:"block",svgData:"",
+      primitiveType:"box",
+      width:editingText ? item.text_model.width : 20,
+      depth:editingText ? item.text_model.depth : 20,
+      height:editingText ? item.text_model.height : 20,
+      z_mm:solidRequest.kind==="negative"?pretty(center.z):editingText?Number(item.z_mm||0):0,
+      rotation_x:0,rotation_y:0,rotation_z:0,
+      text:editingText?item.text_model.text:"MakerVault",
+      font:editingText?item.text_model.font||"block":"block",svgData:"",
     });
-    setSolidDialog({kind:solidRequest.kind,id:item?.instance_id || null,name:
+    setSolidDialog({kind:solidRequest.kind,id:item?.instance_id || null,
+      editTargetId:editingText?item.instance_id:null,name:
       ["primitive","text","svg"].includes(solidRequest.kind) ? solidRequest.kind[0].toUpperCase()+solidRequest.kind.slice(1) :
       sourceFiles.find(file => String(file.id)===String(item?.asset_id))?.name || "Model"});
   }, [solidRequest?.id]);
@@ -946,18 +957,30 @@ export default function SlicerPlateEditor({
         if(!id) throw new Error("MakerVault did not return a validated STL identifier.");
         created.push({id,name:filename,file,part});
       }
-      const remaining=objects.filter(row=>["primitive","text","svg"].includes(solidDialog.kind) ||
+      const creating=["primitive","text","svg"].includes(solidDialog.kind);
+      const remaining=objects.filter(row=>
+        (creating && !solidDialog.editTargetId) ||
         (row.instance_id!==solidDialog.id && !solidPreview.secondIds?.includes(row.instance_id)));
       const additions=created.map(({id,part},index)=>({
         ...selectedObject,
         ...newPlateInstance(id,objects.length+index),
+        ...(solidDialog.editTargetId ? {
+          instance_id:solidDialog.editTargetId,color:selectedObject.color,
+          assembly_id:selectedObject.assembly_id,
+        } : {color:PALETTE[(index+2)%PALETTE.length],assembly_id:null}),
         x_mm:pretty(part.x_mm),y_mm:pretty(part.y_mm),z_mm:pretty(part.z_mm),
-        color:PALETTE[(index+2)%PALETTE.length],
-        assembly_id:null,
+        text_model:solidDialog.kind==="text"?{
+          text:solidOptions.text,font:solidOptions.font||"block",
+          width:Number(solidOptions.width),depth:Number(solidOptions.depth),
+          height:Number(solidOptions.height),
+        }:null,
       }));
       if (["primitive","text","svg"].includes(solidDialog.kind)) {
-        // Honour the preview position; never relocate a newly placed shape on Apply.
-        onChange([...remaining,...additions]);
+        // Replacing editable text preserves its tree position and instance identity.
+        // New shapes retain their manually positioned preview coordinates.
+        onChange(solidDialog.editTargetId
+          ? objects.map(row=>row.instance_id===solidDialog.editTargetId?additions[0]:row)
+          : [...remaining,...additions]);
       } else if (solidDialog.kind==="cut" && additions.length>1) {
         const dims={...dimensionsRef.current};
         additions.forEach((item,i)=>{const p=created[i].part;
