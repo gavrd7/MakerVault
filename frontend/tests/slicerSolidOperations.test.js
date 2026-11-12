@@ -55,5 +55,16 @@ test("Hollow refuses a wall larger than available solid", () => {
 test("Csg errors do not modify source meshes", () => {
   const mesh=solid();
   assert.throws(()=>executeSolidOperation("boolean",mesh,{booleanMode:"union"},null),/second/i);
-  assert.equal(CSG_MAX_INPUT_TRIANGLES,80000);
+  assert.equal(CSG_MAX_INPUT_TRIANGLES,500000);
+});
+
+test("high-resolution input is no longer arbitrarily capped at 80,000 faces", () => {
+  const mesh=solid();
+  const high=new THREE.SphereGeometry(10,480,240);
+  // 230k triangles on a watertight spherical input should pass the preliminary
+  // guard; the geometry operation may still reject non-manifold output.
+  const detailed=new THREE.Mesh(high,new THREE.MeshBasicMaterial());
+  assert.ok(high.getIndex().count/3>80000);
+  assert.ok(high.getIndex().count/3<=CSG_MAX_INPUT_TRIANGLES);
+  mesh.geometry.dispose();detailed.geometry.dispose();
 });
