@@ -1866,32 +1866,32 @@ export default function SlicerPlateEditor({
         aria-label={toolMode === "move" ? "On-plate position controls" : toolMode === "rotate" ? "On-plate rotation controls" : "On-plate scale controls"}>
         <div className="slicerViewportMeasurementHeader">
           <strong>{toolMode === "move" ? "Move · mm" : toolMode === "rotate" ? "Rotate · degrees" : "Scale · %"}</strong>
-          <button type="button" aria-expanded={transformOverlayExpanded}
+          {toolMode !== "move" && <button type="button" aria-expanded={transformOverlayExpanded}
             onClick={() => setTransformOverlayExpanded(open => !open)}>
             {transformOverlayExpanded ? "Less" : "Details"}
-          </button>
+          </button>}
         </div>
         <div className="slicerViewportMeasurementModel">{sourceFiles.find(file =>
           String(file.id) === String(chosen.asset_id))?.name || "Selected model"}</div>
         {toolMode === "move" ? <>
           <div className="slicerViewportTransformGrid">
-            {["X", "Y"].map((axis, index) => <label key={axis}>{axis} (mm)
-              <input type="number" step="0.5" value={index === 0 ? chosen.x_mm : chosen.y_mm}
-                disabled={!canEdit} onChange={event => patch(index === 0 ? "x_mm" : "y_mm",
-                  Number(event.target.value))} /></label>)}
-            <div className="slicerTransformReadout">Z (bed): 0 mm</div>
+            {["X", "Y", "Z"].map((axis, index) => <label key={axis}>{axis} (mm)
+              <input type="number" step="0.5" min={index === 2 ? 0 : -10000}
+                max={index === 2 ? 1000 : 10000}
+                value={index === 0 ? chosen.x_mm : index === 1 ? chosen.y_mm :
+                  pretty(Number(chosen.z_mm || 0) + (selectedMeasurement?.height || 0) / 2)}
+                disabled={!canEdit} onChange={event => {
+                  const number = Number(event.target.value);
+                  if (!Number.isFinite(number)) return;
+                  if (index < 2) patch(index === 0 ? "x_mm" : "y_mm", number);
+                  else patch("z_mm", pretty(number - (selectedMeasurement?.height || 0) / 2));
+                }} /></label>)}
           </div>
-          {transformOverlayExpanded && <>
-            <p className="slicerViewportMeasurementHint">Coordinates are measured from the build plate centre (0, 0).</p>
-            {selectedMeasurement && <p className="slicerViewportMeasurementHint">
-              X bounds: {pretty(selectedMeasurement.minX)} to {pretty(selectedMeasurement.maxX)} mm.
-              Y bounds: {pretty(selectedMeasurement.minY)} to {pretty(selectedMeasurement.maxY)} mm.</p>}
-            <button type="button" className="slicerTransformQuickAction" disabled={!canEdit}
-              onClick={() => applySelectedTransform({ x_mm: 0, y_mm: 0 },
-                "The model cannot be centred without leaving the bed or overlapping another model.")}>
-              <SlicerUiIcon name="center" /> <span>Centre model</span>
-            </button>
-          </>}
+          <button type="button" className="slicerTransformQuickAction" disabled={!canEdit}
+            onClick={() => applySelectedTransform({ x_mm: 0, y_mm: 0 },
+              "The model cannot be centred without leaving the bed or overlapping another model.")}>
+            <SlicerUiIcon name="center" /> <span>Centre model</span>
+          </button>
         </> : toolMode === "rotate" ? <>
           <div className="slicerViewportTransformGrid">
             {["X", "Y", "Z"].map((axis, index) => <label key={axis}>{axis} (°)
@@ -2267,6 +2267,12 @@ export default function SlicerPlateEditor({
       <label>Y position (mm)
         <input type="number" min={-10000} max={10000} step="0.5" value={chosen?.y_mm ?? 0}
           disabled={!canEdit} onChange={event => patch("y_mm", pretty(event.target.value))} />
+      </label>
+      <label>Z centre (mm)
+        <input data-slicer-field="z_mm" type="number" min={0} max={1000} step="0.5"
+          value={pretty(Number(chosen?.z_mm || 0) + (selectedMeasurement?.height || 0) / 2)}
+          disabled={!canEdit} onChange={event =>
+            patch("z_mm", pretty(Number(event.target.value) - (selectedMeasurement?.height || 0) / 2))} />
       </label>
       <div className="slicerTransformFieldWithReset">
         <label htmlFor="slicer-model-rotation">Rotation around Z (degrees)</label>
