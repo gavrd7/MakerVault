@@ -314,5 +314,5 @@ export function createMakerVaultRotationGizmo(scene) {
     disposeObject(group);
   }
   return { group, update, pick, begin, drag, end, dispose, get dragging() { return !!dragState; },
-    get activeAxis() { return activeAxis; } };
+    get activeAxis() { return activeAxis; }, get activeMesh() { return activeMesh; } };
 }
