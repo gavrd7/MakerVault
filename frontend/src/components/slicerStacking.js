@@ -33,7 +33,7 @@ function contacts(top, below) {
   return false;
 }
 /** Returns a strict verdict. Never infers physical support from box overlap. */
-export function validateStackPlacement(objects, meshes, selectedId, bedX, bedY) {
+export function validateStackPlacement(objects, meshes, selectedId, bedX, bedY, allowIntersections = false) {
   const list=objects.map(row=>{
     const mesh=meshes.get(row.instance_id);
     if(!mesh) return null;
@@ -51,7 +51,7 @@ export function validateStackPlacement(objects, meshes, selectedId, bedX, bedY) 
   }
   for(let i=0;i<list.length;i++)for(let j=i+1;j<list.length;j++){
     const a=list[i].box,b=list[j].box;
-    if(xyOverlap(a,b,0.1) && a.min.z < b.max.z-0.1 && a.max.z > b.min.z+0.1)
+    if(!allowIntersections && xyOverlap(a,b,0.1) && a.min.z < b.max.z-0.1 && a.max.z > b.min.z+0.1)
       return {valid:false,reason:"Models intersect in three dimensions."};
   }
   const visited=new Set(),active=new Set();
