@@ -638,3 +638,22 @@ test("duplicate individual XYZ scale toolbar action is removed", () => {
   assert.doesNotMatch(scene, /name: "Individual XYZ scale"/);
   assert.match(scene, /name: "Scale", target: "scale_percent"/);
 });
+
+
+test("model toolbar renders immediately above the interactive build plate, not in page header", () => {
+  const scene = read("SlicerPrepareWorkspace.jsx");
+  const plate = read("SlicerPlateEditor.jsx");
+  const styles = fs.readFileSync(path.resolve(root, "../styles.css"), "utf8");
+  assert.match(scene, /const modelToolbar = \(/);
+  assert.match(scene, /<SlicerPlateEditor toolbar=\{modelToolbar\}/);
+  const header = scene.slice(scene.indexOf('className="slicerPrepareHeader"'),
+    scene.indexOf('className="slicerMobilePaneTabs"'));
+  assert.doesNotMatch(header, /className="slicerPrepareTools"/);
+  assert.match(plate, /\{toolbar && <div className="slicerPlateEditingToolbar">\{toolbar\}<\/div>\}/);
+  const index = plate.indexOf('className="slicerPlateEditingToolbar"');
+  assert.ok(index > 0);
+  assert.ok(index < plate.indexOf('className="slicerPlateCameraToolbar"', index));
+  assert.doesNotMatch(plate, /Arrange models, change their size and position, and preview the build plate/);
+  assert.match(styles, /\.slicerPlateEditingToolbar > \.slicerPrepareTools/);
+  assert.match(styles, /overflow-x: auto/);
+});
