@@ -259,6 +259,7 @@ export default function SlicerPlateEditor({
   const [sectionPercent, setSectionPercent] = useState(100);
   const [sectionAxis, setSectionAxis] = useState("z");
   const sectionPercentRef = useRef(100);
+  const lastBooleanPlateSelectionRef = useRef("");
   const [undersidePlateMode, setUndersidePlateMode] = useState("auto");
   const undersidePlateModeRef = useRef(undersidePlateMode);
   undersidePlateModeRef.current = undersidePlateMode;
@@ -618,6 +619,7 @@ export default function SlicerPlateEditor({
       new THREE.Box3(new THREE.Vector3(-10,-10,0),new THREE.Vector3(10,10,20));
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
+    lastBooleanPlateSelectionRef.current = selectedInstanceIds.join("|");
     setSolidOptions({
       wall: pretty(Math.max(0.4, Math.min(size.x,size.y,size.z)*0.08)),
       radius: pretty(Math.max(0.5,Math.min(size.x,size.y)/10)),
@@ -640,12 +642,14 @@ export default function SlicerPlateEditor({
   // the non-modal editor remains open; checkbox choices work independently.
   const booleanSelectionKey=selectedInstanceIds.join("|");
   useEffect(() => {
-    if(solidDialog?.kind!=="boolean")return;
+    if(solidDialog?.kind!=="boolean") return;
+    // Only sync genuine plate-selection changes. Opening the dialog must
+    // preserve initial preselection, and manually toggled checkboxes must
+    // not be silently reset by unrelated renders.
+    if(lastBooleanPlateSelectionRef.current===booleanSelectionKey) return;
+    lastBooleanPlateSelectionRef.current=booleanSelectionKey;
     const ids=selectedInstanceIds.filter(id=>id!==solidDialog.id);
-    setSolidOptions(old=>{
-      if(JSON.stringify(old.booleanIds||[])===JSON.stringify(ids))return old;
-      return {...old,booleanIds:ids};
-    });
+    setSolidOptions(old=>({...old,booleanIds:ids}));
   }, [booleanSelectionKey,solidDialog?.id,solidDialog?.kind]);
 
   // Results are previewed as translucent, independent STL ghosts. None of
@@ -2719,9 +2723,7 @@ export default function SlicerPlateEditor({
                   <input type="number" step="0.5" value={solidOptions[field]}
                     onChange={event=>setSolidOptions(v=>({...v,[field]:event.target.value}))}/></label>)}
               </div>
-              <p className="slicerPlateHint">Subtract this shape from the selected model.
-                The original stays intact until the result has been previewed and validated.
-                This changes mesh geometry, not native print settings.</p>
+
             </>}
             {["primitive","text","svg"].includes(solidDialog.kind) && <p className="slicerPlateHint">
               Creates a real STL primitive, then automatically arranges it on the plate.
@@ -2731,9 +2733,7 @@ export default function SlicerPlateEditor({
             <label>Approximate wall thickness (mm)
               <input type="number" min="0.4" step="0.5" value={solidOptions.wall}
                 onChange={event=>setSolidOptions(v=>({...v,wall:event.target.value}))}/></label>
-            <p className="slicerPlateHint">Creates an internal cavity from a scaled copy of the STL.
-              Wall thickness varies on curved or irregular shapes. It is not a true normal-offset hollow.
-              Add drain/vent holes separately using Drill if required.</p>
+
           </>}
           {solidDialog.kind==="drill" && <div className="slicerSolidGrid">
             <label>Hole radius (mm)<input type="number" min="0.2" step="0.5"
@@ -2770,7 +2770,7 @@ export default function SlicerPlateEditor({
           {solidDialog.kind==="boolean" && <>
             <fieldset className="slicerBooleanOperands">
               <legend>Other models · select one or more</legend>
-              <small>Ctrl/Shift-click parts on the plate or select them here.</small>
+              <small>Previously selected parts are checked automatically.</small>
               {objects.filter(row=>row.instance_id!==solidDialog.id).map((row,index)=>
                 <label key={row.instance_id}>
                   <input type="checkbox" checked={(solidOptions.booleanIds||[]).includes(row.instance_id)}
