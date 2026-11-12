@@ -655,7 +655,9 @@ export default function SlicerPlateEditor({
     if (!state) return undefined;
     // Keep source models visible; ghosts overlay rather than replace.
     const original=solidDialog?.id ? state.meshes.get(solidDialog.id) : null;
-    const originalMaterial=solidDialog?.kind==="hollow" && original?.material && !Array.isArray(original.material)
+    const revealCavity=["hollow","negative"].includes(solidDialog?.kind) ||
+      (solidDialog?.kind==="boolean" && solidOptions.booleanMode==="difference");
+    const originalMaterial=revealCavity && original?.material && !Array.isArray(original.material)
       ? original.material : null;
     let fadedMaterial=null;
     if(originalMaterial) {
