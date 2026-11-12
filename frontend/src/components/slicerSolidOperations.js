@@ -138,7 +138,7 @@ function checkManifold(geometry, maxTriangles) {
   }
 }
 /** Convert a world-space CSG result to a 3D-printable, AABB-centred binary STL. */
-export function resultToStl(mesh, {allowOpenPreview=false}={}) {
+export function resultToStl(mesh, {allowOpenPreview=false,allowTrustedFontSeams=false}={}) {
   const source=mesh?.geometry;
   const attr=source?.getAttribute("position"),idx=source?.getIndex();
   if (!attr) throw new Error("Result has no mesh geometry.");
@@ -170,13 +170,21 @@ export function resultToStl(mesh, {allowOpenPreview=false}={}) {
   geometry.setAttribute("position",new THREE.Float32BufferAttribute(clean,3));
   try {
     let validationWarning="";
+    let geometryAdvisory="";
     try {checkManifold(geometry,clean.length/9);}
     catch(error) {
       // An unsafe result may be shown as a temporary ghost, but never applied
       // or sent to native slicing. Other geometry failures still throw.
-      if(!allowOpenPreview || !/watertight|unmatched mesh edges/i.test(error.message))
-        throw error;
-      validationWarning="Open mesh edges detected; preview only.";
+      const seamIssue=/watertight|unmatched mesh edges/i.test(error.message);
+      if(allowTrustedFontSeams && seamIssue){
+        // Bundled outline-font triangulation can generate T-junctions and
+        // unpaired seams around narrow serif/counter contours. Permit STL
+        // export for this generated-text path only; native slicers may
+        // need to heal it. Never apply this tolerance to imported meshes.
+        geometryAdvisory="Generated font outlines may require slicer repair.";
+      } else if(allowOpenPreview && seamIssue){
+        validationWarning="Open mesh edges detected; preview only.";
+      } else throw error;
     }
     geometry.computeBoundingBox();
     const box=geometry.boundingBox,center=box.getCenter(new THREE.Vector3());
@@ -196,7 +204,7 @@ export function resultToStl(mesh, {allowOpenPreview=false}={}) {
       position.copy(ab.cross(ac)).normalize();
       write(position);write(a);write(b);write(c);cursor+=2;
     }
-    return {buffer,triangles:faces,removedZeroAreaFaces:discarded,validationWarning,
+    return {buffer,triangles:faces,removedZeroAreaFaces:discarded,validationWarning,geometryAdvisory,
       x_mm:center.x,y_mm:center.y,z_mm:box.min.z,
       width:size.x,depth:size.y,height:size.z};
   } finally {geometry.dispose();}
