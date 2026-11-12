@@ -292,7 +292,7 @@ export default function SlicerPlateEditor({
   const [solidPreview, setSolidPreview] = useState(null);
   const [solidBusy, setSolidBusy] = useState(false);
   const [solidError, setSolidError] = useState("");
-  const [solidOptions, setSolidOptions] = useState({wall: 2, radius: 3, x_mm: 0, y_mm: 0, cutHeight: 5, keep: "both", booleanMode: "union", secondId: ""});
+  const [solidOptions, setSolidOptions] = useState({wall: 2, radius: 3, x_mm: 0, y_mm: 0, cutHeight: 5, cutAxis: "z", keep: "both", booleanMode: "union", secondId: ""});
   const [measureOverlayExpanded, setMeasureOverlayExpanded] = useState(false);
   const [transformOverlayExpanded, setTransformOverlayExpanded] = useState(false);
   const [liveRotation, setLiveRotation] = useState(null);
@@ -592,7 +592,7 @@ export default function SlicerPlateEditor({
       wall: pretty(Math.max(0.4, Math.min(size.x,size.y,size.z)*0.08)),
       radius: pretty(Math.max(0.5,Math.min(size.x,size.y)/10)),
       x_mm: pretty(center.x), y_mm: pretty(center.y),
-      cutHeight: pretty((box.min.z+box.max.z)/2),
+      cutHeight: pretty((box.min.z+box.max.z)/2), cutAxis: "z",
       keep: "both", booleanMode: "union",
       secondId: objects.find(row => row.instance_id!==item.instance_id)?.instance_id || "",
     });
@@ -2346,7 +2346,19 @@ export default function SlicerPlateEditor({
             <p className="slicerPlateHint">Drills a vertical through-hole along Z.</p>
           </div>}
           {solidDialog.kind==="cut" && <>
-            <label>Horizontal cut height (bed Z, mm)
+            <label>Cut plane axis
+              <select value={solidOptions.cutAxis} onChange={event=>{
+                const axis=event.target.value;
+                const target=sceneRef.current?.meshes.get(solidDialog.id);
+                const box=target ? new THREE.Box3().setFromObject(target) : null;
+                setSolidOptions(v=>({...v,cutAxis:axis,
+                  cutHeight:box ? pretty((box.min[axis]+box.max[axis])/2) : v.cutHeight}));
+              }}>
+                <option value="z">Z · horizontal</option>
+                <option value="x">X · vertical</option>
+                <option value="y">Y · vertical</option>
+              </select></label>
+            <label>Cut plane position (mm)
               <input type="number" step="0.5" value={solidOptions.cutHeight}
                 onChange={event=>setSolidOptions(v=>({...v,cutHeight:event.target.value}))}/></label>
             <label>Keep pieces
