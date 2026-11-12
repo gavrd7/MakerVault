@@ -5903,3 +5903,38 @@ a:focus-visible,
   padding:5px;
   gap:3px;
 }
+
+/* Keep the common per-object action on the SAME row as its name. This cuts
+   the repeated vertical height almost in half even for a large plate. */
+.slicerPrepareTree .slicerPrepareModelEntry{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  grid-auto-rows:min-content;
+  gap:2px 4px;
+  align-items:center;
+  margin-bottom:2px;
+}
+.slicerPrepareTree .slicerPrepareModelEntry>button:first-child{
+  grid-column:1;
+  grid-row:1;
+  min-width:0;
+}
+.slicerPrepareTree .slicerPrepareModelEntry>.slicerModelChangeFilament{
+  grid-column:2;
+  grid-row:1;
+  width:auto;
+  min-width:65px;
+  margin:0;
+  padding:4px 5px;
+  border-radius:6px;
+  font-size:.68rem;
+  white-space:nowrap;
+}
+.slicerPrepareTree .slicerPrepareModelEntry>.slicerModelEditText{
+  grid-column:1/-1;
+  grid-row:2;
+}
+.slicerPrepareTree .slicerPrepareModelEntry>.slicerModelFilamentChoices{
+  grid-column:1/-1;
+}
+.slicerPrepareTree .slicerAssemblyTreePart::after{top:15px}
