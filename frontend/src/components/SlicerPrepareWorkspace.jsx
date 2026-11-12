@@ -769,7 +769,6 @@ export default function SlicerPrepareWorkspace({
             setAddModelMenuOpen(false);setMobilePane("plate");
             setSolidRequest({kind:"negative",id:Date.now(),anchorRect:toolbarAnchor(event)});
           }}><SlicerUiIcon name="cut" /> Add negative volume</button>
-          <small>Native print-setting modifier regions are not yet supported.</small>
         </div>}
         {tool.target === "auto_orient" && autoOrientMenuOpen && <div className="slicerToolOptions slicerAutoOrientMenu" style={toolPopupStyle} id="slicer-auto-orient-toolbar-options" role="group" aria-label="Auto-orient choices">
           <div className="slicerToolOptionsHeader"><strong>Auto-orient</strong><button type="button" onClick={() => setAutoOrientMenuOpen(false)}>Close</button></div>
@@ -783,7 +782,6 @@ export default function SlicerPrepareWorkspace({
               setAutoOrientRequest(request => request + 1);
               setAutoOrientMenuOpen(false);
             }}><strong>{name}</strong><span aria-hidden="true">ⓘ</span></button>)}
-          <small>Hover over ⓘ or a choice for details. Compare results before applying.</small>
         </div>}
         {tool.expandable && measureOptionsOpen && <div className="slicerToolOptions" style={toolPopupStyle} id="slicer-measure-toolbar-options"
           role="group" aria-label="Measure tool options">
@@ -814,9 +812,6 @@ export default function SlicerPrepareWorkspace({
           <button type="button" className="slicerToolOptionsAction" onClick={() => setMeasureClearVersion(value => value + 1)}>
             Clear pins
           </button>
-          <small>{measureMode === "detect"
-            ? "Click a feature to identify a sharp STL edge segment or connected planar patch. Values are mesh estimates, not original CAD dimensions."
-            : "Click the model to place pins. Results appear in the top-left of the 3D view."}</small>
           <button type="button" className="slicerToolOptionsAction" onClick={() => {
             setMeasureOptionsOpen(false);
             setMeasurementVisible(false);
@@ -891,8 +886,6 @@ export default function SlicerPrepareWorkspace({
         <h4>{plateLabel || "Plate 1"} · Models ({objects.length})</h4>
         {objects.length === 0 && <p>Add an STL to start editing.</p>}
         {objects.length > 0 && <div className="slicerAssemblyActions">
-          <small>{validSelection.length} selected · Ctrl/Cmd-click to select several models.
-            Use an assembly header to select its group; expand it to edit individual parts.</small>
           <div>
             <button type="button" disabled={!canEdit || busy || selectedModels.length < 2}
               onClick={assembleSelected}>Assemble selection</button>
@@ -951,12 +944,10 @@ export default function SlicerPrepareWorkspace({
                 style={{ backgroundColor: validSlotColor(slot) || "#697b91" }} aria-hidden="true" />
               <span>{slotName(slot)}</span>
             </button>)}
-            <small>Changing this swatch does not assign an extruder, modify G-code or change the slicer filament preset.</small>
           </div>}
         </div>}
         </React.Fragment>})}
         {filamentNotice && <p className="slicerModelFilamentNotice" role="status">{filamentNotice}</p>}
-        <small>One consistent model colour is now passed to OrcaSlicer as a single-filament colour. Different colours across models still need native multi-material mapping, and are preview-only. Multi-plate output and modifier trees are not implemented yet.</small>
         </aside>
         <section className="slicerLiveMaterialSlots" aria-label="Loaded printer filament slots">
           <div className="slicerLiveMaterialHeader"><strong>Loaded printer filaments</strong>
