@@ -233,7 +233,7 @@ export default function SlicerPlateEditor({
   autoOrientGoal = "balanced", autoOrientRequest = 0, splitRequest = 0,
   measurementVisible = false, measureMode = "distance", measureUnit = "mm", measureSnapMode = "auto", measureClearVersion = 0,
   onMeasurePinPlaced,
-  localAssets = [], onLocalAssetsChange, onExitToolMode,
+  localAssets = [], onLocalAssetsChange, onExitToolMode, onPlateIssuesChange,
 }) {
   const hostRef = useRef(null);
   const sceneRef = useRef(null);
@@ -328,13 +328,26 @@ export default function SlicerPlateEditor({
       if (h1 != null && h2 != null &&
         (first >= second + h2 - 0.1 || second >= first + h1 - 0.1)) return false;
       return plateFootprintsOverlap(item, dimensions[item.instance_id],
-        other, dimensions[other.instance_id], 2) === true;
+        other, dimensions[other.instance_id], 0) === true;
     })
     .map(other => ({
       id: item.instance_id + ":" + other.instance_id,
       message: (sourceFiles.find(file => String(file.id) === item.asset_id)?.name || "Model " + (index + 1)) +
         " overlaps " + (sourceFiles.find(file => String(file.id) === other.asset_id)?.name || "another model"),
     })));
+
+  // Warnings deliberately do not block editing. They DO gate all new slices,
+  // including Quick slice, until the models have been separated.
+  const dimensionWarnings = objects.filter(item => !dimensions[item.instance_id]).map(item => ({
+    id: item.instance_id, message: "A model is still loading its dimensions.",
+  }));
+  const plateIssues = [...dimensionWarnings, ...extentWarnings, ...overlapWarnings];
+  const conflictIds = new Set(overlapWarnings.flatMap(row => row.id.split(":")));
+  const issueSignature = JSON.stringify(objects);
+  const issueKey = JSON.stringify(plateIssues.map(row => [row.id, row.message]));
+  useEffect(() => {
+    onPlateIssuesChange?.({ signature: issueSignature, issues: plateIssues });
+  }, [issueSignature, issueKey, onPlateIssuesChange]);
 
   function arrangeModels(items = objects, announce = true) {
     if (items.some(item => !dimensionsRef.current[item.instance_id])) {
@@ -365,11 +378,7 @@ export default function SlicerPlateEditor({
     const own = dimensionsRef.current[candidate.instance_id];
     if (!own || plateExtentWarning(candidate, own, bedX, bedY)) return false;
     if (!items.some(item => Number(item.instance_id === candidate.instance_id
-      ? candidate.z_mm || 0 : item.z_mm || 0) > 0)) {
-      return !items.some(other => other.instance_id !== candidate.instance_id &&
-        plateFootprintsOverlap(candidate, own, other,
-          dimensionsRef.current[other.instance_id], 2) !== false);
-    }
+      ? candidate.z_mm || 0 : item.z_mm || 0) > 0)) return true;
     const state = sceneRef.current;
     const mesh = state?.meshes.get(candidate.instance_id);
     if (!mesh) return false;
@@ -377,7 +386,7 @@ export default function SlicerPlateEditor({
     positionOrientedMesh(mesh, candidate);
     const verdict = validateStackPlacement(
       items.map(row => row.instance_id === candidate.instance_id ? candidate : row),
-      state.meshes, candidate.instance_id, bedX, bedY);
+      state.meshes, candidate.instance_id, bedX, bedY, true);
     if (previous) positionOrientedMesh(mesh, previous);
     if (!verdict.valid) setError(verdict.reason);
     return verdict.valid;
@@ -700,12 +709,10 @@ export default function SlicerPlateEditor({
     });
     const invalid = moved.some(item => {
       const d = dimensionsRef.current[item.instance_id];
-      return !d || plateExtentWarning(item, d, bedX, bedY) ||
-        others.some(other => plateFootprintsOverlap(item, d, other,
-          dimensionsRef.current[other.instance_id], 2) !== false);
+      return !d || plateExtentWarning(item, d, bedX, bedY);
     });
     if (invalid) {
-      setError("Group transform would leave the build plate or overlap another object. No changes were applied.");
+      setError("Group transform would leave the build plate. No changes were applied.");
       return;
     }
     const byId = new Map(moved.map(row => [row.instance_id, row]));
@@ -1661,8 +1668,10 @@ export default function SlicerPlateEditor({
       positionOrientedMesh(mesh, item);
       // Position-only changes must never alter the displayed filament colour.
       mesh.material.color.set(item.color || PALETTE[0]);
-      mesh.material.emissive.set(selection.includes(item.instance_id) ? "#168ab4" : "#000000");
-      mesh.material.emissiveIntensity = selection.includes(item.instance_id) ? 0.32 : 0;
+      mesh.material.emissive.set(conflictIds.has(item.instance_id) ? "#e84a53" :
+        selection.includes(item.instance_id) ? "#168ab4" : "#000000");
+      mesh.material.emissiveIntensity = conflictIds.has(item.instance_id) ? 0.72 :
+        selection.includes(item.instance_id) ? 0.32 : 0;
     }
     const selectedMesh = state.meshes.get(selected);
     state.setSelectionOutline(selectedMesh || null);
@@ -1684,7 +1693,7 @@ export default function SlicerPlateEditor({
         state.transform.detach();
       }
     }
-  }, [objects, selected, selectedInstanceIds, toolMode, canEdit, dimensions]);
+  }, [objects, selected, selectedInstanceIds, toolMode, canEdit, dimensions, issueKey]);
 
   // Measured world points would become stale after a model is transformed.
   // Clear them rather than presenting a measurement for old geometry.
@@ -2083,11 +2092,11 @@ export default function SlicerPlateEditor({
     {overlapWarnings.length > 0 && <div role="alert" className="integrationError">
       <strong>Models overlap on the build plate.</strong>
       <ul>{overlapWarnings.map(row => <li key={row.id}>{row.message}</li>)}</ul>
-      Select Auto-arrange models or move the affected objects before saving.
+      Separate the highlighted models before slicing. Saving a draft remains available.
     </div>}
 
     {objects.length > 0 && <p role="status" className="slicerPlateHint">{objects.length} model{objects.length === 1 ? "" : "s"} on the plate
-      {" · Plate ready to save as a draft or slice."}</p>}
+      {plateIssues.length ? " · Draft can be saved; slicing blocked until conflicts are fixed." : " · Plate ready to save as a draft or slice."}</p>}
 
       </div>
       <aside className="slicerPlateControls" aria-label="Build plate controls">
