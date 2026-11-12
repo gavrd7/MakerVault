@@ -294,6 +294,8 @@ export default function SlicerPlateEditor({
   const [splitError, setSplitError] = useState("");
   const [solidDialog, setSolidDialog] = useState(null);
   const [solidPreview, setSolidPreview] = useState(null);
+  const liveGhostRef = useRef(null);
+  const negativeGhostRef = useRef(null);
   const [solidBusy, setSolidBusy] = useState(false);
   const [solidError, setSolidError] = useState("");
   const [solidOptions, setSolidOptions] = useState({wall: 2, radius: 3, x_mm: 0, y_mm: 0, cutHeight: 5, cutAxis: "z", keep: "both", booleanMode: "union", secondId: "", booleanIds:[], primitiveType: "box", width: 20, depth: 20, height: 20, z_mm: 10,
@@ -664,12 +666,117 @@ export default function SlicerPlateEditor({
       mesh.position.set(part.x_mm,part.y_mm,part.z_mm);
       mesh.userData.solidPreview=true;
       state.scene.add(mesh);overlays.push(mesh);
+      if(index===0 && ["primitive","text","svg"].includes(solidDialog?.kind))liveGhostRef.current=mesh;
     }
     return () => {
       originals.forEach((mesh,index)=>{mesh.visible=visibility[index];});
+      if(liveGhostRef.current===overlays[0])liveGhostRef.current=null;
       overlays.forEach(mesh=>{state.scene.remove(mesh);mesh.geometry.dispose();mesh.material.dispose();});
     };
   }, [solidPreview]);
+
+  // Display the negative volume itself, not just the subtraction result.
+  // Keep it interactive while the chosen model remains visible.
+  useEffect(() => {
+    if(solidDialog?.kind!=="negative")return undefined;
+    const state=sceneRef.current;
+    if(!state)return undefined;
+    let ghost;
+    try {
+      ghost=createPrimitiveMesh(solidOptions,[
+        Number(solidOptions.x_mm),Number(solidOptions.y_mm),
+        Number(solidOptions.z_mm)-Number(solidOptions.height)/2,
+      ]);
+      ghost.material.dispose();
+      ghost.material=new THREE.MeshBasicMaterial({
+        color:"#ed658d",transparent:true,opacity:0.28,
+        depthWrite:false,side:THREE.DoubleSide,
+        clippingPlanes:[state.sectionPlane],
+      });
+      ghost.renderOrder=101;
+      state.scene.add(ghost);negativeGhostRef.current=ghost;
+    }catch { return undefined; }
+    return ()=>{if(negativeGhostRef.current===ghost)negativeGhostRef.current=null;
+      state.scene.remove(ghost);ghost.geometry.dispose();ghost.material.dispose();};
+  }, [solidDialog?.kind,solidOptions]);
+
+  // Drag the real-time primitive or negative-volume ghost without dismissing
+  // its settings panel. The committed STL remains untouched until Apply.
+  useEffect(() => {
+    if(!["primitive","negative","text","svg"].includes(solidDialog?.kind))
+      return undefined;
+    const state=sceneRef.current, canvas=hostRef.current?.querySelector("canvas");
+    if(!state||!canvas)return undefined;
+    const caster=new THREE.Raycaster(),pointer=new THREE.Vector2();
+    const plane=new THREE.Plane(new THREE.Vector3(0,0,1),0);
+    const point=new THREE.Vector3();
+    let dragging=null;
+    const ray=event=>{
+      const box=canvas.getBoundingClientRect();
+      pointer.set(((event.clientX-box.left)/box.width)*2-1,
+        -((event.clientY-box.top)/box.height)*2+1);
+      caster.setFromCamera(pointer,state.camera);
+    };
+    const down=event=>{
+      if(event.button!==0)return;
+      const ghost=solidDialog.kind==="negative"?negativeGhostRef.current:liveGhostRef.current;
+      if(!ghost)return;
+      ray(event);
+      if(!caster.intersectObject(ghost,false).length)return;
+      plane.constant=-ghost.position.z;
+      if(!caster.ray.intersectPlane(plane,point))return;
+      dragging={pointerId:event.pointerId,ghost,
+        x:ghost.position.x,y:ghost.position.y,
+        offsetX:point.x,offsetY:point.y};
+      state.controls.enabled=false;
+      canvas.setPointerCapture?.(event.pointerId);
+      event.preventDefault();event.stopImmediatePropagation();
+    };
+    const move=event=>{
+      if(!dragging||dragging.pointerId!==event.pointerId)return;
+      ray(event);
+      if(caster.ray.intersectPlane(plane,point)){
+        dragging.ghost.position.x=dragging.x+point.x-dragging.offsetX;
+        dragging.ghost.position.y=dragging.y+point.y-dragging.offsetY;
+      }
+      event.preventDefault();event.stopImmediatePropagation();
+    };
+    const up=event=>{
+      if(!dragging||dragging.pointerId!==event.pointerId)return;
+      const current=dragging;dragging=null;
+      state.controls.enabled=true;
+      if(canvas.hasPointerCapture?.(event.pointerId))
+        canvas.releasePointerCapture(event.pointerId);
+      setSolidOptions(old=>({...old,
+        x_mm:pretty(current.ghost.position.x),
+        y_mm:pretty(current.ghost.position.y),
+      }));
+      event.preventDefault();event.stopImmediatePropagation();
+    };
+    const wheel=event=>{
+      if(!event.shiftKey)return;
+      const ghost=solidDialog.kind==="negative"?negativeGhostRef.current:liveGhostRef.current;
+      if(!ghost)return;
+      ray(event);
+      if(!caster.intersectObject(ghost,false).length)return;
+      setSolidOptions(old=>({...old,rotation_z:
+        ((Number(old.rotation_z||0)+(event.deltaY>0?5:-5)+360)%360)}));
+      event.preventDefault();event.stopImmediatePropagation();
+    };
+    canvas.addEventListener("pointerdown",down,true);
+    canvas.addEventListener("pointermove",move,true);
+    canvas.addEventListener("pointerup",up,true);
+    canvas.addEventListener("pointercancel",up,true);
+    canvas.addEventListener("wheel",wheel,{capture:true,passive:false});
+    return ()=>{
+      state.controls.enabled=true;
+      canvas.removeEventListener("pointerdown",down,true);
+      canvas.removeEventListener("pointermove",move,true);
+      canvas.removeEventListener("pointerup",up,true);
+      canvas.removeEventListener("pointercancel",up,true);
+      canvas.removeEventListener("wheel",wheel,true);
+    };
+  }, [solidDialog?.kind,solidDialog?.id,solidPreview]);
 
   async function previewSolid() {
     if (!solidDialog || solidBusy) return;
