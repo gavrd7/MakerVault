@@ -5561,3 +5561,70 @@ a:focus-visible,
   .slicerSolidGrid { grid-template-columns: 1fr; }
   .slicerSolidModal .slicerAutoOrientModalActions button { flex: 1 1 auto; }
 }
+
+
+/* Editing widgets belong to the viewport, below the plate toolbar. */
+.slicerPlateCanvasColumn { position:relative; }
+.slicerPlateCanvasColumn > .slicerPlateCanvasViewport {
+  position:relative !important;
+}
+.slicerPlateCanvasColumn .slicerGroupTransformOverlay {
+  z-index:15;
+  top:14px;
+  left:14px;
+  width:min(290px,calc(100% - 72px));
+  max-height:min(330px,calc(100% - 20px));
+}
+.slicerPlateSectionControl {
+  position:absolute;
+  right:10px;
+  top:60px;
+  bottom:18px;
+  z-index:18;
+  display:flex;
+  align-items:center;
+  flex-direction:column;
+  gap:9px;
+  width:42px;
+  padding:10px 5px;
+  border:1px solid #415a72;
+  border-radius:10px;
+  background:#111c2be8;
+  color:#cad9e7;
+  font-size:.68rem;
+  box-sizing:border-box;
+}
+.slicerPlateSectionControl input[type="range"] {
+  appearance:slider-vertical;
+  writing-mode:vertical-lr;
+  direction:rtl;
+  width:24px;
+  height:100%;
+  min-height:80px;
+  flex:1;
+  accent-color:#43b8e6;
+}
+.slicerPlateSectionControl .slicerSectionValue {
+  font-size:.64rem;
+  overflow-wrap:anywhere;
+  text-align:center;
+}
+.slicerPlateSectionControl button { padding:4px;min-height:26px;width:100%; }
+.slicerSolidPreviewStatus {font-size:.8rem;color:#8fd9c9;align-self:center;margin-right:auto}
+@media(max-width:700px) {
+  .slicerPlateCanvasColumn .slicerGroupTransformOverlay {
+    position:relative;top:auto;left:auto;order:1;width:100%;max-height:none;
+  }
+  .slicerPlateSectionControl { top:20px;right:4px;bottom:20px; }
+}
+.slicerAssemblyTreeHeader {
+  display:flex;gap:5px;align-items:center;padding:5px;
+  border:1px solid #42617a;border-radius:8px;background:#16283a;
+  margin:10px 0 5px;
+}
+.slicerAssemblyTreeHeader>button:first-child {
+  display:flex;align-items:center;gap:6px;flex:1;min-width:0;text-align:left;
+  overflow-wrap:anywhere;
+}
+.slicerAssemblyTreeHeader>button:last-child {min-width:30px;padding:4px}
+.slicerAssemblyTreePart {margin-left:12px; border-left:2px solid #45657b;padding-left:6px}
