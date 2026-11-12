@@ -552,3 +552,20 @@ test("Rotate gizmo uses 45 degree default detents with Shift precision and a liv
   assert.match(editor, /setLiveRotation\(\{ x:/);
   assert.match(editor, /slicerTransformDragAngle/);
 });
+
+
+test("MakerVault angle gizmo replaces default rotation rings with interactive axis grips", () => {
+  const editor = read("SlicerPlateEditor.jsx");
+  const gizmo = read("slicerRotationGizmo.js");
+  assert.match(editor, /createMakerVaultRotationGizmo\(scene\)/);
+  assert.match(editor, /rotationGizmo\.pick\(raycaster\.ray\)/);
+  assert.match(editor, /rotationGizmo\.drag\(raycaster\.ray, event\.shiftKey\)/);
+  assert.match(editor, /state\.rotationGizmo\?\.update\(selectedMesh\)/);
+  assert.match(editor, /setLiveRotation\(angle\)/);
+  assert.match(editor, /type: "pointercancel"/);
+  assert.match(editor, /positionOrientedMesh\(mesh, original\)/);
+  assert.match(gizmo, /MakerVaultRotationGrip-/);
+  assert.match(gizmo, /degree % 45 === 0/);
+  assert.match(gizmo, /angleBadge\.visible = true/);
+  assert.match(gizmo, /activeArc = new THREE\.Line\(/);
+});
