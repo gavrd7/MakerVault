@@ -1342,6 +1342,7 @@ export default function SlicerPlateEditor({
 
     function pointerUp(event) {
       if (rotationPointerId === event.pointerId) {
+        const cancelled = event.type === "pointercancel";
         rotationPointerId = null;
         lastRotationPreview = null;
         const operation = rotationGizmo.end();
@@ -1354,6 +1355,11 @@ export default function SlicerPlateEditor({
           const current = latestObjectsRef.current;
           const original = current.find(item => item.instance_id === mesh.userData.instanceId);
           if (original) {
+            if (cancelled) {
+              positionOrientedMesh(mesh, original);
+              rotationGizmo.update(mesh);
+              return;
+            }
             const candidate = {
               ...original,
               rotation_xyz_deg: [mesh.rotation.x, mesh.rotation.y].map(value =>
@@ -1427,6 +1433,14 @@ export default function SlicerPlateEditor({
         setPlateCamera(face);
       }
     };
+    const cancelRotationOnEscape = event => {
+      if (event.key === "Escape" && rotationPointerId !== null) {
+        pointerUp({ type: "pointercancel", pointerId: rotationPointerId,
+          preventDefault: () => {} });
+        event.preventDefault();
+      }
+    };
+    window.addEventListener("keydown", cancelRotationOnEscape);
     renderer.domElement.addEventListener("pointerdown", orientationPointerDown, true);
     renderer.domElement.addEventListener("pointerdown", pointerDown);
     renderer.domElement.addEventListener("pointermove", pointerMove);
@@ -1486,6 +1500,7 @@ export default function SlicerPlateEditor({
       disposed = true;
       sceneRef.current = null;
       observer.disconnect();
+      window.removeEventListener("keydown", cancelRotationOnEscape);
       renderer.domElement.removeEventListener("pointerdown", orientationPointerDown, true);
       renderer.domElement.removeEventListener("pointerdown", pointerDown);
       renderer.domElement.removeEventListener("pointermove", pointerMove);
