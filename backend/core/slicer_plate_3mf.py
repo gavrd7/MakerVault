@@ -196,7 +196,7 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth):
         desired_z = float(item.get("z_mm", 0))
         if not math.isfinite(desired_z) or not 0 <= desired_z <= 1000:
             raise SlicerProfileError("Invalid model elevation.")
-        provisional[11] += desired_z - minimum_z
+        provisional[11] = desired_z - minimum_z
         placement = " ".join(format(value, ".6f") for value in provisional)
         if total_triangles > MAX_TRIANGLES:
             raise SlicerProfileError("Total plate triangles exceed the limit.")
