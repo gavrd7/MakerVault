@@ -965,14 +965,14 @@ export default function SlicerPlateEditor({
           const toolBounds=new THREE.Box3().setFromObject(tool);
           if (!targetBounds.intersectsBox(toolBounds))
             throw new Error("Negative shape does not intersect the selected model. Drag the pink shape onto the model or adjust its X/Y/Z position.");
-          parts=executeSolidOperation("boolean",target,{booleanMode:"difference"},tool);
+          parts=executeSolidOperation("boolean",target,{booleanMode:"difference",allowOpenPreview:true},tool);
         } finally {tool.geometry.dispose();tool.material.dispose();}
       } else if (solidDialog.kind==="boolean") {
         let working=target;
         const temporary=[];
         try {
           for(const id of booleanIds) {
-            parts=executeSolidOperation("boolean",working,solidOptions,state.meshes.get(id));
+            parts=executeSolidOperation("boolean",working,{...solidOptions,allowOpenPreview:id===booleanIds.at(-1)},state.meshes.get(id));
             const next=parts[0];
             const geometry=new STLLoader().parse(next.buffer);
             const mesh=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial());
@@ -984,7 +984,7 @@ export default function SlicerPlateEditor({
           temporary.forEach(mesh=>{mesh.geometry.dispose();mesh.material.dispose();});
         }
       } else {
-        parts=executeSolidOperation(solidDialog.kind,target,solidOptions,second);
+        parts=executeSolidOperation(solidDialog.kind,target,{...solidOptions,allowOpenPreview:true},second);
       }
       if (["primitive","text","svg"].includes(solidDialog.kind))
         parts=parts.map(part=>({...part,
@@ -1000,7 +1000,7 @@ export default function SlicerPlateEditor({
     } finally {setSolidBusy(false);}
   }
   async function applySolid() {
-    if (!solidDialog || !solidPreview || solidBusy) return;
+    if (!solidDialog || !solidPreview || solidBusy || solidPreview.parts.some(part=>part.validationWarning)) return;
     const selectedObject=objects.find(row=>row.instance_id===solidDialog.id);
     if (!selectedObject && !["primitive","text","svg"].includes(solidDialog.kind)) {
       setSolidError("Selection changed. Reopen the mesh operation.");return;
@@ -3001,17 +3001,18 @@ export default function SlicerPlateEditor({
           </>}
 
           {solidPreview && <div className="slicerSolidResult" role="status">
-            <strong>Preview ready: {solidPreview.parts.length} solid{solidPreview.parts.length===1?"":"s"}</strong>
+            <strong>{solidPreview.parts.some(part=>part.validationWarning)?"Geometry preview · needs repair":"Preview ready: "+solidPreview.parts.length+" solid"+(solidPreview.parts.length===1?"":"s")}</strong>
             {solidPreview.parts.map((p,i)=><span key={i}>{p.triangles.toLocaleString()} triangles ·
               {p.width.toFixed(1)} × {p.depth.toFixed(1)} × {p.height.toFixed(1)} mm</span>)}
           </div>}
+          {solidPreview?.parts.some(part=>part.validationWarning) && <p className="slicerPlateHint" role="status">This mesh has open edges. Preview is available, but Apply is disabled until the geometry is repaired or the operation changes.</p>}
           {solidError && <p className="integrationError" role="alert">{solidError}</p>}
           <footer className="slicerAutoOrientModalActions">
             <button type="button" disabled={solidBusy} onClick={()=>{setSolidPreview(null);setSolidDialog(null);}}>Cancel</button>
             <span className="slicerSolidPreviewStatus" role="status">
               {solidBusy?"Updating preview…":solidPreview?"Preview up to date":"Preview updates automatically"}
             </span>
-            <button type="button" disabled={!solidPreview||solidBusy} onClick={applySolid}>
+            <button type="button" disabled={!solidPreview||solidBusy||solidPreview.parts.some(part=>part.validationWarning)} onClick={applySolid}>
               {solidBusy?"Saving…":"Apply mesh edit"}</button>
           </footer>
         </section>
