@@ -65,17 +65,18 @@ export function splitDisconnectedMesh(mesh, maxParts = 12) {
   mesh.updateMatrixWorld(true);
   const matrix = mesh.matrixWorld.clone();
   const parts = [...groups.values()].sort((a, b) => b.length - a.length).map((faces, partIndex) => {
-    const points = [];
+    // Two bounded passes avoid retaining three THREE.Vector3 objects per
+    // triangle. Even high-detail 500k-face STLs stay well below the memory
+    // footprint of building a second full in-memory mesh.
     const min = new THREE.Vector3(Infinity, Infinity, Infinity);
     const max = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
+    const transformed = new THREE.Vector3();
     for (const face of faces) {
-      const corners = [];
       for (let corner = 0; corner < 3; corner++) {
         const coords = vertex(face * 3 + corner);
-        const v = new THREE.Vector3(...coords).applyMatrix4(matrix);
-        min.min(v); max.max(v); corners.push(v);
+        transformed.set(...coords).applyMatrix4(matrix);
+        min.min(transformed); max.max(transformed);
       }
-      points.push(corners);
     }
     const centre = min.clone().add(max).multiplyScalar(0.5);
     const offset = new THREE.Vector3(centre.x, centre.y, min.z);
@@ -93,13 +94,14 @@ export function splitDisconnectedMesh(mesh, maxParts = 12) {
       view.setFloat32(cursor + 8, v.z, true);
       cursor += 12;
     };
-    for (const corners of points) {
-      const a = corners[0].clone().sub(offset);
-      const b = corners[1].clone().sub(offset);
-      const c = corners[2].clone().sub(offset);
-      const normal = b.clone().sub(a).cross(c.clone().sub(a)).normalize();
+    for (const face of faces) {
+      const corners = [0, 1, 2].map(corner =>
+        transformed.set(...vertex(face * 3 + corner)).applyMatrix4(matrix)
+          .clone().sub(offset));
+      const normal = corners[1].clone().sub(corners[0])
+        .cross(corners[2].clone().sub(corners[0])).normalize();
       writeVector(normal);
-      writeVector(a); writeVector(b); writeVector(c);
+      corners.forEach(writeVector);
       cursor += 2; // binary STL attribute bytes
     }
     return {
