@@ -62,3 +62,15 @@ test("section cap returns null when section misses the model",()=>{
   assert.equal(buildSectionCapGeometry(mesh,plane),null);
   mesh.geometry.dispose();
 });
+
+test("section inspector retains old cap geometry during slider updates",async()=>{
+  const {readFileSync}=await import("node:fs");
+  const {fileURLToPath}=await import("node:url");
+  const {dirname,resolve}=await import("node:path");
+  const editor=readFileSync(resolve(dirname(fileURLToPath(import.meta.url)),
+    "../src/components/SlicerPlateEditor.jsx"),"utf8");
+  assert.match(editor,/const sectionCapsRef = useRef\(new Map\(\)\)/);
+  assert.match(editor,/previous\.cap\.geometry=geometry/);
+  assert.match(editor,/clearTimeout\(handle\)/);
+  assert.doesNotMatch(editor,/const caps=\[\];[\s\S]*?caps\.push\(cap\)/);
+});
