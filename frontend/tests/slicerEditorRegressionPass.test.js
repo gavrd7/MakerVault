@@ -33,9 +33,9 @@ test("editing shortcuts guard native text entry and safely place pasted models",
   const workspace=source("SlicerPrepareWorkspace.jsx");
   assert.match(editor,/event\.target\?\.isContentEditable/);
   assert.match(editor,/event\.target\?\.closest\?\.\('\[role="dialog"\]'\)/);
-  assert.match(editor,/key === "c" \|\| key === "x"/);
-  assert.match(editor,/key === "v"/);
-  assert.match(editor,/key === "delete" \|\| key === "backspace"/);
+  assert.match(editor,/key==="c"\|\|key==="x"/);
+  assert.match(editor,/key==="v"/);
+  assert.match(editor,/key==="delete"\|\|key==="backspace"/);
   assert.match(editor,/findFreeDuplicatePosition\(/);
   assert.match(workspace,/event\.shiftKey\) redo\(\); else undo\(\)/);
   assert.match(workspace,/event\.key\.toLowerCase\(\) === "y"/);
