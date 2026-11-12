@@ -559,7 +559,7 @@ test("MakerVault angle gizmo replaces default rotation rings with interactive ax
   const gizmo = read("slicerRotationGizmo.js");
   assert.match(editor, /createMakerVaultRotationGizmo\(scene\)/);
   assert.match(editor, /rotationGizmo\.pick\(raycaster\.ray\)/);
-  assert.match(editor, /rotationGizmo\.drag\(raycaster\.ray, event\.shiftKey\)/);
+  assert.match(editor, /rotationGizmo\.drag\(raycaster\.ray, event\.shiftKey, event\.timeStamp\)/);
   assert.match(editor, /state\.rotationGizmo\?\.update\(selectedMesh\)/);
   assert.match(editor, /setLiveRotation\(angle\)/);
   assert.match(editor, /type: "pointercancel"/);
@@ -617,4 +617,23 @@ test("Move controls expose just model-centre XYZ and reject unsupported Z placem
   assert.doesNotMatch(move, /Coordinates are measured from/);
   assert.doesNotMatch(move, /X bounds:/);
   assert.doesNotMatch(move, /Z \(bed\): 0 mm/);
+});
+
+test("conflicting transforms remain editable, highlight affected meshes and block slicing", () => {
+  const editor = read("SlicerPlateEditor.jsx");
+  const scene = read("SlicerPrepareWorkspace.jsx");
+  const workbench = read("SlicerWorkbench.jsx");
+  assert.match(editor, /conflictIds\.has\(item\.instance_id\)/);
+  assert.match(editor, /onPlateIssuesChange\?\.\(\{ signature: issueSignature, issues: plateIssues \}\)/);
+  assert.match(editor, /bedX, bedY, true\)/);
+  assert.match(scene, /conflictsBlockSlice/);
+  assert.match(scene, /onPlateIssuesChange=\{onPlateIssuesChange\}/);
+  assert.match(workbench, /unresolvedPlateIssues/);
+  assert.match(workbench, /if \(sliceNow && unresolvedPlateIssues\)/);
+  assert.match(workbench, /onPlateIssuesChange=\{setPlateValidation\}/);
+});
+test("duplicate individual XYZ scale toolbar action is removed", () => {
+  const scene = read("SlicerPrepareWorkspace.jsx");
+  assert.doesNotMatch(scene, /name: "Individual XYZ scale"/);
+  assert.match(scene, /name: "Scale", target: "scale_percent"/);
 });
