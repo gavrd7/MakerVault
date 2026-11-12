@@ -257,6 +257,7 @@ export default function SlicerPlateEditor({
   const [localSelected, setLocalSelected] = useState("");
   const [showNativeArtwork, setShowNativeArtwork] = useState(true);
   const [sectionPercent, setSectionPercent] = useState(100);
+  const [sectionAxis, setSectionAxis] = useState("z");
   const sectionPercentRef = useRef(100);
   const [undersidePlateMode, setUndersidePlateMode] = useState("auto");
   const undersidePlateModeRef = useRef(undersidePlateMode);
@@ -2126,16 +2127,22 @@ export default function SlicerPlateEditor({
     }
   }, [objects, selected, selectedInstanceIds, toolMode, canEdit, dimensions, issueKey]);
 
-  const sectionMax = Math.max(1, ...objects.map(row => {
-    const measure = plateModelMeasurement(row,dimensions[row.instance_id]);
-    return Number(row.z_mm||0) + Number(measure?.height||0);
-  }));
+  const sectionBounds = (() => {
+    if (sectionAxis === "z") return {min:0,max:Math.max(1,...objects.map(row => {
+      const measure=plateModelMeasurement(row,dimensions[row.instance_id]);
+      return Number(row.z_mm||0)+Number(measure?.height||0);
+    }))};
+    const axisLength=sectionAxis==="x"?bedX:bedY;
+    return {min:-axisLength/2,max:axisLength/2};
+  })();
   useEffect(() => {
     sectionPercentRef.current=sectionPercent;
-    const state=sceneRef.current;
-    if (state?.sectionPlane) state.sectionPlane.constant =
-      sectionPercent>=100 ? 100000 : sectionMax*sectionPercent/100;
-  }, [sectionPercent,sectionMax]);
+    const plane=sceneRef.current?.sectionPlane;
+    if (!plane) return;
+    plane.normal.set(sectionAxis==="x"?-1:0,sectionAxis==="y"?-1:0,sectionAxis==="z"?-1:0);
+    plane.constant=sectionPercent>=100?100000:
+      sectionBounds.min+(sectionBounds.max-sectionBounds.min)*sectionPercent/100;
+  }, [sectionPercent,sectionAxis,sectionBounds.min,sectionBounds.max]);
 
   // Measured world points would become stale after a model is transformed.
   // Clear them rather than presenting a measurement for old geometry.
@@ -2306,14 +2313,21 @@ export default function SlicerPlateEditor({
       <div className="slicerPlateSectionControl" aria-label="Build plate section view">
         <span className="slicerSectionTop">Section</span>
         <input type="range" min="0" max="100" step="1" value={sectionPercent}
-          aria-label="Visible model height percentage" title="Scroll to reveal interior layers"
+          aria-label="Visible model section percentage" title="Scroll to reveal interior layers"
           onChange={event=>setSectionPercent(Number(event.target.value))}
           onWheel={event=>{
             event.preventDefault();
             setSectionPercent(value=>Math.max(0,Math.min(100,value+(event.deltaY>0?-2:2))));
           }}/>
-        <span className="slicerSectionValue">{sectionPercent===100?"All":(sectionMax*sectionPercent/100).toFixed(1)+" mm"}</span>
+        <span className="slicerSectionValue">{sectionPercent===100?"All":
+          (sectionBounds.min+(sectionBounds.max-sectionBounds.min)*sectionPercent/100).toFixed(1)+" mm"}</span>
         <button type="button" onClick={()=>setSectionPercent(100)} aria-label="Show all model layers">All</button>
+        <label className="slicerSectionAxisLabel">Axis
+          <select aria-label="Section plane axis" value={sectionAxis}
+            onChange={event=>setSectionAxis(event.target.value)}>
+            <option value="z">Z</option><option value="x">X</option><option value="y">Y</option>
+          </select>
+        </label>
       </div>
       <div ref={hostRef} className="slicerPlateCanvas"
         aria-label="Interactive three-dimensional model plate preview with a clickable six-face orientation cube in the top right" />
