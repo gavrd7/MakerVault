@@ -255,6 +255,8 @@ export default function SlicerPlateEditor({
   latestToolModeRef.current = toolMode;
   const [localSelected, setLocalSelected] = useState("");
   const [showNativeArtwork, setShowNativeArtwork] = useState(true);
+  const [sectionPercent, setSectionPercent] = useState(100);
+  const sectionPercentRef = useRef(100);
   const [undersidePlateMode, setUndersidePlateMode] = useState("auto");
   const undersidePlateModeRef = useRef(undersidePlateMode);
   undersidePlateModeRef.current = undersidePlateMode;
@@ -633,6 +635,7 @@ export default function SlicerPlateEditor({
       const mesh=new THREE.Mesh(geom,new THREE.MeshStandardMaterial({
         color: solidDialog?.kind === "hollow" ? "#f3b256" : PALETTE[(index+2)%PALETTE.length], transparent:true,
         opacity:0.48, roughness:0.75, side:THREE.DoubleSide,
+        clippingPlanes:[state.sectionPlane],
       }));
       mesh.position.set(part.x_mm,part.y_mm,part.z_mm);
       mesh.userData.solidPreview=true;
@@ -987,6 +990,8 @@ export default function SlicerPlateEditor({
     }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.localClippingEnabled = true;
+    const sectionPlane = new THREE.Plane(new THREE.Vector3(0,0,-1),100000);
     mount.replaceChildren(renderer.domElement);
 
     const scene = new THREE.Scene();
@@ -1697,7 +1702,7 @@ export default function SlicerPlateEditor({
       orientationCube.render();
     });
     sceneRef.current = { scene, meshes, transform, rotationGizmo, camera, controls, bedX, bedY,
-      measurementOverlay, setSelectionOutlines };
+      measurementOverlay, setSelectionOutlines, sectionPlane };
     return () => {
       disposed = true;
       sceneRef.current = null;
@@ -1807,6 +1812,7 @@ export default function SlicerPlateEditor({
           } }));
           const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({
             color: item.color || PALETTE[0], roughness: 0.72, metalness: 0.04, side: THREE.DoubleSide,
+            clippingPlanes: [state.sectionPlane],
           }));
           mesh.userData.instanceId = item.instance_id;
           const latest = latestObjectsRef.current.find(row => row.instance_id === item.instance_id) || item;
@@ -1860,6 +1866,17 @@ export default function SlicerPlateEditor({
       }
     }
   }, [objects, selected, selectedInstanceIds, toolMode, canEdit, dimensions, issueKey]);
+
+  const sectionMax = Math.max(1, ...objects.map(row => {
+    const measure = plateModelMeasurement(row,dimensions[row.instance_id]);
+    return Number(row.z_mm||0) + Number(measure?.height||0);
+  }));
+  useEffect(() => {
+    sectionPercentRef.current=sectionPercent;
+    const state=sceneRef.current;
+    if (state?.sectionPlane) state.sectionPlane.constant =
+      sectionPercent>=100 ? 100000 : sectionMax*sectionPercent/100;
+  }, [sectionPercent,sectionMax]);
 
   // Measured world points would become stale after a model is transformed.
   // Clear them rather than presenting a measurement for old geometry.
@@ -2027,6 +2044,18 @@ export default function SlicerPlateEditor({
 
     </div>
     <div className="slicerPlateCanvasViewport">
+      <div className="slicerPlateSectionControl" aria-label="Build plate section view">
+        <span className="slicerSectionTop">Section</span>
+        <input type="range" min="0" max="100" step="1" value={sectionPercent}
+          aria-label="Visible model height percentage" title="Scroll to reveal interior layers"
+          onChange={event=>setSectionPercent(Number(event.target.value))}
+          onWheel={event=>{
+            event.preventDefault();
+            setSectionPercent(value=>Math.max(0,Math.min(100,value+(event.deltaY>0?-2:2))));
+          }}/>
+        <span className="slicerSectionValue">{sectionPercent===100?"All":(sectionMax*sectionPercent/100).toFixed(1)+" mm"}</span>
+        <button type="button" onClick={()=>setSectionPercent(100)} aria-label="Show all model layers">All</button>
+      </div>
       <div ref={hostRef} className="slicerPlateCanvas"
         aria-label="Interactive three-dimensional model plate preview with a clickable six-face orientation cube in the top right" />
       {selection.length > 1 && <aside className="slicerViewportMeasurement slicerViewportTransform slicerGroupTransformOverlay"
