@@ -476,7 +476,9 @@ export default function SlicerPlateEditor({
     }
     if (["x_mm", "y_mm", "z_mm", "rotation_deg", "rotation_xyz_deg", "scale_percent", "scale_xyz_percent"].includes(field) &&
         !validPlacement(candidate, objects)) {
-      setError("This position or transform overlaps another model, exceeds the build plate, or has dimensions still loading. Try Auto-arrange.");
+      setError(Number(candidate.z_mm || 0) > 0 || objects.some(item => Number(item.z_mm || 0) > 0)
+        ? "Move rejected: models must have a continuous contact path to the bed without intersecting."
+        : "This transform overlaps another model, exceeds the build plate, or has dimensions still loading.");
       return;
     }
     setError("");
