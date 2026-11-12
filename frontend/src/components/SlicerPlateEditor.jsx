@@ -15,6 +15,7 @@ import { nativeBedArtwork } from "./slicerNativePlateArt";
 import { detectMeshMeasurement, formatDetectedMeasurement } from "./slicerAutoMeasure";
 import { evaluateAutoOrient, AUTO_ORIENT_GOALS } from "./slicerAutoOrient";
 import { splitDisconnectedMesh } from "./slicerSplitObjects";
+import { executeSolidOperation } from "./slicerSolidOperations";
 import { validateStackPlacement } from "./slicerStacking";
 import makerVaultLogoSvg from "../assets/slicer-bed-art/makervault-official-logo.svg?raw";
 
@@ -230,7 +231,7 @@ export default function SlicerPlateEditor({
   plateLabel = "Plate 1", onPlateLabelChange, printerLabel = "",
   canEdit = false, onFilesUploaded, defaultColor = null, onManualColorChange, footer = null,
   selectedInstanceId = null, onSelectedInstanceChange, selectedInstanceIds = [], onSelectModel, toolMode = "select",
-  autoOrientGoal = "balanced", autoOrientRequest = 0, splitRequest = 0,
+  autoOrientGoal = "balanced", autoOrientRequest = 0, splitRequest = 0, solidRequest = null,
   measurementVisible = false, measureMode = "distance", measureUnit = "mm", measureSnapMode = "auto", measureClearVersion = 0,
   onMeasurePinPlaced,
   localAssets = [], onLocalAssetsChange, onExitToolMode, onPlateIssuesChange, toolbar = null,
@@ -287,6 +288,11 @@ export default function SlicerPlateEditor({
   const [splitPreview, setSplitPreview] = useState(null);
   const [splitBusy, setSplitBusy] = useState(false);
   const [splitError, setSplitError] = useState("");
+  const [solidDialog, setSolidDialog] = useState(null);
+  const [solidPreview, setSolidPreview] = useState(null);
+  const [solidBusy, setSolidBusy] = useState(false);
+  const [solidError, setSolidError] = useState("");
+  const [solidOptions, setSolidOptions] = useState({wall: 2, radius: 3, x_mm: 0, y_mm: 0, cutHeight: 5, keep: "both", booleanMode: "union", secondId: ""});
   const [measureOverlayExpanded, setMeasureOverlayExpanded] = useState(false);
   const [transformOverlayExpanded, setTransformOverlayExpanded] = useState(false);
   const [liveRotation, setLiveRotation] = useState(null);
@@ -567,6 +573,129 @@ export default function SlicerPlateEditor({
     };
   }, [autoOrientModalOpen, autoOrientAnalysis, autoOrientGoal, autoOrientChoice,
     chosen?.instance_id, chosen?.x_mm, chosen?.y_mm]);
+
+  useEffect(() => {
+    if (!solidRequest?.id || !canEdit) return;
+    const item = objects.find(row => row.instance_id === selected) || objects[0];
+    const mesh = item && sceneRef.current?.meshes.get(item.instance_id);
+    setSolidError("");
+    setSolidPreview(null);
+    if (!mesh) {
+      setSolidError("Select a loaded STL model to edit.");
+      return;
+    }
+    mesh.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(mesh);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    setSolidOptions({
+      wall: pretty(Math.max(0.4, Math.min(size.x,size.y,size.z)*0.08)),
+      radius: pretty(Math.max(0.5,Math.min(size.x,size.y)/10)),
+      x_mm: pretty(center.x), y_mm: pretty(center.y),
+      cutHeight: pretty((box.min.z+box.max.z)/2),
+      keep: "both", booleanMode: "union",
+      secondId: objects.find(row => row.instance_id!==item.instance_id)?.instance_id || "",
+    });
+    setSolidDialog({kind:solidRequest.kind,id:item.instance_id,name:
+      sourceFiles.find(file => String(file.id)===String(item.asset_id))?.name || "Model"});
+  }, [solidRequest?.id]);
+
+  // Results are previewed as translucent, independent STL ghosts. None of
+  // the source geometry or its saved coordinates is mutated before Apply.
+  useEffect(() => {
+    if (!solidPreview) return undefined;
+    const state=sceneRef.current;
+    if (!state) return undefined;
+    const originals=[solidDialog?.id,solidPreview.secondId].filter(Boolean)
+      .map(id=>state.meshes.get(id)).filter(Boolean);
+    const visibility=originals.map(mesh=>mesh.visible);
+    originals.forEach(mesh=>{mesh.visible=false;});
+    const overlays=[];
+    for (const [index,part] of solidPreview.parts.entries()) {
+      const geom=new STLLoader().parse(part.buffer);
+      const mesh=new THREE.Mesh(geom,new THREE.MeshStandardMaterial({
+        color: PALETTE[(index+2)%PALETTE.length], transparent:true,
+        opacity:0.8, roughness:0.75, side:THREE.DoubleSide,
+      }));
+      mesh.position.set(part.x_mm,part.y_mm,part.z_mm);
+      mesh.userData.solidPreview=true;
+      state.scene.add(mesh);overlays.push(mesh);
+    }
+    return () => {
+      originals.forEach((mesh,index)=>{mesh.visible=visibility[index];});
+      overlays.forEach(mesh=>{state.scene.remove(mesh);mesh.geometry.dispose();mesh.material.dispose();});
+    };
+  }, [solidPreview]);
+
+  async function previewSolid() {
+    if (!solidDialog || solidBusy) return;
+    setSolidBusy(true);setSolidPreview(null);setSolidError("");
+    try {
+      // Allow React to render the busy state before potentially costly CSG.
+      await new Promise(resolve=>setTimeout(resolve,0));
+      const state=sceneRef.current;
+      const target=state?.meshes.get(solidDialog.id);
+      const second=solidDialog.kind==="boolean" ? state?.meshes.get(solidOptions.secondId) : null;
+      if (!target) throw new Error("Selected model is not loaded.");
+      if (solidDialog.kind==="boolean" && (!second || second===target))
+        throw new Error("Choose a different model for this Boolean operation.");
+      const parts=executeSolidOperation(solidDialog.kind,target,solidOptions,second);
+      if (objects.length-parts.length-(second?1:0)+parts.length>MAX_OBJECTS)
+        throw new Error("The result would exceed the 12-object build plate limit.");
+      setSolidPreview({parts,secondId:second ? solidOptions.secondId : null});
+    } catch(error) {
+      setSolidError(error.message || "The model could not be edited. Original meshes are unchanged.");
+    } finally {setSolidBusy(false);}
+  }
+  async function applySolid() {
+    if (!solidDialog || !solidPreview || solidBusy) return;
+    const selectedObject=objects.find(row=>row.instance_id===solidDialog.id);
+    if (!selectedObject) {setSolidError("Selection changed. Reopen the mesh operation.");return;}
+    setSolidBusy(true);setSolidError("");
+    try {
+      const created=[];
+      for(const [index,part] of solidPreview.parts.entries()) {
+        const filename=solidDialog.name.replace(/\.stl$/i,"").slice(0,72) +
+          " - " + solidDialog.kind + (solidPreview.parts.length>1?"-"+(index+1):"") + ".stl";
+        const file=new File([part.buffer],filename,{type:"model/stl"});
+        const form=new FormData();form.append("file",file);
+        const result=await apiFetch("/api/printing/slicer/meshes/temporary/",{
+          method:"POST",body:form,
+        });
+        const id=String(result?.asset_id||"");
+        if(!id) throw new Error("MakerVault did not return a validated STL identifier.");
+        created.push({id,name:filename,file,part});
+      }
+      const remaining=objects.filter(row=>row.instance_id!==solidDialog.id &&
+        row.instance_id!==solidPreview.secondId);
+      const additions=created.map(({id,part},index)=>({
+        ...selectedObject,
+        ...newPlateInstance(id,objects.length+index),
+        x_mm:pretty(part.x_mm),y_mm:pretty(part.y_mm),z_mm:pretty(part.z_mm),
+        color:PALETTE[(index+2)%PALETTE.length],
+        assembly_id:null,
+      }));
+      if (solidDialog.kind==="cut" && additions.length>1) {
+        const dims={...dimensionsRef.current};
+        additions.forEach((item,i)=>{const p=created[i].part;
+          dims[item.instance_id]={width:p.width,depth:p.depth,height:p.height};item.z_mm=0;});
+        const arranged=autoArrangePlate([...remaining,...additions],dims,bedX,bedY,5);
+        if (arranged.error) throw new Error(arranged.error +
+          " Use 'Keep top' or 'Keep bottom' to make a smaller result.");
+        onChange(arranged.objects);
+      } else {
+        onChange([...remaining,...additions]);
+      }
+      onLocalAssetsChange?.(current=>[...current,...created.map(({id,name,file})=>({
+        id,category:"mesh",name,filename:name,url:URL.createObjectURL(file),localOnly:true,
+      }))]);
+      setSelected(additions[0]?.instance_id||"");
+      setArrangeNotice(solidDialog.kind+" completed. Source models remain saved; Undo restores this plate.");
+      setSolidPreview(null);setSolidDialog(null);
+    } catch(error) {
+      setSolidError((error.message||"Mesh operation failed.")+" No partial replacement was applied.");
+    } finally {setSolidBusy(false);}
+  }
 
   // Preview only: the loaded model stays intact until every replacement STL
   // has passed the same private, server-side validation used by normal imports.
@@ -2184,6 +2313,83 @@ export default function SlicerPlateEditor({
       </> : <p role="status">Measuring the selected STL preview…</p>}
     </section>}
 
+    {solidDialog && createPortal(
+      <div className="slicerAutoOrientModalBackdrop" role="presentation"
+        onMouseDown={event=>{if(event.target===event.currentTarget&&!solidBusy){
+          setSolidPreview(null);setSolidDialog(null);
+        }}}>
+        <section className="slicerAutoOrientPanel slicerAutoOrientModal slicerSolidModal"
+          role="dialog" aria-modal="true" aria-label={solidDialog.kind+" model geometry"}>
+          <header className="slicerAutoOrientModalHeader">
+            <div><h3>{solidDialog.kind==="boolean"?"Mesh Boolean":
+              solidDialog.kind[0].toUpperCase()+solidDialog.kind.slice(1)} model</h3>
+              <p className="slicerPlateHint">{solidDialog.name}</p></div>
+            <button type="button" disabled={solidBusy} aria-label="Close mesh editor"
+              onClick={()=>{setSolidPreview(null);setSolidDialog(null);}}>✕</button>
+          </header>
+          {solidDialog.kind==="hollow" && <>
+            <label>Approximate wall thickness (mm)
+              <input type="number" min="0.4" step="0.5" value={solidOptions.wall}
+                onChange={event=>setSolidOptions(v=>({...v,wall:event.target.value}))}/></label>
+            <p className="slicerPlateHint">Creates an internal cavity from a scaled copy of the STL.
+              Wall thickness varies on curved or irregular shapes. It is not a true normal-offset hollow.
+              Add drain/vent holes separately using Drill if required.</p>
+          </>}
+          {solidDialog.kind==="drill" && <div className="slicerSolidGrid">
+            <label>Hole radius (mm)<input type="number" min="0.2" step="0.5"
+              value={solidOptions.radius}
+              onChange={event=>setSolidOptions(v=>({...v,radius:event.target.value}))}/></label>
+            <label>Centre X (mm)<input type="number" step="0.5" value={solidOptions.x_mm}
+              onChange={event=>setSolidOptions(v=>({...v,x_mm:event.target.value}))}/></label>
+            <label>Centre Y (mm)<input type="number" step="0.5" value={solidOptions.y_mm}
+              onChange={event=>setSolidOptions(v=>({...v,y_mm:event.target.value}))}/></label>
+            <p className="slicerPlateHint">Drills a vertical through-hole along Z.</p>
+          </div>}
+          {solidDialog.kind==="cut" && <>
+            <label>Horizontal cut height (bed Z, mm)
+              <input type="number" step="0.5" value={solidOptions.cutHeight}
+                onChange={event=>setSolidOptions(v=>({...v,cutHeight:event.target.value}))}/></label>
+            <label>Keep pieces
+              <select value={solidOptions.keep} onChange={event=>setSolidOptions(v=>({...v,keep:event.target.value}))}>
+                <option value="both">Both pieces</option><option value="top">Top only</option>
+                <option value="bottom">Bottom only</option>
+              </select></label>
+          </>}
+          {solidDialog.kind==="boolean" && <>
+            <label>Second object
+              <select value={solidOptions.secondId} onChange={event=>setSolidOptions(v=>({...v,secondId:event.target.value}))}>
+                {objects.filter(row=>row.instance_id!==solidDialog.id).map((row,index)=>
+                  <option key={row.instance_id} value={row.instance_id}>
+                    {index+1}. {sourceFiles.find(file=>String(file.id)===String(row.asset_id))?.name||"Model"}
+                  </option>)}
+              </select></label>
+            <label>Operation
+              <select value={solidOptions.booleanMode}
+                onChange={event=>setSolidOptions(v=>({...v,booleanMode:event.target.value}))}>
+                <option value="union">Union · combine solids</option>
+                <option value="difference">Difference · subtract second model</option>
+                <option value="intersection">Intersection · common volume</option>
+              </select></label>
+          </>}
+          <p className="slicerPlateHint">Only closed watertight STL meshes are supported. Mesh editing
+            runs locally within a bounded triangle/memory budget. Preview first; the originals
+            remain unchanged until all replacement STLs are privately validated.</p>
+          {solidPreview && <div className="slicerSolidResult" role="status">
+            <strong>Preview ready: {solidPreview.parts.length} solid{solidPreview.parts.length===1?"":"s"}</strong>
+            {solidPreview.parts.map((p,i)=><span key={i}>{p.triangles.toLocaleString()} triangles ·
+              {p.width.toFixed(1)} × {p.depth.toFixed(1)} × {p.height.toFixed(1)} mm</span>)}
+          </div>}
+          {solidError && <p className="integrationError" role="alert">{solidError}</p>}
+          <footer className="slicerAutoOrientModalActions">
+            <button type="button" disabled={solidBusy} onClick={()=>{setSolidPreview(null);setSolidDialog(null);}}>Cancel</button>
+            <button type="button" disabled={solidBusy} onClick={previewSolid}>
+              {solidBusy?"Processing…":"Preview result"}</button>
+            <button type="button" disabled={!solidPreview||solidBusy} onClick={applySolid}>
+              {solidBusy?"Saving…":"Apply mesh edit"}</button>
+          </footer>
+        </section>
+      </div>,document.body
+    )}
     {splitPreview && createPortal(
       <div className="slicerAutoOrientModalBackdrop" role="presentation"
         onMouseDown={event => {
