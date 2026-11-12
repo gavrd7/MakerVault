@@ -253,10 +253,18 @@ export function executeSolidOperation(kind, target, options={}, second=null) {
       if([size.x,size.y,size.z].some(dim=>dim<=wall*2))
         throw new Error("This model is too thin for the chosen wall.");
       const scaled=normalizedGeometry(first.geometry);
+      const axisScale=["x","y","z"].map(axis=>safeNumber(
+        options["cavity_scale_"+axis]??100,20,150,"Cavity "+axis+" scale")/100);
+      const angles=["x","y","z"].map(axis=>THREE.MathUtils.degToRad(safeNumber(
+        options["cavity_rotation_"+axis]??0,-360,360,"Cavity "+axis+" rotation")));
+      const offsets=["x","y","z"].map(axis=>safeNumber(
+        options["cavity_"+axis+"_mm"]??0,-500,500,"Cavity "+axis+" offset"));
       scaled.translate(-mid.x,-mid.y,-mid.z);
-      scaled.scale((size.x-2*wall)/size.x,
-        (size.y-2*wall)/size.y,(size.z-2*wall)/size.z);
-      scaled.translate(mid.x,mid.y,mid.z);
+      scaled.scale((size.x-2*wall)/size.x*axisScale[0],
+        (size.y-2*wall)/size.y*axisScale[1],
+        (size.z-2*wall)/size.z*axisScale[2]);
+      scaled.rotateX(angles[0]);scaled.rotateY(angles[1]);scaled.rotateZ(angles[2]);
+      scaled.translate(mid.x+offsets[0],mid.y+offsets[1],mid.z+offsets[2]);
       secondary=new Brush(scaled);
       secondary.updateMatrixWorld();
       outputs.push(run(first,secondary,SUBTRACTION));
