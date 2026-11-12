@@ -5678,3 +5678,20 @@ a:focus-visible,
 @media(max-width:700px){
   .slicerPlateSectionControl{top:100px;right:4px;bottom:12px}
 }
+
+/* Preview geometry transform mode, alongside precise dimension fields. */
+.slicerInsertionMode{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:5px;margin:8px 0 12px;
+}
+.slicerSolidModal .slicerInsertionMode button{
+  width:100%;min-width:0;min-height:32px;
+  padding:5px 7px;font-size:.76rem;
+}
+.slicerSolidModal .slicerInsertionMode button.selected{
+  background:#293853;border-color:#b8a6ff;color:#f1eaff;
+}
+.slicerPrepareTree .slicerModelEditText{
+  width:100%;min-height:26px;padding:3px 7px;margin:0;
+  font-size:.76rem;line-height:1.2;
+}
