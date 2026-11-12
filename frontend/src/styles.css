@@ -5474,3 +5474,37 @@ a:focus-visible,
 .slicerPlateControlsGroup[data-slicer-add-models] {
   scroll-margin-top: 24px;
 }
+
+
+/* All toolbar descriptors live within the toolbar border. A reserved row
+ * prevents hover/focus from shifting the plate or clipping at either edge. */
+.slicerPlateEditingToolbar .slicerToolTooltip::after {
+  content: none !important;
+  display: none !important;
+}
+.slicerPlateEditingToolbar > .slicerPrepareTools {
+  overflow: visible;
+}
+.slicerPlateEditingToolbar .slicerToolbarDescriptor {
+  flex: 1 0 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 28px;
+  padding: 5px 9px;
+  border: 1px solid #33475c;
+  border-radius: 7px;
+  background: #172433;
+  color: #cedaeb;
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+@media (max-width: 850px) {
+  .slicerPlateEditingToolbar > .slicerPrepareTools {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+  .slicerPlateEditingToolbar .slicerToolTooltip { flex-shrink: 0; }
+}
