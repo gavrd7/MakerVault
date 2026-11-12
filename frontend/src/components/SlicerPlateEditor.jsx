@@ -5,6 +5,7 @@ import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { threeMfGeometryToStl, MAX_3MF_IMPORT_BYTES } from "./slicer3mfGeometry";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
+import { createMakerVaultRotationGizmo } from "./slicerRotationGizmo";
 import { SlicerOrientationCube } from "./slicerOrientationCube";
 import { apiFetch } from "../api";
 import { plateExtentWarning, plateFootprintsOverlap, autoArrangePlate, plateModelMeasurement,
@@ -1096,6 +1097,7 @@ export default function SlicerPlateEditor({
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     const transform = new TransformControls(camera, renderer.domElement);
+    const rotationGizmo = createMakerVaultRotationGizmo(scene);
     const orientationCube = new SlicerOrientationCube(camera, renderer);
     transform.setSpace("world");
     transform.setTranslationSnap(0.5);
@@ -1150,6 +1152,7 @@ export default function SlicerPlateEditor({
     const raycaster = new THREE.Raycaster();
     const bedPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
     let dragging = null;
+    let rotationPointerId = null;
 
     function rayFromPointer(event) {
       const rect = renderer.domElement.getBoundingClientRect();
@@ -1164,6 +1167,19 @@ export default function SlicerPlateEditor({
     function pointerDown(event) {
       if (!canEdit || event.button > 0 || transform.dragging) return;
       rayFromPointer(event);
+      // Direct hit testing against MakerVault's larger rotation handles
+      // happens before ordinary model selection and plate dragging.
+      if (latestToolModeRef.current === "rotate" && rotationGizmo.group.visible) {
+        const axis = rotationGizmo.pick(raycaster.ray);
+        if (axis && rotationGizmo.begin(axis, raycaster.ray)) {
+          rotationPointerId = event.pointerId;
+          controls.enabled = false;
+          renderer.domElement.setPointerCapture?.(event.pointerId);
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+      }
       const hits = raycaster.intersectObjects([...meshes.values()], false);
       if (latestMeasurementRef.current.active) {
         if (!hits.length) return;
@@ -1290,6 +1306,13 @@ export default function SlicerPlateEditor({
     }
 
     function pointerMove(event) {
+      if (rotationPointerId === event.pointerId && rotationGizmo.dragging) {
+        rayFromPointer(event);
+        const angle = rotationGizmo.drag(raycaster.ray, event.shiftKey);
+        if (angle) setLiveRotation(angle);
+        event.preventDefault();
+        return;
+      }
       if (!dragging || dragging.pointerId !== event.pointerId) return;
       rayFromPointer(event);
       const location = new THREE.Vector3();
@@ -1305,6 +1328,38 @@ export default function SlicerPlateEditor({
     }
 
     function pointerUp(event) {
+      if (rotationPointerId === event.pointerId) {
+        rotationPointerId = null;
+        const operation = rotationGizmo.end();
+        controls.enabled = true;
+        setLiveRotation(null);
+        if (renderer.domElement.hasPointerCapture?.(event.pointerId))
+          renderer.domElement.releasePointerCapture(event.pointerId);
+        if (operation?.mesh) {
+          const mesh = operation.mesh;
+          const current = latestObjectsRef.current;
+          const original = current.find(item => item.instance_id === mesh.userData.instanceId);
+          if (original) {
+            const candidate = {
+              ...original,
+              rotation_xyz_deg: [mesh.rotation.x, mesh.rotation.y].map(value =>
+                Math.round(THREE.MathUtils.radToDeg(value) * 1000) / 1000),
+              rotation_deg: Math.round(THREE.MathUtils.radToDeg(mesh.rotation.z) * 1000) / 1000,
+            };
+            if (!validPlacement(candidate, current)) {
+              positionOrientedMesh(mesh, original);
+              setError("Rotation would extend past the build plate or overlap another object. The original orientation was restored.");
+            } else {
+              setError("");
+              latestOnChangeRef.current(current.map(item =>
+                item.instance_id === original.instance_id ? candidate : item));
+            }
+          }
+        }
+        rotationGizmo.update(operation?.mesh);
+        event.preventDefault();
+        return;
+      }
       if (!dragging || dragging.pointerId !== event.pointerId) return;
       dragging = null;
       controls.enabled = true;
@@ -1411,7 +1466,7 @@ export default function SlicerPlateEditor({
       renderer.render(scene, camera);
       orientationCube.render();
     });
-    sceneRef.current = { scene, meshes, transform, camera, controls, bedX, bedY,
+    sceneRef.current = { scene, meshes, transform, rotationGizmo, camera, controls, bedX, bedY,
       measurementOverlay, setSelectionOutline };
     return () => {
       disposed = true;
@@ -1430,6 +1485,7 @@ export default function SlicerPlateEditor({
       transform.detach();
       scene.remove(transform.getHelper());
       transform.dispose();
+      rotationGizmo.dispose();
       setSelectionOutline(null);
       for (const item of [...measurementOverlay.children]) {
         measurementOverlay.remove(item);
@@ -1552,16 +1608,23 @@ export default function SlicerPlateEditor({
     }
     const selectedMesh = state.meshes.get(selected);
     state.setSelectionOutline(selectedMesh || null);
-    if (canEdit && selectedMesh && selection.length < 2 && (toolMode === "move" || toolMode === "rotate" || toolMode === "scale")) {
-      state.transform.setMode(toolMode === "move" ? "translate" : toolMode === "scale" ? "scale" : "rotate");
-      state.transform.showX = true;
-      state.transform.showY = true;
-      state.transform.showZ = toolMode === "rotate" || toolMode === "scale";
-      state.transform.setSpace(toolMode === "rotate" ? "local" : "world");
-      state.transform.setSize(toolMode === "rotate" ? 1.3 : 1);
-      state.transform.attach(selectedMesh);
-    } else {
+    const singleEditable = canEdit && selectedMesh && selection.length < 2;
+    if (singleEditable && toolMode === "rotate") {
       state.transform.detach();
+      state.rotationGizmo?.update(selectedMesh);
+    } else {
+      state.rotationGizmo?.update(null);
+      if (singleEditable && (toolMode === "move" || toolMode === "scale")) {
+        state.transform.setMode(toolMode === "move" ? "translate" : "scale");
+        state.transform.showX = true;
+        state.transform.showY = true;
+        state.transform.showZ = toolMode === "scale";
+        state.transform.setSpace("world");
+        state.transform.setSize(1);
+        state.transform.attach(selectedMesh);
+      } else {
+        state.transform.detach();
+      }
     }
   }, [objects, selected, selectedInstanceIds, toolMode, canEdit, dimensions]);
 
@@ -1807,8 +1870,7 @@ export default function SlicerPlateEditor({
             <SlicerUiIcon name="rotate" /> <span>Reset rotation</span>
           </button>
           {transformOverlayExpanded && <small className="slicerViewportMeasurementHint">
-            Drag the red, green or blue rotation ring for X, Y or Z.
-            Drag the coloured axis arcs. Rotation snaps to 45° by default; hold Shift for 5° increments. Each object remains grounded on the plate.
+            Drag a coloured ring or its labelled grip to rotate about X, Y or Z. Major marks show 45° detents; hold Shift for 5° precision. The live degree readout appears while dragging.
           </small>}
         </> : <>
           <label className="slicerViewportScaleUniform">Uniform scale (%)
