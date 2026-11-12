@@ -699,7 +699,9 @@ export default function SlicerPlateEditor({
       depth:editingText ? item.text_model.depth : 20,
       height:editingText ? item.text_model.height : 20,
       z_mm:solidRequest.kind==="negative"?pretty(center.z):editingText?Number(item.z_mm||0):0,
-      rotation_x:0,rotation_y:0,rotation_z:0,
+      rotation_x:editingText?Number(item.text_model.rotation_x||0):0,
+      rotation_y:editingText?Number(item.text_model.rotation_y||0):0,
+      rotation_z:editingText?Number(item.text_model.rotation_z||0):0,
       text:editingText?item.text_model.text:"MakerVault",
       font:editingText?item.text_model.font||"block":"block",svgData:"",
     });
@@ -1025,6 +1027,9 @@ export default function SlicerPlateEditor({
           text:solidOptions.text,font:solidOptions.font||"block",
           width:Number(solidOptions.width),depth:Number(solidOptions.depth),
           height:Number(solidOptions.height),
+          rotation_x:Number(solidOptions.rotation_x||0),
+          rotation_y:Number(solidOptions.rotation_y||0),
+          rotation_z:Number(solidOptions.rotation_z||0),
         }:null,
       }));
       if (["primitive","text","svg"].includes(solidDialog.kind)) {
@@ -2859,7 +2864,7 @@ export default function SlicerPlateEditor({
                   value={solidOptions[field]} onChange={event=>
                     setSolidOptions(v=>({...v,[field]:event.target.value}))}/></label>)}
             </div>
-            {["primitive","negative"].includes(solidDialog.kind) && <div className="slicerSolidGrid">
+            {["primitive","negative","text","svg"].includes(solidDialog.kind) && <div className="slicerSolidGrid">
               {["rotation_x","rotation_y","rotation_z"].map((field,index)=><label key={field}>
                 {["Rotate X","Rotate Y","Rotate Z"][index]} (°)
                 <input type="number" min="-360" max="360" step="1"
