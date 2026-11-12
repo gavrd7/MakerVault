@@ -21,7 +21,7 @@ import { validateStackPlacement } from "./slicerStacking";
 import makerVaultLogoSvg from "../assets/slicer-bed-art/makervault-official-logo.svg?raw";
 
 const PALETTE = ["#58b5e4", "#f59e0b", "#a78bfa", "#10b981", "#ef4444", "#f472b6"];
-const MAX_OBJECTS = 12;
+const MAX_OBJECTS = 200; // bounded by STL size and native slicing validation
 const MAX_FILE_BYTES = 32 * 1024 * 1024;
 
 const PLATE_SURFACE = {
@@ -441,7 +441,7 @@ export default function SlicerPlateEditor({
   function addAsset(id) {
     if (!id) return;
     if (objects.length >= MAX_OBJECTS) {
-      setError("The preparation editor currently supports at most twelve STL instances.");
+      setError("The editor currently supports at most 200 STL instances.");
       return;
     }
     const next = newPlateInstance(id, objects.length);
@@ -612,10 +612,9 @@ export default function SlicerPlateEditor({
     if (!solidPreview) return undefined;
     const state=sceneRef.current;
     if (!state) return undefined;
-    const originals=[solidDialog?.id,solidPreview.secondId].filter(Boolean)
-      .map(id=>state.meshes.get(id)).filter(Boolean);
-    const visibility=originals.map(mesh=>mesh.visible);
-    originals.forEach(mesh=>{mesh.visible=false;});
+    // Keep source models visible; ghosts overlay rather than replace.
+    const originals=[];
+    const visibility=[];
     const overlays=[];
     for (const [index,part] of solidPreview.parts.entries()) {
       const geom=new STLLoader().parse(part.buffer);
@@ -661,7 +660,7 @@ export default function SlicerPlateEditor({
         parts=executeSolidOperation(solidDialog.kind,target,solidOptions,second);
       }
       if (objects.length-(solidDialog.kind==="primitive"?0:1)-(second?1:0)+parts.length>MAX_OBJECTS)
-        throw new Error("The result would exceed the 12-object build plate limit.");
+        throw new Error("The result would exceed the 200-object build plate limit.");
       setSolidPreview({parts,secondId:second ? solidOptions.secondId : null});
     } catch(error) {
       setSolidError(error.message || "The model could not be edited. Original meshes are unchanged.");
@@ -892,7 +891,7 @@ export default function SlicerPlateEditor({
     event.target.value = "";
     if (!imports.length || !canEdit) return;
     if (imports.length + objects.length > MAX_OBJECTS) {
-      setError("Maximum twelve models per build plate.");
+      setError("Maximum 200 models per build plate.");
       return;
     }
     if (imports.some(file => !/\.(stl|3mf)$/i.test(file.name) || !file.size ||
@@ -2018,7 +2017,7 @@ export default function SlicerPlateEditor({
     <div className="slicerPlateCanvasViewport">
       <div ref={hostRef} className="slicerPlateCanvas"
         aria-label="Interactive three-dimensional model plate preview with a clickable six-face orientation cube in the top right" />
-      {selection.length > 1 && <aside className="slicerViewportMeasurement slicerViewportTransform"
+      {selection.length > 1 && <aside className="slicerViewportMeasurement slicerViewportTransform slicerGroupTransformOverlay"
         aria-label="Multi-model assembly controls">
         <div className="slicerViewportMeasurementHeader"><strong>{selection.length} models selected</strong></div>
         <p className="slicerViewportMeasurementHint">Move or rotate the selected models together.
@@ -2438,9 +2437,7 @@ export default function SlicerPlateEditor({
                 <option value="intersection">Intersection · common volume</option>
               </select></label>
           </>}
-          <p className="slicerPlateHint">Only closed watertight STL meshes are supported. Mesh editing
-            runs locally within a bounded triangle/memory budget. Preview first; the originals
-            remain unchanged until all replacement STLs are privately validated.</p>
+
           {solidPreview && <div className="slicerSolidResult" role="status">
             <strong>Preview ready: {solidPreview.parts.length} solid{solidPreview.parts.length===1?"":"s"}</strong>
             {solidPreview.parts.map((p,i)=><span key={i}>{p.triangles.toLocaleString()} triangles ·
