@@ -296,7 +296,7 @@ export default function SlicerPlateEditor({
   const [solidPreview, setSolidPreview] = useState(null);
   const [solidBusy, setSolidBusy] = useState(false);
   const [solidError, setSolidError] = useState("");
-  const [solidOptions, setSolidOptions] = useState({wall: 2, radius: 3, x_mm: 0, y_mm: 0, cutHeight: 5, cutAxis: "z", keep: "both", booleanMode: "union", secondId: "", primitiveType: "box", width: 20, depth: 20, height: 20, z_mm: 10,
+  const [solidOptions, setSolidOptions] = useState({wall: 2, radius: 3, x_mm: 0, y_mm: 0, cutHeight: 5, cutAxis: "z", keep: "both", booleanMode: "union", secondId: "", booleanIds:[], primitiveType: "box", width: 20, depth: 20, height: 20, z_mm: 10,
     rotation_x:0,rotation_y:0,rotation_z:0,text:"MakerVault",svgData:""});
   // An applied result must always correspond to the options actually shown.
   useEffect(() => { setSolidPreview(null); }, [solidOptions]);
@@ -621,6 +621,7 @@ export default function SlicerPlateEditor({
       cutHeight: pretty((box.min.z+box.max.z)/2), cutAxis: "z",
       keep: "both", booleanMode: "union",
       secondId: objects.find(row => row.instance_id!==item?.instance_id)?.instance_id || "",
+      booleanIds: selectedInstanceIds.filter(id=>id!==item?.instance_id),
       primitiveType:"box", width:20,depth:20,height:20,z_mm:pretty(center.z),
       rotation_x:0,rotation_y:0,rotation_z:0,text:"MakerVault",svgData:"",
     });
@@ -664,11 +665,14 @@ export default function SlicerPlateEditor({
       await new Promise(resolve=>setTimeout(resolve,0));
       const state=sceneRef.current;
       const target=state?.meshes.get(solidDialog.id);
-      const second=solidDialog.kind==="boolean" ? state?.meshes.get(solidOptions.secondId) : null;
+      const booleanIds=solidDialog.kind==="boolean" ?
+        [...new Set(solidOptions.booleanIds || [])].filter(id=>id!==solidDialog.id) : [];
+      const second=solidDialog.kind==="boolean" ? state?.meshes.get(booleanIds[0]) : null;
       if (!target && !["primitive","text","svg"].includes(solidDialog.kind))
         throw new Error("Selected model is not loaded.");
-      if (solidDialog.kind==="boolean" && (!second || second===target))
-        throw new Error("Choose a different model for this Boolean operation.");
+      if (solidDialog.kind==="boolean" && (!booleanIds.length ||
+        booleanIds.some(id=>!state?.meshes.get(id))))
+        throw new Error("Ctrl/Shift-select one or more other models for Mesh Boolean.");
       let parts;
       if (solidDialog.kind==="primitive") {
         parts=[createPrimitiveStl(solidOptions)];
@@ -684,12 +688,28 @@ export default function SlicerPlateEditor({
         try {
           parts=executeSolidOperation("boolean",target,{booleanMode:"difference"},tool);
         } finally {tool.geometry.dispose();tool.material.dispose();}
+      } else if (solidDialog.kind==="boolean") {
+        let working=target;
+        const temporary=[];
+        try {
+          for(const id of booleanIds) {
+            parts=executeSolidOperation("boolean",working,solidOptions,state.meshes.get(id));
+            const next=parts[0];
+            const geometry=new STLLoader().parse(next.buffer);
+            const mesh=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial());
+            mesh.position.set(next.x_mm,next.y_mm,next.z_mm);
+            mesh.updateMatrixWorld(true);
+            temporary.push(mesh);working=mesh;
+          }
+        } finally {
+          temporary.forEach(mesh=>{mesh.geometry.dispose();mesh.material.dispose();});
+        }
       } else {
         parts=executeSolidOperation(solidDialog.kind,target,solidOptions,second);
       }
-      if (objects.length-(["primitive","text","svg"].includes(solidDialog.kind)?0:1)-(second?1:0)+parts.length>MAX_OBJECTS)
+      if (objects.length-(["primitive","text","svg"].includes(solidDialog.kind)?0:1)-booleanIds.length+parts.length>MAX_OBJECTS)
         throw new Error("The result would exceed the 200-object build plate limit.");
-      setSolidPreview({parts,secondId:second ? solidOptions.secondId : null});
+      setSolidPreview({parts,secondIds:booleanIds});
     } catch(error) {
       setSolidError(error.message || "The model could not be edited. Original meshes are unchanged.");
     } finally {setSolidBusy(false);}
@@ -716,7 +736,7 @@ export default function SlicerPlateEditor({
         created.push({id,name:filename,file,part});
       }
       const remaining=objects.filter(row=>["primitive","text","svg"].includes(solidDialog.kind) ||
-        (row.instance_id!==solidDialog.id && row.instance_id!==solidPreview.secondId));
+        (row.instance_id!==solidDialog.id && !solidPreview.secondIds?.includes(row.instance_id)));
       const additions=created.map(({id,part},index)=>({
         ...selectedObject,
         ...newPlateInstance(id,objects.length+index),
@@ -2536,13 +2556,19 @@ export default function SlicerPlateEditor({
               </select></label>
           </>}
           {solidDialog.kind==="boolean" && <>
-            <label>Second object
-              <select value={solidOptions.secondId} onChange={event=>setSolidOptions(v=>({...v,secondId:event.target.value}))}>
-                {objects.filter(row=>row.instance_id!==solidDialog.id).map((row,index)=>
-                  <option key={row.instance_id} value={row.instance_id}>
-                    {index+1}. {sourceFiles.find(file=>String(file.id)===String(row.asset_id))?.name||"Model"}
-                  </option>)}
-              </select></label>
+            <fieldset className="slicerBooleanOperands">
+              <legend>Other models · select one or more</legend>
+              <small>Ctrl/Shift-click parts on the plate or select them here.</small>
+              {objects.filter(row=>row.instance_id!==solidDialog.id).map((row,index)=>
+                <label key={row.instance_id}>
+                  <input type="checkbox" checked={(solidOptions.booleanIds||[]).includes(row.instance_id)}
+                    onChange={event=>setSolidOptions(v=>({...v,
+                      booleanIds:event.target.checked?[...(v.booleanIds||[]),row.instance_id]:
+                        (v.booleanIds||[]).filter(id=>id!==row.instance_id),
+                    }))}/>
+                  {index+1}. {sourceFiles.find(file=>String(file.id)===String(row.asset_id))?.name||"Model"}
+                </label>)}
+            </fieldset>
             <label>Operation
               <select value={solidOptions.booleanMode}
                 onChange={event=>setSolidOptions(v=>({...v,booleanMode:event.target.value}))}>
