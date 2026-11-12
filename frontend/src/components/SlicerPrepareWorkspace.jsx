@@ -643,20 +643,7 @@ export default function SlicerPrepareWorkspace({
           Printer startup and purge G-code are never changed here.</p>
       </aside>
   );
-  return <section className="panel printingSection slicerPrepareWorkspace"
-    aria-label="Interactive slicer Prepare workspace">
-    <div className="slicerPrepareHeader">
-      <div>
-        <span className="settingsEyebrow">MakerVault Slicer · Prepare</span>
-        <h3>Interactive model editor</h3>
-        <p>Engine: {engine || "Not selected"} · Printer: {printer || "Not selected"} ·
-          Native profiles remain engine-specific.</p>
-      </div>
-      <button type="button" className="slicerChangeProfiles" onClick={onChangeProfiles}>
-        <SlicerUiIcon name="others" /> Change profiles
-      </button>
-    </div>
-    <div className="slicerPrepareTools" role="toolbar" aria-label="Model editing tools">
+  const modelToolbar = (\n<div className="slicerPrepareTools" role="toolbar" aria-label="Model editing tools">
       <span className="slicerToolTooltip" data-tooltip="Undo · Ctrl+Z">
         <button type="button" disabled={!undoRef.current.length || busy} onClick={undo}
           aria-label="Undo"><SlicerUiIcon name="undo" /></button>
@@ -738,6 +725,18 @@ export default function SlicerPrepareWorkspace({
           }}>Finish measuring</button>
         </div>}
       </div>)}
+    </div>\n  );\n  return <section className="panel printingSection slicerPrepareWorkspace"
+    aria-label="Interactive slicer Prepare workspace">
+    <div className="slicerPrepareHeader">
+      <div>
+        <span className="settingsEyebrow">MakerVault Slicer · Prepare</span>
+        <h3>Interactive model editor</h3>
+        <p>Engine: {engine || "Not selected"} · Printer: {printer || "Not selected"} ·
+          Native profiles remain engine-specific.</p>
+      </div>
+      <button type="button" className="slicerChangeProfiles" onClick={onChangeProfiles}>
+        <SlicerUiIcon name="others" /> Change profiles
+      </button>
     </div>
     <nav className="slicerMobilePaneTabs" role="tablist" aria-label="Mobile slicer workspace">
       {[
@@ -855,7 +854,7 @@ export default function SlicerPrepareWorkspace({
           <strong>Lay on face:</strong> Tap or click the model face you want touching the build plate.
           MakerVault will rotate the model and place it back on the bed. Select the tool again to cancel.
         </p>}
-        <SlicerPlateEditor files={files} localAssets={localAssets}
+        <SlicerPlateEditor toolbar={modelToolbar} files={files} localAssets={localAssets}
           onLocalAssetsChange={onLocalAssetsChange} onPlateIssuesChange={onPlateIssuesChange} objects={objects} onChange={updatePlate}
           onPrimaryChange={onPrimaryChange} onFilesUploaded={onFilesUploaded}
           onManualColorChange={onManualColorChange} defaultColor={defaultColor}
