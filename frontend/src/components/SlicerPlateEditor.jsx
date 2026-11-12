@@ -617,12 +617,14 @@ export default function SlicerPlateEditor({
     setSolidOptions({
       wall: pretty(Math.max(0.4, Math.min(size.x,size.y,size.z)*0.08)),
       radius: pretty(Math.max(0.5,Math.min(size.x,size.y)/10)),
-      x_mm: pretty(center.x), y_mm: pretty(center.y),
+      x_mm: solidRequest.kind==="negative"?pretty(center.x):0,
+      y_mm: solidRequest.kind==="negative"?pretty(center.y):0,
       cutHeight: pretty((box.min.z+box.max.z)/2), cutAxis: "z",
       keep: "both", booleanMode: "union",
       secondId: objects.find(row => row.instance_id!==item?.instance_id)?.instance_id || "",
       booleanIds: selectedInstanceIds.filter(id=>id!==item?.instance_id),
-      primitiveType:"box", width:20,depth:20,height:20,z_mm:pretty(center.z),
+      primitiveType:"box", width:20,depth:20,height:20,
+      z_mm:solidRequest.kind==="negative"?pretty(center.z):0,
       rotation_x:0,rotation_y:0,rotation_z:0,text:"MakerVault",svgData:"",
     });
     setSolidDialog({kind:solidRequest.kind,id:item?.instance_id || null,name:
@@ -719,6 +721,12 @@ export default function SlicerPlateEditor({
       } else {
         parts=executeSolidOperation(solidDialog.kind,target,solidOptions,second);
       }
+      if (["primitive","text","svg"].includes(solidDialog.kind))
+        parts=parts.map(part=>({...part,
+          x_mm:part.x_mm+Number(solidOptions.x_mm||0),
+          y_mm:part.y_mm+Number(solidOptions.y_mm||0),
+          z_mm:Number(solidOptions.z_mm||0),
+        }));
       if (objects.length-(["primitive","text","svg"].includes(solidDialog.kind)?0:1)-booleanIds.length+parts.length>MAX_OBJECTS)
         throw new Error("The result would exceed the 200-object build plate limit.");
       setSolidPreview({parts,secondIds:booleanIds});
@@ -757,8 +765,7 @@ export default function SlicerPlateEditor({
         assembly_id:null,
       }));
       if (["primitive","text","svg"].includes(solidDialog.kind)) {
-        pendingArrangeRef.current=true;
-        additions.forEach(item=>pendingAddIdsRef.current.add(item.instance_id));
+        // Honour the preview position; never relocate a newly placed shape on Apply.
         onChange([...remaining,...additions]);
       } else if (solidDialog.kind==="cut" && additions.length>1) {
         const dims={...dimensionsRef.current};
@@ -2511,6 +2518,14 @@ export default function SlicerPlateEditor({
                 <input type="number" min="-360" max="360" step="1"
                   value={solidOptions[field]} onChange={event=>
                     setSolidOptions(v=>({...v,[field]:event.target.value}))}/></label>)}
+            </div>}
+            {["primitive","text","svg"].includes(solidDialog.kind) && <div className="slicerSolidGrid">
+              {["x_mm","y_mm","z_mm"].map((field,index)=><label key={field}>
+                {["Centre X","Centre Y","Base Z"][index]} (mm)
+                <input type="number" step="0.5" value={solidOptions[field]}
+                  onChange={event=>setSolidOptions(v=>({...v,[field]:event.target.value}))}/></label>)}
+              <small>Drag the preview shape on the plate to position it.
+                Use the rotation fields above for initial orientation.</small>
             </div>}
             {solidDialog.kind==="negative" && <>
               <div className="slicerSolidGrid">
