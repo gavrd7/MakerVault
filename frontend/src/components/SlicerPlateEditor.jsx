@@ -317,6 +317,7 @@ export default function SlicerPlateEditor({
   const [measureOverlayExpanded, setMeasureOverlayExpanded] = useState(false);
   const [transformOverlayExpanded, setTransformOverlayExpanded] = useState(false);
   const [liveRotation, setLiveRotation] = useState(null);
+  const groupCommitRef = useRef(null);
   const [groupDeltaX, setGroupDeltaX] = useState(0);
   const [groupDeltaY, setGroupDeltaY] = useState(0);
   const [groupRotation, setGroupRotation] = useState(0);
@@ -1055,6 +1056,8 @@ export default function SlicerPlateEditor({
     setError("");
   }
 
+  groupCommitRef.current = transformGroup;
+
   function applySelectedTransform(fields, message) {
     if (!chosen || !canEdit) return;
     const candidate = { ...chosen, ...fields };
@@ -1495,6 +1498,11 @@ export default function SlicerPlateEditor({
       controls.enabled = !event.value;
     });
 
+    // Lightweight pivot for manipulating an assembly without merging or
+    // reparenting its independently editable STL meshes.
+    const groupProxy=new THREE.Object3D();
+    groupProxy.userData.isAssemblyPivot=true;
+    scene.add(groupProxy);
     const meshes = new Map();
     // The helper is owned by the selected instance, never by its STL asset.
     // This keeps two copies of the same model independently selectable and
@@ -1792,6 +1800,20 @@ export default function SlicerPlateEditor({
       setLiveRotation(null);
       const mesh = transform.object;
       if (!mesh) return;
+      if (mesh===groupProxy) {
+        const pivot=groupProxy.userData.pivot || {x:0,y:0,z:0};
+        const dx=pretty(groupProxy.position.x-pivot.x);
+        const dy=pretty(groupProxy.position.y-pivot.y);
+        const rotation=pretty(THREE.MathUtils.radToDeg(groupProxy.rotation.z));
+        const scale=pretty(groupProxy.scale.x*100);
+        groupProxy.position.set(pivot.x,pivot.y,pivot.z);
+        groupProxy.rotation.set(0,0,0);
+        groupProxy.scale.set(1,1,1);
+        if (Math.abs(dx)>0.01 || Math.abs(dy)>0.01 ||
+            Math.abs(rotation)>0.01 || Math.abs(scale-100)>0.01)
+          groupCommitRef.current?.(dx,dy,rotation,scale);
+        return;
+      }
       const current = latestObjectsRef.current;
       const selectedItem = current.find(item => item.instance_id === mesh.userData.instanceId);
       if (!selectedItem) return;
@@ -1897,7 +1919,7 @@ export default function SlicerPlateEditor({
       orientationCube.render();
     });
     sceneRef.current = { scene, meshes, transform, rotationGizmo, camera, controls, bedX, bedY,
-      measurementOverlay, setSelectionOutlines, sectionPlane };
+      measurementOverlay, setSelectionOutlines, sectionPlane, groupProxy };
     return () => {
       disposed = true;
       sceneRef.current = null;
@@ -1916,6 +1938,7 @@ export default function SlicerPlateEditor({
       transform.detach();
       scene.remove(transform.getHelper());
       transform.dispose();
+      scene.remove(groupProxy);
       rotationGizmo.dispose();
       setSelectionOutlines([]);
       for (const item of [...measurementOverlay.children]) {
@@ -2043,7 +2066,25 @@ export default function SlicerPlateEditor({
     const selectedMesh = state.meshes.get(selected);
     state.setSelectionOutlines(selection.map(id=>state.meshes.get(id)).filter(Boolean));
     const singleEditable = canEdit && selectedMesh && selection.length < 2;
-    if (singleEditable && toolMode === "rotate") {
+    const groupEditable = canEdit && selection.length > 1 &&
+      ["move","rotate","scale"].includes(toolMode);
+    if (groupEditable) {
+      const members=objects.filter(item=>selection.includes(item.instance_id));
+      const centerX=members.reduce((sum,item)=>sum+Number(item.x_mm||0),0)/members.length;
+      const centerY=members.reduce((sum,item)=>sum+Number(item.y_mm||0),0)/members.length;
+      const pivot=state.groupProxy;
+      pivot.position.set(centerX,centerY,0);
+      pivot.rotation.set(0,0,0);
+      pivot.scale.set(1,1,1);
+      pivot.userData.pivot={x:centerX,y:centerY,z:0};
+      state.rotationGizmo?.update(null);
+      state.transform.setMode(toolMode==="move"?"translate":toolMode==="rotate"?"rotate":"scale");
+      state.transform.setSpace("world");
+      state.transform.showX=toolMode!=="rotate";
+      state.transform.showY=toolMode!=="rotate";
+      state.transform.showZ=toolMode==="rotate" || toolMode==="scale";
+      state.transform.attach(pivot);
+    } else if (singleEditable && toolMode === "rotate") {
       state.transform.detach();
       state.rotationGizmo?.update(selectedMesh);
     } else {
