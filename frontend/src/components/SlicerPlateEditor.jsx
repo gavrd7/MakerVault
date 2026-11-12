@@ -299,6 +299,8 @@ export default function SlicerPlateEditor({
   const [splitBusy, setSplitBusy] = useState(false);
   const [splitError, setSplitError] = useState("");
   const [solidDialog, setSolidDialog] = useState(null);
+  const solidDialogRef=useRef(null);
+  solidDialogRef.current=solidDialog;
   const [solidViewportRect, setSolidViewportRect] = useState(null);
   const [solidPreview, setSolidPreview] = useState(null);
   const liveGhostRef = useRef(null);
@@ -318,13 +320,13 @@ export default function SlicerPlateEditor({
   const lastPreviewKeyRef = useRef("");
   // Coalesce rapid changes so high-resolution CSG is not rerun every keystroke.
   useEffect(() => {
-    if (!solidDialog || solidBusy) return undefined;
+    if (!solidDialog || solidBusy || insertionGizmoRef.current?.dragging) return undefined;
     const key = JSON.stringify([solidDialog.kind,solidDialog.id,solidOptions]);
     if (lastPreviewKeyRef.current === key) return undefined;
     const handle = setTimeout(() => {
       lastPreviewKeyRef.current = key;
       previewSolid();
-    }, solidDialog.kind === "primitive" ? 120 : 300);
+    }, ["primitive","text","svg"].includes(solidDialog.kind)?350:900);
     return () => clearTimeout(handle);
   }, [solidDialog, solidOptions, solidBusy]);
   const [measureOverlayExpanded, setMeasureOverlayExpanded] = useState(false);
@@ -889,10 +891,11 @@ export default function SlicerPlateEditor({
       const fit=axis=>Math.max(.001,(size[axis]-2*wall)/Math.max(.001,size[axis]))*
         Number(solidOptions["cavity_scale_"+axis]||100)/100;
       geometry.scale(fit("x"),fit("y"),fit("z"));
-      geometry.translate(mid.x,mid.y,mid.z);
+      // Keep vertices centred on their own pivot so TransformControls are
+      // located at the selected model instead of the plate origin.
       ghost=new THREE.Mesh(geometry,material);
-      ghost.position.set(Number(solidOptions.cavity_x_mm||0),
-        Number(solidOptions.cavity_y_mm||0),Number(solidOptions.cavity_z_mm||0));
+      ghost.position.set(mid.x+Number(solidOptions.cavity_x_mm||0),
+        mid.y+Number(solidOptions.cavity_y_mm||0),mid.z+Number(solidOptions.cavity_z_mm||0));
       ghost.rotation.set(...["x","y","z"].map(axis=>
         THREE.MathUtils.degToRad(Number(solidOptions["cavity_rotation_"+axis]||0))));
     } else {
@@ -1004,6 +1007,9 @@ export default function SlicerPlateEditor({
     const ghost=["drill","cut","hollow"].includes(solidDialog.kind)?operationGhostRef.current:
       solidDialog.kind==="negative"?negativeGhostRef.current:liveGhostRef.current;
     if(!state||!canvas||!ghost)return undefined;
+    const cavityTarget=solidDialog.kind==="hollow"?state.meshes.get(solidDialog.id):null;
+    const cavityCentre=cavityTarget?new THREE.Box3().setFromObject(cavityTarget)
+      .getCenter(new THREE.Vector3()):new THREE.Vector3();
     const gizmo=new TransformControls(state.camera,canvas);
     const helper=gizmo.getHelper();
     insertionGizmoRef.current=gizmo;
@@ -1022,8 +1028,8 @@ export default function SlicerPlateEditor({
       if(solidDialog.kind==="hollow") {
         const degrees=axis=>Math.round(THREE.MathUtils.radToDeg(axis)*10)/10;
         if(insertionMode==="translate") {
-          setSolidOptions(old=>({...old,cavity_x_mm:pretty(position.x),
-            cavity_y_mm:pretty(position.y),cavity_z_mm:pretty(position.z)}));
+          setSolidOptions(old=>({...old,cavity_x_mm:pretty(position.x-cavityCentre.x),
+            cavity_y_mm:pretty(position.y-cavityCentre.y),cavity_z_mm:pretty(position.z-cavityCentre.z)}));
         } else if(insertionMode==="scale") {
           setSolidOptions(old=>({...old,
             cavity_scale_x:Math.max(20,Math.min(150,pretty(Number(old.cavity_scale_x||100)*Math.abs(ghost.scale.x)))),
@@ -1858,7 +1864,7 @@ export default function SlicerPlateEditor({
     }
 
     function pointerDown(event) {
-      if (!canEdit || event.button > 0 || transform.dragging) return;
+      if (!canEdit || solidDialogRef.current || event.button > 0 || transform.dragging) return;
       rayFromPointer(event);
       // Direct hit testing against MakerVault's larger rotation handles
       // happens before ordinary model selection and plate dragging.
@@ -2110,6 +2116,7 @@ export default function SlicerPlateEditor({
       }
     }
     transform.addEventListener("mouseUp", () => {
+      if(solidDialogRef.current)return;
       setLiveRotation(null);
       const mesh = transform.object;
       if (!mesh) return;
@@ -2382,8 +2389,8 @@ export default function SlicerPlateEditor({
     }
     const selectedMesh = state.meshes.get(selected);
     state.setSelectionOutlines(selection.map(id=>state.meshes.get(id)).filter(Boolean));
-    const singleEditable = canEdit && selectedMesh && selection.length < 2;
-    const groupEditable = canEdit && selection.length > 1 &&
+    const singleEditable = canEdit && !solidDialog && selectedMesh && selection.length < 2;
+    const groupEditable = canEdit && !solidDialog && selection.length > 1 &&
       ["move","rotate","scale"].includes(toolMode);
     if (groupEditable) {
       const members=objects.filter(item=>selection.includes(item.instance_id));
@@ -2418,7 +2425,7 @@ export default function SlicerPlateEditor({
         state.transform.detach();
       }
     }
-  }, [objects, selected, selectedInstanceIds, toolMode, canEdit, dimensions, issueKey]);
+  }, [objects, selected, selectedInstanceIds, toolMode, canEdit, dimensions, issueKey, solidDialog]);
 
   const sectionBounds = (() => {
     if (sectionAxis === "z") return {min:0,max:Math.max(1,...objects.map(row => {
@@ -2684,7 +2691,7 @@ export default function SlicerPlateEditor({
       maxHeight:Math.max(180,screenH-24)};
     const compact=screenW<740 || rect.width<620;
     if(compact){
-      const top=Math.max(8,Math.min(screenH-220,rect.top+8));
+      const top=Math.max(8,Math.min(screenH-220,rect.top-42));
       return {pointerEvents:"auto",position:"fixed",
         left:Math.max(8,Math.min(screenW-rect.width,rect.left)),
         top,width:Math.min(rect.width,screenW-16),
@@ -2694,7 +2701,7 @@ export default function SlicerPlateEditor({
     // Reserve the remaining majority for the model and its transform handles.
     const width=Math.min(440,Math.max(320,rect.width*0.38),screenW-24);
     const left=Math.max(8,Math.min(rect.left+10,screenW-width-8));
-    const top=Math.max(8,Math.min(rect.top+10,screenH-300));
+    const top=Math.max(8,Math.min(rect.top-42,screenH-300));
     const availableHeight=Math.min(screenH-top-8,rect.bottom-top-8);
     return {pointerEvents:"auto",position:"fixed",left,top,width,
       maxHeight:Math.max(220,availableHeight)};
