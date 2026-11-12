@@ -2306,7 +2306,8 @@ export default function SlicerPlateEditor({
     let live = true;
     const keep = new Set(objects.map(item => item.instance_id));
     for (const [id, mesh] of state.meshes) {
-      if (keep.has(id)) continue;
+      const currentItem=objects.find(item=>item.instance_id===id);
+      if (keep.has(id) && String(mesh.userData.assetId||"")===String(currentItem?.asset_id||"")) continue;
       state.scene.remove(mesh);
       mesh.geometry.dispose();
       mesh.material.dispose();
@@ -2346,6 +2347,7 @@ export default function SlicerPlateEditor({
             clippingPlanes: [state.sectionPlane],
           }));
           mesh.userData.instanceId = item.instance_id;
+          mesh.userData.assetId = item.asset_id;
           const latest = latestObjectsRef.current.find(row => row.instance_id === item.instance_id) || item;
           positionOrientedMesh(mesh, latest);
           state.meshes.set(item.instance_id, mesh);
