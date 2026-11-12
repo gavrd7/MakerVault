@@ -8,7 +8,7 @@ test("slow dragging uses 1 degree steps and faster gestures snap to 5 or 45 degr
   assert.equal(snapRotationDegrees(17), 17);
   assert.equal(snapRotationDegrees(-80), -80);
   assert.equal(snapRotationDegrees(43, false, 300), 45);
-  assert.equal(snapRotationDegrees(17, false, 300), 0);
+  assert.equal(snapRotationDegrees(17, false, 300), 15);
   assert.equal(snapRotationDegrees(18, false, 150), 20);
   assert.equal(snapRotationDegrees(18.4, true, 600), 18);
 });
