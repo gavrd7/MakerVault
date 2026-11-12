@@ -17,6 +17,14 @@ test("bundled text styles generate real printable geometry", () => {
   }
 });
 
+test("full MakerVault lettering is printable in every bundled font", () => {
+  for (const font of TEXT_FONTS) {
+    const output=createTextStl({text:"MakerVault",font:font.id,width:80,depth:20,height:4});
+    assert.ok(output.triangles>0,font.id);
+    assert.ok(output.height>3.9&&output.height<4.1,font.id);
+  }
+});
+
 test("text edit preserves the model identity and exposes its original parameters", () => {
   const workspace=source("SlicerPrepareWorkspace.jsx");
   const editor=source("SlicerPlateEditor.jsx");
