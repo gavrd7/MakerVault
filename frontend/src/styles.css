@@ -4168,7 +4168,7 @@ a:focus-visible,
 
 /* Per-model material preview selector, shared with provider-neutral live slots.
    Keeps the object tree compact and avoids a clipped floating dropdown. */
-.slicerPrepareModelEntry{display:flex;flex-direction:column;gap:6px;min-width:0}
+.slicerPrepareModelEntry{display:flex;flex-direction:column;gap:3px;min-width:0;margin-bottom:5px}
 .slicerPrepareModelEntry>button:first-child{display:flex;align-items:center;text-align:left;gap:8px;width:100%;
   min-width:0;overflow-wrap:anywhere;padding:10px;margin:0}
 .slicerPrepareModelEntry>button:first-child span:last-child{min-width:0;overflow-wrap:anywhere}
@@ -5657,4 +5657,24 @@ a:focus-visible,
 .slicerBooleanOperands small {font-size:.73rem;color:#9aacbf}
 @media(max-width:480px) {
   .slicerPrimitiveShapeGrid {grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+
+/* Compact large object trees without making long filenames unreadable. */
+.slicerPrepareTree .slicerPrepareModelEntry>button:first-child{
+  min-height:34px;padding:5px 7px;line-height:1.25;font-size:.8rem;
+}
+.slicerPrepareTree .slicerModelChangeFilament{
+  min-height:26px;padding:3px 7px;margin-bottom:4px;line-height:1.2;
+}
+.slicerPrepareTree .slicerAssemblyTreeHeader{margin:6px 0 3px}
+.slicerPlateSectionControl{top:100px;bottom:12px;width:50px}
+.slicerSectionAxisLabel{display:flex;flex-direction:column;gap:3px;align-items:center;
+  width:100%;font-size:.65rem}
+.slicerPlateSectionControl .slicerSectionAxisLabel select{
+  width:100%;min-width:0;border:1px solid #415a72;border-radius:5px;
+  background:#142439;color:#e0edfa;padding:3px 0;font:inherit;
+}
+@media(max-width:700px){
+  .slicerPlateSectionControl{top:100px;right:4px;bottom:12px}
 }
