@@ -19,6 +19,7 @@ import { splitDisconnectedMesh } from "./slicerSplitObjects";
 import { executeSolidOperation } from "./slicerSolidOperations";
 import { PRIMITIVE_TYPES, TEXT_FONTS, createPrimitiveMesh, createPrimitiveStl, createTextStl, createSvgStl } from "./slicerPrimitives";
 import { validateStackPlacement } from "./slicerStacking";
+import { buildSectionCapGeometry } from "./slicerSectionCaps";
 import makerVaultLogoSvg from "../assets/slicer-bed-art/makervault-official-logo.svg?raw";
 
 const PALETTE = ["#58b5e4", "#f59e0b", "#a78bfa", "#10b981", "#ef4444", "#f472b6"];
@@ -2284,6 +2285,44 @@ export default function SlicerPlateEditor({
     plane.constant=sectionPercent>=100?100000:
       sectionBounds.min+(sectionBounds.max-sectionBounds.min)*sectionPercent/100;
   }, [sectionPercent,sectionAxis,sectionBounds.min,sectionBounds.max]);
+
+  // Clipping only hides the outer surfaces, which makes solid boxes appear
+  // hollow. Build actual cut-face geometry from the STL intersections.
+  // This is visual-only: no STL, source model or native slicer data changes.
+  useEffect(() => {
+    const state=sceneRef.current;
+    if(!state || sectionPercent>=100)return undefined;
+    let cancelled=false;
+    const caps=[];
+    const handle=setTimeout(()=>{
+      if(cancelled)return;
+      for(const model of state.meshes.values()) {
+        let geometry;
+        try{geometry=buildSectionCapGeometry(model,state.sectionPlane);}
+        catch{continue;} // malformed mesh is never modified to draw a cap
+        if(!geometry)continue;
+        const source=Array.isArray(model.material)?model.material[0]:model.material;
+        const material=new THREE.MeshStandardMaterial({
+          color:source?.color||"#a78bfa",roughness:0.83,metalness:0,
+          side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-1,
+          polygonOffsetUnits:-1,
+        });
+        const cap=new THREE.Mesh(geometry,material);
+        cap.userData.isSectionCap=true;
+        cap.renderOrder=2;
+        state.scene.add(cap);
+        caps.push(cap);
+      }
+    },80);
+    return ()=>{
+      cancelled=true;clearTimeout(handle);
+      for(const cap of caps){
+        state.scene.remove(cap);
+        cap.geometry.dispose();
+        cap.material.dispose();
+      }
+    };
+  }, [sectionPercent,sectionAxis,objects,dimensions]);
 
   // Measured world points would become stale after a model is transformed.
   // Clear them rather than presenting a measurement for old geometry.
