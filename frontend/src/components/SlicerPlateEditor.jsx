@@ -17,7 +17,7 @@ import { detectMeshMeasurement, formatDetectedMeasurement } from "./slicerAutoMe
 import { evaluateAutoOrient, AUTO_ORIENT_GOALS } from "./slicerAutoOrient";
 import { splitDisconnectedMesh } from "./slicerSplitObjects";
 import { executeSolidOperation } from "./slicerSolidOperations";
-import { PRIMITIVE_TYPES, createPrimitiveMesh, createPrimitiveStl, createTextStl, createSvgStl } from "./slicerPrimitives";
+import { PRIMITIVE_TYPES, TEXT_FONTS, createPrimitiveMesh, createPrimitiveStl, createTextStl, createSvgStl } from "./slicerPrimitives";
 import { validateStackPlacement } from "./slicerStacking";
 import makerVaultLogoSvg from "../assets/slicer-bed-art/makervault-official-logo.svg?raw";
 
@@ -302,7 +302,7 @@ export default function SlicerPlateEditor({
   const [solidBusy, setSolidBusy] = useState(false);
   const [solidError, setSolidError] = useState("");
   const [solidOptions, setSolidOptions] = useState({wall: 2, radius: 3, x_mm: 0, y_mm: 0, cutHeight: 5, cutAxis: "z", keep: "both", booleanMode: "union", secondId: "", booleanIds:[], primitiveType: "box", width: 20, depth: 20, height: 20, z_mm: 10,
-    rotation_x:0,rotation_y:0,rotation_z:0,text:"MakerVault",svgData:""});
+    rotation_x:0,rotation_y:0,rotation_z:0,text:"MakerVault",font:"block",svgData:""});
   // An applied result must always correspond to the options actually shown.
   useEffect(() => { setSolidPreview(null); }, [solidOptions]);
   const lastPreviewKeyRef = useRef("");
@@ -688,7 +688,7 @@ export default function SlicerPlateEditor({
       booleanIds: selectedInstanceIds.filter(id=>id!==item?.instance_id),
       primitiveType:"box", width:20,depth:20,height:20,
       z_mm:solidRequest.kind==="negative"?pretty(center.z):0,
-      rotation_x:0,rotation_y:0,rotation_z:0,text:"MakerVault",svgData:"",
+      rotation_x:0,rotation_y:0,rotation_z:0,text:"MakerVault",font:"block",svgData:"",
     });
     setSolidDialog({kind:solidRequest.kind,id:item?.instance_id || null,name:
       ["primitive","text","svg"].includes(solidRequest.kind) ? solidRequest.kind[0].toUpperCase()+solidRequest.kind.slice(1) :
@@ -2740,9 +2740,17 @@ export default function SlicerPlateEditor({
                 </button>)}
               </div>
             </fieldset>}
-            {solidDialog.kind==="text" && <label>Text
-              <input type="text" maxLength="40" value={solidOptions.text}
-                onChange={event=>setSolidOptions(v=>({...v,text:event.target.value}))}/></label>}
+            {solidDialog.kind==="text" && <>
+              <label>Text
+                <input type="text" maxLength="40" value={solidOptions.text}
+                  onChange={event=>setSolidOptions(v=>({...v,text:event.target.value}))}/></label>
+              <label>Font
+                <select aria-label="Text font" value={solidOptions.font||"block"}
+                  onChange={event=>setSolidOptions(v=>({...v,font:event.target.value}))}>
+                  {TEXT_FONTS.map(font=><option key={font.id} value={font.id}>{font.name}</option>)}
+                </select>
+              </label>
+            </>}
             {solidDialog.kind==="svg" && <label>Vector artwork
               <input type="file" accept=".svg,image/svg+xml" onChange={async event=>{
                 const file=event.target.files?.[0];
