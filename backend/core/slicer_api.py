@@ -228,7 +228,7 @@ def _draft_plate_settings(user, input_asset, settings):
         required = {"instance_id", "asset_id", "x_mm", "y_mm", "rotation_deg",
                     "scale_percent", "color"}
         if (not isinstance(item, dict) or not required.issubset(item)
-                or set(item) - required - {"scale_xyz_percent", "process_overrides", "rotation_xyz_deg", "assembly_id", "z_mm"}):
+                or set(item) - required - {"scale_xyz_percent", "process_overrides", "rotation_xyz_deg", "assembly_id", "z_mm", "text_model"}):
             raise ValueError("Invalid plate model instance.")
         instance_id = str(_uuid(item["instance_id"]))
         asset_id = _uuid(item["asset_id"])
@@ -273,9 +273,35 @@ def _draft_plate_settings(user, input_asset, settings):
         if assembly_id is not None and (not isinstance(assembly_id, str) or
                 not re.fullmatch(r"assembly:[a-zA-Z0-9-]{8,64}", assembly_id)):
             raise ValueError("Invalid assembly identifier.")
+        text_model = item.get("text_model")
+        text_fields = {}
+        if text_model is not None:
+            if not isinstance(text_model, dict) or set(text_model) != {
+                "text", "font", "width", "depth", "height",
+                "rotation_x", "rotation_y", "rotation_z",
+            }:
+                raise ValueError("Invalid editable text model metadata.")
+            text = text_model["text"]
+            font = text_model["font"]
+            if (not isinstance(text, str) or not 1 <= len(text) <= 128 or
+                    any(ord(ch) < 32 or ord(ch) == 127 for ch in text) or
+                    font not in {"block", "sans", "sans-bold", "optimer", "gentilis"}):
+                raise ValueError("Invalid printable text or font.")
+            numerical = {}
+            for key, low, high in (
+                ("width", .2, 500), ("depth", .2, 500), ("height", .2, 500),
+                ("rotation_x", -360, 360), ("rotation_y", -360, 360),
+                ("rotation_z", -360, 360),
+            ):
+                value = text_model[key]
+                if (isinstance(value, bool) or not isinstance(value, (int, float))
+                        or not math.isfinite(value) or not low <= value <= high):
+                    raise ValueError("Invalid editable text dimensions.")
+                numerical[key] = round(float(value), 3)
+            text_fields = {"text_model": {"text": text, "font": font, **numerical}}
         saved.append({"instance_id": instance_id, "asset_id": str(asset_id),
                       **({"assembly_id": assembly_id} if assembly_id is not None else {}),
-                      **values, "color": color.lower(),
+                      **values, "color": color.lower(), **text_fields,
                       **({"process_overrides": instance_overrides} if instance_overrides else {})})
     if saved[0]["asset_id"] != str(input_asset.pk):
         raise ValueError("The first plate model must match the selected primary STL.")
