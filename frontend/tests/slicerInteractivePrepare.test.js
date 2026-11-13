@@ -202,6 +202,15 @@ test("live CFS AMS RFID slots support draft assignments without enabling unverif
   assert.match(scene, /live slot-to-tool bindings and physical changeovers are not yet verified/);
 });
 
+test("switching registered printers invalidates physical CFS slots and flush volumes", () => {
+  const workbench = read("SlicerWorkbench.jsx");
+  assert.match(workbench, /const changeSessionPrinter = printerId =>/);
+  assert.match(workbench, /setFlushSettings\(null\)/);
+  assert.match(workbench, /setProjectPlates\(current => current\.map\(plate => \(\{/);
+  assert.match(workbench, /material_slot: oldSlot/);
+  assert.match(workbench, /spool_id: ""/);
+});
+
 test("icon toolbar tooltips show names and unavailable reasons on hover and focus", () => {
   const scene = read("SlicerPrepareWorkspace.jsx");
   const styles = fs.readFileSync(path.resolve(root, "../styles.css"), "utf8");
