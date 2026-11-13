@@ -264,6 +264,7 @@ export default function SlicerPrepareWorkspace({
     });
   const [liveMaterials, setLiveMaterials] = useState([]);
   const [editingSlotProfile,setEditingSlotProfile] = useState(null);
+  const [detailsSlotId,setDetailsSlotId] = useState(null);
   const [filamentPickerId, setFilamentPickerId] = useState("");
   const [filamentNotice, setFilamentNotice] = useState("");
   // WCAG relative luminance: choose the more legible foreground for each
@@ -1225,20 +1226,54 @@ export default function SlicerPrepareWorkspace({
           {liveMaterials.map(slot => {
             const chosen=slotFilamentProfiles.find(row=>row.slot_id===String(slot.id));
             const profile=filamentProfiles.find(row=>row.id===chosen?.profile_id);
-            return <div className="slicerLiveMaterialSlot" key={slot.id}>
+            return <div className="slicerLiveMaterialSlot slicerLiveMaterialSlotCompact" key={slot.id}>
               <span className="slicerLiveMaterialSwatch slicerLiveMaterialSwatchRound"
                 style={{backgroundColor:validSlotColor(slot)||"#697b91"}} aria-hidden="true"/>
-              <div><strong>{slot.product_name || slot.material || "Unknown filament"}</strong>
-                <small>{slot.system_label || "Printer material"} · Slot {(slot.slot_index ?? 0) + 1}
-                  {slot.spool_code ? " · " + slot.spool_code : " · Unlinked spool"}</small>
-                <small>{slot.material || "Unknown type"}{slot.remaining_percent != null ? " · " + Math.round(slot.remaining_percent) + "% remaining" : ""}</small>
-                <small>Filament profile: {profile?.name || "Main profile (not slot-specific)"}</small>
+              <div className="slicerLiveMaterialSummary">
+                <strong title={slot.product_name || slot.material || "Unknown filament"}>
+                  {slot.product_name || slot.material || "Unknown filament"}</strong>
+                <small>Slot {(slot.slot_index??0)+1} · {slot.material||"Unknown"}</small>
               </div>
-              <button type="button" disabled={!canEdit||busy}
-                onClick={()=>setEditingSlotProfile(String(slot.id))}
-                aria-label={"Choose filament profile for "+slotName(slot)}>Profile</button>
+              <div className="slicerLiveMaterialActions">
+                <button type="button" onClick={()=>setDetailsSlotId(String(slot.id))}
+                  aria-label={"Details for "+slotName(slot)}>Details</button>
+                <button type="button" disabled={!canEdit||busy}
+                  onClick={()=>setEditingSlotProfile(String(slot.id))}
+                  aria-label={"Choose filament profile for "+slotName(slot)}>Profile</button>
+              </div>
             </div>;
           })}
+          {detailsSlotId && createPortal(<div className="slicerFlushModalBackdrop"
+            onMouseDown={e=>{if(e.target===e.currentTarget)setDetailsSlotId(null);}}>
+            <section className="slicerFlushModal slicerSlotProfileModal" role="dialog"
+              aria-modal="true" aria-label="Loaded filament details">
+              <header className="slicerFlushModalHeader">
+                <h3>Loaded filament details</h3>
+                <button type="button" onClick={()=>setDetailsSlotId(null)} aria-label="Close filament details">✕</button>
+              </header>
+              <div className="slicerFlushModalBody">
+                {liveMaterials.filter(slot=>String(slot.id)===detailsSlotId).map(slot=>{
+                  const chosen=slotFilamentProfiles.find(row=>row.slot_id===String(slot.id));
+                  const profile=filamentProfiles.find(row=>row.id===chosen?.profile_id);
+                  return <div key={slot.id} className="slicerSlotDetails">
+                    <div className="slicerFlushSlotLabel"><span className="slicerLiveMaterialSwatch slicerLiveMaterialSwatchRound"
+                      style={{backgroundColor:validSlotColor(slot)||"#697b91"}}/>
+                      <strong>{slot.product_name||slot.material||"Unknown filament"}</strong></div>
+                    <p>{slot.system_label||"Printer material"} · Slot {(slot.slot_index??0)+1}</p>
+                    <p>{slot.spool_code||"Unlinked spool"}</p>
+                    <p>Material: {slot.material||"Unknown"}</p>
+                    <p>Remaining: {slot.remaining_percent==null?"Not reported":Math.round(slot.remaining_percent)+"%"}</p>
+                    <p>Filament profile: {profile?.name||"Main profile (not slot-specific)"}</p>
+                    <button type="button" onClick={()=>{setDetailsSlotId(null);setEditingSlotProfile(String(slot.id));}}>
+                      Change filament profile</button>
+                  </div>;
+                })}
+              </div>
+              <footer className="slicerFlushModalFooter">
+                <button type="button" onClick={()=>setDetailsSlotId(null)}>Done</button>
+              </footer>
+            </section>
+          </div>,document.body)}
           {editingSlotProfile && createPortal(<div className="slicerFlushModalBackdrop"
              onMouseDown={e=>{if(e.target===e.currentTarget)setEditingSlotProfile(null);}}>
             <section className="slicerFlushModal slicerSlotProfileModal" role="dialog"
