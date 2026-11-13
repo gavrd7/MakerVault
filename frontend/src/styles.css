@@ -6367,3 +6367,14 @@ a:focus-visible,
  .slicerFlushModalControls{grid-template-columns:1fr}
  .slicerFlushModalHeader,.slicerFlushModalFooter{padding:9px 11px}
 }
+
+.slicerLiveMaterialSlot .slicerLiveMaterialSwatchRound{
+ border-radius:50%;width:26px;height:26px;min-width:26px;
+ border:1px solid #9cacc0;
+}
+.slicerLiveMaterialSlot>button{
+ margin-left:auto;align-self:center;flex:0 0 auto;
+}
+.slicerSlotProfileModal{width:min(560px,100%)}
+.slicerSlotProfileModal label{display:grid;gap:7px}
+.slicerSlotProfileModal select{width:100%;min-width:0}
