@@ -1183,6 +1183,7 @@ export default function SlicerPrepareWorkspace({
           aria-label="Remove active build plate">Remove</button>
       </div>
 
+        {paintPanel}
         {toolMode === "lay_face" && <p className="projectUploadHint" role="status">
           <strong>Lay on face:</strong> Tap or click the model face you want touching the build plate.
           MakerVault will rotate the model and place it back on the bed. Select the tool again to cancel.
@@ -1248,7 +1249,6 @@ export default function SlicerPrepareWorkspace({
           onMeasurePinPlaced={() => setMeasureOptionsOpen(false)}
           onExitToolMode={() => setToolMode("select")} />}
       </div>
-      {paintPanel}
       {settingsExpanded ? createPortal(
         <div className="slicerSettingsModalBackdrop" role="presentation"
           onMouseDown={event => {
