@@ -33,15 +33,33 @@ if str(ROOT) not in sys.path:
 DOTENV = ROOT / ".slicer-staging.env"
 BUNDLE = ROOT / "slicer-engine-assets"
 OVERLAY = ROOT / "compose.slicer.staging.yaml"
-TAG = "v2.4.2"
-VERSION = "2.4.2"
-ASSET = "OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.4.2.AppImage"
+# Official upstream assets are pinned by version AND audited asset digest.
+# Staging can select an approved release independently of MakerVault app code.
+# New versions must first have an accepted digest and pass pinned-binary CI.
+APPROVED_ORCA_RELEASES = {
+    "2.4.2": "d12fb8c8eac1aecd2dfb6377acd48f994f8fa439ed5292fa532dd82880f029fd",
+    "2.5.0": "d13eb0a9cd618ed080ab6b82c64c0a60c4501aac91e88d5ac2c3b526fb141a7c",
+}
+VERSION = "2.5.0"
+TAG = "v" + VERSION
+ASSET = f"OrcaSlicer_Linux_AppImage_Ubuntu2404_V{VERSION}.AppImage"
 RELEASE_API = "https://api.github.com/repos/OrcaSlicer/OrcaSlicer/releases/tags/" + TAG
+
+
+def _release_spec(version):
+    if version not in APPROVED_ORCA_RELEASES:
+        raise ValueError("Orca release must be reviewed and SHA-256 pinned before staging.")
+    tag = "v" + version
+    asset = f"OrcaSlicer_Linux_AppImage_Ubuntu2404_V{version}.AppImage"
+    return (tag, asset,
+            "https://api.github.com/repos/OrcaSlicer/OrcaSlicer/releases/tags/" + tag,
+            APPROVED_ORCA_RELEASES[version])
 MAX_DOWNLOAD = 1024 * 1024 * 1024
 
 
-def _github_asset():
-    request = Request(RELEASE_API, headers={
+def _github_asset(version=VERSION):
+    tag, asset, release_api, pinned_sha = _release_spec(version)
+    request = Request(release_api, headers={
         "Accept": "application/vnd.github+json",
         "User-Agent": "MakerVault-Staging-Slicer-Installer",
     })
@@ -52,20 +70,22 @@ def _github_asset():
     if len(payload) > 2 * 1024 * 1024:
         raise ValueError("Release metadata exceeds the allowed size.")
     release = json.loads(payload)
-    matches = [a for a in release.get("assets", []) if a.get("name") == ASSET]
+    matches = [a for a in release.get("assets", []) if a.get("name") == asset]
     if len(matches) != 1:
         raise ValueError("The exact pinned OrcaSlicer Linux AppImage is missing from the upstream release.")
     item = matches[0]
     digest = item.get("digest", "")
     url = item.get("browser_download_url", "")
-    allowed_url = "https://github.com/OrcaSlicer/OrcaSlicer/releases/download/" + TAG + "/" + ASSET
+    allowed_url = "https://github.com/OrcaSlicer/OrcaSlicer/releases/download/" + tag + "/" + asset
     if url != allowed_url:
         raise ValueError("Official release asset URL does not match the pinned path.")
     if not isinstance(digest, str) or not digest.startswith("sha256:") or len(digest) != 71:
         raise ValueError("Official release metadata has no SHA-256 digest; refusing unverified download.")
     if any(ch not in "0123456789abcdef" for ch in digest[7:]):
         raise ValueError("Official release digest is invalid.")
-    return url, digest[7:]
+    if digest[7:] != pinned_sha:
+        raise ValueError("Official release SHA-256 differs from the independently approved pinned digest.")
+    return url, pinned_sha
 
 
 def _download_verified(url, digest, dest):
@@ -131,7 +151,7 @@ def _save_env(text):
             temp.unlink()
 
 
-def _resume_staged_bundle():
+def _resume_staged_bundle(expected_version=None):
     """Resume only an intact, digest-verified staging bundle after a failed build."""
     path = BUNDLE / "manifest.json"
     binary = BUNDLE / "orcaslicer.AppImage"
@@ -149,35 +169,37 @@ def _resume_staged_bundle():
     with binary.open("rb") as stream:
         while chunk := stream.read(1024 * 1024):
             digest.update(chunk)
-    if (entry.get("version") != VERSION or
+    if (entry.get("version") not in APPROVED_ORCA_RELEASES or
+            (expected_version is not None and entry.get("version") != expected_version) or
             entry.get("binary") != "/opt/engines/orcaslicer.AppImage" or
             entry.get("binary_sha256") != digest.hexdigest()):
         raise ValueError("Staged engine identity or SHA-256 has changed; refusing reuse.")
     return {
         "app_approvals_json": json.dumps({
-            "orcaslicer": {"version": VERSION, "binary_sha256": digest.hexdigest()}
+            "orcaslicer": {"version": entry["version"], "binary_sha256": digest.hexdigest()}
         }, separators=(",", ":")),
         "worker_engines_json": json.dumps(entries, separators=(",", ":")),
     }
 
 
-def prepare_orca():
+def prepare_orca(version=VERSION):
+    tag, asset, _api, _sha = _release_spec(version)
     if not (ROOT / ".env").is_file() or not OVERLAY.is_file():
         raise ValueError("Run from a MakerVault staging checkout with a configured .env.")
     if DOTENV.exists():
         raise ValueError("Slicer already configured. Use enable, disable or status.")
     if BUNDLE.exists():
         print("Resuming a staged binary after verifying its original SHA-256…")
-        prepared = _resume_staged_bundle()
+        prepared = _resume_staged_bundle(expected_version=version)
     else:
-        url, expected_sha = _github_asset()
+        url, expected_sha = _github_asset(version)
         with tempfile.TemporaryDirectory(prefix="makervault-orca-") as tmp:
-            appimage = Path(tmp) / ASSET
-            print("Downloading pinned official OrcaSlicer " + VERSION + " (SHA-256 verified)…")
+            appimage = Path(tmp) / asset
+            print("Downloading pinned official OrcaSlicer " + version + " (SHA-256 verified)…")
             _download_verified(url, expected_sha, appimage)
             from slicer_worker.stage_engines import stage_engines
             prepared = stage_engines(
-                [("orcaslicer", VERSION, str(appimage), expected_sha)], BUNDLE
+                [("orcaslicer", version, str(appimage), expected_sha)], BUNDLE
             )
     print("Building isolated candidate slicer image (without running the engine)…")
     _run(["docker", "build", "-f", "slicer_worker/Dockerfile.bundle",
@@ -303,9 +325,16 @@ def status():
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=["prepare-orca", "enable", "disable", "status", "refresh-worker", "update"])
+    parser.add_argument("--version", default=VERSION,
+                        help="Explicit approved Orca release for prepare-orca (default: 2.5.0)")
     args = parser.parse_args(argv)
     try:
-        {"prepare-orca": prepare_orca, "enable": enable,
+        if args.action == "prepare-orca":
+            prepare_orca(version=args.version)
+            return 0
+        if args.version != VERSION:
+            raise ValueError("--version applies only to prepare-orca.")
+        {"enable": enable,
          "disable": disable, "status": status,
          "refresh-worker": refresh_worker, "update": update}[args.action]()
     except (ValueError, OSError, subprocess.CalledProcessError) as exc:
