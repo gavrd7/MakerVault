@@ -59,3 +59,42 @@ class OfficialOrcaProfileTests(SimpleTestCase):
                 with self.assertRaises(OfficialProfileError):
                     fetch_official_profile("printer", "Creality K2 0.4 nozzle",
                                            "machine/Creality K2 0.4 nozzle.json")
+
+    def test_version_pinned_manufacturer_filament_catalogue(self):
+        import core.slicer_official_profiles as official
+        manifest = {
+            "name": "OrcaFilamentLibrary",
+            "machine_list": [],
+            "process_list": [],
+            "filament_list": [
+                {"name": "fdm_filament_pla", "sub_path": "filament/base/fdm_filament_pla.json"},
+                {"name": "eSUN PLA+ @base", "sub_path": "filament/eSUN/eSUN PLA+ @base.json"},
+                {"name": "SUNLU PLA Matte @base", "sub_path": "filament/SUNLU/SUNLU PLA Matte @base.json"},
+                {"name": "Invalid path", "sub_path": "filament/../../secret.json"},
+            ],
+        }
+        with patch("core.slicer_official_profiles._manifest", return_value=manifest):
+            self.assertEqual(official.official_filament_brands("2.5.0"), ["eSUN", "SUNLU"])
+            result = official.search_official_profiles(
+                "PLA", "filament", vendor="OrcaFilamentLibrary",
+                printer_model="K2", version="2.5.0", brand="eSUN")
+            self.assertEqual(result["engine_version"], "2.5.0")
+            self.assertEqual(result["ref"], "v2.5.0")
+            self.assertEqual([row["name"] for row in result["profiles"]], ["eSUN PLA+ @base"])
+            with self.assertRaises(OfficialProfileError):
+                official.search_official_profiles("PLA", "filament", "OrcaFilamentLibrary",
+                                                 version="2.5.0", brand="../wrong")
+            with self.assertRaises(OfficialProfileError):
+                official.search_official_profiles("PLA", "filament", "OrcaFilamentLibrary",
+                                                 version="2.6.0")
+
+    def test_version_specific_source_is_never_silently_relabelled(self):
+        import core.slicer_official_profiles as official
+        expected = ("filament", "eSUN PLA+ @base", "filament/eSUN/eSUN PLA+ @base.json")
+        manifest = {"name":"OrcaFilamentLibrary", "machine_list": [], "process_list": [],
+                    "filament_list":[{"name":expected[1], "sub_path":expected[2]}]}
+        raw = b'{"name":"eSUN PLA+ @base","type":"filament"}'
+        with (patch("core.slicer_official_profiles._manifest", return_value=manifest),
+              patch("core.slicer_official_profiles._get_json", return_value=({"name":expected[1], "type":"filament"},raw)) as fetch):
+            self.assertEqual(official.fetch_official_profile(*expected,"OrcaFilamentLibrary",version="2.5.0"),raw)
+            self.assertIn("/v2.5.0/",fetch.call_args.args[0])
