@@ -10,7 +10,7 @@ const source = fs.readFileSync(path.join(root, "src/components/SlicerWorkbench.j
 test("main workbench directly submits approved slicing jobs after draft creation", () => {
   assert.match(source, /onClick=\{\(\) => saveDraft\("quick"\)\}/);
   assert.match(source, /Quick slice/);
-  assert.match(source, /const sliceNow = mode !== "draft"/);
+  assert.match(source, /const sliceNow = !\["draft","project"\]\.includes\(mode\)/);
   assert.match(source, /apiFetch\("\/api\/printing\/slicer\/jobs\/" \+ job\.id \+ "\/start\/"/);
   assert.match(source, /workerConfigured && engines\.some/);
 });
@@ -117,4 +117,17 @@ test("multi-plate projects preserve every plate but slice only the active plate"
   assert.match(source,/active_plate_id:activePlateId/);
   assert.match(source,/plate_objects: plateObjects/);
   assert.match(source,/setProjectPlates\(restored\)/);
+});
+
+test("explicit slice-all creates independent queued jobs, while default Slice is unchanged",()=>{
+  assert.match(source,/if\(mode==="all"\)/);
+  assert.match(source,/for\(const target of targets\)/);
+  assert.match(source,/active_plate_id:target\.id/);
+  assert.match(source,/plate_objects:target\.objects/);
+  assert.match(source,/onSliceAll=\{\(\) => saveDraft\("all"\)\}/);
+  assert.match(source,/onSlice=\{\(\) => saveDraft\("slice"\)\}/);
+});
+test("3mf project export uses owner-scoped server endpoint",()=>{
+  assert.match(source,/export-project\//);
+  assert.match(source,/link\.download="MakerVault-project\.3mf"/);
 });
