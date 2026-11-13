@@ -6081,6 +6081,59 @@ a:focus-visible,
 }
 .slicerPrepareTree .slicerAssemblyTreePart::after{top:18px}
 
+/* Show material and assigned printer slot inside the existing compact
+   model-selection row. Never insert an extra metadata row per object. */
+.slicerPrepareTree .slicerPrepareModelEntry>button:first-child{
+  gap:6px;
+  min-width:0;
+}
+.slicerPrepareTree .slicerPrepareMaterialSwatch{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  width:32px;
+  height:32px;
+  flex:0 0 32px;
+  border-radius:50%;
+  border:1px solid #a0b0c0;
+  box-shadow:0 0 0 1px #111c2b;
+  font-size:9px;
+  font-weight:800;
+  line-height:1;
+  letter-spacing:-.25px;
+  color:#101722;
+  text-shadow:0 1px 1px #ffffffaa;
+  overflow:hidden;
+  white-space:nowrap;
+}
+.slicerPrepareTree .slicerPrepareModelName{
+  flex:1 1 auto;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.slicerPrepareTree .slicerPrepareSlotBadge{
+  display:inline-flex;
+  justify-content:center;
+  align-items:center;
+  width:25px;
+  height:25px;
+  min-width:25px;
+  flex:0 0 25px;
+  border-radius:50%;
+  font-size:11px;
+  font-weight:700;
+  color:#eaf4ff;
+  background:#244669;
+  border:1px solid #5d9bcc;
+}
+.slicerPrepareTree .slicerPrepareSlotBadge.stale{
+  border-color:#d8a059;
+  color:#ffe1a8;
+  background:#5e4226;
+}
+
 /* All model inspectors share a measured camera-row top anchor. */
 .slicerPlateCanvasViewport > .slicerViewportMeasurement,
 .slicerPlateCanvasViewport > .slicerViewportMeasurement.slicerViewportTransform,
