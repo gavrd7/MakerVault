@@ -55,3 +55,24 @@ export function paintPreview(mesh, item, fallback = "#58b5e4") {
   }
   mesh.userData.paintPreviewCache = {state, baseHex};
 }
+
+/** Fast in-progress stroke update: only touched triangles are sent to the GPU.
+ * Call paintPreview once when the stroke starts to initialise/validate colours.
+ */
+export function paintPreviewDelta(mesh, item, faces, slot, palette) {
+  const attribute = mesh?.geometry?.getAttribute("color");
+  if (!mesh?.material?.vertexColors || !attribute)
+    throw new Error("Initialise painted mesh colours before applying a stroke.");
+  const hex = slot === null ? (item?.color || "#58b5e4") : palette?.[slot]?.color;
+  if (!/^#[0-9a-f]{6}$/i.test(hex || ""))
+    throw new Error("Invalid colour paint swatch.");
+  const color = new THREE.Color(hex);
+  const max = mesh.geometry.getAttribute("position").count / 3;
+  for (const face of faces) {
+    if (!Number.isInteger(face) || face < 0 || face >= max)
+      throw new Error("Invalid updated triangle index.");
+    for (let corner=0;corner<3;corner++)
+      attribute.setXYZ(face*3+corner,color.r,color.g,color.b);
+  }
+  attribute.needsUpdate=true;
+}
