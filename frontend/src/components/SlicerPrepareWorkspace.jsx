@@ -816,7 +816,7 @@ export default function SlicerPrepareWorkspace({
   const paintSelected = objects.find(row => row.instance_id === selectedId);
   const paintPanel = toolMode === "paint_colour" && (
     <section className={"slicerColourPaintPanel"+(paintMobileMinimised?" slicerPaintMinimised":"")} aria-label="Colour painting controls"
-      style={{position:"absolute",top:"var(--slicer-overlay-top, 0px)",left:12,zIndex:20,width:"min(310px, calc(100% - 74px))",
+      style={{position:"absolute",top:"var(--slicer-paint-top, 56px)",left:12,zIndex:20,width:"min(310px, calc(100% - 74px))",
         maxHeight:"min(490px, calc(100% - 24px))",overflowY:"auto",padding:10,
         border:"1px solid #476079",borderRadius:10,background:"rgba(17,27,42,.96)",
         boxShadow:"0 8px 26px rgba(0,0,0,.4)",display:"grid",gap:8}}>
