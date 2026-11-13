@@ -6405,3 +6405,24 @@ a:focus-visible,
     min-height:32px;padding:5px 7px;font-size:.77rem;
   }
 }
+
+/* Collapsed mesh inspector retains its title and controls but releases the
+   print bed. The panel can be expanded again without losing operation state. */
+.slicerSolidModal.slicerSolidInspectorCollapsed{
+  height:auto!important;min-height:0!important;
+  max-height:60px!important;padding:7px 10px!important;overflow:hidden!important;
+}
+.slicerSolidModal.slicerSolidInspectorCollapsed > :not(.slicerAutoOrientModalHeader){
+  display:none!important;
+}
+.slicerSolidModal .slicerSolidCollapseButton{
+  flex:0 0 auto;min-width:47px;padding:5px 9px;min-height:33px;
+}
+.slicerSolidModal.slicerSolidInspectorCollapsed .slicerAutoOrientModalHeader{
+  position:static;padding:0!important;margin:0;border:0;align-items:center;
+}
+@media(max-width:740px){
+  .slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalHeader > button{
+    flex:0 0 auto;min-width:36px;
+  }
+}
