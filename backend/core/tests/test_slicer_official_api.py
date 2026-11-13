@@ -188,6 +188,61 @@ class OfficialProfileApiTests(TestCase):
         self.assertFalse(response.json()["execution_available"])
         self.addCleanup(lambda asset=profile.file_asset: asset.file.delete(save=False))
 
+    def test_orca_25_catalogue_search_and_manufacturer_brand_filter(self):
+        self.client.force_login(self.user)
+        result = self.client.get(self.url, {
+            "engine": "orcaslicer", "version": "2.5.0", "catalogues": "1",
+        })
+        self.assertEqual(result.status_code, 200)
+        self.assertIn("2.5.0", result.json()["versions"])
+        self.assertIn("OrcaFilamentLibrary", {row["id"] for row in result.json()["vendors"]})
+        with patch("core.slicer_api.official_filament_brands", return_value=["eSUN", "SUNLU"]):
+            brands = self.client.get(self.url, {
+                "engine": "orcaslicer", "version": "2.5.0",
+                "vendor": "OrcaFilamentLibrary", "brands": "1",
+            })
+        self.assertEqual(brands.status_code, 200)
+        self.assertEqual(brands.json()["brands"], ["eSUN", "SUNLU"])
+        with patch("core.slicer_api.search_official_profiles", return_value={
+            "engine": "orcaslicer", "engine_version": "2.5.0", "profiles": [],
+        }) as search:
+            found = self.client.get(self.url, {
+                "engine": "orcaslicer", "version": "2.5.0",
+                "kind": "filament", "vendor": "OrcaFilamentLibrary",
+                "brand": "eSUN", "q": "PLA",
+            })
+        self.assertEqual(found.status_code, 200)
+        search.assert_called_once_with(
+            "PLA", "filament", "OrcaFilamentLibrary",
+            printer_model=None, version="2.5.0", brand="eSUN",
+        )
+        invalid = self.client.get(self.url, {
+            "engine": "orcaslicer", "version": "2.6.0", "catalogues": "1",
+        })
+        self.assertEqual(invalid.status_code, 400)
+
+    def test_orca_25_native_import_does_not_relabel_existing_24_profile(self):
+        self.client.force_login(self.user)
+        raw = b'{"name":"eSUN PLA+ @base","type":"filament"}'
+        selection = {
+            "engine":"orcaslicer", "engine_version":"2.5.0",
+            "vendor":"OrcaFilamentLibrary", "kind":"filament",
+            "name":"eSUN PLA+ @base", "sub_path":"filament/eSUN/eSUN PLA+ @base.json",
+        }
+        with patch("core.slicer_api.official_profile_chain",
+                   return_value=[(selection["name"], selection["sub_path"], raw)]) as chain:
+            response = self.post(selection)
+        self.assertEqual(response.status_code, 201, response.content)
+        chain.assert_called_once_with(
+            "orcaslicer", "filament", selection["name"], selection["sub_path"],
+            "OrcaFilamentLibrary", version="2.5.0",
+        )
+        profile = SlicerProfile.objects.get(pk=response.json()["profile"]["id"])
+        self.assertEqual(profile.engine_version,"2.5.0")
+        self.assertEqual(profile.status,"candidate")
+        self.assertIn("@v2.5.0/OrcaFilamentLibrary/filament/eSUN/", profile.provenance)
+        self.addCleanup(lambda asset=profile.file_asset: asset.file.delete(save=False))
+
     def test_unprivileged_user_cannot_import(self):
         self.client.force_login(self.other)
         with patch("core.slicer_api.fetch_official_profile") as external:
