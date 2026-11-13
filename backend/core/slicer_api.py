@@ -26,6 +26,7 @@ from .slicer_native_resolution import resolved_native_profile
 from .slicer_native_overrides import ORCA_PLATES
 from .slicer_process_settings import process_schema, validate_process_overrides, apply_process_overrides
 from .slicer_flush_settings import validate_flush_settings
+from .slicer_colour_painting import validate_colour_paint
 from .slicer_mesh import inspect_stl, MeshInspectionError, MAX_INSPECTION_BYTES
 from .slicer_bed import inspect_orca_plate, inspect_creality_plate
 from .slicer_bed_artwork import (official_artwork_source, cached_official_artwork,
@@ -231,7 +232,7 @@ def _draft_plate_settings(user, input_asset, settings):
         required = {"instance_id", "asset_id", "x_mm", "y_mm", "rotation_deg",
                     "scale_percent", "color"}
         if (not isinstance(item, dict) or not required.issubset(item)
-                or set(item) - required - {"scale_xyz_percent", "process_overrides", "rotation_xyz_deg", "assembly_id", "z_mm", "text_model", "material_slot"}):
+                or set(item) - required - {"scale_xyz_percent", "process_overrides", "rotation_xyz_deg", "assembly_id", "z_mm", "text_model", "material_slot", "colour_paint"}):
             raise ValueError("Invalid plate model instance.")
         instance_id = str(_uuid(item["instance_id"]))
         asset_id = _uuid(item["asset_id"])
@@ -324,9 +325,12 @@ def _draft_plate_settings(user, input_asset, settings):
                     raise ValueError("Invalid editable text dimensions.")
                 numerical[key] = round(float(value), 3)
             text_fields = {"text_model": {"text": text, "font": font, **numerical}}
+        paint_fields = {}
+        if "colour_paint" in item:
+            paint_fields["colour_paint"] = validate_colour_paint(item["colour_paint"])
         saved.append({"instance_id": instance_id, "asset_id": str(asset_id),
                       **({"assembly_id": assembly_id} if assembly_id is not None else {}),
-                      **values, "color": color.lower(), **text_fields, **material_fields,
+                      **values, "color": color.lower(), **text_fields, **material_fields, **paint_fields,
                       **({"process_overrides": instance_overrides} if instance_overrides else {})})
     if saved[0]["asset_id"] != str(input_asset.pk):
         raise ValueError("The first plate model must match the selected primary STL.")
