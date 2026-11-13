@@ -197,7 +197,7 @@ test("live CFS AMS RFID slots support draft assignments without enabling unverif
   assert.match(scene, /slot\.spool_code/);
   assert.match(scene, /material_slot:materialSlot/);
   assert.match(scene, /materialRoutingPending/);
-  assert.match(scene, /native multi-material tool changes are not yet verified/);
+  assert.match(scene, /live slot-to-tool bindings and physical changeovers are not yet verified/);
 });
 
 test("icon toolbar tooltips show names and unavailable reasons on hover and focus", () => {
