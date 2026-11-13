@@ -104,6 +104,11 @@ class SliceJobApiTests(TestCase):
         })
         self.assertNotIn("plate_objects", empty_selected)
         self.assertEqual(len(empty_selected["plates"][0]["objects"]), 1)
+        from core.slicer_execution import _validate_plate_execution, SlicerExecutionError
+        empty_job = SliceJob(owner=self.owner, input_asset=self.input_asset,
+                             settings=empty_selected)
+        with self.assertRaisesRegex(SlicerExecutionError, "active build plate is empty"):
+            _validate_plate_execution(empty_job)
 
         with self.assertRaisesRegex(ValueError, "active plate must match"):
             _draft_plate_settings(self.owner, self.input_asset, {
