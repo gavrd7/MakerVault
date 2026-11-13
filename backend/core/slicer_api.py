@@ -439,6 +439,61 @@ def _cleanup_temporary_job_sources(job):
 
 @login_required
 @require_http_methods(["GET"])
+def export_project_3mf(request, job_id):
+    """Return a self-contained private 3MF project. Never send it to a printer."""
+    job = SliceJob.objects.filter(pk=job_id, owner=request.user).select_related(
+        "printer_profile").first()
+    if not job:
+        return _error("Slicer draft not found.", 404)
+    settings = job.settings or {}
+    plates = settings.get("plates") or [{
+        "id": "plate-1",
+        "name": settings.get("plate_label", "Plate 1"),
+        "objects": settings.get("plate_objects", []),
+    }]
+    try:
+        from .slicer_bed_dimensions import trusted_plate_dimensions
+        from .slicer_execution import _read_owned_file, MAX_INPUT
+        from .slicer_plate_3mf import build_makervault_project_3mf
+        width, depth = trusted_plate_dimensions(job.printer_profile)
+        ids = {str(item["asset_id"]) for plate in plates for item in plate["objects"]}
+        owned = {str(asset.pk): asset for asset in FileAsset.objects.filter(
+            owner=request.user, category="mesh", pk__in=ids)}
+        if len(owned) != len(ids):
+            raise ValueError("Some project STL assets are no longer available.")
+        raw = {ident:_read_owned_file(asset, request.user.pk, MAX_INPUT, "Project STL")
+               for ident, asset in owned.items()}
+        rows = [(plate["name"], [(item, raw[str(item["asset_id"])])
+                 for item in plate["objects"]]) for plate in plates]
+        config = {
+            "format": "makervault-project-v1",
+            "active_plate_id": settings.get("active_plate_id", plates[0]["id"]),
+            "plates": plates,
+            "printer": {"id": str(job.printer_id),
+                        "profile_id": str(job.printer_profile_id or ""),
+                        "preset": job.printer_preset},
+            "filament": {"profile_id": str(job.filament_profile_id or ""),
+                         "preset": job.filament_preset,
+                         "spool_id": str(job.spool_id or "")},
+            "process": {"profile_id": str(job.process_profile_id or ""),
+                        "preset": job.process_preset,
+                        "overrides": settings.get("process_overrides", {})},
+            "engine": job.engine, "engine_version": job.engine_version,
+            "nozzle_mm": str(job.nozzle_mm),
+            "build_volume_mm": [width, depth],
+        }
+        archive = build_makervault_project_3mf(rows, bed_width=width,
+                                               bed_depth=depth, metadata=config)
+    except (ValueError, OSError, SlicerProfileError, SlicerExecutionError) as exc:
+        return _error(str(exc), 422)
+    response = HttpResponse(archive, content_type="model/3mf")
+    response["Content-Disposition"] = 'attachment; filename="MakerVault-project.3mf"'
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+@login_required
+@require_http_methods(["GET"])
 def inspect_mesh(request, asset_id):
     """Source-file dimensions only; never an implied build-plate compatibility check."""
     asset = FileAsset.objects.filter(
