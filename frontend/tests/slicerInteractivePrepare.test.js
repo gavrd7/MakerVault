@@ -114,10 +114,11 @@ test("active 3D model has a temporary outline and preserves preview filament col
 test("advanced tools are visibly gated pending safe native transformations", () => {
   const scene = read("SlicerPrepareWorkspace.jsx");
   for (const tool of ["Support painting", "Seam painting", "Variable layer height",
-                       "Colour painting", "Add plate"]) {
+                       "Colour painting"]) {
     assert.match(scene, new RegExp('name: "' + tool + '", icon: "[^"]+", pending:'));
   }
   assert.match(scene, /disabled=\{!!tool.pending/);
+  assert.match(scene, /name: "Add plate", target: "add_plate"/);
   assert.match(scene, /name: "Lay on face", target: "lay_face", icon: "face"/);
   assert.match(scene, /name: "Auto-orient", target: "auto_orient", icon: "orient"/);
   for (const group of ["Quality", "Strength", "Speed", "Supports", "Multifilament", "Others"])
@@ -644,7 +645,8 @@ test("model toolbar renders immediately above the interactive build plate, not i
   const plate = read("SlicerPlateEditor.jsx");
   const styles = fs.readFileSync(path.resolve(root, "../styles.css"), "utf8");
   assert.match(scene, /const modelToolbar = \(/);
-  assert.match(scene, /<SlicerPlateEditor toolbar=\{modelToolbar\}/);
+  assert.match(scene, /<SlicerPlateEditor key=\{activePlateId\} plateIndex=/);
+  assert.match(scene, /toolbar=\{modelToolbar\}/);
   const header = scene.slice(scene.indexOf('className="slicerPrepareHeader"'),
     scene.indexOf('className="slicerMobilePaneTabs"'));
   assert.doesNotMatch(header, /className="slicerPrepareTools"/);
@@ -716,4 +718,15 @@ test("negative volume warns if the subtraction shape misses the model",()=>{
   const editor=read("SlicerPlateEditor.jsx");
   assert.match(editor,/if \(!targetBounds\.intersectsBox\(toolBounds\)\)/);
   assert.match(editor,/Negative shape does not intersect the selected model/);
+});
+
+test("project plates can be added and switched without sharing selection history",()=>{
+  const scene=read("SlicerPrepareWorkspace.jsx");
+  assert.match(scene,/className="slicerPlateProjectNav"/);
+  assert.match(scene,/plates\.map\(\(item,index\)=>/);
+  assert.match(scene,/onChoosePlate\?\.\(item\.id\)/);
+  assert.match(scene,/onAddPlate\?\.\(\)/);
+  assert.match(scene,/onRemovePlate\?\.\(activePlateId\)/);
+  assert.match(scene,/undoRef\.current=\[\];redoRef\.current=\[\]/);
+  assert.match(scene,/key=\{activePlateId\}/);
 });
