@@ -50,7 +50,7 @@ export default function SlicerPrepareWorkspace({
   plates = [], activePlateId = "plate-1", onChoosePlate, onAddPlate, onRemovePlate, onMoveModelsToPlate,
   onPlateLabelChange, onPrimaryChange, onFilesUploaded,
   defaultColor, onManualColorChange, canEdit, busy, error, notice,
-  onChangeProfiles, onOpenDevice, onSaveDraft, onSlice, engine, printer,
+  onChangeProfiles, onOpenDevice, onSaveDraft, onSaveProject, onSlice, onSliceAll, engine, printer,
   selectedProfiles, workerConfigured, printerId,
   processOverrides = {}, onProcessOverridesChange, onSaveCustomProcessProfile,
   processProfiles = [], onSelectProcessProfile, onResetProcessSettings,
@@ -67,6 +67,7 @@ export default function SlicerPrepareWorkspace({
   const [selectedIds, setSelectedIds] = useState([]);
   const [expandedAssemblies, setExpandedAssemblies] = useState([]);
   const [movePlateTarget,setMovePlateTarget]=useState("");
+  const [sliceMenuOpen,setSliceMenuOpen]=useState(false);
   const selectSingle = id => { setSelectedId(id); setSelectedIds(id ? [id] : []); };
   const selectMultiple = (id, additive = false, partOnly = false) => {
     const item = objects.find(row => row.instance_id === id);
@@ -1083,11 +1084,29 @@ export default function SlicerPrepareWorkspace({
       </div>
       <div className="settingsActions">
         {plates.length>1 && <p className="slicerPlateSliceScope" role="status">
-          Save draft preserves all {plates.length} plates. Slicing uses only <strong>{plateLabel}</strong>.
+          Save draft and project export preserve all {plates.length} plates. The main Slice button uses <strong>{plateLabel}</strong>.
         </p>}
         <button type="button" disabled={!plateReady || !profilesReady} onClick={onSaveDraft}>Save draft</button>
-        <button type="button" className="primary" disabled={!activePlateReady || !profilesReady || !workerConfigured || conflictsBlockSlice || objectSettingsPending}
-          onClick={onSlice}>Slice active plate and preview</button>
+        <button type="button" disabled={!plateReady || !profilesReady} onClick={onSaveProject}>Save project (.3mf)</button>
+        <div className="slicerSliceSplit">
+          <button type="button" className="primary"
+            disabled={!activePlateReady || !profilesReady || !workerConfigured || conflictsBlockSlice || objectSettingsPending}
+            onClick={onSlice}>Slice</button>
+          <button type="button" aria-label="More slicing options"
+            aria-haspopup="menu" aria-expanded={sliceMenuOpen}
+            disabled={!plateReady || !profilesReady || !workerConfigured}
+            onClick={()=>setSliceMenuOpen(value=>!value)}>▾</button>
+          {sliceMenuOpen && <div className="slicerSliceMenu" role="menu">
+            <button type="button" role="menuitem"
+              disabled={!activePlateReady || conflictsBlockSlice || objectSettingsPending}
+              onClick={()=>{setSliceMenuOpen(false);onSlice?.();}}>Slice active plate</button>
+            <button type="button" role="menuitem"
+              disabled={!projectHasModels || objectSettingsPending}
+              onClick={()=>{setSliceMenuOpen(false);onSliceAll?.();}}>
+              Slice all plates ({plates.filter(plate=>plate.objects.length).length})
+            </button>
+          </div>}
+        </div>
       </div>
     </div>
   </section>;
