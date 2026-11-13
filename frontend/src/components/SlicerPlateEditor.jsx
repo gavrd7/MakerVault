@@ -3298,7 +3298,14 @@ export default function SlicerPlateEditor({
         </select>
       </label>
       <div className="settingsActions">
-        <button type="button" onClick={() => addAsset(assetChoice)} disabled={!canEdit || !assetChoice || uploadBusy || objects.length >= MAX_OBJECTS}>Add STL to plate</button>
+        <button type="button" onClick={event => {
+          // The file picker is below the viewport: return to the interactive
+          // slicer after the selected STL has been placed on its active plate.
+          const platePanel=event.currentTarget.closest("#slicer-prepare-plate");
+          addAsset(assetChoice);
+          if(platePanel) requestAnimationFrame(() =>
+            platePanel.scrollIntoView({behavior:"smooth",block:"start"}));
+        }} disabled={!canEdit || !assetChoice || uploadBusy || objects.length >= MAX_OBJECTS}>Add STL to plate</button>
       </div>
       <label className="full">Add STL or 3MF files from your device
         <input type="file" accept=".stl,.3mf" multiple onChange={uploadFiles} disabled={!canEdit || uploadBusy || objects.length >= MAX_OBJECTS} />
