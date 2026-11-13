@@ -115,6 +115,7 @@ test("compact filament rows and the flush spreadsheet keep actions readable",()=
   assert.match(flushing,/slicerFlushCell/);
   assert.match(css,/\.slicerFlushMatrix \.slicerFlushCell/);
   assert.match(css,/\.slicerLiveMaterialSlotCompact \.slicerLiveMaterialActions/);
+  assert.match(css,/grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
 });
 
 test("adding an existing MakerVault STL returns to the interactive plate",()=>{
