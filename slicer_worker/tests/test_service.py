@@ -51,6 +51,33 @@ class SlicerWorkerProtocolTests(TestCase):
             with patch.dict(os.environ, {k: v for k, v in settings.items() if k != "SLICER_ENGINE_BINARY_SHA256"}, clear=True):
                 self.assertIsNone(configured_engine())
 
+
+    def test_multi_filament_payload_rejects_malformed_and_cross_engine_palettes(self):
+        import io
+        import zipfile
+        from unittest.mock import patch
+        payload = self.payload()
+        payload["engine"] = "orcaslicer"
+        payload["model_format"] = "3mf"
+        profile = payload["filament_profile"]
+        payload["filament_profiles"] = [profile, profile]
+        # Geometry validity is tested separately; isolate protocol validation.
+        with patch("slicer_worker.service.validate_worker_3mf") as validate:
+            decoded = _decode_payload(payload)
+            self.assertEqual(decoded["filament_profiles"], [b"filament = 1"] * 2)
+            validate.assert_called_once_with(decoded["model"], native_tool_count=2)
+        for change in (
+            {"engine": "prusaslicer"},
+            {"model_format": "stl"},
+            {"filament_profiles": [profile]},
+            {"filament_profiles": [profile, "not-base64"]},
+            {"filament_profiles": [profile, base64.b64encode(b"other").decode()]},
+            {"filament_profiles": "not-a-list"},
+        ):
+            with self.subTest(change=change):
+                with self.assertRaises(WorkerError):
+                    _decode_payload({**payload, **change})
+
     def test_fixed_payload_accepts_only_bounded_inputs(self):
         decoded = _decode_payload(self.payload())
         self.assertEqual(decoded["model"], b"stl")
