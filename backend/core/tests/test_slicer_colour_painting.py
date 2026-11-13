@@ -40,3 +40,33 @@ class ColourPaintDraftTests(SimpleTestCase):
         for value in variants:
             with self.subTest(value=value), self.assertRaises(ValueError):
                 validate_colour_paint(value)
+
+    def test_v2_draft_preserves_precise_surface_polygons(self):
+        paint = {
+            "version": 2, "signature": "12:abcdef01",
+            "palette": self.paint["palette"],
+            "regions": [{"slot": 1, "patches": [
+                {"face": 0, "polygon": [[0, 0, 4], [2, 0, 4], [0, 2, 9]]}
+            ]}],
+        }
+        saved = validate_colour_paint(paint)
+        self.assertEqual(saved["version"], 2)
+        self.assertEqual(saved["regions"][0]["patches"][0]["polygon"],
+                         [[0.0, 0.0, 4.0], [2.0, 0.0, 4.0], [0.0, 2.0, 9.0]])
+        self.assertEqual(saved["palette"][1]["slot_id"], "CFS-B-2")
+
+    def test_v2_rejects_invalid_or_unbounded_patches(self):
+        base = {
+            "version": 2, "signature": "12:abcdef01",
+            "palette": self.paint["palette"], "regions": [],
+        }
+        cases = (
+            [{"slot": 2, "patches": [{"face": 0, "polygon": [[0, 0, 0]] * 3}]}],
+            [{"slot": 0, "patches": [{"face": 12, "polygon": [[0, 0, 0]] * 3}]}],
+            [{"slot": 0, "patches": [{"face": 0, "polygon": [[0, 0, 0]] * 2}]}],
+            [{"slot": 0, "patches": [{"face": 0, "polygon": [[float("nan"), 0, 0]] * 3}]}],
+            [{"slot": 0, "patches": [{"face": 0, "polygon": [[True, 0, 0]] * 3}]}],
+        )
+        for regions in cases:
+            with self.subTest(regions=regions), self.assertRaises(ValueError):
+                validate_colour_paint({**base, "regions": regions})
