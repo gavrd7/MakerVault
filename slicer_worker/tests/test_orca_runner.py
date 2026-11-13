@@ -36,6 +36,30 @@ class OrcaRunnerTests(TestCase):
         self.assertEqual(cmd[cmd.index("--load-filaments") + 1], str(self.root / "filament.json"))
         self.assertIn(str(self.root / "process.json") + ";" + str(self.root / "printer.json"), cmd)
 
+
+    def test_ordered_native_multi_filament_cli_requires_explicit_3mf_tools(self):
+        from unittest.mock import patch
+        project = self.root / "input.3mf"
+        project.write_bytes(b"bounded test 3mf")
+        (self.root / "filament-0.json").write_text('{"name":"First"}')
+        (self.root / "filament-1.json").write_text('{"name":"Second"}')
+        with patch("slicer_worker.orca_runner.validate_worker_3mf") as validate:
+            command = orca_command(self.binary, self.root)
+        self.assertEqual(command[command.index("--load-filaments") + 1],
+                         str(self.root / "filament-0.json") + ";" +
+                         str(self.root / "filament-1.json"))
+        self.assertEqual(command[command.index("--arrange") + 1], "0")
+        self.assertTrue(any(call.kwargs.get("native_tool_count") == 2
+                            for call in validate.call_args_list))
+
+    def test_native_multi_filament_cli_rejects_missing_intermediate_profile(self):
+        (self.root / "input.3mf").write_bytes(b"bounded test 3mf")
+        (self.root / "filament-0.json").write_text('{"name":"First"}')
+        (self.root / "filament-2.json").write_text('{"name":"Third"}')
+        with patch("slicer_worker.orca_runner.validate_worker_3mf"):
+            with self.assertRaisesRegex(WorkerError, "Non-contiguous"):
+                orca_command(self.binary, self.root)
+
     def test_experimental_native_plate_modes_are_probe_only(self):
         with self.assertRaisesRegex(WorkerError, "requires a 3MF input"):
             orca_command(self.binary, self.root, experimental_all_plates=True)
