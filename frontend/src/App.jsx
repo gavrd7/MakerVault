@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { AllCommunityModule, ModuleRegistry } from "ag-grid-community";
 import { apiFetch } from "./api";
+import { installRegionalSpelling, spellingVariant } from "./regionalSpelling";
 import BoardsPage, { ImportBoardModal } from "./components/BoardsPage";
 import ComponentsPage from "./components/ComponentsPage";
 import { consumePrinterIntent } from "./components/printerNavigation";
@@ -44,6 +45,12 @@ export default function App() {
   const [components, setComponents] = useState([]);
   const [projects, setProjects] = useState([]);
   const [config, setConfig] = useState(null);
+  useEffect(()=>{
+    if(!config)return undefined;
+    document.documentElement.lang=spellingVariant(config.timezone);
+    return installRegionalSpelling(document.body,config.timezone);
+  },[config?.timezone]);
+
   const [slicerStatus, setSlicerStatus] = useState({ state: "checking" });
   const [pendingSlicerNavigation, setPendingSlicerNavigation] = useState(false);
   const [error, setError] = useState("");
