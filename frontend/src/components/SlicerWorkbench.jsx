@@ -248,6 +248,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [importKind, setImportKind] = useState("printer");
   const [officialQuery, setOfficialQuery] = useState("");
   const [officialVendor, setOfficialVendor] = useState("");
+  const [officialProfileVersion, setOfficialProfileVersion] = useState("2.5.0");
+  const [officialProfileVersions, setOfficialProfileVersions] = useState([]);
+  const [officialBrand, setOfficialBrand] = useState("");
+  const [officialBrands, setOfficialBrands] = useState([]);
   const [officialVendors, setOfficialVendors] = useState([]);
   const [officialSourceInfo, setOfficialSourceInfo] = useState(null);
   const [officialResults, setOfficialResults] = useState(null);
@@ -838,7 +842,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     setOfficialModels([]);
     setOfficialModel("");
     apiFetch("/api/printing/slicer/official-profiles/?" + new URLSearchParams({
-      engine: form.engine, vendor: officialVendor, models: "1",
+      engine: form.engine, vendor: officialVendor, version: officialProfileVersion, models: "1",
     }).toString()).then(result => {
       if (!active) return;
       const models = result.models || [];
@@ -857,7 +861,19 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       }
     }).finally(() => { if (active) setOfficialModelsBusy(false); });
     return () => { active = false; };
-  }, [profileModal, officialVendor, form.engine, selectedPrinter?.id, selectedPrinter?.model, selectedPrinter?.name]);
+  }, [profileModal, officialVendor, officialProfileVersion, form.engine, selectedPrinter?.id, selectedPrinter?.model, selectedPrinter?.name]);
+  useEffect(() => {
+    if (profileModal !== "search" || form.engine !== "orcaslicer" ||
+        officialVendor !== "OrcaFilamentLibrary" || importKind !== "filament") {
+      setOfficialBrands([]);setOfficialBrand("");return undefined;
+    }
+    let active = true;
+    apiFetch("/api/printing/slicer/official-profiles/?" + new URLSearchParams({
+      engine:form.engine,version:officialProfileVersion,vendor:officialVendor,brands:"1",
+    })).then(result=>{if(active)setOfficialBrands(result.brands||[]);})
+      .catch(err=>{if(active)setOfficialError(err.message||"Could not load filament manufacturers.");});
+    return ()=>{active=false;};
+  },[profileModal,form.engine,officialVendor,officialProfileVersion,importKind]);
 
   async function searchOfficialProfiles(event) {
     event.preventDefault();
@@ -867,7 +883,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       // matches tokens anywhere in native preset names, in any order.
       const q = [officialManualModel.trim(), officialQuery.trim()].filter(Boolean).join(" ").trim();
       if (q.length < 2 || q.length > 80) throw new Error("Enter 2–80 characters across the manual model and preset searches.");
-      const params = new URLSearchParams({ q, kind: importKind, vendor: officialVendor, engine: form.engine });
+      const params = new URLSearchParams({q, kind:importKind,vendor:officialVendor,
+        engine:form.engine,version:officialProfileVersion});
+      if(officialBrand && importKind==="filament" && officialVendor==="OrcaFilamentLibrary")
+        params.set("brand",officialBrand);
       if (!officialManualModel.trim() && officialModel) params.set("model", officialModel);
       const result = await apiFetch("/api/printing/slicer/official-profiles/?" + params.toString());
       setOfficialResults(result);
@@ -903,6 +922,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         method: "POST",
         body: {
           kind: importKind, vendor: officialVendor, engine: form.engine,
+          engine_version: officialProfileVersion,
           name: candidate.name, sub_path: candidate.sub_path,
         },
       });
@@ -1080,14 +1100,17 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     }
   }
 
-  async function loadOfficialVendors() {
+  async function loadOfficialVendors(version = officialProfileVersion, kind = importKind) {
     try {
-      const params = new URLSearchParams({ engine: form.engine, catalogues: "1" });
+      const params = new URLSearchParams({engine:form.engine,version,catalogues:"1"});
       const response = await apiFetch("/api/printing/slicer/official-profiles/?" + params.toString());
       const vendors = response.vendors || [];
       setOfficialSourceInfo(response);
       setOfficialVendors(vendors);
-      setOfficialVendor(suggestOfficialVendor(selectedPrinter, vendors));
+      setOfficialProfileVersions(response.versions || []);
+      setOfficialVendor(form.engine==="orcaslicer" && kind==="filament" &&
+        vendors.some(row=>row.id==="OrcaFilamentLibrary")
+        ? "OrcaFilamentLibrary" : suggestOfficialVendor(selectedPrinter,vendors));
     } catch (err) {
       setOfficialVendors([]);
       setOfficialSourceInfo(null);
@@ -1098,13 +1121,17 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   function openOfficialSearch(kind = materialHint ? "filament" : form.printer_id ? "printer" : "process") {
     setImportKind(["bambustudio", "prusaslicer"].includes(form.engine) ? "printer" : kind);
     setOfficialVendor("");
+    const targetVersion = form.engine==="orcaslicer" &&
+      ["2.4.2","2.5.0"].includes(form.engine_version) ? form.engine_version : "2.5.0";
+    setOfficialProfileVersion(targetVersion);
+    setOfficialProfileVersions([]);setOfficialBrand("");setOfficialBrands([]);
     setOfficialModel("");
     setOfficialManualModel("");
     setOfficialModels([]);
     setOfficialVendors([]);
     setOfficialSourceInfo(null);
     setOfficialError("");
-    loadOfficialVendors();
+    loadOfficialVendors(targetVersion, kind);
     setOfficialQuery(defaultOfficialSearch(kind, { printer: selectedPrinter, spool: selectedSpool, nozzle: form.nozzle_mm }));
     setOfficialResults(null); // Never carry results into another engine/vendor catalogue.
     setOfficialImportNotice("");
@@ -1564,23 +1591,50 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               <option value={form.engine}>{engines.find(engine => engine.key === form.engine)?.label || form.engine}</option>
             </select>
           </label>
+          {form.engine==="orcaslicer" && <label>Native OrcaSlicer profile release
+            <select aria-label="Official OrcaSlicer profile version"
+              value={officialProfileVersion} disabled={officialBusy}
+              onChange={e=>{
+                setOfficialProfileVersion(e.target.value);setOfficialVendor("");
+                setOfficialBrand("");setOfficialModels([]);setOfficialResults(null);
+                loadOfficialVendors(e.target.value,importKind);
+              }}>
+              {(officialProfileVersions.length?officialProfileVersions:["2.4.2","2.5.0"])
+                .map(version=><option key={version} value={version}>{version}</option>)}
+            </select>
+          </label>}
           <label>Manufacturer / upstream catalogue
             <select value={officialVendor} disabled={officialBusy || !officialVendors.length} onChange={e => {
-              setOfficialVendor(e.target.value); setOfficialResults(null);
+              setOfficialVendor(e.target.value);setOfficialBrand("");setOfficialResults(null);
             }}>
               {officialVendors.map(vendor => <option key={vendor.id} value={vendor.id}>{vendor.label}</option>)}
               {!officialVendors.length && <option value="">No catalogue loaded</option>}
             </select>
           </label>
+          {form.engine==="orcaslicer" && importKind==="filament" &&
+            officialVendor==="OrcaFilamentLibrary" && <label>Filament manufacturer
+              <select aria-label="Filament manufacturer" value={officialBrand}
+                onChange={e=>{setOfficialBrand(e.target.value);setOfficialResults(null);}}>
+                <option value="">All manufacturers</option>
+                {officialBrands.map(brand=><option key={brand} value={brand}>{brand}</option>)}
+              </select>
+            </label>}
           <label>Printer model
-            <select value={officialModel} disabled={officialModelsBusy || !officialVendor}
+            <select value={officialModel} disabled={officialModelsBusy || !officialVendor || officialVendor==="OrcaFilamentLibrary"}
               onChange={e => { setOfficialModel(e.target.value); setOfficialResults(null); }}>
               <option value="">All models / generic profiles</option>
               {officialModels.map(model => <option key={model} value={model}>{model}</option>)}
             </select>
           </label>
           <label>Profile type
-            <select value={importKind} disabled={officialBusy} onChange={e => { setImportKind(e.target.value); setOfficialQuery(defaultOfficialSearch(e.target.value, { printer: selectedPrinter, spool: selectedSpool, nozzle: form.nozzle_mm })); setOfficialResults(null); setOfficialImportNotice(""); }}>
+            <select value={importKind} disabled={officialBusy} onChange={e => {
+                const kind=e.target.value;
+                setImportKind(kind);setOfficialResults(null);setOfficialImportNotice("");setOfficialBrand("");
+                setOfficialQuery(defaultOfficialSearch(kind,{printer:selectedPrinter,spool:selectedSpool,nozzle:form.nozzle_mm}));
+                if(form.engine==="orcaslicer" && kind==="filament" &&
+                    officialVendors.some(v=>v.id==="OrcaFilamentLibrary"))
+                  setOfficialVendor("OrcaFilamentLibrary");
+              }}>
               <option value="printer">Printer / machine</option>
               <option value="filament">Filament</option>
               <option value="process">Process</option>
@@ -1604,6 +1658,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         <div className="full settingsActions slicerOfficialImportAlternative"><button type="button" onClick={() => { setProfileModal("import"); setOfficialError(""); }}>Import native profile file instead</button></div>
         {officialError && <p className="integrationError" role="alert">{officialError}</p>}
         {officialImportNotice && <p role="status" className="slicerProfileImportNotice">{officialImportNotice}</p>}
+        {form.engine==="orcaslicer" && officialVendor==="OrcaFilamentLibrary" &&
+          <p className="slicerPlateHint">Native filament manufacturer presets are imported as candidates
+            from the selected OrcaSlicer release. Parent presets and printer compatibility must be verified before slicing.</p>}
         {officialResults && <div className="printingStack" role="region" aria-label="Official profile search results">
           <p>{officialResults.total_matches} matching official presets in {officialResults.vendor} · showing up to {officialResults.profiles.length} · original upstream release {officialResults.ref}{officialResults.printer_model_filter ? " · filtered for " + officialResults.printer_model_filter + " (name-based, not verified compatibility)" : ""}</p>
           {officialResults.profiles.map(candidate => <div className="cameraSourceRow" key={candidate.sub_path}>
