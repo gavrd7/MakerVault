@@ -23,8 +23,8 @@ test("a failed worker queue leaves a visible, retrievable saved draft", () => {
 
 test("visual build plate is the only model selector for slicing", () => {
   assert.doesNotMatch(source, /<label className="full">Model STL/);
-  assert.match(source, /input_asset_id: plateObjects\[0\]\.asset_id/);
-  assert.match(source, /if \(!plateObjects\.length\)/);
+  assert.match(source, /input_asset_id: plateObjects\[0\]\?\.asset_id/);
+  assert.match(source, /sliceNow\?plateObjects\.length:projectPlates\.some/);
   assert.match(source, /!plateObjects\.length \|\| !printers\.length/);
 });
 
@@ -108,4 +108,13 @@ test("temporary models are supported without adding STL to the files library", (
 test("failed jobs expose a delete action while active jobs remain protected", () => {
   assert.match(source, /mayDeleteDraft && \["draft", "failed", "cancelled", "stale"\]\.includes\(job\.status\)/);
   assert.match(source, /job\.status === "draft" \? "Delete draft" : "Delete"/);
+});
+
+test("multi-plate projects preserve every plate but slice only the active plate",()=>{
+  assert.match(source,/const \[projectPlates,setProjectPlates\]/);
+  assert.match(source,/const \[activePlateId,setActivePlateId\]/);
+  assert.match(source,/plates:projectPlates\.map/);
+  assert.match(source,/active_plate_id:activePlateId/);
+  assert.match(source,/plate_objects: plateObjects/);
+  assert.match(source,/setProjectPlates\(restored\)/);
 });
