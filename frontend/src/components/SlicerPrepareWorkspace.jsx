@@ -68,6 +68,7 @@ export default function SlicerPrepareWorkspace({
   const [expandedAssemblies, setExpandedAssemblies] = useState([]);
   const [movePlateTarget,setMovePlateTarget]=useState("");
   const [sliceMenuOpen,setSliceMenuOpen]=useState(false);
+  const [showAllPlates,setShowAllPlates]=useState(false);
   const selectSingle = id => { setSelectedId(id); setSelectedIds(id ? [id] : []); };
   const selectMultiple = (id, additive = false, partOnly = false) => {
     const item = objects.find(row => row.instance_id === id);
@@ -1029,10 +1030,13 @@ export default function SlicerPrepareWorkspace({
       <div id="slicer-prepare-plate" className="slicerPrepareScene" ref={editorRef} aria-labelledby="slicer-mobile-tab-plate">
       <div className="slicerPlateProjectNav" role="group" aria-label="Project build plates">
         <div className="slicerPlateProjectTabs">
+          {plates.length>1 && <button type="button"
+            className={showAllPlates?"active":""} aria-pressed={showAllPlates}
+            onClick={()=>setShowAllPlates(true)}><SlicerUiIcon name="plates-overview" size={16}/> All plates</button>}
           {plates.map((item,index)=><button key={item.id} type="button"
             className={item.id===activePlateId?"active":""}
             aria-current={item.id===activePlateId?"true":undefined}
-            onClick={()=>onChoosePlate?.(item.id)}>
+            onClick={()=>{setShowAllPlates(false);onChoosePlate?.(item.id);}}>
             {item.name || "Plate "+(index+1)}
             <span className="slicerPlateProjectCount">{item.objects.length}</span>
           </button>)}
@@ -1048,7 +1052,49 @@ export default function SlicerPrepareWorkspace({
           <strong>Lay on face:</strong> Tap or click the model face you want touching the build plate.
           MakerVault will rotate the model and place it back on the bed. Select the tool again to cancel.
         </p>}
-        <SlicerPlateEditor key={activePlateId} plateIndex={Math.max(0,plates.findIndex(item=>item.id===activePlateId))} plateCount={plates.length||1} toolbar={modelToolbar} files={files} localAssets={localAssets}
+        {showAllPlates && plates.length>1 ? <section className="slicerAllPlates" aria-label="All build plates overview">
+          <div className="slicerAllPlatesHeading">
+            <strong>All build plates</strong>
+            <span>{plates.length} plates · {plates.reduce((sum,item)=>sum+item.objects.length,0)} models</span>
+          </div>
+          <div className="slicerAllPlatesGrid">
+            {plates.map((entry,index)=>{
+              const width=Number(plate?.size_mm?.[0])||260;
+              const depth=Number(plate?.size_mm?.[1])||260;
+              return <button type="button" key={entry.id}
+                className="slicerAllPlatesCard"
+                onClick={()=>{setShowAllPlates(false);onChoosePlate?.(entry.id);}}
+                aria-label={"Edit "+entry.name+", "+entry.objects.length+" models"}>
+                <span className="slicerAllPlatesCardTitle">
+                  <strong>{index+1}. {entry.name}</strong>
+                  <small>{entry.objects.length} models</small>
+                </span>
+                <svg viewBox="0 0 260 260" role="img"
+                  aria-label={"Top-down plate placements for "+entry.name}>
+                  <rect x="5" y="5" width="250" height="250" rx="5" fill="#293744" stroke="#6eaac5" strokeWidth="2"/>
+                  {Array.from({length:9},(_,line)=>
+                    <React.Fragment key={line}>
+                      <path d={`M${30+line*25} 5V255`} stroke="#506478" strokeWidth=".5"/>
+                      <path d={`M5 ${30+line*25}H255`} stroke="#506478" strokeWidth=".5"/>
+                    </React.Fragment>)}
+                  {entry.objects.map((item,itemIndex)=>{
+                    const x=130+Number(item.x_mm||0)*250/width;
+                    const y=130-Number(item.y_mm||0)*250/depth;
+                    const angle=-Number(item.rotation_deg||0);
+                    return <g key={item.instance_id}
+                      transform={`translate(${Math.max(8,Math.min(252,x))} ${Math.max(8,Math.min(252,y))}) rotate(${angle})`}>
+                      <rect x="-9" y="-9" width="18" height="18" rx="2"
+                        fill={/^#[0-9a-f]{6}$/i.test(item.color||"")?item.color:"#8c80d9"}
+                        stroke="#e8f3ff" strokeWidth="1" opacity=".88"/>
+                      {itemIndex<25&&<text x="0" y="3" textAnchor="middle" fontSize="8" fill="#111827">{itemIndex+1}</text>}
+                    </g>;
+                  })}
+                </svg>
+                <span className="slicerAllPlatesOpen">Open plate for editing</span>
+              </button>;
+            })}
+          </div>
+        </section> : <SlicerPlateEditor key={activePlateId} plateIndex={Math.max(0,plates.findIndex(item=>item.id===activePlateId))} plateCount={plates.length||1} toolbar={modelToolbar} files={files} localAssets={localAssets}
           onLocalAssetsChange={onLocalAssetsChange} onPlateIssuesChange={onPlateIssuesChange} objects={objects} onChange={updatePlate}
           onPrimaryChange={onPrimaryChange} onFilesUploaded={onFilesUploaded}
           onManualColorChange={onManualColorChange} defaultColor={defaultColor}
@@ -1062,7 +1108,7 @@ export default function SlicerPrepareWorkspace({
           measureMode={measureMode} measureUnit={measureUnit} measureSnapMode={measureSnapMode}
           measureClearVersion={measureClearVersion}
           onMeasurePinPlaced={() => setMeasureOptionsOpen(false)}
-          onExitToolMode={() => setToolMode("select")} />
+          onExitToolMode={() => setToolMode("select")} />}
       </div>
       {settingsExpanded ? createPortal(
         <div className="slicerSettingsModalBackdrop" role="presentation"
