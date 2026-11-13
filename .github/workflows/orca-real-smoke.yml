@@ -119,9 +119,8 @@ jobs:
           python3 scripts/build_slicer_colour_fixture.py \
             --filament /tmp/makervault-orca-k2/filament.json \
             --output /tmp/makervault-orca-k2-white.json --colour '#FFFFFF'
-      - name: Verify separate K2 black and white PLA native presets (experimental)
+      - name: Require separate K2 black and white PLA native presets (offline)
         id: k2_distinct_colour
-        continue-on-error: true
         run: |
           python3 scripts/probe_slicer_staging.py \
             --printer /tmp/makervault-orca-k2/printer.json \
@@ -146,9 +145,8 @@ jobs:
             --second-filament /tmp/makervault-orca-k2/filament.json \
             --process /tmp/makervault-orca-k2-flush-only.json \
             --model /tmp/makervault-orca-two-tool.3mf
-      - name: Probe K2 native flush matrix and prime tower (experimental; no printer)
+      - name: Require K2 native directional flushing, changeovers and prime tower (offline)
         id: k2_flush_tower
-        continue-on-error: true
         run: |
           python3 scripts/probe_slicer_staging.py \
             --printer /tmp/makervault-orca-k2/printer.json \
