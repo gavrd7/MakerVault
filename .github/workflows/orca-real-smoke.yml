@@ -40,7 +40,7 @@ jobs:
             --object-infill-output /tmp/makervault-orca-infill-only.3mf \
             --object-infill-reverse-output /tmp/makervault-orca-infill-reversed.3mf \
             --material-output /tmp/makervault-orca-two-tool.3mf
-      - name: Download SHA-256 verified official Orca 2.4.2 and build isolated image
+      - name: Download SHA-256 verified official Orca 2.5.0 and build isolated image
         run: python3 scripts/install_slicer_staging.py prepare-orca
       - name: Check restricted worker loads real executable
         shell: bash
@@ -130,7 +130,7 @@ jobs:
             --filament /tmp/makervault-orca-k1/filament.json \
             --process /tmp/makervault-orca-k1/process.json \
             --model /tmp/makervault-orca-plate.3mf
-      - name: Probe real Orca 2.4.2 with distinct per-object wall/infill settings
+      - name: Probe real Orca 2.5.0 with distinct per-object wall/infill settings
         id: native_object_settings
         continue-on-error: true
         run: |
@@ -206,7 +206,7 @@ jobs:
         shell: bash
         run: |
           {
-            echo "### Per-object Orca 2.4.2 evidence"
+            echo "### Per-object Orca 2.5.0 evidence"
             echo "- Normal assignments: ${{ steps.native_object_effects.outcome }}"
             echo "- Reversed assignments: ${{ steps.native_object_reverse.outcome }}"
             echo "- Wall-only original/reversed: ${{ steps.native_wall_effect.outcome }} / ${{ steps.native_wall_reverse.outcome }}"
