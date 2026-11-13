@@ -730,3 +730,35 @@ test("project plates can be added and switched without sharing selection history
   assert.match(scene,/undoRef\.current=\[\];redoRef\.current=\[\]/);
   assert.match(scene,/key=\{activePlateId\}/);
 });
+
+test("toolbar groups related tools and shows distinct plate and geometry icons",()=>{
+  const scene=read("SlicerPrepareWorkspace.jsx");
+  const icons=read("SlicerUiIcon.jsx");
+  for(const group of ["create","transform","arrange","geometry","inspect","paint"])
+    assert.match(scene,new RegExp('group: "'+group+'"'));
+  assert.match(scene,/slicerToolGroupStart/);
+  assert.match(scene,/name: "Add plate", target: "add_plate", icon: "add-plate"/);
+  assert.match(icons,/"add-plate":/);
+  assert.match(icons,/"plates-overview":/);
+});
+test("all-plates overview preserves per-plate placement and returns to selected plate",()=>{
+  const scene=read("SlicerPrepareWorkspace.jsx");
+  assert.match(scene,/const \[showAllPlates,setShowAllPlates\]/);
+  assert.match(scene,/aria-label="All build plates overview"/);
+  assert.match(scene,/entry\.objects\.map\(\(item,itemIndex\)=>/);
+  assert.match(scene,/Number\(item\.x_mm\|\|0\)/);
+  assert.match(scene,/Number\(item\.y_mm\|\|0\)/);
+  assert.match(scene,/setShowAllPlates\(false\);onChoosePlate\?\.\(entry\.id\)/);
+});
+test("assembly detach only selected parts and keeps remaining groups",()=>{
+  const scene=read("SlicerPrepareWorkspace.jsx");
+  assert.match(scene,/function removeSelectedFromAssembly\(\)/);
+  assert.match(scene,/ids\.has\(row\.instance_id\)/);
+  assert.match(scene,/counts\.get\(row\.assembly_id\)<2/);
+  assert.match(scene,/Remove selected from assembly/);
+});
+test("inspector top uses measured camera row instead of a fixed viewport offset",()=>{
+  const editor=read("SlicerPlateEditor.jsx");
+  assert.match(editor,/camera\.getBoundingClientRect\(\)\.top/);
+  assert.match(editor,/viewport\.style\.setProperty\("--slicer-overlay-top"/);
+});
