@@ -990,9 +990,31 @@ export default function SlicerPrepareWorkspace({
             className={validSelection.includes(object.instance_id) ? "selected" : ""}
             onClick={event => selectMultiple(object.instance_id, event.ctrlKey || event.metaKey || event.shiftKey, !!assembly)}
             aria-pressed={validSelection.includes(object.instance_id)}>
-            <span className="slicerPrepareModelSwatch"
-              style={{ background: object.color }} aria-hidden="true" />
-            <span>{index + 1}. {itemName(object)}</span>
+            {(() => {
+              const mapping = object.material_slot;
+              const samePrinter = mapping && String(mapping.printer_id) === String(printerId);
+              const liveSlot = samePrinter ? liveMaterials.find(slot =>
+                String(slot.id) === String(mapping.slot_id)) : null;
+              const rawMaterial = liveSlot?.material || "";
+              const material = /^([A-Z]{2,6})(?:[- /]|$)/i.exec(rawMaterial.trim())?.[1]?.toUpperCase()
+                || rawMaterial.trim().slice(0, 5).toUpperCase() || "";
+              const slotNumber = mapping && Number.isInteger(Number(mapping.slot_index))
+                ? Number(mapping.slot_index) + 1 : null;
+              const status = !mapping ? "No printer slot assigned"
+                : !samePrinter ? "Assigned to a different printer — reassign before printing"
+                : !liveSlot ? "Assigned slot is no longer loaded — recheck before printing"
+                : "Intended slot: " + slotName(liveSlot) + " (draft mapping only)";
+              return <>
+                <span className="slicerPrepareModelSwatch slicerPrepareMaterialSwatch"
+                  style={{ background: object.color }}
+                  title={liveSlot ? (rawMaterial || "Unknown material") : "Model preview colour"}
+                  aria-hidden="true">{material}</span>
+                <span className="slicerPrepareModelName">{index + 1}. {itemName(object)}</span>
+                {mapping && <span className={"slicerPrepareSlotBadge"+(samePrinter && liveSlot ? "" : " stale")}
+                  title={status} aria-hidden="true">{slotNumber ?? "?"}</span>}
+                <span className="sr-only">{status}</span>
+              </>;
+            })()}
           </button>
           {object.text_model && <button type="button" className="slicerModelEditText"
             disabled={!canEdit || busy} onClick={()=>{
@@ -1009,13 +1031,6 @@ export default function SlicerPrepareWorkspace({
               setFilamentPickerId(current => current === object.instance_id ? "" : object.instance_id);
               setFilamentNotice("");
             }}>Change filament</button>
-          {object.material_slot && <small className="slicerModelFilamentNotice" role="status">
-            Intended slot: {String(object.material_slot.printer_id) === String(printerId)
-              ? (liveMaterials.find(slot => String(slot.id) === String(object.material_slot.slot_id))
-                ? slotName(liveMaterials.find(slot => String(slot.id) === String(object.material_slot.slot_id)))
-                : "Slot unavailable or unloaded — recheck before printing")
-              : "Assigned to another printer — reassign for this printer"} · draft mapping only
-          </small>
           {filamentPickerId === object.instance_id && <div className="slicerModelFilamentChoices">
             <strong>Loaded printer slots · intended mapping only</strong>
             {!liveMaterials.length && <small>No loaded slots reported. An existing assignment can still be cleared.</small>}
