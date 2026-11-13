@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 from core.slicer_flush_settings import apply_orca_flush_settings
 
 
-def generate(source, destination):
+def generate(source, destination, *, prime_tower="enabled"):
     source = Path(source)
     destination = Path(destination)
     if destination.exists() or destination.is_symlink():
@@ -29,7 +29,7 @@ def generate(source, destination):
     data.pop("flush_volumes_matrix", None)
     settings = {
         "multiplier": 1.0,
-        "prime_tower": "enabled",
+        "prime_tower": prime_tower,
         "transitions": [
             {"from_slot_id": "test-tool-0", "to_slot_id": "test-tool-1",
              "volume_mm3": 300},
@@ -54,8 +54,9 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--process", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--prime-tower", choices=("native", "enabled", "disabled"), default="enabled")
     args = parser.parse_args(argv)
-    generate(args.process, args.output)
+    generate(args.process, args.output, prime_tower=args.prime_tower)
 
 
 if __name__ == "__main__":
