@@ -140,6 +140,20 @@ jobs:
           echo "- Directional volumes 300/220 mm³ are test inputs, NOT calibrated manufacturer values." >> "$GITHUB_STEP_SUMMARY"
           echo "- The probe currently verifies tool deposition, not complete flushing/prime-tower paths." >> "$GITHUB_STEP_SUMMARY"
           echo "- This remains diagnostic and does not enable physical CFS printing." >> "$GITHUB_STEP_SUMMARY"
+      - name: Diagnose the two native flushing failures using official fixture logs
+        if: always() && (steps.k2_flush_only.outcome == 'failure' || steps.k2_flush_tower.outcome == 'failure')
+        run: |
+          IMAGE=$(sed -n 's/^MAKERVAULT_SLICER_WORKER_IMAGE=//p' .slicer-staging.env)
+          docker run --rm --network none --read-only --user 10001:10001 \
+            --cap-drop ALL --security-opt no-new-privileges:true --pids-limit 96 \
+            --memory 3g --cpus 2 --tmpfs /tmp:rw,exec,nosuid,nodev,size=1g,mode=1777 \
+            --mount type=bind,src=/tmp/makervault-orca-k2,dst=/fixtures,readonly \
+            --mount type=bind,src=/tmp/makervault-orca-k2-flush-only.json,dst=/flush-process.json,readonly \
+            --mount type=bind,src=/tmp/makervault-orca-two-tool.3mf,dst=/two-tool.3mf,readonly \
+            --entrypoint python3 "$IMAGE" -m slicer_worker.diagnose_orca_fixture \
+            --printer /fixtures/printer.json --filament /fixtures/filament.json \
+            --process /flush-process.json --second-filament /fixtures/filament.json \
+            --model /two-tool.3mf
       - name: Verify real Prusa MK4 native-profile tetrahedron slice
         run: |
           python3 scripts/probe_slicer_staging.py \
