@@ -20,7 +20,7 @@ class AcceptanceProbeTests(unittest.TestCase):
             "MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST=" + IMAGE,
             "SLICER_ENGINES_JSON='" + json.dumps({"orcaslicer": {
                 "binary": "/opt/engines/orcaslicer.AppImage",
-                "version": "2.4.2", "binary_sha256": "b" * 64,
+                "version": "2.5.0", "binary_sha256": "b" * 64,
             }}) + "'",
         ]))
         self.config.chmod(0o600)
