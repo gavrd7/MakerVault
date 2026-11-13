@@ -5817,8 +5817,42 @@ a:focus-visible,
   word-break:normal;
   white-space:nowrap;
 }
+/* Draw the vertical rail only across the thumb's actual travel. A native
+   range track extends beneath half the thumb at each endpoint, making 100%
+   appear short of the top; align both endpoints to the visible rail instead. */
 .slicerPlateSectionControl input[type="range"]{
+  -webkit-appearance:none;
+  appearance:none;
   min-height:42px;
+  box-sizing:border-box;
+  border:0;
+  border-radius:0;
+  background:linear-gradient(#43b8e6,#43b8e6) center / 4px calc(100% - 18px) no-repeat;
+  cursor:pointer;
+}
+.slicerPlateSectionControl input[type="range"]::-webkit-slider-runnable-track{
+  background:transparent;
+  border:0;
+}
+.slicerPlateSectionControl input[type="range"]::-webkit-slider-thumb{
+  -webkit-appearance:none;
+  appearance:none;
+  width:18px;
+  height:18px;
+  border:1px solid #cbd5e1;
+  border-radius:999px;
+  background:#fff;
+}
+.slicerPlateSectionControl input[type="range"]::-moz-range-track{
+  background:transparent;
+  border:0;
+}
+.slicerPlateSectionControl input[type="range"]::-moz-range-thumb{
+  width:18px;
+  height:18px;
+  border:1px solid #cbd5e1;
+  border-radius:999px;
+  background:#fff;
 }
 @media(max-width:700px){
   .slicerPlateCanvasViewport > .slicerPlateSectionControl{
