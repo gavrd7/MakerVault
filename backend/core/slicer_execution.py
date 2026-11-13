@@ -303,6 +303,12 @@ def _validate_plate_execution(job):
 
 def validate_scheduling(job, installed=None):
     """Pure admission check; caller must hold a row lock before queueing."""
+    if (job.settings or {}).get("slot_filament_profiles"):
+        raise SlicerExecutionError(
+            "Per-slot filament profiles are saved in this draft, but independent "
+            "native tool-to-profile routing has not yet been verified. "
+            "Remove the per-slot assignments before single-filament slicing."
+        )
     _validate_plate_execution(job)
     if job.status != "draft" or job.output_asset_id:
         raise SlicerExecutionError("Only unscheduled slice drafts can be queued.")
