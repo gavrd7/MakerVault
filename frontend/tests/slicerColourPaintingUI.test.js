@@ -13,8 +13,11 @@ test("painting palette and icon tools are anchored beside the camera toolbar",()
   assert.match(workspace,/paintControls=\{paintPanel\}/);
   assert.match(editor,/\{paintControls\}[\s\S]*?className="slicerPlateCameraToolbar"/);
   assert.match(workspace,/role="group" aria-label="Painting tools"/);
-  assert.match(workspace,/\["circle","paint-disc"/);
+  assert.doesNotMatch(workspace,/\["circle","paint-disc"/);
   assert.match(workspace,/\["sphere","paint-sphere"/);
+  assert.match(workspace,/\["smart_fill","paint-fill"/);
+  assert.doesNotMatch(workspace,/\["facet","paint-facet"/);
+  assert.doesNotMatch(workspace,/\["fill","paint-fill"/);
   assert.match(workspace,/borderRadius:"50%"/);
   assert.match(workspace,/title=\{description\}/);
 });
@@ -33,4 +36,13 @@ test("height fill does not recalculate an entire mesh on every drag event",()=>{
   const editor=read("SlicerPlateEditor.jsx");
   assert.match(editor,/\["height","fill","smart_fill","facet"\]\.includes/);
   assert.match(editor,/hidePaintGuides\(\)/);
+});
+
+test("painting uses palette icon and four unambiguous options",()=>{
+  const icons=read("SlicerUiIcon.jsx");
+  const workspace=read("SlicerPrepareWorkspace.jsx");
+  assert.match(workspace,/target: "paint_colour", icon: "paint-colour"/);
+  assert.match(icons,/"paint-colour": <><path d="M12 2a10/);
+  for(const mode of ["brush","sphere","smart_fill","height"])
+    assert.ok(workspace.includes('["'+mode+'","paint-'));
 });
