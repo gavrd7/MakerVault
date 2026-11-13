@@ -32,6 +32,40 @@ const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a
 const dot = (a, b) => a.reduce((sum, x, i) => sum + x * b[i], 0);
 const magnitude = a => Math.sqrt(dot(a, a));
 const distance = (a, b) => magnitude(vector(a, b));
+
+/** Squared distance to the nearest point on a triangle, including its edges.
+ * Using just face centres misses small brushes on large triangles.
+ * Derived from the closest-point regions in Real-Time Collision Detection. */
+export function pointTriangleDistanceSquared(p, a, b, c) {
+  const ab=vector(b,a), ac=vector(c,a), ap=vector(p,a);
+  const d1=dot(ab,ap),d2=dot(ac,ap);
+  if(d1<=0&&d2<=0)return dot(ap,ap);
+  const bp=vector(p,b),d3=dot(ab,bp),d4=dot(ac,bp);
+  if(d3>=0&&d4<=d3)return dot(bp,bp);
+  const vc=d1*d4-d3*d2;
+  if(vc<=0&&d1>=0&&d3<=0){
+    const v=d1/(d1-d3),delta=vector(p,a.map((x,i)=>x+v*ab[i]));
+    return dot(delta,delta);
+  }
+  const cp=vector(p,c),d5=dot(ab,cp),d6=dot(ac,cp);
+  if(d6>=0&&d5<=d6)return dot(cp,cp);
+  const vb=d5*d2-d1*d6;
+  if(vb<=0&&d2>=0&&d6<=0){
+    const w=d2/(d2-d6),delta=vector(p,a.map((x,i)=>x+w*ac[i]));
+    return dot(delta,delta);
+  }
+  const va=d3*d6-d5*d4;
+  if(va<=0&&(d4-d3)>=0&&(d5-d6)>=0){
+    const v=(d4-d3)/((d4-d3)+(d5-d6));
+    const bc=vector(c,b),delta=vector(p,b.map((x,i)=>x+v*bc[i]));
+    return dot(delta,delta);
+  }
+  const denom=va+vb+vc;
+  if(Math.abs(denom)<1e-12)return Math.min(dot(ap,ap),dot(bp,bp),dot(cp,cp));
+  const v=vb/denom,w=vc/denom;
+  const delta=vector(p,a.map((x,i)=>x+v*ab[i]+w*ac[i]));
+  return dot(delta,delta);
+}
 function validateSlot(slot) {
   if (!Number.isInteger(slot) || slot < 0 || slot >= MAX_SLOTS)
     throw new Error("Invalid logical paint slot.");
@@ -45,13 +79,16 @@ function validateFace(face, count) {
 export function createPaintMesh(geometry) {
   const { point, faces } = meshPositions(geometry);
   const centres = new Array(faces), normals = new Array(faces);
-  const heights = new Array(faces), neighbours = Array.from({ length: faces }, () => new Set());
+  const heights = new Array(faces), heightBounds = new Array(faces);
+  const neighbours = Array.from({ length: faces }, () => new Set());
   const edges = new Map();
   let fingerprint = 2166136261;
   for (let f = 0; f < faces; f++) {
     const v = [point(f * 3), point(f * 3 + 1), point(f * 3 + 2)];
     centres[f] = [0, 1, 2].map(axis => (v[0][axis] + v[1][axis] + v[2][axis]) / 3);
     heights[f] = centres[f][2];
+    heightBounds[f] = [Math.min(v[0][2],v[1][2],v[2][2]),
+      Math.max(v[0][2],v[1][2],v[2][2])];
     const n = cross(vector(v[1], v[0]), vector(v[2], v[0]));
     const length = magnitude(n);
     normals[f] = length ? n.map(value => value / length) : [0, 0, 0];
@@ -75,7 +112,7 @@ export function createPaintMesh(geometry) {
       }
   }
   return { faceCount: faces, signature: faces + ":" + fingerprint.toString(16),
-    centres, normals, heights, neighbours: neighbours.map(s => [...s]),
+    centres, normals, heights, heightBounds, neighbours: neighbours.map(s => [...s]),
     triangle: face => [point(face*3),point(face*3+1),point(face*3+2)] };
 }
 
@@ -87,15 +124,39 @@ export function selectPaintFaces(mesh, { mode, face, radiusMm = 2, angleDeg = 30
   if (mode === "height") {
     if (!Number.isFinite(minHeightMm) || !(Number.isFinite(maxHeightMm) || maxHeightMm === Infinity) ||
         minHeightMm > maxHeightMm) throw new Error("Invalid height selection.");
-    return mesh.heights.flatMap((h, i) => h >= minHeightMm && h <= maxHeightMm ? [i] : []);
+    // Triangle centroids alone miss many intersecting facets (particularly
+    // steep slopes and edges). Select every face intersecting the interval;
+    // true sharp Z boundaries require splitting boundary triangles (v2).
+    return (mesh.heightBounds || mesh.heights.map(z=>[z,z])).flatMap(([min,max],i)=>
+      max>=minHeightMm && min<=maxHeightMm ? [i] : []);
   }
   validateFace(face, count);
   if (mode === "facet") return [face];
   if (mode === "brush") {
     if (!Number.isFinite(radiusMm) || radiusMm <= 0 || radiusMm > 1000)
       throw new Error("Invalid brush radius.");
-    return mesh.centres.flatMap((centre, i) =>
-      distance(centre, mesh.centres[face]) <= radiusMm ? [i] : []);
+    const origin=centre || mesh.centres[face];
+    if(!Array.isArray(origin)||origin.length!==3||!origin.every(Number.isFinite))
+      throw new Error("Invalid brush origin.");
+    const radius2=radiusMm*radiusMm;
+    const chosen=new Set(),visited=new Set([face]),queue=[face];
+    const seedNormal=mesh.normals[face];
+    for(let head=0;head<queue.length;head++){
+      const current=queue[head];
+      // Restrict brush to adjacent, similarly oriented surface regions
+      // instead of selecting disconnected rear faces through the model.
+      if(current!==face && dot(seedNormal,mesh.normals[current])<0.25)continue;
+      const triangle=mesh.triangle?.(current);
+      const inBrush=triangle
+        ? pointTriangleDistanceSquared(origin,...triangle)<=radius2
+        : distance(mesh.centres[current],origin)<=radiusMm;
+      if(!inBrush)continue;
+      chosen.add(current);
+      for(const adjacent of mesh.neighbours[current]||[]){
+        if(!visited.has(adjacent)){visited.add(adjacent);queue.push(adjacent);}
+      }
+    }
+    return [...chosen].sort((a,b)=>a-b);
   }
   if (mode === "sphere" || mode === "circle") {
     if (!Number.isFinite(radiusMm) || radiusMm <= 0 || radiusMm > 1000)
