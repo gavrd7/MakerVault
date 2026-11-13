@@ -2077,6 +2077,17 @@ export default function SlicerPlateEditor({
     }
 
     function pointerMove(event) {
+      if (painting?.pointerId === event.pointerId) {
+        rayFromPointer(event);
+        const hits = raycaster.intersectObjects([...meshes.values()], false);
+        const hit = hits.find(row => row.object.userData.instanceId === painting.instanceId);
+        if (hit) {
+          try {paintHit(hit, painting);}
+          catch (error) {latestPaintErrorRef.current?.(error.message || "Painting failed.");}
+        }
+        event.preventDefault();
+        return;
+      }
       if (rotationPointerId === event.pointerId && rotationGizmo.dragging) {
         rayFromPointer(event);
         const angle = rotationGizmo.drag(raycaster.ray, event.shiftKey, event.timeStamp);
@@ -2125,6 +2136,27 @@ export default function SlicerPlateEditor({
     }
 
     function pointerUp(event) {
+      if (painting?.pointerId === event.pointerId) {
+        const stroke = painting;
+        painting = null;
+        controls.enabled = true;
+        if (renderer.domElement.hasPointerCapture?.(event.pointerId))
+          renderer.domElement.releasePointerCapture(event.pointerId);
+        if (stroke.changed) {
+          const current = latestObjectsRef.current;
+          const item = current.find(row => row.instance_id === stroke.instanceId);
+          if (item) {
+            if (event.type === "pointercancel") {
+              paintPreview(meshes.get(stroke.instanceId), item);
+            } else {
+              latestOnChangeRef.current(current.map(row =>
+                row.instance_id === stroke.instanceId ? {...row,colour_paint:stroke.paint} : row));
+            }
+          }
+        }
+        event.preventDefault();
+        return;
+      }
       if (rotationPointerId === event.pointerId) {
         const cancelled = event.type === "pointercancel";
         rotationPointerId = null;
@@ -2415,6 +2447,8 @@ export default function SlicerPlateEditor({
           mesh.userData.assetId = item.asset_id;
           const latest = latestObjectsRef.current.find(row => row.instance_id === item.instance_id) || item;
           positionOrientedMesh(mesh, latest);
+          try {paintPreview(mesh, latest, PALETTE[0]);}
+          catch (error) {latestPaintErrorRef.current?.(error.message || "Invalid saved colour painting.");}
           state.meshes.set(item.instance_id, mesh);
           state.scene.add(mesh);
           if (latestToolModeRef.current !== "select" && item.instance_id === selectedInstanceId &&
@@ -2437,7 +2471,8 @@ export default function SlicerPlateEditor({
       if (!mesh) continue;
       positionOrientedMesh(mesh, item);
       // Position-only changes must never alter the displayed filament colour.
-      mesh.material.color.set(item.color || PALETTE[0]);
+      try {paintPreview(mesh, item, PALETTE[0]);}
+      catch (error) {latestPaintErrorRef.current?.(error.message || "Invalid saved colour painting.");}
       mesh.material.emissive.set(conflictIds.has(item.instance_id) ? "#e84a53" :
         selection.includes(item.instance_id) ? "#168ab4" : "#000000");
       mesh.material.emissiveIntensity = conflictIds.has(item.instance_id) ? 0.72 :
