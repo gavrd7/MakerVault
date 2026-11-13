@@ -65,6 +65,47 @@ class SliceJobApiTests(TestCase):
         # The temporary source remains private for any live unsaved editor session.
         self.assertNotIn(str(asset.pk), str(self.client.get("/api/files/").json()))
 
+    def test_multi_plate_draft_preserves_empty_and_populated_plates(self):
+        from core.slicer_api import _draft_plate_settings
+
+        obj = {
+            "instance_id": str(uuid.uuid4()),
+            "asset_id": str(self.input_asset.pk),
+            "x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+            "scale_percent": 100, "color": "#abcdef",
+        }
+        project = [
+            {"id": "plate-1", "name": "Benchy", "objects": [obj]},
+            {"id": "plate-2", "name": "Accessories", "objects": []},
+        ]
+        saved = _draft_plate_settings(self.owner, self.input_asset, {
+            "plate_objects": [obj], "plate_label": "Benchy",
+            "plates": project, "active_plate_id": "plate-1",
+        })
+        self.assertEqual(len(saved["plates"]), 2)
+        self.assertEqual(saved["active_plate_id"], "plate-1")
+        self.assertEqual(saved["plates"][1]["objects"], [])
+        self.assertEqual(saved["plates"][0]["objects"][0]["asset_id"],
+                         str(self.input_asset.pk))
+        self.assertEqual(saved["plate_objects"], saved["plates"][0]["objects"])
+        empty_selected = _draft_plate_settings(self.owner, self.input_asset, {
+            "plate_label": "Accessories", "plates": project,
+            "active_plate_id": "plate-2",
+        })
+        self.assertNotIn("plate_objects", empty_selected)
+        self.assertEqual(len(empty_selected["plates"][0]["objects"]), 1)
+
+        with self.assertRaisesRegex(ValueError, "active plate must match"):
+            _draft_plate_settings(self.owner, self.input_asset, {
+                "plate_objects": [obj], "plate_label": "Accessories",
+                "plates": project, "active_plate_id": "plate-2",
+            })
+        with self.assertRaisesRegex(ValueError, "IDs must be unique"):
+            _draft_plate_settings(self.owner, self.input_asset, {
+                "plates": [project[0], {**project[1], "id": "plate-1"}],
+                "active_plate_id": "plate-1",
+            })
+
     def test_gcode_library_preference_is_explicit_and_private(self):
         self.client.force_login(self.owner)
         response = self.post()
