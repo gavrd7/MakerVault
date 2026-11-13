@@ -209,3 +209,58 @@ test("duplicate placement fills nearby free 2D slots without relocating original
   assert.equal(a.x_mm,0);
   assert.equal(b.x_mm,23);
 });
+
+test("four Benchies auto-arrange into a compact centred group rather than a long row", () => {
+  const models = ["black", "blue", "white", "pink"].map((instance_id, index) => ({
+    ...item, instance_id, x_mm: index * 50, y_mm: -75,
+    color: ["#000000", "#628ca6", "#ffffff", "#db2b80"][index],
+    material_slot: {printer_id: "k2", slot_id: "bay-" + index, slot_index: index},
+  }));
+  const dimensions = Object.fromEntries(models.map(row => [
+    row.instance_id, {width: 61.223, depth: 32.197, height: 48},
+  ]));
+  const before = JSON.stringify(models);
+  const result = autoArrangePlate(models, dimensions, 260, 260, 5);
+  assert.equal(result.error, undefined);
+  const envelopes = result.objects.map(model => plateEnvelope(model, dimensions[model.instance_id]));
+  const minX = Math.min(...envelopes.map(row => row.minX));
+  const maxX = Math.max(...envelopes.map(row => row.maxX));
+  const minY = Math.min(...envelopes.map(row => row.minY));
+  const maxY = Math.max(...envelopes.map(row => row.maxY));
+  assert.ok(maxX - minX < 140, "compact group width rather than four-across");
+  assert.ok(maxY - minY < 100, "compact group depth rather than four-deep");
+  assert.ok(Math.abs((minX + maxX) / 2) < 1);
+  assert.ok(Math.abs((minY + maxY) / 2) < 1);
+  result.objects.forEach((model, i) => {
+    assert.equal(model.instance_id, models[i].instance_id);
+    assert.equal(model.color, models[i].color);
+    assert.deepEqual(model.material_slot, models[i].material_slot);
+    assert.equal(plateExtentWarning(model, dimensions[model.instance_id], 260, 260), "");
+    for (let j = 0; j < i; j++)
+      assert.equal(plateFootprintsOverlap(model, dimensions[model.instance_id],
+        result.objects[j], dimensions[result.objects[j].instance_id], 5), false);
+  });
+  assert.equal(JSON.stringify(models), before, "arrangement must not mutate saved draft input");
+  assert.deepEqual(autoArrangePlate(models, dimensions, 260, 260, 5), result,
+    "packing must be deterministic");
+});
+
+test("auto-arrange falls back safely when a compact regular grid does not fit", () => {
+  const models = ["a", "b", "c"].map(instance_id => ({ ...item, instance_id }));
+  const sizes = {
+    a: {width: 95, depth: 20},
+    b: {width: 20, depth: 95},
+    c: {width: 15, depth: 15},
+  };
+  const before = JSON.stringify(models);
+  const result = autoArrangePlate(models, sizes, 125, 125, 5);
+  if (!result.error) {
+    result.objects.forEach((model, i) => {
+      assert.equal(plateExtentWarning(model, sizes[model.instance_id], 125, 125), "");
+      for (let j = 0; j < i; j++)
+        assert.equal(plateFootprintsOverlap(model, sizes[model.instance_id],
+          result.objects[j], sizes[result.objects[j].instance_id], 5), false);
+    });
+  }
+  assert.equal(JSON.stringify(models), before);
+});
