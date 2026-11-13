@@ -20,7 +20,7 @@ const TOOLS = [
   { name: "Remove", target: "remove", icon: "remove" },
   { name: "Centre selected", target: "center", icon: "center" },
   { name: "Fit selected", target: "focus", icon: "focus" },
-  { name: "Add plate", icon: "add", pending: "Multi-plate project persistence and native plate export" },
+  { name: "Add plate", target: "add_plate", icon: "add" },
   { name: "Auto-orient", target: "auto_orient", icon: "orient" },
   { name: "Lay on face", target: "lay_face", icon: "face" },
   { name: "Split", target: "split", icon: "split" },
@@ -47,6 +47,7 @@ const GROUPS = [["Quality", "quality"], ["Strength", "strength"], ["Speed", "spe
 
 export default function SlicerPrepareWorkspace({
   objects, onChange, files, plate, plateType = "default", plateLabel = "Plate 1",
+  plates = [], activePlateId = "plate-1", onChoosePlate, onAddPlate, onRemovePlate,
   onPlateLabelChange, onPrimaryChange, onFilesUploaded,
   defaultColor, onManualColorChange, canEdit, busy, error, notice,
   onChangeProfiles, onOpenDevice, onSaveDraft, onSlice, engine, printer,
@@ -299,6 +300,12 @@ export default function SlicerPrepareWorkspace({
     refreshPrinterMaterials();
     return () => { requestRef.current += 1; };
   }, [refreshPrinterMaterials]);
+  useEffect(()=>{
+    undoRef.current=[];redoRef.current=[];
+    setSelectedId("");setSelectedIds([]);setSolidRequest(null);
+    setToolMode("select");setMeasurementVisible(false);setMeasureOptionsOpen(false);
+    setSplitRequest(0);setHistoryVersion(version=>version+1);
+  },[activePlateId]);
   latest.current = objects;
 
   const updatePlate = useCallback(next => {
@@ -430,6 +437,9 @@ export default function SlicerPrepareWorkspace({
     }
     setMeasurementVisible(false);
     setMeasureOptionsOpen(false);
+    if (tool.target === "add_plate") {
+      onAddPlate?.();setToolMode("select");setMobilePane("plate");return;
+    }
     if (tool.target === "auto_orient") {
       if (!selectedId && objects[0]?.instance_id) setSelectedId(objects[0].instance_id);
       setAutoOrientMenuOpen(current => !current);
@@ -746,7 +756,7 @@ export default function SlicerPrepareWorkspace({
           aria-label={tool.name}
           aria-expanded={tool.target === "import" ? addModelMenuOpen : tool.target === "auto_orient" ? autoOrientMenuOpen : tool.expandable ? measureOptionsOpen : undefined}
           aria-controls={tool.target === "import" ? "slicer-add-model-toolbar-options" : tool.target === "auto_orient" ? "slicer-auto-orient-toolbar-options" : tool.expandable ? "slicer-measure-toolbar-options" : undefined}
-          disabled={!!tool.pending || !canEdit || busy || (tool.target !== "import" && !objects.length)}
+          disabled={!!tool.pending || !canEdit || busy || (tool.target==="add_plate" && plates.length>=8) || (!["import","add_plate"].includes(tool.target) && !objects.length)}
           onClick={event => selectTool(tool,event)}><SlicerUiIcon name={tool.icon || "others"} /></button>
         {tool.target === "import" && addModelMenuOpen && <div
           className="slicerToolOptions slicerAddModelMenu" style={toolPopupStyle} id="slicer-add-model-toolbar-options"
@@ -980,12 +990,28 @@ export default function SlicerPrepareWorkspace({
         </section>
 
       </div>
+      <div className="slicerPlateProjectNav" role="group" aria-label="Project build plates">
+        <div className="slicerPlateProjectTabs">
+          {plates.map((item,index)=><button key={item.id} type="button"
+            className={item.id===activePlateId?"active":""}
+            aria-current={item.id===activePlateId?"true":undefined}
+            onClick={()=>onChoosePlate?.(item.id)}>
+            {item.name || "Plate "+(index+1)}
+            <span className="slicerPlateProjectCount">{item.objects.length}</span>
+          </button>)}
+        </div>
+        <button type="button" onClick={onAddPlate} disabled={!canEdit||busy||plates.length>=8}
+          aria-label="Add build plate" title="Add a new empty build plate">+ Plate</button>
+        <button type="button" onClick={()=>onRemovePlate?.(activePlateId)}
+          disabled={!canEdit||busy||plates.length<=1}
+          aria-label="Remove active build plate">Remove</button>
+      </div>
       <div id="slicer-prepare-plate" className="slicerPrepareScene" ref={editorRef} aria-labelledby="slicer-mobile-tab-plate">
         {toolMode === "lay_face" && <p className="projectUploadHint" role="status">
           <strong>Lay on face:</strong> Tap or click the model face you want touching the build plate.
           MakerVault will rotate the model and place it back on the bed. Select the tool again to cancel.
         </p>}
-        <SlicerPlateEditor toolbar={modelToolbar} files={files} localAssets={localAssets}
+        <SlicerPlateEditor key={activePlateId} toolbar={modelToolbar} files={files} localAssets={localAssets}
           onLocalAssetsChange={onLocalAssetsChange} onPlateIssuesChange={onPlateIssuesChange} objects={objects} onChange={updatePlate}
           onPrimaryChange={onPrimaryChange} onFilesUploaded={onFilesUploaded}
           onManualColorChange={onManualColorChange} defaultColor={defaultColor}
