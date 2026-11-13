@@ -1861,6 +1861,30 @@ export default function SlicerPlateEditor({
     const bedPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
     let dragging = null;
     let painting = null;
+    const activeTouchPointers = new Set();
+    let touchNavigation = false;
+    function cancelTouchEdit() {
+      if (painting) {
+        const stroke=painting;
+        painting=null;
+        const original=latestObjectsRef.current.find(item=>item.instance_id===stroke.instanceId);
+        const mesh=meshes.get(stroke.instanceId);
+        if (original && mesh) paintPreview(mesh, original);
+        if (renderer.domElement.hasPointerCapture?.(stroke.pointerId))
+          renderer.domElement.releasePointerCapture(stroke.pointerId);
+      }
+      if (rotationPointerId !== null) {
+        rotationGizmo.end();
+        rotationPointerId=null;
+        setLiveRotation(null);
+      }
+      if (dragging) {
+        if (renderer.domElement.hasPointerCapture?.(dragging.pointerId))
+          renderer.domElement.releasePointerCapture(dragging.pointerId);
+        dragging=null;
+      }
+      controls.enabled=true;
+    }
     // Lightweight on-mesh previews never alter STL geometry or project data.
     const brushGuide = new THREE.Mesh(new THREE.RingGeometry(.94, 1, 48),
       new THREE.MeshBasicMaterial({color:"#f9e65c",side:THREE.DoubleSide,depthTest:false,
@@ -1965,6 +1989,15 @@ export default function SlicerPlateEditor({
       pending.changed = true;
     }
     function pointerDown(event) {
+      if (event.pointerType === "touch") {
+        activeTouchPointers.add(event.pointerId);
+        if (activeTouchPointers.size > 1) {
+          touchNavigation=true;
+          cancelTouchEdit();
+          return; // OrbitControls owns the two-finger gesture.
+        }
+        if (touchNavigation) return;
+      }
       if (!canEdit || solidDialogRef.current || event.button > 0 || transform.dragging) return;
       rayFromPointer(event);
       // Direct hit testing against MakerVault's larger rotation handles
@@ -2126,6 +2159,10 @@ export default function SlicerPlateEditor({
       if (onSelectModelRef.current) onSelectModelRef.current(id, additive);
       else setSelected(id);
       if (additive) return;
+      // A normal touch selects the model but keeps OrbitControls active:
+      // one finger orbits, two fingers pan/zoom. Model manipulation on
+      // mobile is performed with the explicit Move/Rotate controls.
+      if (event.pointerType === "touch" && latestToolModeRef.current === "select") return;
       if (selectionRef.current.length > 1) {
         if (!selectionRef.current.includes(id) ||
           !["select","move"].includes(latestToolModeRef.current)) return;
@@ -2153,6 +2190,7 @@ export default function SlicerPlateEditor({
     }
 
     function pointerMove(event) {
+      if (event.pointerType === "touch" && (touchNavigation || activeTouchPointers.size > 1)) return;
       if (latestToolModeRef.current === "paint_colour" && !painting &&
           (event.buttons === 0 || event.pointerType === "touch")) {
         rayFromPointer(event);
@@ -2228,6 +2266,14 @@ export default function SlicerPlateEditor({
     }
 
     function pointerUp(event) {
+      if (event.pointerType === "touch") {
+        activeTouchPointers.delete(event.pointerId);
+        if (touchNavigation) {
+          if (activeTouchPointers.size === 0) touchNavigation=false;
+          controls.enabled=true;
+          return;
+        }
+      }
       if (painting?.pointerId === event.pointerId) {
         const stroke = painting;
         painting = null;
@@ -2917,10 +2963,12 @@ export default function SlicerPlateEditor({
       const width=Math.max(0,Math.min(440,screenW-16));
       const left=Math.max(8,Math.min(rect.left+6,screenW-width-8));
       const preferredTop=rect.cameraTop??rect.top;
-      const top=Math.max(8,Math.min(preferredTop,screenH-240));
+      // Keep a usable preview exposed instead of covering almost the whole
+      // phone with a tall floating geometry inspector. The inspector scrolls.
+      const top=Math.max(8,Math.min(preferredTop,screenH-160));
       return {pointerEvents:"auto",position:"fixed",
         left,top,width,maxWidth:"calc(100vw - 16px)",
-        maxHeight:Math.max(180,screenH-top-12)};
+        maxHeight:"min(35dvh, 300px)"};
     }
     // Left-side inspector: 38% or less of the build-plate viewport.
     // Reserve the remaining majority for the model and its transform handles.
