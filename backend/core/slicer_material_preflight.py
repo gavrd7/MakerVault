@@ -8,13 +8,14 @@ from .slicer_material_routing import MaterialRoutingError
 from .slicer_native_material_palette import resolve_native_material_palette
 from .slicer_plate_3mf import build_plate_3mf
 from .slicer_plate_validation import validate_plate_collisions
+from .slicer_flush_settings import apply_orca_flush_settings
 
 
 def prepare_offline_material_plate(
     objects_with_stl, *, bed_width, bed_depth,
     printer_id, owner_id, engine, engine_version, topology,
     tool_bindings, native_filament_profiles,
-    resolver=None,
+    resolver=None, native_process_profile=None, flush_settings=None,
 ):
     """Return a checked, separately routed native project and filament bytes.
 
@@ -48,7 +49,17 @@ def prepare_offline_material_plate(
         objects_with_stl, bed_width=bed_width, bed_depth=bed_depth,
         native_tool_indices=palette["native_tool_indices"],
     )
+    native_process = None
+    if flush_settings is not None:
+        if not isinstance(native_process_profile, bytes):
+            raise MaterialRoutingError(
+                "A verified native process preset is required for flushing overrides.")
+        native_process = apply_orca_flush_settings(
+            native_process_profile, flush_settings, routes=palette["routes"],
+            tool_count=len(palette["filament_profiles"]), topology=topology,
+        )
     return {
+        "native_process_profile": native_process,
         "model_3mf": model,
         "filament_profiles": palette["filament_profiles"],
         "native_tool_indices": palette["native_tool_indices"],
