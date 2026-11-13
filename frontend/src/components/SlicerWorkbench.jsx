@@ -102,6 +102,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const awaitingSlicePreviewRef = useRef(null);
   const [customBed, setCustomBed] = useState({ enabled: false, x: "220", y: "220" });
   const [flushSettings, setFlushSettings] = useState(null);
+  const [slotFilamentProfiles,setSlotFilamentProfiles] = useState([]);
   const [profileLineages, setProfileLineages] = useState({});
   const [workerConfigured, setWorkerConfigured] = useState(false);
   const [canVerifyProfiles, setCanVerifyProfiles] = useState(false);
@@ -322,6 +323,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     // Flushing depends on the exact verified machine, filament and process
     // presets. Never silently reuse an old printer’s directional matrix.
     setFlushSettings(null);
+    if(kind==="printer" || kind==="filament")setSlotFilamentProfiles([]);
     manuallyChosenProfiles.current.add(kind);
     const profile = profiles.find(item => item.id === id);
     setForm(current => ({
@@ -337,6 +339,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     manuallyChosenProfiles.current.clear();
     setProfileSuggestions({});
     setFlushSettings(null);
+    setSlotFilamentProfiles([]);
     // Physical CFS/AMS slot IDs belong to the previously registered printer.
     // Preserve every model and visual colour, but clear invalid physical
     // bindings on *all* plates before using another printer.
@@ -520,6 +523,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     setPlateValidation(null);
     setProcessOverrides(job.settings?.process_overrides || {});
     setFlushSettings(job.settings?.flush_settings || null);
+    setSlotFilamentProfiles(job.settings?.slot_filament_profiles || []);
     setEditorOpen(true);
     setForm(current => ({
       ...current,
@@ -734,6 +738,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               active_plate_id:target.id,workflow:"interactive",
               save_gcode_to_library:false,
               ...(flushSettings ? {flush_settings:flushSettings} : {}),
+              ...(slotFilamentProfiles.length ? {slot_filament_profiles:slotFilamentProfiles} : {}),
               ...(form.engine==="orcaslicer"?{process_overrides:processOverrides}:{}),
             },
           };
@@ -776,6 +781,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             })),active_plate_id:activePlateId,
             save_gcode_to_library: saveOutput, workflow,
             ...(flushSettings ? { flush_settings: flushSettings } : {}),
+            ...(slotFilamentProfiles.length ? {slot_filament_profiles:slotFilamentProfiles} : {}),
             ...(form.engine === "orcaslicer" ? { process_overrides: processOverrides } : {}) },
         },
       });
@@ -1292,6 +1298,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       workerConfigured={workerConfigured && engines.some(engine => engine.key === form.engine && engine.available)}
       processOverrides={processOverrides} onProcessOverridesChange={setProcessOverrides}
       flushSettings={flushSettings} onFlushSettingsChange={setFlushSettings}
+      slotFilamentProfiles={slotFilamentProfiles} onSlotFilamentProfilesChange={setSlotFilamentProfiles}
+      filamentProfiles={forKind("filament")}
       onSaveCustomProcessProfile={saveInteractiveProcessProfile}
       onBackToSetup={() => setEditorOpen(false)} onSaveDraft={() => saveDraft("draft")}
       onSaveProject={() => saveDraft("project")} onSliceAll={() => saveDraft("all")}
@@ -1313,6 +1321,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             onSelect={key => {
               manuallyChosenProfiles.current.clear();
               setFlushSettings(null);
+              setSlotFilamentProfiles([]);
               const selectedEngine = engines.find(item => item.key === key);
               setForm(current => ({
                 ...current, engine: key,
