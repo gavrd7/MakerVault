@@ -4,6 +4,7 @@ Optional, validated per-object process metadata is stored in Orca/Bambu
 model_settings.config; this does not itself authorise worker execution.
 """
 import io
+import json
 import math
 import re
 import struct
@@ -343,3 +344,95 @@ def build_compound_plate_3mf(objects_with_stl, *, bed_width, bed_depth):
     if not data or len(data) > MAX_PROJECT_BYTES:
         raise SlicerProfileError("Combined 3MF exceeds the safe worker upload limit.")
     return data
+
+
+def build_makervault_project_3mf(plates_with_stl, *, bed_width, bed_depth, metadata):
+    """Portable, editable 3MF with a native mesh scene and plate manifest.
+
+    Every plate also has an independent ordinary 3MF inside the archive.
+    The MakerVault manifest records true centred per-plate coordinates, labels,
+    material preview colours, part settings and selected native profiles.
+    The combined top-level 3MF arranges plates side by side for generic viewers.
+    It is an export, not an assertion of verified Orca native project import.
+    """
+    if not isinstance(plates_with_stl, list) or not 1 <= len(plates_with_stl) <= 8:
+        raise SlicerProfileError("Export supports one to eight project plates.")
+    if not any(rows for _label, rows in plates_with_stl):
+        raise SlicerProfileError("Add at least one STL before exporting a project.")
+    if sum(len(rows) for _label, rows in plates_with_stl) > 200:
+        raise SlicerProfileError("A project supports up to 200 instances.")
+    ns = "{" + NS + "}"
+    ET.register_namespace("", NS)
+    combined = ET.Element(ns + "model", {
+        "unit": "millimeter",
+        "{http://www.w3.org/XML/1998/namespace}lang": "en-US"
+    })
+    resources = ET.SubElement(combined, ns + "resources")
+    build = ET.SubElement(combined, ns + "build")
+    embedded = {}
+    plate_manifest = ET.Element("config")
+    global_index = 0
+    for plate_number, (label, pairs) in enumerate(plates_with_stl, start=1):
+        plate_element = ET.SubElement(plate_manifest, "plate")
+        ET.SubElement(plate_element, "metadata", {
+            "key": "plater_id", "value": str(plate_number)
+        })
+        ET.SubElement(plate_element, "metadata", {
+            "key": "plate_name", "value": label
+        })
+        if not pairs:
+            continue
+        native = build_plate_3mf(pairs, bed_width=bed_width, bed_depth=bed_depth)
+        embedded[f"Metadata/plates/plate-{plate_number}.3mf"] = native
+        with zipfile.ZipFile(io.BytesIO(native)) as source:
+            tree = SafeET.fromstring(source.read("3D/3dmodel.model"))
+        objects = tree.findall("./" + ns + "resources/" + ns + "object")
+        instances = tree.findall("./" + ns + "build/" + ns + "item")
+        if len(objects) != len(pairs) or len(instances) != len(pairs):
+            raise SlicerProfileError("Incomplete generated plate geometry.")
+        for source_obj, instance in zip(objects, instances):
+            global_index += 1
+            source_obj.set("id", str(global_index))
+            resources.append(source_obj)
+            matrix = [float(v) for v in instance.attrib["transform"].split()]
+            if len(matrix) != 12:
+                raise SlicerProfileError("Invalid generated model transform.")
+            matrix[9] += (plate_number - 1) * (bed_width + 20)
+            ET.SubElement(build, ns + "item", {
+                "objectid": str(global_index),
+                "transform": " ".join(format(v, ".6f") for v in matrix)
+            })
+            row = ET.SubElement(plate_element, "model_instance")
+            for key, value in (("object_id", str(global_index)),
+                               ("instance_id", "0"),
+                               ("identify_id", str(global_index))):
+                ET.SubElement(row, "metadata", {"key": key, "value": value})
+    manifest = json.dumps(metadata, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    if len(manifest) > 131072:
+        raise SlicerProfileError("Project metadata is too large.")
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED,
+                         compresslevel=6, allowZip64=False) as package:
+        package.writestr("3D/3dmodel.model",
+                         ET.tostring(combined, encoding="utf-8", xml_declaration=True))
+        package.writestr("Metadata/model_settings.config",
+                         ET.tostring(plate_manifest, encoding="utf-8", xml_declaration=True))
+        package.writestr("Metadata/makervault-project.json", manifest)
+        for name, data in embedded.items():
+            package.writestr(name, data)
+        package.writestr("[Content_Types].xml",
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+            '<Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>'
+            '</Types>')
+        package.writestr("_rels/.rels",
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Target="/3D/3dmodel.model" Id="rel0" '
+            'Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>'
+            '</Relationships>')
+    result = output.getvalue()
+    if len(result) > MAX_PROJECT_BYTES:
+        raise SlicerProfileError("Project 3MF exceeds the safe export limit.")
+    return result
