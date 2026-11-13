@@ -193,3 +193,42 @@ multi-colour feature; further requirements include native K2 CFS toolchange
 and purge behaviour, verified live slot/profile reconciliation, a
 manufacturer-specific U1 toolhead profile/offset/dock sequence, and
 painting-region export with native 3MF round-trips.
+
+### Engine-level blocker observed in real CI
+
+The two-colour offline K2 fixture has reached the pinned Orca 2.4.2
+executable with two filament presets and valid object extruder metadata,
+but the CLI segfaults (exit `-11`) before producing G-code. This is
+consistent with upstream Orca reports:
+- https://github.com/OrcaSlicer/OrcaSlicer/issues/15632
+- https://github.com/OrcaSlicer/OrcaSlicer/issues/14181
+
+**Do not claim the diagnostic passed merely because the overall real-Orca
+workflow is green**: this experimental step uses `continue-on-error` to
+preserve existing single-material CI coverage.
+
+Software preflight now includes `prepare_offline_material_plate`, which
+checks explicit physical-slot/native-tool bindings and owner-verified ordered
+native filament profiles, rejects overlapping mesh envelopes, and creates
+unmerged per-object 3MF with matching native extruder metadata. This routine
+does not queue or transmit a job.
+
+**Release criteria**, in order:
+1. A pinned Orca version (or alternate engine with equivalent native
+   acceptance) must slice the two-object, two-tool fixture with actual tool
+   selections and extrusion in the expected model regions, not merely a
+   green CI workflow.
+2. Repeat with the actual approved machine profile, two compatible material
+   profiles, and topology-specific switch/park/purge start/end sequences.
+3. Reconcile loaded slots and native-tool bindings again immediately before
+   slicing and printer submission; support clean cancellation and errors.
+4. Only then enable the matched engine+version+profile+topology combination
+   through explicit per-printer capability checks. Never enable globally or
+   infer machine abilities from a CFS/AMS label alone.
+5. Independently validate G-code interpretation on K2 CFS. Snapmaker U1
+   requires a separate, actual multi-toolhead profile and subsequent
+   acceptance; both share the MakerVault UI without sharing printer macros.
+
+Until those checks pass, saved assigned slots remain project metadata;
+slicing mapped drafts is disabled, and the proven single-filament path is
+unchanged.
