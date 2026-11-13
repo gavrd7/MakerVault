@@ -392,6 +392,20 @@ export default function SlicerPrepareWorkspace({
       ? { ...row, assembly_id: null } : row));
     setExpandedAssemblies(current=>current.filter(id=>id!==activeAssembly));
   }
+  const removableAssemblyMembers=selectedModels.filter(row=>row.assembly_id);
+  function removeSelectedFromAssembly(){
+    if(!canEdit||busy||!removableAssemblyMembers.length)return;
+    const ids=new Set(removableAssemblyMembers.map(row=>row.instance_id));
+    const remaining=objects.map(row=>ids.has(row.instance_id)
+      ?{...row,assembly_id:null}:row);
+    const counts=new Map();
+    remaining.forEach(row=>{if(row.assembly_id)
+      counts.set(row.assembly_id,(counts.get(row.assembly_id)||0)+1);});
+    updatePlate(remaining.map(row=>row.assembly_id&&counts.get(row.assembly_id)<2
+      ?{...row,assembly_id:null}:row));
+    setExpandedAssemblies(current=>current.filter(id=>counts.get(id)>=2));
+    setSelectedIds([]);setSelectedId("");
+  }
   const active = selectedId ? objects.find(row => row.instance_id === selectedId) : null;
   const itemName = object => {
     const file = [...localAssets, ...files].find(row => String(row.id) === String(object.asset_id));
@@ -919,6 +933,8 @@ export default function SlicerPrepareWorkspace({
               onClick={assembleSelected}>Assemble selection</button>
             <button type="button" disabled={!canEdit || busy || !activeAssembly}
               onClick={disassembleSelected}>Disassemble</button>
+            <button type="button" disabled={!canEdit||busy||!removableAssemblyMembers.length}
+              onClick={removeSelectedFromAssembly}>Remove selected from assembly</button>
           </div>
         </div>}
         {selectedModels.length>0 && plates.length>1 && <div className="slicerMoveToPlate">
