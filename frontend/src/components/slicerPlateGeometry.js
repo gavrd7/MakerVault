@@ -122,6 +122,77 @@ export function findFreeDuplicatePosition(item,objects,dimensions,bedX,bedY,clea
   return null;
 }
 
+/** Prefer a compact, centred rectangular cluster over a long edge-hugging
+ * shelf. Try different numbers of models per row, retain each model's current
+ * rotation/scale and validate the same conservative envelopes as the editor.
+ * If no regular layout fits, the legacy free-space search remains available.
+ */
+function compactCentredLayout(objects, dimensions, bedX, bedY, clearance) {
+  if (!objects.length || objects.length > 200) return null;
+  const shapes = [];
+  for (const item of objects) {
+    const zero = plateEnvelope({ ...item, x_mm: 0, y_mm: 0 }, dimensions?.[item.instance_id]);
+    if (!zero) return null;
+    const width = zero.maxX - zero.minX, depth = zero.maxY - zero.minY;
+    if (width > bedX || depth > bedY) return null;
+    shapes.push({ item, width, depth,
+      offsetX: (zero.minX + zero.maxX) / 2,
+      offsetY: (zero.minY + zero.maxY) / 2 });
+  }
+  let best = null;
+  // A small positive placement tolerance keeps 0.01 mm rounding from eroding
+  // the requested inter-model gap. It is not an added printer-specific margin.
+  const gap = clearance + 0.04;
+  const margin = Math.min(2, Math.max(0.05, Math.min(bedX, bedY) * 0.005));
+  for (let count = 1; count <= shapes.length; count++) {
+    const rows = [];
+    for (let i = 0; i < shapes.length; i += count) {
+      const parts = shapes.slice(i, i + count);
+      rows.push({ parts,
+        width: parts.reduce((sum, shape) => sum + shape.width, 0) + gap * (parts.length - 1),
+        depth: Math.max(...parts.map(shape => shape.depth)) });
+    }
+    const spanX = Math.max(...rows.map(row => row.width));
+    const spanY = rows.reduce((sum, row) => sum + row.depth, 0) + gap * (rows.length - 1);
+    if (spanX + 2 * margin > bedX || spanY + 2 * margin > bedY) continue;
+    const placed = [];
+    let y = -spanY / 2;
+    for (const row of rows) {
+      let x = -row.width / 2;
+      for (const shape of row.parts) {
+        const proposedX = x + shape.width / 2 - shape.offsetX;
+        const proposedY = y + row.depth / 2 - shape.offsetY;
+        placed.push({ ...shape.item,
+          x_mm: Math.round(proposedX * 100) / 100,
+          y_mm: Math.round(proposedY * 100) / 100 });
+        x += shape.width + gap;
+      }
+      y += row.depth + gap;
+    }
+    if (placed.some(model => plateExtentWarning(model, dimensions[model.instance_id], bedX, bedY)))
+      continue;
+    let overlaps = false;
+    for (let i = 0; i < placed.length && !overlaps; i++)
+      for (let j = 0; j < i; j++)
+        if (plateFootprintsOverlap(placed[i], dimensions[placed[i].instance_id],
+          placed[j], dimensions[placed[j].instance_id], clearance) !== false) {
+          overlaps = true;
+          break;
+        }
+    if (overlaps) continue;
+    // Minimise the longest occupied span relative to the available bed,
+    // then favour less overall area. This promotes a 2×2 group of Benchies
+    // over an excessively long 1×4 row or column without assuming that
+    // every heated bed has a particular temperature map.
+    const ratioX = spanX / bedX, ratioY = spanY / bedY;
+    const score = Math.max(ratioX, ratioY) + 0.2 * ratioX * ratioY +
+      0.025 * Math.abs(ratioX - ratioY);
+    if (!best || score < best.score - 1e-9)
+      best = { score, objects: placed };
+  }
+  return best?.objects || null;
+}
+
 /** Deterministic shelf-like packing by footprint. No geometry or profile data is modified.
  * All positions are centred on the displayed plate, and rotation/scale are respected.
  * Failure does not change the original arrangement. This is a preview only; native
@@ -131,6 +202,8 @@ export function autoArrangePlate(objects, dimensions, bedX, bedY, clearance = 5)
   if (!Array.isArray(objects) || !Number.isFinite(bedX) || !Number.isFinite(bedY) ||
       bedX <= 0 || bedY <= 0 || !Number.isFinite(clearance) || clearance < 0)
     return { error: "Build plate dimensions are unavailable." };
+  const compact = compactCentredLayout(objects, dimensions, bedX, bedY, clearance);
+  if (compact) return { objects: compact };
   const placed = [];
   for (const item of objects) {
     const envelope = plateEnvelope({ ...item, x_mm: 0, y_mm: 0 }, dimensions?.[item.instance_id]);
