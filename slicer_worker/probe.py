@@ -27,7 +27,7 @@ from .runner import MAX_PROFILE_BYTES, MAX_GCODE_BYTES, WorkerError
 from .orca_runner import run_orca
 from .creality_runner import run_creality
 from .three_mf_validation import validate_worker_3mf
-from .material_gcode_audit import verify_multi_material_output, expected_native_tools
+from .material_gcode_audit import verify_multi_material_output, expected_native_tools, verify_two_object_tool_regions
 
 ENGINES = {"orcaslicer": run_orca, "crealityprint": run_creality}
 GCODE_EXTRUSION = re.compile(
@@ -231,8 +231,9 @@ def run_probe(*, engine, version, binary, printer, filament, process, timeout=12
         output = _validate_gcode(root / "output.gcode",
                                  min_extrusion_span_x=35 if expected_objects == 2 or expected_islands == 2 else None)
         if second_filament is not None:
-            verify_multi_material_output((root / "output.gcode").read_bytes(),
-                                         expected_native_tools(model_bytes))
+            generated = (root / "output.gcode").read_bytes()
+            verify_multi_material_output(generated, expected_native_tools(model_bytes))
+            output.update(verify_two_object_tool_regions(generated))
             output["native_multi_tool_verified"] = True
         if verify_object_effects:
             if expected_objects != 2 or model is None or engine != "orcaslicer":
