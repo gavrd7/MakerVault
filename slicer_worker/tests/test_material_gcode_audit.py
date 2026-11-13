@@ -80,7 +80,7 @@ class MaterialOutputVerificationTests(TestCase):
                  "".join("G1 X40 Y40 E1\\n" for _ in range(25)) +
                  "T1\\n; FEATURE: Prime tower\\n" +
                  "".join("G1 X41 Y40 E1\\n" for _ in range(25)) +
-                 "T0\\n").replace("\\\\n", "\\n").encode()
+                 "T0\\n").replace(chr(92) + "n", chr(10)).encode()
         evidence = verify_k2_fixture_purge_tower_evidence(valid)
         self.assertTrue(evidence["k2_prime_tower_evidence_verified"])
         for malformed in (
