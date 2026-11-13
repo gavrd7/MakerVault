@@ -232,3 +232,24 @@ def summarize_k2_fixture_changeovers(raw_gcode):
         "stationary_extrusion_moves": {str(k): v for k, v in sorted(stationary_e.items())},
         "outside_deposition_features": dict(sorted(feature_counts.items())),
     }
+
+
+def verify_k2_fixture_purge_tower_evidence(raw_gcode):
+    """Fail the *offline K2 two-cube fixture* without real tower toolpaths.
+
+    The pinned Orca acceptance requires tools to switch repeatedly, each to
+    extrude outside both model footprints, and the native Orca output to
+    label a substantial number of those moves as prime-tower deposition.
+    This does not validate CFS firmware commands or physical purge quality.
+    """
+    evidence = summarize_k2_fixture_changeovers(raw_gcode)
+    per_tool = evidence["outside_model_deposition_moves"]
+    if (evidence["selected_tools"] != [0, 1]
+            or evidence["tool_switches"] < 2
+            or int(per_tool.get("0", 0)) < 20
+            or int(per_tool.get("1", 0)) < 20
+            or evidence["outside_deposition_features"].get("prime tower", 0) < 20):
+        raise WorkerError(
+            "K2 native fixture lacks verified multi-tool prime-tower deposition evidence.")
+    evidence["k2_prime_tower_evidence_verified"] = True
+    return evidence
