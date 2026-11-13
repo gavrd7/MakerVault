@@ -1861,6 +1861,59 @@ export default function SlicerPlateEditor({
     const bedPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
     let dragging = null;
     let painting = null;
+    // Lightweight on-mesh previews never alter STL geometry or project data.
+    const brushGuide = new THREE.Mesh(new THREE.RingGeometry(.94, 1, 48),
+      new THREE.MeshBasicMaterial({color:"#f9e65c",side:THREE.DoubleSide,depthTest:false,
+        transparent:true,opacity:.92}));
+    const sphereGuide = new THREE.Mesh(new THREE.SphereGeometry(1,18,12),
+      new THREE.MeshBasicMaterial({color:"#f9e65c",wireframe:true,depthTest:false,
+        transparent:true,opacity:.65}));
+    const heightGuide = [0,1].map(()=>new THREE.Mesh(new THREE.PlaneGeometry(1,1),
+      new THREE.MeshBasicMaterial({color:"#f9e65c",transparent:true,
+        opacity:.22,depthTest:false,side:THREE.DoubleSide})));
+    scene.add(brushGuide,sphereGuide,...heightGuide);
+    const hidePaintGuides = () => {
+      brushGuide.visible=false;sphereGuide.visible=false;
+      heightGuide.forEach(guide=>{guide.visible=false;});
+    };
+    hidePaintGuides();
+    let lastHoverHeight = null;
+    function previewPaintGuide(hit) {
+      hidePaintGuides();
+      if (latestToolModeRef.current !== "paint_colour" || !hit?.face) return;
+      const target = hit.object;
+      const options = latestPaintOptionsRef.current;
+      if (!options) return;
+      const local = target.worldToLocal(hit.point.clone());
+      if (options.mode === "height") {
+        // The guide is drawn at the model's local Z and follows its transform.
+        // This also works when the model has been rotated on the plate.
+        const box = target.geometry.boundingBox;
+        if (!box) return;
+        const centre = box.getCenter(new THREE.Vector3());
+        for (let i=0;i<2;i++) {
+          const plane=heightGuide[i];
+          plane.position.copy(target.localToWorld(new THREE.Vector3(centre.x,centre.y,
+            i===0?options.minHeightMm:options.maxHeightMm)));
+          plane.quaternion.copy(target.getWorldQuaternion(new THREE.Quaternion()));
+          const worldScale=target.getWorldScale(new THREE.Vector3());
+          plane.scale.set(Math.max(.1,box.max.x-box.min.x)*worldScale.x,
+            Math.max(.1,box.max.y-box.min.y)*worldScale.y,1);
+          plane.visible=true;
+        }
+        return;
+      }
+      const radius = ["brush","circle","sphere"].includes(options.mode)
+        ? Number(options.radiusMm)||2 : 1;
+      const guide=options.mode==="sphere"?sphereGuide:brushGuide;
+      guide.position.copy(hit.point).addScaledVector(
+        hit.face.normal.clone().transformDirection(target.matrixWorld),.06);
+      guide.quaternion.copy(options.mode==="circle"?target.getWorldQuaternion(new THREE.Quaternion()):
+        new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,1),
+          hit.face.normal.clone().transformDirection(target.matrixWorld)));
+      guide.scale.setScalar(radius * target.getWorldScale(new THREE.Vector3()).length()/Math.sqrt(3));
+      guide.visible=true;
+    }
     let rotationPointerId = null;
     let lastRotationPreview = null;
 
@@ -1879,12 +1932,13 @@ export default function SlicerPlateEditor({
       const mesh = hit.object;
       if (mesh.userData.instanceId !== pending.instanceId) return;
       const options = latestPaintOptionsRef.current;
-      if (!options || !["brush","facet","fill","smart_fill","height"].includes(options.mode)) return;
+      if (!options || !["brush","circle","sphere","facet","fill","smart_fill","height"].includes(options.mode)) return;
       if (!mesh.userData.paintMesh) mesh.userData.paintMesh = createPaintMesh(mesh.geometry);
       const paintMesh = mesh.userData.paintMesh;
       const faces = selectPaintFaces(paintMesh, {
         mode:options.mode,face:hit.faceIndex,radiusMm:options.radiusMm,
         angleDeg:options.angleDeg,minHeightMm:options.minHeightMm,maxHeightMm:options.maxHeightMm,
+        centre:mesh.worldToLocal(hit.point.clone()).toArray(),
       });
       pending.paint = applyPaint(pending.paint, paintMesh, faces, pending.slot);
       pending.paint.palette = pending.palette;
@@ -2081,14 +2135,30 @@ export default function SlicerPlateEditor({
     }
 
     function pointerMove(event) {
+      if (latestToolModeRef.current === "paint_colour" && !painting &&
+          (event.buttons === 0 || event.pointerType === "touch")) {
+        rayFromPointer(event);
+        const hit=raycaster.intersectObjects([...meshes.values()],false)
+          .find(row=>row.object.userData.instanceId===selectionRef.current[0]);
+        if (hit && latestPaintOptionsRef.current?.mode==="height") {
+          const local=hit.object.worldToLocal(hit.point.clone());
+          const next=Math.max(0,Math.round(local.z*2)/2);
+          if (next !== lastHoverHeight) {
+            lastHoverHeight=next;
+            latestPaintHeightPickRef.current?.(next);
+          }
+        }
+        previewPaintGuide(hit);
+      }
       if (painting?.pointerId === event.pointerId) {
         rayFromPointer(event);
         const hits = raycaster.intersectObjects([...meshes.values()], false);
         const hit = hits.find(row => row.object.userData.instanceId === painting.instanceId);
-        if (hit) {
+        if (hit && !["height","fill","smart_fill","facet"].includes(latestPaintOptionsRef.current?.mode)) {
           try {paintHit(hit, painting);}
           catch (error) {latestPaintErrorRef.current?.(error.message || "Painting failed.");}
         }
+        if (hit) previewPaintGuide(hit);
         event.preventDefault();
         return;
       }
@@ -2284,6 +2354,8 @@ export default function SlicerPlateEditor({
     renderer.domElement.addEventListener("pointermove", pointerMove);
     renderer.domElement.addEventListener("pointerup", pointerUp);
     renderer.domElement.addEventListener("pointercancel", pointerUp);
+    const pointerLeavePaint=()=>{if(!painting)hidePaintGuides();};
+    renderer.domElement.addEventListener("pointerleave",pointerLeavePaint);
     const resize = () => {
       if (!mount.clientWidth || !mount.clientHeight) return;
       renderer.setSize(mount.clientWidth, mount.clientHeight, false);
@@ -2344,6 +2416,10 @@ export default function SlicerPlateEditor({
       renderer.domElement.removeEventListener("pointermove", pointerMove);
       renderer.domElement.removeEventListener("pointerup", pointerUp);
       renderer.domElement.removeEventListener("pointercancel", pointerUp);
+      renderer.domElement.removeEventListener("pointerleave",pointerLeavePaint);
+      for(const guide of [brushGuide,sphereGuide,...heightGuide]){
+        scene.remove(guide);guide.geometry.dispose();guide.material.dispose();
+      }
       renderer.setAnimationLoop(null);
       window.removeEventListener("keydown", onRotationKeyChange);
       window.removeEventListener("keyup", onRotationKeyChange);
