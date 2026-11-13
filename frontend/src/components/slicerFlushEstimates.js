@@ -54,8 +54,16 @@ const family=v=>{
   if(/PA|NYLON/.test(m))return "PA";
   return null;
 };
-export function estimateSlotFlush(from,to){
+export function slotMaterialCompatibility(from,to){
   const a=family(from?.material),b=family(to?.material);
-  if(!a||!b||a!==b)return null;
-  return estimateColourFlush(from.color_hex,to.color_hex);
+  return !a||!b ? "unknown" : a===b ? "same" : "mixed";
+}
+export function estimateSlotFlush(from,to,{allowMixed=false}={}){
+  const compatibility=slotMaterialCompatibility(from,to);
+  if(compatibility==="unknown" || (compatibility==="mixed" && !allowMixed))return null;
+  return estimateColourFlush(from?.color_hex,to?.color_hex);
+}
+export function multiplyFlushEstimate(base,multiplier=1){
+  if(base==null||!Number.isFinite(multiplier)||multiplier<.1||multiplier>3)return null;
+  return Math.min(20000,Math.max(0,Math.round(base*multiplier)));
 }
