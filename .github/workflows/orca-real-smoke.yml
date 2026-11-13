@@ -130,7 +130,8 @@ jobs:
             --filament /tmp/makervault-orca-k2/filament.json \
             --second-filament /tmp/makervault-orca-k2/filament.json \
             --process /tmp/makervault-orca-k2-flush-process.json \
-            --model /tmp/makervault-orca-two-tool.3mf
+            --model /tmp/makervault-orca-two-tool.3mf \
+            --audit-changeovers
       - name: Report native flushing acceptance evidence
         if: always() && steps.k2_flush_tower.outcome != 'skipped'
         run: |
@@ -138,7 +139,7 @@ jobs:
           echo "- Flush-matrix only: ${{ steps.k2_flush_only.outcome }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Flush-matrix with tower enabled: ${{ steps.k2_flush_tower.outcome }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Directional volumes 300/220 mm³ are test inputs, NOT calibrated manufacturer values." >> "$GITHUB_STEP_SUMMARY"
-          echo "- The probe currently verifies tool deposition, not complete flushing/prime-tower paths." >> "$GITHUB_STEP_SUMMARY"
+          echo "- The probe records tool-switch counts, stationary extrusion and out-of-model toolpaths; it does not prove the complete physical CFS purge sequence." >> "$GITHUB_STEP_SUMMARY"
           echo "- This remains diagnostic and does not enable physical CFS printing." >> "$GITHUB_STEP_SUMMARY"
       - name: Diagnose the two native flushing failures using official fixture logs
         if: always() && (steps.k2_flush_only.outcome == 'failure' || steps.k2_flush_tower.outcome == 'failure')
