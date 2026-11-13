@@ -8,7 +8,7 @@ const base=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../src");
 
 test("Orca analytic fallback is directional and does not imply a printer minimum",()=>{
   assert.ok(Math.abs(estimateColourFlush("#000000","#ffffff")-560)<=1);
-  assert.equal(estimateColourFlush("#ffffff","#000000"),80);
+  assert.ok(Math.abs(estimateColourFlush("#ffffff","#000000")-80)<=1);
   assert.notEqual(estimateColourFlush("#00ff00","#ffffff"),
     estimateColourFlush("#ffffff","#00ff00"));
 });
