@@ -22,6 +22,7 @@ urlpatterns = [
     path("printing/slicer/profiles/<uuid:profile_id>/bed-model/", slicer_api.profile_bed_model, name="api-slicer-profile-bed-model"),
     path("printing/slicer/jobs/<uuid:job_id>/", slicer_api.job_detail, name="api-slicer-job-detail"),
     path("printing/slicer/jobs/<uuid:job_id>/start/", slicer_api.job_start, name="api-slicer-job-start"),
+    path("printing/slicer/jobs/<uuid:job_id>/export-project/", slicer_api.export_project_3mf, name="api-slicer-export-project"),
     path("printing/slicer/jobs/<uuid:job_id>/save-gcode/", slicer_api.save_job_gcode_to_library, name="api-slicer-save-job-gcode"),
     path("printing/slicer/jobs/<uuid:job_id>/cancel/", slicer_api.job_cancel, name="api-slicer-job-cancel"),
 
