@@ -163,6 +163,54 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     setNotice("Moved "+selected.length+" model(s) to "+destination.name+
       ". Review their placement on that plate before slicing.");
   };
+  const importProjectFile=async file=>{
+    if(!file||busy||loading||!canPrepare)return;
+    if(projectPlates.some(plate=>plate.objects.length)&&
+       !window.confirm("Replace the current unsaved multi-plate workspace with this project?"))return;
+    setBusy(true);setError("");setNotice("");
+    try{
+      const data=new FormData();data.append("file",file);
+      const result=await apiFetch("/api/printing/slicer/projects/import/",{
+        method:"POST",body:data,
+      });
+      setProjectPlates(result.plates);
+      setActivePlateId(result.active_plate_id);
+      setPlateValidation(null);
+      setPlateLocalAssets(current=>[...current,...result.files]);
+      manuallyColouredModels.current=new Set(result.plates.flatMap(plate=>
+        plate.objects.map(item=>item.instance_id)));
+      const config=result.configuration||{};
+      const allProfiles=[...profiles];
+      const profileAvailable=(id,kind)=>allProfiles.some(profile=>
+        String(profile.id)===String(id)&&profile.kind===kind);
+      // Only restore native identities still present on this installation.
+      // Missing/foreign profiles must be chosen explicitly before slicing.
+      setForm(current=>({
+        ...current,
+        ...(config.engine?{engine:config.engine}:{}),
+        ...(config.engine_version?{engine_version:config.engine_version}:{}),
+        ...(config.nozzle_mm?{nozzle_mm:String(config.nozzle_mm)}:{}),
+        printer_profile_id:profileAvailable(config.printer?.profile_id,"printer")
+          ?config.printer.profile_id:"",
+        filament_profile_id:profileAvailable(config.filament?.profile_id,"filament")
+          ?config.filament.profile_id:"",
+        process_profile_id:profileAvailable(config.process?.profile_id,"process")
+          ?config.process.profile_id:"",
+        printer_preset:config.printer?.preset||current.printer_preset,
+        filament_preset:config.filament?.preset||current.filament_preset,
+        process_preset:config.process?.preset||current.process_preset,
+        spool_id:spools.some(spool=>String(spool.id)===String(config.filament?.spool_id))
+          ?config.filament.spool_id:"",
+        printer_id:printers.some(printer=>String(printer.id)===String(config.printer?.id))
+          ?config.printer.id:"",
+      }));
+      setProcessOverrides(config.process?.overrides||{});
+      setEditorOpen(true);
+      setNotice("Project restored with "+result.plates.length+
+        " plates. Review native profiles before slicing.");
+    }catch(err){setError(err.message||"Could not import project 3MF.");}
+    finally{setBusy(false);}
+  };
   const [processOverrides, setProcessOverrides] = useState({});
   // Keep temporary STL filenames and preview URLs when switching between
   // the setup plate and the interactive editor.
@@ -1177,6 +1225,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       onSaveCustomProcessProfile={saveInteractiveProcessProfile}
       onBackToSetup={() => setEditorOpen(false)} onSaveDraft={() => saveDraft("draft")}
       onSaveProject={() => saveDraft("project")} onSliceAll={() => saveDraft("all")}
+       onImportProject={importProjectFile}
       onSlice={() => saveDraft("slice")}
     /> : <>
     <div className="slicerWorkbenchTop">
