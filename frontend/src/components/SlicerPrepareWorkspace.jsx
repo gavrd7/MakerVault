@@ -853,9 +853,6 @@ export default function SlicerPrepareWorkspace({
             border:"1px solid #9aa9bc",display:"grid",placeItems:"center",
             color:materialTextColor(slot.color),fontWeight:700,fontSize:11}}>{index+1}</span>
         </button>)}
-        <button type="button" title="Erase painted faces" aria-label="Erase painted faces"
-          aria-pressed={paintErase} onClick={()=>setPaintErase(true)}
-          style={{alignSelf:"end",padding:"6px",border:paintErase?"2px solid #38bdf8":"1px solid #53647a",borderRadius:7}}>Erase</button>
       </div>
       {["brush","circle","sphere"].includes(paintMode)&&<label style={{display:"grid",gap:2,fontSize:12}}>
         {paintMode==="brush"?"Brush":"Region"} radius · {paintBrushMm} mm
@@ -905,11 +902,16 @@ export default function SlicerPrepareWorkspace({
       </div>}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:5}}>
         <small>{paintSelected?.colour_paint ? Object.keys(paintSelected.colour_paint.faces||{}).length : 0} facets</small>
+        <div className="slicerPaintEditActions">
+          <button type="button" title="Erase painted faces" aria-label="Erase painted faces"
+            aria-pressed={paintErase} onClick={()=>setPaintErase(true)}
+            className={paintErase?"isActive":""}>Erase</button>
         <button type="button" disabled={!paintSelected?.colour_paint}
           onClick={()=>{updatePlate(latest.current.map(item=>{
             if(item.instance_id!==selectedId)return item;
             const {colour_paint:unused,...rest}=item;return rest;
           }));setPaintError("");}}>Clear all</button>
+        </div>
       </div>
       <small style={{fontSize:11,opacity:.8}}>Left drag: paint · Right drag: move view · Wheel: zoom · Ctrl+Z: undo. Preview only.</small>
       {paintError&&<small role="alert" style={{color:"#fca5a5"}}>{paintError}</small>}
