@@ -4,6 +4,7 @@ from unittest import TestCase
 
 from slicer_worker.material_gcode_audit import (
     expected_native_tools, verify_multi_material_output, verify_two_object_tool_regions,
+    summarize_k2_fixture_changeovers,
 )
 from slicer_worker.runner import WorkerError
 
@@ -51,3 +52,24 @@ class MaterialOutputVerificationTests(TestCase):
         raw = (b"M82\nT0\nG92 E0\nG1 X10 E0.3\n"
                b"T1\nG92 E0\nG1 X20 E0.5\n")
         self.assertTrue(verify_multi_material_output(raw, {0, 1}))
+
+    def test_changeover_summary_counts_extrusion_outside_model_regions(self):
+        raw = (b"G90\\nM83\\nT0\\n"
+               b"G1 X75 Y110 E0.2\\n"
+               b"; FEATURE: Prime tower\\nG1 X40 Y40 E0.3\\n"
+               b"T1\\nG1 E3\\n"
+               b"G1 X145 Y110 E0.2\\n"
+               b"; FEATURE: Prime tower\\nG1 X41 Y40 E0.4\\n"
+               b"T0\\nG1 X40 Y40 E0.5\\n")
+        evidence = summarize_k2_fixture_changeovers(raw)
+        self.assertEqual(evidence["selected_tools"], [0, 1])
+        self.assertEqual(evidence["tool_switches"], 2)
+        self.assertEqual(evidence["outside_model_deposition_moves"], {"0": 2, "1": 1})
+        self.assertEqual(evidence["stationary_extrusion_moves"], {"1": 1})
+        self.assertEqual(evidence["outside_deposition_features"]["prime tower"], 3)
+
+    def test_changeover_auditor_rejects_unsupported_relative_xy_and_binary(self):
+        with self.assertRaisesRegex(WorkerError, "Relative XY"):
+            summarize_k2_fixture_changeovers(b"M83\\nG91\\nT0\\nG1 X3 E1\\n")
+        with self.assertRaisesRegex(WorkerError, "UTF-8"):
+            summarize_k2_fixture_changeovers(b"T0\\n\\xff")
