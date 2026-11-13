@@ -6317,3 +6317,16 @@ a:focus-visible,
   .slicerColourPaintPanel label{min-width:0}
   .slicerColourPaintPanel input[type="range"]{max-width:100%}
 }
+
+/* Keep interactive slicing actions at the trailing/right edge even when the
+   status column is empty or hidden. Narrow screens retain a wrapping footer. */
+.slicerPrepareActions{width:100%;min-width:0}
+.slicerPrepareActions>.settingsActions{
+  margin-left:auto;justify-content:flex-end;align-items:center;
+  max-width:100%;min-width:0;
+}
+@media(max-width:700px){
+  .slicerPrepareActions>.settingsActions{
+    width:100%;margin-left:0;justify-content:stretch;
+  }
+}
