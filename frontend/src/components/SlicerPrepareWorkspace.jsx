@@ -11,28 +11,28 @@ import { apiFetch } from "../api";
  * native format round-trip have been implemented and tested.
  */
 const TOOLS = [
-  { name: "Add model", target: "import", icon: "add" },
-  { name: "Move", target: "x_mm", icon: "move" },
-  { name: "Rotate", target: "rotation_deg", icon: "rotate" },
-  { name: "Scale", target: "scale_percent", icon: "scale" },
-  { name: "Auto-arrange", target: "arrange", icon: "arrange" },
-  { name: "Duplicate", target: "duplicate", icon: "duplicate" },
-  { name: "Remove", target: "remove", icon: "remove" },
-  { name: "Centre selected", target: "center", icon: "center" },
-  { name: "Fit selected", target: "focus", icon: "focus" },
-  { name: "Add plate", target: "add_plate", icon: "add" },
-  { name: "Auto-orient", target: "auto_orient", icon: "orient" },
-  { name: "Lay on face", target: "lay_face", icon: "face" },
-  { name: "Split", target: "split", icon: "split" },
-  { name: "Hollow", target: "hollow", icon: "hollow" },
-  { name: "Drill", target: "drill", icon: "drill" },
-  { name: "Cut", target: "cut", icon: "cut" },
-  { name: "Mesh boolean", target: "boolean", icon: "boolean" },
-  { name: "Measure", target: "measure", icon: "measure", expandable: true },
-  { name: "Support painting", icon: "paint", pending: "Native per-face support annotations" },
-  { name: "Seam painting", icon: "paint", pending: "Native seam-region annotations" },
-  { name: "Variable layer height", icon: "layers", pending: "Native variable layer representation" },
-  { name: "Colour painting", icon: "paint", pending: "Native multi-material annotations and tool mapping" },
+  {name:"Add model",target:"import",icon:"add",group:"create"},
+  {name:"Add plate",target:"add_plate",icon:"add-plate",group:"create"},
+  {name:"Duplicate",target:"duplicate",icon:"duplicate",group:"create"},
+  {name:"Remove",target:"remove",icon:"remove",group:"create"},
+  {name:"Move",target:"x_mm",icon:"move",group:"transform"},
+  {name:"Rotate",target:"rotation_deg",icon:"rotate",group:"transform"},
+  {name:"Scale",target:"scale_percent",icon:"scale",group:"transform"},
+  {name:"Centre selected",target:"center",icon:"center",group:"arrange"},
+  {name:"Auto-arrange",target:"arrange",icon:"arrange",group:"arrange"},
+  {name:"Auto-orient",target:"auto_orient",icon:"orient",group:"arrange"},
+  {name:"Lay on face",target:"lay_face",icon:"face",group:"arrange"},
+  {name:"Fit selected",target:"focus",icon:"focus",group:"arrange"},
+  {name:"Split",target:"split",icon:"split",group:"geometry"},
+  {name:"Cut",target:"cut",icon:"cut",group:"geometry"},
+  {name:"Drill",target:"drill",icon:"drill",group:"geometry"},
+  {name:"Hollow",target:"hollow",icon:"hollow",group:"geometry"},
+  {name:"Mesh boolean",target:"boolean",icon:"boolean",group:"geometry"},
+  {name:"Measure",target:"measure",icon:"measure",group:"inspect",expandable:true},
+  {name:"Support painting",icon:"paint-support",group:"paint",pending:"Native per-face support annotations"},
+  {name:"Seam painting",icon:"paint-seam",group:"paint",pending:"Native seam-region annotations"},
+  {name:"Variable layer height",icon:"layers",group:"paint",pending:"Native variable layer representation"},
+  {name:"Colour painting",icon:"paint-colour",group:"paint",pending:"Native multi-material annotations and tool mapping"},
 ];
 const SECTION_ORDER = {
   Quality: ["Layer height", "Line width", "Seam", "Precision", "Ironing", "Z contouring", "Walls and surfaces", "Overhangs", "Bridging"],
@@ -737,7 +737,7 @@ export default function SlicerPrepareWorkspace({
         <button type="button" disabled={!redoRef.current.length || busy} onClick={redo}
           aria-label="Redo"><SlicerUiIcon name="redo" /></button>
       </span>
-      {TOOLS.map(tool => <div className={"slicerToolTooltip" + (((tool.expandable && measureOptionsOpen) || (tool.target === "auto_orient" && autoOrientMenuOpen) || (tool.target === "import" && addModelMenuOpen)) ? " slicerToolOptionsOpen" : "")} key={tool.name}
+      {TOOLS.map((tool,index) => <div className={"slicerToolTooltip" + (index===0||TOOLS[index-1].group!==tool.group?" slicerToolGroupStart":"") + (((tool.expandable && measureOptionsOpen) || (tool.target === "auto_orient" && autoOrientMenuOpen) || (tool.target === "import" && addModelMenuOpen)) ? " slicerToolOptionsOpen" : "")} key={tool.name}
         onMouseEnter={() => setToolDescriptor(tool.pending ? tool.name + " · Not yet available: " + tool.pending : tool.name)}
         onMouseLeave={() => setToolDescriptor("")}
         onFocus={() => setToolDescriptor(tool.pending ? tool.name + " · Not yet available: " + tool.pending : tool.name)}
