@@ -63,8 +63,7 @@ export function appendPaintRegion(state,mesh,selection,slot){
     if(polygon.length>=3)patches.push({face,polygon:polygon.map(p=>[...p])});
   }
   if(!patches.length)return state;
-  return {version:2,signature:state.signature,
-    regions:[...state.regions,{slot,patches}]};
+  return {...state,regions:[...state.regions,{slot,patches}]};
 }
 /** Snapshot-friendly undo for additive region edits. */
 export function removeLastPaintRegion(state,mesh){
