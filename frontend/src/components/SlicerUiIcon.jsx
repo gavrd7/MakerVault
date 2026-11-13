@@ -17,6 +17,13 @@ const paths = {
   "paint-seam": <><path d="M5 3h14v18H5z"/><path strokeDasharray="2 2" d="M12 3v18"/><path d="m3 7 4 4"/></>,
   "paint-colour": <><path d="m5 18 8-13 6 6-11 9H4z"/><circle cx="17" cy="5" r="2"/><path d="M5 3h4"/></>,
 
+  "paint-brush": <><path d="m14 4 6 6-9 9-6-6 9-9Z"/><path d="m14 4 3-2 5 5-2 3M5 13c-2 2-2 5-3 7 3-1 6-1 8-3"/></>,
+  "paint-facet": <><path d="M12 3 3 20h18L12 3Z"/><path d="m12 3 1 12M3 20l10-5 8 5"/></>,
+  "paint-disc": <><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 1v4M12 19v4M1 12h4m14 0h4"/></>,
+  "paint-sphere": <><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/></>,
+  "paint-fill": <><path d="m12 3 8 8-8 8-8-8 8-8Z"/><path d="M7 12h10m-5-5v10"/></>,
+  "paint-smart": <><path d="M4 19 11 5l9 14H4Z"/><path d="m13 8 3 7M8 15l2-4"/></>,
+  "paint-height": <><path d="M4 4h16M4 20h16M4 12h16"/><path d="m9 9 3-3 3 3m-3-3v12m-3-3 3 3 3-3"/></>,
   undo: <><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-2"/></>,
   redo: <><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h2"/></>,
   move: <><path d="M12 2v20M2 12h20M9 5l3-3 3 3M9 19l3 3 3-3M5 9l-3 3 3 3m14-6 3 3-3 3"/></>,
