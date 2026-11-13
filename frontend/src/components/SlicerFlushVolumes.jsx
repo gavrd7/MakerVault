@@ -1,6 +1,6 @@
 import React from "react";
 
-const defaultFlush = () => ({ multiplier: 1, prime_tower: "native", transitions: [] });
+const defaultFlush = () => ({ multiplier: null, prime_tower: "native", transitions: [] });
 const nameFor = slot => `Slot ${Number(slot.slot_index ?? 0) + 1} · ${slot.product_name || slot.material || "Unknown"}`;
 
 /** Draft-only native Orca flushing configuration for observed changer slots.
@@ -37,10 +37,11 @@ export default function SlicerFlushVolumes({ slots = [], value = null, onChange,
     </p>
     <div className="slicerFlushPanelControls">
       <label>Flush multiplier
-        <input type="number" min="0.1" max="3" step="0.1" value={data.multiplier}
+        <input type="number" min="0.1" max="3" step="0.1" value={data.multiplier ?? ""} placeholder="Native"
           disabled={disabled} onChange={event => {
             const number = Number(event.target.value);
-            if (number >= 0.1 && number <= 3)
+            if (!event.target.value.trim()) change({ ...data, multiplier: null });
+            else if (number >= 0.1 && number <= 3)
               change({ ...data, multiplier: number });
           }} />
       </label>
