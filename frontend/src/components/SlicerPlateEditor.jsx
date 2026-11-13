@@ -16,6 +16,8 @@ import { nativeBedArtwork } from "./slicerNativePlateArt";
 import { detectMeshMeasurement, formatDetectedMeasurement } from "./slicerAutoMeasure";
 import { evaluateAutoOrient, AUTO_ORIENT_GOALS } from "./slicerAutoOrient";
 import { splitDisconnectedMesh } from "./slicerSplitObjects";
+import { createPaintMesh, selectPaintFaces, applyPaint } from "./slicerColourPainting";
+import { paintPreview } from "./slicerColourPaintPreview";
 import { executeSolidOperation } from "./slicerSolidOperations";
 import { PRIMITIVE_TYPES, TEXT_FONTS, createPrimitiveMesh, createPrimitiveStl, createTextStl, createSvgStl } from "./slicerPrimitives";
 import { validateStackPlacement } from "./slicerStacking";
@@ -237,7 +239,7 @@ export default function SlicerPlateEditor({
   selectedInstanceId = null, onSelectedInstanceChange, selectedInstanceIds = [], onSelectModel, toolMode = "select",
   autoOrientGoal = "balanced", autoOrientRequest = 0, splitRequest = 0, solidRequest = null,
   measurementVisible = false, measureMode = "distance", measureUnit = "mm", measureSnapMode = "auto", measureClearVersion = 0,
-  onMeasurePinPlaced,
+  onMeasurePinPlaced, colourPaintOptions = null, onColourPaintError,
   localAssets = [], onLocalAssetsChange, onExitToolMode, onPlateIssuesChange, toolbar = null,
 }) {
   const hostRef = useRef(null);
@@ -257,6 +259,10 @@ export default function SlicerPlateEditor({
   latestObjectsRef.current = objects;
   latestOnChangeRef.current = onChange;
   latestToolModeRef.current = toolMode;
+  const latestPaintOptionsRef = useRef(colourPaintOptions);
+  const latestPaintErrorRef = useRef(onColourPaintError);
+  latestPaintOptionsRef.current = colourPaintOptions;
+  latestPaintErrorRef.current = onColourPaintError;
   const [localSelected, setLocalSelected] = useState("");
   const [showNativeArtwork, setShowNativeArtwork] = useState(true);
   const [sectionPercent, setSectionPercent] = useState(100);
@@ -1850,6 +1856,7 @@ export default function SlicerPlateEditor({
     const raycaster = new THREE.Raycaster();
     const bedPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
     let dragging = null;
+    let painting = null;
     let rotationPointerId = null;
     let lastRotationPreview = null;
 
@@ -1863,6 +1870,24 @@ export default function SlicerPlateEditor({
       return raycaster;
     }
 
+    function paintHit(hit, pending) {
+      if (!hit?.face || !Number.isInteger(hit.faceIndex)) return;
+      const mesh = hit.object;
+      if (mesh.userData.instanceId !== pending.instanceId) return;
+      const options = latestPaintOptionsRef.current;
+      if (!options || !["brush","facet","fill","smart_fill","height"].includes(options.mode)) return;
+      if (!mesh.userData.paintMesh) mesh.userData.paintMesh = createPaintMesh(mesh.geometry);
+      const paintMesh = mesh.userData.paintMesh;
+      const faces = selectPaintFaces(paintMesh, {
+        mode:options.mode,face:hit.faceIndex,radiusMm:options.radiusMm,
+        angleDeg:options.angleDeg,minHeightMm:options.minHeightMm,maxHeightMm:options.maxHeightMm,
+      });
+      pending.paint = applyPaint(pending.paint, paintMesh, faces, pending.slot);
+      pending.paint.palette = pending.palette;
+      pending.changed = true;
+      const original = latestObjectsRef.current.find(item => item.instance_id === pending.instanceId);
+      if (original) paintPreview(mesh, { ...original, colour_paint:pending.paint });
+    }
     function pointerDown(event) {
       if (!canEdit || solidDialogRef.current || event.button > 0 || transform.dragging) return;
       rayFromPointer(event);
@@ -1881,6 +1906,37 @@ export default function SlicerPlateEditor({
         }
       }
       const hits = raycaster.intersectObjects([...meshes.values()], false);
+      if (latestToolModeRef.current === "paint_colour") {
+        if (!hits.length) return;
+        const hit = hits[0];
+        if (hit.object.userData.instanceId !== selectionRef.current[0]) {
+          setSelected(hit.object.userData.instanceId);
+          return;
+        }
+        const options = latestPaintOptionsRef.current;
+        if (!options) return;
+        const item = latestObjectsRef.current.find(row => row.instance_id === hit.object.userData.instanceId);
+        if (!item) return;
+        try {
+          const palette = item.colour_paint?.palette || options.palette;
+          if (!Array.isArray(palette) || !palette.length || palette.length > 64)
+            throw new Error("Choose a valid filament preview palette first.");
+          const slot = options.slot;
+          if (slot !== null && (!Number.isInteger(slot) || slot < 0 || slot >= palette.length))
+            throw new Error("The selected paint slot is no longer available.");
+          painting = { pointerId:event.pointerId, instanceId:item.instance_id,
+            slot, palette, paint:item.colour_paint || null, changed:false };
+          paintHit(hit, painting);
+          controls.enabled = false;
+          renderer.domElement.setPointerCapture?.(event.pointerId);
+          latestPaintErrorRef.current?.("");
+        } catch (error) {
+          painting = null;
+          latestPaintErrorRef.current?.(error.message || "Could not paint this model.");
+        }
+        event.preventDefault();
+        return;
+      }
       if (latestMeasurementRef.current.active) {
         if (!hits.length) return;
         const hit = hits[0];
