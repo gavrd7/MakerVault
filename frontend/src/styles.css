@@ -6330,3 +6330,40 @@ a:focus-visible,
     width:100%;margin-left:0;justify-content:stretch;
   }
 }
+
+/* Accessible flushing editor: one compact action in the setup column,
+   a scrollable modal with a wide, non-cramped transition matrix. */
+.slicerFlushOpenButton{width:100%;max-width:100%;text-align:center;min-height:40px}
+.slicerFlushModalBackdrop{
+  position:fixed;inset:0;z-index:11000;background:rgba(0,0,0,.7);
+  display:flex;align-items:center;justify-content:center;padding:16px;
+}
+.slicerFlushModal{
+  width:min(1020px,100%);max-height:min(90dvh,900px);min-width:0;
+  border:1px solid #43556d;border-radius:12px;background:#111a28;color:#e7edf6;
+  display:flex;flex-direction:column;overflow:hidden;box-shadow:0 22px 70px rgba(0,0,0,.55);
+}
+.slicerFlushModalHeader,.slicerFlushModalFooter{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:12px 16px;flex:0 0 auto;background:#111a28;
+}
+.slicerFlushModalHeader{border-bottom:1px solid #354359}
+.slicerFlushModalHeader h3{margin:0}
+.slicerFlushModalFooter{border-top:1px solid #354359;justify-content:flex-end}
+.slicerFlushModalBody{padding:14px 16px;overflow:auto;min-width:0;min-height:0}
+.slicerFlushModalControls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.slicerFlushModalControls label{min-width:0;display:grid;gap:5px}
+.slicerFlushModalControls input,.slicerFlushModalControls select{min-width:0;width:100%}
+.slicerFlushModal .slicerFlushTableScroll{overflow:auto;max-width:100%;max-height:40dvh}
+.slicerFlushModal .slicerFlushTable{width:max-content;min-width:100%;border-collapse:separate;white-space:nowrap}
+.slicerFlushModal .slicerFlushTable th{min-width:95px}
+.slicerFlushModal .slicerFlushTable td input{min-width:78px;width:94px;max-width:110px}
+.slicerFlushSlotLabel{display:flex;gap:6px;align-items:center;text-align:left}
+.slicerFlushSwatch{width:18px;height:18px;border:1px solid #8b9aac;border-radius:50%;flex:0 0 18px}
+@media(max-width:700px){
+ .slicerFlushModalBackdrop{padding:8px}
+ .slicerFlushModal{max-height:calc(100dvh - 16px);width:100%}
+ .slicerFlushModalBody{padding:10px}
+ .slicerFlushModalControls{grid-template-columns:1fr}
+ .slicerFlushModalHeader,.slicerFlushModalFooter{padding:9px 11px}
+}
