@@ -77,6 +77,44 @@ class Core3MFWorkerTests(TestCase):
             with self.subTest(overrides=overrides), self.assertRaises(WorkerError):
                 validate_worker_3mf(self.with_object_metadata(overrides))
 
+
+    def test_native_extruder_metadata_requires_matching_explicit_palette(self):
+        raw = self.with_object_metadata([("extruder", "2")])
+        with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+            contents = {name: archive.read(name) for name in archive.namelist()}
+        manifest = contents["Metadata/model_settings.config"]
+        manifest = manifest.replace(
+            b'<config><object id="2">',
+            b'<config><object id="1"><metadata key="extruder" value="1"/></object><object id="2">',
+        )
+        contents["Metadata/model_settings.config"] = manifest
+        def archive(data):
+            out = io.BytesIO()
+            with zipfile.ZipFile(out, "w") as package:
+                for name, contents_ in data.items():
+                    package.writestr(name, contents_)
+            return out.getvalue()
+        self.assertTrue(validate_worker_3mf(archive(contents), native_tool_count=2))
+        with self.assertRaisesRegex(WorkerError, "Unsupported"):
+            validate_worker_3mf(archive(contents))
+        with self.assertRaises(WorkerError):
+            validate_worker_3mf(archive(contents), native_tool_count=1)
+        for invalid in (b"0", b"3", b"-1", b"1.5"):
+            with self.subTest(invalid=invalid):
+                changed = dict(contents)
+                changed["Metadata/model_settings.config"] = manifest.replace(
+                    b'key="extruder" value="2"',
+                    b'key="extruder" value="' + invalid + b'"',
+                )
+                with self.assertRaises(WorkerError):
+                    validate_worker_3mf(archive(changed), native_tool_count=2)
+        changed = dict(contents)
+        changed["Metadata/model_settings.config"] = manifest.replace(
+            b'<object id="1"><metadata key="extruder" value="1"/></object>', b'',
+        )
+        with self.assertRaisesRegex(WorkerError, "Every native object"):
+            validate_worker_3mf(archive(changed), native_tool_count=2)
+
     def test_valid_core_model_is_admitted(self):
         self.assertTrue(validate_worker_3mf(self.package()))
 
