@@ -21,8 +21,10 @@ IMAGE_ID = re.compile(r"^sha256:[a-f0-9]{64}$")
 
 
 # Direct script invocation puts scripts/ (not the repository root) on sys.path.
-# Keep the approved release list shared with the installer.
-from install_slicer_staging import APPROVED_ORCA_RELEASES
+# Resolve the shared installer package consistently for CLI and unit imports.
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+from scripts.install_slicer_staging import APPROVED_ORCA_RELEASES
 
 
 def _pinned_details(config=DOTENV):
