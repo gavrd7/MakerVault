@@ -20,7 +20,10 @@ MAX_PROFILE_BYTES = 1024 * 1024
 IMAGE_ID = re.compile(r"^sha256:[a-f0-9]{64}$")
 
 
-def _pinned_image(config=DOTENV):
+from scripts.install_slicer_staging import APPROVED_ORCA_RELEASES
+
+
+def _pinned_details(config=DOTENV):
     if config.is_symlink() or not config.is_file() or config.stat().st_mode & 0o077:
         raise ValueError("Private staging installer environment (.slicer-staging.env) is required.")
     variables = {}
@@ -33,16 +36,21 @@ def _pinned_image(config=DOTENV):
         raise ValueError("Worker image is not pinned to the configured immutable SHA-256 ID.")
     engines = json.loads(variables.get("SLICER_ENGINES_JSON", "{}"))
     orca = engines.get("orcaslicer")
-    if not isinstance(orca, dict) or orca.get("version") != "2.5.0" or orca.get("binary") != "/opt/engines/orcaslicer.AppImage":
+    if not isinstance(orca, dict) or orca.get("version") not in APPROVED_ORCA_RELEASES or orca.get("binary") != "/opt/engines/orcaslicer.AppImage":
         raise ValueError("The pinned Orca 2.4.2 worker is not present in the staging manifest.")
     if not re.fullmatch("[a-f0-9]{64}", str(orca.get("binary_sha256", ""))):
         raise ValueError("Orca executable digest is missing or invalid.")
-    return image
+    return image, orca["version"]
+
+
+def _pinned_image(config=DOTENV):
+    """Compatibility helper for callers needing only the immutable image."""
+    return _pinned_details(config)[0]
 
 
 def probe(printer, filament, process, *, model=None, compound=False, experimental_all_plates=False, experimental_no_arrange=False, verify_object_effects=False, reverse_object_effects=False, second_filament=None, config=DOTENV, runner=subprocess.run):
     """Exercise real engine without app, network, Docker socket or host mounts."""
-    image = _pinned_image(config)
+    image, installed_version = _pinned_details(config)
     sources = {"printer": printer, "filament": filament, "process": process}
     if second_filament is not None:
         if model is None or compound or verify_object_effects:
@@ -87,7 +95,7 @@ def probe(printer, filament, process, *, model=None, compound=False, experimenta
             "--mount", f"type=bind,src={bundle},dst=/fixtures,readonly",
             "--entrypoint", "python3", image,
             "-m", "slicer_worker.probe", "--engine", "orcaslicer",
-            "--version", "2.5.0", "--binary", "/opt/engines/orcaslicer.AppImage",
+            "--version", installed_version, "--binary", "/opt/engines/orcaslicer.AppImage",
             "--printer", "/fixtures/printer.json",
             "--filament", "/fixtures/filament.json",
             "--process", "/fixtures/process.json",
