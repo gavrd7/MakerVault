@@ -232,3 +232,41 @@ does not queue or transmit a job.
 Until those checks pass, saved assigned slots remain project metadata;
 slicing mapped drafts is disabled, and the proven single-filament path is
 unchanged.
+
+### G-code postprocessing and material flushing (13 November)
+
+**Post-slice editing:** The saved G-code viewer has an explicit `+ G-code`
+control alongside the visualiser's layer slider. It reads the **complete**
+original file (not the 80k-segment sampled preview), matches native
+`;LAYER_CHANGE`/`;Z:` boundaries, inserts user-entered commands *after*
+the selected layer and before the next layer marker, previews the exact
+insertion, and saves an immutable new asset version. Missing/ambiguous layers,
+invalid code, final layers without successors and files over 32 MiB are
+rejected. No edit replaces the original file or starts a print. Firmware-
+specific pause and temperature commands require human review.
+
+**Native flush preparation:** Orca's directional `flush_volumes_matrix`
+is in mm³, row=from tool, column=to tool. Its native `flush_multiplier`
+multiplies matrix entries, and `enable_prime_tower` controls tower generation.
+MakerVault's filament sidebar now has a collapsible per-slot directional
+table, optional multiplier (blank=inherited) and prime-tower choice
+(native/enabled/disabled). Draft settings are strictly validated, saved and
+restored; the offline material preflight maps physical slot IDs onto
+verified native Orca tool indices and derives a new process profile **without
+mutating the source profile**.
+
+No generic per-printer multiplier is fabricated. Verified profile data is
+retained wherever available; missing native matrix cells require explicit
+values for every directed transition. Independent toolheads are rejected by
+the single-nozzle CFS/AMS flushing path. Actual purge/unload/load sequences
+are never handwritten by MakerVault; they remain owned by selected,
+manufacturer-appropriate native profiles.
+
+The pinned 2.5 real-Orca workflow includes an experimental, *nonblocking*
+two-tool process-profile fixture with deliberately artificial 300/220 mm³
+transitions and prime tower enabled. Passing this probe does **not** mean
+flush waste volumes, wipe tower placement, firmware toolchanges or print
+quality are certified. Product slicing with intended CFS/AMS assignments
+remains disabled until the native tool mapping, flushing/prime-tower G-code
+semantics, printer-profile compatibility and physical acceptance are
+verified.
