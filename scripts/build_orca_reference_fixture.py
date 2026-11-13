@@ -1,4 +1,4 @@
-"""Build isolated *test-only* native Orca profile fixtures from upstream v2.4.2.
+"""Build isolated *test-only* native Orca profile fixtures from upstream v2.5.0.
 
 This utility NEVER imports or approves profiles in MakerVault. Parent chains
 are loaded only from each pinned upstream vendor namespace and flattened for
@@ -17,7 +17,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 from slicer_worker.orca_runner import FORBIDDEN_KEYS
 
-REF = "v2.4.2"
+REF = "v2.5.0"
 SOURCE = f"https://raw.githubusercontent.com/OrcaSlicer/OrcaSlicer/{REF}/resources/profiles"
 FIXTURES = {
     "k1": {
@@ -89,7 +89,7 @@ def generate(destination, printer, *, opener=urlopen):
         data = resolved(kind, name, opener=opener, vendor=fixture["vendor"])
         if printer == "k2" and kind == "printer":
             # Reference-only compatibility experiment: the pinned official
-            # Creality K2 profile sets 30 while Orca 2.4.2 enforces 10..18.
+            # Creality K2 profile sets 30 while legacy Orca 2.4.2 enforced 10..18.
             # Never copy this modification into production printer profiles.
             if data.get("retraction_distances_when_cut") != "30":
                 raise ValueError("Official K2 retraction setting changed; review fixture before testing.")
