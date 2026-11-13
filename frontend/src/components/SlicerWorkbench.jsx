@@ -107,8 +107,44 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [mayDeleteDraft, setMayDeleteDraft] = useState(false);
   const [printSelection, setPrintSelection] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
-  const [plateObjects, setPlateObjects] = useState([]);
-  const [plateLabel, setPlateLabel] = useState("Plate 1");
+  // Multi-plate project; existing code reads only the active plate.
+  const [projectPlates,setProjectPlates] = useState([{id:"plate-1",name:"Plate 1",objects:[]}]);
+  const [activePlateId,setActivePlateId] = useState("plate-1");
+  const activePlate=projectPlates.find(item=>item.id===activePlateId)||projectPlates[0];
+  const plateObjects=activePlate?.objects||[];
+  const plateLabel=activePlate?.name||"Plate 1";
+  const setPlateObjects=useCallback(updater=>{
+    setProjectPlates(current=>current.map(item=>item.id===activePlateId
+      ?{...item,objects:typeof updater==="function"?updater(item.objects):updater}:item));
+  },[activePlateId]);
+  const setPlateLabel=useCallback(value=>{
+    setProjectPlates(current=>current.map(item=>item.id===activePlateId
+      ?{...item,name:typeof value==="function"?value(item.name):value}:item));
+  },[activePlateId]);
+  const addProjectPlate=()=>{
+    if(projectPlates.length>=8)return;
+    const id="plate-"+(typeof crypto!=="undefined"&&crypto.randomUUID
+      ?crypto.randomUUID():Math.random().toString(36).slice(2));
+    const used=new Set(projectPlates.map(item=>item.name));
+    let number=projectPlates.length+1;
+    while(used.has("Plate "+number))number++;
+    setProjectPlates(current=>[...current,{id,name:"Plate "+number,objects:[]}]);
+    setActivePlateId(id);setPlateValidation(null);
+  };
+  const removeProjectPlate=id=>{
+    if(projectPlates.length<=1)return;
+    const target=projectPlates.find(item=>item.id===id);
+    if(target?.objects.length&&!window.confirm("Remove "+target.name+" and its "+
+      target.objects.length+" model(s) from this project?"))return;
+    const remaining=projectPlates.filter(item=>item.id!==id);
+    setProjectPlates(remaining);
+    if(activePlateId===id)setActivePlateId(remaining[0].id);
+    setPlateValidation(null);
+  };
+  const chooseProjectPlate=id=>{
+    if(!projectPlates.some(item=>item.id===id))return;
+    setActivePlateId(id);setPlateValidation(null);
+  };
   const [processOverrides, setProcessOverrides] = useState({});
   // Keep temporary STL filenames and preview URLs when switching between
   // the setup plate and the interactive editor.
@@ -367,10 +403,17 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       return;
     }
     const savedObjects = job.settings?.plate_objects || [];
-    manuallyColouredModels.current = new Set(savedObjects.map(item => item.instance_id));
+    const savedPlates=job.settings?.plates;
+    const restored=Array.isArray(savedPlates)&&savedPlates.length
+      ?savedPlates.map(item=>({id:item.id,name:item.name,objects:item.objects||[]}))
+      :[{id:"plate-1",name:job.settings?.plate_label||"Plate 1",objects:savedObjects}];
+    manuallyColouredModels.current = new Set(restored.flatMap(item=>
+      item.objects.map(model=>model.instance_id)));
     manuallyChosenProfiles.current = new Set(["printer", "filament", "process"]);
-    setPlateObjects(savedObjects);
-    setPlateLabel(job.settings?.plate_label || "Plate 1");
+    setProjectPlates(restored);
+    setActivePlateId(restored.some(p=>p.id===job.settings?.active_plate_id)
+      ?job.settings.active_plate_id:restored[0].id);
+    setPlateValidation(null);
     setProcessOverrides(job.settings?.process_overrides || {});
     setEditorOpen(true);
     setForm(current => ({
@@ -542,15 +585,16 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     const saveOutput = mode === "save-and-slice";
     const workflow = mode === "quick" ? "quick" : mode === "draft" && !editorOpen ? "setup" : "interactive";
     setError(""); setNotice("");
-    if (!plateObjects.length) {
-      setError("Add at least one STL to the visual build plate before saving or slicing.");
+    if (!(sliceNow?plateObjects.length:projectPlates.some(item=>item.objects.length))) {
+      setError(sliceNow?"Add at least one STL to the active plate before slicing.":
+        "Add at least one STL to any plate before saving.");
       return;
     }
     if (sliceNow && unresolvedPlateIssues) {
       setError("Slicing is blocked: resolve overlapping or out-of-bounds models on the build plate first. You can still save a draft.");
       return;
     }
-    if (plateObjects.some(item => String(item.asset_id).startsWith("local:"))) {
+    if (projectPlates.some(plate=>plate.objects.some(item=>String(item.asset_id).startsWith("local:")))) {
       setError("A temporary STL has not finished uploading to the private slicing workspace. Import it again.");
       return;
     }
@@ -570,10 +614,14 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         method: "POST",
         body: {
           ...form,
-          input_asset_id: plateObjects[0].asset_id,
+          input_asset_id: plateObjects[0]?.asset_id ||
+            projectPlates.find(item=>item.objects.length)?.objects[0]?.asset_id,
           spool_id: form.spool_id || null,
           settings: { ...(plateObjects.length ? { plate_objects: plateObjects } : {}),
             plate_label: plateLabel.trim() || "Plate 1",
+            plates:projectPlates.map(plate=>({
+              id:plate.id,name:plate.name.trim()||"Untitled plate",objects:plate.objects,
+            })),active_plate_id:activePlateId,
             save_gcode_to_library: saveOutput, workflow,
             ...(form.engine === "orcaslicer" ? { process_overrides: processOverrides } : {}) },
         },
