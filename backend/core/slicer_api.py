@@ -850,7 +850,9 @@ def official_profiles(request):
             if not provider:
                 return _error("This slicer has no official printer catalogue.")
             try:
-                models = (orca_catalogue_models(request.GET.get("vendor", "Creality"), version)
+                models = (orca_catalogue_models(request.GET.get("vendor", "Creality"))
+                          if selected == "orcaslicer" and version == OFFICIAL_ORCA_VERSION else
+                          orca_catalogue_models(request.GET.get("vendor", "Creality"), version)
                           if selected == "orcaslicer" else provider(request.GET.get("vendor", "Creality")))
             except OfficialProfileError as exc:
                 return _error(str(exc), 400)
@@ -889,7 +891,9 @@ def official_profiles(request):
                                 "bambustudio": bambu_catalogue_models,
                                 "prusaslicer": prusa_catalogue_models,
                                 "snapmakerorca": snapmaker_catalogue_models}
-                catalogue_models = (orca_catalogue_models(request.GET.get("vendor", "Creality"), version)
+                catalogue_models = (orca_catalogue_models(request.GET.get("vendor", "Creality"))
+                                    if selected == "orcaslicer" and version == OFFICIAL_ORCA_VERSION else
+                                    orca_catalogue_models(request.GET.get("vendor", "Creality"), version)
                                     if selected == "orcaslicer" else
                                     model_catalogues[selected](request.GET.get("vendor", "Creality")))
                 if chosen_model not in catalogue_models:
@@ -902,7 +906,8 @@ def official_profiles(request):
             )
             results = (search_official_profiles(*args, printer_model=printer_model, version=version,
                            brand=request.GET.get("brand", ""))
-                       if selected == "orcaslicer" else
+                       if selected == "orcaslicer" and
+                          (version != OFFICIAL_ORCA_VERSION or request.GET.get("brand")) else
                        searcher(*args, printer_model=printer_model) if printer_model else searcher(*args))
             results["printer_model_filter"] = printer_model
         except OfficialProfileError as exc:
@@ -949,7 +954,9 @@ def official_profiles(request):
                  if engine == "bambustudio" else
                  [(name, subpath, fetch_prusa_model(kind, name, subpath, vendor))]
                  if engine == "prusaslicer" else
-                 official_profile_chain(engine, kind, name, subpath, vendor, version=version))
+                 official_profile_chain(engine, kind, name, subpath, vendor, version=version)
+                 if engine == "orcaslicer" and version != OFFICIAL_ORCA_VERSION else
+                 official_profile_chain(engine, kind, name, subpath, vendor))
         prepared = []
         for native_name, native_subpath, raw in chain:
             existing = SlicerProfile.objects.filter(
