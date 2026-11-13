@@ -540,10 +540,14 @@ export default function SlicerPrepareWorkspace({
   const objectSettingsPending = objects.some(item =>
     Object.keys(item.process_overrides || {}).some(key => !verifiedObjectSettings.has(key))
   );
+  const materialRoutingPending = plates.some(plate =>
+    (plate.objects || []).some(item => item.material_slot != null)
+  ) || objects.some(item => item.material_slot != null);
   const sliceBlockReason = draftBlockReason ||
     (!activePlateReady ? "Select a plate containing models to slice." : "") ||
     (conflictsBlockSlice ? "Resolve build-plate conflicts or wait for models to finish loading before slicing." : "") ||
-    (objectSettingsPending
+    (materialRoutingPending ? "This project contains intended filament slots, but native multi-material tool changes are not yet verified. Save the draft; clear slot assignments to use the single-filament slicing path."
+      : objectSettingsPending
       ? "Some Object settings are not yet verified for slicing. Wall loops and sparse infill density are supported; other Object overrides can be saved in drafts but cannot be sliced yet."
       : !workerConfigured
         ? "The selected slicing engine is not available in the verified worker. Check engine installations or choose an installed engine."
@@ -1200,7 +1204,7 @@ export default function SlicerPrepareWorkspace({
         </label>
         <div className="slicerSliceSplit">
           <button type="button" className="primary"
-            disabled={!activePlateReady || !profilesReady || !workerConfigured || conflictsBlockSlice || objectSettingsPending}
+            disabled={!activePlateReady || !profilesReady || !workerConfigured || conflictsBlockSlice || objectSettingsPending || materialRoutingPending}
             onClick={onSlice}>Slice</button>
           <button type="button" aria-label="More slicing options"
             aria-haspopup="menu" aria-expanded={sliceMenuOpen}
@@ -1208,10 +1212,10 @@ export default function SlicerPrepareWorkspace({
             onClick={()=>setSliceMenuOpen(value=>!value)}>▾</button>
           {sliceMenuOpen && <div className="slicerSliceMenu" role="menu">
             <button type="button" role="menuitem"
-              disabled={!activePlateReady || conflictsBlockSlice || objectSettingsPending}
+              disabled={!activePlateReady || conflictsBlockSlice || objectSettingsPending || materialRoutingPending}
               onClick={()=>{setSliceMenuOpen(false);onSlice?.();}}>Slice active plate</button>
             <button type="button" role="menuitem"
-              disabled={!projectHasModels || objectSettingsPending}
+              disabled={!projectHasModels || objectSettingsPending || materialRoutingPending}
               onClick={()=>{setSliceMenuOpen(false);onSliceAll?.();}}>
               Slice all plates ({plates.filter(plate=>plate.objects.length).length})
             </button>
