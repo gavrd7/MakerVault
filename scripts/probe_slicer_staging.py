@@ -40,10 +40,14 @@ def _pinned_image(config=DOTENV):
     return image
 
 
-def probe(printer, filament, process, *, model=None, compound=False, experimental_all_plates=False, experimental_no_arrange=False, verify_object_effects=False, reverse_object_effects=False, config=DOTENV, runner=subprocess.run):
+def probe(printer, filament, process, *, model=None, compound=False, experimental_all_plates=False, experimental_no_arrange=False, verify_object_effects=False, reverse_object_effects=False, second_filament=None, config=DOTENV, runner=subprocess.run):
     """Exercise real engine without app, network, Docker socket or host mounts."""
     image = _pinned_image(config)
     sources = {"printer": printer, "filament": filament, "process": process}
+    if second_filament is not None:
+        if model is None or compound or verify_object_effects:
+            raise ValueError("Two-tool probing requires an independent two-object 3MF.")
+        sources["filament-1"] = second_filament
     with tempfile.TemporaryDirectory(prefix="makervault-slicer-probe-") as tmp:
         bundle = Path(tmp)
         bundle.chmod(0o755)
@@ -91,6 +95,8 @@ def probe(printer, filament, process, *, model=None, compound=False, experimenta
         if model is not None:
             command.extend(["--model", "/fixtures/fixture.3mf", "--expected-objects",
                             "1" if compound else "2"])
+            if second_filament is not None:
+                command.extend(["--second-filament", "/fixtures/filament-1.json"])
             if compound:
                 command.extend(["--expected-islands", "2"])
             if experimental_all_plates:
@@ -109,6 +115,8 @@ def main(argv=None):
     for name in ("printer", "filament", "process"):
         parser.add_argument("--" + name, type=Path, required=True)
     parser.add_argument("--model", type=Path, help="Optional two-object MakerVault 3MF acceptance fixture")
+    parser.add_argument("--second-filament", type=Path,
+                        help="Second ordered native filament for offline real-Orca tool verification")
     parser.add_argument("--compound", action="store_true", help="Experimental combined-mesh 3MF geometry-island test")
     parser.add_argument("--experimental-all-plates", action="store_true", help="Offline diagnostic: slice all native plates")
     parser.add_argument("--experimental-no-arrange", action="store_true", help="Offline diagnostic: disable native auto-arrange")
@@ -120,7 +128,8 @@ def main(argv=None):
                      experimental_all_plates=args.experimental_all_plates,
                      experimental_no_arrange=args.experimental_no_arrange,
                      verify_object_effects=args.verify_object_effects,
-                     reverse_object_effects=args.reverse_object_effects)
+                     reverse_object_effects=args.reverse_object_effects,
+                     second_filament=args.second_filament)
     except (ValueError, OSError, subprocess.SubprocessError) as exc:
         print("Offline Orca acceptance probe refused: " + str(exc), file=sys.stderr)
         return 1
