@@ -370,6 +370,8 @@ def build_makervault_project_3mf(plates_with_stl, *, bed_width, bed_depth, metad
     resources = ET.SubElement(combined, ns + "resources")
     build = ET.SubElement(combined, ns + "build")
     embedded = {}
+    source_stls = {}
+    total_source_bytes = 0
     plate_manifest = ET.Element("config")
     global_index = 0
     for plate_number, (label, pairs) in enumerate(plates_with_stl, start=1):
@@ -382,6 +384,15 @@ def build_makervault_project_3mf(plates_with_stl, *, bed_width, bed_depth, metad
         })
         if not pairs:
             continue
+        for item, raw in pairs:
+            asset_id = str(item.get("asset_id", ""))
+            if not re.fullmatch(r"[a-fA-F0-9-]{36}", asset_id):
+                raise SlicerProfileError("Project source asset has no valid identifier.")
+            if asset_id not in source_stls:
+                source_stls[asset_id] = raw
+                total_source_bytes += len(raw)
+                if total_source_bytes > 64 * 1024 * 1024:
+                    raise SlicerProfileError("Total project source STL size exceeds 64 MiB.")
         native = build_plate_3mf(pairs, bed_width=bed_width, bed_depth=bed_depth)
         embedded[f"Metadata/plates/plate-{plate_number}.3mf"] = native
         with zipfile.ZipFile(io.BytesIO(native)) as source:
@@ -420,6 +431,8 @@ def build_makervault_project_3mf(plates_with_stl, *, bed_width, bed_depth, metad
         package.writestr("Metadata/makervault-project.json", manifest)
         for name, data in embedded.items():
             package.writestr(name, data)
+        for asset_id, raw in source_stls.items():
+            package.writestr("Metadata/sources/" + asset_id + ".stl", raw)
         package.writestr("[Content_Types].xml",
             '<?xml version="1.0" encoding="UTF-8"?>'
             '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
