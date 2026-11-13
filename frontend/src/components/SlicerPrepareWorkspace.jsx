@@ -256,18 +256,32 @@ export default function SlicerPrepareWorkspace({
     ? slot.color_hex.toUpperCase() : null;
   const slotName = slot => (slot.product_name || slot.material || "Unknown filament") +
     " · " + (slot.system_label || "Printer") + " slot " + ((slot.slot_index ?? 0) + 1);
+  // A physical slot selection is an advisory project mapping, independent of
+  // the preview colour and of the native slicer's filament preset. Never use it
+  // to imply that a multi-material tool change has been configured.
   const changeModelPreviewFilament = (instanceId, slot) => {
+    if (!printerId || slot?.id == null) return;
     const hex = validSlotColor(slot);
-    if (!hex) {
-      setFilamentNotice("This loaded slot has no valid recorded colour. No change was made.");
-      return;
-    }
+    const materialSlot = {
+      printer_id: String(printerId),
+      slot_id: String(slot.id),
+      slot_index: Number(slot.slot_index ?? 0),
+    };
     updatePlate(latest.current.map(item => item.instance_id === instanceId
-      ? { ...item, color: hex } : item));
-    onManualColorChange?.(instanceId);
+      ? { ...item, ...(hex ? {color:hex} : {}), material_slot:materialSlot } : item));
+    if (hex) onManualColorChange?.(instanceId);
     setFilamentPickerId("");
-    setFilamentNotice("Preview colour set from " + slotName(slot) +
-      ". The actual sliced material still comes from the global native filament profile.");
+    setFilamentNotice("Assigned " + slotName(slot) +
+      " to the project model. This is not yet a native slicer tool assignment.");
+  };
+  const clearModelFilament = instanceId => {
+    updatePlate(latest.current.map(item => {
+      if (item.instance_id !== instanceId) return item;
+      const {material_slot:unused, ...withoutSlot} = item;
+      return withoutSlot;
+    }));
+    setFilamentPickerId("");
+    setFilamentNotice("Model's intended printer slot cleared. The native filament preset is unchanged.");
   };
   const [materialRefreshing, setMaterialRefreshing] = useState(false);
   const [materialMessage, setMaterialMessage] = useState("Select Refresh to read current printer filament slots.");
@@ -289,7 +303,7 @@ export default function SlicerPrepareWorkspace({
       const loaded = (selectedPrinter?.slots || []).filter(slot => slot.is_loaded);
       setLiveMaterials(loaded);
       setMaterialMessage(loaded.length
-        ? "Live slots are informational until native multi-material mapping is implemented."
+        ? "Loaded slots can now be assigned as project metadata; slicing still uses native filament presets."
         : "No loaded slots reported for this printer.");
     } catch (err) {
       if (requestId !== requestRef.current) return;
@@ -995,15 +1009,24 @@ export default function SlicerPrepareWorkspace({
               setFilamentPickerId(current => current === object.instance_id ? "" : object.instance_id);
               setFilamentNotice("");
             }}>Change filament</button>
+          {object.material_slot && <small className="slicerModelFilamentNotice">
+            Intended slot: {String(object.material_slot.printer_id) === String(printerId)
+              ? (liveMaterials.find(slot => String(slot.id) === String(object.material_slot.slot_id))
+                ? slotName(liveMaterials.find(slot => String(slot.id) === String(object.material_slot.slot_id)))
+                : "Previously selected slot unavailable")
+              : "Different printer selected"} · mapping only
+          </small>}
           {filamentPickerId === object.instance_id && <div className="slicerModelFilamentChoices">
-            <strong>Loaded filaments · preview colour only</strong>
+            <strong>Loaded printer slots · intended mapping only</strong>
             {liveMaterials.map(slot => <button type="button" key={slot.id}
-              disabled={!canEdit || busy || !validSlotColor(slot)}
+              disabled={!canEdit || busy}
               onClick={() => changeModelPreviewFilament(object.instance_id, slot)}>
               <span className="slicerLiveMaterialSwatch"
                 style={{ backgroundColor: validSlotColor(slot) || "#697b91" }} aria-hidden="true" />
               <span>{slotName(slot)}</span>
             </button>)}
+            {object.material_slot && <button type="button" disabled={!canEdit||busy}
+              onClick={() => clearModelFilament(object.instance_id)}>Clear intended slot</button>}
           </div>}
         </div>}
         </React.Fragment>})}
