@@ -22,6 +22,7 @@ from .orca_runner import run_orca
 from .creality_runner import run_creality
 from .engine_registry import configured_engines
 from .three_mf_validation import validate_worker_3mf
+from .material_gcode_audit import expected_native_tools, verify_multi_material_output
 
 
 logger = logging.getLogger(__name__)
@@ -212,6 +213,8 @@ class Handler(BaseHTTPRequestHandler):
                 data = (workdir / "output.gcode").read_bytes()
                 if not data or len(data) > MAX_OUTPUT_BYTES:
                     raise WorkerError("Generated G-code exceeded the output size limit.")
+                if "filament_profiles" in files:
+                    verify_multi_material_output(data, expected_native_tools(files["model"]))
                 return self._json(200, {
                     "status": "completed", "bytes": receipt["bytes"],
                     "sha256": hashlib.sha256(data).hexdigest(),
