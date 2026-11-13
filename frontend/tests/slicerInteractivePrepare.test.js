@@ -389,7 +389,9 @@ test("loaded live filaments follow the model tree in the left rail", () => {
   const settingsEnd = scene.indexOf('return <section className="panel printingSection', settings);
   assert.ok(settings >= 0 && settingsEnd > settings);
   assert.doesNotMatch(scene.slice(settings, settingsEnd), /className="slicerLiveMaterialSlots"/);
-  assert.match(scene, /liveMaterials\.map\(slot => <div className="slicerLiveMaterialSlot"/);
+  assert.match(scene, /liveMaterials\.map\(slot => \{/);
+  assert.match(scene, /className="slicerLiveMaterialSlot"/);
+  assert.match(scene, /setEditingSlotProfile\(String\(slot.id\)\)/);
   assert.match(scene, /onClick=\{refreshPrinterMaterials\}/);
 });
 
