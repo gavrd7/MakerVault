@@ -4,15 +4,17 @@ These are logical preview palette references, not verified machine tool IDs.
 This module never authorises slicing, firmware commands or physical printing.
 """
 import re
+import math
 
 MAX_FACES = 500_000
 MAX_PAINT_SLOTS = 64
 
 
 def validate_colour_paint(value):
-    if not isinstance(value, dict) or set(value) != {"version", "signature", "faces", "palette"}:
+    if not isinstance(value, dict) or set(value) not in ({"version", "signature", "faces", "palette"},
+                                                  {"version", "signature", "regions", "palette"}):
         raise ValueError("Invalid colour painting metadata.")
-    if type(value["version"]) is not int or value["version"] != 1:
+    if type(value["version"]) is not int or value["version"] not in (1, 2):
         raise ValueError("Unsupported colour painting version.")
     signature = value["signature"]
     if not isinstance(signature, str) or not re.fullmatch(r"[1-9][0-9]{0,5}:[0-9a-f]{1,8}", signature):
@@ -50,6 +52,44 @@ def validate_colour_paint(value):
                 raise ValueError("Invalid advisory filament-slot reference.")
             clean.update({"printer_id": printer_id, "slot_id": slot_id, "slot_index": slot_index})
         cleaned_palette.append(clean)
+    if value["version"] == 2:
+        if set(value) != {"version", "signature", "regions", "palette"}:
+            raise ValueError("Invalid v2 painting metadata.")
+        regions = value["regions"]
+        if not isinstance(regions, list) or len(regions) > 4096:
+            raise ValueError("Invalid painted surface regions.")
+        cleaned_regions = []
+        patch_total = 0
+        for region in regions:
+            if not isinstance(region, dict) or set(region) != {"slot", "patches"}:
+                raise ValueError("Invalid surface region.")
+            slot, patches = region["slot"], region["patches"]
+            if type(slot) is not int or not 0 <= slot < len(palette):
+                raise ValueError("Invalid surface region slot.")
+            if not isinstance(patches, list) or not 1 <= len(patches) <= 100_000:
+                raise ValueError("Invalid surface region patch list.")
+            patch_total += len(patches)
+            if patch_total > 500_000:
+                raise ValueError("Too many surface paint patches.")
+            clean_patches = []
+            for patch in patches:
+                if not isinstance(patch, dict) or set(patch) != {"face", "polygon"}:
+                    raise ValueError("Invalid surface patch.")
+                face, polygon = patch["face"], patch["polygon"]
+                if type(face) is not int or not 0 <= face < face_count or (
+                        not isinstance(polygon, list) or not 3 <= len(polygon) <= 128):
+                    raise ValueError("Invalid surface patch geometry.")
+                clean_polygon = []
+                for point in polygon:
+                    if (not isinstance(point, list) or len(point) != 3 or
+                            any(type(n) not in (float, int) or not math.isfinite(n) or
+                                abs(n) > 1_000_000 for n in point)):
+                        raise ValueError("Invalid surface patch coordinates.")
+                    clean_polygon.append([float(n) for n in point])
+                clean_patches.append({"face": face, "polygon": clean_polygon})
+            cleaned_regions.append({"slot": slot, "patches": clean_patches})
+        return {"version": 2, "signature": signature,
+                "palette": cleaned_palette, "regions": cleaned_regions}
     faces = value["faces"]
     if not isinstance(faces, dict) or len(faces) > face_count:
         raise ValueError("Invalid painted face list.")
