@@ -3,7 +3,7 @@ import zipfile
 from unittest import TestCase
 
 from slicer_worker.material_gcode_audit import (
-    expected_native_tools, verify_multi_material_output,
+    expected_native_tools, verify_multi_material_output, verify_two_object_tool_regions,
 )
 from slicer_worker.runner import WorkerError
 
@@ -31,6 +31,21 @@ class MaterialOutputVerificationTests(TestCase):
             with self.subTest(raw=raw):
                 with self.assertRaisesRegex(WorkerError, "lacks required"):
                     verify_multi_material_output(raw, {0, 1})
+
+
+    def test_real_fixture_requires_correct_tool_in_each_model_region(self):
+        left = "T0\n" + "".join("G1 X75 Y110 E0.2\n" for _ in range(25))
+        right = "T1\n" + "".join("G1 X145 Y110 E0.2\n" for _ in range(25))
+        content = ("M83\n" + left + right).encode()
+        evidence = verify_two_object_tool_regions(content)
+        self.assertEqual(evidence, {"left_tool_deposits": 25, "right_tool_deposits": 25})
+        with self.assertRaisesRegex(WorkerError, "expected model/tool"):
+            verify_two_object_tool_regions(("M83\n" +
+                left.replace("T0", "T1") + right.replace("T1", "T0")).encode())
+        # Purge-only material extrusion outside both model bounds is insufficient.
+        with self.assertRaises(WorkerError):
+            verify_two_object_tool_regions(
+                b"M83\nT0\nG1 X10 Y10 E1\nT1\nG1 X20 Y20 E1\n")
 
     def test_absolute_e_and_resets_are_not_interpreted_as_filament_changes(self):
         raw = (b"M82\nT0\nG92 E0\nG1 X10 E0.3\n"
