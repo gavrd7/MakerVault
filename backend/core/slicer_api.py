@@ -84,6 +84,10 @@ def serialise(job, installed=None):
     source_ids = {str(job.input_asset_id)}
     source_ids.update(str(item.get("asset_id")) for item in
                       (job.settings or {}).get("plate_objects", []) if isinstance(item, dict))
+    for project_plate in (job.settings or {}).get("plates", []):
+        if isinstance(project_plate, dict):
+            source_ids.update(str(row.get("asset_id")) for row in
+                              project_plate.get("objects", []) if isinstance(row, dict))
     temporary_inputs = [{
         "id": str(asset.pk), "name": asset.name,
         "filename": str((asset.metadata or {}).get("original_name") or asset.name),
@@ -153,7 +157,7 @@ def _draft_plate_settings(user, input_asset, settings):
     """Persist preview-only plate geometry; never compile it into slicer flags."""
     if settings is None:
         settings = {}
-    if not isinstance(settings, dict) or set(settings) - {"plate_objects", "plate_label", "save_gcode_to_library", "workflow", "process_overrides"}:
+    if not isinstance(settings, dict) or set(settings) - {"plate_objects", "plate_label", "plates", "active_plate_id", "save_gcode_to_library", "workflow", "process_overrides"}:
         raise ValueError("Unsupported slicer plate settings.")
     process_overrides = validate_process_overrides(settings.get("process_overrides"))
     workflow = settings.get("workflow", "interactive")
@@ -167,8 +171,52 @@ def _draft_plate_settings(user, input_asset, settings):
             or any(ord(character) < 32 or ord(character) == 127 for character in label)):
         raise ValueError("Build plate label must be 1–64 printable characters.")
     label = label.strip()
+    project = settings.get("plates")
+    project_fields = {}
+    if project is not None:
+        if not isinstance(project, list) or not 1 <= len(project) <= 8:
+            raise ValueError("A slicer project must contain 1–8 plates.")
+        ids, validated, total = set(), [], 0
+        raw_by_id = {}
+        for plate in project:
+            if not isinstance(plate, dict) or set(plate) != {"id", "name", "objects"}:
+                raise ValueError("Invalid build plate entry.")
+            plate_id, name, instances = plate["id"], plate["name"], plate["objects"]
+            if (not isinstance(plate_id, str) or
+                    not re.fullmatch(r"plate-[a-zA-Z0-9-]{1,80}", plate_id) or plate_id in ids):
+                raise ValueError("Build plate IDs must be unique.")
+            ids.add(plate_id)
+            if (not isinstance(name, str) or not 1 <= len(name.strip()) <= 64 or
+                    any(ord(c) < 32 or ord(c) == 127 for c in name)):
+                raise ValueError("Build plate names must be 1–64 printable characters.")
+            if not isinstance(instances, list) or len(instances) > 200:
+                raise ValueError("Each plate must have at most 200 models.")
+            total += len(instances)
+            if total > 200:
+                raise ValueError("A multi-plate draft supports at most 200 models in total.")
+            raw_by_id[plate_id] = instances
+            if instances:
+                primary = FileAsset.objects.filter(
+                    pk=_uuid(instances[0].get("asset_id")), owner=user, category="mesh"
+                ).first() if isinstance(instances[0], dict) else None
+                if not primary:
+                    raise ValueError("A plate contains an unavailable STL asset.")
+                checked = _draft_plate_settings(user, primary, {
+                    "plate_objects": instances, "plate_label": name.strip()
+                })
+                instances = checked["plate_objects"]
+            validated.append({"id": plate_id, "name": name.strip(), "objects": instances})
+        active_id = settings.get("active_plate_id")
+        if active_id not in ids:
+            raise ValueError("Choose an active build plate.")
+        if raw_by_id[active_id] != settings.get("plate_objects", []):
+            raise ValueError("The active plate must match its submitted model list.")
+        project_fields = {"plates": validated, "active_plate_id": active_id}
+    elif "active_plate_id" in settings:
+        raise ValueError("An active plate requires a multi-plate project.")
     if "plate_objects" not in settings:
-        return {"plate_label": label, "save_gcode_to_library": save_to_library, "workflow": workflow, "process_overrides": process_overrides}
+        return {"plate_label": label, "save_gcode_to_library": save_to_library,
+                "workflow": workflow, "process_overrides": process_overrides, **project_fields}
     objects = settings["plate_objects"]
     if not isinstance(objects, list) or not 1 <= len(objects) <= 200:
         raise ValueError("The visual build plate supports up to 200 model instances.")
@@ -229,11 +277,12 @@ def _draft_plate_settings(user, input_asset, settings):
                       **({"process_overrides": instance_overrides} if instance_overrides else {})})
     if saved[0]["asset_id"] != str(input_asset.pk):
         raise ValueError("The first plate model must match the selected primary STL.")
-    return {"plate_objects": saved, "plate_label": label, "save_gcode_to_library": save_to_library, "workflow": workflow, "process_overrides": process_overrides}
+    return {"plate_objects": saved, "plate_label": label, "save_gcode_to_library": save_to_library,
+            "workflow": workflow, "process_overrides": process_overrides, **project_fields}
 
 
 def _draft(user, data):
-    if not isinstance(data, dict) or len(json.dumps(data)) > 8192:
+    if not isinstance(data, dict) or len(json.dumps(data)) > 131072:
         raise ValueError("Slice configuration must be a small JSON object.")
     allowed = {"engine", "engine_version", "input_asset_id", "printer_id", "spool_id", "printer_preset", "filament_preset", "process_preset", "nozzle_mm", "plate", "settings", "printer_profile_id", "filament_profile_id", "process_profile_id"}
     if set(data) - allowed:
