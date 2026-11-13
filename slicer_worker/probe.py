@@ -27,6 +27,7 @@ from .runner import MAX_PROFILE_BYTES, MAX_GCODE_BYTES, WorkerError
 from .orca_runner import run_orca
 from .creality_runner import run_creality
 from .three_mf_validation import validate_worker_3mf
+from .material_gcode_audit import verify_multi_material_output, expected_native_tools
 
 ENGINES = {"orcaslicer": run_orca, "crealityprint": run_creality}
 GCODE_EXTRUSION = re.compile(
@@ -172,7 +173,7 @@ def _verify_two_native_object_effects(path, *, reverse=False):
             "left_moves": moves[0], "right_moves": moves[1]}
 
 
-def run_probe(*, engine, version, binary, printer, filament, process, timeout=120, model=None, expected_objects=1, expected_islands=1, experimental_all_plates=False, experimental_no_arrange=False, verify_object_effects=False, reverse_object_effects=False):
+def run_probe(*, engine, version, binary, printer, filament, process, timeout=120, model=None, expected_objects=1, expected_islands=1, experimental_all_plates=False, experimental_no_arrange=False, verify_object_effects=False, reverse_object_effects=False, second_filament=None):
     """Run the *real* worker adapter with the *real* binary and report evidence.
 
     No mock success, no automatic deployment and no stored G-code artifact.
@@ -189,12 +190,15 @@ def run_probe(*, engine, version, binary, printer, filament, process, timeout=12
         raise WorkerError("Explicit two-object 3MF input is required for multi-model acceptance.")
     if reverse_object_effects and not verify_object_effects:
         raise WorkerError("Reversed object settings require G-code effect verification.")
+    if second_filament is not None and (engine != "orcaslicer" or not model or
+            expected_objects != 2 or expected_islands != 1 or verify_object_effects):
+        raise WorkerError("Two-tool native acceptance requires a two-object Orca 3MF.")
     model_bytes = None
     if model is not None:
         if (expected_objects != 2 and expected_islands != 2) or Path(model).suffix.lower() != ".3mf":
             raise WorkerError("Only the two-object core 3MF acceptance fixture is supported.")
         model_bytes = _read_source(model, 32 * 1024 * 1024)
-        validate_worker_3mf(model_bytes)
+        validate_worker_3mf(model_bytes, native_tool_count=2 if second_filament is not None else None)
         with zipfile.ZipFile(io.BytesIO(model_bytes)) as package:
             xml = ET.fromstring(package.read("3D/3dmodel.model"))
         namespace = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
@@ -207,6 +211,9 @@ def run_probe(*, engine, version, binary, printer, filament, process, timeout=12
         "filament.json": _read_source(filament, MAX_PROFILE_BYTES),
         "process.json": _read_source(process, MAX_PROFILE_BYTES),
     }
+    if second_filament is not None:
+        inputs["filament-0.json"] = inputs["filament.json"]
+        inputs["filament-1.json"] = _read_source(second_filament, MAX_PROFILE_BYTES)
     with tempfile.TemporaryDirectory(prefix="makervault-engine-probe-") as tmp:
         root = Path(tmp)
         (root / ("input.3mf" if model_bytes is not None else "input.stl")).write_bytes(
@@ -223,6 +230,10 @@ def run_probe(*, engine, version, binary, printer, filament, process, timeout=12
             raise WorkerError("The engine did not complete the slicing fixture.")
         output = _validate_gcode(root / "output.gcode",
                                  min_extrusion_span_x=35 if expected_objects == 2 or expected_islands == 2 else None)
+        if second_filament is not None:
+            verify_multi_material_output((root / "output.gcode").read_bytes(),
+                                         expected_native_tools(model_bytes))
+            output["native_multi_tool_verified"] = True
         if verify_object_effects:
             if expected_objects != 2 or model is None or engine != "orcaslicer":
                 raise WorkerError("Per-object effect probe requires independent Orca 3MF.")
@@ -253,6 +264,7 @@ def main(argv=None):
     parser.add_argument("--process", required=True)
     parser.add_argument("--timeout", type=int, default=120)
     parser.add_argument("--model", help="Optional real two-model MakerVault core 3MF fixture")
+    parser.add_argument("--second-filament", help="Second ordered native filament preset (offline only)")
     parser.add_argument("--expected-objects", type=int, choices=(1, 2), default=1)
     parser.add_argument("--expected-islands", type=int, choices=(1, 2), default=1)
     parser.add_argument("--experimental-all-plates", action="store_true")
