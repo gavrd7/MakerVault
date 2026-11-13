@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import SlicerToolpath3D from "./SlicerToolpath3D";
+import GcodeLayerInsert from "./GcodeLayerInsert";
 import { featureColour, hasFeatureFocus } from "./slicerToolpathFeatures";
 
 /**
@@ -23,7 +24,7 @@ const COLOUR_MODES = [
   { value: "acceleration", label: "Acceleration", supported: false },
 ];
 
-export default function SlicerGcodePreview({ fileId = null, preview, bedSize = null }) {
+export default function SlicerGcodePreview({ fileId = null, preview, bedSize = null, file = null, canEdit = false, onSaved = null }) {
   const [layer, setLayer] = useState(null);
   const [step, setStep] = useState(null);
   const [colourMode, setColourMode] = useState("feature");
@@ -35,6 +36,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
   const [exactLayer, setExactLayer] = useState(null);
   const [layerBusy, setLayerBusy] = useState(false);
   const [layerError, setLayerError] = useState("");
+  const [showLayerInsert, setShowLayerInsert] = useState(false);
   const fullLayerCache = useRef(new Map());
   const layers = preview?.layers || [];
   const allSegments = preview?.segments || [];
@@ -171,8 +173,17 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
             max={Math.max(0, layers.length - 1)} step="1" value={currentLayer}
             onChange={e => { setLayer(Number(e.target.value)); setStep(null); }} />
           <span>Z {z?.toFixed(2)} mm</span>
+          {canEdit && fileId && file && <button type="button" className="slicerGcodeInsertButton"
+            onClick={() => setShowLayerInsert(value => !value)} aria-expanded={showLayerInsert}
+            aria-label="Add G-code at selected layer" title="Add G-code after selected layer">
+            + G-code
+          </button>}
         </label>
       </div>
+      {showLayerInsert && canEdit && fileId && file && <GcodeLayerInsert
+        key={String(currentLayer) + ":" + String(fileId)}
+        file={file} selectedZ={z} nextZ={layers[currentLayer + 1]}
+        onSaved={onSaved} onCancel={() => setShowLayerInsert(false)} />}
       <div className="slicerPreviewCoverage" role="status">
         {layerBusy ? "Loading complete toolpaths for the selected layer…" :
           layerError ? "Full-resolution layer unavailable: " + layerError :
