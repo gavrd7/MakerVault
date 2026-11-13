@@ -2718,7 +2718,7 @@ export default function SlicerPlateEditor({
         <input id="slicer-plate-name" type="text" value={plateLabel}
           maxLength={64} disabled={!canEdit}
           onChange={event => onPlateLabelChange?.(event.target.value)}
-          onBlur={() => { if (!plateLabel.trim()) onPlateLabelChange?.("Plate 1"); }}
+          onBlur={() => { if (!plateLabel.trim()) onPlateLabelChange?.("Plate "+(plateIndex+1)); }}
           placeholder="Plate 1" />
       </label>
       <span>Plate {plateIndex+1} of {plateCount} · {PLATE_SURFACE[plateType]?.label || "Native default"} · {pretty(bedX)} × {pretty(bedY)} mm</span>
