@@ -7,11 +7,11 @@ import {fileURLToPath} from "node:url";
 const base=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../src/components");
 const read=name=>fs.readFileSync(path.join(base,name),"utf8");
 
-test("painting palette and icon tools are in the viewport overlay, not above the plate",()=>{
+test("painting palette and icon tools are anchored beside the camera toolbar",()=>{
   const workspace=read("SlicerPrepareWorkspace.jsx");
   const editor=read("SlicerPlateEditor.jsx");
   assert.match(workspace,/paintControls=\{paintPanel\}/);
-  assert.match(editor,/className="slicerPlateCanvasViewport"[^>]*>[\s\S]*?\{paintControls\}/);
+  assert.match(editor,/\{paintControls\}[\s\S]*?className="slicerPlateCameraToolbar"/);
   assert.match(workspace,/role="group" aria-label="Painting tools"/);
   assert.match(workspace,/\["circle","paint-disc"/);
   assert.match(workspace,/\["sphere","paint-sphere"/);
