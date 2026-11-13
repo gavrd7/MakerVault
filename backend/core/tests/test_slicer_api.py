@@ -121,6 +121,42 @@ class SliceJobApiTests(TestCase):
                 "active_plate_id": "plate-1",
             })
 
+    def test_import_portable_3mf_restores_plates_and_private_stls(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from core.slicer_plate_3mf import build_makervault_project_3mf
+        from core.slicer_approval import fixture_stl
+        source_id=str(uuid.uuid4())
+        item={"instance_id":str(uuid.uuid4()),"asset_id":source_id,
+              "x_mm":18,"y_mm":-12,"z_mm":0,"rotation_deg":30,
+              "scale_percent":95,"color":"#aabbcc",
+              "process_overrides":{"wall_loops":3}}
+        plates=[{"id":"plate-1","name":"Main hull","objects":[item]},
+                {"id":"plate-2","name":"Accessories","objects":[]}]
+        package=build_makervault_project_3mf(
+            [("Main hull",[(item,fixture_stl())]),("Accessories",[])],
+            bed_width=220,bed_depth=220,
+            metadata={"format":"makervault-project-v1","plates":plates,
+                      "active_plate_id":"plate-1","filament":{"preset":"PLA"},
+                      "process":{"overrides":{"wall_loops":3}}})
+        self.client.force_login(self.owner)
+        result=self.client.post("/api/printing/slicer/projects/import/",
+            {"file":SimpleUploadedFile("saved.3mf",package,content_type="model/3mf")})
+        self.assertEqual(result.status_code,201,result.content)
+        data=result.json()
+        self.assertEqual(len(data["plates"]),2)
+        self.assertEqual(data["plates"][0]["objects"][0]["x_mm"],18)
+        self.assertEqual(data["plates"][0]["objects"][0]["process_overrides"]["wall_loops"],3)
+        self.assertEqual(data["plates"][1]["objects"],[])
+        new_id=data["plates"][0]["objects"][0]["asset_id"]
+        self.assertNotEqual(new_id,source_id)
+        owned=FileAsset.objects.get(pk=new_id)
+        self.assertEqual(owned.owner_id,self.owner.pk)
+        self.assertTrue(owned.metadata["slicer_temporary"])
+        self.assertNotIn(new_id,str(self.client.get("/api/files/").json()))
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.post("/api/printing/slicer/projects/import/",
+            {"file":SimpleUploadedFile("saved.3mf",package)}).status_code,403)
+
     def test_gcode_library_preference_is_explicit_and_private(self):
         self.client.force_login(self.owner)
         response = self.post()
