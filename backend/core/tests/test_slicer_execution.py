@@ -25,6 +25,21 @@ class IntendedMaterialSafetyTests(SimpleTestCase):
                     _validate_plate_execution(job)
 
 
+    def test_unhandled_flush_matrix_cannot_be_silently_ignored(self):
+        from types import SimpleNamespace
+        for models in (None, [], [{"instance_id": "one"}]):
+            with self.subTest(models=models):
+                job = SimpleNamespace(
+                    settings={"plate_objects": models, "flush_settings": {
+                        "multiplier": None, "prime_tower": "enabled",
+                        "transitions": [],
+                    }},
+                    engine="orcaslicer",
+                )
+                with self.assertRaisesRegex(SlicerExecutionError, "flushing/prime-tower"):
+                    _validate_plate_execution(job)
+
+
 class WorkerApprovalTests(SimpleTestCase):
     def setUp(self):
         self.digest = "sha256:" + "a" * 64
