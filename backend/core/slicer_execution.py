@@ -228,6 +228,15 @@ VERIFIED_OBJECT_PROCESS_KEYS = frozenset({
 def _validate_plate_execution(job):
     """An untouched STL or a bounded native-bed-backed multi-object 3MF plate."""
     settings=job.settings or {}
+    # Do not silently discard native flush / prime-tower preferences when
+    # admitting an otherwise single-filament job. They require the future
+    # exact-printer, multi-tool worker route and verified CFS bindings.
+    if settings.get("flush_settings") is not None:
+        raise SlicerExecutionError(
+            "This draft has flushing/prime-tower overrides, but the physical "
+            "multi-material slicing path is not yet verified. Save the draft; "
+            "reset flushing settings for the proven single-filament path."
+        )
     objects=settings.get("plate_objects")
     project=settings.get("plates")
     if project is not None:
