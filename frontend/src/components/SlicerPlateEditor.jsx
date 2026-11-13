@@ -2139,7 +2139,7 @@ export default function SlicerPlateEditor({
       if (painting?.pointerId === event.pointerId) {
         const stroke = painting;
         painting = null;
-        controls.enabled = true;
+        controls.enabled = latestToolModeRef.current !== "paint_colour";
         if (renderer.domElement.hasPointerCapture?.(event.pointerId))
           renderer.domElement.releasePointerCapture(event.pointerId);
         if (stroke.changed) {
@@ -2462,6 +2462,13 @@ export default function SlicerPlateEditor({
     return () => { live = false; controller.abort(); };
   }, [objectKey, sourceFiles, bedX, bedY, plate?.polygon_mm, plate?.bounds_mm, plateType, printerLabel,
     showNativeArtwork, showOrientationLabels, showMachineLabel, showDimensionsLabel, showAxisLabels, plate?.bed_model_url, plate?.artwork_url]);
+
+  // Painting consumes pointer drags; OrbitControls must not rotate the camera
+  // underneath a brush stroke. Selecting another toolbar tool restores orbit.
+  useEffect(() => {
+    const state = sceneRef.current;
+    if (state && !state.transform.dragging) state.controls.enabled = toolMode !== "paint_colour";
+  }, [toolMode, objectKey]);
 
   useEffect(() => {
     const state = sceneRef.current;
