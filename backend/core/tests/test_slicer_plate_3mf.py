@@ -1,10 +1,50 @@
 import io
+import json
 import zipfile
 from defusedxml import ElementTree as ET
 from django.test import SimpleTestCase
 from core.slicer_approval import fixture_stl
-from core.slicer_plate_3mf import build_plate_3mf, build_compound_plate_3mf, NS
+from core.slicer_plate_3mf import build_plate_3mf, build_compound_plate_3mf, build_makervault_project_3mf, NS
 from core.slicer_profiles import SlicerProfileError
+
+
+class MultiPlateProject3MFTests(SimpleTestCase):
+    def test_export_keeps_separate_plates_and_native_meshes(self):
+        model = fixture_stl()
+        obj = {"x_mm": 12, "y_mm": -4, "rotation_deg": 45,
+               "scale_percent": 90, "color": "#cc33aa",
+               "process_overrides": {"wall_loops": 3}}
+        metadata = {
+            "format": "makervault-project-v1",
+            "active_plate_id": "plate-1",
+            "plates": [
+                {"id": "plate-1", "name": "First",
+                 "objects": [{**obj, "instance_id": "one"}]},
+                {"id": "plate-2", "name": "Second",
+                 "objects": [{**obj, "instance_id": "two"}]},
+            ],
+            "filament": {"preset": "PLA", "spool_id": "spool1"},
+            "process": {"overrides": {"wall_loops": 3}},
+        }
+        data=build_makervault_project_3mf([
+            ("First", [(obj,model)]),
+            ("Second", [(obj,model)]),
+        ],bed_width=220,bed_depth=220,metadata=metadata)
+        with zipfile.ZipFile(io.BytesIO(data)) as package:
+            contents=set(package.namelist())
+            self.assertIn("Metadata/plates/plate-1.3mf",contents)
+            self.assertIn("Metadata/plates/plate-2.3mf",contents)
+            self.assertEqual(json.loads(package.read(
+                "Metadata/makervault-project.json")),metadata)
+            root=ET.fromstring(package.read("3D/3dmodel.model"))
+            config=ET.fromstring(package.read("Metadata/model_settings.config"))
+        self.assertEqual(len(root.findall(".//{%s}object" % NS)),2)
+        self.assertEqual(len(root.findall(".//{%s}build/{%s}item" % (NS,NS))),2)
+        self.assertEqual(len(config.findall("plate")),2)
+        plate_ids=[[x.attrib["value"] for x in node.findall("metadata")
+                    if x.attrib["key"]=="plater_id"]
+                   for node in config.findall("plate")]
+        self.assertEqual(plate_ids,[["1"],["2"]])
 
 
 class BuildPlate3MFTests(SimpleTestCase):
