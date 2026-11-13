@@ -161,7 +161,7 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
     total_triangles = 0
     # Only native per-object projects use baked individual placements. Existing
     # generic 3MF exports and their transform semantics remain unchanged.
-    bake_native_positions = any(
+    bake_native_positions = native_tool_indices is not None or any(
         isinstance(entry, tuple) and len(entry) == 2 and
         isinstance(entry[0], dict) and (
             bool(entry[0].get("process_overrides")) or
