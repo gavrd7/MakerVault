@@ -798,58 +798,86 @@ export default function SlicerPrepareWorkspace({
       color, label: "Preview colour " + (index + 1),
     }));
   })();
+  const paintTools = [
+    ["brush","paint-colour","Brush · paint a circular surface area"],
+    ["facet","shape-box","Triangle · colour one mesh facet"],
+    ["circle","shape-disc","Circle · paint a projected circular region"],
+    ["sphere","shape-sphere","Sphere · paint a three-dimensional region"],
+    ["fill","arrange","Connected fill · paint an entire connected shell"],
+    ["smart_fill","face","Smart fill · stop at sharp changes of surface angle"],
+    ["height","layers","Height range · move across the model to choose a band"],
+  ];
+  const paintSelected = objects.find(row => row.instance_id === selectedId);
   const paintPanel = toolMode === "paint_colour" && (
     <section className="slicerColourPaintPanel" aria-label="Colour painting controls"
-      style={{padding:"12px",margin:"8px 0",border:"1px solid var(--border-color, #64748b)",borderRadius:10,
-        background:"var(--surface, #17212f)",display:"grid",gap:10}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+      style={{position:"absolute",top:12,left:12,zIndex:20,width:"min(310px, calc(100% - 74px))",
+        maxHeight:"min(490px, calc(100% - 24px))",overflowY:"auto",padding:10,
+        border:"1px solid #476079",borderRadius:10,background:"rgba(17,27,42,.96)",
+        boxShadow:"0 8px 26px rgba(0,0,0,.4)",display:"grid",gap:8}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
         <strong>Colour painting</strong>
-        <button type="button" onClick={() => {setToolMode("select");setPaintError("");}}>Done</button>
+        <button type="button" onClick={()=>{setToolMode("select");setPaintError("");}}
+          aria-label="Close colour painting">Done</button>
       </div>
-      <small>Visual preparation only — painted faces are not yet converted into native multi-tool G-code. Physical printing is not enabled by this tool.</small>
-      <label>Paint tool
-        <select value={paintMode} onChange={e=>setPaintMode(e.target.value)} aria-label="Painting mode">
-          <option value="brush">Brush</option><option value="facet">Individual triangle</option>
-          <option value="fill">Connected fill</option><option value="smart_fill">Smart angle fill</option>
-          <option value="height">Height range</option>
-        </select>
-      </label>
-      <div role="group" aria-label="Paint filament palette" style={{display:"flex",flexWrap:"wrap",gap:6}}>
+      <div role="group" aria-label="Painting tools" style={{display:"flex",flexWrap:"wrap",gap:5}}>
+        {paintTools.map(([mode,icon,description])=><button type="button" key={mode}
+          title={description} aria-label={description} aria-pressed={paintMode===mode}
+          onClick={()=>setPaintMode(mode)} className={paintMode===mode?"isActive":""}
+          style={{border:paintMode===mode?"2px solid #38bdf8":"1px solid #53647a",
+            borderRadius:7,width:33,height:33,display:"grid",placeItems:"center",padding:5}}>
+          <SlicerUiIcon name={icon} size={19}/></button>)}
+      </div>
+      <div role="group" aria-label="Paint filament palette" style={{display:"flex",gap:6,flexWrap:"wrap"}}>
         {paintPalette.map((slot,index)=><button key={index} type="button"
-          title={slot.label} aria-label={"Paint with "+slot.label} aria-pressed={!paintErase&&paintSlot===index}
+          title={slot.label} aria-label={"Paint with "+slot.label}
+          aria-pressed={!paintErase&&paintSlot===index}
           onClick={()=>{setPaintSlot(index);setPaintErase(false);}}
-          style={{border:!paintErase&&paintSlot===index?"3px solid #38bdf8":"2px solid #64748b",borderRadius:8,
-            width:36,height:36,background:slot.color,color:materialTextColor(slot.color)}}>{index+1}</button>)}
-        <button type="button" aria-pressed={paintErase} onClick={()=>setPaintErase(true)}
-          style={{border:paintErase?"2px solid #38bdf8":"1px solid #64748b",borderRadius:8,padding:"5px 9px"}}>Erase</button>
+          style={{display:"grid",justifyItems:"center",alignContent:"center",gap:1,
+            padding:"3px",border:!paintErase&&paintSlot===index?"2px solid #38bdf8":"1px solid #53647a",
+            borderRadius:8,minWidth:53,background:"transparent",maxWidth:85}}>
+          <span style={{fontSize:10,maxWidth:74,overflow:"hidden",textOverflow:"ellipsis",
+            whiteSpace:"nowrap"}}>{(slot.label||"Filament").split(" · ")[0]}</span>
+          <span style={{width:25,height:25,borderRadius:"50%",backgroundColor:slot.color,
+            border:"1px solid #9aa9bc",display:"grid",placeItems:"center",
+            color:materialTextColor(slot.color),fontWeight:700,fontSize:11}}>{index+1}</span>
+        </button>)}
+        <button type="button" title="Erase painted faces" aria-label="Erase painted faces"
+          aria-pressed={paintErase} onClick={()=>setPaintErase(true)}
+          style={{alignSelf:"end",padding:"6px",border:paintErase?"2px solid #38bdf8":"1px solid #53647a",borderRadius:7}}>Erase</button>
       </div>
-      {paintMode==="brush" && <label>Brush radius: {paintBrushMm} mm
-        <input aria-label="Paint brush radius" type="range" min="0.5" max="30" step="0.5" value={paintBrushMm}
-          onChange={e=>setPaintBrushMm(Number(e.target.value))}/>
+      {["brush","circle","sphere"].includes(paintMode)&&<label style={{display:"grid",gap:2,fontSize:12}}>
+        {paintMode==="brush"?"Brush":"Region"} radius · {paintBrushMm} mm
+        <input aria-label="Paint radius" type="range" min="0.5" max="30" step="0.5"
+          value={paintBrushMm} onChange={e=>setPaintBrushMm(Number(e.target.value))}/>
       </label>}
-      {paintMode==="smart_fill" && <label>Maximum surface angle: {paintAngle}°
-        <input aria-label="Smart fill angle" type="range" min="0" max="90" value={paintAngle}
-          onChange={e=>setPaintAngle(Number(e.target.value))}/>
+      {paintMode==="smart_fill"&&<label style={{display:"grid",gap:2,fontSize:12}}>
+        Surface angle · {paintAngle}°
+        <input type="range" min="0" max="90" aria-label="Smart fill angle"
+          value={paintAngle} onChange={e=>setPaintAngle(Number(e.target.value))}/>
       </label>}
-      {paintMode==="height" && <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <label>From (mm) <input type="number" min="0" step="0.5" aria-label="Paint from height"
-          value={paintHeight[0]} onChange={e=>setPaintHeight(v=>[Number(e.target.value),v[1]])}/></label>
-        <label>To (mm) <input type="number" min="0" step="0.5" aria-label="Paint to height"
-          value={paintHeight[1]} onChange={e=>setPaintHeight(v=>[v[0],Number(e.target.value)])}/></label>
+      {paintMode==="height"&&<div style={{display:"grid",gap:5}}>
+        <small>Move over the model to position the height band. Click to paint it.</small>
+        <div style={{display:"flex",gap:7}}>
+          <label style={{flex:1,minWidth:0,fontSize:11}}>From (mm)
+            <input type="number" min="0" step=".5" aria-label="Paint from height" style={{width:"100%"}}
+              value={paintHeight[0]} onChange={e=>setPaintHeight(v=>[Number(e.target.value),v[1]])}/>
+          </label>
+          <label style={{flex:1,minWidth:0,fontSize:11}}>To (mm)
+            <input type="number" min="0" step=".5" aria-label="Paint to height" style={{width:"100%"}}
+              value={paintHeight[1]} onChange={e=>setPaintHeight(v=>[v[0],Number(e.target.value)])}/>
+          </label>
+        </div>
       </div>}
-      <button type="button" disabled={!objects.find(row=>row.instance_id===selectedId)?.colour_paint}
-        onClick={() => {
-          updatePlate(latest.current.map(item => {
-            if (item.instance_id !== selectedId) return item;
-            const {colour_paint:unused,...rest} = item;
-            return rest;
-          }));
-          setPaintError("");
-        }}>Clear painting on selected model</button>
-      <small>{objects.find(row=>row.instance_id===selectedId)?.colour_paint
-        ? Object.keys(objects.find(row=>row.instance_id===selectedId).colour_paint.faces || {}).length+" painted triangles"
-        : "No painted triangles yet"} · Click or drag across the model to paint. Ctrl+Z undoes a stroke.</small>
-      {paintError && <p role="alert" style={{color:"#fca5a5",margin:0}}>{paintError}</p>}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:5}}>
+        <small>{paintSelected?.colour_paint ? Object.keys(paintSelected.colour_paint.faces||{}).length : 0} facets</small>
+        <button type="button" disabled={!paintSelected?.colour_paint}
+          onClick={()=>{updatePlate(latest.current.map(item=>{
+            if(item.instance_id!==selectedId)return item;
+            const {colour_paint:unused,...rest}=item;return rest;
+          }));setPaintError("");}}>Clear all</button>
+      </div>
+      <small style={{fontSize:11,opacity:.8}}>Left drag: paint · Right drag: move view · Wheel: zoom · Ctrl+Z: undo. Preview only.</small>
+      {paintError&&<small role="alert" style={{color:"#fca5a5"}}>{paintError}</small>}
     </section>
   );
   const modelToolbar = (
@@ -1192,7 +1220,6 @@ export default function SlicerPrepareWorkspace({
           aria-label="Remove active build plate">Remove</button>
       </div>
 
-        {paintPanel}
         {toolMode === "lay_face" && <p className="projectUploadHint" role="status">
           <strong>Lay on face:</strong> Tap or click the model face you want touching the build plate.
           MakerVault will rotate the model and place it back on the bed. Select the tool again to cancel.
@@ -1239,10 +1266,14 @@ export default function SlicerPrepareWorkspace({
               </button>;
             })}
           </div>
-        </section> : <SlicerPlateEditor key={activePlateId} plateIndex={Math.max(0,plates.findIndex(item=>item.id===activePlateId))} plateCount={plates.length||1} toolbar={modelToolbar} files={files} localAssets={localAssets}
+        </section> : <SlicerPlateEditor key={activePlateId} plateIndex={Math.max(0,plates.findIndex(item=>item.id===activePlateId))} plateCount={plates.length||1} toolbar={modelToolbar} paintControls={paintPanel} files={files} localAssets={localAssets}
           onLocalAssetsChange={onLocalAssetsChange} onPlateIssuesChange={onPlateIssuesChange} objects={objects} onChange={updatePlate}
           colourPaintOptions={{mode:paintMode,slot:paintErase?null:paintSlot,palette:paintPalette,
             radiusMm:paintBrushMm,angleDeg:paintAngle,minHeightMm:paintHeight[0],maxHeightMm:paintHeight[1]}}
+          onColourPaintHeightPick={z=>setPaintHeight(([lower,upper])=>{
+            const thickness=Math.max(0.5,Math.abs(upper-lower));const low=Math.max(0,Math.round(z*2)/2);
+            return Math.abs(low-lower)<.01?[lower,upper]:[low,Math.round((low+thickness)*2)/2];
+          })}
           onColourPaintError={setPaintError}
           onPrimaryChange={onPrimaryChange} onFilesUploaded={onFilesUploaded}
           onManualColorChange={onManualColorChange} defaultColor={defaultColor}
