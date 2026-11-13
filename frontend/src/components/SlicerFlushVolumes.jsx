@@ -15,7 +15,7 @@ export default function SlicerFlushVolumes({slots=[],value=null,onChange,disable
   const [native,setNative]=useState(null);
   const [error,setError]=useState("");
   const [loading,setLoading]=useState(false);
-  const [estimateMode,setEstimateMode]=useState(false);
+  const [estimateMode,setEstimateMode]=useState(true);
   const visible=slots.filter(slot=>slot?.id!=null).slice(0,16);
   const data=value||empty();
   useEffect(()=>{
@@ -111,7 +111,7 @@ export default function SlicerFlushVolumes({slots=[],value=null,onChange,disable
           <div className="slicerFlushEstimateBar">
             <label><input type="checkbox" checked={estimateMode}
               onChange={e=>setEstimateMode(e.target.checked)}/>
-              Show Orca-style colour estimates</label>
+              Show colour-only estimates (not native volumes)</label>
             <button type="button" disabled={disabled||!suggestions.length||!estimateMode}
               title="Copies colour-only estimates as manual draft overrides; does not verify safe purging"
               onClick={()=>{if(window.confirm("These are colour-only estimates, not native purge volumes. They omit nozzle dead volume and minimum material purging and are NOT validated for physical printing. Add them as draft overrides for inspection?"))copySuggestions();}}>
