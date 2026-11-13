@@ -22,7 +22,8 @@ def validate_flush_settings(value):
     }:
         raise MaterialRoutingError("Invalid flushing configuration.")
     multiplier = value["multiplier"]
-    if (isinstance(multiplier, bool) or not isinstance(multiplier, (int, float))
+    if multiplier is not None and (
+            isinstance(multiplier, bool) or not isinstance(multiplier, (int, float))
             or not math.isfinite(multiplier) or not 0.1 <= multiplier <= 3):
         raise MaterialRoutingError("Flush multiplier must be between 0.1 and 3.")
     mode = value["prime_tower"]
@@ -50,7 +51,7 @@ def validate_flush_settings(value):
         seen.add((source, dest))
         result.append({"from_slot_id": source, "to_slot_id": dest,
                        "volume_mm3": round(float(amount), 3)})
-    return {"multiplier": float(multiplier),
+    return {"multiplier": float(multiplier) if multiplier is not None else None,
             "transitions": result, "prime_tower": mode}
 
 
@@ -112,7 +113,8 @@ def apply_orca_flush_settings(process_bytes, settings, *, routes, tool_count, to
         raise MaterialRoutingError(
             "Missing native flush volumes; configure every directional transition.")
     process["flush_volumes_matrix"] = matrix
-    process["flush_multiplier"] = str(approved["multiplier"])
+    if approved["multiplier"] is not None:
+        process["flush_multiplier"] = str(approved["multiplier"])
     if approved["prime_tower"] != "native":
         process["enable_prime_tower"] = "1" if approved["prime_tower"] == "enabled" else "0"
     # No attempt to synthesize printer G-code: CFS/AMS unload, load, purge
