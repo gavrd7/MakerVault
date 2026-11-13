@@ -83,9 +83,8 @@ jobs:
             --printer /tmp/makervault-orca-k2/printer.json \
             --filament /tmp/makervault-orca-k2/filament.json \
             --process /tmp/makervault-orca-k2/process.json
-      - name: Probe real K2 Orca two-tool output (diagnostic; no printer)
+      - name: Verify real K2 Orca 2.5 two-tool G-code (required; no printer)
         id: k2_two_tool
-        continue-on-error: true
         run: |
           python3 scripts/probe_slicer_staging.py \
             --printer /tmp/makervault-orca-k2/printer.json \
@@ -99,7 +98,7 @@ jobs:
           echo "### K2 native multi-material fixture (offline)" >> "$GITHUB_STEP_SUMMARY"
           echo "- Two-tool G-code verification: ${{ steps.k2_two_tool.outcome }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Profiles are intentionally the same benign native PLA preset in two tool positions; no printer or CFS commands were sent." >> "$GITHUB_STEP_SUMMARY"
-          echo "- This diagnostic cannot approve production mapping or actual CFS filament changes." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Required software acceptance only; production CFS mappings, physical filament changes and printer submission remain separately gated." >> "$GITHUB_STEP_SUMMARY"
       - name: Verify real Prusa MK4 native-profile tetrahedron slice
         run: |
           python3 scripts/probe_slicer_staging.py \
