@@ -2678,7 +2678,7 @@ export default function SlicerPlateEditor({
   // The mesh editor must stay alongside the canvas, not below whichever
   // toolbar button opened it. Track viewport bounds as panes resize or scroll.
   useEffect(() => {
-    if (!solidDialog) return undefined;
+    if (!solidDialog && !splitPreview) return undefined;
     const viewport=hostRef.current?.closest(".slicerPlateCanvasViewport");
     if (!viewport) return undefined;
     const measure=()=>{
@@ -2703,7 +2703,7 @@ export default function SlicerPlateEditor({
       window.removeEventListener("resize",measure);
       window.removeEventListener("scroll",measure,true);
     };
-  }, [solidDialog?.kind,solidDialog?.id,solidDialog?.editTargetId]);
+  }, [solidDialog?.kind,solidDialog?.id,solidDialog?.editTargetId,Boolean(splitPreview)]);
 
   const solidPanelStyle=(()=>{
     if(typeof window==="undefined")return {pointerEvents:"auto"};
@@ -3283,10 +3283,9 @@ export default function SlicerPlateEditor({
     )}
     {splitPreview && createPortal(
       <div className="slicerAutoOrientModalBackdrop" role="presentation"
-        onMouseDown={event => {
-          if (event.target === event.currentTarget && !splitBusy) setSplitPreview(null);
-        }}>
-        <section className="slicerAutoOrientPanel slicerAutoOrientModal" role="dialog" aria-modal="true"
+        style={{pointerEvents:"none"}}>
+        <section className="slicerAutoOrientPanel slicerAutoOrientModal slicerSolidModal slicerViewportAnchoredModal"
+          role="dialog" aria-modal="false" style={solidPanelStyle}
           aria-label="Split disconnected objects">
           <header className="slicerAutoOrientModalHeader">
             <div><h3>Split into objects</h3>
