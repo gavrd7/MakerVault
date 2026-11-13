@@ -993,6 +993,7 @@ export default function SlicerPrepareWorkspace({
         </section>
 
       </div>
+      <div id="slicer-prepare-plate" className="slicerPrepareScene" ref={editorRef} aria-labelledby="slicer-mobile-tab-plate">
       <div className="slicerPlateProjectNav" role="group" aria-label="Project build plates">
         <div className="slicerPlateProjectTabs">
           {plates.map((item,index)=><button key={item.id} type="button"
@@ -1009,7 +1010,7 @@ export default function SlicerPrepareWorkspace({
           disabled={!canEdit||busy||plates.length<=1}
           aria-label="Remove active build plate">Remove</button>
       </div>
-      <div id="slicer-prepare-plate" className="slicerPrepareScene" ref={editorRef} aria-labelledby="slicer-mobile-tab-plate">
+
         {toolMode === "lay_face" && <p className="projectUploadHint" role="status">
           <strong>Lay on face:</strong> Tap or click the model face you want touching the build plate.
           MakerVault will rotate the model and place it back on the bed. Select the tool again to cancel.
