@@ -1,5 +1,7 @@
 """Owner-scoped slicer drafts and engine discovery; no execution endpoints yet."""
 import json
+import io
+import zipfile
 import os
 import math
 import re
@@ -435,6 +437,126 @@ def _cleanup_temporary_job_sources(job):
     reclaim temporary storage without breaking the active editor.
     """
     return None
+
+
+@login_required
+@require_http_methods(["POST"])
+def import_project_3mf(request):
+    """Restore an exported MakerVault 3MF into owner-private temporary STLs."""
+    if not request.user.has_perm("core.add_fileasset"):
+        return _error("You do not have permission to import project models.", 403)
+    uploaded = request.FILES.get("file")
+    if not uploaded or not str(uploaded.name or "").lower().endswith(".3mf"):
+        return _error("Choose a MakerVault .3mf project.")
+    if uploaded.size <= 0 or uploaded.size > 32 * 1024 * 1024:
+        return _error("Project archive must be no larger than 32 MiB.", 413)
+    try:
+        from .slicer_execution import MAX_INPUT
+        stream = io.BytesIO(uploaded.read(32 * 1024 * 1024 + 1))
+        with zipfile.ZipFile(stream) as archive:
+            infos = archive.infolist()
+            if (len(infos) > 230 or sum(info.file_size for info in infos)
+                    > 128 * 1024 * 1024 or
+                    any(info.flag_bits & 1 for info in infos)):
+                raise ValueError("Project archive exceeds safe limits.")
+            manifest_info = archive.getinfo("Metadata/makervault-project.json")
+            if manifest_info.file_size > 131072:
+                raise ValueError("Project metadata is too large.")
+            metadata = json.loads(archive.read(manifest_info).decode("utf-8"))
+            if not isinstance(metadata, dict) or metadata.get("format") != "makervault-project-v1":
+                raise ValueError("This is not a MakerVault project 3MF.")
+            plates = metadata.get("plates")
+            if not isinstance(plates, list) or not 1 <= len(plates) <= 8:
+                raise ValueError("Invalid project plate list.")
+            active_id = metadata.get("active_plate_id")
+            ids, source_names, total = set(), set(), 0
+            for plate in plates:
+                if not isinstance(plate, dict) or set(plate) != {"id", "name", "objects"}:
+                    raise ValueError("Invalid project plate.")
+                pid, name, objects = plate["id"], plate["name"], plate["objects"]
+                if (not isinstance(pid, str) or not re.fullmatch(r"plate-[A-Za-z0-9-]{1,80}", pid)
+                        or pid in ids):
+                    raise ValueError("Invalid or duplicate plate identifier.")
+                ids.add(pid)
+                if (not isinstance(name, str) or not 1 <= len(name.strip()) <= 64
+                        or any(ord(c)<32 or ord(c)==127 for c in name)):
+                    raise ValueError("Invalid project plate name.")
+                if not isinstance(objects, list):
+                    raise ValueError("Invalid project models.")
+                total += len(objects)
+                if total > 200:
+                    raise ValueError("Project contains too many models.")
+                for row in objects:
+                    if not isinstance(row, dict):
+                        raise ValueError("Invalid project model.")
+                    asset_id = str(_uuid(row.get("asset_id")))
+                    source_names.add(asset_id)
+            if active_id not in ids or not source_names:
+                raise ValueError("Project has no usable active plate or models.")
+            original = {}
+            total_bytes = 0
+            for old_id in source_names:
+                file_name = "Metadata/sources/" + old_id + ".stl"
+                info = archive.getinfo(file_name)
+                if not 0 < info.file_size <= MAX_INPUT:
+                    raise ValueError("Project source STL exceeds safe limits.")
+                total_bytes += info.file_size
+                if total_bytes > 64 * 1024 * 1024:
+                    raise ValueError("Project contains too much source geometry.")
+                raw = archive.read(info)
+                inspect_stl(raw)
+                original[old_id] = raw
+        ensure_storage_capacity(request.user, total_bytes)
+        created = []
+        mapping = {}
+        try:
+            for old_id, raw in original.items():
+                name = "project-" + old_id[:8] + ".stl"
+                asset = FileAsset(
+                    owner=request.user, category="mesh", name=name,
+                    sha256=hashlib.sha256(raw).hexdigest(),
+                    metadata={"extension":".stl","original_name":name,
+                              "size_bytes":len(raw),"slicer_temporary":True,
+                              "uploaded_from":"slicer-project"},
+                )
+                asset.file.save(name, ContentFile(raw), save=False)
+                asset.full_clean()
+                asset.save()
+                created.append(asset)
+                mapping[old_id] = str(asset.pk)
+            restored = []
+            for plate in plates:
+                rows=[{**row,"asset_id":mapping[str(_uuid(row["asset_id"]))]}
+                      for row in plate["objects"]]
+                if rows:
+                    checked=_draft_plate_settings(request.user,created[
+                        list(mapping.values()).index(rows[0]["asset_id"])],{
+                        "plate_label":plate["name"],"plate_objects":rows,
+                    })
+                    rows=checked["plate_objects"]
+                restored.append({"id":plate["id"],"name":plate["name"],"objects":rows})
+        except Exception:
+            for asset in created:
+                if asset.file:
+                    asset.file.delete(save=False)
+                asset.delete()
+            raise
+    except (ValueError, KeyError, zipfile.BadZipFile, UnicodeError,
+            OSError, MeshInspectionError, ValidationError) as exc:
+        return _error("Could not restore project: " + str(exc), 422)
+    except StorageQuotaExceeded:
+        return _error("Not enough private storage to import this project.", 413)
+    files=[{"id":str(asset.pk),"name":asset.name,"filename":asset.name,
+            "category":"mesh","url":asset.file.url} for asset in created]
+    return JsonResponse({
+        "plates":restored,"active_plate_id":active_id,
+        "configuration":{
+            "engine":metadata.get("engine"),"engine_version":metadata.get("engine_version"),
+            "printer":metadata.get("printer"),"filament":metadata.get("filament"),
+            "process":metadata.get("process"),"nozzle_mm":metadata.get("nozzle_mm"),
+        },
+        "files":files,
+    },status=201)
 
 
 @login_required
