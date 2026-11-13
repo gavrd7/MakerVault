@@ -33,7 +33,7 @@ const TOOLS = [
   { name: "Support painting", icon: "paint-support", pending: "Native per-face support annotations", group: "paint" },
   { name: "Seam painting", icon: "paint-seam", pending: "Native seam-region annotations", group: "paint" },
   { name: "Variable layer height", icon: "layers", pending: "Native variable layer representation", group: "paint" },
-  { name: "Colour painting", icon: "paint-colour", pending: "Native multi-material annotations and tool mapping", group: "paint" },
+  { name: "Colour painting", target: "paint_colour", icon: "paint-colour", group: "paint" },
 ];
 const SECTION_ORDER = {
   Quality: ["Layer height", "Line width", "Seam", "Precision", "Ironing", "Z contouring", "Walls and surfaces", "Overhangs", "Bridging"],
@@ -100,6 +100,13 @@ export default function SlicerPrepareWorkspace({
   const [scope, setScope] = useState("global");
   const [group, setGroup] = useState("Quality");
   const [toolMode, setToolMode] = useState("select");
+  const [paintMode, setPaintMode] = useState("brush");
+  const [paintSlot, setPaintSlot] = useState(0);
+  const [paintBrushMm, setPaintBrushMm] = useState(3);
+  const [paintAngle, setPaintAngle] = useState(30);
+  const [paintHeight, setPaintHeight] = useState([0, 10]);
+  const [paintErase, setPaintErase] = useState(false);
+  const [paintError, setPaintError] = useState("");
   const [splitRequest, setSplitRequest] = useState(0);
   const [solidRequest, setSolidRequest] = useState(null);
   const [autoOrientMenuOpen, setAutoOrientMenuOpen] = useState(false);
@@ -334,7 +341,7 @@ export default function SlicerPrepareWorkspace({
   useEffect(()=>{
     undoRef.current=[];redoRef.current=[];
     setSelectedId("");setSelectedIds([]);setSolidRequest(null);setMovePlateTarget("");
-    setToolMode("select");setMeasurementVisible(false);setMeasureOptionsOpen(false);
+    setToolMode("select");setPaintError("");setMeasurementVisible(false);setMeasureOptionsOpen(false);
     setSplitRequest(0);setHistoryVersion(version=>version+1);
   },[activePlateId]);
   latest.current = objects;
@@ -469,6 +476,14 @@ export default function SlicerPrepareWorkspace({
       return;
     }
     setAddModelMenuOpen(false);
+    if (tool.target === "paint_colour") {
+      if (!selectedId && objects[0]?.instance_id) selectSingle(objects[0].instance_id);
+      setMeasureOptionsOpen(false);setMeasurementVisible(false);setAutoOrientMenuOpen(false);
+      setPaintError("");
+      setToolMode(current => current === "paint_colour" ? "select" : "paint_colour");
+      setMobilePane("plate");
+      return;
+    }
     if (tool.target === "measure") {
       if (!selectedId && objects[0]?.instance_id) setSelectedId(objects[0].instance_id);
       setToolMode("select");
@@ -769,6 +784,65 @@ export default function SlicerPrepareWorkspace({
           Printer startup and purge G-code are never changed here.</p>
       </aside>
   );
+  const paintPalette = (() => {
+    const saved = objects.find(item => item.instance_id === selectedId)?.colour_paint?.palette;
+    if (Array.isArray(saved) && saved.length) return saved;
+    const loaded = [...liveMaterials].sort((a, b) => Number(a.slot_index ?? 0) - Number(b.slot_index ?? 0)).slice(0, 64);
+    return loaded.length ? loaded.map(slot => ({
+      color: validSlotColor(slot) || "#8c80d9",
+      label: slotName(slot),
+      printer_id: String(printerId),
+      slot_id: String(slot.id),
+      slot_index: Number(slot.slot_index ?? 0),
+    })) : ["#58b5e4","#f59e0b","#a78bfa","#10b981","#ef4444","#f472b6"].map((color, index) => ({
+      color, label: "Preview colour " + (index + 1),
+    }));
+  })();
+  const paintPanel = toolMode === "paint_colour" && (
+    <section className="slicerColourPaintPanel" aria-label="Colour painting controls"
+      style={{padding:"12px",margin:"8px 0",border:"1px solid var(--border-color, #64748b)",borderRadius:10,
+        background:"var(--surface, #17212f)",display:"grid",gap:10}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+        <strong>Colour painting</strong>
+        <button type="button" onClick={() => {setToolMode("select");setPaintError("");}}>Done</button>
+      </div>
+      <small>Visual preparation only — painted faces are not yet converted into native multi-tool G-code. Physical printing is not enabled by this tool.</small>
+      <label>Paint tool
+        <select value={paintMode} onChange={e=>setPaintMode(e.target.value)} aria-label="Painting mode">
+          <option value="brush">Brush</option><option value="facet">Individual triangle</option>
+          <option value="fill">Connected fill</option><option value="smart_fill">Smart angle fill</option>
+          <option value="height">Height range</option>
+        </select>
+      </label>
+      <div role="group" aria-label="Paint filament palette" style={{display:"flex",flexWrap:"wrap",gap:6}}>
+        {paintPalette.map((slot,index)=><button key={index} type="button"
+          title={slot.label} aria-label={"Paint with "+slot.label} aria-pressed={!paintErase&&paintSlot===index}
+          onClick={()=>{setPaintSlot(index);setPaintErase(false);}}
+          style={{border:!paintErase&&paintSlot===index?"3px solid #38bdf8":"2px solid #64748b",borderRadius:8,
+            width:36,height:36,background:slot.color,color:materialTextColor(slot.color)}}>{index+1}</button>)}
+        <button type="button" aria-pressed={paintErase} onClick={()=>setPaintErase(true)}
+          style={{border:paintErase?"2px solid #38bdf8":"1px solid #64748b",borderRadius:8,padding:"5px 9px"}}>Erase</button>
+      </div>
+      {paintMode==="brush" && <label>Brush radius: {paintBrushMm} mm
+        <input aria-label="Paint brush radius" type="range" min="0.5" max="30" step="0.5" value={paintBrushMm}
+          onChange={e=>setPaintBrushMm(Number(e.target.value))}/>
+      </label>}
+      {paintMode==="smart_fill" && <label>Maximum surface angle: {paintAngle}°
+        <input aria-label="Smart fill angle" type="range" min="0" max="90" value={paintAngle}
+          onChange={e=>setPaintAngle(Number(e.target.value))}/>
+      </label>}
+      {paintMode==="height" && <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <label>From (mm) <input type="number" min="0" step="0.5" aria-label="Paint from height"
+          value={paintHeight[0]} onChange={e=>setPaintHeight(v=>[Number(e.target.value),v[1]])}/></label>
+        <label>To (mm) <input type="number" min="0" step="0.5" aria-label="Paint to height"
+          value={paintHeight[1]} onChange={e=>setPaintHeight(v=>[v[0],Number(e.target.value)])}/></label>
+      </div>}
+      <small>{objects.find(row=>row.instance_id===selectedId)?.colour_paint
+        ? Object.keys(objects.find(row=>row.instance_id===selectedId).colour_paint.faces || {}).length+" painted triangles"
+        : "No painted triangles yet"} · Click or drag across the model to paint. Ctrl+Z undoes a stroke.</small>
+      {paintError && <p role="alert" style={{color:"#fca5a5",margin:0}}>{paintError}</p>}
+    </section>
+  );
   const modelToolbar = (
 <div className="slicerPrepareTools" role="toolbar" aria-label="Model editing tools">
       <span className="slicerToolTooltip" onMouseEnter={() => setToolDescriptor("Undo · Ctrl+Z")}
@@ -797,10 +871,11 @@ export default function SlicerPrepareWorkspace({
             (tool.target === "rotation_deg" && toolMode === "rotate") ||
             (tool.target === "scale_percent" && toolMode === "scale") ||
             (tool.target === "measure" && measurementVisible) ||
+            (tool.target === "paint_colour" && toolMode === "paint_colour") ||
             (tool.target === "lay_face" && toolMode === "lay_face") ||
             (tool.target === "auto_orient" && autoOrientMenuOpen) ||
             (tool.target === "import" && addModelMenuOpen)) ? "isActive" : ""}
-          aria-pressed={tool.target === "measure" ? measurementVisible :
+          aria-pressed={tool.target === "paint_colour" ? toolMode === "paint_colour" : tool.target === "measure" ? measurementVisible :
             tool.target === "lay_face" ? toolMode === "lay_face" :
             tool.target === "auto_orient" ? autoOrientMenuOpen :
             ["x_mm", "rotation_deg", "scale_percent"].includes(tool.target)
@@ -1156,6 +1231,9 @@ export default function SlicerPrepareWorkspace({
           </div>
         </section> : <SlicerPlateEditor key={activePlateId} plateIndex={Math.max(0,plates.findIndex(item=>item.id===activePlateId))} plateCount={plates.length||1} toolbar={modelToolbar} files={files} localAssets={localAssets}
           onLocalAssetsChange={onLocalAssetsChange} onPlateIssuesChange={onPlateIssuesChange} objects={objects} onChange={updatePlate}
+          colourPaintOptions={{mode:paintMode,slot:paintErase?null:paintSlot,palette:paintPalette,
+            radiusMm:paintBrushMm,angleDeg:paintAngle,minHeightMm:paintHeight[0],maxHeightMm:paintHeight[1]}}
+          onColourPaintError={setPaintError}
           onPrimaryChange={onPrimaryChange} onFilesUploaded={onFilesUploaded}
           onManualColorChange={onManualColorChange} defaultColor={defaultColor}
           plate={plate} plateType={plateType} plateLabel={plateLabel}
@@ -1170,6 +1248,7 @@ export default function SlicerPrepareWorkspace({
           onMeasurePinPlaced={() => setMeasureOptionsOpen(false)}
           onExitToolMode={() => setToolMode("select")} />}
       </div>
+      {paintPanel}
       {settingsExpanded ? createPortal(
         <div className="slicerSettingsModalBackdrop" role="presentation"
           onMouseDown={event => {
