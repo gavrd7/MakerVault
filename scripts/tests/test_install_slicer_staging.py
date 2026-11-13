@@ -24,7 +24,7 @@ class ReleaseMetadataTests(unittest.TestCase):
     def test_official_matching_release_requires_sha256(self):
         url = "https://github.com/OrcaSlicer/OrcaSlicer/releases/download/" + installer.TAG + "/" + installer.ASSET
         payload = ('{"assets":[{"name":"' + installer.ASSET +
-                   '","digest":"sha256:' + "a" * 64 + '","browser_download_url":"' + url + '"}]}')
+                   '","digest":"sha256:' + installer.APPROVED_ORCA_RELEASES[installer.VERSION] + '","browser_download_url":"' + url + '"}]}')
         response = MagicMock()
         response.status = 200
         response.headers = {}
@@ -32,12 +32,12 @@ class ReleaseMetadataTests(unittest.TestCase):
         response.__enter__ = MagicMock(return_value=response)
         response.__exit__ = MagicMock(return_value=False)
         with patch.object(installer, "urlopen", return_value=response):
-            self.assertEqual(installer._github_asset(), (url, "a" * 64))
+            self.assertEqual(installer._github_asset(), (url, installer.APPROVED_ORCA_RELEASES[installer.VERSION]))
 
     def test_engine_asset_name_remains_pinned(self):
-        self.assertEqual(installer.TAG, "v2.4.2")
+        self.assertEqual(installer.TAG, "v2.5.0")
         self.assertIn("Ubuntu2404", installer.ASSET)
-        self.assertEqual(installer.VERSION, "2.4.2")
+        self.assertEqual(installer.VERSION, "2.5.0")
 
 
 class ConfigurationTests(unittest.TestCase):
