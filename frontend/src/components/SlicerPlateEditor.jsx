@@ -17,7 +17,7 @@ import { detectMeshMeasurement, formatDetectedMeasurement } from "./slicerAutoMe
 import { evaluateAutoOrient, AUTO_ORIENT_GOALS } from "./slicerAutoOrient";
 import { splitDisconnectedMesh } from "./slicerSplitObjects";
 import { createPaintMesh, selectPaintFaces, applyPaint } from "./slicerColourPainting";
-import { paintPreview } from "./slicerColourPaintPreview";
+import { paintPreview, paintPreviewDelta } from "./slicerColourPaintPreview";
 import { executeSolidOperation } from "./slicerSolidOperations";
 import { PRIMITIVE_TYPES, TEXT_FONTS, createPrimitiveMesh, createPrimitiveStl, createTextStl, createSvgStl } from "./slicerPrimitives";
 import { validateStackPlacement } from "./slicerStacking";
@@ -1941,11 +1941,28 @@ export default function SlicerPlateEditor({
         centre:mesh.worldToLocal(hit.point.clone()).toArray(),
         surfaceNormal:hit.face.normal.toArray(),
       });
-      pending.paint = applyPaint(pending.paint, paintMesh, faces, pending.slot);
-      pending.paint.palette = pending.palette;
-      pending.changed = true;
       const original = latestObjectsRef.current.find(item => item.instance_id === pending.instanceId);
-      if (original) paintPreview(mesh, { ...original, colour_paint:pending.paint });
+      if (!original) return;
+      // Applying a large stroke must not copy hundreds of thousands of face
+      // assignments and repaint the full mesh on every pointermove.
+      const unique = faces.filter(face => !pending.touched.has(face) &&
+        (pending.slot === null ? pending.paint?.faces?.[face] !== undefined :
+          pending.paint?.faces?.[face] !== pending.slot));
+      if (!unique.length) return;
+      for (const face of unique) pending.touched.add(face);
+      if (!pending.initialised) {
+        pending.paint = applyPaint(pending.paint, paintMesh, unique, pending.slot);
+        pending.paint.palette = pending.palette;
+        paintPreview(mesh, { ...original, colour_paint:pending.paint });
+        pending.initialised = true;
+      } else {
+        for (const face of unique) {
+          if (pending.slot === null) delete pending.paint.faces[face];
+          else pending.paint.faces[face] = pending.slot;
+        }
+        paintPreviewDelta(mesh, original, unique, pending.slot, pending.palette);
+      }
+      pending.changed = true;
     }
     function pointerDown(event) {
       if (!canEdit || solidDialogRef.current || event.button > 0 || transform.dragging) return;
@@ -1984,7 +2001,7 @@ export default function SlicerPlateEditor({
           if (slot !== null && (!Number.isInteger(slot) || slot < 0 || slot >= palette.length))
             throw new Error("The selected paint slot is no longer available.");
           painting = { pointerId:event.pointerId, instanceId:item.instance_id,
-            slot, palette, paint:item.colour_paint || null, changed:false };
+            slot, palette, paint:item.colour_paint || null, touched:new Set(), initialised:false, changed:false };
           paintHit(hit, painting);
           controls.enabled = false;
           renderer.domElement.setPointerCapture?.(event.pointerId);
