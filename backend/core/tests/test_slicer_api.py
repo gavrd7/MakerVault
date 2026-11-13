@@ -418,6 +418,36 @@ class SliceJobApiTests(TestCase):
         with patch("core.slicer_execution.trusted_plate_dimensions", return_value=(220, 220)):
             self.assertTrue(_validate_plate_execution(validation_job))
 
+    def test_material_slot_mapping_is_advisory_and_persists_across_draft_load(self):
+        self.client.force_login(self.owner)
+        instance = {
+            "instance_id": str(uuid.uuid4()), "asset_id": str(self.input_asset.pk),
+            "x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+            "scale_percent": 100, "color": "#58b5e4",
+            "material_slot": {
+                "printer_id": str(self.printer.pk),
+                "slot_id": "cfs-slot-1",
+                "slot_index": 0,
+            },
+        }
+        response = self.post({**self.payload, "settings": {"plate_objects": [instance]}})
+        self.assertEqual(response.status_code, 201, response.content)
+        job = SliceJob.objects.get(pk=response.json()["job"]["id"])
+        self.assertEqual(job.settings["plate_objects"][0]["material_slot"],
+                         instance["material_slot"])
+        self.assertEqual(job.filament_preset, self.payload["filament_preset"])
+
+        for invalid in (
+            {"printer_id": str(self.printer.pk), "slot_id": "A", "slot_index": -1},
+            {"printer_id": str(self.printer.pk), "slot_id": "A", "slot_index": True},
+            {"printer_id": str(self.printer.pk), "slot_id": "A", "slot_index": 0,
+             "trusted_spool_id": "forged"},
+        ):
+            rejected = self.post({**self.payload, "settings": {
+                "plate_objects": [{**instance, "material_slot": invalid}],
+            }})
+            self.assertEqual(rejected.status_code, 400, rejected.content)
+
     def test_invalid_object_setting_is_rejected_before_draft_creation(self):
         self.client.force_login(self.owner)
         obj = {
