@@ -29,7 +29,7 @@ test("flush form aligns native and custom controls; estimates stay optional",()=
   assert.match(src,/id="slicer-flush-prime-tower"/);
   assert.match(css,/grid-template-rows:22px 48px minmax\(30px,auto\)/);
   assert.match(css,/height:48px;min-height:48px;max-height:48px/);
-  assert.match(src,/Show Orca-style colour estimates/);
+  assert.match(src,/Show colour-only estimates/);
   assert.match(src,/window\.confirm\(/);
   assert.match(src,/Copy estimates to draft/);
   assert.match(src,/estimateMode \?/);
