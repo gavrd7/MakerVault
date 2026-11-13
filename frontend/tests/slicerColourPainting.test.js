@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import { createPaintMesh, selectPaintFaces, applyPaint, validatePaint } from "../src/components/slicerColourPainting.js";
+import { createPaintMesh, selectPaintFaces, applyPaint, validatePaint, pointTriangleDistanceSquared } from "../src/components/slicerColourPainting.js";
 
 test("facets, brush, connected fill and orientation-aware smart fill", () => {
   const geometry = new THREE.BoxGeometry(10, 10, 10).toNonIndexed();
@@ -76,5 +76,32 @@ test("planar fill stays on a roof and avoids an adjoining angled shell",()=>{
   assert.equal(filled.length,2);
   assert.ok(filled.every(face=>mesh.normals[face].every((x,i)=>
     Math.abs(x-mesh.normals[0][i])<1e-6)));
+  geometry.dispose();
+});
+
+test("brush uses triangle surface rather than centroid and does not paint through box",()=>{
+  const geometry=new THREE.BoxGeometry(10,10,10).toNonIndexed();
+  const mesh=createPaintMesh(geometry);
+  const seed=mesh.triangle(0)[0];
+  // A 1-mm brush touching the corner of a coarse triangle must select the
+  // triangle even when its centroid is much further away.
+  const hits=selectPaintFaces(mesh,{mode:"brush",face:0,radiusMm:1,centre:seed});
+  assert.ok(hits.includes(0));
+  assert.ok(hits.length<mesh.faceCount/2);
+  assert.ok(pointTriangleDistanceSquared(seed,...mesh.triangle(0))<1e-8);
+  assert.ok(pointTriangleDistanceSquared([100,100,100],...mesh.triangle(0))>0);
+  geometry.dispose();
+});
+
+test("height range includes triangles crossing interval, not just centroids",()=>{
+  const geometry=new THREE.BufferGeometry();
+  geometry.setAttribute("position",new THREE.Float32BufferAttribute([
+    0,0,0, 8,0,20, 0,8,20, // centroid 13.3 outside the band
+    0,0,30, 8,0,40, 0,8,40
+  ],3));
+  const mesh=createPaintMesh(geometry);
+  const hits=selectPaintFaces(mesh,{mode:"height",minHeightMm:4,maxHeightMm:8});
+  assert.deepEqual(hits,[0]);
+  assert.deepEqual(mesh.heightBounds[0],[0,20]);
   geometry.dispose();
 });
