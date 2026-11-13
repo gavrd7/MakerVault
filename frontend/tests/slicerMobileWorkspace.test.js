@@ -89,3 +89,18 @@ test("mobile paint eraser stays outside scrolling filament palette", () => {
   assert.ok(palette>=0&&groupEnd>palette&&erase>groupEnd);
   assert.match(css,/\.slicerColourPaintPanel \.slicerPaintEditActions/);
 });
+
+test("flushing settings and CFS profile controls use the new modal rather than a cramped inline matrix",()=>{
+  const workspace=fs.readFileSync(path.join(base,"components/SlicerPrepareWorkspace.jsx"),"utf8");
+  const flushing=fs.readFileSync(path.join(base,"components/SlicerFlushVolumes.jsx"),"utf8");
+  assert.match(workspace,/processProfileId=\{selectedProfiles\?\.process_id\}/);
+  assert.match(workspace,/className="slicerLiveMaterialSwatch slicerLiveMaterialSwatchRound"/);
+  assert.match(workspace,/setEditingSlotProfile\(String\(slot.id\)\)/);
+  assert.match(workspace,/onSlotFilamentProfilesChange\?\.\(updated\)/);
+  assert.match(flushing,/aria-haspopup="dialog"/);
+  assert.match(flushing,/createPortal\(/);
+  assert.match(flushing,/className="slicerFlushModal"/);
+  assert.match(flushing,/value=\{data.multiplier \?\? nativeMultiplier \?\? ""\}/);
+  assert.match(flushing,/slicerFlushSlotLabel/);
+  assert.match(flushing,/slicerFlushSwatch/);
+});
