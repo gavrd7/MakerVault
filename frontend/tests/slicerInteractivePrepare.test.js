@@ -197,6 +197,8 @@ test("live CFS AMS RFID slots support draft assignments without enabling unverif
   assert.match(scene, /slot\.spool_code/);
   assert.match(scene, /material_slot:materialSlot/);
   assert.match(scene, /materialRoutingPending/);
+  assert.match(scene, /flushSettings != null/);
+  assert.match(scene, /physical multi-material path is not yet enabled/);
   assert.match(scene, /live slot-to-tool bindings and physical changeovers are not yet verified/);
 });
 
