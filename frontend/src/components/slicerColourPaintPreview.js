@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { createPaintMesh, validatePaint } from "./slicerColourPainting.js";
+import { clearPaintRegionOverlay, paintRegionsPreview } from "./slicerPaintRegionsPreview.js";
 
 /** Face-colour visualization is strictly a viewport preview, not slicer output. */
 export function paintPreview(mesh, item, fallback = "#58b5e4") {
@@ -8,6 +9,12 @@ export function paintPreview(mesh, item, fallback = "#58b5e4") {
   const baseHex = item?.color || fallback;
   const previous = mesh.userData.paintPreviewCache;
   if (previous && previous.state === state && previous.baseHex === baseHex) return;
+  if (state?.version === 2) {
+    paintRegionsPreview(mesh, state, baseHex);
+    mesh.userData.paintPreviewCache = {state, baseHex};
+    return;
+  }
+  clearPaintRegionOverlay(mesh);
   const positions = mesh.geometry.getAttribute("position");
   if (!state || !Object.keys(state.faces || {}).length) {
     if (mesh.material.vertexColors) {
