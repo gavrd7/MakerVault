@@ -63,3 +63,29 @@ test("painting controls adapt to a shallow, minimisable mobile strip", () => {
   assert.match(css,/overflow-x:auto;overscroll-behavior-inline:contain/);
   assert.match(css,/\.slicerColourPaintPanel\.slicerPaintMinimised/);
 });
+
+test("touch navigation is not captured by ordinary model selection and pinch interrupts edit", () => {
+  const editor=fs.readFileSync(path.join(base,"components/SlicerPlateEditor.jsx"),"utf8");
+  assert.match(editor,/event\.pointerType === "touch" && latestToolModeRef\.current === "select"/);
+  assert.match(editor,/const activeTouchPointers = new Set\(\)/);
+  assert.match(editor,/activeTouchPointers\.size > 1/);
+  assert.match(editor,/cancelTouchEdit\(\)/);
+  assert.match(editor,/controls\.enabled=true/);
+});
+
+test("mobile geometry editing is short and can collapse without discarding the preview", () => {
+  const editor=fs.readFileSync(path.join(base,"components/SlicerPlateEditor.jsx"),"utf8");
+  assert.match(editor,/maxHeight:"min\(35dvh, 300px\)"/);
+  assert.match(editor,/solidInspectorCollapsed/);
+  assert.match(editor,/aria-expanded=\{!solidInspectorCollapsed\}/);
+  assert.match(css,/\.slicerSolidModal\.slicerSolidInspectorCollapsed/);
+});
+
+test("mobile paint eraser stays outside scrolling filament palette", () => {
+  const workspace=fs.readFileSync(path.join(base,"components/SlicerPrepareWorkspace.jsx"),"utf8");
+  const palette=workspace.indexOf('aria-label="Paint filament palette"');
+  const groupEnd=workspace.indexOf('</div>',palette);
+  const erase=workspace.indexOf('aria-label="Erase painted faces"',palette);
+  assert.ok(palette>=0&&groupEnd>palette&&erase>groupEnd);
+  assert.match(css,/\.slicerColourPaintPanel \.slicerPaintEditActions/);
+});
