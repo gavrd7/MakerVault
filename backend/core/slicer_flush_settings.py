@@ -11,7 +11,7 @@ import math
 from .slicer_material_routing import MaterialRoutingError
 
 MAX_FLUSH_MM3 = 20000
-MAX_FLUSH_PAIRS = 64
+MAX_FLUSH_PAIRS = 240
 
 
 def validate_flush_settings(value):
