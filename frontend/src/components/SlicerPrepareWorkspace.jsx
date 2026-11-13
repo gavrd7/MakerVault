@@ -107,6 +107,7 @@ export default function SlicerPrepareWorkspace({
   const [paintHeight, setPaintHeight] = useState([0, 10]);
   const [paintErase, setPaintErase] = useState(false);
   const [paintError, setPaintError] = useState("");
+  const [paintMobileMinimised, setPaintMobileMinimised] = useState(false);
   const [splitRequest, setSplitRequest] = useState(0);
   const [solidRequest, setSolidRequest] = useState(null);
   const [autoOrientMenuOpen, setAutoOrientMenuOpen] = useState(false);
@@ -809,15 +810,22 @@ export default function SlicerPrepareWorkspace({
   ];
   const paintSelected = objects.find(row => row.instance_id === selectedId);
   const paintPanel = toolMode === "paint_colour" && (
-    <section className="slicerColourPaintPanel" aria-label="Colour painting controls"
+    <section className={"slicerColourPaintPanel"+(paintMobileMinimised?" slicerPaintMinimised":"")} aria-label="Colour painting controls"
       style={{position:"absolute",top:12,left:12,zIndex:20,width:"min(310px, calc(100% - 74px))",
         maxHeight:"min(490px, calc(100% - 24px))",overflowY:"auto",padding:10,
         border:"1px solid #476079",borderRadius:10,background:"rgba(17,27,42,.96)",
         boxShadow:"0 8px 26px rgba(0,0,0,.4)",display:"grid",gap:8}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
         <strong>Colour painting</strong>
+        <div style={{display:"flex",alignItems:"center",gap:5}}>
+          <button type="button" className="slicerPaintMobileMinimise"
+            aria-expanded={!paintMobileMinimised}
+            onClick={()=>setPaintMobileMinimised(v=>!v)}>
+            {paintMobileMinimised?"Tools":"Minimise"}
+          </button>
         <button type="button" onClick={()=>{setToolMode("select");setPaintError("");}}
           aria-label="Close colour painting">Done</button>
+        </div>
       </div>
       <div role="group" aria-label="Painting tools" style={{display:"flex",flexWrap:"wrap",gap:5}}>
         {paintTools.map(([mode,icon,description])=><button type="button" key={mode}
