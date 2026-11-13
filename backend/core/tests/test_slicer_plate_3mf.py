@@ -1,5 +1,6 @@
 import io
 import json
+import uuid
 import zipfile
 from defusedxml import ElementTree as ET
 from django.test import SimpleTestCase
@@ -11,7 +12,7 @@ from core.slicer_profiles import SlicerProfileError
 class MultiPlateProject3MFTests(SimpleTestCase):
     def test_export_keeps_separate_plates_and_native_meshes(self):
         model = fixture_stl()
-        obj = {"x_mm": 12, "y_mm": -4, "rotation_deg": 45,
+        obj = {"asset_id": str(uuid.uuid4()), "x_mm": 12, "y_mm": -4, "rotation_deg": 45,
                "scale_percent": 90, "color": "#cc33aa",
                "process_overrides": {"wall_loops": 3}}
         metadata = {
