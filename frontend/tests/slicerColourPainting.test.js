@@ -35,3 +35,17 @@ test("height selection and stale geometry guard", () => {
   assert.throws(() => applyPaint(state, createPaintMesh(geometry), [0], 1), /geometry changed/);
   geometry.dispose();
 });
+
+test("circle follows clicked surface and sphere selects a 3D neighbourhood", () => {
+  const geometry = new THREE.BoxGeometry(10,10,10).toNonIndexed();
+  const mesh = createPaintMesh(geometry);
+  const origin = mesh.centres[0];
+  const circle = selectPaintFaces(mesh, {mode:"circle",face:0,radiusMm:8,
+    centre:origin,surfaceNormal:mesh.normals[0]});
+  const sphere = selectPaintFaces(mesh, {mode:"sphere",face:0,radiusMm:8,centre:origin});
+  assert.ok(circle.includes(0));
+  assert.ok(sphere.includes(0));
+  assert.ok(circle.length <= mesh.faceCount && sphere.length <= mesh.faceCount);
+  assert.throws(()=>selectPaintFaces(mesh,{mode:"circle",face:0,radiusMm:-1}),/Invalid paint radius/);
+  geometry.dispose();
+});
