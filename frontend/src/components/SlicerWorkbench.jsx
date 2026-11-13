@@ -331,9 +331,16 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     manuallyChosenProfiles.current.clear();
     setProfileSuggestions({});
     setFlushSettings(null);
+    // Physical CFS/AMS slot IDs belong to the previously registered printer.
+    // Preserve every model and visual colour, but clear invalid physical
+    // bindings on *all* plates before using another printer.
+    setProjectPlates(current => current.map(plate => ({
+      ...plate, objects: plate.objects.map(({ material_slot: oldSlot, ...object }) => object),
+    })));
     setForm(current => ({
       ...current,
       printer_id: String(printerId),
+      spool_id: "",
       nozzle_mm: String(printer?.nozzle_mm || "0.40"),
       printer_profile_id: "", filament_profile_id: "", process_profile_id: "",
       printer_preset: "", filament_preset: "", process_preset: "",
