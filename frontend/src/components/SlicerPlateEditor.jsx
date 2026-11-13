@@ -2654,6 +2654,27 @@ export default function SlicerPlateEditor({
     controls.update();
   }
 
+  // Align all Move/Rotate/Scale/Measure/group inspectors with the actual
+  // first camera-button pixel, including when that toolbar wraps.
+  useEffect(()=>{
+    const viewport=hostRef.current?.closest(".slicerPlateCanvasViewport");
+    const camera=viewport?.parentElement?.querySelector(".slicerPlateCameraToolbar");
+    if(!viewport||!camera)return undefined;
+    const measure=()=>{
+      const offset=camera.getBoundingClientRect().top-
+        viewport.getBoundingClientRect().top;
+      viewport.style.setProperty("--slicer-overlay-top",offset+"px");
+    };
+    measure();
+    const observer=typeof ResizeObserver==="undefined"?null:new ResizeObserver(measure);
+    observer?.observe(camera);observer?.observe(viewport);
+    window.addEventListener("resize",measure);
+    return ()=>{
+      observer?.disconnect();window.removeEventListener("resize",measure);
+      viewport.style.removeProperty("--slicer-overlay-top");
+    };
+  },[]);
+
   // The mesh editor must stay alongside the canvas, not below whichever
   // toolbar button opened it. Track viewport bounds as panes resize or scroll.
   useEffect(() => {
