@@ -156,9 +156,19 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     }
     // Preserve assembly membership, per-part materials and precise transforms.
     // The destination plate editor revalidates placement before permitting slicing.
+    const normaliseAssemblies=rows=>{
+      const counts=new Map();
+      rows.forEach(row=>{
+        if(row.assembly_id)counts.set(row.assembly_id,(counts.get(row.assembly_id)||0)+1);
+      });
+      return rows.map(row=>row.assembly_id && counts.get(row.assembly_id)<2
+        ?{...row,assembly_id:null}:row);
+    };
     setProjectPlates(current=>current.map(plate=>plate.id===activePlateId
-      ?{...plate,objects:plate.objects.filter(item=>!ids.has(item.instance_id))}
-      :plate.id===destinationId?{...plate,objects:[...plate.objects,...selected]}:plate));
+      ?{...plate,objects:normaliseAssemblies(
+        plate.objects.filter(item=>!ids.has(item.instance_id)))}
+      :plate.id===destinationId?{...plate,objects:normaliseAssemblies(
+        [...plate.objects,...selected])}:plate));
     setPlateValidation(null);
     setNotice("Moved "+selected.length+" model(s) to "+destination.name+
       ". Review their placement on that plate before slicing.");
