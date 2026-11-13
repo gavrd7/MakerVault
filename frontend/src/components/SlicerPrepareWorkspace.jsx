@@ -560,6 +560,7 @@ export default function SlicerPrepareWorkspace({
   const sliceBlockReason = draftBlockReason ||
     (!activePlateReady ? "Select a plate containing models to slice." : "") ||
     (conflictsBlockSlice ? "Resolve build-plate conflicts or wait for models to finish loading before slicing." : "") ||
+    (flushSettings != null ? "This draft contains flushing/prime-tower overrides, but the physical multi-material path is not yet enabled. Save the draft or reset flushing settings to slice a single-filament job." : "") ||
     (materialRoutingPending ? "This draft contains intended filament slots. Offline multi-colour Orca 2.5 fixtures pass, but this registered printer's live slot-to-tool bindings and physical changeovers are not yet verified. Save the draft; clear assignments to slice with the proven single-filament path."
       : objectSettingsPending
       ? "Some Object settings are not yet verified for slicing. Wall loops and sparse infill density are supported; other Object overrides can be saved in drafts but cannot be sliced yet."
