@@ -5938,3 +5938,40 @@ a:focus-visible,
   grid-column:1/-1;
 }
 .slicerPrepareTree .slicerAssemblyTreePart::after{top:15px}
+
+/* Multi-plate project navigation. Keep plates visible without reducing the
+   model canvas or pushing the editing toolbar out of the viewport. */
+.slicerPlateProjectNav{
+  display:flex;align-items:center;gap:7px;min-width:0;
+  margin:5px 0 9px;padding:7px;
+  border:1px solid #344b61;border-radius:9px;
+  background:#111f2d;
+}
+.slicerPlateProjectTabs{
+  display:flex;flex:1;gap:5px;overflow-x:auto;
+  min-width:0;scrollbar-width:thin;
+}
+.slicerPlateProjectNav button{
+  flex:none;display:inline-flex;align-items:center;gap:8px;
+  min-height:33px;padding:5px 10px;
+  white-space:nowrap;font-size:.78rem;
+  border:1px solid #3a4d61;border-radius:7px;
+  background:#152437;color:#c8d7e6;
+}
+.slicerPlateProjectNav button.active{
+  background:#302d50;border-color:#8b80d5;color:#f4eeff;
+}
+.slicerPlateProjectNav button:disabled{opacity:.45;cursor:not-allowed}
+.slicerPlateProjectCount{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-width:18px;padding:1px 5px;border-radius:12px;
+  font-size:.7rem;background:#26374b;
+}
+.slicerPlateSliceScope{
+  align-self:center;flex:1 1 100%;
+  margin:0;font-size:.77rem;color:#a5b9cd;
+}
+@media(max-width:700px){
+  .slicerPlateProjectNav{flex-wrap:wrap;padding:5px}
+  .slicerPlateProjectTabs{flex:1 1 100%;order:0}
+}
