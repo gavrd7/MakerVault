@@ -5975,3 +5975,9 @@ a:focus-visible,
   .slicerPlateProjectNav{flex-wrap:wrap;padding:5px}
   .slicerPlateProjectTabs{flex:1 1 100%;order:0}
 }
+
+/* The project tabs consume their own row; the plate panel must not also
+   claim 100% of the centre column's original height. */
+.slicerPrepareScene>.slicerPlateProjectNav+.slicerPlatePanel{
+  height:auto;
+}
