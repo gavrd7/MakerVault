@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
-import {estimateColourFlush,estimateSlotFlush} from "../src/components/slicerFlushEstimates.js";
+import {estimateColourFlush,estimateSlotFlush,multiplyFlushEstimate,slotMaterialCompatibility} from "../src/components/slicerFlushEstimates.js";
 const base=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../src");
 
 test("Orca analytic fallback is directional and does not imply a printer minimum",()=>{
@@ -33,4 +33,26 @@ test("flush form aligns native and custom controls; estimates stay optional",()=
   assert.match(src,/window\.confirm\(/);
   assert.match(src,/Copy estimates to draft/);
   assert.match(src,/estimateMode \?/);
+});
+
+test("mixed PLA/ABS is previewable but not an auto-copy candidate",()=>{
+ const pla={material:"PLA",color_hex:"#ffffff"},abs={material:"ABS",color_hex:"#000000"};
+ assert.equal(slotMaterialCompatibility(pla,abs),"mixed");
+ assert.equal(estimateSlotFlush(pla,abs),null);
+ assert.ok(estimateSlotFlush(pla,abs,{allowMixed:true})>0);
+ assert.equal(slotMaterialCompatibility(pla,pla),"same");
+ assert.equal(slotMaterialCompatibility({material:"unknown"},abs),"unknown");
+});
+test("recalculate preview multiplier, retaining directional overrides",()=>{
+ assert.equal(multiplyFlushEstimate(100,1),100);
+ assert.equal(multiplyFlushEstimate(100,1.3),130);
+ assert.equal(multiplyFlushEstimate(100,2),200);
+ assert.equal(multiplyFlushEstimate(null,2),null);
+ assert.equal(multiplyFlushEstimate(100,NaN),null);
+ const src=fs.readFileSync(path.join(base,"components/SlicerFlushVolumes.jsx"),"utf8");
+ assert.ok(src.includes("setPreviewMultiplier(desiredMultiplier)"));
+ assert.ok(src.includes("Recalculate"));
+ assert.ok(src.includes("estimateSlotFlush(from,to,{allowMixed:true})"));
+ assert.ok(src.includes("Mixed-material values are NOT copied"));
+ assert.ok(src.includes("const estimate=estimateSlotFlush(from,to);"));
 });
