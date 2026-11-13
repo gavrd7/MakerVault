@@ -228,7 +228,7 @@ def _draft_plate_settings(user, input_asset, settings):
         required = {"instance_id", "asset_id", "x_mm", "y_mm", "rotation_deg",
                     "scale_percent", "color"}
         if (not isinstance(item, dict) or not required.issubset(item)
-                or set(item) - required - {"scale_xyz_percent", "process_overrides", "rotation_xyz_deg", "assembly_id", "z_mm", "text_model"}):
+                or set(item) - required - {"scale_xyz_percent", "process_overrides", "rotation_xyz_deg", "assembly_id", "z_mm", "text_model", "material_slot"}):
             raise ValueError("Invalid plate model instance.")
         instance_id = str(_uuid(item["instance_id"]))
         asset_id = _uuid(item["asset_id"])
@@ -268,6 +268,28 @@ def _draft_plate_settings(user, input_asset, settings):
         color = item["color"]
         if not isinstance(color, str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
             raise ValueError("Choose a six-digit colour for each model.")
+        # Advisory mapping to a printer-loaded filament slot. This is stored
+        # with the draft but must NOT be interpreted as a native slicer tool,
+        # extruder assignment, or a trusted physical spool identity.
+        material_slot = item.get("material_slot")
+        material_fields = {}
+        if material_slot is not None:
+            if (not isinstance(material_slot, dict) or set(material_slot) !=
+                    {"printer_id", "slot_id", "slot_index"}):
+                raise ValueError("Invalid intended material slot.")
+            mapped_printer = str(_uuid(material_slot["printer_id"]))
+            slot_id = material_slot["slot_id"]
+            slot_index = material_slot["slot_index"]
+            if (not isinstance(slot_id, str) or not 1 <= len(slot_id) <= 128 or
+                    any(ord(char) < 33 or ord(char) > 126 for char in slot_id) or
+                    isinstance(slot_index, bool) or not isinstance(slot_index, int)
+                    or not 0 <= slot_index <= 63):
+                raise ValueError("Invalid intended material slot.")
+            material_fields = {"material_slot": {
+                "printer_id": mapped_printer,
+                "slot_id": slot_id,
+                "slot_index": slot_index,
+            }}
         instance_overrides = validate_process_overrides(item.get("process_overrides"))
         assembly_id = item.get("assembly_id")
         if assembly_id is not None and (not isinstance(assembly_id, str) or
@@ -301,7 +323,7 @@ def _draft_plate_settings(user, input_asset, settings):
             text_fields = {"text_model": {"text": text, "font": font, **numerical}}
         saved.append({"instance_id": instance_id, "asset_id": str(asset_id),
                       **({"assembly_id": assembly_id} if assembly_id is not None else {}),
-                      **values, "color": color.lower(), **text_fields,
+                      **values, "color": color.lower(), **text_fields, **material_fields,
                       **({"process_overrides": instance_overrides} if instance_overrides else {})})
     if saved[0]["asset_id"] != str(input_asset.pk):
         raise ValueError("The first plate model must match the selected primary STL.")
