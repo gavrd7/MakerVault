@@ -88,7 +88,7 @@ class OfflineMaterialPreflightTests(SimpleTestCase):
             self.items, **self.options, native_process_profile=process,
             flush_settings=flush)
         profile = json.loads(output["native_process_profile"])
-        self.assertEqual(profile["flush_volumes_matrix"], [0, 160, 345, 0])
+        self.assertEqual(profile["flush_volumes_matrix"], ["0", "160", "345", "0"])
         self.assertEqual(profile["flush_multiplier"], ["1.1"])
         self.assertEqual(profile["enable_prime_tower"], "1")
         self.assertEqual(profile["prime_tower_width"], "40")
