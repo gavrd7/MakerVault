@@ -33,6 +33,7 @@ class K2OfflineProfileAcceptanceTests(TestCase):
     def test_wrong_machine_or_manual_changer_fails_closed(self):
         for replacement in (
             {"name": "Creality K1 0.4 nozzle"},
+            {"name": "Creality K2 Plus 0.4 nozzle"},
             {"single_extruder_multi_material": "0"},
             {"manual_filament_change": "1"},
             {"purge_in_prime_tower": "0"},
