@@ -8,7 +8,7 @@ const nameFor = slot => `Slot ${Number(slot.slot_index ?? 0) + 1} · ${slot.prod
  * CFS/AMS bay is never assumed to be the matching native tool number.
  */
 export default function SlicerFlushVolumes({ slots = [], value = null, onChange, disabled = false }) {
-  const visible = slots.filter(slot => slot?.id != null).slice(0, 8);
+  const visible = slots.filter(slot => slot?.id != null).slice(0, 16);
   const data = value || defaultFlush();
   const change = update => onChange?.(update);
   const updateTransition = (from, to, raw) => {
@@ -76,8 +76,8 @@ export default function SlicerFlushVolumes({ slots = [], value = null, onChange,
     </div> : <p className="projectUploadHint">
       Refresh the loaded filament list to configure at least two observed slots.
     </p>}
-    {slots.length > 8 && <p className="formError">
-      More than eight loaded slots: edit a smaller supported palette before applying these overrides.
+    {slots.length > 16 && <p className="formError">
+      More than sixteen loaded slots: edit a smaller supported palette before applying these overrides.
     </p>}
     <p className="projectUploadHint">
       These are saved with the slicing draft. Native profiles define the
