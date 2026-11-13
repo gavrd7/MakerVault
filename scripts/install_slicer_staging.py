@@ -9,6 +9,7 @@ A separate real native-profile test slice is still needed in MakerVault GUI.
   python3 scripts/install_slicer_staging.py status
   python3 scripts/install_slicer_staging.py update
   python3 scripts/install_slicer_staging.py refresh-worker
+  python3 scripts/install_slicer_staging.py upgrade-orca --version 2.5.0
   python3 scripts/install_slicer_staging.py disable
 
 Requires Docker access, internet access for the prepare step, and a valid
@@ -20,6 +21,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -272,6 +274,107 @@ def refresh_worker():
     print("Refreshed staging worker; engine binary hash and token preserved.")
 
 
+def upgrade_orca(version=VERSION):
+    """Replace the staging engine safely, preserving credentials and rollback assets.
+
+    Requires a stopped/idle slicer queue. Refuses to overwrite a previous
+    rollback snapshot. Both identity-locked configurations are recoverable.
+    """
+    _release_spec(version)
+    current_env = _read_env()
+    current = _resume_staged_bundle()
+    installed = json.loads(current["worker_engines_json"]).get("orcaslicer")
+    if not installed:
+        raise ValueError("Installed staging worker has no OrcaSlicer engine.")
+    if installed["version"] == version:
+        print("OrcaSlicer " + version + " is already staged; no upgrade required.")
+        return
+    env_backup = ROOT / ".slicer-staging.env.pre-upgrade"
+    bundle_backup = ROOT / "slicer-engine-assets.pre-upgrade"
+    if env_backup.exists() or bundle_backup.exists():
+        raise ValueError("Previous upgrade backup exists. Preserve or inspect it before upgrading.")
+    # Do not replace a live binary while a slicer operation is in progress.
+    print("Ensure no slicing jobs are queued or running before proceeding.")
+    url, expected_sha = _github_asset(version)
+    with tempfile.TemporaryDirectory(prefix=".orca-upgrade-", dir=ROOT) as directory:
+        directory = Path(directory)
+        appimage = directory / _release_spec(version)[1]
+        print("Downloading and verifying pinned OrcaSlicer " + version + "…")
+        _download_verified(url, expected_sha, appimage)
+        from slicer_worker.stage_engines import stage_engines
+        candidate = directory / "bundle"
+        staged = stage_engines(
+            [("orcaslicer", version, str(appimage), expected_sha)], candidate)
+        # Back up the original secret env without displaying its token.
+        with env_backup.open("xb") as saved:
+            os.chmod(env_backup, 0o600)
+            saved.write(current_env.encode("utf-8"))
+        moved_old = False
+        try:
+            BUNDLE.rename(bundle_backup)
+            moved_old = True
+            candidate.rename(BUNDLE)
+            _resume_staged_bundle(expected_version=version)
+            print("Building checksum-pinned replacement worker…")
+            _run(["docker", "build", "-f", "slicer_worker/Dockerfile.bundle",
+                  "-t", "makervault-slicer-worker:staging", "."])
+            new_image = _run(["docker", "image", "inspect", "--format", "{{.Id}}",
+                             "makervault-slicer-worker:staging"], capture=True)
+            if (not new_image.startswith("sha256:") or len(new_image) != 71 or
+                    any(ch not in "0123456789abcdef" for ch in new_image[7:])):
+                raise ValueError("New engine image has no immutable identity.")
+            previous_image = next((line.partition("=")[2] for line in
+                current_env.splitlines() if line.startswith(
+                    "MAKERVAULT_SLICER_WORKER_IMAGE=")), None)
+            previous_digest = next((line.partition("=")[2] for line in
+                current_env.splitlines() if line.startswith(
+                    "MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST=")), None)
+            if not previous_image or previous_image != previous_digest:
+                raise ValueError("Previously approved image identity is inconsistent.")
+            updates = {
+                "MAKERVAULT_SLICER_WORKER_IMAGE": new_image,
+                "MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST": new_image,
+                "MAKERVAULT_SLICER_ENGINES_JSON": "'" + staged["app_approvals_json"] + "'",
+                "SLICER_ENGINES_JSON": "'" + staged["worker_engines_json"] + "'",
+            }
+            updated_lines, seen = [], set()
+            for line in current_env.splitlines():
+                key, sep, _value = line.partition("=")
+                if sep and key in updates:
+                    updated_lines.append(key + "=" + updates[key])
+                    seen.add(key)
+                else:
+                    updated_lines.append(line)
+            if seen != set(updates):
+                raise ValueError("Existing slicer environment is missing a required approval.")
+            _save_env("\n".join(updated_lines) + "\n")
+            _run(_compose_args() + ["config", "--quiet"])
+            _run(_compose_args() + ["up", "-d", "--build", "--force-recreate",
+                                    "makervault", "slicer-worker"])
+            _run(_compose_args() + ["ps", "makervault", "slicer-worker"])
+        except Exception:
+            # Restore credentials, image approval and old binary together.
+            # Retain backups if rollback itself fails so recovery is possible.
+            print("Upgrade failed: restoring original staging engine configuration…",
+                  file=sys.stderr)
+            if moved_old:
+                if BUNDLE.exists():
+                    if BUNDLE.is_symlink() or not BUNDLE.is_dir():
+                        raise ValueError("Unexpected engine bundle; manual rollback required.")
+                    shutil.rmtree(BUNDLE)
+                bundle_backup.rename(BUNDLE)
+            _save_env(current_env)
+            try:
+                _run(_compose_args() + ["up", "-d", "--no-build", "--force-recreate",
+                                        "makervault", "slicer-worker"])
+            except Exception:
+                print("Automatic container rollback failed; inspect staging backups.",
+                      file=sys.stderr)
+            raise
+    print("Upgraded OrcaSlicer to " + version + ". Old env and binary preserved as *.pre-upgrade.")
+    print("Reverify the engine and native profiles in MakerVault before slicing.")
+
+
 def update():
     """Update the application with the already-installed slicer worker attached.
 
@@ -330,16 +433,19 @@ def status():
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["prepare-orca", "enable", "disable", "status", "refresh-worker", "update"])
+    parser.add_argument("action", choices=["prepare-orca", "enable", "disable", "status", "refresh-worker", "upgrade-orca", "update"])
     parser.add_argument("--version", default=VERSION,
-                        help="Explicit approved Orca release for prepare-orca (default: 2.5.0)")
+                        help="Approved Orca release for prepare-orca and upgrade-orca (default: 2.5.0)")
     args = parser.parse_args(argv)
     try:
         if args.action == "prepare-orca":
             prepare_orca(version=args.version)
             return 0
+        if args.action == "upgrade-orca":
+            upgrade_orca(version=args.version)
+            return 0
         if args.version != VERSION:
-            raise ValueError("--version applies only to prepare-orca.")
+            raise ValueError("--version applies only to prepare-orca or upgrade-orca.")
         {"enable": enable,
          "disable": disable, "status": status,
          "refresh-worker": refresh_worker, "update": update}[args.action]()
