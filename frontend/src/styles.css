@@ -5817,9 +5817,8 @@ a:focus-visible,
   word-break:normal;
   white-space:nowrap;
 }
-/* Draw the vertical rail only across the thumb's actual travel. A native
-   range track extends beneath half the thumb at each endpoint, making 100%
-   appear short of the top; align both endpoints to the visible rail instead. */
+/* Keep the section rail full-height so the thumb reaches the visible top
+   and bottom endpoints rather than stopping short of a shortened rail. */
 .slicerPlateSectionControl input[type="range"]{
   -webkit-appearance:none;
   appearance:none;
@@ -5827,7 +5826,8 @@ a:focus-visible,
   box-sizing:border-box;
   border:0;
   border-radius:0;
-  background:linear-gradient(#43b8e6,#43b8e6) center / 4px calc(100% - 18px) no-repeat;
+  padding:0;
+  background:linear-gradient(#43b8e6,#43b8e6) center / 4px 100% no-repeat;
   cursor:pointer;
 }
 .slicerPlateSectionControl input[type="range"]::-webkit-slider-runnable-track{
