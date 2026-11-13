@@ -6378,3 +6378,30 @@ a:focus-visible,
 .slicerSlotProfileModal{width:min(560px,100%)}
 .slicerSlotProfileModal label{display:grid;gap:7px}
 .slicerSlotProfileModal select{width:100%;min-width:0}
+
+/* Keep the eraser visible even if the mobile colour-swatch carousel scrolls.
+   It must not be clipped as the last item inside the horizontally scrolling list. */
+.slicerColourPaintPanel .slicerPaintEditActions{
+  display:flex;align-items:center;justify-content:flex-end;gap:6px;
+  min-width:0;flex-wrap:wrap;
+}
+.slicerColourPaintPanel .slicerPaintEditActions>button{
+  flex:0 0 auto;min-height:32px;white-space:nowrap;padding:5px 9px;
+  border:1px solid #53647a;border-radius:7px;
+}
+.slicerColourPaintPanel .slicerPaintEditActions>button[aria-pressed="true"]{
+  background:#34486b;border-color:#38bdf8;
+}
+@media (max-width:740px){
+  /* The mobile geometry editor is a SHORT scrollable inspector. It must
+     never fill the whole canvas as the earlier auto-height dialog did. */
+  .slicerSolidModal.slicerViewportAnchoredModal{
+    max-height:min(35dvh,300px)!important;
+    min-height:0!important;
+    overscroll-behavior:contain;
+  }
+  .slicerColourPaintPanel .slicerPaintEditActions{gap:5px}
+  .slicerColourPaintPanel .slicerPaintEditActions>button{
+    min-height:32px;padding:5px 7px;font-size:.77rem;
+  }
+}
