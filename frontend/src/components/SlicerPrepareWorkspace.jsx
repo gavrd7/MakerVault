@@ -490,7 +490,9 @@ export default function SlicerPrepareWorkspace({
       el?.focus();
     }
   }
-  const plateReady = canEdit && !!objects.length && !busy;
+  const projectHasModels=plates.length?plates.some(item=>item.objects.length>0):objects.length>0;
+  const plateReady = canEdit && projectHasModels && !busy;
+  const activePlateReady = canEdit && !!objects.length && !busy;
   const conflictsBlockSlice = !plateIssues || plateIssues.signature !== JSON.stringify(objects) ||
     plateIssues.issues.length > 0;
   const profilesReady = ["printer", "process", "filament"].every(
@@ -498,7 +500,7 @@ export default function SlicerPrepareWorkspace({
   const draftBlockReason = !canEdit
     ? "Your account cannot prepare slicing drafts."
     : busy ? "The slicer is still loading or processing a request."
-    : !objects.length ? "Add a model to the build plate first."
+    : !projectHasModels ? "Add a model to at least one build plate first."
     : !profilesReady ? "Select native printer, process and filament profiles in Slicer setup."
     : "";
   // Matches the bounded keys proven by the pinned Orca 2.4.2 real-binary
@@ -508,6 +510,7 @@ export default function SlicerPrepareWorkspace({
     Object.keys(item.process_overrides || {}).some(key => !verifiedObjectSettings.has(key))
   );
   const sliceBlockReason = draftBlockReason ||
+    (!activePlateReady ? "Select a plate containing models to slice." : "") ||
     (conflictsBlockSlice ? "Resolve build-plate conflicts or wait for models to finish loading before slicing." : "") ||
     (objectSettingsPending
       ? "Some Object settings are not yet verified for slicing. Wall loops and sparse infill density are supported; other Object overrides can be saved in drafts but cannot be sliced yet."
@@ -1062,9 +1065,12 @@ export default function SlicerPrepareWorkspace({
         </p>}
       </div>
       <div className="settingsActions">
+        {plates.length>1 && <p className="slicerPlateSliceScope" role="status">
+          Save draft preserves all {plates.length} plates. Slicing uses only <strong>{plateLabel}</strong>.
+        </p>}
         <button type="button" disabled={!plateReady || !profilesReady} onClick={onSaveDraft}>Save draft</button>
-        <button type="button" className="primary" disabled={!plateReady || !profilesReady || !workerConfigured || conflictsBlockSlice || objectSettingsPending}
-          onClick={onSlice}>Slice and preview</button>
+        <button type="button" className="primary" disabled={!activePlateReady || !profilesReady || !workerConfigured || conflictsBlockSlice || objectSettingsPending}
+          onClick={onSlice}>Slice active plate and preview</button>
       </div>
     </div>
   </section>;
