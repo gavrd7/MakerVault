@@ -335,7 +335,15 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     // Preserve every model and visual colour, but clear invalid physical
     // bindings on *all* plates before using another printer.
     setProjectPlates(current => current.map(plate => ({
-      ...plate, objects: plate.objects.map(({ material_slot: oldSlot, ...object }) => object),
+      ...plate, objects: plate.objects.map(({ material_slot: oldSlot, ...object }) => ({
+        ...object,
+        // Preserve painted previews while dropping advisory bindings to the
+        // previous printer. Logical palette indices are not physical slots.
+        ...(object.colour_paint ? {colour_paint:{
+          ...object.colour_paint,
+          palette:(object.colour_paint.palette || []).map(({printer_id,slot_id,slot_index,...swatch}) => swatch),
+        }} : {}),
+      })),
     })));
     setForm(current => ({
       ...current,
@@ -677,6 +685,11 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     if (!((sliceNow&&mode!=="all")?plateObjects.length:projectPlates.some(item=>item.objects.length))) {
       setError(sliceNow?"Add at least one STL to the active plate before slicing.":
         "Add at least one STL to any plate before saving.");
+      return;
+    }
+    if (sliceNow && projectPlates.some(plate=>plate.objects.some(item=>
+      Object.keys(item.colour_paint?.faces || {}).length))) {
+      setError("This project has painted colour regions. Save the draft; native painted-toolpath slicing is not yet enabled.");
       return;
     }
     if (sliceNow && mode!=="all" && unresolvedPlateIssues) {
