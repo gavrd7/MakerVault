@@ -120,6 +120,28 @@ def object_settings_fixture(target, *, reverse=False, setting="combined"):
     print("Created independent Orca per-object settings fixture: " + str(target))
 
 
+def material_fixture(target):
+    """Two independent physical models bound to native tools 0 and 1.
+
+    Both use the same benign cube shape. Different object colours are not
+    evidence of tool changes; the isolated real Orca probe must prove G-code.
+    """
+    source = cube_fixture_stl()
+    entries = [
+        ({"x_mm": -35, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100}, source),
+        ({"x_mm": 35, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100}, source),
+    ]
+    data = build_plate_3mf(entries, bed_width=220, bed_depth=220,
+                           native_tool_indices=[0, 1])
+    validate_worker_3mf(data, native_tool_count=2)
+    target = Path(target)
+    if target.exists() or target.is_symlink():
+        raise ValueError("Material fixture output already exists.")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(data)
+    print("Created independent two-tool Orca 3MF acceptance fixture: " + str(target))
+
+
 def compound_preview(path, target):
     """Run the production compound builder against the same two source STLs."""
     targets = [
@@ -156,10 +178,13 @@ def main():
     parser.add_argument("--object-wall-reverse-output", type=Path)
     parser.add_argument("--object-infill-output", type=Path)
     parser.add_argument("--object-infill-reverse-output", type=Path)
+    parser.add_argument("--material-output", type=Path)
     args = parser.parse_args()
     generate(args.output)
     if args.compound_output:
         compound_preview(args.output, args.compound_output)
+    if args.material_output:
+        material_fixture(args.material_output)
     if args.object_output:
         object_settings_fixture(args.object_output)
     if args.object_reverse_output:
