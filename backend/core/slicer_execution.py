@@ -241,6 +241,17 @@ def _validate_plate_execution(job):
                 "The active build plate does not match the saved slicing model list.")
     if not objects:
         return True
+    # Saved CFS/AMS/head mappings are advisory until the native palette,
+    # toolchange commands, and chosen machine topology have passed pinned
+    # worker + printer verification. Do NOT silently merge distinct material
+    # assignments into a single-filament print.
+    if any(isinstance(item, dict) and item.get("material_slot") is not None
+           for item in objects):
+        raise SlicerExecutionError(
+            "This draft has intended filament-slot assignments, but native multi-material "
+            "tool mapping is not yet verified. Save the draft; remove assignments to "
+            "slice using the single-filament profile."
+        )
     if job.engine != "orcaslicer":
         raise SlicerExecutionError("Multi-model plate execution is currently verified only for the single-material OrcaSlicer worker.")
     if not isinstance(objects, list) or not 1 <= len(objects) <= 12:
