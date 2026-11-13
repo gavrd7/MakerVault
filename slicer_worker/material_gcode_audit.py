@@ -129,3 +129,106 @@ def verify_two_object_tool_regions(raw_gcode, *, left_tool=0, right_tool=1):
     if min(hits) < 20 or any(mismatches):
         raise WorkerError("Native multi-tool G-code does not match the expected model/tool regions.")
     return {"left_tool_deposits": hits[0], "right_tool_deposits": hits[1]}
+
+
+def summarize_k2_fixture_changeovers(raw_gcode):
+    """Offline evidence for fixed two-cube test, NOT a physical K2 approval.
+
+    Count tool selections and deposition away from the two model regions;
+    distinguish XY deposition from stationary purge. These observations
+    cannot prove actual CFS mechanics, nozzle wiping or colour cleanliness.
+    """
+    if not isinstance(raw_gcode, bytes) or not raw_gcode or len(raw_gcode) > 64 * 1024 * 1024:
+        raise WorkerError("Invalid bounded two-tool fixture G-code.")
+    try:
+        lines = raw_gcode.decode("utf-8").splitlines()
+    except UnicodeDecodeError:
+        raise WorkerError("Two-tool fixture G-code is not plain UTF-8.") from None
+    # Only analyse G90/M82 or M83 absolute XY fixture output. Reject
+    # relative XY to avoid inventing positions.
+    active = None
+    relative_e = False
+    absolute_xyz = True
+    prev_e = {}
+    x = y = 0.0
+    changed = 0
+    selections = set()
+    outside_xy = {}
+    stationary_e = {}
+    feature_counts = {}
+    feature = ""
+    for raw in lines:
+        if raw.lstrip().startswith(";"):
+            comment = raw.lstrip()[1:].strip()
+            if comment.upper().startswith(("TYPE:", "FEATURE:")):
+                feature = comment.split(":", 1)[1].strip().lower()[:80]
+            continue
+        line = raw.split(";", 1)[0].strip().upper()
+        if not line:
+            continue
+        tool = TOOL.fullmatch(line)
+        if tool:
+            next_tool = int(tool.group(1))
+            if active is not None and active != next_tool:
+                changed += 1
+            active = next_tool
+            selections.add(active)
+            continue
+        command = line.split(None, 1)[0]
+        if command == "G90":
+            absolute_xyz = True
+        elif command == "G91":
+            absolute_xyz = False
+        elif command == "M82":
+            relative_e = False
+        elif command == "M83":
+            relative_e = True
+        elif command == "G92" and active is not None:
+            entry = E_AXIS.search(line)
+            if entry:
+                prev_e[active] = float(entry.group(1))
+        elif MOVE.match(line) and active is not None:
+            ex = E_AXIS.search(line)
+            if not ex:
+                # Travel coordinates are still important to locate stationary
+                # purging and subsequent XY extrusion.
+                coords = re.findall(r"(?:^|\s)([XY])([-+]?(?:\d+(?:\.\d*)?|\.\d+))(?=\s|$)", line)
+                for axis, value in coords:
+                    if not absolute_xyz:
+                        raise WorkerError("Relative XY is unsupported in the K2 fixture auditor.")
+                    if axis == "X":
+                        x = float(value)
+                    else:
+                        y = float(value)
+                continue
+            value = float(ex.group(1))
+            previous = prev_e.get(active, 0.0)
+            deposition = value if relative_e else value - previous
+            if not relative_e:
+                prev_e[active] = value
+            coords = re.findall(r"(?:^|\s)([XY])([-+]?(?:\d+(?:\.\d*)?|\.\d+))(?=\s|$)", line)
+            if coords and not absolute_xyz:
+                raise WorkerError("Relative XY is unsupported in the K2 fixture auditor.")
+            for axis, number in coords:
+                if axis == "X":
+                    x = float(number)
+                else:
+                    y = float(number)
+            if deposition <= 1e-6:
+                continue
+            if not coords:
+                stationary_e[active] = stationary_e.get(active, 0) + 1
+                continue
+            left = 64 <= x <= 86 and 99 <= y <= 121
+            right = 134 <= x <= 156 and 99 <= y <= 121
+            if not left and not right:
+                outside_xy[active] = outside_xy.get(active, 0) + 1
+                if feature:
+                    feature_counts[feature] = feature_counts.get(feature, 0) + 1
+    return {
+        "tool_switches": changed,
+        "selected_tools": sorted(selections),
+        "outside_model_deposition_moves": {str(k): v for k, v in sorted(outside_xy.items())},
+        "stationary_extrusion_moves": {str(k): v for k, v in sorted(stationary_e.items())},
+        "outside_deposition_features": dict(sorted(feature_counts.items())),
+    }
