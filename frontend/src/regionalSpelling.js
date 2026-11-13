@@ -64,6 +64,7 @@ export function installRegionalSpelling(root,timezone){
   if(!root||typeof document==="undefined"||typeof MutationObserver==="undefined")
     return ()=>{};
   let stopped=false,scheduled=false;
+  const pending=new Set();
   const ignored="script,style,code,pre,textarea,[contenteditable]:not([contenteditable='false']),[data-preserve-spelling]";
   function visit(node){
     if(node.nodeType===3){
@@ -84,12 +85,24 @@ export function installRegionalSpelling(root,timezone){
     }
     for(const child of element.childNodes)visit(child);
   }
-  function apply(){scheduled=false;if(!stopped)visit(root);}
-  const observer=new MutationObserver(()=>{
-    if(!scheduled){scheduled=true;queueMicrotask(apply);}
+  function apply(){
+    scheduled=false;
+    if(stopped){pending.clear();return;}
+    const nodes=[...pending];pending.clear();
+    for(const node of nodes)if(node===root || root.contains(node))visit(node);
+  }
+  const observer=new MutationObserver(mutations=>{
+    for(const mutation of mutations){
+      if(mutation.type==="childList"){
+        for(const child of mutation.addedNodes)pending.add(child);
+      }else{
+        pending.add(mutation.target);
+      }
+    }
+    if(pending.size&&!scheduled){scheduled=true;queueMicrotask(apply);}
   });
   visit(root);
   observer.observe(root,{subtree:true,childList:true,characterData:true,attributes:true,
     attributeFilter:["placeholder","aria-label","title"]});
-  return ()=>{stopped=true;observer.disconnect();};
+  return ()=>{stopped=true;pending.clear();observer.disconnect();};
 }
