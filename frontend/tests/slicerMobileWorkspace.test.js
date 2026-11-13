@@ -57,7 +57,7 @@ test("painting controls adapt to a shallow, minimisable mobile strip", () => {
   const workspace = fs.readFileSync(path.join(base,"components/SlicerPrepareWorkspace.jsx"),"utf8");
   assert.match(workspace,/paintMobileMinimised/);
   assert.match(workspace,/className="slicerPaintMobileMinimise"/);
-  assert.match(css,/\.slicerPlateCanvasViewport>\.slicerColourPaintPanel\{/);
+  assert.match(css,/\.slicerPrepareScene \.slicerPlateCanvasColumn>\.slicerColourPaintPanel\{/);
   assert.match(css,/max-height:min\(195px,32dvh\)!important/);
   assert.match(css,/\.slicerColourPaintPanel>div\[role="group"\]/);
   assert.match(css,/overflow-x:auto;overscroll-behavior-inline:contain/);
@@ -103,4 +103,16 @@ test("flushing settings and CFS profile controls use the new modal rather than a
   assert.match(flushing,/value=\{data.multiplier \?\? nativeMultiplier \?\? ""\}/);
   assert.match(flushing,/slicerFlushSlotLabel/);
   assert.match(flushing,/slicerFlushSwatch/);
+});
+
+test("compact filament rows and the flush spreadsheet keep actions readable",()=>{
+  const workspace=fs.readFileSync(path.join(base,"components/SlicerPrepareWorkspace.jsx"),"utf8");
+  const flushing=fs.readFileSync(path.join(base,"components/SlicerFlushVolumes.jsx"),"utf8");
+  assert.match(workspace,/slicerLiveMaterialSlotCompact/);
+  assert.match(workspace,/Loaded filament details/);
+  assert.match(workspace,/slicerLiveMaterialActions/);
+  assert.match(flushing,/slicerFlushMatrix/);
+  assert.match(flushing,/slicerFlushCell/);
+  assert.match(css,/\.slicerFlushMatrix \.slicerFlushCell/);
+  assert.match(css,/\.slicerLiveMaterialSlotCompact \.slicerLiveMaterialActions/);
 });
