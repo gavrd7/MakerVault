@@ -166,3 +166,30 @@ request currently takes a **single** native filament profile. Next work is an
 explicit versioned multi-profile worker contract, verified Orca CLI fixture,
 and separate manufacturer-specific toolchange acceptance, with no fallback
 to single-filament output when assignments are present.
+
+### Multi-material worker contract and real-binary acceptance (November 13)
+
+The worker now accepts a bounded optional `filament_profiles` array alongside
+the legacy first-filament field. It is Orca/3MF-only and requires 2–16 ordered,
+nonempty, independently size-limited native JSON presets with matching first
+profile bytes. Orca's fixed `--load-filaments` argument receives only trusted
+scratch paths, never arbitrary user arguments. Worker 3MF validation permits
+one-based `extruder` metadata *only* for a matching multi-profile request,
+requires every object to have an assignment, and requires at least two distinct
+tools. Worker output is rejected if its selected tools fail to deposit material.
+
+An isolated CI fixture now slices two separate cubes through real Orca 2.4.2
+using two tool indices. The stronger experimental acceptance gate additionally
+requires deposited extrusion in the expected left/right cube regions, not just
+purging or metadata. The diagnostic is **non-blocking** until that real binary
+and exact printer configuration pass; CI workflow overall success is NOT proof
+that the optional diagnostic passed. Inspect the individual `k2_two_tool`
+step outcome before making any support claim.
+
+Production `SliceJob` admission remains disabled for projects with
+`material_slot` mappings, and no printer commands or automatic print
+submissions were enabled. This is intentionally not yet a verified end-to-end
+multi-colour feature; further requirements include native K2 CFS toolchange
+and purge behaviour, verified live slot/profile reconciliation, a
+manufacturer-specific U1 toolhead profile/offset/dock sequence, and
+painting-region export with native 3MF round-trips.
