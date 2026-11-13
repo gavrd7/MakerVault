@@ -190,12 +190,14 @@ test("model gizmos and profile switch are accessible without leaving Prepare", (
   assert.match(scene, /SlicerUiIcon name=\{tool\.icon/);
 });
 
-test("live CFS AMS RFID material slots remain read-only until real multi-material slicing", () => {
+test("live CFS AMS RFID slots support draft assignments without enabling unverified tool changes", () => {
   const scene = read("SlicerPrepareWorkspace.jsx");
   assert.match(scene, /apiFetch\("\/api\/printing\/\?include_filaments=0"\)/);
   assert.match(scene, /\.filter\(slot => slot\.is_loaded\)/);
   assert.match(scene, /slot\.spool_code/);
-  assert.match(scene, /native multi-material mapping is implemented/);
+  assert.match(scene, /material_slot:materialSlot/);
+  assert.match(scene, /materialRoutingPending/);
+  assert.match(scene, /native multi-material tool changes are not yet verified/);
 });
 
 test("icon toolbar tooltips show names and unavailable reasons on hover and focus", () => {
