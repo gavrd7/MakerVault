@@ -35,7 +35,9 @@ function profileFacets(profile) {
   const label = String(profile.name || "");
   const provenance = String(profile.provenance || "");
   const pathVendor = provenance.match(/(?:@[^/]+\/|profiles\/)([^/]+)\/(?:machine|filament|process)\//i)?.[1];
-  const vendor = pathVendor || PROFILE_VENDORS.find(name =>
+  const libraryBrand = provenance.match(/\/OrcaFilamentLibrary\/filament\/([^/]+)\//i)?.[1];
+  const vendor = (libraryBrand && libraryBrand !== "base" ? libraryBrand : null) ||
+    pathVendor || PROFILE_VENDORS.find(name =>
     label.toLowerCase().startsWith(name.toLowerCase() + " ") ||
     label.toLowerCase().startsWith(name.toLowerCase() + "@")
   ) || "Other / custom";
