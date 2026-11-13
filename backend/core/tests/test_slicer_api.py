@@ -88,6 +88,16 @@ class SliceJobApiTests(TestCase):
         self.assertEqual(saved["plates"][0]["objects"][0]["asset_id"],
                          str(self.input_asset.pk))
         self.assertEqual(saved["plate_objects"], saved["plates"][0]["objects"])
+        self.client.force_login(self.owner)
+        created = self.post({**self.payload, "settings": {
+            "plate_objects": [obj], "plate_label": "Benchy",
+            "plates": project, "active_plate_id": "plate-1",
+        }})
+        self.assertEqual(created.status_code, 201, created.content)
+        job_settings = created.json()["job"]["settings"]
+        self.assertEqual(len(job_settings["plates"]), 2)
+        self.assertEqual(job_settings["active_plate_id"], "plate-1")
+        self.assertEqual(job_settings["plates"][1]["objects"], [])
         empty_selected = _draft_plate_settings(self.owner, self.input_asset, {
             "plate_label": "Accessories", "plates": project,
             "active_plate_id": "plate-2",
