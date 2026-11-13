@@ -40,6 +40,8 @@ def profile_matches_printer(name, kind, model):
 
     if "@" in raw:
         qualifier = _words(raw.rsplit("@", 1)[1])
+        if qualifier == ["base"]:
+            return True  # Native generic filament root; not a K2-only claim.
         if not all(w in qualifier for w in expected):
             return False
         # Preserve exact model variants: K1 is not K1 SE/Max/Plus or
