@@ -2423,7 +2423,7 @@ export default function SlicerPlateEditor({
       orientationCube.render();
     });
     sceneRef.current = { scene, meshes, transform, rotationGizmo, camera, controls, bedX, bedY,
-      measurementOverlay, setSelectionOutlines, sectionPlane, groupProxy };
+      measurementOverlay, setSelectionOutlines, sectionPlane, groupProxy, hidePaintGuides };
     return () => {
       disposed = true;
       sceneRef.current = null;
@@ -2566,6 +2566,7 @@ export default function SlicerPlateEditor({
   useEffect(() => {
     const state = sceneRef.current;
     if (state && !state.transform.dragging) state.controls.enabled = true;
+    if (toolMode !== "paint_colour") state?.hidePaintGuides?.();
   }, [toolMode, objectKey]);
 
   useEffect(() => {
