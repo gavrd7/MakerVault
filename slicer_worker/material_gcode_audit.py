@@ -105,8 +105,8 @@ def verify_two_object_tool_regions(raw_gcode, *, left_tool=0, right_tool=1):
             if entry:
                 previous_e[active] = float(entry.group(1))
         elif MOVE.match(code):
-            mx = re.search(r"(?:^|\\s)X([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))(?=\\s|$)", code)
-            my = re.search(r"(?:^|\\s)Y([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))(?=\\s|$)", code)
+            mx = re.search(r"(?:^|\s)X([-+]?(?:\d+(?:\.\d*)?|\.\d+))(?=\s|$)", code)
+            my = re.search(r"(?:^|\s)Y([-+]?(?:\d+(?:\.\d*)?|\.\d+))(?=\s|$)", code)
             if mx:
                 last_x = float(mx.group(1))
             if my:
