@@ -804,14 +804,12 @@ export default function SlicerPrepareWorkspace({
       color, label: "Preview colour " + (index + 1),
     }));
   })();
+  // A focused toolset, sharing selection semantics with future support painting.
   const paintTools = [
-    ["brush","paint-brush","Brush · paint a circular surface area"],
-    ["facet","paint-facet","Triangle · colour one mesh facet"],
-    ["circle","paint-disc","Circle · paint a projected circular region"],
-    ["sphere","paint-sphere","Sphere · paint a three-dimensional region"],
-    ["fill","paint-fill","Connected fill · paint an entire connected shell"],
-    ["smart_fill","paint-smart","Smart fill · stop at sharp changes of surface angle"],
-    ["height","paint-height","Height range · move across the model to choose a band"],
+    ["brush","paint-brush","Brush · paint the visible surface with an adjustable pen"],
+    ["sphere","paint-sphere","Sphere · paint a 3D region around the pointer"],
+    ["smart_fill","paint-fill","Fill · paint the clicked surface until a sharp edge"],
+    ["height","paint-height","Height range · paint between two model heights"],
   ];
   const paintSelected = objects.find(row => row.instance_id === selectedId);
   const paintPanel = toolMode === "paint_colour" && (
@@ -868,7 +866,7 @@ export default function SlicerPrepareWorkspace({
           }));setPaintError("");}}>Clear all</button>
         </div>
       </div>
-      {["brush","circle","sphere"].includes(paintMode)&&<label style={{display:"grid",gap:2,fontSize:12}}>
+      {["brush","sphere"].includes(paintMode)&&<label style={{display:"grid",gap:2,fontSize:12}}>
         {paintMode==="brush"?"Brush":"Region"} radius · {paintBrushMm} mm
         <input aria-label="Paint radius" type="range" min="0.5" max="30" step="0.5"
           value={paintBrushMm} onChange={e=>setPaintBrushMm(Number(e.target.value))}/>
