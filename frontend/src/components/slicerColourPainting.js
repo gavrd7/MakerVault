@@ -122,13 +122,20 @@ export function selectPaintFaces(mesh, { mode, face, radiusMm = 2, angleDeg = 30
   if (mode === "fill" || mode === "smart_fill") {
     if (!Number.isFinite(angleDeg) || angleDeg < 0 || angleDeg > 180)
       throw new Error("Invalid fill angle.");
+    // Neither fill mode may flood the entire connected STL shell.
+    // Ordinary Fill is a conservative seed-plane flood (roof, floor, wall);
+    // Smart Fill permits a configurable seed-normal angle but does not
+    // accumulate small bends until it wraps around the whole object.
     const selected = new Set([face]), queue = [face];
-    const threshold = Math.cos(angleDeg * Math.PI / 180);
+    const threshold = Math.cos((mode === "fill" ? 12 : angleDeg) * Math.PI / 180);
+    const stepThreshold = Math.cos((mode === "fill" ? 20 : Math.min(45, angleDeg)) * Math.PI / 180);
+    const seedNormal = mesh.normals[face];
     for (let head = 0; head < queue.length; head++) {
       const current = queue[head];
       for (const neighbour of mesh.neighbours[current]) {
         if (selected.has(neighbour)) continue;
-        if (mode === "smart_fill" && dot(mesh.normals[current], mesh.normals[neighbour]) < threshold)
+        if (dot(seedNormal, mesh.normals[neighbour]) < threshold ||
+            dot(mesh.normals[current], mesh.normals[neighbour]) < stepThreshold)
           continue;
         selected.add(neighbour);
         queue.push(neighbour);
