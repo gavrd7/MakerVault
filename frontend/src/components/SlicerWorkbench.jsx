@@ -599,16 +599,16 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
   async function saveDraft(mode = "draft") {
     if (busy || loading || !canPrepare) return;
-    const sliceNow = mode !== "draft";
+    const sliceNow = !["draft","project"].includes(mode);
     const saveOutput = mode === "save-and-slice";
     const workflow = mode === "quick" ? "quick" : mode === "draft" && !editorOpen ? "setup" : "interactive";
     setError(""); setNotice("");
-    if (!(sliceNow?plateObjects.length:projectPlates.some(item=>item.objects.length))) {
+    if (!((sliceNow&&mode!=="all")?plateObjects.length:projectPlates.some(item=>item.objects.length))) {
       setError(sliceNow?"Add at least one STL to the active plate before slicing.":
         "Add at least one STL to any plate before saving.");
       return;
     }
-    if (sliceNow && unresolvedPlateIssues) {
+    if (sliceNow && mode!=="all" && unresolvedPlateIssues) {
       setError("Slicing is blocked: resolve overlapping or out-of-bounds models on the build plate first. You can still save a draft.");
       return;
     }
@@ -623,6 +623,47 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     }
     if (["printer", "filament", "process"].some(kind => !form[kind + "_profile_id"])) {
       setError("Select a native printer, filament and process profile before saving or slicing.");
+      return;
+    }
+    if(mode==="all"){
+      const targets=projectPlates.filter(plate=>plate.objects.length);
+      setBusy(true);
+      const queuedJobs=[];
+      try{
+        for(const target of targets){
+          const payload={
+            ...form,input_asset_id:target.objects[0].asset_id,
+            spool_id:form.spool_id||null,
+            settings:{
+              plate_objects:target.objects,plate_label:target.name.trim()||"Untitled plate",
+              plates:projectPlates.map(plate=>({
+                id:plate.id,name:plate.name.trim()||"Untitled plate",objects:plate.objects,
+              })),
+              active_plate_id:target.id,workflow:"interactive",
+              save_gcode_to_library:false,
+              ...(form.engine==="orcaslicer"?{process_overrides:processOverrides}:{}),
+            },
+          };
+          // Each plate is independently checked and admitted by the server.
+          const {job}=await apiFetch("/api/printing/slicer/jobs/",{
+            method:"POST",body:payload,
+          });
+          setJobs(current=>[job,...current]);
+          const queued=await apiFetch("/api/printing/slicer/jobs/"+job.id+"/start/",{
+            method:"POST",body:{},
+          });
+          queuedJobs.push(queued.job);
+          setJobs(current=>current.map(entry=>entry.id===job.id?queued.job:entry));
+        }
+        setNotice("Queued "+queuedJobs.length+" plate"+(queuedJobs.length===1?"":"s")+
+          " for independent slicing. Each plate produces its own G-code job.");
+        setShowDrafts(true);
+      }catch(err){
+        setError("Queued "+queuedJobs.length+" of "+targets.length+
+          " plates. Further slicing stopped: "+(err.message||"Cannot queue plate.")+
+          " Review the saved drafts before retrying to avoid duplicate jobs.");
+        setShowDrafts(true);
+      }finally{setBusy(false);}
       return;
     }
     setBusy(true);
@@ -647,8 +688,25 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       savedJob = job;
       setJobs(current => [job, ...current]);
       if (!sliceNow) {
-        setNotice("Slicing configuration saved as a private draft. No slicer or printer command was run.");
-        setShowDrafts(true);
+        if(mode==="project"){
+          const response=await fetch("/api/printing/slicer/jobs/"+job.id+
+            "/export-project/",{credentials:"same-origin"});
+          if(!response.ok){
+            const failure=await response.json().catch(()=>({}));
+            throw new Error(failure.error||"3MF project export was rejected.");
+          }
+          const blob=await response.blob();
+          const url=URL.createObjectURL(blob);
+          try{
+            const link=document.createElement("a");
+            link.href=url;link.download="MakerVault-project.3mf";
+            document.body.appendChild(link);link.click();link.remove();
+          }finally{setTimeout(()=>URL.revokeObjectURL(url),1000);}
+          setNotice("Saved multi-plate project as a .3mf file.");
+        }else{
+          setNotice("Slicing configuration saved as a private draft. No slicer or printer command was run.");
+          setShowDrafts(true);
+        }
       } else {
         const queued = await apiFetch("/api/printing/slicer/jobs/" + job.id + "/start/", {
           method: "POST", body: {},
@@ -1118,6 +1176,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       processOverrides={processOverrides} onProcessOverridesChange={setProcessOverrides}
       onSaveCustomProcessProfile={saveInteractiveProcessProfile}
       onBackToSetup={() => setEditorOpen(false)} onSaveDraft={() => saveDraft("draft")}
+      onSaveProject={() => saveDraft("project")} onSliceAll={() => saveDraft("all")}
       onSlice={() => saveDraft("slice")}
     /> : <>
     <div className="slicerWorkbenchTop">
