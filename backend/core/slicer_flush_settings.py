@@ -112,7 +112,11 @@ def apply_orca_flush_settings(process_bytes, settings, *, routes, tool_count, to
            for i in range(tool_count) for j in range(tool_count) if i != j):
         raise MaterialRoutingError(
             "Missing native flush volumes; configure every directional transition.")
-    process["flush_volumes_matrix"] = matrix
+    # Orca's JSON preset loader only accepts string elements in coFloats
+    # arrays. Native Python JSON numbers can abort parsing before the
+    # "from" profile metadata is read, producing misleading exit 251.
+    process["flush_volumes_matrix"] = [format(value, ".3f").rstrip("0").rstrip(".")
+                                       if value else "0" for value in matrix]
     if approved["multiplier"] is not None:
         # Orca 2.5 PrintConfig declares flush_multiplier as coFloats,
         # i.e. a vector (one value per nozzle), not a scalar coFloat.
