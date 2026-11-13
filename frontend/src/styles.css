@@ -5981,3 +5981,25 @@ a:focus-visible,
 .slicerPrepareScene>.slicerPlateProjectNav+.slicerPlatePanel{
   height:auto;
 }
+
+/* Multi-plate object transfer and compact split Slice control. */
+.slicerMoveToPlate{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;
+  padding:7px;margin:6px 0;border:1px solid #375269;border-radius:8px}
+.slicerMoveToPlate label{display:grid;gap:4px;font-size:.76rem;color:#b3c9db}
+.slicerMoveToPlate select{width:100%;min-width:0;min-height:30px;padding:3px 6px}
+.slicerMoveToPlate button{min-height:28px;padding:4px 7px}
+.slicerSliceSplit{display:inline-flex;align-items:stretch;position:relative;flex:none}
+.slicerSliceSplit>button{min-height:36px}
+.slicerSliceSplit>button.primary{border-radius:8px 0 0 8px;padding:7px 18px}
+.slicerSliceSplit>button:nth-child(2){border-radius:0 8px 8px 0;
+  padding:6px 10px;border-left:1px solid #61708d}
+.slicerSliceMenu{position:absolute;right:0;bottom:calc(100% + 5px);z-index:30;
+  min-width:190px;display:grid;gap:4px;padding:6px;background:#142434;
+  border:1px solid #445a72;border-radius:8px;box-shadow:0 8px 20px #0008}
+.slicerSliceMenu button{text-align:left;width:100%;padding:8px 10px;min-height:32px}
+.slicerSliceMenu button:disabled{opacity:.45}
+@media(max-width:650px){
+ .slicerSliceSplit{flex:1 1 100%}
+ .slicerSliceSplit>button.primary{flex:1}
+ .slicerSliceMenu{left:0;right:0}
+}
