@@ -74,8 +74,8 @@ def _decode_payload(payload):
         "job_id", "engine", "engine_version",
         "model", "printer_profile", "filament_profile", "process_profile",
     }
-    if not isinstance(payload, dict) or (set(payload) != expected and
-                                        set(payload) != expected | {"model_format"}):
+    if not isinstance(payload, dict) or not expected.issubset(payload) or (
+            set(payload) - expected - {"model_format", "filament_profiles"}):
         raise WorkerError("Invalid slicing job payload.")
     try:
         uuid.UUID(str(payload["job_id"]))
@@ -103,8 +103,31 @@ def _decode_payload(payload):
         if not raw or len(raw) > limit:
             raise WorkerError("Invalid slicing input size.")
         files[key] = raw
+    if "filament_profiles" in payload:
+        palette = payload["filament_profiles"]
+        if (payload["engine"] != "orcaslicer" or model_format != "3mf"
+                or not isinstance(palette, list) or not 2 <= len(palette) <= 16):
+            raise WorkerError("Multi-filament requests require Orca 3MF and two to sixteen presets.")
+        decoded = []
+        for entry in palette:
+            if not isinstance(entry, str) or len(entry) > ((MAX_PROFILE_BYTES + 2)//3)*4 + 8:
+                raise WorkerError("Invalid native filament palette entry.")
+            try:
+                raw = base64.b64decode(entry, validate=True)
+            except (ValueError, base64.binascii.Error):
+                raise WorkerError("Invalid native filament palette encoding.") from None
+            if not raw or len(raw) > MAX_PROFILE_BYTES:
+                raise WorkerError("Invalid native filament palette size.")
+            decoded.append(raw)
+        # A single-profile request and the first palette item must agree,
+        # preventing disagreement between legacy and multi-tool contracts.
+        if decoded[0] != files["filament_profile"]:
+            raise WorkerError("Native filament palette does not match its first preset.")
+        files["filament_profiles"] = decoded
     if model_format == "3mf":
-        validate_worker_3mf(files["model"])
+        validate_worker_3mf(files["model"],
+            native_tool_count=len(files["filament_profiles"])
+                if "filament_profiles" in files else None)
     return files
 
 
@@ -177,6 +200,9 @@ class Handler(BaseHTTPRequestHandler):
                     ("process_profile", "process" + extension),
                 ):
                     (workdir / name).write_bytes(files[field])
+                if "filament_profiles" in files:
+                    for index, native in enumerate(files["filament_profiles"]):
+                        (workdir / ("filament-" + str(index) + ".json")).write_bytes(native)
                 stage = "running slicer engine"
                 runner = {"orcaslicer": run_orca,
                           "crealityprint": run_creality,
