@@ -116,3 +116,14 @@ test("compact filament rows and the flush spreadsheet keep actions readable",()=
   assert.match(css,/\.slicerFlushMatrix \.slicerFlushCell/);
   assert.match(css,/\.slicerLiveMaterialSlotCompact \.slicerLiveMaterialActions/);
 });
+
+test("adding an existing MakerVault STL returns to the interactive plate",()=>{
+  const editor=fs.readFileSync(path.join(base,"components/SlicerPlateEditor.jsx"),"utf8");
+  assert.match(editor,/Add STL to plate<\/button>/);
+  assert.match(editor,/event\.currentTarget\.closest\("#slicer-prepare-plate"\)/);
+  assert.match(editor,/addAsset\(assetChoice\);\s*if\(platePanel\) requestAnimationFrame/);
+  assert.match(editor,/platePanel\.scrollIntoView\(\{behavior:"smooth",block:"start"\}\)/);
+  const workspace=fs.readFileSync(path.join(base,"components/SlicerPrepareWorkspace.jsx"),"utf8");
+  assert.match(workspace,/data-slicer-add-models/);
+  assert.match(workspace,/behavior: "smooth", block: "start"/);
+});
