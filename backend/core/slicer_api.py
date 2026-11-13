@@ -25,6 +25,7 @@ from .slicer_profile_lineage import inspect_orca_lineage
 from .slicer_native_resolution import resolved_native_profile
 from .slicer_native_overrides import ORCA_PLATES
 from .slicer_process_settings import process_schema, validate_process_overrides, apply_process_overrides
+from .slicer_flush_settings import validate_flush_settings
 from .slicer_mesh import inspect_stl, MeshInspectionError, MAX_INSPECTION_BYTES
 from .slicer_bed import inspect_orca_plate, inspect_creality_plate
 from .slicer_bed_artwork import (official_artwork_source, cached_official_artwork,
@@ -159,9 +160,10 @@ def _draft_plate_settings(user, input_asset, settings):
     """Persist preview-only plate geometry; never compile it into slicer flags."""
     if settings is None:
         settings = {}
-    if not isinstance(settings, dict) or set(settings) - {"plate_objects", "plate_label", "plates", "active_plate_id", "save_gcode_to_library", "workflow", "process_overrides"}:
+    if not isinstance(settings, dict) or set(settings) - {"plate_objects", "plate_label", "plates", "active_plate_id", "save_gcode_to_library", "workflow", "process_overrides", "flush_settings"}:
         raise ValueError("Unsupported slicer plate settings.")
     process_overrides = validate_process_overrides(settings.get("process_overrides"))
+    flush_settings = validate_flush_settings(settings.get("flush_settings"))
     workflow = settings.get("workflow", "interactive")
     if not isinstance(workflow, str) or workflow not in {"setup", "quick", "interactive"}:
         raise ValueError("Unknown slicer workflow.")
@@ -218,7 +220,8 @@ def _draft_plate_settings(user, input_asset, settings):
         raise ValueError("An active plate requires a multi-plate project.")
     if "plate_objects" not in settings:
         return {"plate_label": label, "save_gcode_to_library": save_to_library,
-                "workflow": workflow, "process_overrides": process_overrides, **project_fields}
+                "workflow": workflow, "process_overrides": process_overrides,
+                **({"flush_settings": flush_settings} if flush_settings is not None else {}), **project_fields}
     objects = settings["plate_objects"]
     if not isinstance(objects, list) or not 1 <= len(objects) <= 200:
         raise ValueError("The visual build plate supports up to 200 model instances.")
@@ -328,7 +331,8 @@ def _draft_plate_settings(user, input_asset, settings):
     if saved[0]["asset_id"] != str(input_asset.pk):
         raise ValueError("The first plate model must match the selected primary STL.")
     return {"plate_objects": saved, "plate_label": label, "save_gcode_to_library": save_to_library,
-            "workflow": workflow, "process_overrides": process_overrides, **project_fields}
+            "workflow": workflow, "process_overrides": process_overrides,
+                **({"flush_settings": flush_settings} if flush_settings is not None else {}), **project_fields}
 
 
 def _draft(user, data):
