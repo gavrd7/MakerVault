@@ -30,7 +30,9 @@ RUN if [ -f /opt/engines/orcaslicer.AppImage ]; then \
       ./orcaslicer.AppImage --appimage-extract >/dev/null && \
       test -e squashfs-root/AppRun && \
       test -x squashfs-root/AppRun && \
-      test -d squashfs-root/usr; \
+      test -d squashfs-root/usr && \
+      chmod -R a+rX squashfs-root && \
+      test -x squashfs-root/AppRun; \
     fi
 RUN python3 -m compileall -q /opt/makervault-slicer/slicer_worker && \
     test -f /opt/engines/manifest.json
