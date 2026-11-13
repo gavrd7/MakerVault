@@ -837,6 +837,15 @@ export default function SlicerPrepareWorkspace({
         <label>To (mm) <input type="number" min="0" step="0.5" aria-label="Paint to height"
           value={paintHeight[1]} onChange={e=>setPaintHeight(v=>[v[0],Number(e.target.value)])}/></label>
       </div>}
+      <button type="button" disabled={!objects.find(row=>row.instance_id===selectedId)?.colour_paint}
+        onClick={() => {
+          updatePlate(latest.current.map(item => {
+            if (item.instance_id !== selectedId) return item;
+            const {colour_paint:unused,...rest} = item;
+            return rest;
+          }));
+          setPaintError("");
+        }}>Clear painting on selected model</button>
       <small>{objects.find(row=>row.instance_id===selectedId)?.colour_paint
         ? Object.keys(objects.find(row=>row.instance_id===selectedId).colour_paint.faces || {}).length+" painted triangles"
         : "No painted triangles yet"} · Click or drag across the model to paint. Ctrl+Z undoes a stroke.</small>
