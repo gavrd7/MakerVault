@@ -11,14 +11,14 @@ const source = fs.readFileSync(file, "utf8");
 test("auto-arrange clears explicit mesh highlighting without changing the controls", () => {
   assert.ok(source.includes('onChange(result.objects);'));
   assert.ok(source.includes('setSelected("");'));
-  assert.ok(source.includes('mesh.material.emissive.set(conflictIds.has(item.instance_id)'));
+  assert.ok(source.includes('mesh.material.emissive.set(toolMode === "paint_colour" ? "#000000" : conflictIds.has(item.instance_id)'));
   assert.ok(!source.includes('chosen?.instance_id || selected'));
   assert.ok(source.includes('|| objects[0] || null'));
 });
 
 test("plate movement retains stored preview colours and clears residual emission", () => {
-  assert.ok(source.includes("mesh.material.color.set(item.color || PALETTE[0])"));
-  assert.ok(source.includes("mesh.material.emissiveIntensity = conflictIds.has(item.instance_id) ? 0.72 :"));
+  assert.ok(source.includes("paintPreview(mesh, item, PALETTE[0])"));
+  assert.ok(source.includes("mesh.material.emissiveIntensity = toolMode === \"paint_colour\" ? 0 : conflictIds.has(item.instance_id) ? 0.72 :"));
 });
 
 test("plate height follows the model-control rail instead of fixed viewport height", () => {
