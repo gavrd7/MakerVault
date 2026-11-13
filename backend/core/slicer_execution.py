@@ -227,7 +227,18 @@ VERIFIED_OBJECT_PROCESS_KEYS = frozenset({
 
 def _validate_plate_execution(job):
     """An untouched STL or a bounded native-bed-backed multi-object 3MF plate."""
-    objects = (job.settings or {}).get("plate_objects")
+    settings=job.settings or {}
+    objects=settings.get("plate_objects")
+    project=settings.get("plates")
+    if project is not None:
+        active=next((plate for plate in project
+                     if plate.get("id")==settings.get("active_plate_id")), None)
+        if not active or not active.get("objects"):
+            raise SlicerExecutionError(
+                "The active build plate is empty. Choose a populated plate before slicing.")
+        if objects!=active["objects"]:
+            raise SlicerExecutionError(
+                "The active build plate does not match the saved slicing model list.")
     if not objects:
         return True
     if job.engine != "orcaslicer":
