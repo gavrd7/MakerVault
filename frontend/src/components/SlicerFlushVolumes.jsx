@@ -158,7 +158,7 @@ export default function SlicerFlushVolumes({slots=[],value=null,onChange,disable
                   <span>{slotName(from)}</span></span></th>
                 {visible.map(to=><td key={to.id}>
                   {String(from.id)===String(to.id) ? <span aria-label="Same filament">—</span> :
-                  <input className="slicerFlushCell" type="number" min="0" max="20000" step="1"
+                  <><input className="slicerFlushCell" type="number" min="0" max="20000" step="1"
                     disabled={disabled} value={overrideFor(from,to)??""}
                     placeholder={estimateMode ? (()=>{
                       const estimate=estimateSlotFlush(from,to,{allowMixed:true});
@@ -172,7 +172,7 @@ export default function SlicerFlushVolumes({slots=[],value=null,onChange,disable
                     aria-label={`Flush ${slotName(from)} to ${slotName(to)}`}
                     onChange={e=>updateTransition(from,to,e.target.value)}/>
                     {estimateMode && slotMaterialCompatibility(from,to)==="mixed" && 
-                      <span className="slicerFlushMixedMarker" title="Mixed material: unverified colour-only contribution">†</span>}}
+                      <span className="slicerFlushMixedMarker" title="Mixed material: unverified colour-only contribution">†</span>}</>}
                 </td>)}
               </tr>)}</tbody>
             </table>
