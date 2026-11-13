@@ -630,7 +630,7 @@ test("conflicting transforms remain editable, highlight affected meshes and bloc
   assert.match(scene, /conflictsBlockSlice/);
   assert.match(scene, /onPlateIssuesChange=\{onPlateIssuesChange\}/);
   assert.match(workbench, /unresolvedPlateIssues/);
-  assert.match(workbench, /if \(sliceNow && unresolvedPlateIssues\)/);
+  assert.match(workbench, /if \(sliceNow && mode!=="all" && unresolvedPlateIssues\)/);
   assert.match(workbench, /onPlateIssuesChange=\{setPlateValidation\}/);
 });
 test("duplicate individual XYZ scale toolbar action is removed", () => {
