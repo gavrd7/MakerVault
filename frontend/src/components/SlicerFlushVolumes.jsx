@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { apiFetch } from "../api";
-import { estimateSlotFlush } from "./slicerFlushEstimates";
+import { estimateSlotFlush, multiplyFlushEstimate, slotMaterialCompatibility } from "./slicerFlushEstimates";
 
 const empty = () => ({ multiplier: null, prime_tower: "native", transitions: [] });
 const slotName = slot => `Slot ${Number(slot.slot_index ?? 0)+1} · ${slot.product_name || slot.material || "Unknown"}`;
@@ -16,6 +16,8 @@ export default function SlicerFlushVolumes({slots=[],value=null,onChange,disable
   const [error,setError]=useState("");
   const [loading,setLoading]=useState(false);
   const [estimateMode,setEstimateMode]=useState(true);
+  const [previewMultiplier,setPreviewMultiplier]=useState(null);
+  const [hasEditedMultiplier,setHasEditedMultiplier]=useState(false);
   const visible=slots.filter(slot=>slot?.id!=null).slice(0,16);
   const data=value||empty();
   useEffect(()=>{
@@ -48,6 +50,16 @@ export default function SlicerFlushVolumes({slots=[],value=null,onChange,disable
     t.from_slot_id===String(from.id)&&t.to_slot_id===String(to.id))?.volume_mm3;
   const nativeMultiplier=native?.multiplier;
   const effectiveMultiplier=nativeMultiplier??1;
+  const desiredMultiplier=data.multiplier??effectiveMultiplier;
+  // A changed multiplier does not mutate manually edited directional values.
+  // It updates only the preview when the user selects Recalculate.
+  const displayedMultiplier=previewMultiplier??desiredMultiplier;
+  const recalcRequired=hasEditedMultiplier && Math.abs(displayedMultiplier-desiredMultiplier)>1e-8;
+  useEffect(()=>{
+    if(!open)return;
+    setPreviewMultiplier(null);
+    setHasEditedMultiplier(false);
+  },[open,processProfileId]);
   const suggestions=visible.flatMap(from=>visible.flatMap(to=>{
     if(String(from.id)===String(to.id))return [];
     const estimate=estimateSlotFlush(from,to);
@@ -85,8 +97,8 @@ export default function SlicerFlushVolumes({slots=[],value=null,onChange,disable
                 disabled={disabled} value={data.multiplier ?? effectiveMultiplier}
                 onChange={e=>{
                   const raw=e.target.value;
-                  if(!raw.trim()){onChange?.({...data,multiplier:null});return;}
-                  const n=Number(raw);if(n>=.1&&n<=3)onChange?.({...data,multiplier:n});
+                  if(!raw.trim()){onChange?.({...data,multiplier:null});setHasEditedMultiplier(true);return;}
+                  const n=Number(raw);if(n>=.1&&n<=3){onChange?.({...data,multiplier:n});setHasEditedMultiplier(true);}
                 }}/>
               <small>{data.multiplier==null
                 ? nativeMultiplier!=null?"Inherited from process profile · "+nativeMultiplier
@@ -112,16 +124,22 @@ export default function SlicerFlushVolumes({slots=[],value=null,onChange,disable
             <label><input type="checkbox" checked={estimateMode}
               onChange={e=>setEstimateMode(e.target.checked)}/>
               Show colour-only estimates (not native volumes)</label>
+            <button type="button" disabled={!estimateMode || !recalcRequired}
+              onClick={()=>{setPreviewMultiplier(desiredMultiplier);setHasEditedMultiplier(false);}}>
+              Recalculate
+            </button>
             <button type="button" disabled={disabled||!suggestions.length||!estimateMode}
               title="Copies colour-only estimates as manual draft overrides; does not verify safe purging"
-              onClick={()=>{if(window.confirm("These are colour-only estimates, not native purge volumes. They omit nozzle dead volume and minimum material purging and are NOT validated for physical printing. Add them as draft overrides for inspection?"))copySuggestions();}}>
+              onClick={()=>{if(window.confirm("These are unscaled colour-only contributions, not native purge volumes. The selected multiplier is applied separately during slicing. Mixed-material values are NOT copied, and minimum material purge is missing. Add same-material base estimates as draft overrides for inspection?"))copySuggestions();}}>
               Copy estimates to draft
             </button>
           </div>
           {estimateMode&&<p className="projectUploadHint" role="status">
-            Estimates approximate Orca's analytic colour-distance component only (not the printer minimum,
-            trained predictor or CFS tool routing). These values are unverified. Mixed-material
-            transitions are intentionally not estimated.
+            Displayed estimates include a preview multiplier of {displayedMultiplier}.
+            They omit nozzle minimum purging, calibrated prediction and CFS tool routing.
+            Mixed-material (†) cells show colour contribution only and are never copied into draft overrides.
+            Copying same-material estimates saves unscaled values because the multiplier is applied separately.
+            {recalcRequired ? " Multiplier changed: choose Recalculate to refresh the estimates." : ""}
           </p>}
           {visible.length>=2 ? <div className="slicerFlushTableScroll">
             <table className="slicerFlushMatrix" aria-label="Directional flushing volumes">
@@ -136,9 +154,15 @@ export default function SlicerFlushVolumes({slots=[],value=null,onChange,disable
                   {String(from.id)===String(to.id) ? <span aria-label="Same filament">—</span> :
                   <input className="slicerFlushCell" type="number" min="0" max="20000" step="1"
                     disabled={disabled} value={overrideFor(from,to)??""}
-                    placeholder={estimateMode ? (estimateSlotFlush(from,to)==null?"—":"~"+estimateSlotFlush(from,to)) : "—"}
-                    title={estimateMode ? "Approximate colour-only contribution. Native nozzle minimum and physical routing unverified." :
-                      "Blank = inherit; native slot value requires verified mapping"}
+                    placeholder={estimateMode ? (()=>{
+                      const estimate=estimateSlotFlush(from,to,{allowMixed:true});
+                      const scaled=multiplyFlushEstimate(estimate,displayedMultiplier);
+                      return scaled==null?"—":String(scaled);
+                    })() : "—"}
+                    title={estimateMode ? (slotMaterialCompatibility(from,to)==="mixed"
+                      ? "† Mixed materials: colour contribution only, not a safe purge amount; never auto-copied."
+                      : "Estimated colour contribution × preview multiplier, not a native purge amount.")
+                      : "Blank = inherit; native slot value requires verified mapping"}
                     aria-label={`Flush ${slotName(from)} to ${slotName(to)}`}
                     onChange={e=>updateTransition(from,to,e.target.value)}/>}
                 </td>)}
