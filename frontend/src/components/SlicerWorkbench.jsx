@@ -145,6 +145,24 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     if(!projectPlates.some(item=>item.id===id))return;
     setActivePlateId(id);setPlateValidation(null);
   };
+  const moveProjectModels=(instanceIds,destinationId)=>{
+    if(destinationId===activePlateId || !projectPlates.some(p=>p.id===destinationId))return;
+    const ids=new Set(instanceIds);
+    const selected=plateObjects.filter(item=>ids.has(item.instance_id));
+    if(!selected.length)return;
+    const destination=projectPlates.find(item=>item.id===destinationId);
+    if(destination.objects.length+selected.length>200){
+      setError("Destination plate cannot contain more than 200 objects.");return;
+    }
+    // Preserve assembly membership, per-part materials and precise transforms.
+    // The destination plate editor revalidates placement before permitting slicing.
+    setProjectPlates(current=>current.map(plate=>plate.id===activePlateId
+      ?{...plate,objects:plate.objects.filter(item=>!ids.has(item.instance_id))}
+      :plate.id===destinationId?{...plate,objects:[...plate.objects,...selected]}:plate));
+    setPlateValidation(null);
+    setNotice("Moved "+selected.length+" model(s) to "+destination.name+
+      ". Review their placement on that plate before slicing.");
+  };
   const [processOverrides, setProcessOverrides] = useState({});
   // Keep temporary STL filenames and preview URLs when switching between
   // the setup plate and the interactive editor.
@@ -1065,6 +1083,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       plateLabel={plateLabel} onPlateLabelChange={setPlateLabel}
       plates={projectPlates} activePlateId={activePlateId}
       onChoosePlate={chooseProjectPlate} onAddPlate={addProjectPlate} onRemovePlate={removeProjectPlate}
+       onMoveModelsToPlate={moveProjectModels}
       objects={plateObjects} onChange={setPlateObjects} files={stlFiles}
       plateIssues={plateValidation} onPlateIssuesChange={setPlateValidation}
       localAssets={plateLocalAssets} onLocalAssetsChange={setPlateLocalAssets}
