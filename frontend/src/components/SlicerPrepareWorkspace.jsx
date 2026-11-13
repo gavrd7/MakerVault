@@ -47,7 +47,7 @@ const GROUPS = [["Quality", "quality"], ["Strength", "strength"], ["Speed", "spe
 
 export default function SlicerPrepareWorkspace({
   objects, onChange, files, plate, plateType = "default", plateLabel = "Plate 1",
-  plates = [], activePlateId = "plate-1", onChoosePlate, onAddPlate, onRemovePlate,
+  plates = [], activePlateId = "plate-1", onChoosePlate, onAddPlate, onRemovePlate, onMoveModelsToPlate,
   onPlateLabelChange, onPrimaryChange, onFilesUploaded,
   defaultColor, onManualColorChange, canEdit, busy, error, notice,
   onChangeProfiles, onOpenDevice, onSaveDraft, onSlice, engine, printer,
@@ -66,6 +66,7 @@ export default function SlicerPrepareWorkspace({
   const [selectedId, setSelectedId] = useState("");
   const [selectedIds, setSelectedIds] = useState([]);
   const [expandedAssemblies, setExpandedAssemblies] = useState([]);
+  const [movePlateTarget,setMovePlateTarget]=useState("");
   const selectSingle = id => { setSelectedId(id); setSelectedIds(id ? [id] : []); };
   const selectMultiple = (id, additive = false, partOnly = false) => {
     const item = objects.find(row => row.instance_id === id);
@@ -302,7 +303,7 @@ export default function SlicerPrepareWorkspace({
   }, [refreshPrinterMaterials]);
   useEffect(()=>{
     undoRef.current=[];redoRef.current=[];
-    setSelectedId("");setSelectedIds([]);setSolidRequest(null);
+    setSelectedId("");setSelectedIds([]);setSolidRequest(null);setMovePlateTarget("");
     setToolMode("select");setMeasurementVisible(false);setMeasureOptionsOpen(false);
     setSplitRequest(0);setHistoryVersion(version=>version+1);
   },[activePlateId]);
@@ -918,6 +919,21 @@ export default function SlicerPrepareWorkspace({
             <button type="button" disabled={!canEdit || busy || !activeAssembly}
               onClick={disassembleSelected}>Disassemble</button>
           </div>
+        </div>}
+        {selectedModels.length>0 && plates.length>1 && <div className="slicerMoveToPlate">
+          <label>Move {selectedModels.length} selected to plate
+            <select value={movePlateTarget}
+              onChange={event=>setMovePlateTarget(event.target.value)}>
+              <option value="">Choose destination</option>
+              {plates.filter(p=>p.id!==activePlateId).map(p=>
+                <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </label>
+          <button type="button" disabled={!canEdit||busy||!movePlateTarget}
+            onClick={()=>{
+              onMoveModelsToPlate?.(selectedModels.map(item=>item.instance_id),movePlateTarget);
+              setSelectedIds([]);setSelectedId("");setMovePlateTarget("");
+            }}>Move models</button>
         </div>}
         {modelTreeRows.map((object, index) => {
           const assembly = object.assembly_id;
