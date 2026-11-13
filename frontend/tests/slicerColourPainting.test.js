@@ -57,3 +57,24 @@ test("conservative fill does not flood an entire connected mesh",()=>{
   assert.ok(painted.length>0 && painted.length<mesh.faceCount/2);
   geometry.dispose();
 });
+
+test("circle covers adjacent triangle edges instead of just triangle centres",()=>{
+  const geometry=new THREE.PlaneGeometry(20,20,2,2).toNonIndexed();
+  const mesh=createPaintMesh(geometry);
+  const seed=mesh.centres[0],normal=mesh.normals[0];
+  const faces=selectPaintFaces(mesh,{mode:"circle",face:0,centre:seed,
+    surfaceNormal:normal,radiusMm:6});
+  assert.ok(faces.length>1,"disc should intersect adjacent faces, not just seed triangle");
+  assert.ok(faces.length<mesh.faceCount,"disc should not flood the entire plane");
+  geometry.dispose();
+});
+
+test("planar fill stays on a roof and avoids an adjoining angled shell",()=>{
+  const geometry=new THREE.BoxGeometry(20,20,20).toNonIndexed();
+  const mesh=createPaintMesh(geometry);
+  const filled=selectPaintFaces(mesh,{mode:"fill",face:0});
+  assert.equal(filled.length,2);
+  assert.ok(filled.every(face=>mesh.normals[face].every((x,i)=>
+    Math.abs(x-mesh.normals[0][i])<1e-6)));
+  geometry.dispose();
+});
