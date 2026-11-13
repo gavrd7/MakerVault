@@ -50,7 +50,7 @@ export default function SlicerPrepareWorkspace({
   plates = [], activePlateId = "plate-1", onChoosePlate, onAddPlate, onRemovePlate, onMoveModelsToPlate,
   onPlateLabelChange, onPrimaryChange, onFilesUploaded,
   defaultColor, onManualColorChange, canEdit, busy, error, notice,
-  onChangeProfiles, onOpenDevice, onSaveDraft, onSaveProject, onSlice, onSliceAll, engine, printer,
+  onChangeProfiles, onOpenDevice, onSaveDraft, onSaveProject, onImportProject, onSlice, onSliceAll, engine, printer,
   selectedProfiles, workerConfigured, printerId,
   processOverrides = {}, onProcessOverridesChange, onSaveCustomProcessProfile,
   processProfiles = [], onSelectProcessProfile, onResetProcessSettings,
@@ -1088,6 +1088,15 @@ export default function SlicerPrepareWorkspace({
         </p>}
         <button type="button" disabled={!plateReady || !profilesReady} onClick={onSaveDraft}>Save draft</button>
         <button type="button" disabled={!plateReady || !profilesReady} onClick={onSaveProject}>Save project (.3mf)</button>
+        <label className="slicerProjectImportButton" aria-label="Open project from 3MF file">
+          Open project (.3mf)
+          <input type="file" accept=".3mf" disabled={!canEdit||busy}
+            onChange={event=>{
+              const file=event.target.files?.[0];
+              event.target.value="";
+              if(file)onImportProject?.(file);
+            }}/>
+        </label>
         <div className="slicerSliceSplit">
           <button type="button" className="primary"
             disabled={!activePlateReady || !profilesReady || !workerConfigured || conflictsBlockSlice || objectSettingsPending}
