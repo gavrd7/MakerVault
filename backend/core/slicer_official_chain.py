@@ -35,14 +35,17 @@ def official_profile_chain(engine, kind, name, subpath, vendor="Creality", versi
         (engine == "snapmakerorca" and vendor not in SNAPMAKER_VENDORS)):
         raise OfficialProfileError("Unsupported official profile vendor for this engine.")
     index = (
-        dict(orca_entries(vendor, kind, version)) if engine == "orcaslicer"
+        (dict(orca_entries(vendor, kind)) if version == "2.4.2" else
+         dict(orca_entries(vendor, kind, version))) if engine == "orcaslicer"
         else dict(creality_entries(kind, vendor)) if engine == "crealityprint"
         else dict(snapmaker_entries(kind, vendor))
     )
-    fetch = (lambda profile_kind, profile_name, path, source_vendor:
-             fetch_official_profile(profile_kind, profile_name, path, source_vendor, version)) \
-             if engine == "orcaslicer" else (fetch_creality_profile if engine == "crealityprint"
-             else fetch_snapmaker_profile)
+    if engine == "orcaslicer":
+        fetch = (fetch_official_profile if version == "2.4.2" else
+                 lambda profile_kind, profile_name, path, source_vendor:
+                 fetch_official_profile(profile_kind, profile_name, path, source_vendor, version))
+    else:
+        fetch = fetch_creality_profile if engine == "crealityprint" else fetch_snapmaker_profile
     if index.get(name) != subpath:
         raise OfficialProfileError("Requested native profile is not in the pinned catalogue.")
     visiting = set()
