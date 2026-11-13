@@ -112,7 +112,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [activePlateId,setActivePlateId] = useState("plate-1");
   const activePlate=projectPlates.find(item=>item.id===activePlateId)||projectPlates[0];
   const plateObjects=activePlate?.objects||[];
-  const plateLabel=activePlate?.name||"Plate 1";
+  const plateLabel=activePlate?.name??"Plate 1";
   const setPlateObjects=useCallback(updater=>{
     setProjectPlates(current=>current.map(item=>item.id===activePlateId
       ?{...item,objects:typeof updater==="function"?updater(item.objects):updater}:item));
