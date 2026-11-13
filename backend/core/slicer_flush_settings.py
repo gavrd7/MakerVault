@@ -114,7 +114,10 @@ def apply_orca_flush_settings(process_bytes, settings, *, routes, tool_count, to
             "Missing native flush volumes; configure every directional transition.")
     process["flush_volumes_matrix"] = matrix
     if approved["multiplier"] is not None:
-        process["flush_multiplier"] = str(approved["multiplier"])
+        # Orca 2.5 PrintConfig declares flush_multiplier as coFloats,
+        # i.e. a vector (one value per nozzle), not a scalar coFloat.
+        # The changer topology here has one nozzle and multiple filaments.
+        process["flush_multiplier"] = [str(approved["multiplier"])]
     if approved["prime_tower"] != "native":
         process["enable_prime_tower"] = "1" if approved["prime_tower"] == "enabled" else "0"
     # No attempt to synthesize printer G-code: CFS/AMS unload, load, purge
