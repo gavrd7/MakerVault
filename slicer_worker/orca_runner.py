@@ -212,18 +212,7 @@ def orca_command(binary: Path, workdir: Path, *,
         raise WorkerError("Experimental plate mode requires a 3MF input.")
     model = _regular_file(workdir, "input.3mf" if is_project else "input.stl", MAX_MODEL_BYTES)
     native_object_settings = False
-    if is_project:
-        model_bytes = model.read_bytes()
-        validate_worker_3mf(model_bytes)
-        # The bounded worker validator has already checked the exact package
-        # layout, object IDs and native setting values. Project-specific
-        # settings must retain their baked placements, not be re-arranged by
-        # Orca's CLI automatic arrangement mode.
-        with zipfile.ZipFile(io.BytesIO(model_bytes)) as archive:
-            if "Metadata/model_settings.config" in archive.namelist():
-                metadata = ET.fromstring(archive.read("Metadata/model_settings.config"))
-                native_object_settings = bool(metadata.findall("object"))
-    else:
+    if not is_project:
         try:
             validate_stl(model.read_bytes())
         except StlValidationError as exc:
@@ -247,10 +236,20 @@ def orca_command(binary: Path, workdir: Path, *,
         profile = _regular_file(workdir, path.name, MAX_PROFILE_BYTES)
         _native_json(profile)
         palette.append(profile)
-    if palette:
-        if not is_project or len(palette) < 2 or profiles[1].read_bytes() != palette[0].read_bytes():
-            raise WorkerError("Multi-filament palette does not match the native 3MF job.")
-        validate_worker_3mf(model.read_bytes(), native_tool_count=len(palette))
+    if palette and (not is_project or len(palette) < 2 or
+                    profiles[1].read_bytes() != palette[0].read_bytes()):
+        raise WorkerError("Multi-filament palette does not match the native 3MF job.")
+    if is_project:
+        model_bytes = model.read_bytes()
+        # Validate the archive once, against the actual request topology.
+        # Without a palette, extruder metadata must remain forbidden.
+        validate_worker_3mf(model_bytes,
+                            native_tool_count=len(palette) if palette else None)
+        # Inspect the manifest only after all archive bounds have been checked.
+        with zipfile.ZipFile(io.BytesIO(model_bytes)) as archive:
+            if "Metadata/model_settings.config" in archive.namelist():
+                metadata = ET.fromstring(archive.read("Metadata/model_settings.config"))
+                native_object_settings = bool(metadata.findall("object"))
     outdir = workdir / "orca-output"
     if outdir.exists() or outdir.is_symlink():
         raise WorkerError("Output directory is not empty; fresh scratch is required.")
