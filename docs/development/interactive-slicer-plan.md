@@ -99,3 +99,49 @@ Unsupported features are disabled instead of simulating an incorrect slice.
 The current read-only loaded slot panel is a *discovery foundation*, not
 multi-material printing support. Native engine and physical printer test
 fixtures are required before enabling object-level selection or painting.
+
+## Native material routing implementation (November 2026)
+
+A common, non-vendor-specific route has two distinct axes:
+
+- **Single nozzle with filament changer:** multiple physical bays feed one hotend
+  (e.g. CFS/AMS); the engine must select virtual filament IDs, generate
+  unload/load/flush sequences from the machine's approved native profiles,
+  and account for tower/flush waste.
+- **Independent toolheads:** each native tool selects its dedicated hotend
+  (e.g. Snapmaker U1); preserve offsets, docking/parking and standby/heating
+  logic from the manufacturer's actual verified printer profile. Do not apply
+  CFS-style purging or invent a toolchange macro.
+
+Implemented groundwork: `slicer_material_routing.py` validates an explicit
+mapping from physical slot IDs to zero-based engine tools; Orca 3MF generation
+can write one-based per-object `extruder` metadata for individually preserved
+mesh objects. These native indices are **not** derived from slot order.
+Unit tests cover both topologies and malformed/conflicting routes.
+
+**Not enabled in the production slicing worker yet.** The existing verified
+compound-3MF route merges objects, and worker input currently includes a
+single native filament preset. Generated multi-material G-code requires
+engine-specific *multiple* resolved filament presets, printer-native tool
+configuration, complete object retention, and binary evidence that its actual
+G-code includes intended tool changes. Therefore mapped drafts intentionally
+fail closed at queue admission and have disabled Slice controls in Prepare,
+rather than printing all assigned colours as one material.
+
+Before activation:
+
+1. Resolve an ordered native filament palette matching the selected engine
+   and version, each preset inherited and owned/verified, with compatible
+   nozzle/material temperatures and validated machine tool count.
+2. Bind each saved object to a **verified** native tool index through the
+   selected physical printer's topology and live slots; reject missing,
+   stale, cross-printer or conflicting assignments.
+3. Use the unmerged, object-preserving 3MF; demonstrate a pinned real Orca
+   CLI fixture for at least two differently assigned objects. Assert actual
+   tool changes and per-tool extrusion in the generated G-code (not just
+   metadata or a preview swatch). Verify cooling, purging and estimates.
+4. Separately verify a CFS/AMS-style single-nozzle fixture and a dedicated
+   toolhead fixture. Snapmaker U1 requires its own approved native profile,
+   firmware and physical acceptance; do not reuse K2 printer commands.
+5. Restore slicing UI only for exact verified topology/profile/engine
+   combinations. Print submission is a separate, explicit safety gate.
