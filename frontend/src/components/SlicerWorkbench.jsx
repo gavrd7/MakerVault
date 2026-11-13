@@ -99,6 +99,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [previewJobId, setPreviewJobId] = useState(null);
   const awaitingSlicePreviewRef = useRef(null);
   const [customBed, setCustomBed] = useState({ enabled: false, x: "220", y: "220" });
+  const [flushSettings, setFlushSettings] = useState(null);
   const [profileLineages, setProfileLineages] = useState({});
   const [workerConfigured, setWorkerConfigured] = useState(false);
   const [canVerifyProfiles, setCanVerifyProfiles] = useState(false);
@@ -491,6 +492,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       ?job.settings.active_plate_id:restored[0].id);
     setPlateValidation(null);
     setProcessOverrides(job.settings?.process_overrides || {});
+    setFlushSettings(job.settings?.flush_settings || null);
     setEditorOpen(true);
     setForm(current => ({
       ...current,
@@ -740,6 +742,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               id:plate.id,name:plate.name.trim()||"Untitled plate",objects:plate.objects,
             })),active_plate_id:activePlateId,
             save_gcode_to_library: saveOutput, workflow,
+            ...(flushSettings ? { flush_settings: flushSettings } : {}),
             ...(form.engine === "orcaslicer" ? { process_overrides: processOverrides } : {}) },
         },
       });
@@ -1232,6 +1235,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       selectedPlateType={plateOptions(form.engine).find(([id]) => id === form.plate)?.[1] || "Native / profile default"}
       workerConfigured={workerConfigured && engines.some(engine => engine.key === form.engine && engine.available)}
       processOverrides={processOverrides} onProcessOverridesChange={setProcessOverrides}
+      flushSettings={flushSettings} onFlushSettingsChange={setFlushSettings}
       onSaveCustomProcessProfile={saveInteractiveProcessProfile}
       onBackToSetup={() => setEditorOpen(false)} onSaveDraft={() => saveDraft("draft")}
       onSaveProject={() => saveDraft("project")} onSliceAll={() => saveDraft("all")}
