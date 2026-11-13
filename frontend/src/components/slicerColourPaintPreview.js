@@ -5,6 +5,9 @@ import { createPaintMesh, validatePaint } from "./slicerColourPainting.js";
 export function paintPreview(mesh, item, fallback = "#58b5e4") {
   if (!mesh?.geometry || !mesh?.material || Array.isArray(mesh.material)) return;
   const state = item?.colour_paint;
+  const baseHex = item?.color || fallback;
+  const previous = mesh.userData.paintPreviewCache;
+  if (previous && previous.state === state && previous.baseHex === baseHex) return;
   const positions = mesh.geometry.getAttribute("position");
   if (!state || !Object.keys(state.faces || {}).length) {
     if (mesh.material.vertexColors) {
@@ -12,7 +15,8 @@ export function paintPreview(mesh, item, fallback = "#58b5e4") {
       mesh.material.needsUpdate = true;
       mesh.geometry.deleteAttribute("color");
     }
-    mesh.material.color.set(item?.color || fallback);
+    mesh.material.color.set(baseHex);
+    mesh.userData.paintPreviewCache = {state, baseHex};
     return;
   }
   if (!mesh.userData.paintMesh) mesh.userData.paintMesh = createPaintMesh(mesh.geometry);
@@ -24,7 +28,7 @@ export function paintPreview(mesh, item, fallback = "#58b5e4") {
   // rather than bleeding colors onto adjacent triangles that share vertices.
   if (mesh.geometry.getIndex() || positions.count !== mesh.userData.paintMesh.faceCount * 3)
     throw new Error("This mesh cannot display independently coloured facets.");
-  const base = new THREE.Color(item?.color || fallback);
+  const base = new THREE.Color(baseHex);
   const colours = new Float32Array(positions.count * 3);
   for (let face = 0; face < mesh.userData.paintMesh.faceCount; face++) {
     const slot = state.faces[face];
@@ -49,4 +53,5 @@ export function paintPreview(mesh, item, fallback = "#58b5e4") {
     mesh.material.vertexColors = true;
     mesh.material.needsUpdate = true;
   }
+  mesh.userData.paintPreviewCache = {state, baseHex};
 }
