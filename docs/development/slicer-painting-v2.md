@@ -1,6 +1,11 @@
 # MakerVault painting v2: surface regions rather than original STL faces
 
-Status: design and migration specification; **not yet implemented as the persisted paint format**.
+Status: **incremental implementation in progress**. The v2 surface-region schema,
+clipped-polygon preview renderer, frontend/backend validation and draft
+round-trip foundation are committed. The interactive paint tools still
+write v1 facet assignments; v2 editing, erasure/overlap resolution,
+3MF round-trips and native engine export are **not yet connected**.
+Do not enable physical multicolour slicing from painted regions.
 
 ## Problem confirmed by staging (13 November 2026)
 
