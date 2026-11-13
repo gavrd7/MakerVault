@@ -53,6 +53,6 @@ test("recalculate preview multiplier, retaining directional overrides",()=>{
  assert.ok(src.includes("setPreviewMultiplier(desiredMultiplier)"));
  assert.ok(src.includes("Recalculate"));
  assert.ok(src.includes("estimateSlotFlush(from,to,{allowMixed:true})"));
- assert.ok(src.includes("Mixed-material values are NOT copied"));
+ assert.ok(!src.includes("Copy estimates to draft"));
  assert.ok(src.includes("const estimate=estimateSlotFlush(from,to);"));
 });
