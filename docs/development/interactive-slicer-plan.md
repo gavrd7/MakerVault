@@ -145,3 +145,24 @@ Before activation:
    firmware and physical acceptance; do not reuse K2 printer commands.
 5. Restore slicing UI only for exact verified topology/profile/engine
    combinations. Print submission is a separate, explicit safety gate.
+
+### Ordered native filament palette and G-code evidence
+
+Implemented preparatory modules:
+
+- `slicer_native_material_palette.py` accepts an explicitly ordered list of
+  **verified** native Orca filament presets, resolves owner-scoped native
+  inheritance, checks same engine/version and consistent filament diameter,
+  verifies every assigned native tool has a corresponding selected preset,
+  and returns immutable per-object tool indices plus profile bytes.
+- `slicer_material_gcode_audit.py` inspects *executed* T-index commands and
+  positive XY extrusion for every expected native tool. Comment-only T codes,
+  tools selected without deposition, or missing tools fail the evidence check.
+  This is a **G-code acceptance aid**, not proof that printer firmware will
+  interpret those tools correctly.
+
+Both are deliberately disconnected from worker dispatch; the existing worker
+request currently takes a **single** native filament profile. Next work is an
+explicit versioned multi-profile worker contract, verified Orca CLI fixture,
+and separate manufacturer-specific toolchange acceptance, with no fallback
+to single-filament output when assignments are present.
