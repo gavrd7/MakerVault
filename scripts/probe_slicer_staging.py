@@ -33,7 +33,7 @@ def _pinned_image(config=DOTENV):
         raise ValueError("Worker image is not pinned to the configured immutable SHA-256 ID.")
     engines = json.loads(variables.get("SLICER_ENGINES_JSON", "{}"))
     orca = engines.get("orcaslicer")
-    if not isinstance(orca, dict) or orca.get("version") != "2.4.2" or orca.get("binary") != "/opt/engines/orcaslicer.AppImage":
+    if not isinstance(orca, dict) or orca.get("version") != "2.5.0" or orca.get("binary") != "/opt/engines/orcaslicer.AppImage":
         raise ValueError("The pinned Orca 2.4.2 worker is not present in the staging manifest.")
     if not re.fullmatch("[a-f0-9]{64}", str(orca.get("binary_sha256", ""))):
         raise ValueError("Orca executable digest is missing or invalid.")
@@ -87,7 +87,7 @@ def probe(printer, filament, process, *, model=None, compound=False, experimenta
             "--mount", f"type=bind,src={bundle},dst=/fixtures,readonly",
             "--entrypoint", "python3", image,
             "-m", "slicer_worker.probe", "--engine", "orcaslicer",
-            "--version", "2.4.2", "--binary", "/opt/engines/orcaslicer.AppImage",
+            "--version", "2.5.0", "--binary", "/opt/engines/orcaslicer.AppImage",
             "--printer", "/fixtures/printer.json",
             "--filament", "/fixtures/filament.json",
             "--process", "/fixtures/process.json",
