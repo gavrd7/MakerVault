@@ -73,3 +73,23 @@ class OfflineMaterialPreflightTests(SimpleTestCase):
         overlapping[0][0]["x_mm"] = 35
         with self.assertRaises(ValueError):
             prepare_offline_material_plate(overlapping, **self.options)
+
+    def test_offline_preflight_applies_directional_flush_and_preserves_native_tower(self):
+        process = json.dumps({
+            "flush_volumes_matrix": [0, 160, 220, 0],
+            "flush_multiplier": "0.7",
+            "enable_prime_tower": "1",
+            "prime_tower_width": "40",
+        }).encode()
+        flush = {"multiplier": 1.1, "prime_tower": "native", "transitions": [
+            {"from_slot_id": "cfs-4", "to_slot_id": "cfs-1", "volume_mm3": 345},
+        ]}
+        output = prepare_offline_material_plate(
+            self.items, **self.options, native_process_profile=process,
+            flush_settings=flush)
+        profile = json.loads(output["native_process_profile"])
+        self.assertEqual(profile["flush_volumes_matrix"], [0, 160, 345, 0])
+        self.assertEqual(profile["flush_multiplier"], "1.1")
+        self.assertEqual(profile["enable_prime_tower"], "1")
+        self.assertEqual(profile["prime_tower_width"], "40")
+
