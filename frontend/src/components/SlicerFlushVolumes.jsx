@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { apiFetch } from "../api";
+import { estimateSlotFlush } from "./slicerFlushEstimates";
 
 const empty = () => ({ multiplier: null, prime_tower: "native", transitions: [] });
 const slotName = slot => `Slot ${Number(slot.slot_index ?? 0)+1} · ${slot.product_name || slot.material || "Unknown"}`;
@@ -14,6 +15,7 @@ export default function SlicerFlushVolumes({slots=[],value=null,onChange,disable
   const [native,setNative]=useState(null);
   const [error,setError]=useState("");
   const [loading,setLoading]=useState(false);
+  const [estimateMode,setEstimateMode]=useState(false);
   const visible=slots.filter(slot=>slot?.id!=null).slice(0,16);
   const data=value||empty();
   useEffect(()=>{
@@ -45,6 +47,21 @@ export default function SlicerFlushVolumes({slots=[],value=null,onChange,disable
   const overrideFor=(from,to)=>data.transitions.find(t=>
     t.from_slot_id===String(from.id)&&t.to_slot_id===String(to.id))?.volume_mm3;
   const nativeMultiplier=native?.multiplier;
+  const effectiveMultiplier=nativeMultiplier??1;
+  const suggestions=visible.flatMap(from=>visible.flatMap(to=>{
+    if(String(from.id)===String(to.id))return [];
+    const estimate=estimateSlotFlush(from,to);
+    return estimate==null?[]:[{from,to,estimate}];
+  }));
+  function copySuggestions(){
+    const existing=data.transitions||[];
+    const updates=[...existing];
+    for(const row of suggestions){
+      if(existing.some(t=>t.from_slot_id===String(row.from.id)&&t.to_slot_id===String(row.to.id)))continue;
+      updates.push({from_slot_id:String(row.from.id),to_slot_id:String(row.to.id),volume_mm3:row.estimate});
+    }
+    onChange?.({...data,transitions:updates});
+  }
   return <>
     <button type="button" className="slicerFlushOpenButton" onClick={()=>setOpen(true)}
       aria-haspopup="dialog">Flushing settings {value?"· customised":"· native defaults"}</button>
@@ -62,30 +79,50 @@ export default function SlicerFlushVolumes({slots=[],value=null,onChange,disable
           {loading&&<p role="status">Resolving native profile settings…</p>}
           {error&&<p role="alert" className="formError">{error}</p>}
           <div className="slicerFlushModalControls">
-            <label>Flush multiplier
-              <input type="number" min=".1" max="3" step=".1" disabled={disabled}
-                value={data.multiplier ?? nativeMultiplier ?? ""} placeholder={nativeMultiplier!=null?String(nativeMultiplier):"Not defined"}
+            <div className="slicerFlushField">
+              <label htmlFor="slicer-flush-multiplier">Flush multiplier</label>
+              <input id="slicer-flush-multiplier" type="number" min=".1" max="3" step=".1"
+                disabled={disabled} value={data.multiplier ?? effectiveMultiplier}
                 onChange={e=>{
                   const raw=e.target.value;
                   if(!raw.trim()){onChange?.({...data,multiplier:null});return;}
                   const n=Number(raw);if(n>=.1&&n<=3)onChange?.({...data,multiplier:n});
                 }}/>
-              <small>{data.multiplier===null
-                ? nativeMultiplier!=null?"Inherited from process profile · "+nativeMultiplier+" (edit to override)":"Not available in selected native process profile"
-                :"Overriding native multiplier"}</small>
-            </label>
-            <label>Prime tower
-              <select disabled={disabled} value={data.prime_tower}
+              <small>{data.multiplier==null
+                ? nativeMultiplier!=null?"Inherited from process profile · "+nativeMultiplier
+                  :"Orca project default · 1 (not process profile data)"
+                :"Custom override · "+data.multiplier}</small>
+            </div>
+            <div className="slicerFlushField">
+              <label htmlFor="slicer-flush-prime-tower">Prime tower</label>
+              <select id="slicer-flush-prime-tower" disabled={disabled} value={data.prime_tower}
                 onChange={e=>onChange?.({...data,prime_tower:e.target.value})}>
                 <option value="native">Native default {native?.prime_tower==null?"(unknown)":native.prime_tower?"(enabled)":"(disabled)"}</option>
                 <option value="enabled">Enabled</option><option value="disabled">Disabled</option>
               </select>
-            </label>
+              <small>{data.prime_tower==="native"
+                ?"Inherited from native process / project settings":"User override"}</small>
+            </div>
           </div>
           <h4>Directional flushing · mm³</h4>
           <p className="projectUploadHint">Rows: unloaded filament. Columns: next loaded filament.
             Each editable cell is a directional override. Native process values are tool-indexed,
             not physical CFS slot values, until a verified slot-to-tool map is available.</p>
+          <div className="slicerFlushEstimateBar">
+            <label><input type="checkbox" checked={estimateMode}
+              onChange={e=>setEstimateMode(e.target.checked)}/>
+              Show Orca-style colour estimates</label>
+            <button type="button" disabled={disabled||!suggestions.length||!estimateMode}
+              title="Copies colour-only estimates as manual draft overrides; does not verify safe purging"
+              onClick={()=>{if(window.confirm("These are colour-only estimates, not native purge volumes. They omit nozzle dead volume and minimum material purging and are NOT validated for physical printing. Add them as draft overrides for inspection?"))copySuggestions();}}>
+              Copy estimates to draft
+            </button>
+          </div>
+          {estimateMode&&<p className="projectUploadHint" role="status">
+            Estimates approximate Orca's analytic colour-distance component only (not the printer minimum,
+            trained predictor or CFS tool routing). These values are unverified. Mixed-material
+            transitions are intentionally not estimated.
+          </p>}
           {visible.length>=2 ? <div className="slicerFlushTableScroll">
             <table className="slicerFlushMatrix" aria-label="Directional flushing volumes">
               <thead><tr><th scope="col">From / To</th>{visible.map(slot=><th scope="col" key={slot.id}>
@@ -99,7 +136,9 @@ export default function SlicerFlushVolumes({slots=[],value=null,onChange,disable
                   {String(from.id)===String(to.id) ? <span aria-label="Same filament">—</span> :
                   <input className="slicerFlushCell" type="number" min="0" max="20000" step="1"
                     disabled={disabled} value={overrideFor(from,to)??""}
-                    placeholder="—" title="Blank = inherit; native slot value requires verified mapping"
+                    placeholder={estimateMode ? (estimateSlotFlush(from,to)==null?"—":"~"+estimateSlotFlush(from,to)) : "—"}
+                    title={estimateMode ? "Approximate colour-only contribution. Native nozzle minimum and physical routing unverified." :
+                      "Blank = inherit; native slot value requires verified mapping"}
                     aria-label={`Flush ${slotName(from)} to ${slotName(to)}`}
                     onChange={e=>updateTransition(from,to,e.target.value)}/>}
                 </td>)}
