@@ -548,7 +548,7 @@ export default function SlicerPrepareWorkspace({
     : !projectHasModels ? "Add a model to at least one build plate first."
     : !profilesReady ? "Select native printer, process and filament profiles in Slicer setup."
     : "";
-  // Matches the bounded keys proven by the pinned Orca 2.4.2 real-binary
+  // Matches the bounded keys proven by the pinned Orca 2.5.0 real-binary
   // two-object G-code fixture. Object edits outside this set remain draft-only.
   const verifiedObjectSettings = new Set(["wall_loops", "sparse_infill_density"]);
   const objectSettingsPending = objects.some(item =>
@@ -560,7 +560,7 @@ export default function SlicerPrepareWorkspace({
   const sliceBlockReason = draftBlockReason ||
     (!activePlateReady ? "Select a plate containing models to slice." : "") ||
     (conflictsBlockSlice ? "Resolve build-plate conflicts or wait for models to finish loading before slicing." : "") ||
-    (materialRoutingPending ? "This project contains intended filament slots, but native multi-material tool changes are not yet verified. Save the draft; clear slot assignments to use the single-filament slicing path."
+    (materialRoutingPending ? "This draft contains intended filament slots. Offline multi-colour Orca 2.5 fixtures pass, but this registered printer's live slot-to-tool bindings and physical changeovers are not yet verified. Save the draft; clear assignments to slice with the proven single-filament path."
       : objectSettingsPending
       ? "Some Object settings are not yet verified for slicing. Wall loops and sparse infill density are supported; other Object overrides can be saved in drafts but cannot be sliced yet."
       : !workerConfigured
