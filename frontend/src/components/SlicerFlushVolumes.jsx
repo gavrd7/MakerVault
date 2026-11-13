@@ -17,7 +17,10 @@ export default function SlicerFlushVolumes({slots=[],value=null,onChange,disable
   const visible=slots.filter(slot=>slot?.id!=null).slice(0,16);
   const data=value||empty();
   useEffect(()=>{
-    if(!open||!processProfileId)return undefined;
+    if(!open)return undefined;
+    setNative(null);
+    if(!processProfileId){setError("Select an imported OrcaSlicer process profile to view its native flushing values.");return undefined;}
+    setError("");
     let live=true;
     setLoading(true);setError("");setNative(null);
     apiFetch("/api/printing/slicer/profiles/"+encodeURIComponent(processProfileId)+"/flush-defaults/")
@@ -61,14 +64,14 @@ export default function SlicerFlushVolumes({slots=[],value=null,onChange,disable
           <div className="slicerFlushModalControls">
             <label>Flush multiplier
               <input type="number" min=".1" max="3" step=".1" disabled={disabled}
-                value={data.multiplier ?? ""} placeholder={nativeMultiplier!=null?String(nativeMultiplier):"Not defined"}
+                value={data.multiplier ?? nativeMultiplier ?? ""} placeholder={nativeMultiplier!=null?String(nativeMultiplier):"Not defined"}
                 onChange={e=>{
                   const raw=e.target.value;
                   if(!raw.trim()){onChange?.({...data,multiplier:null});return;}
                   const n=Number(raw);if(n>=.1&&n<=3)onChange?.({...data,multiplier:n});
                 }}/>
               <small>{data.multiplier===null
-                ? nativeMultiplier!=null?"Native: "+nativeMultiplier:"Native value unavailable"
+                ? nativeMultiplier!=null?"Inherited from process profile · "+nativeMultiplier+" (edit to override)":"Not defined in selected process profile"
                 :"Overriding native multiplier"}</small>
             </label>
             <label>Prime tower
