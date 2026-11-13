@@ -252,6 +252,18 @@ export default function SlicerPrepareWorkspace({
   const [liveMaterials, setLiveMaterials] = useState([]);
   const [filamentPickerId, setFilamentPickerId] = useState("");
   const [filamentNotice, setFilamentNotice] = useState("");
+  // WCAG relative luminance: choose the more legible foreground for each
+  // filament swatch rather than assuming all material colours are light.
+  const materialTextColor = hex => {
+    if (!/^#[0-9a-f]{6}$/i.test(hex || "")) return "#ffffff";
+    const channel = offset => {
+      const value = parseInt(hex.slice(offset, offset + 2), 16) / 255;
+      return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    };
+    const luminance = 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
+    return (luminance + 0.05) / 0.05 >= 1.05 / (luminance + 0.05)
+      ? "#101722" : "#ffffff";
+  };
   const validSlotColor = slot => /^#[0-9a-f]{6}$/i.test(slot?.color_hex || "")
     ? slot.color_hex.toUpperCase() : null;
   const slotName = slot => (slot.product_name || slot.material || "Unknown filament") +
@@ -1010,7 +1022,7 @@ export default function SlicerPrepareWorkspace({
                 : "Intended slot: " + slotName(liveSlot) + " (draft mapping only)";
               return <>
                 <span className="slicerPrepareModelSwatch slicerPrepareMaterialSwatch"
-                  style={{ background: object.color }}
+                  style={{ background: object.color, color: materialTextColor(object.color) }}
                   title={liveSlot ? (rawMaterial || "Unknown material") : "Model preview colour"}
                   aria-hidden="true">{material}</span>
                 <span className="slicerPrepareModelName">{index + 1}. {itemName(object)}</span>
