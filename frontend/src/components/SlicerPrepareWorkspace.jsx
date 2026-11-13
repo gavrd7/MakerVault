@@ -105,6 +105,8 @@ export default function SlicerPrepareWorkspace({
   const [paintBrushMm, setPaintBrushMm] = useState(3);
   const [paintAngle, setPaintAngle] = useState(30);
   const [paintHeight, setPaintHeight] = useState([0, 10]);
+  const [paintHeightFollow, setPaintHeightFollow] = useState(true);
+  const [paintHeightRange, setPaintHeightRange] = useState(10);
   const [paintErase, setPaintErase] = useState(false);
   const [paintError, setPaintError] = useState("");
   const [paintMobileMinimised, setPaintMobileMinimised] = useState(false);
@@ -811,7 +813,7 @@ export default function SlicerPrepareWorkspace({
   const paintSelected = objects.find(row => row.instance_id === selectedId);
   const paintPanel = toolMode === "paint_colour" && (
     <section className={"slicerColourPaintPanel"+(paintMobileMinimised?" slicerPaintMinimised":"")} aria-label="Colour painting controls"
-      style={{position:"absolute",top:12,left:12,zIndex:20,width:"min(310px, calc(100% - 74px))",
+      style={{position:"absolute",top:"var(--slicer-overlay-top, 0px)",left:12,zIndex:20,width:"min(310px, calc(100% - 74px))",
         maxHeight:"min(490px, calc(100% - 24px))",overflowY:"auto",padding:10,
         border:"1px solid #476079",borderRadius:10,background:"rgba(17,27,42,.96)",
         boxShadow:"0 8px 26px rgba(0,0,0,.4)",display:"grid",gap:8}}>
@@ -864,15 +866,38 @@ export default function SlicerPrepareWorkspace({
           value={paintAngle} onChange={e=>setPaintAngle(Number(e.target.value))}/>
       </label>}
       {paintMode==="height"&&<div style={{display:"grid",gap:5}}>
-        <small>Move over the model to position the height band. Click to paint it.</small>
+        <label style={{display:"flex",alignItems:"center",gap:7,fontSize:12}}>
+          <input type="checkbox" checked={paintHeightFollow}
+            onChange={e=>setPaintHeightFollow(e.target.checked)}/>
+          Follow pointer to position band
+        </label>
+        <label style={{display:"grid",gap:2,fontSize:12}}>
+          Range thickness · {paintHeightRange} mm
+          <input type="range" min="0.5" max="100" step="0.5" value={paintHeightRange}
+            aria-label="Height painting range thickness"
+            onChange={e=>{
+              const mm=Number(e.target.value);setPaintHeightRange(mm);
+              setPaintHeight(([from])=>[from,Math.round((from+mm)*2)/2]);
+            }}/>
+        </label>
+        <small>{paintHeightFollow?"Move over the model to position the height band; click to paint.":
+          "Fixed range: edit both heights below, then click the model to paint."}</small>
         <div style={{display:"flex",gap:7}}>
           <label style={{flex:1,minWidth:0,fontSize:11}}>From (mm)
             <input type="number" min="0" step=".5" aria-label="Paint from height" style={{width:"100%"}}
-              value={paintHeight[0]} onChange={e=>setPaintHeight(v=>[Number(e.target.value),v[1]])}/>
+              value={paintHeight[0]} onChange={e=>{
+                const from=Number(e.target.value);setPaintHeight(v=>{
+                  setPaintHeightRange(Math.max(.5,Math.abs(v[1]-from)));return [from,v[1]];
+                });setPaintHeightFollow(false);
+              }}/>
           </label>
           <label style={{flex:1,minWidth:0,fontSize:11}}>To (mm)
             <input type="number" min="0" step=".5" aria-label="Paint to height" style={{width:"100%"}}
-              value={paintHeight[1]} onChange={e=>setPaintHeight(v=>[v[0],Number(e.target.value)])}/>
+              value={paintHeight[1]} onChange={e=>{
+                const to=Number(e.target.value);setPaintHeight(v=>{
+                  setPaintHeightRange(Math.max(.5,Math.abs(to-v[0])));return [v[0],to];
+                });setPaintHeightFollow(false);
+              }}/>
           </label>
         </div>
       </div>}
@@ -1278,10 +1303,14 @@ export default function SlicerPrepareWorkspace({
           onLocalAssetsChange={onLocalAssetsChange} onPlateIssuesChange={onPlateIssuesChange} objects={objects} onChange={updatePlate}
           colourPaintOptions={{mode:paintMode,slot:paintErase?null:paintSlot,palette:paintPalette,
             radiusMm:paintBrushMm,angleDeg:paintAngle,minHeightMm:paintHeight[0],maxHeightMm:paintHeight[1]}}
-          onColourPaintHeightPick={z=>setPaintHeight(([lower,upper])=>{
-            const thickness=Math.max(0.5,Math.abs(upper-lower));const low=Math.max(0,Math.round(z*2)/2);
-            return Math.abs(low-lower)<.01?[lower,upper]:[low,Math.round((low+thickness)*2)/2];
-          })}
+          onColourPaintHeightPick={z=>{
+            if(!paintHeightFollow)return;
+            setPaintHeight(([lower,upper])=>{
+              const low=Math.max(0,Math.round(z*2)/2);
+              const high=Math.round((low+paintHeightRange)*2)/2;
+              return low===lower && high===upper?[lower,upper]:[low,high];
+            });
+          }}
           onColourPaintError={setPaintError}
           onPrimaryChange={onPrimaryChange} onFilesUploaded={onFilesUploaded}
           onManualColorChange={onManualColorChange} defaultColor={defaultColor}
