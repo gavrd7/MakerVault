@@ -162,10 +162,31 @@ def _draft_plate_settings(user, input_asset, settings):
     """Persist preview-only plate geometry; never compile it into slicer flags."""
     if settings is None:
         settings = {}
-    if not isinstance(settings, dict) or set(settings) - {"plate_objects", "plate_label", "plates", "active_plate_id", "save_gcode_to_library", "workflow", "process_overrides", "flush_settings"}:
+    if not isinstance(settings, dict) or set(settings) - {"plate_objects", "plate_label", "plates", "active_plate_id", "save_gcode_to_library", "workflow", "process_overrides", "flush_settings", "slot_filament_profiles"}:
         raise ValueError("Unsupported slicer plate settings.")
     process_overrides = validate_process_overrides(settings.get("process_overrides"))
     flush_settings = validate_flush_settings(settings.get("flush_settings"))
+    # Independent per-bay filament presets are draft annotations only until
+    # the engine's verified native tool routing is available. Never synthesize
+    # a different tool/profile from a physical bay number.
+    raw_slot_profiles = settings.get("slot_filament_profiles", [])
+    if not isinstance(raw_slot_profiles, list) or len(raw_slot_profiles) > 16:
+        raise ValueError("Invalid per-slot filament profile assignments.")
+    slot_profiles, seen_slots = [], set()
+    for entry in raw_slot_profiles:
+        if not isinstance(entry, dict) or set(entry) != {"slot_id", "profile_id"}:
+            raise ValueError("Invalid per-slot filament profile assignment.")
+        slot_id = entry["slot_id"]
+        if (not isinstance(slot_id, str) or not 1 <= len(slot_id) <= 128 or
+                any(ord(char) < 33 or ord(char) > 126 for char in slot_id) or
+                slot_id in seen_slots):
+            raise ValueError("A filament slot must be a unique printable identifier.")
+        profile_id = _uuid(entry["profile_id"])
+        if not SlicerProfile.objects.filter(owner=user, pk=profile_id, kind="filament").exists():
+            raise ValueError("Per-slot filament preset must be owned and imported.")
+        seen_slots.add(slot_id)
+        slot_profiles.append({"slot_id":slot_id,"profile_id":str(profile_id)})
+    slot_fields = {"slot_filament_profiles":slot_profiles} if slot_profiles else {}
     workflow = settings.get("workflow", "interactive")
     if not isinstance(workflow, str) or workflow not in {"setup", "quick", "interactive"}:
         raise ValueError("Unknown slicer workflow.")
@@ -223,7 +244,7 @@ def _draft_plate_settings(user, input_asset, settings):
     if "plate_objects" not in settings:
         return {"plate_label": label, "save_gcode_to_library": save_to_library,
                 "workflow": workflow, "process_overrides": process_overrides,
-                **({"flush_settings": flush_settings} if flush_settings is not None else {}), **project_fields}
+                **({"flush_settings": flush_settings} if flush_settings is not None else {}), **slot_fields, **project_fields}
     objects = settings["plate_objects"]
     if not isinstance(objects, list) or not 1 <= len(objects) <= 200:
         raise ValueError("The visual build plate supports up to 200 model instances.")
@@ -337,7 +358,7 @@ def _draft_plate_settings(user, input_asset, settings):
         raise ValueError("The first plate model must match the selected primary STL.")
     return {"plate_objects": saved, "plate_label": label, "save_gcode_to_library": save_to_library,
             "workflow": workflow, "process_overrides": process_overrides,
-                **({"flush_settings": flush_settings} if flush_settings is not None else {}), **project_fields}
+                **({"flush_settings": flush_settings} if flush_settings is not None else {}), **slot_fields, **project_fields}
 
 
 def _draft(user, data):
@@ -404,6 +425,11 @@ def _draft(user, data):
             ) for item in plate_models])
         except (KeyError, ValueError, OSError):
             settings_data["plate_conflicts"] = True
+    for assigned in settings_data.get("slot_filament_profiles", []):
+        if not SlicerProfile.objects.filter(
+                owner=user, pk=assigned["profile_id"], kind="filament",
+                engine=engine.key, engine_version=version).exists():
+            raise ValueError("Per-slot filament profile does not match the current engine and version.")
     native_profiles = {}
     native_labels = {}
     for kind in ("printer", "filament", "process"):
