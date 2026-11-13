@@ -79,7 +79,7 @@ export function createPaintMesh(geometry) {
 }
 
 export function selectPaintFaces(mesh, { mode, face, radiusMm = 2, angleDeg = 30,
-  minHeightMm = 0, maxHeightMm = Infinity, centre = null } = {}) {
+  minHeightMm = 0, maxHeightMm = Infinity, centre = null, surfaceNormal = null } = {}) {
   const count = mesh?.faceCount;
   if (!Number.isInteger(count) || count < 1 || count > MAX_FACES)
     throw new Error("Invalid painting mesh.");
@@ -103,11 +103,20 @@ export function selectPaintFaces(mesh, { mode, face, radiusMm = 2, angleDeg = 30
     if (!Array.isArray(origin) || origin.length !== 3 || !origin.every(Number.isFinite))
       throw new Error("Invalid paint origin.");
     const radius2 = radiusMm * radiusMm;
+    const normal = surfaceNormal || mesh.normals[face];
+    if (!Array.isArray(normal) || normal.length !== 3 || !normal.every(Number.isFinite))
+      throw new Error("Invalid circular brush direction.");
+    const unitLength = magnitude(normal);
+    const unit = unitLength ? normal.map(n=>n/unitLength) : [0,0,1];
     return mesh.centres.flatMap((point, i) => {
-      // A circle is a projected XY cylinder; a sphere is bounded in 3D.
-      const dx = point[0] - origin[0], dy = point[1] - origin[1];
-      const dz = mode === "sphere" ? point[2] - origin[2] : 0;
-      return dx * dx + dy * dy + dz * dz <= radius2 ? [i] : [];
+      const delta = vector(point, origin);
+      if (mode === "sphere") return dot(delta,delta) <= radius2 ? [i] : [];
+      // The disc follows the face being painted rather than the printer's XY
+      // plane. Avoid colouring hidden/back surfaces across the entire mesh.
+      const depth = dot(delta,unit);
+      const projectedSquared = Math.max(0,dot(delta,delta)-depth*depth);
+      return Math.abs(depth) <= Math.max(.1,radiusMm*.2) &&
+        projectedSquared <= radius2 ? [i] : [];
     });
   }
   if (mode === "fill" || mode === "smart_fill") {
