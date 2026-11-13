@@ -59,10 +59,16 @@ MAX_DOWNLOAD = 1024 * 1024 * 1024
 
 def _github_asset(version=VERSION):
     tag, asset, release_api, pinned_sha = _release_spec(version)
-    request = Request(release_api, headers={
+    headers = {
         "Accept": "application/vnd.github+json",
         "User-Agent": "MakerVault-Staging-Slicer-Installer",
-    })
+    }
+    # CI's short-lived token avoids the unauthenticated GitHub API rate limit.
+    # The request URL is the fixed official release endpoint, never user input.
+    token = os.environ.get("GH_TOKEN", "")
+    if token:
+        headers["Authorization"] = "Bearer " + token
+    request = Request(release_api, headers=headers)
     with urlopen(request, timeout=25) as response:
         if response.status != 200 or len(str(response.headers)) > 16384:
             raise ValueError("Official GitHub release metadata is unavailable.")
