@@ -700,7 +700,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       return;
     }
     if (sliceNow && projectPlates.some(plate=>plate.objects.some(item=>
-      Object.keys(item.colour_paint?.faces || {}).length))) {
+      (Object.keys(item.colour_paint?.faces || {}).length || item.colour_paint?.regions?.length)))) {
       setError("This project has painted colour regions. Save the draft; native painted-toolpath slicing is not yet enabled.");
       return;
     }
