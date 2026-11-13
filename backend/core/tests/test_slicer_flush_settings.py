@@ -34,7 +34,7 @@ class FlushSettingsTests(SimpleTestCase):
 
     def test_directional_mapping_uses_native_tool_indices_not_bay_order(self):
         data = self.apply()
-        self.assertEqual(data["flush_volumes_matrix"], [0, 215, 370, 0])
+        self.assertEqual(data["flush_volumes_matrix"], ["0", "215", "370", "0"])
         self.assertEqual(data["flush_multiplier"], ["0.65"])
         self.assertEqual(data["enable_prime_tower"], "1")
         self.assertEqual(data["prime_tower_width"], "45")
@@ -55,7 +55,7 @@ class FlushSettingsTests(SimpleTestCase):
             {"from_slot_id": "bay-black", "to_slot_id": "bay-blue", "volume_mm3": 220},
         ]}
         data = self.apply(settings=complete, native=no_matrix)
-        self.assertEqual(data["flush_volumes_matrix"], [0, 220, 370, 0])
+        self.assertEqual(data["flush_volumes_matrix"], ["0", "220", "370", "0"])
 
     def test_no_cfs_flushing_on_independent_toolheads(self):
         with self.assertRaisesRegex(MaterialRoutingError, "independent toolheads"):
