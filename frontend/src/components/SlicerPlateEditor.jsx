@@ -1939,6 +1939,7 @@ export default function SlicerPlateEditor({
         mode:options.mode,face:hit.faceIndex,radiusMm:options.radiusMm,
         angleDeg:options.angleDeg,minHeightMm:options.minHeightMm,maxHeightMm:options.maxHeightMm,
         centre:mesh.worldToLocal(hit.point.clone()).toArray(),
+        surfaceNormal:hit.face.normal.toArray(),
       });
       pending.paint = applyPaint(pending.paint, paintMesh, faces, pending.slot);
       pending.paint.palette = pending.palette;
