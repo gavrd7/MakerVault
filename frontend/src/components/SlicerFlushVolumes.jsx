@@ -97,8 +97,14 @@ export default function SlicerFlushVolumes({slots=[],value=null,onChange,disable
                 disabled={disabled} value={data.multiplier ?? effectiveMultiplier}
                 onChange={e=>{
                   const raw=e.target.value;
-                  if(!raw.trim()){onChange?.({...data,multiplier:null});setHasEditedMultiplier(true);return;}
-                  const n=Number(raw);if(n>=.1&&n<=3){onChange?.({...data,multiplier:n});setHasEditedMultiplier(true);}
+                  if(!raw.trim()){
+                    setPreviewMultiplier(current=>current??desiredMultiplier);
+                    onChange?.({...data,multiplier:null});setHasEditedMultiplier(true);return;
+                  }
+                  const n=Number(raw);if(n>=.1&&n<=3){
+                    setPreviewMultiplier(current=>current??desiredMultiplier);
+                    onChange?.({...data,multiplier:n});setHasEditedMultiplier(true);
+                  }
                 }}/>
               <small>{data.multiplier==null
                 ? nativeMultiplier!=null?"Inherited from process profile · "+nativeMultiplier
@@ -164,7 +170,9 @@ export default function SlicerFlushVolumes({slots=[],value=null,onChange,disable
                       : "Estimated colour contribution × preview multiplier, not a native purge amount.")
                       : "Blank = inherit; native slot value requires verified mapping"}
                     aria-label={`Flush ${slotName(from)} to ${slotName(to)}`}
-                    onChange={e=>updateTransition(from,to,e.target.value)}/>}
+                    onChange={e=>updateTransition(from,to,e.target.value)}/>
+                    {estimateMode && slotMaterialCompatibility(from,to)==="mixed" && 
+                      <span className="slicerFlushMixedMarker" title="Mixed material: unverified colour-only contribution">†</span>}}
                 </td>)}
               </tr>)}</tbody>
             </table>
