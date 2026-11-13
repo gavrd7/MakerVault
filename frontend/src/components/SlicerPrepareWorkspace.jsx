@@ -455,7 +455,7 @@ export default function SlicerPrepareWorkspace({
     setMeasurementVisible(false);
     setMeasureOptionsOpen(false);
     if (tool.target === "add_plate") {
-      onAddPlate?.();setToolMode("select");setMobilePane("plate");return;
+      setShowAllPlates(false);onAddPlate?.();setToolMode("select");setMobilePane("plate");return;
     }
     if (tool.target === "auto_orient") {
       if (!selectedId && objects[0]?.instance_id) setSelectedId(objects[0].instance_id);
@@ -1034,14 +1034,14 @@ export default function SlicerPrepareWorkspace({
             className={showAllPlates?"active":""} aria-pressed={showAllPlates}
             onClick={()=>setShowAllPlates(true)}><SlicerUiIcon name="plates-overview" size={16}/> All plates</button>}
           {plates.map((item,index)=><button key={item.id} type="button"
-            className={item.id===activePlateId?"active":""}
+            className={!showAllPlates&&item.id===activePlateId?"active":""}
             aria-current={item.id===activePlateId?"true":undefined}
             onClick={()=>{setShowAllPlates(false);onChoosePlate?.(item.id);}}>
             {item.name || "Plate "+(index+1)}
             <span className="slicerPlateProjectCount">{item.objects.length}</span>
           </button>)}
         </div>
-        <button type="button" onClick={onAddPlate} disabled={!canEdit||busy||plates.length>=8}
+        <button type="button" onClick={()=>{setShowAllPlates(false);onAddPlate?.();}} disabled={!canEdit||busy||plates.length>=8}
           aria-label="Add build plate" title="Add a new empty build plate">+ Plate</button>
         <button type="button" onClick={()=>onRemovePlate?.(activePlateId)}
           disabled={!canEdit||busy||plates.length<=1}
