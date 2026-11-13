@@ -55,6 +55,7 @@ export default function SlicerPrepareWorkspace({
   selectedProfiles, workerConfigured, printerId,
   processOverrides = {}, onProcessOverridesChange, onSaveCustomProcessProfile,
   flushSettings = null, onFlushSettingsChange,
+  slotFilamentProfiles = [], onSlotFilamentProfilesChange, filamentProfiles = [],
   processProfiles = [], onSelectProcessProfile, onResetProcessSettings,
   printerDetails, nozzleMm, selectedPlateType = "Native / profile default",
   localAssets = [], onLocalAssetsChange, onPlateIssuesChange, plateIssues = null,
@@ -262,6 +263,7 @@ export default function SlicerPrepareWorkspace({
       return rank(a) - rank(b) || a.localeCompare(b);
     });
   const [liveMaterials, setLiveMaterials] = useState([]);
+  const [editingSlotProfile,setEditingSlotProfile] = useState(null);
   const [filamentPickerId, setFilamentPickerId] = useState("");
   const [filamentNotice, setFilamentNotice] = useState("");
   // WCAG relative luminance: choose the more legible foreground for each
@@ -1218,14 +1220,54 @@ export default function SlicerPrepareWorkspace({
               {materialRefreshing ? "Refreshing…" : "Refresh"}
             </button>
           </div>
-          {liveMaterials.map(slot => <div className="slicerLiveMaterialSlot" key={slot.id}>
-            <span className="slicerLiveMaterialSwatch" style={{ backgroundColor: /^#[0-9a-f]{6}$/i.test(slot.color_hex || "") ? slot.color_hex : "#697b91" }} aria-hidden="true" />
-            <div><strong>{slot.product_name || slot.material || "Unknown filament"}</strong>
-              <small>{slot.system_label || "Printer material"} · Slot {(slot.slot_index ?? 0) + 1}
-                {slot.spool_code ? " · " + slot.spool_code : " · Unlinked spool"}</small>
-              <small>{slot.material || "Unknown type"}{slot.remaining_percent != null ? " · " + Math.round(slot.remaining_percent) + "% remaining" : ""}</small>
-            </div>
-          </div>)}
+          {liveMaterials.map(slot => {
+            const chosen=slotFilamentProfiles.find(row=>row.slot_id===String(slot.id));
+            const profile=filamentProfiles.find(row=>row.id===chosen?.profile_id);
+            return <div className="slicerLiveMaterialSlot" key={slot.id}>
+              <span className="slicerLiveMaterialSwatch slicerLiveMaterialSwatchRound"
+                style={{backgroundColor:validSlotColor(slot)||"#697b91"}} aria-hidden="true"/>
+              <div><strong>{slot.product_name || slot.material || "Unknown filament"}</strong>
+                <small>{slot.system_label || "Printer material"} · Slot {(slot.slot_index ?? 0) + 1}
+                  {slot.spool_code ? " · " + slot.spool_code : " · Unlinked spool"}</small>
+                <small>{slot.material || "Unknown type"}{slot.remaining_percent != null ? " · " + Math.round(slot.remaining_percent) + "% remaining" : ""}</small>
+                <small>Filament profile: {profile?.name || "Main profile (not slot-specific)"}</small>
+              </div>
+              <button type="button" disabled={!canEdit||busy}
+                onClick={()=>setEditingSlotProfile(String(slot.id))}
+                aria-label={"Choose filament profile for "+slotName(slot)}>Profile</button>
+            </div>;
+          })}
+          {editingSlotProfile && createPortal(<div className="slicerFlushModalBackdrop"
+             onMouseDown={e=>{if(e.target===e.currentTarget)setEditingSlotProfile(null);}}>
+            <section className="slicerFlushModal slicerSlotProfileModal" role="dialog"
+              aria-modal="true" aria-label="Choose per-slot filament profile">
+              <header className="slicerFlushModalHeader"><h3>Slot filament profile</h3>
+                <button type="button" onClick={()=>setEditingSlotProfile(null)}>✕</button>
+              </header>
+              <div className="slicerFlushModalBody">
+                <p className="projectUploadHint">Choose an imported native filament preset for this slot.
+                  This selection is saved with the draft; physical tool routing still requires validation.</p>
+                <label>Native filament preset
+                  <select value={slotFilamentProfiles.find(row=>row.slot_id===editingSlotProfile)?.profile_id||""}
+                    onChange={e=>{
+                      const updated=slotFilamentProfiles.filter(row=>row.slot_id!==editingSlotProfile);
+                      if(e.target.value)updated.push({slot_id:editingSlotProfile,profile_id:e.target.value});
+                      onSlotFilamentProfilesChange?.(updated);
+                    }}>
+                    <option value="">Use main filament preset</option>
+                    {filamentProfiles.map(profile=><option key={profile.id} value={profile.id}>
+                      {profile.name}{profile.status==="candidate"?" · candidate":""}
+                    </option>)}
+                  </select>
+                </label>
+                {!filamentProfiles.length&&<p className="projectUploadHint">Import filament presets
+                  through Profile Management before assigning them to CFS slots.</p>}
+              </div>
+              <footer className="slicerFlushModalFooter">
+                <button type="button" onClick={()=>setEditingSlotProfile(null)}>Done</button>
+              </footer>
+            </section>
+          </div>,document.body)}
           <p role="status">{materialMessage}</p>
           <SlicerFlushVolumes slots={liveMaterials} value={flushSettings}
             processProfileId={selectedProfiles?.process_id}
