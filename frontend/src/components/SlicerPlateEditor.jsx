@@ -232,7 +232,7 @@ function orientationComparison(metricValue) {
 
 export default function SlicerPlateEditor({
   files = [], objects = [], onChange, onPrimaryChange, plate = null, plateType = "default",
-  plateLabel = "Plate 1", onPlateLabelChange, printerLabel = "",
+  plateLabel = "Plate 1", onPlateLabelChange, plateIndex = 0, plateCount = 1, printerLabel = "",
   canEdit = false, onFilesUploaded, defaultColor = null, onManualColorChange, footer = null,
   selectedInstanceId = null, onSelectedInstanceChange, selectedInstanceIds = [], onSelectModel, toolMode = "select",
   autoOrientGoal = "balanced", autoOrientRequest = 0, splitRequest = 0, solidRequest = null,
@@ -2721,7 +2721,7 @@ export default function SlicerPlateEditor({
           onBlur={() => { if (!plateLabel.trim()) onPlateLabelChange?.("Plate 1"); }}
           placeholder="Plate 1" />
       </label>
-      <span>Plate 1 of 1 · {PLATE_SURFACE[plateType]?.label || "Native default"} · {pretty(bedX)} × {pretty(bedY)} mm</span>
+      <span>Plate {plateIndex+1} of {plateCount} · {PLATE_SURFACE[plateType]?.label || "Native default"} · {pretty(bedX)} × {pretty(bedY)} mm</span>
     </div>
     <div className="slicerPlateWorkspace">
       <div className="slicerPlateCanvasColumn">
