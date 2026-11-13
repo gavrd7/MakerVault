@@ -27,7 +27,7 @@ from .runner import MAX_PROFILE_BYTES, MAX_GCODE_BYTES, WorkerError
 from .orca_runner import run_orca
 from .creality_runner import run_creality
 from .three_mf_validation import validate_worker_3mf
-from .material_gcode_audit import verify_multi_material_output, expected_native_tools, verify_two_object_tool_regions
+from .material_gcode_audit import verify_multi_material_output, expected_native_tools, verify_two_object_tool_regions, summarize_k2_fixture_changeovers
 
 ENGINES = {"orcaslicer": run_orca, "crealityprint": run_creality}
 GCODE_EXTRUSION = re.compile(
@@ -173,7 +173,7 @@ def _verify_two_native_object_effects(path, *, reverse=False):
             "left_moves": moves[0], "right_moves": moves[1]}
 
 
-def run_probe(*, engine, version, binary, printer, filament, process, timeout=120, model=None, expected_objects=1, expected_islands=1, experimental_all_plates=False, experimental_no_arrange=False, verify_object_effects=False, reverse_object_effects=False, second_filament=None):
+def run_probe(*, engine, version, binary, printer, filament, process, timeout=120, model=None, expected_objects=1, expected_islands=1, experimental_all_plates=False, experimental_no_arrange=False, verify_object_effects=False, reverse_object_effects=False, second_filament=None, audit_changeovers=False):
     """Run the *real* worker adapter with the *real* binary and report evidence.
 
     No mock success, no automatic deployment and no stored G-code artifact.
@@ -190,6 +190,8 @@ def run_probe(*, engine, version, binary, printer, filament, process, timeout=12
         raise WorkerError("Explicit two-object 3MF input is required for multi-model acceptance.")
     if reverse_object_effects and not verify_object_effects:
         raise WorkerError("Reversed object settings require G-code effect verification.")
+    if audit_changeovers and second_filament is None:
+        raise WorkerError("K2 changeover audit requires a two-tool fixture.")
     if second_filament is not None and (engine != "orcaslicer" or not model or
             expected_objects != 2 or expected_islands != 1 or verify_object_effects):
         raise WorkerError("Two-tool native acceptance requires a two-object Orca 3MF.")
@@ -235,6 +237,8 @@ def run_probe(*, engine, version, binary, printer, filament, process, timeout=12
             verify_multi_material_output(generated, expected_native_tools(model_bytes))
             output.update(verify_two_object_tool_regions(generated))
             output["native_multi_tool_verified"] = True
+            if audit_changeovers:
+                output["k2_changeover_evidence"] = summarize_k2_fixture_changeovers(generated)
         if verify_object_effects:
             if expected_objects != 2 or model is None or engine != "orcaslicer":
                 raise WorkerError("Per-object effect probe requires independent Orca 3MF.")
@@ -266,6 +270,8 @@ def main(argv=None):
     parser.add_argument("--timeout", type=int, default=120)
     parser.add_argument("--model", help="Optional real two-model MakerVault core 3MF fixture")
     parser.add_argument("--second-filament", help="Second ordered native filament preset (offline only)")
+    parser.add_argument("--audit-changeovers", action="store_true",
+                        help="Report bounded K2 two-cube toolchange/purge-region evidence")
     parser.add_argument("--expected-objects", type=int, choices=(1, 2), default=1)
     parser.add_argument("--expected-islands", type=int, choices=(1, 2), default=1)
     parser.add_argument("--experimental-all-plates", action="store_true")
