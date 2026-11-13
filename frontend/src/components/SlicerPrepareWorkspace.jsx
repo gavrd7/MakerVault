@@ -1002,22 +1002,23 @@ export default function SlicerPrepareWorkspace({
                 id:Date.now()+Math.random()});
             }}>Edit text</button>}
           <button type="button" className="slicerModelChangeFilament"
-            disabled={!canEdit || busy || !liveMaterials.length}
+            disabled={!canEdit || busy || (!liveMaterials.length && !object.material_slot)}
             aria-expanded={filamentPickerId === object.instance_id}
             onClick={() => {
               setSelectedId(object.instance_id);
               setFilamentPickerId(current => current === object.instance_id ? "" : object.instance_id);
               setFilamentNotice("");
             }}>Change filament</button>
-          {object.material_slot && <small className="slicerModelFilamentNotice">
+          {object.material_slot && <small className="slicerModelFilamentNotice" role="status">
             Intended slot: {String(object.material_slot.printer_id) === String(printerId)
               ? (liveMaterials.find(slot => String(slot.id) === String(object.material_slot.slot_id))
                 ? slotName(liveMaterials.find(slot => String(slot.id) === String(object.material_slot.slot_id)))
-                : "Previously selected slot unavailable")
-              : "Different printer selected"} · mapping only
-          </small>}
+                : "Slot unavailable or unloaded — recheck before printing")
+              : "Assigned to another printer — reassign for this printer"} · draft mapping only
+          </small>
           {filamentPickerId === object.instance_id && <div className="slicerModelFilamentChoices">
             <strong>Loaded printer slots · intended mapping only</strong>
+            {!liveMaterials.length && <small>No loaded slots reported. An existing assignment can still be cleared.</small>}
             {liveMaterials.map(slot => <button type="button" key={slot.id}
               disabled={!canEdit || busy}
               onClick={() => changeModelPreviewFilament(object.instance_id, slot)}>
