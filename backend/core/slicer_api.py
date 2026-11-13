@@ -58,6 +58,7 @@ from .slicer_bambu_official_profiles import (
 )
 from .slicer_official_profiles import (
     OfficialProfileError, search_official_profiles, fetch_official_profile, available_official_vendors,
+    official_filament_brands, APPROVED_VERSIONS as ORCA_APPROVED_PROFILE_VERSIONS,
     official_catalogue_models as orca_catalogue_models,
     ENGINE_VERSION as OFFICIAL_ORCA_VERSION, SOURCE as OFFICIAL_ORCA_SOURCE,
     REF as OFFICIAL_ORCA_REF,
@@ -805,6 +806,16 @@ def official_profiles(request):
     """Search/import native candidates from pinned official engine catalogues."""
     if request.method == "GET":
         selected = request.GET.get("engine", "orcaslicer")
+        version = request.GET.get("version", OFFICIAL_ORCA_VERSION)
+        if selected == "orcaslicer" and version not in ORCA_APPROVED_PROFILE_VERSIONS:
+            return _error("Choose an approved OrcaSlicer profile release.")
+        if request.GET.get("brands") == "1":
+            if selected != "orcaslicer" or request.GET.get("vendor") != "OrcaFilamentLibrary":
+                return _error("Filament brand browsing requires the official Orca library.")
+            try:
+                return JsonResponse({"brands": official_filament_brands(version), "engine_version": version})
+            except OfficialProfileError as exc:
+                return _error(str(exc))
         if request.GET.get("catalogues") == "1":
             try:
                 native = get_engine(selected)
@@ -820,7 +831,9 @@ def official_profiles(request):
             provider = sources.get(selected)
             return JsonResponse({
                 "engine": selected,
-                "vendors": provider[0]() if provider else [],
+                "vendors": (available_official_vendors(version) if selected == "orcaslicer" else provider[0]()) if provider else [],
+                "versions": ORCA_APPROVED_PROFILE_VERSIONS if selected == "orcaslicer" else [],
+                "selected_version": version if selected == "orcaslicer" else None,
                 "ref": provider[1] if provider else None,
                 "native_profile_format": native.profile_format,
                 "manual_import_available": True,
@@ -837,7 +850,8 @@ def official_profiles(request):
             if not provider:
                 return _error("This slicer has no official printer catalogue.")
             try:
-                models = provider(request.GET.get("vendor", "Creality"))
+                models = (orca_catalogue_models(request.GET.get("vendor", "Creality"), version)
+                          if selected == "orcaslicer" else provider(request.GET.get("vendor", "Creality")))
             except OfficialProfileError as exc:
                 return _error(str(exc), 400)
             return JsonResponse({"engine": selected, "models": models})
@@ -875,7 +889,10 @@ def official_profiles(request):
                                 "bambustudio": bambu_catalogue_models,
                                 "prusaslicer": prusa_catalogue_models,
                                 "snapmakerorca": snapmaker_catalogue_models}
-                if chosen_model not in model_catalogues[selected](request.GET.get("vendor", "Creality")):
+                catalogue_models = (orca_catalogue_models(request.GET.get("vendor", "Creality"), version)
+                                    if selected == "orcaslicer" else
+                                    model_catalogues[selected](request.GET.get("vendor", "Creality")))
+                if chosen_model not in catalogue_models:
                     return _error("Choose a printer model listed in the official catalogue.")
                 printer_model = chosen_model
             args = (
@@ -883,7 +900,10 @@ def official_profiles(request):
                 request.GET.get("kind", "printer"),
                 request.GET.get("vendor", "Creality"),
             )
-            results = searcher(*args, printer_model=printer_model) if printer_model else searcher(*args)
+            results = (search_official_profiles(*args, printer_model=printer_model, version=version,
+                           brand=request.GET.get("brand", ""))
+                       if selected == "orcaslicer" else
+                       searcher(*args, printer_model=printer_model) if printer_model else searcher(*args))
             results["printer_model_filter"] = printer_model
         except OfficialProfileError as exc:
             return _error(str(exc), 503 if "source" in str(exc).lower() or "contact" in str(exc).lower() else 400)
@@ -894,7 +914,7 @@ def official_profiles(request):
         return _error("Official profile selection is too large.", 413)
     try:
         selection = json.loads(request.body.decode("utf-8"))
-        if not isinstance(selection, dict) or set(selection) - {"engine", "vendor", "kind", "name", "sub_path"}:
+        if not isinstance(selection, dict) or set(selection) - {"engine", "vendor", "kind", "name", "sub_path", "engine_version"}:
             raise ValueError("Invalid official profile selection.")
         engine = selection.get("engine", "orcaslicer")
         providers = {
@@ -907,6 +927,13 @@ def official_profiles(request):
         if engine not in providers:
             return _error("Official import is not available for this engine.")
         version, source, ref, fetcher = providers[engine]
+        if engine == "orcaslicer":
+            version = selection.get("engine_version", OFFICIAL_ORCA_VERSION)
+            if version not in ORCA_APPROVED_PROFILE_VERSIONS:
+                raise ValueError("Unsupported OrcaSlicer official profile release.")
+            ref = "v" + version
+        elif selection.get("engine_version", version) != version:
+            raise ValueError("This source does not provide the requested engine version.")
         kind = selection.get("kind")
         vendor = selection.get("vendor", "Creality")
         name = selection.get("name")
@@ -922,7 +949,7 @@ def official_profiles(request):
                  if engine == "bambustudio" else
                  [(name, subpath, fetch_prusa_model(kind, name, subpath, vendor))]
                  if engine == "prusaslicer" else
-                 official_profile_chain(engine, kind, name, subpath, vendor))
+                 official_profile_chain(engine, kind, name, subpath, vendor, version=version))
         prepared = []
         for native_name, native_subpath, raw in chain:
             existing = SlicerProfile.objects.filter(
