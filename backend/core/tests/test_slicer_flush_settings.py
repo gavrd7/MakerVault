@@ -13,7 +13,7 @@ class FlushSettingsTests(SimpleTestCase):
             SimpleNamespace(slot_id="bay-black", tool_index=0),
         ]
         self.native = json.dumps({
-            "flush_multiplier": "0.65",
+            "flush_multiplier": ["0.65"],
             "flush_volumes_matrix": [0, 215, 330, 0],
             "enable_prime_tower": "1",
             "prime_tower_width": "45",
@@ -35,7 +35,7 @@ class FlushSettingsTests(SimpleTestCase):
     def test_directional_mapping_uses_native_tool_indices_not_bay_order(self):
         data = self.apply()
         self.assertEqual(data["flush_volumes_matrix"], [0, 215, 370, 0])
-        self.assertEqual(data["flush_multiplier"], "0.65")
+        self.assertEqual(data["flush_multiplier"], ["0.65"])
         self.assertEqual(data["enable_prime_tower"], "1")
         self.assertEqual(data["prime_tower_width"], "45")
         self.assertEqual(data["printer_start_gcode"], "M117 native printer profile")
@@ -43,7 +43,7 @@ class FlushSettingsTests(SimpleTestCase):
     def test_explicit_multiplier_and_tower_setting(self):
         data = self.apply({**self.settings, "multiplier": 1.2,
                            "prime_tower": "enabled"})
-        self.assertEqual(data["flush_multiplier"], "1.2")
+        self.assertEqual(data["flush_multiplier"], ["1.2"])
         self.assertEqual(data["enable_prime_tower"], "1")
 
     def test_missing_native_matrix_requires_all_directional_volumes(self):
