@@ -2911,11 +2911,16 @@ export default function SlicerPlateEditor({
       maxHeight:Math.max(180,screenH-24)};
     const compact=screenW<740 || rect.width<620;
     if(compact){
-      const top=Math.max(8,Math.min(screenH-220,rect.cameraTop??rect.top));
+      // The viewport is inset inside the page on phones. Its left coordinate
+      // must NEVER be combined with a full-screen-width dialog: that pushes
+      // half the editor outside Safari's visible area.
+      const width=Math.max(0,Math.min(440,screenW-16));
+      const left=Math.max(8,Math.min(rect.left+6,screenW-width-8));
+      const preferredTop=rect.cameraTop??rect.top;
+      const top=Math.max(8,Math.min(preferredTop,screenH-240));
       return {pointerEvents:"auto",position:"fixed",
-        left:Math.max(8,Math.min(screenW-rect.width,rect.left)),
-        top,width:Math.min(rect.width,screenW-16),
-        maxHeight:Math.max(180,screenH-top-8)};
+        left,top,width,maxWidth:"calc(100vw - 16px)",
+        maxHeight:Math.max(180,screenH-top-12)};
     }
     // Left-side inspector: 38% or less of the build-plate viewport.
     // Reserve the remaining majority for the model and its transform handles.
