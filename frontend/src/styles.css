@@ -6210,3 +6210,110 @@ a:focus-visible,
 .slicerFlushTable input{width:80px;min-width:65px;box-sizing:border-box}
 .slicerFlushTable th{white-space:nowrap;font-size:.77rem}
 .slicerFlushTable td{text-align:center}
+
+
+/* Mobile geometry inspectors: keep all fields and sticky actions inside the
+   available screen, never under Safari's off-screen horizontal edge. */
+.slicerSolidModal.slicerViewportAnchoredModal{
+  min-width:0;min-height:0;overflow-x:hidden;
+}
+.slicerSolidModal.slicerViewportAnchoredModal *,
+.slicerSolidModal.slicerViewportAnchoredModal *::before,
+.slicerSolidModal.slicerViewportAnchoredModal *::after{box-sizing:border-box}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalHeader{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:8px;
+  min-width:0;flex:0 0 auto;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalHeader>div{
+  min-width:0;flex:1 1 auto;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalHeader h3{
+  overflow-wrap:anywhere;word-break:normal;line-height:1.25;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalHeader>button{
+  flex:0 0 36px;min-width:36px;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalActions{
+  display:flex;flex-wrap:wrap;gap:6px;min-width:0;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalActions>*{
+  min-width:0;max-width:100%;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerSolidGrid,
+.slicerSolidModal.slicerViewportAnchoredModal .slicerPrimitivePicker{
+  width:100%;max-width:100%;min-width:0;
+}
+.slicerSolidModal.slicerViewportAnchoredModal input,
+.slicerSolidModal.slicerViewportAnchoredModal select{
+  width:100%;max-width:100%;min-width:0;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerPrimitiveShapeGrid{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+}
+.slicerPaintMobileMinimise{display:none}
+@media(max-width:740px){
+  .slicerSolidModal.slicerViewportAnchoredModal{
+    width:calc(100vw - 16px)!important;
+    max-width:calc(100vw - 16px)!important;
+    overflow-x:hidden;overflow-y:auto;
+    scrollbar-gutter:auto;
+    padding:10px;
+    gap:8px;
+  }
+  .slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalHeader{
+    top:-10px;align-items:center;
+  }
+  .slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalHeader h3{
+    font-size:1rem;max-width:100%;
+  }
+  .slicerSolidModal.slicerViewportAnchoredModal .slicerSolidGrid{
+    grid-template-columns:minmax(0,1fr);
+  }
+  .slicerSolidModal.slicerViewportAnchoredModal .slicerInsertionMode{
+    display:flex;flex-wrap:wrap;gap:5px;
+  }
+  .slicerSolidModal.slicerViewportAnchoredModal .slicerInsertionMode>button{
+    flex:1 1 100px;min-width:0;
+  }
+  .slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalActions{
+    bottom:-10px;justify-content:stretch;flex-direction:row;
+    padding:8px 0 2px;
+  }
+  .slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalActions button{
+    flex:1 1 120px;max-width:100%;min-height:40px;white-space:normal;
+  }
+  .slicerSolidModal.slicerViewportAnchoredModal .slicerSolidPreviewStatus{
+    flex:1 1 100%;text-align:center;order:-1;margin:0;
+  }
+  /* Painting is a shallow top toolbar on phones, leaving the build plate
+     accessible. Tools and filament slots can scroll sideways independently. */
+  .slicerPlateCanvasViewport>.slicerColourPaintPanel{
+    top:6px!important;left:6px!important;right:6px!important;
+    width:calc(100% - 12px)!important;max-width:calc(100% - 12px)!important;
+    max-height:min(195px,32dvh)!important;overflow-x:hidden;overflow-y:auto;
+    padding:7px!important;gap:5px!important;border-radius:8px;
+    scrollbar-gutter:auto;
+  }
+  .slicerColourPaintPanel>div[role="group"]{
+    display:flex!important;flex-wrap:nowrap!important;gap:4px!important;
+    overflow-x:auto;overscroll-behavior-inline:contain;
+    padding:1px 1px 4px;max-width:100%;min-width:0;
+    scrollbar-width:thin;
+  }
+  .slicerColourPaintPanel>div[role="group"] button{
+    flex:0 0 auto;
+  }
+  .slicerColourPaintPanel>div[role="group"][aria-label="Paint filament palette"] button{
+    min-width:54px;max-width:90px;
+  }
+  .slicerColourPaintPanel>div:first-child>strong{font-size:.86rem}
+  .slicerPaintMobileMinimise{display:inline-flex;align-items:center;min-height:28px;padding:3px 6px;font-size:.72rem}
+  .slicerColourPaintPanel.slicerPaintMinimised{
+    max-height:42px!important;overflow:hidden!important;
+  }
+  .slicerColourPaintPanel.slicerPaintMinimised > :not(:first-child){
+    display:none!important;
+  }
+  .slicerColourPaintPanel label{min-width:0}
+  .slicerColourPaintPanel input[type="range"]{max-width:100%}
+}
