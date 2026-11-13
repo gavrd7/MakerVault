@@ -1990,6 +1990,15 @@ export default function SlicerPlateEditor({
       }
       pending.changed = true;
     }
+    // Capture phase runs before OrbitControls' bubble-phase listener.
+    // Re-enable OrbitControls BEFORE the second touch arrives there, or it
+    // will discard the second contact and pinch-to-zoom cannot begin.
+    function captureTouchNavigation(event) {
+      if (event.pointerType !== "touch" ||
+          activeTouchPointers.has(event.pointerId) || activeTouchPointers.size < 1) return;
+      touchNavigation=true;
+      cancelTouchEdit();
+    }
     function pointerDown(event) {
       if (event.pointerType === "touch") {
         activeTouchPointers.add(event.pointerId);
@@ -2416,6 +2425,7 @@ export default function SlicerPlateEditor({
     };
     window.addEventListener("keydown", cancelRotationOnEscape);
     renderer.domElement.addEventListener("pointerdown", orientationPointerDown, true);
+    renderer.domElement.addEventListener("pointerdown", captureTouchNavigation, true);
     renderer.domElement.addEventListener("pointerdown", pointerDown);
     renderer.domElement.addEventListener("pointermove", pointerMove);
     renderer.domElement.addEventListener("pointerup", pointerUp);
@@ -2478,6 +2488,7 @@ export default function SlicerPlateEditor({
       observer.disconnect();
       window.removeEventListener("keydown", cancelRotationOnEscape);
       renderer.domElement.removeEventListener("pointerdown", orientationPointerDown, true);
+      renderer.domElement.removeEventListener("pointerdown", captureTouchNavigation, true);
       renderer.domElement.removeEventListener("pointerdown", pointerDown);
       renderer.domElement.removeEventListener("pointermove", pointerMove);
       renderer.domElement.removeEventListener("pointerup", pointerUp);
