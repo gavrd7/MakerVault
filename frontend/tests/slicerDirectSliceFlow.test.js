@@ -24,7 +24,7 @@ test("a failed worker queue leaves a visible, retrievable saved draft", () => {
 test("visual build plate is the only model selector for slicing", () => {
   assert.doesNotMatch(source, /<label className="full">Model STL/);
   assert.match(source, /input_asset_id: plateObjects\[0\]\?\.asset_id/);
-  assert.match(source, /sliceNow\?plateObjects\.length:projectPlates\.some/);
+  assert.match(source, /\(sliceNow&&mode!=="all"\)\?plateObjects\.length:projectPlates\.some/);
   assert.match(source, /!plateObjects\.length \|\| !printers\.length/);
 });
 
