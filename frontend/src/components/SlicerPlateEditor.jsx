@@ -239,8 +239,8 @@ export default function SlicerPlateEditor({
   selectedInstanceId = null, onSelectedInstanceChange, selectedInstanceIds = [], onSelectModel, toolMode = "select",
   autoOrientGoal = "balanced", autoOrientRequest = 0, splitRequest = 0, solidRequest = null,
   measurementVisible = false, measureMode = "distance", measureUnit = "mm", measureSnapMode = "auto", measureClearVersion = 0,
-  onMeasurePinPlaced, colourPaintOptions = null, onColourPaintError,
-  localAssets = [], onLocalAssetsChange, onExitToolMode, onPlateIssuesChange, toolbar = null,
+  onMeasurePinPlaced, colourPaintOptions = null, onColourPaintError, onColourPaintHeightPick,
+  localAssets = [], onLocalAssetsChange, onExitToolMode, onPlateIssuesChange, toolbar = null, paintControls = null,
 }) {
   const hostRef = useRef(null);
   const sceneRef = useRef(null);
@@ -261,8 +261,10 @@ export default function SlicerPlateEditor({
   latestToolModeRef.current = toolMode;
   const latestPaintOptionsRef = useRef(colourPaintOptions);
   const latestPaintErrorRef = useRef(onColourPaintError);
+  const latestPaintHeightPickRef = useRef(onColourPaintHeightPick);
   latestPaintOptionsRef.current = colourPaintOptions;
   latestPaintErrorRef.current = onColourPaintError;
+  latestPaintHeightPickRef.current = onColourPaintHeightPick;
   const [localSelected, setLocalSelected] = useState("");
   const [showNativeArtwork, setShowNativeArtwork] = useState(true);
   const [sectionPercent, setSectionPercent] = useState(100);
@@ -1793,6 +1795,8 @@ export default function SlicerPlateEditor({
     camera.position.set(bedX * 1.0, -bedY * 1.3, Math.max(bedX, bedY) * 1.35);
     camera.lookAt(0, 0, 0);
     const controls = new OrbitControls(camera, renderer.domElement);
+    // Right drag is OrbitControls pan; it must continue to work in paint mode.
+    controls.mouseButtons.RIGHT = THREE.MOUSE.PAN;
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     const transform = new TransformControls(camera, renderer.domElement);
@@ -2139,7 +2143,7 @@ export default function SlicerPlateEditor({
       if (painting?.pointerId === event.pointerId) {
         const stroke = painting;
         painting = null;
-        controls.enabled = latestToolModeRef.current !== "paint_colour";
+        controls.enabled = true;
         if (renderer.domElement.hasPointerCapture?.(event.pointerId))
           renderer.domElement.releasePointerCapture(event.pointerId);
         if (stroke.changed) {
@@ -2467,7 +2471,7 @@ export default function SlicerPlateEditor({
   // underneath a brush stroke. Selecting another toolbar tool restores orbit.
   useEffect(() => {
     const state = sceneRef.current;
-    if (state && !state.transform.dragging) state.controls.enabled = toolMode !== "paint_colour";
+    if (state && !state.transform.dragging) state.controls.enabled = true;
   }, [toolMode, objectKey]);
 
   useEffect(() => {
@@ -2480,14 +2484,14 @@ export default function SlicerPlateEditor({
       // Position-only changes must never alter the displayed filament colour.
       try {paintPreview(mesh, item, PALETTE[0]);}
       catch (error) {latestPaintErrorRef.current?.(error.message || "Invalid saved colour painting.");}
-      mesh.material.emissive.set(conflictIds.has(item.instance_id) ? "#e84a53" :
+      mesh.material.emissive.set(toolMode === "paint_colour" ? "#000000" : conflictIds.has(item.instance_id) ? "#e84a53" :
         selection.includes(item.instance_id) ? "#168ab4" : "#000000");
-      mesh.material.emissiveIntensity = conflictIds.has(item.instance_id) ? 0.72 :
+      mesh.material.emissiveIntensity = toolMode === "paint_colour" ? 0 : conflictIds.has(item.instance_id) ? 0.72 :
         selection.includes(item.instance_id) ? 0.32 : 0;
     }
     const selectedMesh = state.meshes.get(selected);
-    state.setSelectionOutlines(selection.map(id=>state.meshes.get(id)).filter(Boolean));
-    const singleEditable = canEdit && !solidDialog && selectedMesh && selection.length < 2;
+    state.setSelectionOutlines(toolMode === "paint_colour" ? [] : selection.map(id=>state.meshes.get(id)).filter(Boolean));
+    const singleEditable = canEdit && toolMode !== "paint_colour" && !solidDialog && selectedMesh && selection.length < 2;
     const groupEditable = canEdit && !solidDialog && selection.length > 1 &&
       ["move","rotate","scale"].includes(toolMode);
     if (groupEditable) {
@@ -2854,7 +2858,8 @@ export default function SlicerPlateEditor({
         title="Centre and zoom onto the currently selected model">Fit selected model</button>
 
     </div>
-    <div className="slicerPlateCanvasViewport">
+    <div className="slicerPlateCanvasViewport" style={{position:"relative"}}>
+      {paintControls}
       <div className="slicerPlateSectionControl" aria-label="Build plate section view">
         <span className="slicerSectionTop">Section</span>
         <input type="range" min="0" max="100" step="1" value={sectionPercent}
