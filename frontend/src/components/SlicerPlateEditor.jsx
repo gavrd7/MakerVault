@@ -2920,6 +2920,14 @@ export default function SlicerPlateEditor({
       const offset=camera.getBoundingClientRect().top-
         viewport.getBoundingClientRect().top;
       viewport.style.setProperty("--slicer-overlay-top",offset+"px");
+      const column=viewport.closest(".slicerPlateCanvasColumn");
+      if(column){
+        const columnTop=column.getBoundingClientRect().top;
+        const bounds=camera.getBoundingClientRect();
+        const mobile=window.matchMedia("(max-width:740px)").matches;
+        column.style.setProperty("--slicer-paint-top",
+          (mobile?bounds.bottom-columnTop+6:bounds.top-columnTop)+"px");
+      }
     };
     measure();
     const observer=typeof ResizeObserver==="undefined"?null:new ResizeObserver(measure);
@@ -2928,6 +2936,7 @@ export default function SlicerPlateEditor({
     return ()=>{
       observer?.disconnect();window.removeEventListener("resize",measure);
       viewport.style.removeProperty("--slicer-overlay-top");
+      viewport.closest(".slicerPlateCanvasColumn")?.style.removeProperty("--slicer-paint-top");
     };
   },[]);
 
@@ -3010,6 +3019,7 @@ export default function SlicerPlateEditor({
     <div className="slicerPlateWorkspace">
       <div className="slicerPlateCanvasColumn">
     {toolbar && <div className="slicerPlateEditingToolbar">{toolbar}</div>}
+    {paintControls}
     <div className="slicerPlateCameraToolbar" role="toolbar" aria-label="Build-plate camera views">
       <button type="button" onClick={() => setPlateCamera("iso")} title="Isometric build-plate view">Isometric</button>
       <button type="button" onClick={() => setPlateCamera("top")} title="Top-down build-plate view">Top</button>
@@ -3020,7 +3030,6 @@ export default function SlicerPlateEditor({
 
     </div>
     <div className="slicerPlateCanvasViewport" style={{position:"relative"}}>
-      {paintControls}
       <div className="slicerPlateSectionControl" aria-label="Build plate section view">
         <span className="slicerSectionTop">Section</span>
         <input type="range" min="0" max="100" step="1" value={sectionPercent}
