@@ -12,6 +12,7 @@ const paths = {
   "shape-svg": <><path d="M4 2h11l5 5v15H4zM15 2v5h5M7 17l3-6 3 3 4-5"/></>,
   add: <><path d="M12 5v14M5 12h14"/></>,
   "add-plate": <><path d="m2 12 9-5 9 5-9 5-9-5Z"/><path d="m2 16 9 5 9-5"/><path d="M18 3v8M14 7h8"/></>,
+  "plates-overview": <><rect x="2" y="3" width="9" height="8" rx="1"/><rect x="13" y="3" width="9" height="8" rx="1"/><rect x="2" y="13" width="9" height="8" rx="1"/><rect x="13" y="13" width="9" height="8" rx="1"/><path d="M5 6h3m8 0h3M5 16h3m8 0h3"/></>,
   "paint-support": <><path d="m4 17 8-5 8 5-8 5-8-5Z"/><path d="M7 14v7m5-7v7m5-7v7"/><path d="m4 4 6 6"/></>,
   "paint-seam": <><path d="M5 3h14v18H5z"/><path strokeDasharray="2 2" d="M12 3v18"/><path d="m3 7 4 4"/></>,
   "paint-colour": <><path d="m5 18 8-13 6 6-11 9H4z"/><circle cx="17" cy="5" r="2"/><path d="M5 3h4"/></>,
