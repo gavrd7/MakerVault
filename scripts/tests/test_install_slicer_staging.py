@@ -107,6 +107,52 @@ class ConfigurationTests(unittest.TestCase):
         self.assertIn(".slicer-staging.env", updater)
         self.assertNotIn("slicer-worker", updater[-4:])
 
+    def test_upgrade_retains_secret_and_rollback_bundle(self):
+        import hashlib
+        from slicer_worker.stage_engines import stage_engines
+        old = self.root / "old.AppImage"
+        old.write_bytes(b"old fixture")
+        stage_engines([("orcaslicer", "2.4.2", str(old),
+                       hashlib.sha256(old.read_bytes()).hexdigest())],
+                      self.root / "slicer-engine-assets")
+        old_image = "sha256:" + "a" * 64
+        env = "\n".join([
+            "MAKERVAULT_SLICER_EXECUTION_ENABLED=1",
+            "MAKERVAULT_SLICER_WORKER_TOKEN=retain-secret",
+            "MAKERVAULT_SLICER_WORKER_IMAGE=" + old_image,
+            "MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST=" + old_image,
+            "MAKERVAULT_SLICER_ENGINES_JSON='{}'",
+            "SLICER_ENGINES_JSON='{}'", "",
+        ])
+        self.env.write_text(env)
+        candidate = b"new fixture"
+        digest = hashlib.sha256(candidate).hexdigest()
+        new_image = "sha256:" + "b" * 64
+        def download(_url, _sha, dest):
+            dest.write_bytes(candidate)
+        def run(args, **kwargs):
+            return new_image if "inspect" in args else ""
+        with (
+            patch.object(installer, "_github_asset", return_value=("https://example.invalid/file", digest)),
+            patch.object(installer, "_download_verified", side_effect=download),
+            patch.object(installer, "_run", side_effect=run),
+        ):
+            installer.upgrade_orca("2.5.0")
+        self.assertIn("retain-secret", self.env.read_text())
+        self.assertIn('"version":"2.5.0"', self.env.read_text())
+        self.assertIn(new_image, self.env.read_text())
+        self.assertEqual((self.root / ".slicer-staging.env.pre-upgrade").read_text(), env)
+        self.assertTrue((self.root / "slicer-engine-assets.pre-upgrade" / "orcaslicer.AppImage").is_file())
+
+    def test_upgrade_refuses_previous_backup(self):
+        (self.root / ".slicer-staging.env.pre-upgrade").touch()
+        with patch.object(installer, "_resume_staged_bundle", return_value={
+            "worker_engines_json": '{"orcaslicer":{"version":"2.4.2"}}'
+        }), patch.object(installer, "_github_asset") as download:
+            with self.assertRaisesRegex(ValueError, "backup exists"):
+                installer.upgrade_orca("2.5.0")
+        download.assert_not_called()
+
     def test_update_requires_private_slicer_config(self):
         self.env.unlink()
         with patch.object(installer, "_run") as run:
