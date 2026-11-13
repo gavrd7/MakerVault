@@ -91,7 +91,7 @@ def _encode(raw, limit):
     return base64.b64encode(raw).decode("ascii")
 
 
-def run_remote_job(job_id, engine, version, model, printer_profile, filament_profile, process_profile, *, timeout_seconds=900, model_format="stl"):
+def run_remote_job(job_id, engine, version, model, printer_profile, filament_profile, process_profile, *, timeout_seconds=900, model_format="stl", filament_profiles=None):
     if model_format not in {"stl", "3mf"}:
         raise SlicerWorkerError("Unsupported slicer input format.")
     if not isinstance(timeout_seconds, int) or not 1 <= timeout_seconds <= 900:
@@ -112,6 +112,18 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
     }
     if model_format == "3mf":
         payload["model_format"] = "3mf"
+    if filament_profiles is not None:
+        if (engine != "orcaslicer" or model_format != "3mf"
+                or not isinstance(filament_profiles, (list, tuple))
+                or not 2 <= len(filament_profiles) <= 16):
+            raise SlicerWorkerError("Multiple native filaments require an Orca 3MF job.")
+        if any(not isinstance(profile, bytes) for profile in filament_profiles):
+            raise SlicerWorkerError("Invalid native filament palette.")
+        if filament_profiles[0] != filament_profile:
+            raise SlicerWorkerError("The first native filament preset must match the legacy profile.")
+        payload["filament_profiles"] = [
+            _encode(profile, MAX_REQUEST_PROFILE) for profile in filament_profiles
+        ]
     session = _session()
     response = None
     try:
