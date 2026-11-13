@@ -313,6 +313,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   );
   const selectNativeProfile = (kind, id) => {
     if (kind === "process") setProcessOverrides({});
+    // Flushing depends on the exact verified machine, filament and process
+    // presets. Never silently reuse an old printer’s directional matrix.
+    setFlushSettings(null);
     manuallyChosenProfiles.current.add(kind);
     const profile = profiles.find(item => item.id === id);
     setForm(current => ({
@@ -327,6 +330,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     // machine's verified native presets or nozzle geometry.
     manuallyChosenProfiles.current.clear();
     setProfileSuggestions({});
+    setFlushSettings(null);
     setForm(current => ({
       ...current,
       printer_id: String(printerId),
@@ -701,6 +705,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               })),
               active_plate_id:target.id,workflow:"interactive",
               save_gcode_to_library:false,
+              ...(flushSettings ? {flush_settings:flushSettings} : {}),
               ...(form.engine==="orcaslicer"?{process_overrides:processOverrides}:{}),
             },
           };
@@ -1256,6 +1261,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             selected={form.engine} disabled={!canPrepare || busy || loading}
             onSelect={key => {
               manuallyChosenProfiles.current.clear();
+              setFlushSettings(null);
               const selectedEngine = engines.find(item => item.key === key);
               setForm(current => ({
                 ...current, engine: key,
@@ -1274,7 +1280,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             : "The selected engine is not installed or verified. You can prepare drafts, but slicing is disabled."}
         </p>
         <label>Engine version
-          <input required maxLength="80" disabled={!canPrepare || busy} value={form.engine_version} onChange={e => update("engine_version", e.target.value)} placeholder="Exact installed/version-matched engine version" />
+          <input required maxLength="80" disabled={!canPrepare || busy} value={form.engine_version} onChange={e => { setFlushSettings(null); update("engine_version", e.target.value); }} placeholder="Exact installed/version-matched engine version" />
         </label>
         <label>Printer
           <select required disabled={!canPrepare || busy} value={form.printer_id}
