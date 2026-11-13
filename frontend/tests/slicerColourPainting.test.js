@@ -8,7 +8,7 @@ test("facets, brush, connected fill and orientation-aware smart fill", () => {
   const mesh = createPaintMesh(geometry);
   assert.equal(mesh.faceCount, 12);
   assert.deepEqual(selectPaintFaces(mesh, { mode: "facet", face: 0 }), [0]);
-  assert.equal(selectPaintFaces(mesh, { mode: "fill", face: 0 }).length, 12);
+  assert.equal(selectPaintFaces(mesh, { mode: "fill", face: 0 }).length, 2);
   assert.equal(selectPaintFaces(mesh, { mode: "smart_fill", face: 0, angleDeg: 10 }).length, 2);
   assert.ok(selectPaintFaces(mesh, { mode: "brush", face: 0, radiusMm: 3 }).includes(0));
   geometry.dispose();
@@ -47,5 +47,13 @@ test("circle follows clicked surface and sphere selects a 3D neighbourhood", () 
   assert.ok(sphere.includes(0));
   assert.ok(circle.length <= mesh.faceCount && sphere.length <= mesh.faceCount);
   assert.throws(()=>selectPaintFaces(mesh,{mode:"circle",face:0,radiusMm:-1}),/Invalid paint radius/);
+  geometry.dispose();
+});
+
+test("conservative fill does not flood an entire connected mesh",()=>{
+  const geometry = new THREE.SphereGeometry(8,24,12).toNonIndexed();
+  const mesh=createPaintMesh(geometry);
+  const painted=selectPaintFaces(mesh,{mode:"fill",face:90});
+  assert.ok(painted.length>0 && painted.length<mesh.faceCount/2);
   geometry.dispose();
 });
