@@ -75,7 +75,8 @@ export function createPaintMesh(geometry) {
       }
   }
   return { faceCount: faces, signature: faces + ":" + fingerprint.toString(16),
-    centres, normals, heights, neighbours: neighbours.map(s => [...s]) };
+    centres, normals, heights, neighbours: neighbours.map(s => [...s]),
+    triangle: face => [point(face*3),point(face*3+1),point(face*3+2)] };
 }
 
 export function selectPaintFaces(mesh, { mode, face, radiusMm = 2, angleDeg = 30,
@@ -115,8 +116,33 @@ export function selectPaintFaces(mesh, { mode, face, radiusMm = 2, angleDeg = 30
       // plane. Avoid colouring hidden/back surfaces across the entire mesh.
       const depth = dot(delta,unit);
       const projectedSquared = Math.max(0,dot(delta,delta)-depth*depth);
-      return Math.abs(depth) <= Math.max(.1,radiusMm*.2) &&
-        projectedSquared <= radius2 ? [i] : [];
+      // Face-centre-only inclusion creates a triangular stamp when a circle
+      // overlaps a coarse triangle. Include any face whose projected edge
+      // intersects the disc; still restrict paint to the clicked surface.
+      if (Math.abs(depth) > Math.max(.12,radiusMm*.15) ||
+          dot(mesh.normals[i],unit) < Math.cos(12*Math.PI/180)) return [];
+      if(projectedSquared <= radius2) return [i];
+      const triangle=mesh.triangle?.(i);
+      if(!triangle) return [];
+      const near=triangle.some(v=>{
+        const dv=vector(v,origin);
+        const h=dot(dv,unit);
+        return Math.abs(h)<=Math.max(.12,radiusMm*.15) &&
+          dot(dv,dv)-h*h<=radius2;
+      });
+      if(near)return [i];
+      const nearEdge=triangle.some((v,j)=>{
+        const w=triangle[(j+1)%3];
+        const va=vector(v,origin),vb=vector(w,origin);
+        const ha=dot(va,unit),hb=dot(vb,unit);
+        const aa=va.map((x,k)=>x-ha*unit[k]),bb=vb.map((x,k)=>x-hb*unit[k]);
+        const edge=vector(bb,aa);
+        const denom=dot(edge,edge);
+        const fraction=denom>0?Math.max(0,Math.min(1,-dot(aa,edge)/denom)):0;
+        const closest=aa.map((x,k)=>x+fraction*edge[k]);
+        return dot(closest,closest)<=radius2;
+      });
+      return nearEdge?[i]:[];
     });
   }
   if (mode === "fill" || mode === "smart_fill") {
@@ -127,15 +153,18 @@ export function selectPaintFaces(mesh, { mode, face, radiusMm = 2, angleDeg = 30
     // Smart Fill permits a configurable seed-normal angle but does not
     // accumulate small bends until it wraps around the whole object.
     const selected = new Set([face]), queue = [face];
-    const threshold = Math.cos((mode === "fill" ? 12 : angleDeg) * Math.PI / 180);
-    const stepThreshold = Math.cos((mode === "fill" ? 20 : Math.min(45, angleDeg)) * Math.PI / 180);
+    const threshold = Math.cos((mode === "fill" ? 5 : angleDeg) * Math.PI / 180);
+    const stepThreshold = Math.cos((mode === "fill" ? 8 : Math.min(45, angleDeg)) * Math.PI / 180);
     const seedNormal = mesh.normals[face];
+    const seedCentre = mesh.centres[face];
+    const planarToleranceMm = mode === "fill" ? 0.22 : Infinity;
     for (let head = 0; head < queue.length; head++) {
       const current = queue[head];
       for (const neighbour of mesh.neighbours[current]) {
         if (selected.has(neighbour)) continue;
         if (dot(seedNormal, mesh.normals[neighbour]) < threshold ||
-            dot(mesh.normals[current], mesh.normals[neighbour]) < stepThreshold)
+            dot(mesh.normals[current], mesh.normals[neighbour]) < stepThreshold ||
+            Math.abs(dot(vector(mesh.centres[neighbour],seedCentre),seedNormal)) > planarToleranceMm)
           continue;
         selected.add(neighbour);
         queue.push(neighbour);
