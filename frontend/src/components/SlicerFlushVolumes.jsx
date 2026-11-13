@@ -71,7 +71,7 @@ export default function SlicerFlushVolumes({slots=[],value=null,onChange,disable
                   const n=Number(raw);if(n>=.1&&n<=3)onChange?.({...data,multiplier:n});
                 }}/>
               <small>{data.multiplier===null
-                ? nativeMultiplier!=null?"Inherited from process profile · "+nativeMultiplier+" (edit to override)":"Not defined in selected process profile"
+                ? nativeMultiplier!=null?"Inherited from process profile · "+nativeMultiplier+" (edit to override)":"Not available in selected native process profile"
                 :"Overriding native multiplier"}</small>
             </label>
             <label>Prime tower
@@ -83,38 +83,41 @@ export default function SlicerFlushVolumes({slots=[],value=null,onChange,disable
             </label>
           </div>
           <h4>Directional flushing · mm³</h4>
-          <p className="projectUploadHint">Each row represents the filament being unloaded;
-            each column is the filament being loaded. Blank fields inherit their native
-            values only when matching tools have been verified.</p>
+          <p className="projectUploadHint">Rows: unloaded filament. Columns: next loaded filament.
+            Each editable cell is a directional override. Native process values are tool-indexed,
+            not physical CFS slot values, until a verified slot-to-tool map is available.</p>
           {visible.length>=2 ? <div className="slicerFlushTableScroll">
-            <table className="dataTable slicerFlushTable">
-              <thead><tr><th>From / To</th>{visible.map(slot=><th key={slot.id}>
+            <table className="slicerFlushMatrix" aria-label="Directional flushing volumes">
+              <thead><tr><th scope="col">From / To</th>{visible.map(slot=><th scope="col" key={slot.id}>
                 <span className="slicerFlushSlotLabel"><Swatch slot={slot}/>
                   <span>{slotName(slot)}</span></span>
               </th>)}</tr></thead>
               <tbody>{visible.map(from=><tr key={from.id}>
-                <th><span className="slicerFlushSlotLabel"><Swatch slot={from}/>
+                <th scope="row"><span className="slicerFlushSlotLabel"><Swatch slot={from}/>
                   <span>{slotName(from)}</span></span></th>
-                {visible.map(to=><td key={to.id}>{String(from.id)===String(to.id)?"—":
-                  <input type="number" min="0" max="20000" step="1"
+                {visible.map(to=><td key={to.id}>
+                  {String(from.id)===String(to.id) ? <span aria-label="Same filament">—</span> :
+                  <input className="slicerFlushCell" type="number" min="0" max="20000" step="1"
                     disabled={disabled} value={overrideFor(from,to)??""}
-                    placeholder="Inherit" aria-label={`Flush ${slotName(from)} to ${slotName(to)}`}
-                    onChange={e=>updateTransition(from,to,e.target.value)}/>}</td>)}
+                    placeholder="—" title="Blank = inherit; native slot value requires verified mapping"
+                    aria-label={`Flush ${slotName(from)} to ${slotName(to)}`}
+                    onChange={e=>updateTransition(from,to,e.target.value)}/>}
+                </td>)}
               </tr>)}</tbody>
             </table>
           </div> : <p className="projectUploadHint">Refresh at least two loaded filament slots to edit transitions.</p>}
-          {!!native?.matrix && <details>
-            <summary>Native tool-indexed values (not physical slot mappings)</summary>
-            <div className="slicerFlushTableScroll"><table className="dataTable slicerFlushTable">
+          {!!native?.matrix ? <details>
+            <summary>Native tool-indexed matrix from process profile</summary>
+            <div className="slicerFlushTableScroll"><table className="slicerFlushMatrix">
               <thead><tr><th>Tool</th>{Array.from({length:native.tool_count},(_,i)=><th key={i}>T{i}</th>)}</tr></thead>
               <tbody>{Array.from({length:native.tool_count},(_,i)=><tr key={i}>
                 <th>T{i}</th>{Array.from({length:native.tool_count},(_,j)=><td key={j}>
                   {native.matrix[i*native.tool_count+j]}</td>)}
               </tr>)}</tbody>
             </table></div>
-          </details>}
-          {!native?.matrix && <p className="projectUploadHint">This process profile has no inspectable native
-            flushing matrix. No volume is assumed from filament colour.</p>}
+          </details> : <p className="projectUploadHint">No native tool flushing matrix is defined in the selected
+            process profile. It may instead be stored in the slicer's project settings.
+            MakerVault cannot safely infer physical CFS-to-tool values from this profile.</p>}
           {slots.length>16&&<p className="formError">At most sixteen slots can be edited.</p>}
           <p className="projectUploadHint">The machine's native preset remains responsible for unloading,
             loading, purging and priming. These draft overrides are not firmware commands.</p>
