@@ -799,13 +799,13 @@ export default function SlicerPrepareWorkspace({
     }));
   })();
   const paintTools = [
-    ["brush","paint-colour","Brush · paint a circular surface area"],
-    ["facet","shape-box","Triangle · colour one mesh facet"],
-    ["circle","shape-disc","Circle · paint a projected circular region"],
-    ["sphere","shape-sphere","Sphere · paint a three-dimensional region"],
-    ["fill","arrange","Connected fill · paint an entire connected shell"],
-    ["smart_fill","face","Smart fill · stop at sharp changes of surface angle"],
-    ["height","layers","Height range · move across the model to choose a band"],
+    ["brush","paint-brush","Brush · paint a circular surface area"],
+    ["facet","paint-facet","Triangle · colour one mesh facet"],
+    ["circle","paint-disc","Circle · paint a projected circular region"],
+    ["sphere","paint-sphere","Sphere · paint a three-dimensional region"],
+    ["fill","paint-fill","Connected fill · paint an entire connected shell"],
+    ["smart_fill","paint-smart","Smart fill · stop at sharp changes of surface angle"],
+    ["height","paint-height","Height range · move across the model to choose a band"],
   ];
   const paintSelected = objects.find(row => row.instance_id === selectedId);
   const paintPanel = toolMode === "paint_colour" && (
