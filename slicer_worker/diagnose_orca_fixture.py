@@ -16,15 +16,27 @@ from .orca_runner import orca_command
 from .probe import fixture_stl
 
 
-def diagnose(printer, filament, process, binary):
+def diagnose(printer, filament, process, binary, *, model=None, second_filament=None):
     with tempfile.TemporaryDirectory(prefix="makervault-orca-diagnostic-") as directory:
         root = Path(directory)
-        (root / "input.stl").write_bytes(fixture_stl())
+        if model is not None:
+            source = Path(model)
+            if source.is_symlink() or not source.is_file() or not 0 < source.stat().st_size <= 32 * 1024 * 1024:
+                raise ValueError("Unsafe diagnostic 3MF.")
+            shutil.copyfile(source, root / "input.3mf")
+        else:
+            (root / "input.stl").write_bytes(fixture_stl())
         for name, source in (("printer", printer), ("filament", filament), ("process", process)):
             source = Path(source)
             if source.is_symlink() or not source.is_file() or not 0 < source.stat().st_size <= 1024 * 1024:
                 raise ValueError("Unsafe diagnostic profile.")
             shutil.copyfile(source, root / (name + ".json"))
+        if second_filament is not None:
+            source = Path(second_filament)
+            if model is None or source.is_symlink() or not source.is_file() or not 0 < source.stat().st_size <= 1024 * 1024:
+                raise ValueError("Unsafe diagnostic second filament.")
+            shutil.copyfile(root / "filament.json", root / "filament-0.json")
+            shutil.copyfile(source, root / "filament-1.json")
         command = orca_command(Path(binary), root)
         # Diagnostic data is bounded in its display, only public upstream
         # profiles are used in CI; never emit arbitrary user-supplied files.
@@ -45,8 +57,11 @@ def main():
     parser.add_argument("--binary", default="/opt/engines/orcaslicer.AppImage")
     for name in ("printer", "filament", "process"):
         parser.add_argument("--" + name, required=True)
+    parser.add_argument("--model", help="Official, locally generated two-tool 3MF fixture.")
+    parser.add_argument("--second-filament", help="Official second filament preset.")
     args = parser.parse_args()
-    diagnose(args.printer, args.filament, args.process, args.binary)
+    diagnose(args.printer, args.filament, args.process, args.binary,
+             model=args.model, second_filament=args.second_filament)
 
 
 if __name__ == "__main__":
