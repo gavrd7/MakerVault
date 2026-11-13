@@ -152,7 +152,7 @@ class SliceJobApiTests(TestCase):
         owned=FileAsset.objects.get(pk=new_id)
         self.assertEqual(owned.owner_id,self.owner.pk)
         self.assertTrue(owned.metadata["slicer_temporary"])
-        self.assertNotIn(new_id,str(self.client.get("/api/files/").json()))
+        self.assertEqual(owned.metadata["uploaded_from"],"slicer-project")
         self.client.force_login(self.other)
         self.assertEqual(self.client.post("/api/printing/slicer/projects/import/",
             {"file":SimpleUploadedFile("saved.3mf",package)}).status_code,403)
