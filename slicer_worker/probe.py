@@ -28,6 +28,7 @@ from .orca_runner import run_orca
 from .creality_runner import run_creality
 from .three_mf_validation import validate_worker_3mf
 from .material_gcode_audit import verify_multi_material_output, expected_native_tools, verify_two_object_tool_regions, verify_k2_fixture_purge_tower_evidence
+from .k2_cfs_acceptance import k2_offline_profile_evidence
 
 ENGINES = {"orcaslicer": run_orca, "crealityprint": run_creality}
 GCODE_EXTRUSION = re.compile(
@@ -213,6 +214,8 @@ def run_probe(*, engine, version, binary, printer, filament, process, timeout=12
         "filament.json": _read_source(filament, MAX_PROFILE_BYTES),
         "process.json": _read_source(process, MAX_PROFILE_BYTES),
     }
+    k2_profile = (k2_offline_profile_evidence(inputs["printer.json"], inputs["process.json"])
+                  if audit_changeovers else None)
     if second_filament is not None:
         inputs["filament-0.json"] = inputs["filament.json"]
         inputs["filament-1.json"] = _read_source(second_filament, MAX_PROFILE_BYTES)
@@ -255,6 +258,7 @@ def run_probe(*, engine, version, binary, printer, filament, process, timeout=12
         "profile_sha256": {key.removesuffix(".json"): hashlib.sha256(data).hexdigest()
                            for key, data in inputs.items()},
         **output,
+        **({"k2_profile_evidence": k2_profile} if k2_profile is not None else {}),
         "note": "Evidence only; no engine was installed, approved or enabled in MakerVault.",
     }
 
