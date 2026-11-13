@@ -1746,7 +1746,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         {error && <p className="integrationError" role="alert">{error}</p>}
         {notice && <p role="status">{notice}</p>}
         <GcodeViewerModal key={previewJob.output_asset.id} embedded
-          file={previewJob.output_asset} canEdit={true} onSaved={refresh}
+          file={previewJob.output_asset} canEdit={canPrepare} onSaved={refresh}
           objectSettings={previewJob.settings?.plate_objects}
           globalProcessOverrides={previewJob.settings?.process_overrides}
           bedSize={(() => {
