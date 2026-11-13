@@ -6426,3 +6426,57 @@ a:focus-visible,
     flex:0 0 auto;min-width:36px;
   }
 }
+
+
+/* 2026-11: single-line CFS summary rows; detailed telemetry belongs in the modal. */
+.slicerPrepareScene .slicerPlateCanvasColumn{position:relative}
+.slicerLiveMaterialSlots .slicerLiveMaterialSlotCompact{
+  display:grid;grid-template-columns:26px minmax(0,1fr);align-items:center;
+  gap:6px 9px;padding:9px 0;
+}
+.slicerLiveMaterialSlotCompact .slicerLiveMaterialSummary{
+  min-width:0;display:flex;flex-direction:column;gap:2px;
+}
+.slicerLiveMaterialSlotCompact .slicerLiveMaterialSummary strong{
+  white-space:nowrap;text-overflow:ellipsis;overflow:hidden;
+}
+.slicerLiveMaterialSlotCompact .slicerLiveMaterialActions{
+  display:flex;gap:6px;grid-column:2;min-width:0;flex-wrap:wrap;
+}
+.slicerLiveMaterialSlotCompact .slicerLiveMaterialActions button{
+  min-width:0;flex:1 1 68px;padding:5px 7px;font-size:.78rem;white-space:nowrap;
+}
+.slicerSlotDetails p{margin:6px 0}
+.slicerFlushModalBody .slicerFlushTableScroll{overflow:auto;max-width:100%;max-height:48dvh}
+.slicerFlushModal .slicerFlushMatrix{
+  border-collapse:collapse;table-layout:fixed;width:100%;min-width:610px;
+  background:transparent;
+}
+.slicerFlushMatrix th,.slicerFlushMatrix td{
+  border:1px solid #38495c;padding:3px 5px;text-align:center;
+  width:120px;min-width:120px;max-width:120px;vertical-align:middle;
+}
+.slicerFlushMatrix th:first-child{width:140px;min-width:140px;max-width:140px}
+.slicerFlushMatrix th{background:#152236;font-weight:600}
+.slicerFlushMatrix tbody tr:nth-child(even){background:rgba(255,255,255,.025)}
+.slicerFlushMatrix .slicerFlushSlotLabel{max-width:100%;white-space:normal;font-size:.76rem}
+.slicerFlushMatrix .slicerFlushSlotLabel span:last-child{
+  min-width:0;overflow:hidden;text-overflow:ellipsis;
+}
+.slicerFlushMatrix .slicerFlushCell{
+  width:100%;max-width:none;min-width:0;display:block;
+  padding:7px 5px;border:0;border-radius:0;text-align:right;
+  background:transparent;font-variant-numeric:tabular-nums;
+  box-shadow:none;outline-offset:-2px;
+}
+.slicerFlushMatrix .slicerFlushCell:focus-visible{
+  outline:2px solid #38bdf8;background:#203348;
+}
+@media(max-width:740px){
+  .slicerPrepareScene .slicerPlateCanvasColumn>.slicerColourPaintPanel{
+    top:var(--slicer-paint-top, 92px)!important;left:6px!important;
+    right:6px!important;width:calc(100% - 12px)!important;
+    max-width:calc(100% - 12px)!important;
+  }
+  .slicerFlushMatrix th,.slicerFlushMatrix td{min-width:108px;width:108px;max-width:108px}
+}
