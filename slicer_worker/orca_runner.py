@@ -234,6 +234,23 @@ def orca_command(binary: Path, workdir: Path, *,
     ]
     for item in profiles:
         _native_json(item)
+    # The worker writes an explicit ordered palette only for the bounded
+    # multi-filament protocol. No globbing, arbitrary paths or user arguments.
+    palette = []
+    for index in range(16):
+        path = workdir / ("filament-" + str(index) + ".json")
+        if not path.exists():
+            if any((workdir / ("filament-" + str(j) + ".json")).exists()
+                   for j in range(index + 1, 16)):
+                raise WorkerError("Non-contiguous native filament palette.")
+            break
+        profile = _regular_file(workdir, path.name, MAX_PROFILE_BYTES)
+        _native_json(profile)
+        palette.append(profile)
+    if palette:
+        if not is_project or len(palette) < 2 or profiles[1].read_bytes() != palette[0].read_bytes():
+            raise WorkerError("Multi-filament palette does not match the native 3MF job.")
+        validate_worker_3mf(model.read_bytes(), native_tool_count=len(palette))
     outdir = workdir / "orca-output"
     if outdir.exists() or outdir.is_symlink():
         raise WorkerError("Output directory is not empty; fresh scratch is required.")
@@ -242,7 +259,7 @@ def orca_command(binary: Path, workdir: Path, *,
     return [
         str(executable), str(model), "--load-settings",
         str(profiles[2]) + ";" + str(profiles[0]),
-        "--load-filaments", str(profiles[1]),
+        "--load-filaments", ";".join(str(path) for path in palette) if palette else str(profiles[1]),
         "--load-defaultfila",
         *(["--arrange", "1"] if not is_project else
           ["--arrange", "0"] if native_object_settings or experimental_no_arrange else []),
