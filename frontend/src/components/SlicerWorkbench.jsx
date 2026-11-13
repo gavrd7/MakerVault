@@ -411,7 +411,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     let active = true;
     setMaterialProfileMatches({ material: materialHint, loading: true });
     const params = new URLSearchParams({
-      engine: form.engine, kind: "filament", vendor: "Creality", q: materialHint,
+      engine: form.engine, kind: "filament",
+      vendor: form.engine === "orcaslicer" ? "OrcaFilamentLibrary" : "Creality",
+      version: form.engine_version, q: materialHint,
     });
     apiFetch("/api/printing/slicer/official-profiles/?" + params)
       .then(result => {
@@ -421,7 +423,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         if (active) setMaterialProfileMatches({ material: materialHint, unavailable: true });
       });
     return () => { active = false; };
-  }, [form.engine, materialHint]);
+  }, [form.engine, form.engine_version, materialHint]);
 
   function chooseSpool(id) {
     const spool = spools.find(item => String(item.id) === String(id));
