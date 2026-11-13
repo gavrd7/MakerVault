@@ -24,7 +24,7 @@ MAX_CHAIN = 12
 MAX_CHAIN_BYTES = 4 * 1024 * 1024
 
 
-def official_profile_chain(engine, kind, name, subpath, vendor="Creality"):
+def official_profile_chain(engine, kind, name, subpath, vendor="Creality", version="2.4.2"):
     """Return [(native_name, pinned_subpath, bytes)] ordered parent-first."""
     if engine not in {"orcaslicer", "crealityprint", "snapmakerorca"}:
         raise OfficialProfileError("Unknown official slicer profile engine.")
@@ -35,12 +35,13 @@ def official_profile_chain(engine, kind, name, subpath, vendor="Creality"):
         (engine == "snapmakerorca" and vendor not in SNAPMAKER_VENDORS)):
         raise OfficialProfileError("Unsupported official profile vendor for this engine.")
     index = (
-        dict(orca_entries(vendor, kind)) if engine == "orcaslicer"
+        dict(orca_entries(vendor, kind, version)) if engine == "orcaslicer"
         else dict(creality_entries(kind, vendor)) if engine == "crealityprint"
         else dict(snapmaker_entries(kind, vendor))
     )
-    fetch = (fetch_official_profile if engine == "orcaslicer"
-             else fetch_creality_profile if engine == "crealityprint"
+    fetch = (lambda profile_kind, profile_name, path, source_vendor:
+             fetch_official_profile(profile_kind, profile_name, path, source_vendor, version)) \
+             if engine == "orcaslicer" else (fetch_creality_profile if engine == "crealityprint"
              else fetch_snapmaker_profile)
     if index.get(name) != subpath:
         raise OfficialProfileError("Requested native profile is not in the pinned catalogue.")
