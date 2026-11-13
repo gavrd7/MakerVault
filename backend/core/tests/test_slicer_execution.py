@@ -5,6 +5,26 @@ from django.test import SimpleTestCase
 from core.slicer_execution import verified_installation, _single_unmodified_stl, _validate_plate_execution, SlicerExecutionError
 
 
+class IntendedMaterialSafetyTests(SimpleTestCase):
+    def test_mapped_draft_cannot_silently_produce_single_filament_gcode(self):
+        from types import SimpleNamespace
+        for count in (1, 2):
+            with self.subTest(count=count):
+                models = [{
+                    "instance_id": str(index),
+                    "material_slot": {
+                        "printer_id": "printer", "slot_id": "slot-" + str(index),
+                        "slot_index": index,
+                    },
+                } for index in range(count)]
+                job = SimpleNamespace(
+                    settings={"plate_objects": models},
+                    engine="orcaslicer",
+                )
+                with self.assertRaisesRegex(SlicerExecutionError, "not yet verified"):
+                    _validate_plate_execution(job)
+
+
 class WorkerApprovalTests(SimpleTestCase):
     def setUp(self):
         self.digest = "sha256:" + "a" * 64
