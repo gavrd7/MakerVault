@@ -30,7 +30,10 @@ OBJECT_SETTINGS = {
 MAX_OBJECT_SETTINGS = 16
 
 
-def validate_worker_3mf(data):
+def validate_worker_3mf(data, *, native_tool_count=None):
+    if native_tool_count is not None and (isinstance(native_tool_count, bool) or
+            not isinstance(native_tool_count, int) or not 2 <= native_tool_count <= 16):
+        raise WorkerError("Invalid native filament tool count.")
     if not isinstance(data, bytes) or not data or len(data) > 32 * 1024 * 1024:
         raise WorkerError("3MF input exceeds worker limits.")
     try:
@@ -93,6 +96,7 @@ def validate_worker_3mf(data):
         if manifest_root.tag != "config" or manifest_root.attrib:
             raise WorkerError("Unsupported native 3MF plate manifest.")
         object_ids = set()
+        mapped_extruders = {}
         plate_nodes = []
         for node in manifest_root:
             if node.tag == "object":
@@ -108,6 +112,14 @@ def validate_worker_3mf(data):
                             set(entry.attrib) != {"key", "value"}):
                         raise WorkerError("Unsafe per-object 3MF metadata.")
                     key, value = entry.attrib["key"], entry.attrib["value"]
+                    if key == "extruder" and native_tool_count is not None:
+                        if not value.isdecimal() or not 1 <= int(value) <= native_tool_count:
+                            raise WorkerError("Invalid native object extruder.")
+                        if key in used_keys:
+                            raise WorkerError("Duplicate native extruder assignment.")
+                        mapped_extruders[obj_id] = int(value)
+                        used_keys.add(key)
+                        continue
                     if key not in OBJECT_SETTINGS or key in used_keys:
                         raise WorkerError("Unsupported per-object slicer setting.")
                     used_keys.add(key)
@@ -128,6 +140,9 @@ def validate_worker_3mf(data):
                 plate_nodes.append(node)
             else:
                 raise WorkerError("Unknown native 3MF metadata.")
+        if native_tool_count is not None and (
+                set(mapped_extruders) != ids or len(set(mapped_extruders.values())) < 2):
+            raise WorkerError("Every native object must select an extruder; at least two must differ.")
         if len(plate_nodes) != 1 or manifest_root[-1] is not plate_nodes[0]:
             raise WorkerError("Exactly one final native plate mapping is required.")
         plate = plate_nodes[0]
@@ -154,6 +169,8 @@ def validate_worker_3mf(data):
             instance_ids.append(props["object_id"])
         if len(instance_ids) != len(set(instance_ids)) or set(instance_ids) != ids:
             raise WorkerError("3MF plate membership does not match mesh objects.")
+    if native_tool_count is not None and manifest is None:
+        raise WorkerError("Multi-filament 3MF requires native object assignments.")
     for item in items:
         try:
             values = [float(v) for v in item.attrib["transform"].split()]
