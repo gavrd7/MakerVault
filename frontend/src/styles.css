@@ -6477,6 +6477,9 @@ a:focus-visible,
     top:var(--slicer-paint-top, 92px)!important;left:6px!important;
     right:6px!important;width:calc(100% - 12px)!important;
     max-width:calc(100% - 12px)!important;
+    max-height:min(195px,32dvh)!important;
+    overflow-x:hidden;overflow-y:auto;
+    gap:5px!important;padding:7px!important;
   }
   .slicerFlushMatrix th,.slicerFlushMatrix td{min-width:108px;width:108px;max-width:108px}
 }
