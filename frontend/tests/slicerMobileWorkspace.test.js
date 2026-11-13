@@ -100,7 +100,7 @@ test("flushing settings and CFS profile controls use the new modal rather than a
   assert.match(flushing,/aria-haspopup="dialog"/);
   assert.match(flushing,/createPortal\(/);
   assert.match(flushing,/className="slicerFlushModal"/);
-  assert.match(flushing,/value=\{data.multiplier \?\? nativeMultiplier \?\? ""\}/);
+  assert.match(flushing,/value=\{data.multiplier \?\? effectiveMultiplier\}/);
   assert.match(flushing,/slicerFlushSlotLabel/);
   assert.match(flushing,/slicerFlushSwatch/);
 });
