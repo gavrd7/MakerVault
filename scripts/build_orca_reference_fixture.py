@@ -24,19 +24,19 @@ FIXTURES = {
         "vendor": "Creality",
         "printer": "Creality K1 (0.4 nozzle)",
         "process": "0.20mm Standard @Creality K1 (0.4 nozzle)",
-        "filament": "Creality Generic PLA",
+        "filament": "Generic PLA @Creality K1-all",
     },
     "k2": {
         "vendor": "Creality",
         "printer": "Creality K2 0.4 nozzle",
         "process": "0.20mm Standard @Creality K2 0.4 nozzle",
-        "filament": "Creality Generic PLA @K2-all",
+        "filament": "Generic PLA @K2-all",
     },
     "prusa-mk4": {
         "vendor": "Prusa",
         "printer": "Prusa MK4 0.4 nozzle",
         "process": "0.20mm Standard @MK4",
-        "filament": "Prusa Generic PLA @MK4",
+        "filament": "Generic PLA @Prusa MK4",
     },
 }
 DIRECTORIES = {"printer": "machine", "process": "process", "filament": "filament"}
@@ -87,12 +87,10 @@ def generate(destination, printer, *, opener=urlopen):
     for kind in ("printer", "filament", "process"):
         name = fixture[kind]
         data = resolved(kind, name, opener=opener, vendor=fixture["vendor"])
-        if printer == "k2" and kind == "printer":
-            # Reference-only compatibility experiment: the pinned official
-            # Creality K2 profile sets 30 while legacy Orca 2.4.2 enforced 10..18.
-            # Never copy this modification into production printer profiles.
-            if data.get("retraction_distances_when_cut") != "30":
-                raise ValueError("Official K2 retraction setting changed; review fixture before testing.")
+        if printer == "k2" and kind == "printer" and data.get("retraction_distances_when_cut") == "30":
+            # Reference-only workaround for the earlier 2.4.2 validation
+            # discrepancy. Keep disabled when the new upstream profile has
+            # corrected it; never modify production manufacturer profiles.
             data["retraction_distances_when_cut"] = "18"
             print("K2 TEST-ONLY override: retraction_distances_when_cut 30 -> 18; NOT production-approved.", file=sys.stderr)
         # Real upstream system presets may contain print-host/postprocess keys.
