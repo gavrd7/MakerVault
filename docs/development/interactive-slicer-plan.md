@@ -270,3 +270,64 @@ quality are certified. Product slicing with intended CFS/AMS assignments
 remains disabled until the native tool mapping, flushing/prime-tower G-code
 semantics, printer-profile compatibility and physical acceptance are
 verified.
+
+### Per-printer capability resolution — mandatory, never vendor-wide
+
+MakerVault must **never** equate a manufacturer with a material topology.
+Creality, Bambu Lab, Prusa, Flashforge and other vendors each have multiple
+printer architectures; an individual printer may also have optional MMU
+accessories, separately addressable nozzles, an independent-toolhead changer,
+or a combination of these. Example product families and model names discussed
+during development (K3, H2D/H3D, XL, CORE One INDX, Creator 5) are
+**research targets**, not machine capabilities verified from their names.
+Do not add hardcoded model support from names alone.
+
+Capability resolution must be performed for the **specific registered
+printer and its installed hardware configuration**, with explicit
+provenance and confidence. Suggested separated fields:
+
+- Printer identity: manufacturer, exact model/variant, firmware and machine
+  profile identity; verified nozzle count, material paths, physical toolheads
+  and tool positions; installed/paired MMU, feeder or toolchanger modules.
+- Material topology: an array of independent **material paths** and
+  **toolheads** plus explicit relationships, rather than a single
+  manufacturer-wide `single_nozzle_changer`/`independent_toolheads` flag.
+  Those two values remain supported for the initial verified implementations,
+  but cannot represent all hybrid devices on their own.
+- Capabilities: supported switching mechanism per path (manual, MMU, nozzle,
+  toolhead docking, IDEX), native G-code dialect/commands, verified purge/
+  unload/load behaviour, wipe/prime tower suitability, shared nozzle mixing,
+  nozzle/tool offsets, collision/parking rules, bed zones and available
+  material-slot sensor telemetry. Every value is capability evidence,
+  not a guess from manufacturer or installed slicer engine.
+- Sources and overrides: verified printer profile, signed device telemetry,
+  documented supported accessory/firmware combinations and an explicit user
+  confirmation for optional installed modules. Unknown/conflicting details
+  fail closed. A user-provided override cannot silently grant an unverified
+  physical print-start capability.
+- A snapshot/fingerprint of the *effective* hardware topology, selected
+  slicer engine/version, profile versions, bindings, and loaded materials must
+  be stored with the draft/preflight; it must be reconciled at slice and
+  submit time. Changing firmware, installed feeder modules or toolhead
+  configuration invalidates the old mapping.
+
+**Routing separation:** one observed feeder slot is not one toolhead, and
+one toolhead is not necessarily one material. Route material source
+→ designated nozzle/toolhead → native slicer tool index using verified
+bindings. For a hybrid machine, choose the purge strategy *per transition*:
+same-nozzle colour swap uses directional flushing; another nozzle/head may
+require tool changes/offsets/parking/priming rather than shared-nozzle
+flushing; mixing both may require both in the same print.
+
+**Engine separation:** the MakerVault capability contract is shared; each
+versioned engine adapter must translate it into that engine's native
+configuration and independently prove output. Do not assume common upstream
+Orca lineage means identical machine or toolchange commands.
+
+**Release gate:** no multi-material slicing, printer upload or start is
+enabled merely by a model name, brand, physical slot list, available
+preset or nominal multi-colour support. Require a tested compatibility
+record for the exact machine configuration + engine adapter + native
+profiles + transition strategy. First-stage K2 CFS and independent-head
+tests are evidence for their configurations only, not automatic approval
+for other printers from the same manufacturer.
