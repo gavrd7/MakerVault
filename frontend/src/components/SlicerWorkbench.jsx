@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../api";
 import { Modal } from "./Common";
 import { FileModelViewerModal, ModelThumbnail } from "./ModelViewer";
@@ -1063,6 +1063,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
     {editorOpen ? <SlicerPrepareWorkspace
       plateLabel={plateLabel} onPlateLabelChange={setPlateLabel}
+      plates={projectPlates} activePlateId={activePlateId}
+      onChoosePlate={chooseProjectPlate} onAddPlate={addProjectPlate} onRemovePlate={removeProjectPlate}
       objects={plateObjects} onChange={setPlateObjects} files={stlFiles}
       plateIssues={plateValidation} onPlateIssuesChange={setPlateValidation}
       localAssets={plateLocalAssets} onLocalAssetsChange={setPlateLocalAssets}
