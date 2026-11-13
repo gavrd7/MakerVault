@@ -27,7 +27,7 @@ jobs:
       - name: Prepare test-only native K1 and K2 fixtures before expensive image build
         run: |
           python3 -m compileall -q scripts/build_orca_reference_fixture.py scripts/probe_slicer_staging.py scripts/build_slicer_multimodel_fixture.py
-          python3 -m unittest scripts.tests.test_native_orca_object_fixture -v
+          python3 -m unittest scripts.tests.test_native_orca_object_fixture scripts.tests.test_slicer_colour_fixture -v
           python3 scripts/build_orca_reference_fixture.py --printer k1 --output /tmp/makervault-orca-k1
           python3 scripts/build_orca_reference_fixture.py --printer k2 --output /tmp/makervault-orca-k2
           python3 scripts/build_orca_reference_fixture.py --printer prusa-mk4 --output /tmp/makervault-orca-prusa
