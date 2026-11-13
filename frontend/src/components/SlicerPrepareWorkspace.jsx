@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import SlicerPlateEditor from "./SlicerPlateEditor";
 import SlicerUiIcon from "./SlicerUiIcon";
+import SlicerFlushVolumes from "./SlicerFlushVolumes";
 import { apiFetch } from "../api";
 
 /**
@@ -53,6 +54,7 @@ export default function SlicerPrepareWorkspace({
   onChangeProfiles, onOpenDevice, onSaveDraft, onSaveProject, onImportProject, onSlice, onSliceAll, engine, printer,
   selectedProfiles, workerConfigured, printerId,
   processOverrides = {}, onProcessOverridesChange, onSaveCustomProcessProfile,
+  flushSettings = null, onFlushSettingsChange,
   processProfiles = [], onSelectProcessProfile, onResetProcessSettings,
   printerDetails, nozzleMm, selectedPlateType = "Native / profile default",
   localAssets = [], onLocalAssetsChange, onPlateIssuesChange, plateIssues = null,
@@ -1079,6 +1081,8 @@ export default function SlicerPrepareWorkspace({
             </div>
           </div>)}
           <p role="status">{materialMessage}</p>
+          <SlicerFlushVolumes slots={liveMaterials} value={flushSettings}
+            onChange={onFlushSettingsChange} disabled={!canEdit || busy} />
         </section>
 
       </div>
