@@ -40,8 +40,12 @@ class OrcaRunnerTests(TestCase):
     def test_ordered_native_multi_filament_cli_requires_explicit_3mf_tools(self):
         from unittest.mock import patch
         project = self.root / "input.3mf"
-        project.write_bytes(b"bounded test 3mf")
-        (self.root / "filament-0.json").write_text('{"name":"First"}')
+        with zipfile.ZipFile(project, "w") as package:
+            package.writestr("3D/3dmodel.model", "<model/>")
+            package.writestr("Metadata/model_settings.config",
+                '<config><object id="1"><metadata key="extruder" value="1"/></object>'
+                '<object id="2"><metadata key="extruder" value="2"/></object></config>')
+        (self.root / "filament-0.json").write_text('{"name":"Native preset"}')
         (self.root / "filament-1.json").write_text('{"name":"Second"}')
         with patch("slicer_worker.orca_runner.validate_worker_3mf") as validate:
             command = orca_command(self.binary, self.root)
@@ -53,8 +57,12 @@ class OrcaRunnerTests(TestCase):
                             for call in validate.call_args_list))
 
     def test_native_multi_filament_cli_rejects_missing_intermediate_profile(self):
-        (self.root / "input.3mf").write_bytes(b"bounded test 3mf")
-        (self.root / "filament-0.json").write_text('{"name":"First"}')
+        with zipfile.ZipFile(self.root / "input.3mf", "w") as package:
+            package.writestr("3D/3dmodel.model", "<model/>")
+            package.writestr("Metadata/model_settings.config",
+                '<config><object id="1"><metadata key="extruder" value="1"/></object>'
+                '<object id="2"><metadata key="extruder" value="2"/></object></config>')
+        (self.root / "filament-0.json").write_text('{"name":"Native preset"}')
         (self.root / "filament-2.json").write_text('{"name":"Third"}')
         with patch("slicer_worker.orca_runner.validate_worker_3mf"):
             with self.assertRaisesRegex(WorkerError, "Non-contiguous"):
