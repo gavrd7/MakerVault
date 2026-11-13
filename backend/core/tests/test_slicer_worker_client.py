@@ -58,6 +58,46 @@ class SlicerWorkerClientTests(SimpleTestCase):
             run_remote_job(uuid.uuid4(), "orcaslicer", "2.4.2",
                            b"model", b"printer", b"filament", b"process")
 
+
+    @patch("core.slicer_worker_client._session")
+    @patch("core.slicer_worker_client.worker_settings",
+           return_value=("http://slicer-worker:8088", "x" * 40))
+    def test_native_palette_is_encoded_in_order_without_changing_legacy_request(self, settings, session):
+        import json
+        response = Mock()
+        response.status_code = 200
+        gcode = b"T0\\nM83\\nG1 X1 E1\\nT1\\nG1 X2 E1\\n"
+        payload = json.dumps({
+            "status": "completed", "gcode": base64.b64encode(gcode).decode(),
+            "bytes": len(gcode), "sha256": hashlib.sha256(gcode).hexdigest(),
+        }).encode()
+        response.headers = {"Content-Length": str(len(payload))}
+        response.iter_content.return_value = [payload]
+        session.return_value.post.return_value = response
+        result = run_remote_job(uuid.uuid4(), "orcaslicer", "2.4.2",
+                                b"3mf", b"printer", b"filament-a", b"process",
+                                model_format="3mf",
+                                filament_profiles=[b"filament-a", b"filament-b"])
+        self.assertEqual(result, gcode)
+        sent = json.loads(session.return_value.post.call_args.kwargs["data"])
+        self.assertEqual([base64.b64decode(x) for x in sent["filament_profiles"]],
+                         [b"filament-a", b"filament-b"])
+        self.assertEqual(base64.b64decode(sent["filament_profile"]), b"filament-a")
+
+    def test_invalid_or_unsynchronised_native_palette_is_rejected(self):
+        for profiles, engine, model_format in (
+            ([b"one"], "orcaslicer", "3mf"),
+            ([b"one", b"two"], "orcaslicer", "stl"),
+            ([b"one", b"two"], "crealityprint", "3mf"),
+            ([b"other", b"two"], "orcaslicer", "3mf"),
+            ([b"one", "two"], "orcaslicer", "3mf"),
+        ):
+            with self.subTest(profiles=profiles, engine=engine, model_format=model_format):
+                with self.assertRaises(SlicerWorkerError):
+                    run_remote_job(uuid.uuid4(), engine, "2.4.2",
+                                   b"model", b"printer", b"one", b"process",
+                                   model_format=model_format, filament_profiles=profiles)
+
     def test_dangerous_engine_or_invalid_inputs_are_rejected_before_transport(self):
         with self.assertRaises(SlicerWorkerError):
             run_remote_job(uuid.uuid4(), "/bin/sh", "1", b"stl", b"p", b"f", b"process")
