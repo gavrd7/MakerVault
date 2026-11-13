@@ -1228,6 +1228,7 @@ export default function SlicerPrepareWorkspace({
           </div>)}
           <p role="status">{materialMessage}</p>
           <SlicerFlushVolumes slots={liveMaterials} value={flushSettings}
+            processProfileId={selectedProfiles?.process_id}
             onChange={onFlushSettingsChange} disabled={!canEdit || busy} />
         </section>
 
