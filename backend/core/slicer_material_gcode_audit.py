@@ -10,6 +10,7 @@ from collections import Counter
 TOOL = re.compile(r"^T(\d{1,2})(?:\s|$)", re.I)
 AXIS_E = re.compile(r"(?:^|\s)E([-+]?(?:\d+(?:\.\d*)?|\.\d+))(?:\s|$)", re.I)
 MOVE = re.compile(r"^G(?:0|1|00|01)(?:\s|$)", re.I)
+XY_MOVE = re.compile(r"(?:^|\s)[XY][-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:\s|$)", re.I)
 MAX_TOOLS = 16
 MAX_GCODE_LINES = 2_000_000
 
@@ -70,7 +71,7 @@ def audit_native_tool_usage(gcode, *, expected_tools):
                 extrusion = float(value.group(1))
                 previous = last_e.get(tool, 0.0)
                 positive = extrusion > previous + 1e-6 if absolute_e else extrusion > 1e-6
-                if positive:
+                if positive and XY_MOVE.search(line):
                     counts[tool] += 1
                 if absolute_e:
                     last_e[tool] = extrusion
