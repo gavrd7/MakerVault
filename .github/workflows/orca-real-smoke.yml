@@ -111,6 +111,31 @@ jobs:
             --process /tmp/makervault-orca-k2/process.json \
             --output /tmp/makervault-orca-k2-flush-process.json \
             --prime-tower enabled
+      - name: Generate distinct black and white PLA reference colours (offline)
+        run: |
+          python3 scripts/build_slicer_colour_fixture.py \
+            --filament /tmp/makervault-orca-k2/filament.json \
+            --output /tmp/makervault-orca-k2-black.json --colour '#000000'
+          python3 scripts/build_slicer_colour_fixture.py \
+            --filament /tmp/makervault-orca-k2/filament.json \
+            --output /tmp/makervault-orca-k2-white.json --colour '#FFFFFF'
+      - name: Verify separate K2 black and white PLA native presets (experimental)
+        id: k2_distinct_colour
+        continue-on-error: true
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k2/printer.json \
+            --filament /tmp/makervault-orca-k2-black.json \
+            --second-filament /tmp/makervault-orca-k2-white.json \
+            --process /tmp/makervault-orca-k2-flush-process.json \
+            --model /tmp/makervault-orca-two-tool.3mf \
+            --audit-changeovers
+      - name: Report K2 distinct-colour software acceptance
+        if: always() && steps.k2_distinct_colour.outcome != 'skipped'
+        run: |
+          echo "### K2 two distinct filament-colour presets" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Offline same-material black/white preset result: ${{ steps.k2_distinct_colour.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- These are test-only colour metadata; physical spool properties and CFS slots were not authenticated." >> "$GITHUB_STEP_SUMMARY"
       - name: Probe K2 native flush matrix without tower override (diagnostic)
         id: k2_flush_only
         continue-on-error: true
