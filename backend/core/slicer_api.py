@@ -1356,6 +1356,54 @@ def profile_process_settings(request, profile_id):
 
 @login_required
 @require_http_methods(["GET"])
+def profile_flush_defaults(request, profile_id):
+    """Inspect actual inherited Orca process flushing defaults, if present.
+
+    A native matrix is indexed by slicer tools, not observed physical CFS slots.
+    Do not misrepresent those entries as a physical slot mapping.
+    """
+    profile = SlicerProfile.objects.filter(
+        pk=profile_id, owner=request.user, engine="orcaslicer", kind="process"
+    ).select_related("file_asset").first()
+    if not profile:
+        return _error("Owned Orca process profile not found.", 404)
+    try:
+        raw = json.loads(resolved_native_profile(profile))
+        multiplier = raw.get("flush_multiplier")
+        if isinstance(multiplier, list):
+            multiplier = multiplier[0] if len(multiplier) == 1 else None
+        multiplier = float(multiplier) if multiplier is not None else None
+        if multiplier is not None and (not math.isfinite(multiplier) or not 0.1 <= multiplier <= 3):
+            multiplier = None
+        prime = raw.get("enable_prime_tower")
+        if isinstance(prime, list):
+            prime = prime[0] if len(prime) == 1 else None
+        enabled = None if prime is None else str(prime).lower() in {"1", "true"}
+        matrix = raw.get("flush_volumes_matrix")
+        if isinstance(matrix, list) and len(matrix) <= 256 and all(
+            not isinstance(entry, bool) and str(entry).strip() for entry in matrix
+        ):
+            converted = [float(entry) for entry in matrix]
+            if any(not math.isfinite(v) or not 0 <= v <= 20000 for v in converted):
+                matrix = None
+            else:
+                count = math.isqrt(len(converted))
+                matrix = converted if count >= 2 and count * count == len(converted) else None
+        else:
+            matrix = None
+    except (SlicerProfileError, ValueError, TypeError, OSError, OverflowError):
+        return _error("Native flushing values could not be inspected.", 422)
+    return JsonResponse({
+        "profile_id": str(profile.pk), "multiplier": multiplier,
+        "prime_tower": enabled, "matrix": matrix,
+        "tool_count": math.isqrt(len(matrix)) if matrix else None,
+        "native_profile_unchanged": True,
+        "physical_slots_mapped": False,
+    })
+
+
+@login_required
+@require_http_methods(["GET"])
 def profile_plate(request, profile_id):
     profile = SlicerProfile.objects.filter(
         pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint", "bambustudio", "prusaslicer", "snapmakerorca"], kind="printer"
