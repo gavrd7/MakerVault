@@ -132,7 +132,7 @@ def _bake_native_instance_transform(obj, transform):
             vertex.set(axis, format(value, ".6f"))
 
 
-def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth):
+def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indices=None):
     """Render [(validated_plate_item_dict, owned_STL_bytes)] as one core 3MF.
 
     Preview coordinates are centred around the bed. Shift all instances by the
@@ -140,6 +140,15 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth):
     """
     if not isinstance(objects_with_stl, list) or not 1 <= len(objects_with_stl) <= 200:
         raise SlicerProfileError("A plate needs one to 200 STL models.")
+    # Native tool indices are zero-based at the routing boundary, but Orca's
+    # per-object extruder metadata is one-based. Never infer these from slot
+    # positions: the caller must supply verified native palette assignments.
+    if native_tool_indices is not None and (
+            not isinstance(native_tool_indices, (list, tuple)) or
+            len(native_tool_indices) != len(objects_with_stl) or
+            any(isinstance(tool, bool) or not isinstance(tool, int)
+                or not 0 <= tool <= 63 for tool in native_tool_indices)):
+        raise SlicerProfileError("Invalid verified native extruder indices.")
     if (not all(isinstance(v, (int, float)) and not isinstance(v, bool)
                 and math.isfinite(v) and 1 <= v <= 1000
                 for v in (bed_width, bed_depth))):
@@ -222,12 +231,16 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth):
         except ValueError as exc:
             raise SlicerProfileError("Invalid native per-object process setting.") from exc
     plate_xml = None
-    if len(objects_with_stl) > 1 or any(per_object):
+    if len(objects_with_stl) > 1 or any(per_object) or native_tool_indices is not None:
         manifest = ET.Element("config")
         for index, overrides in enumerate(per_object, start=1):
-            if not overrides:
+            if not overrides and native_tool_indices is None:
                 continue
             obj_settings = ET.SubElement(manifest, "object", {"id": str(index)})
+            if native_tool_indices is not None:
+                ET.SubElement(obj_settings, "metadata", {
+                    "key": "extruder", "value": str(native_tool_indices[index - 1] + 1),
+                })
             for key, value in sorted(overrides.items()):
                 unit = PROCESS_FIELDS[key][2] if key in PROCESS_FIELDS else ""
                 value_str = str(value)
