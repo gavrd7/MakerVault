@@ -41,7 +41,7 @@ def _pinned_details(config=DOTENV):
     engines = json.loads(variables.get("SLICER_ENGINES_JSON", "{}"))
     orca = engines.get("orcaslicer")
     if not isinstance(orca, dict) or orca.get("version") not in APPROVED_ORCA_RELEASES or orca.get("binary") != "/opt/engines/orcaslicer.AppImage":
-        raise ValueError("The pinned Orca 2.4.2 worker is not present in the staging manifest.")
+        raise ValueError("The approved pinned Orca worker is not present in the staging manifest.")
     if not re.fullmatch("[a-f0-9]{64}", str(orca.get("binary_sha256", ""))):
         raise ValueError("Orca executable digest is missing or invalid.")
     return image, orca["version"]
@@ -52,10 +52,12 @@ def _pinned_image(config=DOTENV):
     return _pinned_details(config)[0]
 
 
-def probe(printer, filament, process, *, model=None, compound=False, experimental_all_plates=False, experimental_no_arrange=False, verify_object_effects=False, reverse_object_effects=False, second_filament=None, config=DOTENV, runner=subprocess.run):
+def probe(printer, filament, process, *, model=None, compound=False, experimental_all_plates=False, experimental_no_arrange=False, verify_object_effects=False, reverse_object_effects=False, second_filament=None, audit_changeovers=False, config=DOTENV, runner=subprocess.run):
     """Exercise real engine without app, network, Docker socket or host mounts."""
     image, installed_version = _pinned_details(config)
     sources = {"printer": printer, "filament": filament, "process": process}
+    if audit_changeovers and second_filament is None:
+        raise ValueError("Changeover audit requires two native filament profiles.")
     if second_filament is not None:
         if model is None or compound or verify_object_effects:
             raise ValueError("Two-tool probing requires an independent two-object 3MF.")
@@ -109,6 +111,8 @@ def probe(printer, filament, process, *, model=None, compound=False, experimenta
                             "1" if compound else "2"])
             if second_filament is not None:
                 command.extend(["--second-filament", "/fixtures/filament-1.json"])
+                if audit_changeovers:
+                    command.append("--audit-changeovers")
             if compound:
                 command.extend(["--expected-islands", "2"])
             if experimental_all_plates:
@@ -129,6 +133,8 @@ def main(argv=None):
     parser.add_argument("--model", type=Path, help="Optional two-object MakerVault 3MF acceptance fixture")
     parser.add_argument("--second-filament", type=Path,
                         help="Second ordered native filament for offline real-Orca tool verification")
+    parser.add_argument("--audit-changeovers", action="store_true",
+                        help="Collect offline native toolchange and non-model extrusion evidence")
     parser.add_argument("--compound", action="store_true", help="Experimental combined-mesh 3MF geometry-island test")
     parser.add_argument("--experimental-all-plates", action="store_true", help="Offline diagnostic: slice all native plates")
     parser.add_argument("--experimental-no-arrange", action="store_true", help="Offline diagnostic: disable native auto-arrange")
@@ -141,7 +147,8 @@ def main(argv=None):
                      experimental_no_arrange=args.experimental_no_arrange,
                      verify_object_effects=args.verify_object_effects,
                      reverse_object_effects=args.reverse_object_effects,
-                     second_filament=args.second_filament)
+                     second_filament=args.second_filament,
+                     audit_changeovers=args.audit_changeovers)
     except (ValueError, OSError, subprocess.SubprocessError) as exc:
         print("Offline Orca acceptance probe refused: " + str(exc), file=sys.stderr)
         return 1
