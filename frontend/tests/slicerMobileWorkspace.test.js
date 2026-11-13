@@ -43,3 +43,23 @@ test("mobile G-code controls are compact without changing desktop layout", () =>
   assert.match(css, /\.slicerPreviewModal \.slicerResultModeRow\{/);
   assert.match(css, /grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
 });
+
+test("mobile mesh geometry dialogs remain in the visual viewport with wrap-safe actions", () => {
+  const editor = fs.readFileSync(path.join(base,"components/SlicerPlateEditor.jsx"),"utf8");
+  assert.match(editor,/const width=Math.max\(0,Math.min\(440,screenW-16\)\)/);
+  assert.match(editor,/Math.min\(rect.left\+6,screenW-width-8\)/);
+  assert.match(css,/\.slicerSolidModal\.slicerViewportAnchoredModal \.slicerAutoOrientModalActions\{/);
+  assert.match(css,/\.slicerSolidModal\.slicerViewportAnchoredModal \.slicerSolidGrid\{/);
+  assert.match(css,/overflow-x:hidden;overflow-y:auto/);
+});
+
+test("painting controls adapt to a shallow, minimisable mobile strip", () => {
+  const workspace = fs.readFileSync(path.join(base,"components/SlicerPrepareWorkspace.jsx"),"utf8");
+  assert.match(workspace,/paintMobileMinimised/);
+  assert.match(workspace,/className="slicerPaintMobileMinimise"/);
+  assert.match(css,/\.slicerPlateCanvasViewport>\.slicerColourPaintPanel\{/);
+  assert.match(css,/max-height:min\(195px,32dvh\)!important/);
+  assert.match(css,/\.slicerColourPaintPanel>div\[role="group"\]/);
+  assert.match(css,/overflow-x:auto;overscroll-behavior-inline:contain/);
+  assert.match(css,/\.slicerColourPaintPanel\.slicerPaintMinimised/);
+});
