@@ -20,7 +20,7 @@ def k2_offline_profile_evidence(printer_bytes, process_bytes):
     if not isinstance(printer, dict) or not isinstance(process, dict):
         raise WorkerError("The K2 native profiles must contain JSON objects.")
     name = printer.get("name")
-    if not isinstance(name, str) or not name.startswith("Creality K2 "):
+    if name != "Creality K2 0.4 nozzle":
         raise WorkerError("The K2 acceptance fixture needs the exact K2 machine profile.")
     required = {
         "single_extruder_multi_material": "1",
