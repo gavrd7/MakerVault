@@ -21,7 +21,7 @@ test("malformed swatches and mixed or unknown materials cannot be estimated",()=
   assert.equal(estimateSlotFlush({material:"?",color_hex:"#000000"},
     {material:"?",color_hex:"#ffffff"}),null);
 });
-test("flush form aligns native and custom controls; estimates stay optional",()=>{
+test("flush form aligns controls without obsolete estimate toggles",()=>{
   const src=fs.readFileSync(path.join(base,"components/SlicerFlushVolumes.jsx"),"utf8");
   const css=fs.readFileSync(path.join(base,"styles.css"),"utf8");
   assert.match(src,/className="slicerFlushField"/);
@@ -30,9 +30,10 @@ test("flush form aligns native and custom controls; estimates stay optional",()=
   assert.match(css,/grid-template-rows:22px 48px minmax\(30px,auto\)/);
   assert.match(css,/height:48px;min-height:48px;max-height:48px/);
   assert.doesNotMatch(src,/Show colour-only estimates/);
-  assert.match(src,/window\.confirm\(/);
+  assert.doesNotMatch(src,/window\.confirm\(/);
   assert.doesNotMatch(src,/Copy estimates to draft/);
-  assert.match(src,/estimateMode \?/);
+  assert.doesNotMatch(src,/estimateMode/);
+  assert.match(src,/Reset to default/);
 });
 
 test("mixed PLA/ABS is previewable but not an auto-copy candidate",()=>{
@@ -54,5 +55,5 @@ test("recalculate preview multiplier, retaining directional overrides",()=>{
  assert.ok(src.includes("Recalculate"));
  assert.ok(src.includes("estimateSlotFlush(from,to,{allowMixed:true})"));
  assert.ok(!src.includes("Copy estimates to draft"));
- assert.ok(src.includes("const estimate=estimateSlotFlush(from,to);"));
+ assert.ok(!src.includes("Copy estimates to draft"));
 });
