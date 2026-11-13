@@ -41,6 +41,8 @@ jobs:
             --object-infill-reverse-output /tmp/makervault-orca-infill-reversed.3mf \
             --material-output /tmp/makervault-orca-two-tool.3mf
       - name: Download SHA-256 verified official Orca 2.5.0 and build isolated image
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: python3 scripts/install_slicer_staging.py prepare-orca
       - name: Check restricted worker loads real executable
         shell: bash
