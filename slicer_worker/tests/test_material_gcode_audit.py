@@ -5,6 +5,7 @@ from unittest import TestCase
 from slicer_worker.material_gcode_audit import (
     expected_native_tools, verify_multi_material_output, verify_two_object_tool_regions,
     summarize_k2_fixture_changeovers,
+    verify_k2_fixture_purge_tower_evidence,
 )
 from slicer_worker.runner import WorkerError
 
@@ -73,3 +74,21 @@ class MaterialOutputVerificationTests(TestCase):
             summarize_k2_fixture_changeovers(b"M83\nG91\nT0\nG1 X3 E1\n")
         with self.assertRaisesRegex(WorkerError, "UTF-8"):
             summarize_k2_fixture_changeovers(b"T0\n\xff")
+
+    def test_k2_prime_tower_gate_needs_both_tools_and_actual_outside_deposition(self):
+        valid = ("G90\\nM83\\nT0\\n; FEATURE: Prime tower\\n" +
+                 "".join("G1 X40 Y40 E1\\n" for _ in range(25)) +
+                 "T1\\n; FEATURE: Prime tower\\n" +
+                 "".join("G1 X41 Y40 E1\\n" for _ in range(25)) +
+                 "T0\\n").replace("\\\\n", "\\n").encode()
+        evidence = verify_k2_fixture_purge_tower_evidence(valid)
+        self.assertTrue(evidence["k2_prime_tower_evidence_verified"])
+        for malformed in (
+            valid.replace(b"FEATURE: Prime tower", b"FEATURE: Outer wall"),
+            valid.replace(b"G1 X41 Y40 E1", b"G1 X145 Y110 E1"),
+            valid.replace(b"T1", b"T0"),
+        ):
+            with self.subTest(raw=malformed[:60]):
+                with self.assertRaisesRegex(WorkerError, "prime-tower"):
+                    verify_k2_fixture_purge_tower_evidence(malformed)
+
