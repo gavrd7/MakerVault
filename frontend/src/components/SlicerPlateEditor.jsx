@@ -307,6 +307,8 @@ export default function SlicerPlateEditor({
   const [splitBusy, setSplitBusy] = useState(false);
   const [splitError, setSplitError] = useState("");
   const [solidDialog, setSolidDialog] = useState(null);
+  const [solidInspectorCollapsed,setSolidInspectorCollapsed] = useState(false);
+  useEffect(()=>setSolidInspectorCollapsed(false),[solidDialog?.kind,solidDialog?.id]);
   const solidDialogRef=useRef(null);
   solidDialogRef.current=solidDialog;
   const [solidViewportRect, setSolidViewportRect] = useState(null);
@@ -3338,12 +3340,17 @@ export default function SlicerPlateEditor({
     {solidDialog && createPortal(
       <div className="slicerAutoOrientModalBackdrop" role="presentation"
         style={{pointerEvents:"none"}}>
-        <section className="slicerAutoOrientPanel slicerAutoOrientModal slicerSolidModal slicerViewportAnchoredModal"
-          role="dialog" aria-modal="false" style={solidPanelStyle} aria-label={solidDialog.kind+" model geometry"}>
+        <section className={"slicerAutoOrientPanel slicerAutoOrientModal slicerSolidModal slicerViewportAnchoredModal"+(solidInspectorCollapsed?" slicerSolidInspectorCollapsed":"")}
+          role="dialog" aria-modal="false" style={solidInspectorCollapsed?{...solidPanelStyle,maxHeight:60}:solidPanelStyle} aria-label={solidDialog.kind+" model geometry"}>
           <header className="slicerAutoOrientModalHeader">
             <div><h3>{solidDialog.kind==="boolean"?"Mesh Boolean":
               solidDialog.kind[0].toUpperCase()+solidDialog.kind.slice(1)} model</h3>
               </div>
+            <button type="button" className="slicerSolidCollapseButton"
+              onClick={()=>setSolidInspectorCollapsed(value=>!value)}
+              aria-expanded={!solidInspectorCollapsed}>
+              {solidInspectorCollapsed?"Edit":"Hide"}
+            </button>
             <button type="button" disabled={solidBusy} aria-label="Close mesh editor"
               onClick={()=>{setSolidPreview(null);setSolidDialog(null);}}>✕</button>
           </header>
