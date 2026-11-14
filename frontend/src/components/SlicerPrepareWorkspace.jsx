@@ -473,6 +473,15 @@ export default function SlicerPrepareWorkspace({
       if (anchor && toolbar) {
         const frame=toolbar.getBoundingClientRect();
         const button=anchor.getBoundingClientRect();
+        if (window.innerWidth <= 850) {
+          const width=Math.min(260,window.innerWidth-24);
+          setToolPopupStyle({
+            position:"fixed",left:Math.max(12,Math.min(button.left,window.innerWidth-width-12))+"px",
+            top:Math.min(button.bottom+8,window.innerHeight-175)+"px",
+            right:"auto",transform:"none",width:width+"px",
+            maxHeight:"min(65dvh, 360px)",overflowY:"auto",
+          });
+        } else {
         const width=Math.min(260,Math.max(160,frame.width-16));
         const desired=button.left+button.width/2-frame.left-width/2;
         const left=Math.max(8,Math.min(desired,frame.width-width-8));
@@ -480,6 +489,7 @@ export default function SlicerPrepareWorkspace({
           left:(left-(button.left-frame.left))+"px",
           right:"auto",transform:"none",width:width+"px",
         });
+        }
       }
     }
     if (tool.target === "import") {
