@@ -85,3 +85,23 @@ test("compact printer styling preserves large controls and properly fills previe
   assert.match(css,/@media\(max-width:850px\)/);
   assert.match(css,/\.printingPrinterCompactCamera \.printerCameraPlaceholder/);
 });
+
+
+test("offline printer overview never exposes stale controls, progress or camera",()=>{
+  assert.match(source,/function printerLiveConnected\(printer\)/);
+  assert.match(source,/connection\.status === "connected" && !connection\.stale/);
+  assert.match(source,/if \(!connected\) return <div className="printerLiveSummary printerLiveSummary-error printerLiveOffline">/);
+  assert.match(source,/printerLiveConnected\(printer\) && <div className="printingPrinterCompactCamera"/);
+  assert.doesNotMatch(source,/className="printingPrinterImageCredit"/);
+  const css=fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src/styles.css"),"utf8");
+  assert.match(css,/\.printingPrinterCompactCard\.isOffline \{/);
+  assert.match(css,/\.printingPrinterCompactCard\.isOffline \.printerLiveOffline/);
+});
+test("live overview keeps progress and commands together and all stats in a scrolling single row",()=>{
+  assert.match(source,/className="printerLiveCommandRow"/);
+  assert.match(source,/className="printerLiveQuickStats"/);
+  const css=fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src/styles.css"),"utf8");
+  assert.match(css,/\.printingPrinterCompactCard \.printerLiveCommandRow \{/);
+  assert.match(css,/\.printingPrinterCompactCard \.printerLiveQuickStats \{\s*flex:none;\s*display:flex;\s*flex-wrap:nowrap;/);
+  assert.match(css,/overscroll-behavior-x:contain/);
+});
