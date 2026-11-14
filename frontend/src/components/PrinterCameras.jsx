@@ -15,7 +15,7 @@ export function PrinterCameraPreview({ printer, suspended = false, compact = tru
     document.addEventListener("visibilitychange", changed);
     let observer;
     if (globalThis.IntersectionObserver) {
-      observer = new IntersectionObserver(entries => setVisible(entries[0]?.isIntersecting || false));
+      observer = new IntersectionObserver(entries => { if (entries[0]?.isIntersecting) setVisible(true); }, { rootMargin: "1200px 0px" });
       observer.observe(node);
     } else setVisible(true);
     return () => { observer?.disconnect(); document.removeEventListener("visibilitychange", changed); };
